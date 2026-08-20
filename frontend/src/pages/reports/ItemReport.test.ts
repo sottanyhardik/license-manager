@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { buildItemReportPath, normalizeFilterValues, normalizeReportNumber } from "./ItemReport";
+import { buildItemReportPath } from "./reportPaths";
+import { normalizeFilterValues, normalizeReportNumber } from "./itemReport/reportQueryString";
 
 describe("ItemReport helpers", () => {
     it("builds encoded item report URLs from active filters", () => {

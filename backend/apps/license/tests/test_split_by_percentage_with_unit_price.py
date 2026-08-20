@@ -45,12 +45,20 @@ class TestPercentageAllocationBasics:
             }
         ]
 
-        planner = DatabaseDrivenSionPlanner({}, records, Decimal("10000"))
-        planner._split_by_percentage(planner._State({}, records, Decimal("10000"), {}), config)
+        result = DatabaseDrivenSionPlanner().execute(
+            {"actions": [
+                {"action_type": "SPLIT", "priority": 1, "config": config},
+                {"action_type": "ALLOCATE", "priority": 2,
+                 "config": {"algorithm": "SEQUENTIAL_CIF_WATERFALL", "order": ["OUTPUT_A", "OUTPUT_B"]}},
+            ]},
+            records,
+            Decimal("10000"),
+        )
 
-        # After split, we should have 2 records: one for OUTPUT_A, one for OUTPUT_B
-        assert len(planner._State({}, planner._state.records if hasattr(planner, '_state') else records, Decimal("10000"), {}).records) == 0 or True
-        # The split modifies records in place through the state object
+        assert [(row.output_key, row.quantity, row.unit_price, row.value) for row in result.rows] == [
+            ("OUTPUT_A", Decimal("600.000"), Decimal("2.00"), Decimal("1200.00000")),
+            ("OUTPUT_B", Decimal("400.000"), Decimal("5.00"), Decimal("2000.00000")),
+        ]
 
 
 class TestPercentageAllocationThreeWay:
@@ -124,7 +132,9 @@ class TestDecimalPrecision:
 
         # Verify totals
         assert qty_a + qty_b == Decimal("1234.567")
-        assert cif_a + cif_b == Decimal("3704.20")
+        # Quantities are rounded independently to the configured 0.001 kg
+        # precision before CIF is calculated: 740.740×2.50 + 493.827×3.75.
+        assert cif_a + cif_b == Decimal("3703.70")
 
 
 class TestValidation:

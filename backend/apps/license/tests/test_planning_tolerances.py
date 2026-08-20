@@ -47,7 +47,7 @@ def test_tolerances_are_independent(qty, cif, effective_qty, effective_cif):
 
 
 @pytest.mark.django_db
-def test_sub_500_balance_is_excluded_from_operational_planning_without_mutation(monkeypatch):
+def test_positive_sub_500_balance_remains_eligible_and_is_capped_without_mutation(monkeypatch):
     head = HeadSIONNormsModel.objects.create(name="Tolerance")
     sion = SionNormClassModel.objects.create(
         head_norm=head, norm_class="E126T", is_active=True,
@@ -73,7 +73,10 @@ def test_sub_500_balance_is_excluded_from_operational_planning_without_mutation(
         sion, [license_obj.pk], force_plan=False,
     )
 
-    assert licenses == []
+    # Actual Balance CIF is the absolute cap; a positive live balance must
+    # remain eligible rather than being silently discarded by a legacy
+    # operational tolerance.
+    assert [row.pk for row in licenses] == [license_obj.pk]
     assert raw_balances[license_obj.pk] == Decimal("3.89")
     license_obj.refresh_from_db()
     assert license_obj.export_license.get().cif_fc == Decimal("502912.57")

@@ -4,10 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "../api/axios";
 import { downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "../services/licenseLedgerExport";
 import type { CanonicalLedgerResponse } from "../types/canonicalLedger";
-import LicenseLedgerDetail, {
-    buildLedgerDetailPath,
-    normalizeLedgerDetail,
-} from "./LicenseLedgerDetail";
+import LicenseLedgerDetail from "./LicenseLedgerDetail";
+import { buildLedgerDetailPath, normalizeLedgerDetail } from "./licenseLedgerDetailUtils";
 
 vi.mock("react-router-dom", () => ({
     useLocation: () => ({ search: "", state: null }),

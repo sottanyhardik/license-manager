@@ -12,11 +12,151 @@ Validates:
 """
 import pytest
 from decimal import Decimal
+from datetime import date
 
+from apps.allotment.models import AllotmentItems, AllotmentModel
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.constants import DEBIT
+from apps.core.models import CompanyModel, ItemNameModel
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.services.percentage_existing_usage import (
     CanonicalInputResolver,
     PercentageExistingUsageService,
 )
+
+
+@pytest.fixture
+def usage_company(db):
+    return CompanyModel.objects.create(iec="PCTUSAGE01", name="Percentage usage company")
+
+
+@pytest.fixture
+def _usage_license_factory(usage_company):
+    counter = {"value": 0}
+
+    def make(number):
+        counter["value"] += 1
+        return LicenseDetailsModel.objects.create(
+            exporter=usage_company,
+            license_number=number,
+        )
+
+    return make
+
+
+@pytest.fixture
+def license_3411008090(_usage_license_factory):
+    return _usage_license_factory("3411008090")
+
+
+@pytest.fixture
+def license_a(_usage_license_factory):
+    return _usage_license_factory("PCT-USAGE-A")
+
+
+@pytest.fixture
+def license_b(_usage_license_factory):
+    return _usage_license_factory("PCT-USAGE-B")
+
+
+@pytest.fixture
+def _usage_row_factory(usage_company):
+    sequence = {"value": 0}
+
+    def make(license_obj, product, quantity, cif=None, *, allotment=False):
+        sequence["value"] += 1
+        item_name, _ = ItemNameModel.objects.get_or_create(name=product)
+        import_item = LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=sequence["value"],
+            description=f"Usage source {sequence['value']}",
+            quantity=Decimal(str(quantity)),
+            available_quantity=Decimal(str(quantity)),
+        )
+        import_item.items.add(item_name)
+        cif = Decimal(str(cif if cif is not None else quantity))
+        if allotment:
+            parent = AllotmentModel.objects.create(
+                company=usage_company,
+                item_name=f"Allotment {sequence['value']}",
+            )
+            return AllotmentItems.objects.create(
+                allotment=parent, item=import_item,
+                qty=Decimal(str(quantity)), cif_fc=cif,
+            )
+        boe = BillOfEntryModel.objects.create(
+            company=usage_company,
+            bill_of_entry_number=f"PCT-BOE-{sequence['value']}",
+            bill_of_entry_date=date.today(),
+            exchange_rate=Decimal("1"),
+        )
+        return RowDetails.objects.create(
+            bill_of_entry=boe, sr_number=import_item, transaction_type=DEBIT,
+            qty=Decimal(str(quantity)), cif_fc=cif, cif_inr=cif,
+        )
+
+    return make
+
+
+@pytest.fixture
+def boe_olive_51286_84(_usage_row_factory, license_3411008090):
+    return _usage_row_factory(license_3411008090, "OLIVE OIL", "51286.84", "284982.98")
+
+
+@pytest.fixture
+def allotment_olive_26711(_usage_row_factory, license_3411008090):
+    return _usage_row_factory(license_3411008090, "OLIVE OIL", "26711.00", "130033.87", allotment=True)
+
+
+@pytest.fixture
+def boe_pko_100(_usage_row_factory, license_3411008090):
+    return _usage_row_factory(license_3411008090, "PKO", "100.00")
+
+
+@pytest.fixture
+def allotment_pko_alias_150(_usage_row_factory, license_3411008090):
+    # Add the second approved alias to the BOE record set, then retain a
+    # non-BOE row so both usage paths receive real fixture coverage.
+    _usage_row_factory(license_3411008090, "PALM KERNEL OIL", "150.00")
+    return _usage_row_factory(license_3411008090, "PALM KERNEL OIL", "150.00", allotment=True)
+
+
+@pytest.fixture
+def boe_olive_license_a_100(_usage_row_factory, license_a):
+    return _usage_row_factory(license_a, "OLIVE OIL", "100.00")
+
+
+@pytest.fixture
+def boe_olive_license_b_300(_usage_row_factory, license_b):
+    return _usage_row_factory(license_b, "OLIVE OIL", "300.00")
+
+
+@pytest.fixture
+def boe_pko_license_a_100(_usage_row_factory, license_a):
+    return _usage_row_factory(license_a, "PKO", "100.00")
+
+
+@pytest.fixture
+def boe_pko_license_b_200(_usage_row_factory, license_b):
+    return _usage_row_factory(license_b, "PALM KERNEL OIL", "200.00")
+
+
+@pytest.fixture
+def boe_palm_oil_300(_usage_row_factory, license_3411008090):
+    return _usage_row_factory(license_3411008090, "PALM OIL", "300.00")
+
+
+@pytest.fixture
+def boe_olive_with_cif(_usage_row_factory, license_3411008090):
+    return _usage_row_factory(license_3411008090, "OLIVE OIL", "10.00", "25.50")
+
+
+@pytest.fixture
+def boe_pko_variations(_usage_row_factory, license_3411008090):
+    return [
+        _usage_row_factory(license_3411008090, name, "100.00")
+        for name in ("PKO", "pko", "Pko", "PALM KERNEL OIL", "Palm Kernel Oil", "palm kernel oil")
+    ]
 
 
 class TestCanonicalInputResolver:

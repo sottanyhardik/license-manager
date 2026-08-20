@@ -20,7 +20,7 @@ from django.contrib.auth.models import Group
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.test import APIClient
 
-from apps.allotment.models import AllotmentModel
+from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.models import CompanyModel, ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
 
@@ -100,7 +100,7 @@ class TestPlanModeSplitRows:
         # Backward compatibility: default (Actual) mode must be completely
         # unaware of the plan split — one row, full 100kg, exactly like
         # before this feature existed.
-        resp = _get_available_licenses(allotment_client, allotment_obj)
+        resp = _get_available_licenses(allotment_client, allotment_obj, debit_based_on="ACTUAL")
         assert resp.status_code == 200
         rows = [r for r in resp.data["available_items"] if r["id"] == veg_oil_split["import_item"].id]
         assert len(rows) == 1
@@ -142,29 +142,44 @@ class TestPlanModeSplitRows:
             if row.get("import_item_id") == veg_oil_split["import_item"].id:
                 assert Decimal(row["available_quantity"]) != Decimal("100.000")
 
-    def test_fully_consumed_plan_line_remains_visible_but_is_blocked(
+    def test_fully_consumed_plan_line_is_excluded(
         self, allotment_client, allotment_obj, veg_oil_split,
     ):
-        # Keep a selected exhausted child visible so the UI can explain why
-        # raw source availability cannot be allotted.
-        veg_oil_split["pko_line"].remaining_quantity = Decimal("0")
-        veg_oil_split["pko_line"].remaining_cif_fc = Decimal("0")
-        veg_oil_split["pko_line"].save(update_fields=["remaining_quantity", "remaining_cif_fc"])
+        # Raw source availability can never revive an exhausted plan line.
+        # A plan residual is ledger-derived; stale mutable `remaining_*`
+        # columns must not hide or revive a plan line.
+        AllotmentItems.objects.create(
+            allotment=allotment_obj,
+            item=veg_oil_split["import_item"],
+            plan_line=veg_oil_split["pko_line"],
+            allocation_basis="PLAN",
+            qty=Decimal("30.000"),
+            cif_fc=Decimal("54.00"),
+        )
 
         resp = _get_available_licenses(allotment_client, allotment_obj, debit_based_on="plan")
         by_id = {r["id"]: r for r in resp.data["available_items"]}
-        assert veg_oil_split["pko_line"].id in by_id
-        assert by_id[veg_oil_split["pko_line"].id]["can_create_allotment"] is False
-        assert by_id[veg_oil_split["pko_line"].id]["reason_code"] == "NO_PLANNED_BALANCE"
-        assert Decimal(by_id[veg_oil_split["pko_line"].id]["max_allotment_qty"]) == Decimal("0")
-        assert Decimal(by_id[veg_oil_split["pko_line"].id]["remaining_planned_qty"]) == Decimal("0")
-        assert Decimal(by_id[veg_oil_split["pko_line"].id]["display_plan_qty"]) == Decimal("0")
-        assert Decimal(by_id[veg_oil_split["pko_line"].id]["display_plan_cif"]) == Decimal("0")
+        assert veg_oil_split["pko_line"].id not in by_id
         assert veg_oil_split["cheese_line"].id in by_id
 
 
 @pytest.mark.django_db
 class TestPlannedItemNameFilter:
+    def test_selected_plan_item_overrides_route_target(self, allotment_client, allotment_obj, veg_oil_split, item_names):
+        allotment_obj.planning_target_item = item_names["CHEESE - PLANMODE-TEST"]
+        allotment_obj.save(update_fields=["planning_target_item"])
+
+        response = _get_available_licenses(
+            allotment_client,
+            allotment_obj,
+            debit_based_on="PLAN",
+            planning_target_item_id=item_names["PKO - PLANMODE-TEST"].id,
+        )
+
+        assert response.status_code == 200
+        assert response.data["available_items"]
+        assert all(row["planned_item_name"] == "PKO - PLANMODE-TEST" for row in response.data["available_items"])
+
     def test_selecting_pko_shows_only_pko_row(self, allotment_client, allotment_obj, veg_oil_split, item_names):
         resp = _get_available_licenses(
             allotment_client, allotment_obj, debit_based_on="plan",
@@ -181,6 +196,7 @@ class TestPlannedItemNameFilter:
         resp = _get_available_licenses(
             allotment_client, allotment_obj,
             planned_item_names=str(item_names["PKO - PLANMODE-TEST"].id),
+            debit_based_on="ACTUAL",
         )
         assert resp.status_code == 200
         rows = [r for r in resp.data["available_items"] if r["id"] == veg_oil_split["import_item"].id]

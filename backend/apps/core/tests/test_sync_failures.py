@@ -51,6 +51,17 @@ DELETE_CHECK = "sync:sync-delete-check"
 
 
 def _push(api, events, source_server="server-A"):
+    """Submit as the declared peer, as required by the peer-auth protocol.
+
+    Historical tests only changed the envelope's ``source_server`` while
+    retaining server-A's credential.  That is intentionally rejected now: a
+    credential must never be allowed to impersonate another peer.
+    """
+    peer = make_peer(source_server, auth_token=f"{source_server}-test-token")
+    api.credentials(
+        HTTP_X_SYNC_SERVER_ID=peer.server_id,
+        HTTP_AUTHORIZATION=f"Bearer {source_server}-test-token",
+    )
     return api.post(reverse(PUSH), push_payload(events, source_server=source_server), format="json")
 
 
@@ -549,6 +560,9 @@ class TestEveryRegisteredMasterIsTransportable:
                  if e["model_label"] == "core.ItemNameModel"][0]
         assert event["data"]["group"] is None
         assert event["data"]["sion_norm_class"] is None
+        # M2M relation managers are not scalar sync payload values.  This
+        # assertion protects the JSON response as well as the in-process data.
+        assert "norms" not in event["data"]
 
         ItemNameModel.objects.filter(name="NoParent").delete()
         response = _push(api, [{**event, "source_server": "peer-B"}], source_server="peer-B")

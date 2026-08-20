@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { openAuthedFile } from "@/utils/documentDownload";
+import { MAX_DAYS, MIN_DAYS, normalizeExportDays } from "./licenseExportHelpers";
 
-const MIN_DAYS = 1;
-const MAX_DAYS = 365;
 
 type LicenseExportPanelProps = {
     title: string;
@@ -22,17 +21,6 @@ type LicenseExportPanelProps = {
     features?: string[];
     defaultDays?: number;
 };
-
-export function normalizeExportDays(value: unknown, fallback = 30): number {
-    const fallbackDays = Number.isFinite(fallback)
-        ? Math.min(MAX_DAYS, Math.max(MIN_DAYS, Math.trunc(fallback)))
-        : 30;
-    const parsed = Number.parseInt(String(value), 10);
-    if (!Number.isFinite(parsed)) {
-        return fallbackDays;
-    }
-    return Math.min(MAX_DAYS, Math.max(MIN_DAYS, parsed));
-}
 
 /**
  * Shared export panel for the near-identical Expiring/Active license reports.

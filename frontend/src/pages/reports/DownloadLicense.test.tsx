@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 
 import api from "../../api/axios";
-import DownloadLicense, { normalizeDownloadDays, parseLicenseNumbers } from "./DownloadLicense";
+import DownloadLicense from "./DownloadLicense";
+import { normalizeDownloadDays, parseLicenseNumbers } from "./downloadLicenseHelpers";
 
 vi.mock("../../api/axios", () => ({
     default: {

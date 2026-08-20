@@ -37,16 +37,22 @@ try:
 
     @shared_task(name="sync.push_changes")
     def push_changes(since=None):
-        """Push local changes to all peers."""
+        """Retry every unacknowledged immutable event to every active peer."""
         if not getattr(settings, "SYNC_ENABLED", False):
             return "Sync disabled"
-        from .service import get_changes_since
-        from .push import push_to_all_peers
-        events = get_changes_since(since)
-        if events:
-            results = push_to_all_peers(events)
-            return {k: v for k, v in results.items()}
-        return "No changes"
+        from .models import SyncPeer, SyncEvent
+        from .push import push_pending_to_peer, push_to_all_peers
+        # One-release compatibility path for a database that has historical
+        # MasterChange rows but has not yet emitted its first immutable event.
+        # Once the ledger exists, timestamp reconstruction is never used.
+        if not SyncEvent.objects.exists():
+            from .service import get_changes_since
+            events = get_changes_since(since)
+            return push_to_all_peers(events) if events else "No changes"
+        return {
+            peer.server_id: push_pending_to_peer(peer)
+            for peer in SyncPeer.objects.filter(is_active=True)
+        }
 
 except ImportError:
     # Celery not installed — provide no-op stubs

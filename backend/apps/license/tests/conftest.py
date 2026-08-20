@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from apps.core.models import CompanyModel, HSCodeModel, PortModel, SionNormClassModel
+from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, PortModel, SionNormClassModel
 from apps.license.models import (
     LicenseDetailsModel,
     LicenseImportItemsModel,
@@ -26,54 +26,42 @@ from apps.license.services.sion_planner_config.importer import import_e1_e5_prof
 # ============================================================================
 
 
+def _sion(code, description):
+    head, _ = HeadSIONNormsModel.objects.get_or_create(name="Test SION Head")
+    return SionNormClassModel.objects.get_or_create(
+        norm_class=code,
+        defaults={"head_norm": head, "description": description, "is_active": True},
+    )[0]
+
+
 @pytest.fixture
 def e1_sion(db):
     """Fetch or create the E1 SION norm class."""
-    sion, _ = SionNormClassModel.objects.get_or_create(
-        code="E1",
-        defaults={"name": "E1 - Confectionery", "is_active": True},
-    )
-    return sion
+    return _sion("E1", "E1 - Confectionery")
 
 
 @pytest.fixture
 def e5_sion(db):
     """Fetch or create the E5 SION norm class."""
-    sion, _ = SionNormClassModel.objects.get_or_create(
-        code="E5",
-        defaults={"name": "E5 - Milk Products", "is_active": True},
-    )
-    return sion
+    return _sion("E5", "E5 - Milk Products")
 
 
 @pytest.fixture
 def e126_sion(db):
     """Fetch or create the E126 SION norm class."""
-    sion, _ = SionNormClassModel.objects.get_or_create(
-        code="E126",
-        defaults={"name": "E126 - Other", "is_active": True},
-    )
-    return sion
+    return _sion("E126", "E126 - Other")
 
 
 @pytest.fixture
 def e132_sion(db):
     """Fetch or create the E132 SION norm class."""
-    sion, _ = SionNormClassModel.objects.get_or_create(
-        code="E132",
-        defaults={"name": "E132 - Coal", "is_active": True},
-    )
-    return sion
+    return _sion("E132", "E132 - Coal")
 
 
 @pytest.fixture
 def a3627_sion(db):
     """Fetch or create the A3627 SION norm class."""
-    sion, _ = SionNormClassModel.objects.get_or_create(
-        code="A3627",
-        defaults={"name": "A3627 - Minerals", "is_active": True},
-    )
-    return sion
+    return _sion("A3627", "A3627 - Minerals")
 
 
 # ============================================================================

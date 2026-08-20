@@ -2,7 +2,7 @@
 
 This test ensures that:
 1. The RBD rule correctly matches items with HSN 1511x
-2. The output_item is properly configured
+2. The canonical import_item is properly configured
 3. The rule can successfully plan licenses
 4. Changing the price in the rule is reflected in the plan
 """
@@ -64,25 +64,25 @@ def rbd_rule(e1_sion, rbd_item):
             "unit": "MT",
             "priority": 2,
             "is_active": True,
-            "output_item": rbd_item,
+            "import_item": rbd_item,
         },
     )
-    # Ensure output_item is set (this is the fix being tested)
-    if rule.output_item is None:
-        rule.output_item = rbd_item
-        rule.save(update_fields=["output_item"])
+    # Ensure the canonical target item is set.
+    if rule.import_item is None:
+        rule.import_item = rbd_item
+        rule.save(update_fields=["import_item"])
     return rule
 
 
 @pytest.mark.django_db
 def test_rbd_rule_has_output_item_configured(rbd_rule, rbd_item):
-    """The RBD rule must have an output_item set."""
-    assert rbd_rule.output_item is not None, (
-        "RBD PALMOLEIN OIL rule has output_item=None. "
+    """The RBD rule must have a canonical import target set."""
+    assert rbd_rule.import_item is not None, (
+        "RBD PALMOLEIN OIL rule has import_item=None. "
         "This breaks planning persistence."
     )
-    assert rbd_rule.output_item == rbd_item, (
-        f"RBD rule output_item mismatch: {rbd_rule.output_item} != {rbd_item}"
+    assert rbd_rule.import_item == rbd_item, (
+        f"RBD rule import_item mismatch: {rbd_rule.import_item} != {rbd_item}"
     )
 
 

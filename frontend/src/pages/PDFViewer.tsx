@@ -4,18 +4,7 @@ import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 
 import api from "../api/axios";
 import { Button } from "@/components/ui/button";
-
-export function normalizePdfApiPath(value: string | null): string | null {
-    const trimmed = value?.trim();
-    if (!trimmed) return null;
-    if (Array.from(trimmed).some((char) => {
-        const code = char.charCodeAt(0);
-        return code <= 31 || code === 127;
-    })) return null;
-    if (/^[a-z][a-z\d+\-.]*:/i.test(trimmed)) return null;
-    if (trimmed.startsWith("//") || trimmed.includes("\\")) return null;
-    return trimmed;
-}
+import { normalizePdfApiPath } from "./pdfApiPath";
 
 /**
  * PDF Viewer — opens PDFs in a dedicated route that regenerates on refresh.

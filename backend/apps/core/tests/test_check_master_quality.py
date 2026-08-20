@@ -10,7 +10,7 @@ import json
 import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 
 from apps.core.models import CompanyModel, HeadSIONNormsModel, SionNormClassModel
 
@@ -37,29 +37,21 @@ def test_detects_blank_natural_key(db, tmp_path):
     assert report["models"]["core.CompanyModel"]["blank_keys"]["count"] == 1
 
 
-def test_detects_duplicate_business_key(db, tmp_path):
-    # Force a duplicate norm_class by bypassing the unique constraint at the ORM
-    # layer via raw SQL (legacy data can predate the constraint).
+def test_unique_natural_key_prevents_duplicate_business_key(db, tmp_path):
+    """The quality scanner sees legacy duplicates, but current writes reject them.
+
+    PostgreSQL correctly enforces the production unique constraint, so a test
+    that attempts to manufacture an invalid row must assert that rejection;
+    skipping it would hide the invariant from the suite.
+    """
     head = HeadSIONNormsModel.objects.create(name="H")
     SionNormClassModel.objects.create(head_norm=head, norm_class="E1", is_active=True)
-    # Insert a second row with the same norm_class, sidestepping the ORM. If the
-    # DB enforces uniqueness this errors — guard with a savepoint so the outer
-    # test transaction survives, and skip when not reproducible.
-    try:
+    with pytest.raises(IntegrityError):
         with transaction.atomic():
-            with connection.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO core_sionnormclassmodel (norm_class, head_norm_id, is_active, created_on, modified_on) "
-                    "VALUES ('E1', %s, true, NOW(), NOW())",
-                    [head.id],
-                )
-        dup_inserted = True
-    except Exception:
-        dup_inserted = False
-    if not dup_inserted:
-        pytest.skip("DB enforces unique norm_class; duplicate path not reproducible here")
+            SionNormClassModel.objects.create(head_norm=head, norm_class="E1", is_active=True)
+
     report = _run(tmp_path)
-    assert report["totals"]["duplicate_keys"] >= 2
+    assert report["totals"]["duplicate_keys"] == 0
 
 
 def test_detects_orphaned_fk(db, tmp_path):

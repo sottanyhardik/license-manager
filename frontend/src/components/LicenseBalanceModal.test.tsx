@@ -7,7 +7,7 @@ import {
     normalizeLicenseBalanceData,
     normalizeUsageData,
     toSafeLicensePathSegment,
-} from "./LicenseBalanceModal";
+} from "./licenseBalanceHelpers";
 
 describe("LicenseBalanceModal helpers", () => {
     it("builds license API paths from safe path segments", () => {

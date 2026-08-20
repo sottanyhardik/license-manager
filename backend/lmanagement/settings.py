@@ -1,5 +1,6 @@
 # FILE: lmanagement/settings.py
 import os
+import json
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -21,11 +22,14 @@ except ImportError:
 # ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
+_DEFAULT_DEV_SECRET_KEY = "local-dev-only-secret-key-change-for-production-7f8e6d5c4b3a2910"
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
-    "local-dev-only-secret-key-change-for-production-7f8e6d5c4b3a2910",
+    _DEFAULT_DEV_SECRET_KEY,
 )
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"   # PRODUCTION DEFAULT: False
+DEPLOYMENT_ENV = os.getenv("DJANGO_ENVIRONMENT", "development").lower()
+IS_PRODUCTION = DEPLOYMENT_ENV in {"production", "prod"}
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost"  # production: set ALLOWED_HOSTS env var with real domains
@@ -43,6 +47,46 @@ CSRF_COOKIE_SECURE          = os.getenv("CSRF_COOKIE_SECURE",          "False").
 SECURE_HSTS_SECONDS         = int(os.getenv("SECURE_HSTS_SECONDS",     "0"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "False").lower() == "true"
 SECURE_HSTS_PRELOAD             = os.getenv("SECURE_HSTS_PRELOAD",             "False").lower() == "true"
+
+
+def _validate_production_security() -> None:
+    """Fail closed for explicitly configured production processes.
+
+    Local test and development environments remain usable without production
+    secrets.  A process declared as production must not silently boot with the
+    repository fallback secret, permissive hosts, or insecure cookies.
+    """
+    if not IS_PRODUCTION:
+        return
+    errors = []
+    if DEBUG:
+        errors.append("DEBUG must be False")
+    if SECRET_KEY == _DEFAULT_DEV_SECRET_KEY or len(SECRET_KEY) < 32:
+        errors.append("DJANGO_SECRET_KEY must be a non-default secret of at least 32 characters")
+    if not ALLOWED_HOSTS or any(host in {"localhost", "127.0.0.1", "*"} for host in ALLOWED_HOSTS):
+        errors.append("ALLOWED_HOSTS must contain only explicit production hosts")
+    if not (SECURE_SSL_REDIRECT and SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE):
+        errors.append("SECURE_SSL_REDIRECT, SESSION_COOKIE_SECURE, and CSRF_COOKIE_SECURE must be true")
+    if SECURE_HSTS_SECONDS < 31536000:
+        errors.append("SECURE_HSTS_SECONDS must be at least 31536000")
+    if not SECURE_HSTS_INCLUDE_SUBDOMAINS:
+        errors.append("SECURE_HSTS_INCLUDE_SUBDOMAINS must be true")
+    if not SECURE_HSTS_PRELOAD:
+        errors.append("SECURE_HSTS_PRELOAD must be true")
+    if any(
+        os.getenv(name, default) == default
+        for name, default in (
+            ("DB_NAME", "lmanagement"),
+            ("DB_USER", "lmanagement"),
+            ("DB_PASS", "lmanagement"),
+            ("DB_HOST", "localhost"),
+            ("REDIS_URL", "redis://127.0.0.1:6379/0"),
+        )
+    ):
+        errors.append("database and Redis connection settings must be explicitly configured")
+    if errors:
+        raise RuntimeError("Invalid production security configuration: " + "; ".join(errors))
+
 
 # ---------------------------------------------------------------------
 # Applications
@@ -136,6 +180,13 @@ DATABASES = {
         "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
+# Parallel local/CI verification must not share Django's default
+# ``test_lmanagement`` database: one runner can otherwise drop it while another
+# is migrating or tearing down.  Test commands may set TEST_DB_NAME to a
+# unique, explicit identifier (for example test_lmanagement_sync_ledger).
+_test_db_name = os.getenv("TEST_DB_NAME", "").strip()
+if _test_db_name:
+    DATABASES["default"]["TEST"] = {"NAME": _test_db_name}
 
 # ---------------------------------------------------------------------
 # Password Validation
@@ -267,6 +318,22 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+# Replanning is deliberately isolated: it can be expensive, must not starve
+# operational tasks, and needs redelivery when a worker is interrupted.
+CELERY_TASK_ROUTES = {
+    "planning.dispatch_replan_requests": {"queue": "license_planning"},
+    "planning.replan_license": {"queue": "license_planning"},
+    "planning.recover_pending_replan_requests": {"queue": "license_planning"},
+}
+CELERY_TASK_ANNOTATIONS = {
+    "planning.replan_license": {
+        "acks_late": True,
+        "reject_on_worker_lost": True,
+        "soft_time_limit": int(os.getenv("LICENSE_REPLAN_SOFT_TIME_LIMIT", "240")),
+        "time_limit": int(os.getenv("LICENSE_REPLAN_TIME_LIMIT", "300")),
+    },
+}
+CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1"))
 
 # ---------------------------------------------------------------------
 # Caching (Redis)
@@ -298,7 +365,7 @@ CORS_ALLOW_ALL_ORIGINS = False
 _cors_extra = [
     o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
-CORS_ALLOWED_ORIGINS = [
+_development_origins = [
     # ── Development (HTTP allowed locally — all common Vite/React ports) ─────
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -310,15 +377,14 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    # ── Production: add via CORS_ALLOWED_ORIGINS env var (comma-separated) ───
-    # e.g. CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://app2.com
-] + _cors_extra
+]
+CORS_ALLOWED_ORIGINS = _cors_extra if IS_PRODUCTION else _development_origins + _cors_extra
 
 # Allow cookies (credentials) across origins when frontend sends withCredentials
 CORS_ALLOW_CREDENTIALS = True
 
 # Allow ANY localhost port (covers Vite's dynamic port assignment 5173–5180+)
-CORS_ALLOWED_ORIGIN_REGEXES = [
+CORS_ALLOWED_ORIGIN_REGEXES = [] if IS_PRODUCTION else [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
 ]
@@ -354,7 +420,7 @@ CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken", "Authorization"]
 _csrf_extra = [
     o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
 ]
-CSRF_TRUSTED_ORIGINS = [
+_development_csrf_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:5174",
@@ -365,8 +431,32 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    # Production: set CSRF_TRUSTED_ORIGINS env var (comma-separated HTTPS origins)
-] + _csrf_extra
+]
+CSRF_TRUSTED_ORIGINS = _csrf_extra if IS_PRODUCTION else _development_csrf_origins + _csrf_extra
+
+
+def _validate_production_origin_policy() -> None:
+    """Reject development, wildcard, and insecure browser origins in production."""
+    if not IS_PRODUCTION:
+        return
+
+    errors = []
+    for setting_name, origins in (
+        ("CORS_ALLOWED_ORIGINS", CORS_ALLOWED_ORIGINS),
+        ("CSRF_TRUSTED_ORIGINS", CSRF_TRUSTED_ORIGINS),
+    ):
+        for origin in origins:
+            if not origin.startswith("https://"):
+                errors.append(f"{setting_name} entries must use HTTPS")
+                continue
+            host = origin.removeprefix("https://").split("/", 1)[0].split(":", 1)[0].lower()
+            if host in {"localhost", "127.0.0.1", "::1"} or "*" in origin:
+                errors.append(f"{setting_name} must not contain wildcard or loopback origins")
+    if CORS_ALLOW_CREDENTIALS and ("*" in CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGIN_REGEXES):
+        errors.append("credentialed CORS must use explicit origins only")
+    if errors:
+        raise RuntimeError("Invalid production origin policy: " + "; ".join(sorted(set(errors))))
+
 
 # ---------------------------------------------------------------------
 # Email (file backend for dev)
@@ -383,6 +473,30 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
 
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "info@labdhimercantile.com")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+
+def _validate_production_delivery_configuration() -> None:
+    """Ensure deploy-only browser and mail configuration is explicit and safe."""
+    if not IS_PRODUCTION:
+        return
+
+    errors = []
+    if not FRONTEND_URL.startswith("https://"):
+        errors.append("FRONTEND_URL must use HTTPS in production")
+    frontend_host = FRONTEND_URL.removeprefix("https://").split("/", 1)[0].split(":", 1)[0].lower()
+    if frontend_host in {"localhost", "127.0.0.1", "::1"} or "*" in FRONTEND_URL:
+        errors.append("FRONTEND_URL must not contain wildcard or loopback host")
+    if not os.getenv("EMAIL_BACKEND", "").strip():
+        errors.append("EMAIL_BACKEND must be explicitly configured")
+    if not DEFAULT_FROM_EMAIL or not os.getenv("DEFAULT_FROM_EMAIL", "").strip():
+        errors.append("DEFAULT_FROM_EMAIL must be explicitly configured")
+    if errors:
+        raise RuntimeError("Invalid production delivery configuration: " + "; ".join(errors))
+
+
+_validate_production_security()
+_validate_production_origin_policy()
+_validate_production_delivery_configuration()
 
 # ---------------------------------------------------------------------
 # App-specific Config
@@ -408,6 +522,15 @@ RECONCILIATION_QTY_TOLERANCE = Decimal(os.getenv("RECONCILIATION_QTY_TOLERANCE",
 SYNC_SERVER_ID = os.getenv("SYNC_SERVER_ID", "default")
 SYNC_ENABLED = os.getenv("SYNC_ENABLED", "False").lower() == "true"
 SYNC_PUSH_ON_SAVE = os.getenv("SYNC_PUSH_ON_SAVE", "False").lower() == "true"
+try:
+    SYNC_PEER_TOKENS = json.loads(os.getenv("SYNC_PEER_TOKENS", "{}"))
+except json.JSONDecodeError as exc:
+    raise RuntimeError("SYNC_PEER_TOKENS must be a JSON object keyed by server id") from exc
+if not isinstance(SYNC_PEER_TOKENS, dict) or any(
+    not isinstance(key, str) or not isinstance(value, str) or not value.strip()
+    for key, value in SYNC_PEER_TOKENS.items()
+):
+    raise RuntimeError("SYNC_PEER_TOKENS must be a JSON object of non-empty string credentials")
 
 # ---------------------------------------------------------------------
 # Master-Data Service integration (ADR-001) — OFF by default

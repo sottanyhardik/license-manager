@@ -12,9 +12,10 @@ from apps.core.models import (
 )
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    SionPlanningRule, SionPlanningUnitValueRow, SionPlanningPercentageRow,
+    LicenseItemPlan, LicenseReplanRequest, SionPlanningRule, SionPlanningUnitValueRow, SionPlanningPercentageRow,
 )
 from apps.license.serializers.incentive import SionPlanningRuleSerializer
+from apps.license.services.sion_rule_engine import SionRulePlanningService
 
 
 pytestmark = pytest.mark.django_db
@@ -269,8 +270,17 @@ class TestAutoPlanning:
         # Run Auto Plan
         response = setup["client"].post(f"/api/licenses/{license_obj.pk}/auto-plan/")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "EXECUTED"
-        # Should have planned the rule
-        assert data["total_lines_written"] > 0
+        assert response.status_code == 202, response.data
+        request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
+        assert request.license_id == license_obj.pk
+        # The request path must not calculate or replace plans inline.
+        assert LicenseItemPlan.objects.filter(license=license_obj).count() == 0
+
+        # Calculation persistence remains covered separately from HTTP.  This
+        # is the same canonical execution invoked by the worker.
+        result = SionRulePlanningService.plan_sion(
+            setup["sion"].pk, [license_obj.pk], company_id=setup["company"].pk,
+            mode="ALL", force_plan=True,
+        )
+        assert result["write_results"]
+        assert LicenseItemPlan.objects.filter(license=license_obj).count() == 2

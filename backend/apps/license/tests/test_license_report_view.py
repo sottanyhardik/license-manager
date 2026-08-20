@@ -27,12 +27,17 @@ User = get_user_model()
 
 @pytest.fixture
 def license_viewer_client(db):
+    """The Parle report is an organisation-wide report surface.
+
+    CRUD licence viewing is intentionally insufficient for a report action
+    which bypasses the tenant-scoped licence queryset.
+    """
     user = User.objects.create_user(
         username="license-report-viewer",
         email="license-report-viewer@example.com",
         password="RoleP@ssw0rd123",
     )
-    group, _ = Group.objects.get_or_create(name="LICENSE_VIEWER")
+    group, _ = Group.objects.get_or_create(name="REPORT_VIEWER")
     user.groups.add(group)
     token = RefreshToken.for_user(user)
     client = APIClient()
@@ -123,6 +128,33 @@ def test_parle_license_report_validates_query_params(license_viewer_client):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "exporter" in response.data
     assert "is_expired" in response.data
+
+
+@pytest.mark.django_db
+def test_parle_license_report_rejects_crud_viewer_without_leaking_filtered_rows(report_masters):
+    selected = _create_report_license("PARLE-AUTH-001", report_masters["parle"], report_masters)
+    other = _create_report_license("OTHER-AUTH-001", report_masters["other"], report_masters)
+    user = User.objects.create_user(
+        username="parle-crud-viewer",
+        password="RoleP@ssw0rd123",
+        company=report_masters["other"],
+    )
+    group, _ = Group.objects.get_or_create(name="LICENSE_VIEWER")
+    user.groups.add(group)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.get(
+        reverse("license:licenses-parle-license-report"),
+        {"exporter": report_masters["parle"].id},
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert selected.license_number not in str(response.data)
+    assert other.license_number not in str(response.data)
+
+    anonymous = APIClient().get(reverse("license:licenses-parle-license-report"))
+    assert anonymous.status_code in {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN}
 
 
 @pytest.mark.django_db

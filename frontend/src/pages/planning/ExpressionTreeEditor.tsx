@@ -5,12 +5,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import type { RuleCondition, RuleGroup } from "@/services/api/planningRuleApi";
 import { conditionOperator, defaultOperatorForPlanningField, operatorsForPlanningField, PLANNING_MATCH_FIELDS, withConditionOperator } from "./ruleConditionDisplay";
-
-export const emptyRuleCondition = (): RuleCondition => ({
-    field: "HSN",
-    comparator: "STARTS_WITH",
-    value: "",
-});
+import { emptyRuleCondition } from "./expressionTreeUtils";
 
 const isGroup = (node: RuleCondition | RuleGroup): node is RuleGroup => "conditions" in node;
 

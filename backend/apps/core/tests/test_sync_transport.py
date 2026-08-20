@@ -112,12 +112,12 @@ class TestPushToPeerRequest:
 
         assert request_headers(sent_requests(urlopen)[0])["authorization"] == "Bearer s3cret"
 
-    def test_no_token_sends_an_empty_authorization_header(self):
+    def test_no_token_fails_closed_without_a_network_request(self):
         peer = make_peer("peer-B", auth_token="")
         with patched_urlopen(response=FakeHTTPResponse(PUSH_OK)) as urlopen:
-            push_to_peer(peer, _events())
+            assert push_to_peer(peer, _events()) is False
 
-        assert request_headers(sent_requests(urlopen)[0])["authorization"] == ""
+        urlopen.assert_not_called()
 
     def test_payload_survives_non_json_native_values(self):
         """``default=str`` must keep dates/Decimals from killing the push."""
@@ -352,7 +352,7 @@ class TestSyncFromPeer:
         assert PortModel.objects.filter(code__in=["PLL001", "PLL002"]).count() == 2
         assert PortModel.objects.get(code="PLL001").origin_server == "peer-B"
 
-    def test_first_pull_has_no_cursor_and_no_since_param(self):
+    def test_first_durable_pull_starts_at_immutable_cursor_zero(self):
         peer = make_peer("peer-B", base_url="http://b.example.test")
         assert not SyncCursor.objects.filter(peer=peer).exists()
 
@@ -360,7 +360,7 @@ class TestSyncFromPeer:
             sync_from_peer(peer)
 
         request = sent_requests(urlopen)[0]
-        assert request.full_url == "http://b.example.test/api/sync/pull/"
+        assert query_params_of(request.full_url) == {"cursor": "0"}
         assert SyncCursor.objects.filter(peer=peer).exists()
 
     def test_cursor_advances_after_a_successful_pull(self):
@@ -377,6 +377,49 @@ class TestSyncFromPeer:
 
         peer.refresh_from_db()
         assert peer.last_seen is not None and peer.last_seen >= before
+
+    def test_cursor_acknowledges_the_source_watermark_not_receiver_clock(self):
+        """A source change written during transport must remain eligible later."""
+        peer = make_peer("peer-B")
+        source_watermark = timezone.now() - timedelta(minutes=5)
+        payload = {
+            "events": [{
+                **port_event("PLL003W", "Watermark", server="peer-B"),
+                "at": source_watermark.isoformat(),
+            }],
+            "cursor": source_watermark.isoformat(),
+        }
+
+        with patched_urlopen(response=FakeHTTPResponse(payload)):
+            assert sync_from_peer(peer) == 1
+
+        cursor = SyncCursor.objects.get(peer=peer)
+        assert cursor.last_synced_at == source_watermark
+
+    def test_partial_batch_does_not_acknowledge_the_source_cursor(self):
+        """Rejected events are retried; they must never be skipped by a cursor."""
+        peer = make_peer("peer-B")
+        previous_cursor = timezone.now() - timedelta(hours=1)
+        make_cursor(peer, last_synced_at=previous_cursor)
+        source_watermark = timezone.now() - timedelta(minutes=5)
+        payload = {
+            "events": [
+                {**port_event("PLL003P", "Good", server="peer-B"), "at": source_watermark.isoformat()},
+                {
+                    "model_label": "core.NotAModel", "op": "create", "data": {},
+                    "source_server": "peer-B", "source_version": 1,
+                    "at": source_watermark.isoformat(),
+                },
+            ],
+            "cursor": source_watermark.isoformat(),
+        }
+
+        with patched_urlopen(response=FakeHTTPResponse(payload)):
+            assert sync_from_peer(peer) == 1
+
+        cursor = SyncCursor.objects.get(peer=peer)
+        assert cursor.last_synced_at == previous_cursor
+        assert cursor.last_pull_at is None
 
     def test_existing_cursor_is_sent_as_since(self):
         peer = make_peer("peer-B")
@@ -785,6 +828,12 @@ class TestPushedPayloadIsAcceptedByThePeerApi:
         )
 
         from apps.core.sync.service import get_changes_since
+        from apps.core.sync.mixins import SERVER_ID
+        receiving_peer = make_peer(SERVER_ID, auth_token="round-trip-token")
+        api.credentials(
+            HTTP_X_SYNC_SERVER_ID=receiving_peer.server_id,
+            HTTP_AUTHORIZATION="Bearer round-trip-token",
+        )
         events = get_changes_since()
 
         with patched_urlopen(response=FakeHTTPResponse(PUSH_OK)) as urlopen:

@@ -1,140 +1,139 @@
-from dataclasses import dataclass
+"""Core execution contracts for profile/rule based SION planning.
+
+The retired assertions in this module compared E1/E5-specific planners to an
+adapter.  Those planners are no longer production authorities: persisted rule
+priority and the generic execution path are.  These tests retain the business
+risks from the former bridge tests without making legacy implementation output
+the specification.
+"""
 from decimal import Decimal
+from types import SimpleNamespace
 
-from django.test import SimpleTestCase
+import pytest
 
-from apps.license.services.e1_plan import E1Item, classify_e1_item, plan_e1_items
-from apps.license.services.e5_plan import E5Item, classify_e5_item, plan_e5_items
-from apps.license.services.sion_planner_config.e1_e5 import get_legacy_planner_config
+from apps.license.tests.planning_contract_support import compute, rule
 from apps.license.services.sion_planning_execution import (
-    PlannerConfigurationError, ResolvedPlannerConfiguration,
-    SionPlanningExecutionService,
+    PlannerConfigurationError,
+    validate_declarative_rules,
 )
 
 
-@dataclass(frozen=True)
-class _Rule:
-    stable_key: str
-    expression: dict
-    priority: int
-
-
-@dataclass(frozen=True)
-class _Action:
-    action_type: str
-    config: dict
-
-
-def _configuration(code):
-    document = get_legacy_planner_config(code)
-    specs = next(action["config"]["rules"] for action in document["actions"] if action["action_type"] == "MATCH")
-    rules = tuple(_Rule(f"{code}:RULE:{index:03d}", spec["expression"], index) for index, spec in enumerate(specs, 1))
-    outputs = {rule.stable_key: spec["category"] for rule, spec in zip(rules, specs)}
-    return ResolvedPlannerConfiguration(code, rules, outputs)
-
-
-def _rows():
+def _normalized(result):
+    """All business fields: no generated identifiers or timestamps exist here."""
     return [
-        {"record_id": "a", "item_key": "other confectionery", "hs_code": "080211", "description": "almond", "quantity": "100"},
-        {"record_id": "b", "item_key": "dietary fibre", "hs_code": "2106", "description": "dietary fibre", "quantity": "70"},
-        {"record_id": "c", "item_key": "milk", "hs_code": "0404", "description": "milk powder 0404", "quantity": "80"},
-        {"record_id": "d", "item_key": "wheat flour", "hs_code": "11010000", "description": "wheat flour", "quantity": "60"},
+        (row.record_id, row.category, row.output_key, row.quantity, row.unit_price, row.value)
+        for row in result.rows
+    ], result.remaining_cif
+
+
+def test_unmatched_source_is_not_planned(monkeypatch):
+    result = compute(monkeypatch, rules=[rule(key="known", output="KNOWN", price="1")], records=[{
+        "record_id": "unknown", "item_key": "unknown", "quantity": 10, "available_quantity": 10,
+    }], balance_cif="10")
+    assert result.rows == []
+    assert result.remaining_cif == Decimal("10")
+
+
+def test_shortage_is_non_fatal_and_later_valid_rows_are_evaluated(monkeypatch):
+    result = compute(monkeypatch, rules=[
+        rule(key="expensive", output="EXPENSIVE", price="10", priority=1),
+        rule(key="cheap", output="CHEAP", price="1", priority=2),
+    ], records=[
+        {"record_id": "e", "item_key": "expensive", "quantity": 5, "available_quantity": 5},
+        {"record_id": "c", "item_key": "cheap", "quantity": 5, "available_quantity": 5},
+    ], balance_cif="12")
+    assert [(line.output_key, line.quantity) for line in result.rows] == [("EXPENSIVE", Decimal("1.2"))]
+    assert result.remaining_cif == Decimal("0")
+
+
+def test_first_saved_rule_match_is_the_only_owner_of_an_overlapping_source(monkeypatch):
+    """A source matching two rules belongs to the earlier persisted rule.
+
+    This is the current replacement for the old E1/E5 classifier comparison:
+    saved priority defines ownership, so a later rule cannot create a duplicate
+    target from the same physical input.
+    """
+    result = compute(monkeypatch, rules=[
+        rule(key="milk", output="HIGH_PRIORITY", price="2", priority=1),
+        rule(key="milk", output="LOW_PRIORITY", price="1", priority=2),
+    ], records=[{
+        "record_id": "milk-1", "item_key": "milk", "quantity": 10, "available_quantity": 10,
+    }], balance_cif="100")
+
+    # 10 eligible units x the priority-1 rule's CIF 2 = 20.  The second
+    # matching rule is not an additional entitlement.
+    assert [(line.output_key, line.quantity, line.value) for line in result.rows] == [
+        ("HIGH_PRIORITY", Decimal("10"), Decimal("20")),
     ]
+    assert result.remaining_cif == Decimal("80")
 
 
-class SionPlanningExecutionTests(SimpleTestCase):
-    def test_e1_db_classification_preserves_legacy_waterfall_exactly(self):
-        records = _rows()
-        legacy_items = []
-        for row in records:
-            category = classify_e1_item(row["item_key"], row["hs_code"], row["description"])
-            if category:
-                legacy_items.append(E1Item(row["record_id"], category, Decimal(row["quantity"])))
-        legacy = plan_e1_items(legacy_items, Decimal("1000"))
-        bridged = SionPlanningExecutionService.execute(
-            type("Sion", (), {"norm_class": "E1"})(), records, "1000",
-            configuration=_configuration("E1"),
-        )
-        self.assertEqual(legacy, bridged)
+def test_scarce_cif_is_consumed_in_rule_priority_waterfall(monkeypatch):
+    """Current canonical generic rule contract: priority, then source order."""
+    result = compute(monkeypatch, rules=[
+        rule(key="later", output="LATER", price="5", priority=20),
+        rule(key="first", output="FIRST", price="5", priority=10),
+    ], records=[
+        {"record_id": "later-1", "item_key": "later", "quantity": 10, "available_quantity": 10},
+        {"record_id": "first-1", "item_key": "first", "quantity": 10, "available_quantity": 10},
+    ], balance_cif="60")
 
-    def test_e5_db_classification_preserves_legacy_waterfall_exactly(self):
-        records = _rows()
-        legacy_items = []
-        for row in records:
-            category = classify_e5_item(row["item_key"], row["hs_code"], row["description"])
-            if category:
-                legacy_items.append(E5Item(row["record_id"], category, Decimal(row["quantity"])))
-        legacy = plan_e5_items(legacy_items, Decimal("1000"))
-        bridged = SionPlanningExecutionService.execute(
-            type("Sion", (), {"norm_class": "E5"})(), records, "1000",
-            configuration=_configuration("E5"),
-        )
-        self.assertEqual(legacy, bridged)
+    # The priority-10 ask consumes 10 x 5 = 50 first; only 10 CIF remains,
+    # independently yielding 10 / 5 = 2 units for priority 20.
+    assert [(line.output_key, line.quantity, line.value) for line in result.rows] == [
+        ("FIRST", Decimal("10"), Decimal("50")),
+        ("LATER", Decimal("2"), Decimal("10")),
+    ]
+    assert result.remaining_cif == Decimal("0")
 
-    def test_e5_configured_split_action_is_used_by_canonical_adapter(self):
-        config = _configuration("E5")
-        split = _Action("SPLIT", {
-            "algorithm": "SPLIT_BY_UNIT_VALUE",
-            "basis": "BALANCE_CIF_PER_QUANTITY",
-            "category": "MILK PRODUCTS",
-            "buckets": [
-                {"code": "SWP", "min_price": "0.00", "max_price": "1.50", "reference_price": "1.50"},
-                {"code": "DWP", "min_price": "1.50", "max_price": "6.50", "reference_price": "6.50"},
-            ],
-        })
-        configured = ResolvedPlannerConfiguration(
-            config.sion_code, config.rules, config.output_by_rule_key, (split,),
-        )
-        result = SionPlanningExecutionService.execute(
-            type("Sion", (), {"norm_class": "E5"})(),
-            [{"record_id": "milk", "hs_code": "0404", "description": "milk", "quantity": "1000"}],
-            "3500", configuration=configured,
-        )
-        self.assertEqual([(line.step, line.planned_qty, line.planned_cif) for line in result.lines], [
-            ("SWP", Decimal("600.000"), Decimal("900.0000")),
-            ("DWP", Decimal("400.000"), Decimal("2600.0000")),
-        ])
-        self.assertEqual(result.remaining_cif, Decimal("0"))
 
-    def test_db_rule_order_is_first_match_authority(self):
-        config = _configuration("E5")
-        reversed_config = ResolvedPlannerConfiguration(
-            "E5", tuple(reversed(config.rules)), config.output_by_rule_key,
-        )
-        record = {"item_key": "wheat flour dietary fibre", "hs_code": "11010000", "description": "", "quantity": "60"}
-        self.assertEqual(config.classify(record), "DIETARY FIBRE")
-        self.assertEqual(reversed_config.classify(record), "WHEAT FLOUR")
+def test_synthetic_norm_identities_with_identical_declarative_rules_are_equivalent(monkeypatch):
+    """Identity is not a solver input: identical saved-rule shapes plan identically."""
+    records = [{"record_id": "source", "item_key": "component", "quantity": 10, "available_quantity": 10}]
+    first = compute(monkeypatch, rules=[rule(key="component", output="OUTPUT", price="3", priority=4)], records=records, balance_cif="100")
+    second = compute(monkeypatch, rules=[rule(key="component", output="OUTPUT", price="3", priority=4)], records=records, balance_cif="100")
+    assert _normalized(first) == _normalized(second)
 
-    def test_rule_without_output_mapping_is_rejected(self):
-        config = _configuration("E1")
-        broken = ResolvedPlannerConfiguration("E1", config.rules, {})
-        with self.assertRaisesRegex(PlannerConfigurationError, "no execution output mapping"):
-            broken.classify(_rows()[0])
 
-    def test_cleared_db_rule_matches_nothing_without_disabling_other_rules(self):
-        config = _configuration("E1")
-        cleared_first = _Rule(
-            config.rules[0].stable_key,
-            {"operator": "AND", "conditions": []},
-            config.rules[0].priority,
-        )
-        cleared = ResolvedPlannerConfiguration(
-            "E1", (cleared_first, *config.rules[1:]), config.output_by_rule_key,
-        )
-        records = [
-            {"record_id": "conf", "item_key": "other confectionery", "hs_code": "080211", "description": "almond", "quantity": "100"},
-            {"record_id": "cocoa", "item_key": "cocoa", "hs_code": "180300", "description": "cocoa", "quantity": "10"},
-        ]
+def test_synthetic_configuration_mutations_change_output_without_norm_code(monkeypatch):
+    records = [
+        {"record_id": "a", "item_key": "a", "quantity": 10, "available_quantity": 10},
+        {"record_id": "b", "item_key": "b", "quantity": 10, "available_quantity": 10},
+    ]
+    baseline = compute(monkeypatch, rules=[
+        rule(key="a", output="A", price="2", priority=1),
+        rule(key="b", output="B", price="2", priority=2),
+    ], records=records, balance_cif="20")
+    changed_price = compute(monkeypatch, rules=[
+        rule(key="a", output="A", price="1", priority=1),
+        rule(key="b", output="B", price="2", priority=2),
+    ], records=records, balance_cif="20")
+    changed_priority = compute(monkeypatch, rules=[
+        rule(key="a", output="A", price="2", priority=2),
+        rule(key="b", output="B", price="2", priority=1),
+    ], records=records, balance_cif="20")
+    assert _normalized(changed_price) != _normalized(baseline)
+    assert [row.output_key for row in changed_priority.rows] == ["B"]
 
-        result = SionPlanningExecutionService.execute(
-            type("Sion", (), {"norm_class": "E1"})(), records, "1000",
-            configuration=cleared,
-        )
 
-        self.assertEqual([line.key for line in result.lines], ["cocoa"])
+def test_deactivating_a_synthetic_rule_line_removes_its_plan_output(monkeypatch):
+    records = [{"record_id": "source", "item_key": "component", "quantity": 10, "available_quantity": 10}]
+    active = compute(monkeypatch, rules=[rule(key="component", output="OUTPUT", price="2")], records=records, balance_cif="100")
+    inactive = compute(monkeypatch, rules=[], records=records, balance_cif="100")
+    assert len(active.rows) == 1
+    assert inactive.rows == []
+    assert inactive.remaining_cif == Decimal("100")
 
-    def test_registry_has_no_dispatch_branches(self):
-        self.assertEqual(
-            set(SionPlanningExecutionService._registry),
-            {"E1", "E5", "E126", "E132", "A3627"},
-        )
+
+@pytest.mark.parametrize(("rules", "code"), [
+    ([], "NO_ACTIVE_RULE"),
+    ([SimpleNamespace(stable_key="same", strategy="STANDARD"), SimpleNamespace(stable_key="same", strategy="STANDARD")], "MULTIPLE_ACTIVE_RULES"),
+    ([SimpleNamespace(stable_key="percent", strategy="SPLIT_BY_PERCENT", percentage_rows=[])], "MISSING_RULE_LINES"),
+    ([SimpleNamespace(stable_key="percent", strategy="SPLIT_BY_PERCENT", percentage_rows=[SimpleNamespace(import_item_id=1, percentage=Decimal("60"))])], "INVALID_PERCENTAGE_TOTAL"),
+    ([SimpleNamespace(stable_key="percent", strategy="SPLIT_BY_PERCENT", percentage_rows=[SimpleNamespace(import_item_id=None, percentage=Decimal("100"))])], "MISSING_CANONICAL_INPUT"),
+    ([SimpleNamespace(stable_key="unknown", strategy="NOT_A_STRATEGY")], "UNSUPPORTED_GENERIC_STRATEGY"),
+])
+def test_generic_configuration_diagnostics_are_machine_readable(rules, code):
+    with pytest.raises(PlannerConfigurationError) as raised:
+        validate_declarative_rules(rules)
+    assert raised.value.code == code

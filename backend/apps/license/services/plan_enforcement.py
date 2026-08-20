@@ -26,6 +26,11 @@ _ALLOTTED_FILTER = Q(
     allotment__type="AT",
 )
 
+# A plan is allocatable only while it is its current lifecycle version.
+# Every consumer of original/used/remaining capacity must share this exact
+# predicate; otherwise historical rows affect enforcement but not the UI.
+_CURRENT_PLAN_FILTER = Q(is_active=True, is_deleted=False, is_cancelled=False)
+
 
 def _item_pk(item):
     if item is None:
@@ -89,6 +94,80 @@ def live_allotted_value_for(item_ids) -> Decimal:
     )["total"] or DEC_0
 
 
+def plan_line_status_for(plan_line) -> dict | None:
+    """Return the immutable target and live debit balance for one plan line.
+
+    A plan-mode debit names ``AllotmentItems.plan_line``.  That FK is the
+    audit identity which distinguishes sibling split lines for the same import
+    item, so it is the only sound source for a line's residual capacity.
+    Stored ``LicenseItemPlan.remaining_*`` values predate the allocation
+    ledger and are deliberately not read here: create, amend, delete and
+    reopen must all be reflected without a compensating mutation.
+    """
+    if plan_line is None or not getattr(plan_line, "pk", None):
+        return None
+
+    from apps.allotment.models import AllotmentItems
+
+    used = AllotmentItems.objects.filter(
+        _ALLOTTED_FILTER,
+        plan_line_id=plan_line.pk,
+        allocation_basis="PLAN",
+    ).aggregate(
+        q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
+        v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )
+    original_qty = Decimal(str(plan_line.planned_quantity or DEC_000))
+    original_cif = Decimal(str(plan_line.planned_cif_fc or DEC_0))
+    used_qty = used["q"] or DEC_000
+    used_cif = used["v"] or DEC_0
+    return {
+        "original_quantity": original_qty,
+        "used_quantity": used_qty,
+        "remaining_quantity": max(DEC_000, original_qty - used_qty),
+        "original_cif_fc": original_cif,
+        "used_cif_fc": used_cif,
+        "remaining_cif_fc": max(DEC_0, original_cif - used_cif),
+    }
+
+
+def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
+    """Bulk equivalent of :func:`plan_line_status_for` for plan-mode rows."""
+    plan_lines = list(plan_lines)
+    ids = [line.pk for line in plan_lines if getattr(line, "pk", None)]
+    if not ids:
+        return {}
+    from apps.allotment.models import AllotmentItems
+
+    used_by_line = {
+        row["plan_line_id"]: (row["q"] or DEC_000, row["v"] or DEC_0)
+        for row in AllotmentItems.objects.filter(
+            _ALLOTTED_FILTER,
+            allocation_basis="PLAN",
+            plan_line_id__in=ids,
+        ).values("plan_line_id").annotate(
+            q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
+            v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
+        )
+    }
+    statuses = {}
+    for line in plan_lines:
+        if not line.pk:
+            continue
+        original_qty = Decimal(str(line.planned_quantity or DEC_000))
+        original_cif = Decimal(str(line.planned_cif_fc or DEC_0))
+        used_qty, used_cif = used_by_line.get(line.pk, (DEC_000, DEC_0))
+        statuses[line.pk] = {
+            "original_quantity": original_qty,
+            "used_quantity": used_qty,
+            "remaining_quantity": max(DEC_000, original_qty - used_qty),
+            "original_cif_fc": original_cif,
+            "used_cif_fc": used_cif,
+            "remaining_cif_fc": max(DEC_0, original_cif - used_cif),
+        }
+    return statuses
+
+
 def planned_totals_for(item_ids) -> tuple[Decimal, Decimal]:
     """
     Sum of LicenseItemPlan.planned_quantity / planned_cif_fc across a group —
@@ -106,7 +185,7 @@ def planned_totals_for(item_ids) -> tuple[Decimal, Decimal]:
     ids = _normalize_item_ids(item_ids)
     if not ids:
         return DEC_000, DEC_0
-    agg = LicenseItemPlan.objects.filter(import_item_id__in=ids).aggregate(
+    agg = LicenseItemPlan.objects.filter(_CURRENT_PLAN_FILTER, import_item_id__in=ids).aggregate(
         pq=Coalesce(Sum("planned_quantity"), Value(DEC_000), output_field=DecimalField()),
         pv=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )
@@ -224,7 +303,7 @@ def plan_status_for_ids(gids) -> dict | None:
 
     if not gids:
         return None
-    plans = LicenseItemPlan.objects.filter(import_item_id__in=gids)
+    plans = LicenseItemPlan.objects.filter(_CURRENT_PLAN_FILTER, import_item_id__in=gids)
     baseline = plans.aggregate(
         bq=Min("baseline_used_quantity"), bv=Min("baseline_used_cif_fc"),
     )
@@ -349,7 +428,7 @@ def plan_status_for_items(items) -> dict:
         return {it.id: None for it in items}
 
     plans_by_item: dict[int, list] = {}
-    for p in LicenseItemPlan.objects.filter(import_item_id__in=all_gids).values(
+    for p in LicenseItemPlan.objects.filter(_CURRENT_PLAN_FILTER, import_item_id__in=all_gids).values(
         "import_item_id", "baseline_used_quantity", "baseline_used_cif_fc",
         "planned_quantity", "planned_cif_fc",
     ):

@@ -19,6 +19,7 @@ import AllotmentsTab from "./AllotmentsTab";
 import PlanningEditor from "@/components/planning/PlanningEditor";
 import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
+import ReplanStatus from "./ReplanStatus";
 
 type TabId = "overview" | "boes" | "allotments" | "planning" | "items" | "invoice-ledger";
 
@@ -129,6 +130,8 @@ export default function LicenseOverviewPage() {
                     </>
                 }
             />
+
+            {id && <ReplanStatus licenseId={id} />}
 
             <Tabs value={activeTab} onValueChange={handleTabChange}>
                 <TabsList className="mb-4 flex-wrap">

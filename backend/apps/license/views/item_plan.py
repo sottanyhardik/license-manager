@@ -105,7 +105,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     queryset = (
         LicenseItemPlan.objects
         .select_related("import_item", "import_item__license", "item_name", "license")
-        .all()
+        .order_by("pk")
     )
     serializer_class = LicenseItemPlanSerializer
     permission_classes = [LicensePermission]

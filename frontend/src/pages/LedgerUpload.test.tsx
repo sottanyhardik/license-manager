@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
 import { useFileUpload } from "../hooks";
-import LedgerUpload, {
+import LedgerUpload from "./LedgerUpload";
+import {
     buildAsyncUploadErrorMessage,
     getLedgerUploadErrorMessage,
     normalizeLedgerFileTasks,
     normalizeLedgerUploadErrors,
     normalizeProgressValue,
-} from "./LedgerUpload";
+} from "./ledgerUploadHelpers";
 
 vi.mock("../api/axios", () => ({
     default: {

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.hashers import check_password, make_password
+import uuid
 
 
 class SyncConflictLog(models.Model):
@@ -42,7 +44,7 @@ class SyncPeer(models.Model):
     base_url = models.URLField(help_text="Base URL of the peer's sync API")
     auth_token = models.CharField(
         max_length=255, blank=True, default="",
-        help_text="Bearer token for authenticating with this peer",
+        help_text="Password hash of the peer's server-to-server sync credential",
     )
     is_active = models.BooleanField(default=True)
     last_seen = models.DateTimeField(null=True, blank=True)
@@ -53,6 +55,16 @@ class SyncPeer(models.Model):
 
     def __str__(self):
         return f"Peer {self.server_id} ({self.base_url})"
+
+    def set_auth_token(self, raw_token: str) -> None:
+        """Hash a peer credential before persisting it."""
+        if not isinstance(raw_token, str) or not raw_token.strip():
+            raise ValueError("A non-empty sync peer credential is required.")
+        self.auth_token = make_password(raw_token)
+
+    def check_auth_token(self, raw_token: str) -> bool:
+        """Check a credential without ever exposing the stored hash."""
+        return bool(self.auth_token and raw_token and check_password(raw_token, self.auth_token))
 
 
 class SyncCursor(models.Model):
@@ -74,12 +86,79 @@ class SyncCursor(models.Model):
         null=True, blank=True,
         help_text="When we last pulled from this peer",
     )
+    # ``last_synced_at`` is retained only for backwards-compatible status
+    # reporting.  It is not a safe replication cursor: clocks are neither a
+    # total order nor an acknowledgement of an immutable event stream.
+    remote_event_cursor = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         app_label = "core"
 
     def __str__(self):
         return f"Cursor for {self.peer.server_id}: {self.last_synced_at}"
+
+
+class SyncEvent(models.Model):
+    """Immutable replication outbox/inbox event.
+
+    ``id`` is the monotonically ordered cursor exposed by the originating
+    server.  ``event_id`` remains stable across forwarding through peers, so
+    every server can deduplicate delivery independently of wall clocks.
+    """
+
+    event_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    source_server = models.CharField(max_length=100, db_index=True)
+    model_label = models.CharField(max_length=100, db_index=True)
+    natural_key = models.CharField(max_length=255, db_index=True)
+    op = models.CharField(max_length=10)
+    source_version = models.PositiveBigIntegerField(default=1)
+    payload = models.JSONField(default=dict)
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        app_label = "core"
+        ordering = ["id"]
+        indexes = [models.Index(fields=["source_server", "event_id"], name="core_syncev_source__3b168d_idx")]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise RuntimeError("SyncEvent rows are immutable; append a new event instead.")
+        return super().save(*args, **kwargs)
+
+
+class SyncInboxEvent(models.Model):
+    """Idempotency ledger for events received from a peer."""
+
+    source_server = models.CharField(max_length=100)
+    event_id = models.UUIDField()
+    received_at = models.DateTimeField(default=timezone.now)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    result = models.CharField(max_length=20, default="received")
+    error = models.TextField(blank=True, default="")
+
+    class Meta:
+        app_label = "core"
+        constraints = [models.UniqueConstraint(fields=["source_server", "event_id"], name="core_sync_inbox_source_event_unique")]
+
+
+class SyncPeerDelivery(models.Model):
+    """Durable acknowledgement of an immutable event by an outbound peer."""
+
+    STATUS_PENDING = "pending"
+    STATUS_ACKNOWLEDGED = "acknowledged"
+    STATUS_FAILED = "failed"
+    peer = models.ForeignKey(SyncPeer, on_delete=models.CASCADE, related_name="deliveries")
+    event = models.ForeignKey(SyncEvent, on_delete=models.CASCADE, related_name="deliveries")
+    status = models.CharField(max_length=20, default=STATUS_PENDING, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True, default="")
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        app_label = "core"
+        constraints = [models.UniqueConstraint(fields=["peer", "event"], name="core_sync_peer_event_unique")]
 
 
 class MediaSyncTask(models.Model):

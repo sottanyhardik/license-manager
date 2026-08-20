@@ -13,10 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MAX_DAYS, MIN_DAYS, normalizeDownloadDays, parseLicenseNumbers } from "./downloadLicenseHelpers";
 
 const DEFAULT_DAYS = 365;
-const MIN_DAYS = 1;
-const MAX_DAYS = 3650;
 
 const STATUS_OPTIONS = [
     { value: "active", label: "Active Licenses", Icon: CircleCheck, tone: "success" },
@@ -41,32 +40,6 @@ const EXCEL_INCLUDES = [
     "Unit price and CIF FC calculations",
     "Each license in its own named sheet",
 ];
-
-export function normalizeDownloadDays(value: unknown, fallback = DEFAULT_DAYS): number {
-    const fallbackDays = Number.isFinite(fallback)
-        ? Math.min(MAX_DAYS, Math.max(MIN_DAYS, Math.trunc(fallback)))
-        : DEFAULT_DAYS;
-    const parsed = Number.parseInt(String(value), 10);
-    if (!Number.isFinite(parsed)) {
-        return fallbackDays;
-    }
-    return Math.min(MAX_DAYS, Math.max(MIN_DAYS, parsed));
-}
-
-export function parseLicenseNumbers(value: string): string[] {
-    const seen = new Set<string>();
-    const numbers: string[] = [];
-
-    for (const rawValue of value.split(/[\s,]+/)) {
-        const licenseNumber = rawValue.trim();
-        if (licenseNumber && !seen.has(licenseNumber)) {
-            seen.add(licenseNumber);
-            numbers.push(licenseNumber);
-        }
-    }
-
-    return numbers;
-}
 
 function extractLicenseNumbers(data: LicenseReportResponse): string[] {
     if (!Array.isArray(data.licenses)) {

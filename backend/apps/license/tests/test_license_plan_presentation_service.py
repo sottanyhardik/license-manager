@@ -109,13 +109,13 @@ def import_item_2(license_obj, hs_code):
 @pytest.fixture
 def item_name_wpc():
     """Create item name 'WPC' for split."""
-    return ItemNameModel.objects.create(name="WPC")
+    return ItemNameModel.objects.get_or_create(name="WPC")[0]
 
 
 @pytest.fixture
 def item_name_swp():
     """Create item name 'SWP' for split."""
-    return ItemNameModel.objects.create(name="SWP")
+    return ItemNameModel.objects.get_or_create(name="SWP")[0]
 
 
 @pytest.fixture

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "../api/axios";
 import { downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "../services/licenseLedgerExport";
 import { getFinancialYearRange } from "../utils/dateRangePresets";
-import LicenseLedger, { normalizeLicenseWiseData } from "./LicenseLedger";
+import LicenseLedger from "./LicenseLedger";
+import { normalizeLicenseWiseData } from "./licenseLedgerData";
 
 const navigate = vi.fn();
 vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));

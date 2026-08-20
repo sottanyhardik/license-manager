@@ -20,7 +20,8 @@ from django.test import TestCase
 
 from apps.core.constants import GE
 from apps.core.models import CompanyModel, PurchaseStatus
-from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.core.models import ItemNameModel
 from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.views.item_pivot_report import ItemPivotReportView
 
@@ -37,9 +38,18 @@ class ItemPivotBalanceConsistencyTests(TestCase):
             purchase_status=purchase_status,
         )
         LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000.00"))
-        LicenseImportItemsModel.objects.create(
+        import_item = LicenseImportItemsModel.objects.create(
             license=license_obj, serial_number=1, description="Pivot balance item",
             quantity=Decimal("100.000"), available_quantity=Decimal("100.000"),
+        )
+        # Canonical v1 deliberately projects persisted plans rather than
+        # executing Auto Plan on a report read.  Give this fixture one plan
+        # so its balance remains observable in the supported projection.
+        item_name = ItemNameModel.objects.create(name=f"PIVOT BALANCE {license_obj.license_number}")
+        import_item.items.add(item_name)
+        LicenseItemPlan.objects.create(
+            license=license_obj, import_item=import_item, item_name=item_name,
+            planned_quantity=Decimal("1.000"), planned_cif_fc=Decimal("1.00"),
         )
         # Force the denormalized column to a value that does NOT match the
         # live calculation — `.update()` is a raw SQL UPDATE, bypassing the
@@ -75,12 +85,15 @@ class ItemPivotBalanceConsistencyTests(TestCase):
         view = ItemPivotReportView()
         report = view.generate_report(min_balance=0, license_status="all")
 
-        found = None
-        for _norm, notifs in report["licenses_by_norm_notification"].items():
-            for _notif, licenses_list in notifs.items():
-                for lic_row in licenses_list:
-                    if lic_row["license_number"] == license_obj.license_number:
-                        found = lic_row
+        found = next(
+            (
+                license_row
+                for group in report["groups"]
+                for license_row in group["licenses"]
+                if license_row["license_number"] == license_obj.license_number
+            ),
+            None,
+        )
         self.assertIsNotNone(found, "license must appear in the report output")
         self.assertEqual(Decimal(str(found["balance_cif"])), live_balance)
 
@@ -116,11 +129,11 @@ class ItemPivotBalanceConsistencyTests(TestCase):
         view = ItemPivotReportView()
         report = view.generate_report(min_balance=int(threshold), license_status="all")
 
-        numbers_in_report = set()
-        for _norm, notifs in report["licenses_by_norm_notification"].items():
-            for _notif, licenses_list in notifs.items():
-                for lic_row in licenses_list:
-                    numbers_in_report.add(lic_row["license_number"])
+        numbers_in_report = {
+            license_row["license_number"]
+            for group in report["groups"]
+            for license_row in group["licenses"]
+        }
 
         self.assertIn(included.license_number, numbers_in_report, "Live balance above threshold must be included")
         self.assertNotIn(excluded.license_number, numbers_in_report, "Live balance below threshold (despite stale-high cache) must be excluded")

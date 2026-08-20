@@ -17,7 +17,8 @@ from apps.core.models import (
     HeadSIONNormsModel, ItemNameModel, SionNormClassModel, HSCodeModel
 )
 from apps.license.models import (
-    LicenseDetailsModel, LicenseImportItemsModel, SionPlanningRule, LicenseItemPlan
+    LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
+    SionPlanningRule, LicenseItemPlan,
 )
 from apps.license.services.output_item_resolver import OutputItemResolver
 from apps.license.services.sion_rule_engine import SionRulePlanningService
@@ -60,7 +61,10 @@ def test_rule_without_item(e1_sion):
             "unit": "MT",
             "priority": 5,
             "is_active": True,
-            "output_item": None,  # Explicitly no output item
+            # Execution configuration requires an explicit output category;
+            # the resolver then creates the canonical ItemNameModel lazily.
+            "execution_output": "AUTO CREATE TEST OIL",
+            "import_item": None,  # Explicitly no output item
         },
     )
     return rule
@@ -114,7 +118,7 @@ def test_output_item_resolver_creates_missing_item(e1_sion, test_rule_without_it
 
     # Verify rule was linked
     test_rule_without_item.refresh_from_db()
-    assert test_rule_without_item.output_item == resolved
+    assert test_rule_without_item.import_item == resolved
 
 
 @pytest.mark.django_db
@@ -160,7 +164,13 @@ def test_planning_auto_creates_output_item_on_execution(e1_sion, test_rule_witho
     license_obj = LicenseDetailsModel.objects.create(
         license_number="AUTO-CREATE-TEST-001",
     )
-    license_obj.export_license.create(norm_class=e1_sion)
+    # Live financial balance is authoritative.  A relation with zero CIF is
+    # not an entitlement and must not make execution create a target item.
+    LicenseExportItemModel.objects.create(
+        license=license_obj,
+        norm_class=e1_sion,
+        cif_fc=Decimal("1000.00"),
+    )
 
     hs_code = HSCodeModel.objects.create(hs_code="15150000")
     import_item = LicenseImportItemsModel.objects.create(
@@ -169,6 +179,7 @@ def test_planning_auto_creates_output_item_on_execution(e1_sion, test_rule_witho
         hs_code=hs_code,
         description="Test Oil Product",
         quantity=Decimal("50"),
+        available_quantity=Decimal("50"),
     )
 
     # Set license balance via the import items' CIF
@@ -233,8 +244,8 @@ def test_planning_auto_creates_output_item_on_execution(e1_sion, test_rule_witho
 
     # Verify rule was linked
     test_rule_without_item.refresh_from_db()
-    assert test_rule_without_item.output_item is not None
-    assert test_rule_without_item.output_item.name == "AUTO CREATE TEST OIL"
+    assert test_rule_without_item.import_item is not None
+    assert test_rule_without_item.import_item.name == "AUTO CREATE TEST OIL"
 
     # Verify LicenseItemPlan was created
     plan_lines = LicenseItemPlan.objects.filter(
@@ -243,7 +254,7 @@ def test_planning_auto_creates_output_item_on_execution(e1_sion, test_rule_witho
     )
     assert plan_lines.exists(), "No LicenseItemPlan created"
     plan_line = plan_lines.first()
-    assert plan_line.item_name == test_rule_without_item.output_item
+    assert plan_line.item_name == test_rule_without_item.import_item
 
 
 @pytest.mark.django_db
@@ -274,7 +285,11 @@ def test_planning_replan_idempotent(e1_sion, test_rule_without_item):
     license_obj = LicenseDetailsModel.objects.create(
         license_number="AUTO-CREATE-REPLAN-001",
     )
-    license_obj.export_license.create(norm_class=e1_sion)
+    LicenseExportItemModel.objects.create(
+        license=license_obj,
+        norm_class=e1_sion,
+        cif_fc=Decimal("1000.00"),
+    )
 
     hs_code = HSCodeModel.objects.create(hs_code="15150000")
     import_item = LicenseImportItemsModel.objects.create(
@@ -283,6 +298,7 @@ def test_planning_replan_idempotent(e1_sion, test_rule_without_item):
         hs_code=hs_code,
         description="Test Oil",
         quantity=Decimal("50"),
+        available_quantity=Decimal("50"),
     )
 
     # Set license balance via the import items' CIF

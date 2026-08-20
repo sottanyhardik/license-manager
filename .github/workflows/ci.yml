@@ -107,11 +107,7 @@ jobs:
       - name: Backend tests (canonical suite — required gate)
         run: pytest tests/ -p no:cacheprovider
 
-      # Advisory: the app-level tests (balance math, plan cases, core utils) exist
-      # but the project runner only ran tests/. Surface them without blocking CI;
-      # once confirmed green, promote this into the required gate above.
-      - name: App-level tests (advisory — balance/duty math, core utils)
-        continue-on-error: true
+      - name: App-level tests (balance/duty math, plan cases, core utilities)
         run: pytest apps/license/tests apps/core/tests --import-mode=importlib -p no:cacheprovider
 
   mds:

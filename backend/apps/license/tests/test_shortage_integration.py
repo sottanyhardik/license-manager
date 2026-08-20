@@ -156,13 +156,25 @@ class TestShortageIntegration:
             primary_qty = sum(r.quantity for r in primary_rows)
             assert primary_qty == Decimal("100.00")
 
-        # Should record shortage for secondary
+        # The later row cannot be silently discarded when PRIMARY exhausted
+        # the shared CIF pool. Its exact shortage is a reconciliation contract.
         metadata = result.metadata
-        if metadata.get("has_shortage"):
-            shortages = metadata.get("shortages", [])
-            # Should have shortage for secondary (SECONDARY couldn't be fully allocated)
-            secondary_shortages = [s for s in shortages if s["input_key"] == "SECONDARY"]
-            assert len(secondary_shortages) > 0
+        assert metadata["has_shortage"] is True
+        secondary_shortages = [
+            shortage for shortage in metadata["shortages"]
+            if shortage["input_key"] == "SECONDARY"
+        ]
+        assert secondary_shortages == [{
+            "input_key": "SECONDARY",
+            "record_id": "2",
+            "target_quantity": Decimal("100.00"),
+            "allocated_quantity": Decimal("0"),
+            "shortage_quantity": Decimal("100.00"),
+            "target_cif": Decimal("500.00"),
+            "allocated_cif": Decimal("0.00"),
+            "shortage_cif": Decimal("500.00"),
+            "limiting_reason": "NO_REMAINING_CIF",
+        }]
 
     def test_fixed_price_percentage_allocation_with_shortage(self):
         """
@@ -172,9 +184,10 @@ class TestShortageIntegration:
         config = {
             "actions": [
                 {
-                    "action_type": "SPLIT_BY_PERCENTAGE",
+                    "action_type": "SPLIT",
                     "priority": 1,
                     "config": {
+                        "algorithm": "SPLIT_BY_PERCENTAGE",
                         "category": "OIL",
                         "rows": [
                             {"output_code": "OIL_A", "percentage": "60", "unit_price": "5.00"},

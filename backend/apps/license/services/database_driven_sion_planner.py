@@ -399,15 +399,41 @@ class DatabaseDrivenSionPlanner:
             for record in state.for_outputs([output]):
                 # Use pre-set unit_price from percentage allocation if available
                 record_rate = decimal(record.get("unit_price")) if record.get("unit_price") is not None else rate
-                if state.remaining <= 0 or record_rate <= 0:
+                if record_rate <= 0:
                     continue
-                quantity = _quantity(record)
+                requested_quantity = _quantity(record)
+                if requested_quantity <= 0:
+                    continue
+                quantity = requested_quantity
+                remaining_before = state.remaining
                 # Always apply CIF constraint - even with fixed unit_price from SPLIT_BY_PERCENTAGE
                 if quantity * record_rate > state.remaining:
-                    # Reduce quantity to fit within remaining CIF balance
-                    quantity = (state.remaining / record_rate).to_integral_value(rounding=ROUND_FLOOR)
+                    if config.get("partial_mode") == "REDUCE_EFFECTIVE_RATE":
+                        # Some declarative legacy profiles retain the approved
+                        # physical quantity and express a capped CIF as its
+                        # effective plan rate.  This is distinct from the
+                        # normal quantity-limited waterfall and is selected by
+                        # configuration, never by a SION identity.
+                        record_rate = max(state.remaining, ZERO) / quantity
+                    else:
+                        # The ordinary waterfall is quantity limited.  Floor
+                        # avoids ever breaching Actual Balance CIF.
+                        quantity = (
+                            max(state.remaining, ZERO) / record_rate
+                        ).to_integral_value(rounding=ROUND_FLOOR)
                 state.emit(record, output, quantity, record_rate)
                 state.remaining -= quantity * record_rate
+                if quantity < requested_quantity:
+                    state.record_shortage(
+                        record=record,
+                        output=output,
+                        requested_quantity=requested_quantity,
+                        allocated_quantity=quantity,
+                        unit_price=record_rate,
+                        limiting_reason=(
+                            "NO_REMAINING_CIF" if remaining_before <= 0 else "CIF_CAP"
+                        ),
+                    )
 
     def _action_rebalance(self, state: "_State", config: dict[str, Any]) -> None:
         if config.get("mode") != "VALUE_GAIN_SHIFT" or state.remaining <= 0:
@@ -535,6 +561,40 @@ class _State:
             str(record.get("category") or record.get("matched_output") or ""), output,
             quantity, rate, quantity * rate, record.get("source_output"), self.sequence,
         ))
+
+    def record_shortage(
+        self,
+        *,
+        record: dict[str, Any],
+        output: str,
+        requested_quantity: Decimal,
+        allocated_quantity: Decimal,
+        unit_price: Decimal,
+        limiting_reason: str,
+    ) -> None:
+        """Append an auditable row whenever the CIF waterfall clips a request.
+
+        Allocation must remain non-fatal under a CIF shortage, but callers need
+        the exact unallocated quantity and value to reconcile a partial plan.
+        Recording this at the canonical allocation boundary also covers later
+        rows in the waterfall once an earlier row exhausted the shared pool.
+        """
+        shortage_quantity = requested_quantity - allocated_quantity
+        if shortage_quantity <= ZERO:
+            return
+        shortages = self.metadata.setdefault("shortages", [])
+        shortages.append({
+            "input_key": output,
+            "record_id": str(record.get("record_id") or record.get("key") or record.get("id") or ""),
+            "target_quantity": requested_quantity,
+            "allocated_quantity": allocated_quantity,
+            "shortage_quantity": shortage_quantity,
+            "target_cif": requested_quantity * unit_price,
+            "allocated_cif": allocated_quantity * unit_price,
+            "shortage_cif": shortage_quantity * unit_price,
+            "limiting_reason": limiting_reason,
+        })
+        self.metadata["has_shortage"] = True
 
 
 def _quantity(record):

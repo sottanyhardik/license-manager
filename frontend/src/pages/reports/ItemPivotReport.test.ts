@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildItemPivotReportPath, toFiniteNumber } from "./ItemPivotReport";
+import { buildItemPivotReportPath, toFiniteNumber } from "./itemPivotReportUtils";
 
 describe("ItemPivotReport helpers", () => {
     it("builds encoded item-pivot report URLs from active filters", () => {

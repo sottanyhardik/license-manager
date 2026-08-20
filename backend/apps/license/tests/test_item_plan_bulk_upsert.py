@@ -83,13 +83,14 @@ def tartaric_acid_license(db):
 
 
 @pytest.mark.django_db
-def test_pooling_two_different_hsn_items_under_one_plan_line_is_rejected(
+def test_pooling_two_different_hsn_items_under_one_plan_line_is_capped_to_its_hsn_group(
     license_manager_client, tartaric_acid_license,
 ):
     # This reproduces the OLD (description-only) behaviour that let a single
     # plan line on one item (HSN 29181400, capacity 9458.810) absorb the
-    # total pooled across BOTH HSNs (10160.920) — no longer valid once HSN is
-    # part of the group key.
+    # total pooled across BOTH HSNs (10160.920). HSN grouping must prevent that:
+    # the valid 29181400 portion is saved and the exact unavailable portion is
+    # returned as a shortage rather than abandoning the rest of the plan.
     license_obj, item_29181400, item_a, item_b = tartaric_acid_license
 
     resp = license_manager_client.post(BULK_UPSERT_URL, {
@@ -104,10 +105,14 @@ def test_pooling_two_different_hsn_items_under_one_plan_line_is_rejected(
         }],
     }, format="json")
 
-    assert resp.status_code == 400, resp.data
-    # CanonicalPlanningService returns structured error: {code, message, details}
-    assert resp.data.get("code") == "INSUFFICIENT_QUANTITY"
-    assert "exceeds" in resp.data.get("message", "").lower()
+    assert resp.status_code == 200, resp.data
+    assert resp.data["saved"] == 1
+    (line,) = resp.data["lines"]
+    assert Decimal(str(line["planned_quantity"])) == Decimal("9458.810")
+    assert Decimal(str(line["requested_planned_qty"])) == Decimal("10160.920")
+    assert Decimal(str(line["effective_planned_qty"])) == Decimal("9458.810")
+    assert Decimal(str(line["capped_qty"])) == Decimal("702.110")
+    assert line["was_quantity_capped"] is True
 
 
 @pytest.mark.django_db

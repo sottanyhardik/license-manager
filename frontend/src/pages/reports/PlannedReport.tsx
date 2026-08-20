@@ -2,16 +2,13 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, FileSpreadsheet, Inbox, Loader2, Package, Tag } from "lucide-react";
-import { reportQueryString, type ReportQueryOptions } from "./itemReport/reportQueryString";
 import { useItemReportFilters } from "./itemReport/useItemReportFilters";
 import { useItemReportData } from "./itemReport/useItemReportData";
 import ItemReportFilters from "./itemReport/ItemReportFilters";
 import ItemReportTotalsBar from "./itemReport/ItemReportTotalsBar";
 import ItemReportTable from "./itemReport/ItemReportTable";
+import { buildPlannedReportPath } from "./reportPaths";
 
-export function buildPlannedReportPath(options: ReportQueryOptions): string {
-    return `reports/planned-report/?${reportQueryString(options)}`;
-}
 
 export default function PlannedReport() {
     const navigate = useNavigate();

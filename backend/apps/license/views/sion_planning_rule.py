@@ -429,6 +429,95 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
+    @action(detail=True, methods=("get", "patch"), url_path="allocation-strategy")
+    def allocation_strategy(self, request, pk=None):
+        """Read or update the legacy strategy-editor projection.
+
+        The planning editor still uses this small endpoint while it migrates
+        to versioned rule rows.  Persist the configuration in the canonical
+        profile action model; never attach an ad-hoc strategy blob to a rule.
+        """
+        rule = self.get_object()
+        action = self._allocation_action_for(rule)
+        if request.method == "GET":
+            if action is None:
+                return Response(
+                    {"detail": "No allocation strategy is configured for this rule."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            return Response({
+                "action_id": action.pk,
+                "strategy": (action.config or {}).get("algorithm", "STANDARD"),
+                "config": action.config or {},
+                "version": action.version,
+            })
+
+        payload = RuleAllocationStrategySerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        values = payload.validated_data
+        with transaction.atomic():
+            SionRulePriorityService._lock_sion(rule.sion_id)
+            profile = action.profile if action is not None else None
+            if action is None:
+                profile = SionPlanningProfile.objects.filter(
+                    sion_id=rule.sion_id, is_active=True,
+                ).order_by("-version", "-pk").first()
+                if profile is None:
+                    profile = SionPlanningProfile.objects.create(
+                        sion_id=rule.sion_id,
+                        stable_key=f"{rule.sion.norm_class}:EDITOR",
+                        is_active=False,
+                    )
+                next_priority = (
+                    SionPlanningAction.objects.filter(profile=profile, is_active=True)
+                    .aggregate(max_priority=Max("priority"))["max_priority"] or 0
+                ) + 1
+                action = SionPlanningAction.objects.create(
+                    profile=profile,
+                    stable_key=f"rule:{rule.pk}:strategy",
+                    action_type="SPLIT",
+                    priority=next_priority,
+                    config={},
+                )
+
+            config = dict(action.config or {})
+            config.update(values.get("config") or {})
+            config["algorithm"] = values["strategy"]
+            if values["strategy"] == "SPLIT_BY_PERCENTAGE" and not config.get("rows"):
+                # An empty editor starts from persisted SION master rules;
+                # callers never need to manufacture labels or retired output
+                # fields.  Explicit rows still go through serializer-level
+                # canonical item validation above.
+                defaults = SionPlanningRule.objects.filter(
+                    sion_id=rule.sion_id, is_active=True,
+                    percentage_constraint__isnull=False,
+                    import_item__isnull=False,
+                ).exclude(pk=rule.pk).order_by("priority", "pk")
+                config["rows"] = [{
+                    "input_item_id": candidate.import_item_id,
+                    "output_code": candidate.import_item.name.upper(),
+                    "percentage": str(candidate.percentage_constraint),
+                    "unit_price": str(candidate.max_unit_price),
+                } for candidate in defaults]
+            config["source_rule_id"] = rule.pk
+            config.setdefault("category", rule.execution_output or rule.name)
+            config.setdefault("granularity", "ITEM_SEQUENTIAL")
+            action.config = config
+            action.version += 1
+            action.is_active = True
+            action.save(update_fields=("config", "version", "is_active", "modified_on"))
+            if not profile.is_active:
+                # The action now exists, satisfying the profile invariant.
+                profile.is_active = True
+                profile.save(update_fields=("is_active", "modified_on"))
+        self._audit("RULE_ALLOCATION_STRATEGY_UPDATED", rule=rule, extra={"action_id": action.pk})
+        return Response({
+            "action_id": action.pk,
+            "strategy": values["strategy"],
+            "config": action.config,
+            "version": action.version,
+        })
+
     @action(detail=True, methods=("post",), url_path="test")
     def test_rule(self, request, pk=None):
         response = self._execute(request, persist=False)
@@ -453,6 +542,13 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=("post",), url_path="plan-sion")
     def plan_sion(self, request):
+        """Queue one durable REPLACE request per explicitly selected licence.
+
+        This route previously ran a potentially unbounded Auto Plan operation
+        inside the web request.  It now only resolves licence identifiers and
+        creates one coalesced durable request per licence; workers isolate the
+        actual locks and failures.
+        """
         if "rules" in request.data or "expression" in request.data:
             return Response(
                 {"error": "Planning accepts only saved database rules."},
@@ -461,25 +557,40 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         request_serializer = SionPlanRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
         identifiers = request_serializer.validated_data
-        try:
-            result = SionRulePlanningService.plan_sion(
-                identifiers["sion_id"], identifiers.get("license_ids"),
-                company_id=self._company_id(),
-                mode=identifiers["mode"],
+        requested_ids = identifiers.get("license_ids") or []
+        queryset = LicenseDetailsModel.objects.all()
+        company_id = self._company_id()
+        if company_id is not None:
+            queryset = queryset.filter(exporter_id=company_id)
+        if requested_ids:
+            queryset = queryset.filter(pk__in=requested_ids)
+        else:
+            # This is identifier-only filtering, not plan eligibility or
+            # arithmetic.  It preserves the established "plan this SION"
+            # UI while leaving all Auto Plan work to the queue.
+            queryset = queryset.filter(export_license__norm_class_id=identifiers["sion_id"]).distinct()
+        licenses = list(queryset.only("pk"))
+        if requested_ids and len(licenses) != len(set(requested_ids)):
+            return Response({"code": "LICENSE_NOT_FOUND", "detail": "One or more licenses are unavailable."}, status=status.HTTP_404_NOT_FOUND)
+
+        from apps.license.services.replan_requests import request_license_replan
+        requests = [
+            request_license_replan(
+                license_id=license_obj.pk,
+                reason="manual_plan_sion",
+                source_model="sion_planning_rule.plan_sion",
+                source_pk=identifiers["sion_id"],
             )
-        except CompanyIsolationError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
-        except (PlanningError, ValueError, TypeError) as exc:
-            payload = exc.as_dict() if isinstance(exc, PlanningError) else {"error": str(exc)}
-            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-        self._audit(
-            "SION_PLAN_EXECUTED", sion_id=result["sion_id"],
-            extra={
-                "rules_executed": result["rules_executed"],
-                "mode": result["mode"],
-            },
-        )
-        return Response(result)
+            for license_obj in licenses
+        ]
+        self._audit("SION_REPLAN_QUEUED", sion_id=identifiers["sion_id"], extra={"license_ids": [row.pk for row in licenses], "request_ids": [row.pk for row in requests]})
+        return Response({
+            "sion_id": identifiers["sion_id"],
+            "mode": identifiers["mode"],
+            "planning_state": "REPLAN_PENDING",
+            "replan_request_ids": [row.pk for row in requests],
+            "message": "Licence replanning has been queued.",
+        }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=("post",), url_path="preview-sion")
     def preview_sion(self, request):
@@ -626,75 +737,35 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=("post",), url_path="plan-license")
     def plan_license(self, request):
-        """Plan a single license through all applicable SION norms.
+        """Queue a full REPLACE replan for one licence.
 
-        INTERNAL: This endpoint is used by the /planning page and related planning
-        workflows. It auto-discovers applicable SIONs for a license and plans through
-        all of them. This is an alternative to plan-sion (SION-first planning) but
-        both flow through the same execution engine.
-
-        For new planning integrations, prefer plan-sion and have the caller specify
-        the SION directly.
+        The worker resolves applicable SIONs from committed source data.  This
+        endpoint must not inspect, calculate, or replace plans inline.
         """
         request_serializer = LicenseIdOnlySerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
         values = request_serializer.validated_data
 
-        try:
-            license_obj, sion_ids = self._resolve_sions_for_license(
-                values["license_id"], company_id=self._company_id()
-            )
-        except CompanyIsolationError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
-        except PlanningError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
+        license_obj = LicenseDetailsModel.objects.filter(pk=values["license_id"]).first()
+        if not license_obj:
+            return Response({"code": "LICENSE_NOT_FOUND", "detail": "License not found."}, status=status.HTTP_404_NOT_FOUND)
+        company_id = self._company_id()
+        if company_id is not None and license_obj.exporter_id != company_id:
+            return Response({"code": "COMPANY_MISMATCH", "detail": "License belongs to another company."}, status=status.HTTP_403_FORBIDDEN)
 
-        mode = values["mode"]
-        applicable_sions = []
-
-        for sion_id in sion_ids:
-            try:
-                with transaction.atomic():
-                    result = SionRulePlanningService.plan_sion(
-                        sion_id, license_ids=[license_obj.pk],
-                        company_id=self._company_id(),
-                        mode=mode,
-                    )
-            except CompanyIsolationError as exc:
-                return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
-            except PlanningError as exc:
-                return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
-
-            applicable_sions.append({
-                "sion_id": sion_id,
-                "sion_code": result.get("sion"),
-                "status": "EXECUTED" if result.get("write_results") else "SKIPPED",
-                "rules_executed": result.get("rules_executed", []),
-                "write_results": result.get("write_results", []),
-            })
-
-        self._audit(
-            "LICENSE_PLAN_EXECUTED",
-            extra={
-                "license_id": license_obj.pk,
-                "license_number": license_obj.license_number,
-                "sions_count": len(applicable_sions),
-                "mode": mode,
-            },
+        from apps.license.services.replan_requests import request_license_replan
+        durable_request = request_license_replan(
+            license_id=license_obj.pk,
+            reason="manual_plan_license",
+            source_model="sion_planning_rule.plan_license",
+            source_pk=license_obj.pk,
         )
-
+        self._audit("LICENSE_REPLAN_QUEUED", extra={"license_id": license_obj.pk, "mode": values["mode"], "request_id": durable_request.pk})
         return Response({
             "license_id": license_obj.pk,
             "license_number": license_obj.license_number,
-            "mode": mode,
-            "applicable_sions": applicable_sions,
-            "total_results": {
-                "sions_processed": len(applicable_sions),
-                "sions_executed": len([s for s in applicable_sions if s["status"] == "EXECUTED"]),
-                "total_lines_written": sum(
-                    len(wr.get("write_results", []))
-                    for s in applicable_sions
-                    for wr in s.get("write_results", [])
-                ),
-            },
-        })
+            "mode": values["mode"],
+            "planning_state": "REPLAN_PENDING",
+            "replan_request_id": durable_request.pk,
+            "message": "Licence replanning has been queued.",
+        }, status=status.HTTP_202_ACCEPTED)

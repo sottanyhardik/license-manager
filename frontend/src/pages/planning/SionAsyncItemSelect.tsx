@@ -51,7 +51,7 @@ export function SionImportItemAsyncSelect({
     setSelectedItem(null);
     if (previousSion.current !== sionId && value != null) onChange(null);
     previousSion.current = sionId;
-  }, [sionId]); // onChange/value deliberately excluded: only a SION change clears selection
+  }, [sionId, onChange, value]);
 
   useEffect(() => {
     setPage(1);
@@ -88,7 +88,10 @@ export function SionImportItemAsyncSelect({
   }, [value, selectedQuery.data]);
 
   const excluded = useMemo(() => new Set(excludeIds), [excludeIds]);
-  const resultItems = page === 1 ? (resultsQuery.data?.items ?? []) : loadedItems;
+  const resultItems = useMemo(
+    () => page === 1 ? (resultsQuery.data?.items ?? []) : loadedItems,
+    [page, resultsQuery.data?.items, loadedItems],
+  );
   const options = useMemo<SelectOption[]>(() =>
     resultItems
       .map((item) => ({ value: item.id, label: item.name, item })),

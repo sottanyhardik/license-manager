@@ -5,6 +5,7 @@ from apps.license.services.sion_legacy_configurations import LEGACY_PLANNER_CONF
 from apps.license.services.sion_legacy_importer import import_planner_definition
 from apps.license.services.sion_planner_config.e1_e5 import LEGACY_PLANNER_CONFIG_BY_SION as E1_E5_CONFIGS
 from apps.license.services.sion_planner_config.importer import import_profile_document
+from apps.license.services.e5_planner_seed import ensure_canonical_e5_configuration
 
 ALL_CONFIGS = {**E1_E5_CONFIGS, **LEGACY_PLANNER_CONFIGURATIONS}
 
@@ -35,6 +36,10 @@ class Command(BaseCommand):
             with transaction.atomic():
                 results = []
                 for norm in norms:
+                    if norm == "E5":
+                        result = ensure_canonical_e5_configuration()
+                        results.append({"norm": norm, "profile_id": result.profile.pk if result.profile else None, "status": result.status})
+                        continue
                     if norm in E1_E5_CONFIGS:
                         profile = import_profile_document(E1_E5_CONFIGS[norm])
                         results.append({"norm": norm, "profile_id": profile.pk})
@@ -44,5 +49,5 @@ class Command(BaseCommand):
             raise CommandError(str(exc)) from exc
         for result in results:
             self.stdout.write(self.style.SUCCESS(
-                f"{result['norm']}: profile={result['profile_id']} imported inactive"
+                f"{result['norm']}: profile={result['profile_id']} {result.get('status', 'imported inactive')}"
             ))

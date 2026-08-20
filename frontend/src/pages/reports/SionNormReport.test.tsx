@@ -2,12 +2,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../../api/axios";
-import SionNormReport, {
+import SionNormReport from "./SionNormReport";
+import {
     buildSionReportPath,
     formatReportNumber,
     getSionReportGroups,
     normalizeBooleanFilter,
-} from "./SionNormReport";
+} from "./sionNormReportUtils";
 
 vi.mock("../../api/axios", () => ({
     default: {

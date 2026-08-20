@@ -100,6 +100,39 @@ def _allocate(client, allotment_obj, item_id, qty, cif_fc):
 
 
 class TestAllocateItemsUsesLiveBalance:
+    def test_api_max_pair_saves_the_same_precision_value(self, allotment_client):
+        """The API contract and persistence use one 8.821-price pair."""
+        company = CompanyModel.objects.create(iec="4066666666", name="Paired Max API Co")
+        allotment = AllotmentModel.objects.create(
+            company=company,
+            # The model derives required CIF from the quantity and canonical
+            # 3dp price.  This rounds to the required 2066.75 cap.
+            required_quantity=Decimal("234.299"),
+            unit_value_per_unit=Decimal("8.821"),
+        )
+        license_obj = _make_license("PAIRED-MAX-API", company)
+        LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("2066.75"))
+        item = LicenseImportItemsModel.objects.create(
+            license=license_obj, serial_number=1, quantity=Decimal("500.000"),
+            available_quantity=Decimal("500.000"), condition_type="",
+        )
+        _set_live_balance(license_obj, Decimal("2066.75"))
+
+        available = allotment_client.get(
+            f"/api/allotment-actions/{allotment.id}/available-licenses/",
+            {"debit_based_on": "ACTUAL"},
+        )
+        assert available.status_code == 200, available.data
+        row = next(row for row in available.data["available_items"] if row["id"] == item.id)
+        pair = row["basis_options"]["actual"]["allocation_limit"]
+        assert pair["paired_max_qty"] == "234.000"
+        assert pair["paired_max_cif"] == "2064.12"
+
+        saved = _allocate(allotment_client, allotment, item.id, "234", "2064.12")
+        assert saved.status_code == 201, saved.data
+        assert saved.data["created_items"][0]["qty"] == "234"
+        assert saved.data["created_items"][0]["cif_fc"] == "2064.12"
+
     def test_stale_low_cached_balance_does_not_reject_live_valid_allocation(
         self, allotment_client, allotment_obj,
     ):

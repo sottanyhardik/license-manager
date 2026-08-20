@@ -84,7 +84,10 @@ def test_sale_generation_is_idempotent_and_uses_canonical_amount(monkeypatch):
     assert rendered == [(sale.pk, False)]
     document = TradeInvoiceDocument.objects.get(pk=first.document_id)
     assert document.sale_bill_inr == Decimal("1519243.00")
-    assert document.file.read() == b"%PDF canonical sale"
+    try:
+        assert document.file.read() == b"%PDF canonical sale"
+    finally:
+        document.file.close()
     assert InvoiceDocumentAuditEvent.objects.filter(
         trade=sale, event=InvoiceDocumentAuditEvent.EVENT_SALE_GENERATED
     ).count() == 1

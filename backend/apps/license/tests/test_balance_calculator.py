@@ -108,6 +108,7 @@ class TestLicenseBalanceCalculator(TestCase):
         mock_row_details.objects.filter.assert_called_once_with(
             sr_number__license=mock_license,
             transaction_type=DEBIT,
+            bill_of_entry__isnull=False,
         )
 
     @patch('apps.reconciliation.models.InvoiceBOEAllocation')

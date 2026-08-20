@@ -11,11 +11,12 @@ from django.conf import settings
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import Count, Sum, DecimalField, Value
+from django.db.models import Count, Sum, DecimalField, Value, Q
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import cached_property
 
 from apps.allotment.models import AllotmentItems
@@ -88,6 +89,11 @@ def license_path(instance, filename):
 # License Header
 # -----------------------------
 class LicenseDetailsModel(AuditModel):
+    # Monotonic planning generations.  Source-changing signals increment the
+    # first field; a worker only advances the applied field after it has
+    # successfully built a plan for that exact generation.
+    planning_source_revision = models.PositiveBigIntegerField(default=0)
+    planning_applied_revision = models.PositiveBigIntegerField(default=0)
     purchase_status = models.ForeignKey(
         'core.PurchaseStatus',
         on_delete=models.PROTECT,
@@ -1180,6 +1186,72 @@ class LicenseImportItemsModel(models.Model):
 # -----------------------------
 # Utilization Planning
 # -----------------------------
+class LicenseReplanRequest(models.Model):
+    """Durable, coalesced request to rebuild one licence's plan asynchronously.
+
+    This is intentionally a request ledger, not a second planning authority.
+    The worker delegates to the same SION rule engine as the explicit
+    ``auto-plan`` API after the triggering transaction has committed.
+    """
+    STATUS_PENDING = "pending"
+    STATUS_QUEUED = "queued"
+    STATUS_RUNNING = "running"
+    STATUS_RETRY_PENDING = "retry_pending"
+    STATUS_SUCCEEDED = "succeeded"
+    STATUS_FAILED = "failed"
+    STATUS_SUPERSEDED = "superseded"
+    # Compatibility alias for the initial implementation.
+    STATUS_RETRY = STATUS_RETRY_PENDING
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_RETRY_PENDING, "Retry pending"),
+        (STATUS_SUCCEEDED, "Succeeded"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_SUPERSEDED, "Superseded"),
+    )
+
+    license = models.ForeignKey(
+        "license.LicenseDetailsModel", on_delete=models.CASCADE,
+        related_name="replan_requests", db_index=True,
+    )
+    reason = models.CharField(max_length=100)
+    source_model = models.CharField(max_length=128, blank=True, default="")
+    source_pk = models.CharField(max_length=128, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True)
+    source_revision = models.PositiveBigIntegerField(default=0)
+    planned_revision = models.PositiveBigIntegerField(null=True, blank=True)
+    started_source_revision = models.PositiveBigIntegerField(null=True, blank=True)
+    requested_at = models.DateTimeField(default=timezone.now, db_index=True)
+    queued_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    trigger_count = models.PositiveIntegerField(default=1)
+    retry_count = models.PositiveIntegerField(default=0)
+    next_retry_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    task_id = models.CharField(max_length=255, blank=True, default="")
+    celery_task_id = models.CharField(max_length=255, blank=True, default="")
+    result = models.JSONField(default=dict, blank=True)
+    last_error = models.TextField(blank=True, default="")
+    last_error_code = models.CharField(max_length=100, blank=True, default="")
+    last_error_message = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ("-requested_at", "-pk")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["license"],
+                condition=models.Q(status__in=["pending", "queued", "running", "retry_pending"]),
+                name="one_active_replan_request_per_license",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Replan {self.license_id} ({self.status})"
+
+
 class LicenseItemPlan(AuditModel):
     """
     User-authored utilization plan line for an import item.
@@ -1234,19 +1306,12 @@ class LicenseItemPlan(AuditModel):
     planned_cif_inr = models.DecimalField(
         max_digits=15, decimal_places=2, default=DEC_0, null=True, blank=True,
     )
-    # Live, independently-draining balance for this SPECIFIC plan line —
-    # distinct from `planned_quantity`/`planned_cif_fc` above, which stay
-    # the FIXED original target once Auto-Plan generates them. Needed
-    # because a real debit (`AllotmentItems`) has no item_name of its own —
-    # when one import item carries several plan lines (e.g. E132's
-    # Vegetable Oil split into PKO + Cheese), there is no way to derive
-    # "how much of THIS specific line has been consumed" from the shared
-    # import item's `available_quantity` alone. `allocate_items` decrements
-    # these fields directly (only when the request names this line via
-    # `plan_line_id`) so each line's remaining balance is tracked
-    # independently of its siblings. Defaults to the planned amount at
-    # creation (see `plan_enforcement.save_plan_lines_for_license`); null
-    # only for rows created before this field existed.
+    # Legacy denormalized snapshots retained for migration/reporting
+    # compatibility.  They are NOT allocation authority: a plan line's live
+    # residual is immutable planned capacity minus `AllotmentItems` ledger
+    # debits linked by `plan_line`.  Keeping those values out of validation
+    # avoids drift on amend/delete/reopen and prevents a two-decimal plan
+    # price from overwriting the canonical allocation CIF.
     remaining_quantity = models.DecimalField(
         max_digits=15, decimal_places=3, null=True, blank=True,
         validators=[MinValueValidator(DEC_000)],
@@ -1281,9 +1346,30 @@ class LicenseItemPlan(AuditModel):
     planning_rule_version = models.PositiveIntegerField(null=True, blank=True)
     planning_rule_priority = models.PositiveIntegerField(null=True, blank=True)
     allocation_provenance = models.JSONField(default=dict, blank=True)
+    # Lifecycle state is explicit.  An allocation route must never infer an
+    # active plan from its target item, a positive quantity, or a stale cache.
+    # Existing plans predate lifecycle tracking and are backfilled as active
+    # by the additive migration; later cancellation/supersession is recorded
+    # without deleting audit history.
+    is_active = models.BooleanField(default=True, db_index=True)
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    is_cancelled = models.BooleanField(default=False, db_index=True)
+
+    def clean(self):
+        super().clean()
+        if self.is_active and (self.is_deleted or self.is_cancelled):
+            raise ValidationError({
+                "is_active": "A deleted or cancelled plan line cannot be active.",
+            })
 
     class Meta:
         indexes = [models.Index(fields=["license"]), models.Index(fields=["import_item"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=~(Q(is_active=True) & (Q(is_deleted=True) | Q(is_cancelled=True))),
+                name="license_item_plan_active_not_deleted_or_cancelled",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         # Keep the denormalized license in sync with the item's license.

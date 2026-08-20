@@ -34,6 +34,29 @@ def _json_safe(value):
     return value
 
 
+def _boe_for_license(*, license_obj, boe_id):
+    """Resolve a BOE only when it is actually linked to the URL licence.
+
+    The balance-workspace URL is a capability boundary.  Merely holding the
+    two financial manager roles must not let a caller mutate an arbitrary
+    BOE by supplying its primary key under some other licence's URL.  Return
+    ``None`` for both missing and foreign BOEs so the response does not
+    become an object-enumeration oracle.
+    """
+    from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+
+    try:
+        boe = BillOfEntryModel.objects.get(pk=boe_id)
+    except (BillOfEntryModel.DoesNotExist, TypeError, ValueError):
+        return None
+    if not RowDetails.objects.filter(
+        bill_of_entry=boe,
+        sr_number__license=license_obj,
+    ).exists():
+        return None
+    return boe
+
+
 def add_license_balance_ledger_actions(viewset_class):
     """Attaches the Licence Balance Workspace actions to `viewset_class`."""
 
@@ -168,19 +191,18 @@ def add_license_balance_ledger_actions(viewset_class):
         hidden for ALL of them, by design (see `boe_service.hide_boe`'s
         module docstring — there is no validation anywhere that blocks
         this). `pk` is only used to confirm the requesting licence can see
-        this BOE before mutating it; the actual mutation and cache refresh
-        apply to every licence the BOE touches. Idempotent.
+        this BOE before mutating it; the BOE must have a row attached to the
+        URL licence. The actual mutation and cache refresh still apply to
+        every licence the BOE touches. Idempotent.
         """
-        from apps.bill_of_entry.models import BillOfEntryModel
         from apps.bill_of_entry.services.boe_service import hide_boe as hide_boe_service
 
-        self.get_object()  # 404s if this licence can't see the requested pk
+        license_obj = self.get_object()  # 404s if this licence can't see the requested pk
         boe_id = request.data.get('boe_id')
         if not boe_id:
             return Response({'error': 'boe_id is required.'}, status=400)
-        try:
-            boe = BillOfEntryModel.objects.get(pk=boe_id)
-        except BillOfEntryModel.DoesNotExist:
+        boe = _boe_for_license(license_obj=license_obj, boe_id=boe_id)
+        if boe is None:
             return Response({'error': 'No BOE matches that id.'}, status=404)
 
         result = hide_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
@@ -190,16 +212,14 @@ def add_license_balance_ledger_actions(viewset_class):
     def restore_boe(self, request, pk=None):
         """Body: {boe_id, reason?}. Un-hides a previously-hidden BOE (clears
         `invoice_no`) — see `boe_service.restore_boe`."""
-        from apps.bill_of_entry.models import BillOfEntryModel
         from apps.bill_of_entry.services.boe_service import restore_boe as restore_boe_service
 
-        self.get_object()  # 404s if this licence can't see the requested pk
+        license_obj = self.get_object()  # 404s if this licence can't see the requested pk
         boe_id = request.data.get('boe_id')
         if not boe_id:
             return Response({'error': 'boe_id is required.'}, status=400)
-        try:
-            boe = BillOfEntryModel.objects.get(pk=boe_id)
-        except BillOfEntryModel.DoesNotExist:
+        boe = _boe_for_license(license_obj=license_obj, boe_id=boe_id)
+        if boe is None:
             return Response({'error': 'No BOE matches that id.'}, status=404)
 
         result = restore_boe_service(boe, user=request.user, reason=request.data.get('reason', ''))
@@ -212,15 +232,16 @@ def add_license_balance_ledger_actions(viewset_class):
         `boe_service.hide_boes_bulk`'s docstring: processes every id
         independently (one bad BOE doesn't block the rest) but recomputes
         each affected licence only once, not once per BOE. `pk` only
-        confirms the requesting licence is visible; BOEs need not all
-        belong to it.
+        confirms every requested BOE is attached to the requesting licence.
         """
         from apps.bill_of_entry.services.boe_service import hide_boes_bulk
 
-        self.get_object()
+        license_obj = self.get_object()
         boe_ids = request.data.get('boe_ids') or []
         if not boe_ids:
             return Response({'error': 'boe_ids is required.'}, status=400)
+        if any(_boe_for_license(license_obj=license_obj, boe_id=boe_id) is None for boe_id in boe_ids):
+            return Response({'error': 'One or more BOEs do not belong to this licence.'}, status=404)
 
         result = hide_boes_bulk(boe_ids, user=request.user, reason=request.data.get('reason', ''))
         return Response(result, status=status.HTTP_201_CREATED)
@@ -231,10 +252,12 @@ def add_license_balance_ledger_actions(viewset_class):
         see `boe_service.restore_boes_bulk`."""
         from apps.bill_of_entry.services.boe_service import restore_boes_bulk
 
-        self.get_object()
+        license_obj = self.get_object()
         boe_ids = request.data.get('boe_ids') or []
         if not boe_ids:
             return Response({'error': 'boe_ids is required.'}, status=400)
+        if any(_boe_for_license(license_obj=license_obj, boe_id=boe_id) is None for boe_id in boe_ids):
+            return Response({'error': 'One or more BOEs do not belong to this licence.'}, status=404)
 
         result = restore_boes_bulk(boe_ids, user=request.user, reason=request.data.get('reason', ''))
         return Response(result)

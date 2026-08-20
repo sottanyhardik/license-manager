@@ -813,7 +813,7 @@ export default function MasterList() {
                                     const boeTitleEl = item.bill_of_entry_number ? (
                                         <Link
                                             to={`/bill-of-entries/${item.id}/edit`}
-                                            onClick={(e) => {
+                                            onClick={() => {
                                                 saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
                                             }}
                                             className="font-mono text-[16px] font-bold tracking-tight text-inherit underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded"

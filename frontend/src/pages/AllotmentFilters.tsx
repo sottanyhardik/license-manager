@@ -4,15 +4,18 @@ import DateRangeFilter from "../components/DateRangeFilter";
 import { Filter, XCircle } from "lucide-react";
 
 interface AllotmentFiltersProps {
-    filters: Record<string, string>;
+    filters: Record<string, string | null>;
     setFilters: (f: any) => void;
     availableItemNames: { value: any; label: string }[];
     notificationOptions: { value: string; display_name: string }[];
     purchaseStatusOptions: { value: string; label: string }[];
+    routePlanningTarget?: { id: number; name: string; sion?: string | null } | null;
+    defaultSearchMode?: "PLAN" | "ACTUAL";
+    defaultItemId?: number | null;
 }
 
 /** Allotment-action filter card — extracted verbatim from AllotmentAction. */
-export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions, purchaseStatusOptions }: AllotmentFiltersProps) {
+export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions, purchaseStatusOptions, routePlanningTarget, defaultSearchMode = "ACTUAL", defaultItemId = null }: AllotmentFiltersProps) {
     const isPlanMode = filters.debit_based_on === "PLAN";
     return (
                     <div className="mb-3 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
@@ -38,10 +41,10 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                     is_restricted: "all",
                                     purchase_status: purchaseStatusOptions.map(o => o.value).join(','),
                                     license_status: "active",
-                                    item_names: "",
+                                    item_id: defaultItemId == null ? "" : String(defaultItemId),
                                     expiry_date_from: "",
                                     expiry_date_to: "",
-                                    debit_based_on: "PLAN"
+                                    debit_based_on: defaultSearchMode
                                 })}
                             >
                                 <XCircle className="size-4" aria-hidden="true" />Clear All
@@ -52,16 +55,16 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                 <div className="col-span-full sm:col-span-2 lg:col-span-4">
                                     <label className="form-label">{isPlanMode ? "Filter By Planning Target Item" : "Filter By Actual Item Name"}</label>
                                     <Select
-                                        isMulti
-                                        value={filters.item_names ? filters.item_names.split(',').map(id => {
-                                            const item = availableItemNames.find(i => i.value === parseInt(id));
-                                            return item || {value: id, label: id};
-                                        }) : []}
-                                        onChange={(selected) => setFilters({...filters, item_names: selected ? selected.map(s => s.value).join(',') : ''})}
+                                        value={filters.item_id ? (() => {
+                                            const item = availableItemNames.find(i => String(i.value) === String(filters.item_id));
+                                            return item || {value: filters.item_id, label: filters.item_id};
+                                        })() : null}
+                                        onChange={(selected) => setFilters({...filters, item_id: selected ? String(selected.value) : ''})}
                                         options={availableItemNames}
-                                        placeholder="All Item Names"
+                                        placeholder={isPlanMode ? "Select a planning item" : "Select an actual item to find available licences"}
                                         className="basic-multi-select"
                                         classNamePrefix="select"
+                                        isDisabled={isPlanMode && Boolean(routePlanningTarget)}
                                     />
                                 </div>
                                 <div>
@@ -206,7 +209,7 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                         <select
                                             className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                             value={filters.debit_based_on || "PLAN"}
-                                            onChange={(e) => setFilters({...filters, debit_based_on: e.target.value, item_names: ""})}
+                                            onChange={(e) => setFilters({...filters, debit_based_on: e.target.value, item_id: ""})}
                                         >
                                             <option value="PLAN">Plan</option>
                                             <option value="ACTUAL">Actual</option>

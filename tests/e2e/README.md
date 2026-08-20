@@ -78,6 +78,28 @@ LM_HEADLESS=0 pytest tests/e2e/test_pages_selenium.py -v
 Tests are skipped (not failed) when a server isn't reachable, so CI without
 the stack up just produces "skipped", not red.
 
+## Managed production gate
+
+The commands above are shared-stack smoke tests. They are not the production
+gate because they reuse a running database and user. Use the managed harness
+for an isolated real-process run:
+
+```bash
+LM_E2E_MANAGED=1 \
+LM_E2E_DB_NAME=test_license_manager_browser_001 \
+LM_E2E_REDIS_URL=redis://127.0.0.1:6379/14 \
+LM_E2E_SEED_COMMAND="$(pwd)/.venv/bin/python backend/manage.py seed_browser_2509" \
+LM_E2E_PYTHON="$(pwd)/.venv/bin/python" \
+pytest tests/e2e -v
+```
+
+Managed mode validates that the database name begins with `test_`, requires a
+non-default Redis namespace, runs migrations only against that database,
+starts Django, a real solo Celery worker, and a production-built Vite preview.
+The required seed command is intentionally repository-owned: it must create
+the canonical authenticated licence scenario and is not replaced by shared
+development credentials.
+
 ## Adding new tests
 
 - **New endpoint?** Add a parametrize entry in `test_license_viewsets` or a

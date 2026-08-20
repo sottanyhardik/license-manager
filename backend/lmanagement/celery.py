@@ -87,6 +87,14 @@ app.conf.beat_schedule = {
             "expires": 3600,  # Task expires after 1 hour
         }
     },
+    # Durable outbox-style recovery for a process crash between database
+    # commit and broker publish.  Work is bounded inside the task.
+    "recover-pending-license-replans-every-5-min": {
+        "task": "planning.recover_pending_replan_requests",
+        "schedule": crontab(minute="*/5"),
+        "args": (),
+        "options": {"expires": 240},
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -109,6 +117,33 @@ if getattr(settings, "MDS_ENABLED", False):
             "expires": 300,  # skip a run rather than pile up if a beat is late
         },
     }
+
+
+# Peer master synchronisation is deliberately disabled by default.  When it is
+# enabled, the durable event ledger must be driven even after a broker/network
+# outage; defining tasks without Beat entries leaves an offline peer divergent
+# forever unless an operator remembers to run a management command.
+if getattr(settings, "SYNC_ENABLED", False):
+    app.conf.beat_schedule.update({
+        "sync-pull-peers-every-5-min": {
+            "task": "sync.pull_from_peers",
+            "schedule": crontab(minute="*/5"),
+            "args": (),
+            "options": {"expires": 240},
+        },
+        "sync-push-durable-events-every-5-min": {
+            "task": "sync.push_changes",
+            "schedule": crontab(minute="*/5"),
+            "args": (),
+            "options": {"expires": 240},
+        },
+        "sync-process-media-every-5-min": {
+            "task": "sync.process_media_tasks",
+            "schedule": crontab(minute="*/5"),
+            "args": (),
+            "options": {"expires": 240},
+        },
+    })
 
 
 @signals.worker_process_init.connect

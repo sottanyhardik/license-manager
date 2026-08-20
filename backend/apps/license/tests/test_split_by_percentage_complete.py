@@ -132,9 +132,8 @@ class TestSplitByPercentageComplete:
 
     def test_partial_allocation_does_not_fail(self):
         """
-        Verify that when target > available, Planning still succeeds with max valid allocation.
-
-        No shortage tracking. No error. Just plan what's possible.
+        Verify that when target > available, Planning succeeds with the max
+        valid allocation and emits the deterministic cap shortage.
         """
         config = {
             "actions": [
@@ -186,7 +185,7 @@ class TestSplitByPercentageComplete:
         planner = DatabaseDrivenSionPlanner()
         result = planner.execute(config, records, available_cif)
 
-        # Should complete successfully (no exception, no shortage record)
+        # Should complete successfully and retain the cap reconciliation.
         assert result is not None
         assert len(result.rows) > 0
 
@@ -194,9 +193,20 @@ class TestSplitByPercentageComplete:
         total_allocated_cif = sum(r.value for r in result.rows)
         assert total_allocated_cif <= available_cif
 
-        # No shortage fields should be present in metadata
-        assert "has_shortage" not in result.metadata or result.metadata.get("has_shortage") is False
-        assert "shortages" not in result.metadata or len(result.metadata.get("shortages", [])) == 0
+        assert result.metadata == {
+            "has_shortage": True,
+            "shortages": [{
+                "input_key": "OLIVE_OIL",
+                "record_id": "1",
+                "target_quantity": Decimal("321138.500"),
+                "allocated_quantity": Decimal("84390"),
+                "shortage_quantity": Decimal("236748.500"),
+                "target_cif": Decimal("1605692.50000"),
+                "allocated_cif": Decimal("421950.00"),
+                "shortage_cif": Decimal("1183742.50000"),
+                "limiting_reason": "CIF_CAP",
+            }],
+        }
 
     def test_multiple_candidates_all_used(self):
         """

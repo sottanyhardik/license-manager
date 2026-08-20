@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import ItemPivotFilters, { normalizeMinBalance } from "./ItemPivotFilters";
+import ItemPivotFilters from "./ItemPivotFilters";
+import { normalizeMinBalance } from "./itemPivotFilterHelpers";
 
 vi.mock("react-select", () => ({
     default: ({ inputId, options, value, onChange, placeholder }) => (

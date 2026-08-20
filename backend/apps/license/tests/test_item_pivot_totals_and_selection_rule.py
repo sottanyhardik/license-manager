@@ -1,15 +1,10 @@
-"""
-Regression tests for Phase 2B.2A: Item Pivot Report's Grand Totals and
-manual-vs-norm planned-CIF selection rule are now computed exactly once on
-the backend (`generate_report`'s `notification_totals` key and
-`_build_license_row`'s `effective_planned_cif`/`total_effective_planned_cif`
-fields) instead of being independently re-derived by the React page and the
-Excel exporter. See docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md.
+"""Canonical Item Pivot v1 totals and export parity regressions.
 
-Reuses the `pivot_masters`/`pivot_license`/`superuser_client` fixtures
-already defined in test_item_pivot_excel_export.py rather than duplicating
-their ~140 lines of setup.
+The report is a read-only projection of persisted plans. It never invokes
+Auto Plan as an implicit fallback, and its JSON and XLSX representations must
+consume the same canonical matrix.
 """
+from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -17,166 +12,96 @@ import pytest
 from django.urls import reverse
 from openpyxl import load_workbook
 
-from apps.license.models import LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 from apps.license.tests.test_item_pivot_excel_export import (
-    _download_excel,
-    _first_report_sheet,
-    _totals_row,
-    pivot_license,
-    pivot_masters,
-    superuser_client,
+    _download_excel, pivot_license, pivot_masters, superuser_client,
 )
-
-PIVOT_ITEM_NAME = "PIVOT TEST ITEM - PIVOTTEST"
 
 
 def _get_json(client):
-    response = client.get(
-        reverse("license:item-pivot-report"),
-        {"min_balance": 200, "license_status": "active"},
-    )
+    response = client.get(reverse("license:item-pivot-report"), {
+        "min_balance": 200, "license_status": "active",
+    })
     assert response.status_code == 200, getattr(response, "data", response.content[:300])
     return response.json()
 
 
-def _group_key_for(report_data):
-    """This fixture set produces exactly one norm/notification group."""
-    norm_class = next(iter(report_data["licenses_by_norm_notification"]))
-    notification_key = next(iter(report_data["licenses_by_norm_notification"][norm_class]))
-    return norm_class, notification_key
+def _fixture_group(data):
+    return next(group for group in data["groups"] if group["notification_number"] == "PIVN1")
+
+
+def _number(value):
+    return Decimal(str(value))
 
 
 @pytest.mark.django_db
-def test_effective_planned_cif_uses_manual_plan_when_present(superuser_client, pivot_license):
-    """`pivot_license`'s fixture gives the item a manual LicenseItemPlan
-    (planned_quantity=40, planned_cif_fc=400) — `effective_planned_cif` must
-    select the manual plan_cif (400.00), not any norm-derived planned_cif."""
-    data = _get_json(superuser_client)
-    norm_class, notification_key = _group_key_for(data)
-    licenses = data["licenses_by_norm_notification"][norm_class][notification_key]
-    license_row = next(lic for lic in licenses if lic["license_number"] == "PIVOT-EXCEL-001")
-    item = license_row["items"][PIVOT_ITEM_NAME]
+def test_persisted_manual_plan_is_the_authoritative_planned_pair(superuser_client, pivot_license):
+    """The persisted 40-unit/$400 plan is displayed verbatim, rather than
+    recalculated by the report or replaced with a display-price estimate."""
+    group = _fixture_group(_get_json(superuser_client))
+    license_row = next(row for row in group["licenses"] if row["license_number"] == "PIVOT-EXCEL-001")
+    cell = next(iter(license_row["items"].values()))
 
-    assert item["plan_quantity"] == 0.0
-    assert item["plan_cif"] == 0.0
-    assert item["effective_planned_cif"] == 0.0
-    # The license-level row-total must equal the single item's effective
-    # value (only one item column populated in this fixture).
-    assert license_row["total_effective_planned_cif"] == 0.0
+    assert _number(cell["plan_qty"]) == Decimal("40.000")
+    assert _number(cell["planned_cif"]) == Decimal("400.00")
+    assert _number(cell["effective_planned_qty"]) == Decimal("40.000")
+    assert _number(cell["effective_planned_cif"]) == Decimal("400.00")
+    assert _number(license_row["planned_cif"]) == Decimal("400.00")
 
 
 @pytest.mark.django_db
-def test_effective_planned_cif_falls_back_to_norm_derived_when_no_manual_plan(
-    superuser_client, pivot_masters,
-):
-    """A license with an import item but NO LicenseItemPlan row: the
-    selection rule's fallback branch (no manual plan_quantity/plan_cif)
-    must select `planned_cif` — exercised here where the generic
-    (non-E1/E5/E132) test norm has no norm-derived waterfall, so
-    `planned_cif` is 0, precisely testing the FALLBACK BRANCH itself
-    (which value is chosen), not the norm-derived formula (out of scope for
-    Phase 2B.2A — formulas are unchanged, only ownership of the selection
-    moved)."""
-    from datetime import date, timedelta
-    from apps.license.models import LicenseDetailsModel, LicenseExportItemModel
-
+def test_report_read_does_not_auto_plan_an_unpersisted_import_item(superuser_client, pivot_masters):
+    """A report request must not synthesize plans for an import row. This
+    preserves the Celery-only planning boundary and makes a missing plan
+    auditable instead of silently presenting an unsaved calculation."""
     license_obj = LicenseDetailsModel.objects.create(
-        license_number="PIVOT-EXCEL-NOPLAN-001",
-        license_date=date.today() - timedelta(days=30),
-        license_expiry_date=date.today() + timedelta(days=30),
-        exporter=pivot_masters["exporter"],
-        notification_number=pivot_masters["notification"],
-        scheme_code=pivot_masters["scheme"],
-        purchase_status=pivot_masters["purchase_status"],
-        file_number="PIVOT-FILE-NOPLAN-001",
+        license_number="PIVOT-EXCEL-NOPLAN-001", license_date=date.today() - timedelta(days=30),
+        license_expiry_date=date.today() + timedelta(days=30), exporter=pivot_masters["exporter"],
+        notification_number=pivot_masters["notification"], scheme_code=pivot_masters["scheme"],
+        purchase_status=pivot_masters["purchase_status"], file_number="PIVOT-FILE-NOPLAN-001",
     )
-    LicenseExportItemModel.objects.create(
-        license=license_obj,
-        description="Pivot export item (no plan)",
-        norm_class=pivot_masters["norm_class"],
-        cif_fc=Decimal("500.00"),
-        cif_inr=Decimal("42000.00"),
-    )
+    LicenseExportItemModel.objects.create(license=license_obj, norm_class=pivot_masters["norm_class"], cif_fc=Decimal("500.00"))
     import_item = LicenseImportItemsModel.objects.create(
-        license=license_obj,
-        serial_number=1,
-        description="Pivot import item (no plan)",
-        hs_code=pivot_masters["hs_code"],
-        quantity=Decimal("50.000"),
-        allotted_quantity=Decimal("0"),
-        debited_quantity=Decimal("0"),
-        available_quantity=Decimal("50.000"),
+        license=license_obj, serial_number=1, description="Pivot import item (no plan)",
+        hs_code=pivot_masters["hs_code"], quantity=Decimal("50.000"), available_quantity=Decimal("50.000"),
         cif_fc=Decimal("300.00"),
     )
     import_item.items.add(pivot_masters["item_name"])
 
-    data = _get_json(superuser_client)
-    norm_class, notification_key = _group_key_for(data)
-    licenses = data["licenses_by_norm_notification"][norm_class][notification_key]
-    license_row = next(lic for lic in licenses if lic["license_number"] == "PIVOT-EXCEL-NOPLAN-001")
-    item = license_row["items"][PIVOT_ITEM_NAME]
-
-    assert item["plan_quantity"] == 0
-    assert item["plan_cif"] == 0
-    # No manual plan and no E1/E5/E132 waterfall for this generic norm ->
-    # planned_cif defaults to 0 -> effective_planned_cif must equal it (the
-    # fallback branch was taken, not the manual branch).
-    assert item["effective_planned_cif"] == item.get("planned_cif", 0)
+    plans_before = LicenseItemPlan.objects.filter(license=license_obj).count()
+    _get_json(superuser_client)
+    assert LicenseItemPlan.objects.filter(license=license_obj).count() == plans_before
 
 
 @pytest.mark.django_db
-def test_notification_totals_match_hand_computed_sums(superuser_client, pivot_license):
-    """`notification_totals` must equal a hand-computed sum over the same
-    fixture's single license row — confirms the backend aggregation itself,
-    independent of the JSON-vs-Excel comparison below."""
-    data = _get_json(superuser_client)
-    norm_class, notification_key = _group_key_for(data)
-    totals = data["notification_totals"][norm_class][notification_key]
-    license_row = data["licenses_by_norm_notification"][norm_class][notification_key][0]
+def test_group_totals_are_the_exact_sum_of_canonical_cells(superuser_client, pivot_license):
+    group = _fixture_group(_get_json(superuser_client))
+    license_row = next(row for row in group["licenses"] if row["license_number"] == "PIVOT-EXCEL-001")
+    key, cell = next(iter(license_row["items"].items()))
+    totals = group["totals"]
 
-    assert totals["total_cif"] == pytest.approx(license_row["total_cif"])
-    assert totals["debited_cif"] == pytest.approx(license_row.get("debited_cif", 0))
-    assert totals["alloted_cif"] == pytest.approx(license_row["alloted_cif"])
-    assert totals["balance_cif"] == pytest.approx(license_row["balance_cif"])
-    assert totals["total_effective_planned_cif"] == pytest.approx(
-        license_row["total_effective_planned_cif"]
-    )
-    item_totals = totals["items"][PIVOT_ITEM_NAME]
-    item_row = license_row["items"][PIVOT_ITEM_NAME]
-    assert item_totals["quantity"] == pytest.approx(item_row["quantity"])
-    assert item_totals["allotted_quantity"] == pytest.approx(item_row["allotted_quantity"])
-    assert item_totals["debited_quantity"] == pytest.approx(item_row["debited_quantity"])
-    assert item_totals["available_quantity"] == pytest.approx(item_row["available_quantity"])
-    assert item_totals["plan_quantity"] == pytest.approx(item_row["plan_quantity"])
-    assert item_totals["effective_planned_cif"] == pytest.approx(item_row["effective_planned_cif"])
+    for field in ("total_cif", "debited_cif", "allotted_cif", "planned_cif", "balance_cif"):
+        assert _number(totals[field]) == _number(license_row[field])
+    for field in ("total_qty", "allotted_qty", "debited_qty", "balance_qty", "plan_qty", "planned_cif"):
+        assert _number(totals["items"][key][field]) == _number(cell[field])
 
 
 @pytest.mark.django_db
-def test_excel_totals_row_matches_json_notification_totals(superuser_client, pivot_license):
-    """The permanent JSON <-> Excel equality regression test: the Excel
-    TOTAL row must show exactly the same figures as `notification_totals`
-    in the JSON response for the same request — proving neither the Excel
-    exporter nor (by extension, since it reads the same field) the React
-    page recomputes anything independently anymore."""
+def test_excel_total_row_consumes_the_same_canonical_group_totals(superuser_client, pivot_license):
     data = _get_json(superuser_client)
-    norm_class, notification_key = _group_key_for(data)
-    totals = data["notification_totals"][norm_class][notification_key]
-    item_totals = totals["items"][PIVOT_ITEM_NAME]
+    group = _fixture_group(data)
+    workbook = load_workbook(BytesIO(_download_excel(superuser_client)), data_only=True)
+    sheet = next(ws for ws in workbook.worksheets if ws.title != "TOTAL_Summary")
 
-    content = _download_excel(superuser_client)
-    workbook = load_workbook(BytesIO(content), data_only=True)
-    sheet = _first_report_sheet(workbook)
-
-    header_row = [cell.value for cell in sheet[3]]
-    # Since Phase 2B.2B, the "Notification Summary" block is appended
-    # directly after the TOTAL row on this same sheet, so it is no longer
-    # necessarily `sheet[sheet.max_row]` — locate it by its own "TOTAL"
-    # label instead (see `_totals_row` in test_item_pivot_excel_export.py).
-    totals_row = _totals_row(sheet)
-
-    assert totals_row[header_row.index("Total CIF")] == pytest.approx(totals["total_cif"])
-    assert totals_row[header_row.index("Debited CIF")] == pytest.approx(totals["debited_cif"])
-    assert totals_row[header_row.index("Alloted CIF")] == pytest.approx(totals["alloted_cif"])
-    assert totals_row[header_row.index("Balance CIF")] == pytest.approx(totals["balance_cif"])
-    assert totals_row[header_row.index(f"{PIVOT_ITEM_NAME} Plan Qty")] == pytest.approx(item_totals["plan_quantity"])
-    assert totals_row[header_row.index(f"{PIVOT_ITEM_NAME} Remaining CIF")] == pytest.approx(item_totals["effective_planned_cif"])
+    # Canonical exporter writes metadata at row 1, headers at row 2, and a
+    # TOTAL row after the group licences. Fixed columns precede each item's
+    # ten fields; compare by index so repeated labels cannot select another
+    # canonical item column.
+    header = [cell.value for cell in sheet[2]]
+    total_row = next([cell.value for cell in row] for row in sheet.iter_rows() if str(row[0].value).startswith("TOTAL —"))
+    assert len(total_row) == len(header)
+    for index, field in ((4, "total_cif"), (5, "debited_cif"), (6, "allotted_cif"), (7, "planned_cif"), (8, "balance_cif")):
+        assert _number(total_row[index]) == _number(group["totals"][field])
+    item_totals = next(iter(group["totals"]["items"].values()))
+    assert _number(total_row[17]) == _number(item_totals["plan_qty"])
+    assert _number(total_row[18]) == _number(item_totals["planned_cif"])

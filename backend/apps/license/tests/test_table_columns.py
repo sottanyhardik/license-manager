@@ -3,8 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 
-pytest.importorskip("django_tables2")
-
 from apps.license.table_columns import (
     BalanceCIFColumn,
     ColumnFactory,

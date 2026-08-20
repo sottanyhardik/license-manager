@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import LicenseExportPanel, { normalizeExportDays } from "./LicenseExportPanel";
+import LicenseExportPanel from "./LicenseExportPanel";
+import { normalizeExportDays } from "./licenseExportHelpers";
 import { openAuthedFile } from "@/utils/documentDownload";
 
 vi.mock("@/utils/documentDownload", () => ({

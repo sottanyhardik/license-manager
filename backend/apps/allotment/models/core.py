@@ -246,6 +246,32 @@ class AllotmentItems(AuditModel):
     )
     is_boe = models.BooleanField(default=False)
 
+    # The balance authority used at creation time is an audit fact.  It must
+    # never be reconstructed from a description, CIF amount, or later plan.
+    allocation_basis = models.CharField(
+        max_length=10,
+        choices=[('ACTUAL', 'Actual'), ('PLAN', 'Plan')],
+        default='ACTUAL',
+        db_index=True,
+    )
+    # Search mode is distinct from the legal balance authority.  Keeping both
+    # values on the allocation makes an audit record explain *how* a licence
+    # was found as well as which position constrained the write.
+    search_mode = models.CharField(
+        max_length=10,
+        choices=[('ACTUAL', 'Actual'), ('PLAN', 'Plan')],
+        default='ACTUAL',
+        db_index=True,
+    )
+    planning_target_item = models.ForeignKey(
+        'core.ItemNameModel', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='allotment_allocations_following_plan',
+    )
+    plan_line = models.ForeignKey(
+        'license.LicenseItemPlan', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='allotment_allocations',
+    )
+
     # Allocation lifecycle (Phase A.1)
     status = models.CharField(
         max_length=20,

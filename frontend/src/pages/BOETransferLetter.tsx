@@ -22,7 +22,6 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
     const navigate = useNavigate();
     const id = propId || paramId;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [boe, setBoe] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string>("");

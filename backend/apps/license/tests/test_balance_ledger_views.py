@@ -1419,11 +1419,12 @@ class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
     layer (`LicenseBalanceLedgerPermission`'s `hide_boe`/`restore_boe`
     AND-of-two role gate)."""
 
-    def make_user_with_roles(self, *roles):
+    def make_user_with_roles(self, *roles, company=None):
         user = User.objects.create_user(
             username=f"hide-boe-{uuid.uuid4().hex[:8]}",
             email=f"{uuid.uuid4().hex[:8]}@example.com",
             password="testpass123!",
+            company=company,
         )
         for role in roles:
             group, _ = Group.objects.get_or_create(name=role)
@@ -1550,7 +1551,7 @@ class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         boe = self.make_boe(company)
 
         client = APIClient()
-        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER"))
+        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER", company=company))
         resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
 
         self.assertEqual(resp.status_code, 403)
@@ -1561,7 +1562,7 @@ class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         boe = self.make_boe(company)
 
         client = APIClient()
-        client.force_authenticate(user=self.make_user_with_roles("LICENSE_MANAGER"))
+        client.force_authenticate(user=self.make_user_with_roles("LICENSE_MANAGER", company=company))
         resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
 
         self.assertEqual(resp.status_code, 403)
@@ -1574,10 +1575,37 @@ class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.make_debit_row(boe, item, cif_fc=Decimal("1000.00"), qty=Decimal("10.000"))
 
         client = APIClient()
-        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER", "LICENSE_MANAGER"))
+        client.force_authenticate(user=self.make_user_with_roles(
+            "BOE_MANAGER", "LICENSE_MANAGER", company=company,
+        ))
         resp = client.post(f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": boe.id}, format="json")
 
         self.assertEqual(resp.status_code, 201, resp.data)
+
+    def test_hide_boe_rejects_a_boe_not_linked_to_url_license(self):
+        """The licence URL cannot be used as a capability to mutate a
+        different company's BOE by guessing its primary key."""
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        self.make_item(license_obj, 1)
+
+        other_company = self.make_company()
+        other_license = self.make_license(other_company)
+        other_item = self.make_item(other_license, 1)
+        foreign_boe = self.make_boe(other_company, number="9500004")
+        self.make_debit_row(foreign_boe, other_item, cif_fc=Decimal("1000.00"), qty=Decimal("10.000"))
+
+        client = APIClient()
+        client.force_authenticate(user=self.make_user_with_roles(
+            "BOE_MANAGER", "LICENSE_MANAGER", company=company,
+        ))
+        response = client.post(
+            f"/api/licenses/{license_obj.id}/hide-boe/", {"boe_id": foreign_boe.id}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 404, response.data)
+        foreign_boe.refresh_from_db()
+        self.assertNotEqual(foreign_boe.invoice_no, OTH_INVOICE_MARKER)
 
     def test_restore_boe_denied_with_boe_manager_only(self):
         company = self.make_company()
@@ -1585,7 +1613,7 @@ class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         boe = self.make_boe(company)
 
         client = APIClient()
-        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER"))
+        client.force_authenticate(user=self.make_user_with_roles("BOE_MANAGER", company=company))
         resp = client.post(f"/api/licenses/{license_obj.id}/restore-boe/", {"boe_id": boe.id}, format="json")
 
         self.assertEqual(resp.status_code, 403)

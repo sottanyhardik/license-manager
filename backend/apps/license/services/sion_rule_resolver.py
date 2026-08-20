@@ -147,7 +147,7 @@ class SionRuleResolver:
         """
         rules = SionPlanningRule.objects.filter(
             sion=sion,
-            output_item=output_item,
+            import_item=output_item,
             is_active=True,
         ).order_by("rule_type", "priority")
 
@@ -184,7 +184,7 @@ class SionRuleResolver:
         """
         rules = SionPlanningRule.objects.filter(
             sion=sion,
-            output_item=output_item,
+            import_item=output_item,
             rule_type="PERCENTAGE_CAP",
             is_active=True,
         )
@@ -217,7 +217,7 @@ class SionRuleResolver:
         """
         filters = {
             "sion": sion,
-            "output_item": output_item,
+            "import_item": output_item,
             "rule_type": "SPLIT_PERCENTAGE",
             "is_active": True,
         }
@@ -276,7 +276,7 @@ class SionRuleResolver:
         """
         count = SionPlanningRule.objects.filter(
             sion=sion,
-            output_item=output_item,
+            import_item=output_item,
             rule_type="PERCENTAGE_CAP",
             is_active=True,
         ).count()

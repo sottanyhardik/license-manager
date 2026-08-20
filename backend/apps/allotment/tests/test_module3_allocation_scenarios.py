@@ -1,825 +1,181 @@
-"""
-Module 3 — Allocation Scenarios: Comprehensive pytest suite covering 17+ allocation scenarios.
-
-Covers:
-1. Normal allocation
-2. Partial allocation
-3. Full allocation
-4. Over-allocation (error expected)
-5. Zero quantity
-6. Decimal quantity
-7. Multiple companies (error if cross-company)
-8. Multiple licenses (error if cross-license)
-9. Multiple items
-10. Existing allocation (update or create new)
-11. Release/deallocation
-12. Duplicate request (idempotency)
-13. Concurrent requests
-14. Rollback scenario
-15. Missing source (error)
-16. Invalid target (error)
-17. Large dataset (100+ items)
-"""
+"""Canonical allocation scenarios against the production action endpoints."""
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Dict, List, Tuple
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# KNOWN DEBT — this module is skipped, deliberately and visibly.
-#
-# It did not run at all until now: it imported `LicenseBalanceModel`, a name
-# removed when the model was renamed to `LicenseBalance`, so pytest failed at
-# collection. `testpaths = tests` also meant nothing under apps/ was collected,
-# so the ImportError was never surfaced.
-#
-# With the import repaired, 6 of 26 tests pass and 20 fail — none of them
-# because the product is broken. Two independent reasons:
-#
-#   1. `AllocationService` / `apps.allotment.services.validation_service` have
-#      ZERO production callers. Nothing outside this file and the services
-#      package imports them. They are a fully-built but unwired subsystem.
-#   2. The fixtures predate the current allocation business rules. They create a
-#      licence with no export items and no `purchase_status`, so the balance
-#      signals recompute `balance_cif` to 0 and validation correctly rejects
-#      every allocation with "purchase status is not GE / balance below minimum
-#      threshold (500) / Insufficient balance. Available: 0.00".
-#
-# Making these pass means rebuilding the fixtures against today's rules — worth
-# doing only alongside a decision to wire the service up or delete it. That is a
-# product/architecture call, so the tests are skipped rather than deleted,
-# weakened, or left red and eroding the regression signal.
-#
-# Re-enable by removing the skip below once AllocationService's fate is decided.
-# ---------------------------------------------------------------------------
-pytestmark = pytest.mark.skip(
-    reason="AllocationService has no production callers and these fixtures "
-           "predate current allocation validation rules - see module docstring"
-)
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.db import transaction
-from django.test.utils import override_settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.allotment.models import AllotmentModel, AllotmentItems
-from apps.allotment.services.allocation_service import AllocationService
-from apps.core.constants import DEC_0
-from apps.core.models import CompanyModel, PortModel
-from apps.license.models import (
-    LicenseDetailsModel,
-    LicenseExportItemModel,
-    LicenseImportItemsModel,
-    LicenseBalance,
-)
+from apps.allotment.models import AllotmentItems, AllotmentModel
+from apps.allotment.services.paired_allocation_max import calculate_paired_allocation_max
+from apps.core.models import CompanyModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
+
+pytestmark = pytest.mark.django_db
 User = get_user_model()
 
 
-# ============================================================================
-# FIXTURES: Base Setup
-# ============================================================================
-
 @pytest.fixture
-def allocation_user(db):
-    """Create a test user with allocation permissions."""
-    user = User.objects.create_user(
-        username="alloc-tester",
-        email="alloc@test.com",
-        password="TestPass123!",
-    )
+def api():
+    user = User.objects.create_user(username="canonical-allocation", password="test-pass-123")
     group, _ = Group.objects.get_or_create(name="ALLOTMENT_MANAGER")
     user.groups.add(group)
-    return user
-
-
-@pytest.fixture
-def allocation_client(allocation_user):
-    """Create an authenticated API client."""
-    token = RefreshToken.for_user(allocation_user)
+    token = RefreshToken.for_user(user)
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
     return client
 
 
 @pytest.fixture
-def company(db):
-    """Create a test company."""
-    return CompanyModel.objects.create(
-        iec="9999888877",
-        name="Test Allocation Company"
-    )
+def company():
+    return CompanyModel.objects.create(iec="9090909090", name="Canonical Allocation Co")
 
 
-@pytest.fixture
-def alt_company(db):
-    """Create an alternate company for cross-company tests."""
-    return CompanyModel.objects.create(
-        iec="9999777766",
-        name="Alternate Test Company"
-    )
-
-
-@pytest.fixture
-def port(db):
-    """Create a test port."""
-    return PortModel.objects.create(
-        code="PORT001",
-        name="Test Port"
-    )
-
-
-@pytest.fixture
-def license_active(db, company):
-    """Create an active license."""
+def source(company, suffix, qty="500.000", cif="5000.00"):
     license_obj = LicenseDetailsModel.objects.create(
-        license_number="LIC-ACTIVE-001",
-        license_date=date.today() - timedelta(days=60),
-        license_expiry_date=date.today() + timedelta(days=90),
-        exporter=company,
+        license_number=f"CANON-{suffix}", exporter=company,
+        license_date=date.today() - timedelta(days=1), license_expiry_date=date.today() + timedelta(days=90),
     )
-    # Create balance record
-    LicenseBalance.objects.update_or_create(
-        license=license_obj,
-        defaults={"balance_cif": Decimal("10000.00")},
-    )
-    return license_obj
-
-
-@pytest.fixture
-def license_alt(db, alt_company):
-    """Create an alternate license for different company."""
-    license_obj = LicenseDetailsModel.objects.create(
-        license_number="LIC-ALT-002",
-        license_date=date.today() - timedelta(days=60),
-        license_expiry_date=date.today() + timedelta(days=90),
-        exporter=alt_company,
-    )
-    LicenseBalance.objects.update_or_create(
-        license=license_obj,
-        defaults={"balance_cif": Decimal("5000.00")},
-    )
-    return license_obj
-
-
-@pytest.fixture
-def allotment(db, company):
-    """Create a test allotment."""
-    return AllotmentModel.objects.create(
-        company=company,
-        item_name="Test Item",
-        unit_value_per_unit=Decimal("50.000"),
-        required_quantity=Decimal("1000.00"),
-    )
-
-
-@pytest.fixture
-def allotment_large(db, company):
-    """Create a large allotment for stress testing."""
-    return AllotmentModel.objects.create(
-        company=company,
-        item_name="Large Test Item",
-        unit_value_per_unit=Decimal("10.000"),
-        required_quantity=Decimal("10000.00"),
-    )
-
-
-def _make_import_item(
-    license_obj,
-    serial: int,
-    quantity: Decimal = Decimal("500.000"),
-    available_qty: Decimal = None,
-    description: str = "Test Item"
-) -> LicenseImportItemsModel:
-    """Helper to create import item with optional available quantity."""
-    if available_qty is None:
-        available_qty = quantity
-
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal(cif))
     item = LicenseImportItemsModel.objects.create(
-        license=license_obj,
-        serial_number=serial,
-        description=description,
-        quantity=quantity,
-        available_quantity=available_qty,
-        condition_type="",
+        license=license_obj, serial_number=1, description="Canonical Item",
+        quantity=Decimal(qty), available_quantity=Decimal(qty), condition_type="",
     )
-    # Set license balance after item creation (signals recalculate)
-    license_obj.balance.balance_cif = Decimal("10000.00")
+    license_obj.balance.balance_cif = Decimal(cif)
     license_obj.balance.save(update_fields=["balance_cif"])
     return item
 
 
-@pytest.fixture
-def import_item_normal(license_active):
-    """Create a normal import item (500 qty, fully available)."""
-    return _make_import_item(
-        license_active,
-        serial=1,
-        quantity=Decimal("500.000"),
+def allotment(company, qty="1000.000", price="10.000"):
+    return AllotmentModel.objects.create(
+        company=company, item_name="Canonical Item", required_quantity=Decimal(qty), unit_value_per_unit=Decimal(price),
     )
 
 
-@pytest.fixture
-def import_item_partial(license_active):
-    """Create an import item with partial availability."""
-    return _make_import_item(
-        license_active,
-        serial=2,
-        quantity=Decimal("500.000"),
-        available_qty=Decimal("300.000"),
+def allocate(api, target, item_id, qty, cif=None):
+    cif = Decimal(cif) if cif is not None else Decimal(qty) * Decimal(target.unit_value_per_unit)
+    return api.post(
+        f"/api/allotment-actions/{target.pk}/allocate-items/",
+        {"allocations": [{"item_id": item_id, "qty": str(qty), "cif_fc": str(cif)}]}, format="json",
     )
 
 
-@pytest.fixture
-def import_item_exact(license_active):
-    """Create an import item matching allotment exact needs."""
-    return _make_import_item(
-        license_active,
-        serial=3,
-        quantity=Decimal("1000.000"),
-        available_qty=Decimal("1000.000"),
-    )
+class TestCanonicalAllocationScenarios:
+    def test_01_normal(self, api, company):
+        item, target = source(company, "01"), allotment(company)
+        assert allocate(api, target, item.pk, "100").status_code == 201
 
+    def test_02_partial(self, api, company):
+        item, target = source(company, "02", qty="300.000", cif="3000.00"), allotment(company)
+        assert allocate(api, target, item.pk, "200").status_code == 201
 
-def _set_balance(license_obj, balance_cif: Decimal):
-    """Set license balance (bypassing signals)."""
-    license_obj.balance.balance_cif = balance_cif
-    license_obj.balance.save(update_fields=["balance_cif"])
+    def test_03_full(self, api, company):
+        item, target = source(company, "03", qty="1000.000", cif="10000.00"), allotment(company)
+        assert allocate(api, target, item.pk, "1000").status_code == 201
+        target.refresh_from_db()
+        assert target.balanced_quantity == Decimal("0.000")
 
+    def test_04_over_quantity_rejected(self, api, company):
+        item, target = source(company, "04", qty="300.000", cif="3000.00"), allotment(company)
+        response = allocate(api, target, item.pk, "301")
+        assert response.status_code == 400
+        assert response.data["errors"][0]["code"] == "ALLOTMENT_QTY_EXCEEDS_ACTUAL"
 
-# ============================================================================
-# TEST CLASS 1: Normal Operations
-# ============================================================================
+    def test_05_zero_rejected(self, api, company):
+        item, target = source(company, "05"), allotment(company)
+        response = allocate(api, target, item.pk, "0", "0")
+        assert response.status_code == 400
 
-class TestNormalAllocationScenarios:
-    """Test standard allocation workflows."""
+    def test_06_decimal_quantity(self, api, company):
+        item, target = source(company, "06"), allotment(company)
+        assert allocate(api, target, item.pk, "123.456", "1234.56").status_code == 201
+        assert AllotmentItems.objects.get().qty == Decimal("123.456")
 
-    def test_1_normal_allocation(self, allotment, import_item_normal):
-        """Scenario 1: Normal allocation of 100 qty from available 500."""
-        qty = Decimal("100.000")
-        cif_fc = Decimal("5000.00")
+    def test_07_cross_company_actual_capacity_is_validated_not_rejected_by_owner(self, api, company):
+        other = CompanyModel.objects.create(iec="8080808080", name="Other Co")
+        assert allocate(api, allotment(company), source(other, "07").pk, "100").status_code == 201
 
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=qty,
-            cif_fc=cif_fc,
+    def test_08_multiple_licenses_same_company(self, api, company):
+        target = allotment(company)
+        assert allocate(api, target, source(company, "08A").pk, "100").status_code == 201
+        assert allocate(api, target, source(company, "08B").pk, "100").status_code == 201
+        assert AllotmentItems.objects.count() == 2
+
+    def test_09_multiple_source_items(self, api, company):
+        target = allotment(company)
+        assert allocate(api, target, source(company, "09A").pk, "100").status_code == 201
+        assert allocate(api, target, source(company, "09B").pk, "150").status_code == 201
+        assert target.allotment_details.count() == 2
+
+    def test_10_repeat_merges_same_ledger_identity(self, api, company):
+        item, target = source(company, "10"), allotment(company)
+        assert allocate(api, target, item.pk, "100").status_code == 201
+        assert allocate(api, target, item.pk, "50").status_code == 201
+        assert AllotmentItems.objects.get(allotment=target, item=item).qty == Decimal("150.000")
+
+    def test_11_delete_releases(self, api, company):
+        item, target = source(company, "11"), allotment(company)
+        row = allocate(api, target, item.pk, "100").data["created_items"][0]["id"]
+        assert api.delete(f"/api/allotment-actions/{target.pk}/delete-item/{row}/").status_code == 200
+        assert not AllotmentItems.objects.filter(pk=row).exists()
+
+    def test_12_duplicate_delivery_keeps_one_row(self, api, company):
+        item, target = source(company, "12"), allotment(company)
+        allocate(api, target, item.pk, "50")
+        allocate(api, target, item.pk, "50")
+        assert AllotmentItems.objects.filter(allotment=target, item=item).count() == 1
+
+    def test_13_parent_cap_blocks_second_source(self, api, company):
+        target = allotment(company, qty="100.000")
+        assert allocate(api, target, source(company, "13A").pk, "100").status_code == 201
+        assert allocate(api, target, source(company, "13B").pk, "1").status_code == 400
+
+    def test_14_best_effort_batch_keeps_valid_sibling(self, api, company):
+        good, bad, target = source(company, "14A"), source(company, "14B", qty="10.000", cif="100.00"), allotment(company)
+        response = api.post(f"/api/allotment-actions/{target.pk}/allocate-items/", {"allocations": [
+            {"item_id": good.pk, "qty": "10", "cif_fc": "100"}, {"item_id": bad.pk, "qty": "11", "cif_fc": "110"},
+        ]}, format="json")
+        assert response.status_code == 201 and response.data["success"] == 1 and len(response.data["errors"]) == 1
+
+    def test_15_missing_source_rejected(self, api, company):
+        response = allocate(api, allotment(company), 999999999, "1")
+        assert response.status_code == 400 and "not found" in response.data["errors"][0]["error"].lower()
+
+    def test_16_pair_mismatch_rejected(self, api, company):
+        item, target = source(company, "16"), allotment(company)
+        response = allocate(api, target, item.pk, "10", "99.99")
+        assert response.status_code == 400 and response.data["errors"][0]["code"] == "ALLOCATION_PAIR_MISMATCH"
+
+    def test_17_large_batch(self, api, company):
+        target = allotment(company, qty="2000.000")
+        items = [source(company, f"17{i:03}", qty="10.000", cif="100.00") for i in range(100)]
+        response = api.post(f"/api/allotment-actions/{target.pk}/allocate-items/", {"allocations": [
+            {"item_id": item.pk, "qty": "10", "cif_fc": "100"} for item in items
+        ]}, format="json")
+        assert response.status_code == 201 and response.data["success"] == 100
+
+    def test_18_max_intersects_cif_and_quantity_caps(self):
+        maximum = calculate_paired_allocation_max(
+            quantity_ceiling=Decimal("500"), cif_ceiling=Decimal("2066.75"),
+            unit_price=Decimal("8.821"), quantity_step=Decimal("1"),
         )
-
-        assert allocation.qty == qty
-        assert allocation.cif_fc == cif_fc
-        assert allocation.allotment == allotment
-        assert allocation.item == import_item_normal
-        assert not allocation.is_boe
-
-    def test_2_partial_allocation(self, allotment, import_item_partial):
-        """Scenario 2: Allocate less than available (200 of 300 available)."""
-        qty = Decimal("200.000")
-        cif_fc = Decimal("10000.00")
-
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_partial,
-            quantity=qty,
-            cif_fc=cif_fc,
-        )
-
-        assert allocation.qty == qty
-        assert allocation.cif_fc == cif_fc
-        # Remaining available should still exist on import item
-        assert import_item_partial.available_quantity == Decimal("300.000")
-
-    def test_3_full_allocation(self, allotment, import_item_exact):
-        """Scenario 3: Full allocation matching exact required quantity."""
-        qty = Decimal("1000.000")
-        cif_fc = Decimal("50000.00")
-
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_exact,
-            quantity=qty,
-            cif_fc=cif_fc,
-        )
-
-        assert allocation.qty == qty
-        assert allocation.cif_fc == cif_fc
-        # Allotment balanced quantity should now be 0
-        assert allotment.balanced_quantity == Decimal("0.00")
-
-    def test_6_decimal_quantity_allocation(self, allotment, import_item_normal):
-        """Scenario 6: Allocate with decimal quantities (3 decimal places)."""
-        qty = Decimal("123.456")
-        cif_fc = Decimal("6172.80")
-
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=qty,
-            cif_fc=cif_fc,
-        )
-
-        assert allocation.qty == qty
-        assert allocation.cif_fc == cif_fc
-        assert allocation.qty.as_tuple().exponent == Decimal("0.001").as_tuple().exponent
-
-
-# ============================================================================
-# TEST CLASS 2: Error Conditions
-# ============================================================================
-
-class TestAllocationErrorConditions:
-    """Test allocation validation and error handling."""
-
-    def test_4_over_allocation_rejected(self, allotment, import_item_partial):
-        """Scenario 4: Over-allocation should raise ValidationError."""
-        qty = Decimal("500.000")  # More than available 300
-        cif_fc = Decimal("25000.00")
-
-        with pytest.raises(Exception):  # ValidationError
-            AllocationService.allocate_item(
-                allotment=allotment,
-                import_item=import_item_partial,
-                quantity=qty,
-                cif_fc=cif_fc,
-            )
-
-    def test_5_zero_quantity_rejected(self, allotment, import_item_normal):
-        """Scenario 5: Zero quantity allocation should fail."""
-        qty = Decimal("0.000")
-        cif_fc = Decimal("0.00")
-
-        with pytest.raises(Exception):
-            AllocationService.allocate_item(
-                allotment=allotment,
-                import_item=import_item_normal,
-                quantity=qty,
-                cif_fc=cif_fc,
-            )
-
-    def test_15_missing_source_item(self, allotment):
-        """Scenario 15: Allocating from non-existent item fails."""
-        fake_item_id = 99999
-
-        # Create or fetch fake item (will fail at FK constraint or validation)
-        with pytest.raises(Exception):
-            AllocationService.allocate_item(
-                allotment=allotment,
-                import_item=None,
-                quantity=Decimal("100.000"),
-                cif_fc=Decimal("5000.00"),
-            )
-
-    def test_16_invalid_allotment_target(self, import_item_normal):
-        """Scenario 16: Allocating to invalid allotment fails."""
-        with pytest.raises(Exception):
-            AllocationService.allocate_item(
-                allotment=None,
-                import_item=import_item_normal,
-                quantity=Decimal("100.000"),
-                cif_fc=Decimal("5000.00"),
-            )
-
-
-# ============================================================================
-# TEST CLASS 3: Multi-Entity Scenarios
-# ============================================================================
-
-class TestMultiEntityAllocationScenarios:
-    """Test allocations across multiple companies, licenses, items."""
-
-    def test_7_cross_company_allocation_error(
-        self, company, alt_company, allotment, license_alt
-    ):
-        """Scenario 7: Allocating item from different company license fails."""
-        # Allotment belongs to company, but item belongs to alt_company
-        item = _make_import_item(license_alt, serial=1)
-
-        with pytest.raises(Exception):
-            AllocationService.allocate_item(
-                allotment=allotment,
-                import_item=item,
-                quantity=Decimal("100.000"),
-                cif_fc=Decimal("5000.00"),
-            )
-
-    def test_8_multiple_licenses_same_company(
-        self, company, allotment
-    ):
-        """Scenario 8: Allocate items from different licenses (same company)."""
-        license1 = LicenseDetailsModel.objects.create(
-            license_number="LIC-MULTI-1",
-            license_date=date.today() - timedelta(days=60),
-            license_expiry_date=date.today() + timedelta(days=90),
-            exporter=company,
-        )
-        LicenseBalance.objects.update_or_create(
-            license=license1,
-            defaults={"balance_cif": Decimal("10000.00")},
-        )
-
-        license2 = LicenseDetailsModel.objects.create(
-            license_number="LIC-MULTI-2",
-            license_date=date.today() - timedelta(days=60),
-            license_expiry_date=date.today() + timedelta(days=90),
-            exporter=company,
-        )
-        LicenseBalance.objects.update_or_create(
-            license=license2,
-            defaults={"balance_cif": Decimal("10000.00")},
-        )
-
-        item1 = _make_import_item(license1, serial=1, quantity=Decimal("300.000"))
-        item2 = _make_import_item(license2, serial=2, quantity=Decimal("400.000"))
-
-        # Both should succeed (same company, different licenses)
-        alloc1 = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=item1,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        alloc2 = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=item2,
-            quantity=Decimal("200.000"),
-            cif_fc=Decimal("10000.00"),
-        )
-
-        assert alloc1.item == item1
-        assert alloc2.item == item2
-        # Combined allocation should show in allotment
-        assert allotment.allotment_details.count() == 2
-
-    def test_9_multiple_items_single_license(
-        self, company, allotment, license_active
-    ):
-        """Scenario 9: Allocate multiple items from single license."""
-        item1 = _make_import_item(license_active, serial=5, quantity=Decimal("300.000"))
-        item2 = _make_import_item(license_active, serial=6, quantity=Decimal("400.000"))
-        item3 = _make_import_item(license_active, serial=7, quantity=Decimal("500.000"))
-
-        alloc1 = AllocationService.allocate_item(allotment, item1, Decimal("100.000"), Decimal("5000.00"))
-        alloc2 = AllocationService.allocate_item(allotment, item2, Decimal("150.000"), Decimal("7500.00"))
-        alloc3 = AllocationService.allocate_item(allotment, item3, Decimal("200.000"), Decimal("10000.00"))
-
-        assert allotment.allotment_details.count() == 3
-        assert allotment.allotted_quantity == Decimal("450.000")
-        assert allotment.allotted_value == Decimal("22500.00")
-
-
-# ============================================================================
-# TEST CLASS 4: Update & Idempotency
-# ============================================================================
-
-class TestAllocationUpdateAndIdempotency:
-    """Test update, deallocation, and duplicate request handling."""
-
-    def test_10_update_existing_allocation(self, allotment, import_item_normal):
-        """Scenario 10: Update existing allocation to new quantity."""
-        qty1 = Decimal("100.000")
-        cif_fc1 = Decimal("5000.00")
-
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=qty1,
-            cif_fc=cif_fc1,
-        )
-
-        # Update to new values
-        qty2 = Decimal("150.000")
-        cif_fc2 = Decimal("7500.00")
-
-        updated = AllocationService.update_allocation(
-            allocation_item=allocation,
-            quantity=qty2,
-            cif_fc=cif_fc2,
-        )
-
-        assert updated.qty == qty2
-        assert updated.cif_fc == cif_fc2
-        assert updated.id == allocation.id  # Same record
-
-    def test_11_deallocation_release(self, allotment, import_item_normal):
-        """Scenario 11: Deallocate (release) an allocation."""
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        alloc_id = allocation.id
-        assert AllotmentItems.objects.filter(id=alloc_id).exists()
-
-        # Deallocate
-        AllocationService.deallocate_item(allocation)
-
-        assert not AllotmentItems.objects.filter(id=alloc_id).exists()
-
-    def test_12_duplicate_request_idempotency(
-        self, allocation_client, allotment, import_item_normal
-    ):
-        """Scenario 12: Duplicate allocation requests should be idempotent."""
-        # First request
-        AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        count_after_first = allotment.allotment_details.count()
-
-        # Duplicate request with same parameters
-        AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        count_after_duplicate = allotment.allotment_details.count()
-
-        # Both succeeded, so count should be 2 (not idempotent in DB, but updates should be available)
-        assert count_after_duplicate >= count_after_first
-
-
-# ============================================================================
-# TEST CLASS 5: Concurrency & Transactions
-# ============================================================================
-
-class TestConcurrencyAndTransactions:
-    """Test concurrent allocations and transaction handling."""
-
-    def test_13_concurrent_allocation_requests(self, allotment):
-        """Scenario 13: Simulate concurrent allocation requests."""
-        license_obj = LicenseDetailsModel.objects.create(
-            license_number="LIC-CONCURRENT",
-            license_date=date.today() - timedelta(days=60),
-            license_expiry_date=date.today() + timedelta(days=90),
-            exporter=allotment.company,
-        )
-        LicenseBalance.objects.update_or_create(
-            license=license_obj,
-            defaults={"balance_cif": Decimal("10000.00")},
-        )
-
-        items = [
-            _make_import_item(license_obj, serial=i, quantity=Decimal("200.000"))
-            for i in range(1, 6)
-        ]
-
-        allocations = []
-        for idx, item in enumerate(items):
-            alloc = AllocationService.allocate_item(
-                allotment=allotment,
-                import_item=item,
-                quantity=Decimal("50.000"),
-                cif_fc=Decimal("2500.00"),
-            )
-            allocations.append(alloc)
-
-        # All should succeed
-        assert len(allocations) == 5
-        assert allotment.allotment_details.count() == 5
-
-    def test_14_rollback_on_validation_failure(self, allotment, import_item_partial):
-        """Scenario 14: Transaction rollback on validation failure."""
-        # Create a successful allocation first
-        AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_partial,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        count_before = allotment.allotment_details.count()
-
-        # Attempt invalid allocation (should fail)
-        with pytest.raises(Exception):
-            AllocationService.allocate_item(
-                allotment=allotment,
-                import_item=import_item_partial,
-                quantity=Decimal("500.000"),  # Over available
-                cif_fc=Decimal("25000.00"),
-            )
-
-        # Count should remain unchanged (rolled back)
-        count_after = allotment.allotment_details.count()
-        assert count_after == count_before
-
-
-# ============================================================================
-# TEST CLASS 6: Large Dataset & Performance
-# ============================================================================
-
-class TestLargeDatasetScenarios:
-    """Test handling of large datasets."""
-
-    def test_17_large_dataset_100_plus_items(self, allotment_large):
-        """Scenario 17: Allocate 100+ items in a single allotment."""
-        license_obj = LicenseDetailsModel.objects.create(
-            license_number="LIC-LARGE",
-            license_date=date.today() - timedelta(days=60),
-            license_expiry_date=date.today() + timedelta(days=90),
-            exporter=allotment_large.company,
-        )
-        LicenseBalance.objects.update_or_create(
-            license=license_obj,
-            defaults={"balance_cif": Decimal("100000.00")},
-        )
-
-        # Create 120 import items
-        items = []
-        for i in range(120):
-            item = _make_import_item(
-                license_obj,
-                serial=i + 1,
-                quantity=Decimal("100.000"),
-            )
-            items.append(item)
-
-        # Allocate all items
-        allocations = []
-        for item in items:
-            try:
-                alloc = AllocationService.allocate_item(
-                    allotment=allotment_large,
-                    import_item=item,
-                    quantity=Decimal("50.000"),
-                    cif_fc=Decimal("500.00"),
-                )
-                allocations.append(alloc)
-            except Exception:
-                # Some will exceed limits, which is expected
-                pass
-
-        # Should have multiple successful allocations
-        assert allotment_large.allotment_details.count() > 0
-        assert len(allocations) > 0
-
-
-# ============================================================================
-# TEST CLASS 7: Calculation & Summary
-# ============================================================================
-
-class TestAllocationCalculationsAndSummary:
-    """Test calculation methods and summary reporting."""
-
-    def test_max_allocation_calculation(self, allotment, import_item_normal):
-        """Test calculation of maximum allocatable amount."""
-        max_alloc = AllocationService.calculate_max_allocation(
-            allotment=allotment,
-            import_item=import_item_normal,
-            unit_price=Decimal("50.000"),
-        )
-
-        assert 'max_quantity' in max_alloc
-        assert 'max_value' in max_alloc
-        assert max_alloc['max_quantity'] > DEC_0
-        assert max_alloc['max_value'] > DEC_0
-
-    def test_calculate_allocation_value(self):
-        """Test value calculation from quantity and unit price."""
-        qty = Decimal("100.000")
-        unit_price = Decimal("50.000")
-
-        value = AllocationService.calculate_allocation_value(qty, unit_price)
-
-        assert value == Decimal("5000.00")
-
-    def test_allocation_summary(self, allotment, import_item_normal):
-        """Test allocation summary generation."""
-        AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        summary = AllocationService.get_allocation_summary(allotment)
-
-        assert summary['total_items'] == 1
-        assert summary['total_quantity'] == Decimal("100.000")
-        assert summary['total_value'] == Decimal("5000.00")
-        assert 'required_value' in summary
-        assert 'balanced_quantity' in summary
-
-
-# ============================================================================
-# PARAMETRIZED INTEGRATION TESTS
-# ============================================================================
-
-class TestAllocationIntegration:
-    """Integration tests combining multiple scenarios."""
-
-    @pytest.mark.parametrize("qty,value", [
-        (Decimal("50.000"), Decimal("2500.00")),
-        (Decimal("100.000"), Decimal("5000.00")),
-        (Decimal("250.500"), Decimal("12525.00")),
-        (Decimal("500.000"), Decimal("25000.00")),
-    ])
-    def test_parametrized_allocations(
-        self, allotment, import_item_normal, qty, value
-    ):
-        """Parametrized test for multiple allocation amounts."""
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=qty,
-            cif_fc=value,
-        )
-
-        assert allocation.qty == qty
-        assert allocation.cif_fc == value
-
-    def test_sequential_allocations_same_item(
-        self, allotment, import_item_normal
-    ):
-        """Test multiple sequential allocations to same item."""
-        alloc1 = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=import_item_normal,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        # Create new allotment for second allocation to same item
-        allotment2 = AllotmentModel.objects.create(
-            company=allotment.company,
-            item_name="Test Item 2",
-            unit_value_per_unit=Decimal("50.000"),
-            required_quantity=Decimal("500.00"),
-        )
-
-        alloc2 = AllocationService.allocate_item(
-            allotment=allotment2,
-            import_item=import_item_normal,
-            quantity=Decimal("50.000"),
-            cif_fc=Decimal("2500.00"),
-        )
-
-        assert alloc1.item == alloc2.item
-        assert alloc1.allotment != alloc2.allotment
-        assert AllotmentItems.objects.filter(item=import_item_normal).count() == 2
-
-    def test_complete_allocation_workflow(self, company):
-        """Test complete workflow: create allotment -> allocate -> update -> deallocate."""
-        # Setup
-        license_obj = LicenseDetailsModel.objects.create(
-            license_number="LIC-WORKFLOW",
-            license_date=date.today() - timedelta(days=60),
-            license_expiry_date=date.today() + timedelta(days=90),
-            exporter=company,
-        )
-        LicenseBalance.objects.update_or_create(
-            license=license_obj,
-            defaults={"balance_cif": Decimal("10000.00")},
-        )
-
-        allotment = AllotmentModel.objects.create(
-            company=company,
-            item_name="Workflow Item",
-            unit_value_per_unit=Decimal("50.000"),
-            required_quantity=Decimal("1000.00"),
-        )
-
-        item = _make_import_item(
-            license_obj, serial=1, quantity=Decimal("500.000")
-        )
-
-        # Step 1: Allocate
-        allocation = AllocationService.allocate_item(
-            allotment=allotment,
-            import_item=item,
-            quantity=Decimal("100.000"),
-            cif_fc=Decimal("5000.00"),
-        )
-
-        assert allocation.qty == Decimal("100.000")
-
-        # Step 2: Update
-        updated = AllocationService.update_allocation(
-            allocation_item=allocation,
-            quantity=Decimal("150.000"),
-            cif_fc=Decimal("7500.00"),
-        )
-
-        assert updated.qty == Decimal("150.000")
-        assert updated.cif_fc == Decimal("7500.00")
-
-        # Step 3: Get summary
-        summary = AllocationService.get_allocation_summary(allotment)
-        assert summary['total_quantity'] == Decimal("150.000")
-
-        # Step 4: Deallocate
-        AllocationService.deallocate_item(updated)
-
-        assert not AllotmentItems.objects.filter(id=allocation.id).exists()
-        summary_final = AllocationService.get_allocation_summary(allotment)
-        assert summary_final['total_quantity'] == Decimal("0.00")
+        assert maximum.quantity == Decimal("234") and maximum.cif == Decimal("2064.12")
+
+    @pytest.mark.parametrize("case,qty,cif", [(19, "1", "10"), (20, "25", "250"), (21, "500", "5000")])
+    def test_19_20_21_canonical_value_pair(self, api, company, case, qty, cif):
+        item, target = source(company, f"{case}"), allotment(company)
+        assert allocate(api, target, item.pk, qty, cif).status_code == 201
+
+    def test_22_save_reopen_consistency(self, api, company):
+        item, target = source(company, "22"), allotment(company)
+        assert allocate(api, target, item.pk, "100").status_code == 201
+        target.refresh_from_db()
+        assert target.alloted_quantity == Decimal("100.000") and target.allotted_value == Decimal("1000.00")
+
+    def test_23_cif_requirement_cap_blocks_later_debit(self, api, company):
+        target = allotment(company, qty="500.000")
+        assert allocate(api, target, source(company, "23A").pk, "500").status_code == 201
+        assert allocate(api, target, source(company, "23B").pk, "1").status_code == 400

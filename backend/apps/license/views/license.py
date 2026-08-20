@@ -813,107 +813,27 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     @action(detail=True, methods=['post'], url_path='auto-plan')
     def auto_plan(self, request, pk=None):
-        """Auto-plan a single license using its single SION norm.
+        """Queue authoritative Auto Plan work; never calculate it in HTTP.
 
-        POST /api/licenses/{license_id}/auto-plan/
-
-        Loads the license from the URL, resolves its single SION norm,
-        runs the shared planning engine, atomically rebuilds the saved
-        plan for that license, and returns the result.
+        Validation and planning inputs are deliberately re-read by the worker.
+        That prevents an HTTP request from observing or persisting a partial
+        replacement while concurrent source data is changing.
         """
-        from django.db import transaction
-        from rest_framework import status
-        from apps.license.services.canonical_planning_service import PlanningError
-        from apps.license.services.sion_rule_engine import SionRulePlanningService
-        from apps.license.views.sion_planning_rule import SionPlanningRuleViewSet
-
+        from apps.license.services.replan_requests import request_license_replan
         license_obj = self.get_object()
-
-        try:
-            _, sion_id = SionPlanningRuleViewSet._resolve_sion_for_license(
-                license_obj.pk
-            )
-        except PlanningError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            with transaction.atomic():
-                result = SionRulePlanningService.plan_sion(
-                    sion_id,
-                    license_ids=[license_obj.pk],
-                    mode="ALL",
-                    force_plan=True,
-                )
-        except PlanningError as exc:
-            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
-
-        total_lines_written = sum(
-            wr.get("allocation_summary", {}).get("lines_created", len(wr.get("allocated_items", [])))
-            for wr in result.get("write_results", [])
+        durable_request = request_license_replan(
+            license_id=license_obj.pk,
+            reason="manual_auto_plan",
+            source_model="license.auto_plan",
+            source_pk=license_obj.pk,
         )
-
-        manual_results = [
-            row for row in result.get("write_results", [])
-            if row.get("review_status") == "MANUAL_PLANNING_REQUIRED"
-        ]
-        response_data = {
+        return Response({
             "license_id": license_obj.pk,
             "license_number": license_obj.license_number,
-            "status": (
-                "MANUAL_PLANNING_REQUIRED" if manual_results
-                else "EXECUTED" if result.get("write_results") else "SKIPPED"
-            ),
-            "sion_id": sion_id,
-            "sion_code": result.get("sion"),
-            "rules_executed": result.get("rules_executed", []),
-            "write_results": result.get("write_results", []),
-            "total_lines_written": total_lines_written,
-            "theoretical_plan_generated": bool(result.get("write_results")),
-        }
-        planner_run = (result.get("results") or [{}])[0]
-        response_data.update({
-            "planning_cif_ceiling": planner_run.get("planning_cif_ceiling", planner_run.get("opening_operational_cif")),
-            "remaining_planning_cif": planner_run.get("remaining_planning_cif", planner_run.get("remaining_operational_cif")),
-            "opening_operational_cif": planner_run.get("opening_operational_cif"),
-            "remaining_operational_cif": planner_run.get("remaining_operational_cif"),
-            "waterfall_trace": planner_run.get("waterfall_trace", []),
-        })
-        from apps.license.services.planning_tolerances import effective_planning_balance_cif
-        raw_planning_balance = Decimal(str(license_obj.get_balance_cif or 0))
-        effective_planning_balance = effective_planning_balance_cif(raw_planning_balance)
-        response_data.update({
-            # This is an independent live-ledger audit value.  It must never
-            # be reused as the planning waterfall opening capacity.
-            "live_financial_balance_cif": raw_planning_balance,
-            "actual_license_balance_cif": raw_planning_balance,
-            "raw_balance_cif": raw_planning_balance,
-            "effective_balance_cif": effective_planning_balance,
-            "balance_cif_ignored_by_tolerance": raw_planning_balance != effective_planning_balance,
-            "planner_cif_exhausted": effective_planning_balance == Decimal("0"),
-        })
-        if manual_results:
-            summary = manual_results[0].get("allocation_summary", {})
-            response_data.update({
-                "review_status": "MANUAL_PLANNING_REQUIRED",
-                "review_reason": "TOTAL_CIF_EXCEEDED",
-                "total_theoretical_cif": summary.get("total_theoretical_cif"),
-                "license_total_cif": summary.get("license_total_cif"),
-                "excess_cif": summary.get("excess_cif"),
-            })
-
-        # Add diagnostic metadata if available (especially for understanding why planning failed)
-        if result.get("metadata"):
-            metadata = result["metadata"]
-            if metadata.get("warning"):
-                response_data["warning"] = metadata["warning"]
-            if metadata.get("skip_reasons") and not result.get("write_results"):
-                response_data["diagnostics"] = {
-                    "total_records_evaluated": metadata.get("total_records_evaluated", 0),
-                    "total_rows_planned": metadata.get("total_rows_planned", 0),
-                    "skip_reasons": metadata.get("skip_reasons", []),
-                }
-
-        return Response(response_data)
+            "planning_state": "REPLAN_PENDING",
+            "replan_request_id": durable_request.pk,
+            "message": "Auto Plan has been queued.",
+        }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):

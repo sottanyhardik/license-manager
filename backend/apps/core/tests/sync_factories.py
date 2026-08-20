@@ -58,9 +58,26 @@ def make_user(username: str | None = None, *, superuser: bool = True):
 
 
 def auth_client(user=None) -> APIClient:
-    """An APIClient authenticated as ``user`` (created if not supplied)."""
+    """An APIClient authenticated as the registered ``server-A`` peer.
+
+    Sync endpoints intentionally reject ordinary user credentials.  ``user`` is
+    retained for call-site compatibility but is not used as a sync credential.
+    """
+    from django.conf import settings
+    from apps.core.sync.models import SyncPeer
+
+    token = "server-a-test-token"
+    peer, _ = SyncPeer.objects.get_or_create(
+        server_id="server-A", defaults={"base_url": "http://a.example.test"},
+    )
+    peer.set_auth_token(token)
+    peer.save(update_fields=["auth_token"])
+    settings.SYNC_PEER_TOKENS = {**getattr(settings, "SYNC_PEER_TOKENS", {}), "server-A": token}
     client = APIClient()
-    client.force_authenticate(user=user or make_user())
+    client.credentials(
+        HTTP_X_SYNC_SERVER_ID="server-A",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
     return client
 
 
@@ -70,17 +87,31 @@ def make_peer(
     server_id: str = "peer-B",
     *,
     base_url: str = "http://peer-b.example.test",
-    auth_token: str = "peer-b-token",
+    auth_token: str | None = None,
     is_active: bool = True,
 ):
+    from django.conf import settings
     from apps.core.sync.models import SyncPeer
 
-    return SyncPeer.objects.create(
+    peer, _ = SyncPeer.objects.update_or_create(
         server_id=server_id,
-        base_url=base_url,
-        auth_token=auth_token,
-        is_active=is_active,
+        defaults={"base_url": base_url, "is_active": is_active},
     )
+    if auth_token is None:
+        auth_token = "server-a-test-token" if server_id == "server-A" else "peer-b-token"
+    if auth_token:
+        peer.set_auth_token(auth_token)
+        peer.save(update_fields=["auth_token"])
+        settings.SYNC_PEER_TOKENS = {
+            **getattr(settings, "SYNC_PEER_TOKENS", {}), server_id: auth_token,
+        }
+    else:
+        settings.SYNC_PEER_TOKENS = {
+            key: value
+            for key, value in getattr(settings, "SYNC_PEER_TOKENS", {}).items()
+            if key != server_id
+        }
+    return peer
 
 
 def make_cursor(peer, last_synced_at=None):
@@ -167,13 +198,20 @@ def json_response(payload: dict) -> FakeHTTPResponse:
     return FakeHTTPResponse(payload)
 
 
+class ManagedHTTPError(urllib.error.HTTPError):
+    """HTTPError fake that closes an unused in-memory response at GC time."""
+
+    def __del__(self):  # pragma: no cover - only exercises interpreter cleanup
+        self.close()
+
+
 def http_error(code: int, body: bytes | str | dict = b"", url: str = "http://peer/") -> urllib.error.HTTPError:
     """A real ``HTTPError`` whose ``.read()`` returns ``body``."""
     if isinstance(body, dict):
         body = json.dumps(body)
     if isinstance(body, str):
         body = body.encode("utf-8")
-    return urllib.error.HTTPError(
+    return ManagedHTTPError(
         url, code, f"HTTP {code}", email.message.Message(), io.BytesIO(body),
     )
 

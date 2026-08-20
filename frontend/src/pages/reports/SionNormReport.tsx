@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
+import { buildSionReportPath, formatReportNumber, getSionReportGroups, normalizeBooleanFilter } from "./sionNormReportUtils";
 
 type SionNormReportProps = {
     sionNorm: string;
@@ -19,43 +20,6 @@ type SionReportFilters = {
 
 type ReportValueMap = Record<string, unknown>;
 
-const BOOLEAN_FILTER_VALUES = new Set(["False", "True"]);
-
-export function normalizeBooleanFilter(value: unknown, fallback = "False"): string {
-    const normalized = String(value ?? "").trim();
-    return BOOLEAN_FILTER_VALUES.has(normalized) ? normalized : fallback;
-}
-
-export function formatReportNumber(value: unknown, decimals = 2): string {
-    if (value === null || value === undefined || value === "") return "—";
-
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return "—";
-
-    const fractionDigits = Number.isInteger(decimals) && decimals >= 0 && decimals <= 6 ? decimals : 2;
-    return parsed.toLocaleString("en-IN", {
-        minimumFractionDigits: fractionDigits,
-        maximumFractionDigits: fractionDigits,
-    });
-}
-
-export function buildSionReportPath(filters: SionReportFilters): string {
-    const params = new URLSearchParams({
-        is_expired: normalizeBooleanFilter(filters.is_expired),
-        is_null: normalizeBooleanFilter(filters.is_null),
-        sion_norm: String(filters.sion_norm ?? "").trim(),
-    });
-
-    return `licenses/active-dfia-report/?${params.toString()}`;
-}
-
-export function getSionReportGroups(data: unknown): any[] {
-    if (!data || typeof data !== "object" || !("groups" in data)) {
-        return [];
-    }
-
-    return Array.isArray(data.groups) ? data.groups : [];
-}
 
 /**
  * Reusable SION Norm Report — licenses for a specific SION norm, grouped by

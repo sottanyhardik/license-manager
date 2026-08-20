@@ -15,6 +15,9 @@ class SyncEventSerializer(serializers.Serializer):
     data = serializers.DictField()
     source_server = serializers.CharField(max_length=100)
     source_version = serializers.IntegerField(min_value=1, default=1)
+    # UUID is the durable idempotency key.  Optional only while rolling out to
+    # older peers; the receiver derives a deterministic legacy key otherwise.
+    event_id = serializers.UUIDField(required=False)
     at = serializers.DateTimeField(required=False)
     media = serializers.DictField(required=False, default=dict)
 
@@ -84,3 +87,6 @@ class SyncStatusSerializer(serializers.Serializer):
     failed_media_tasks = serializers.IntegerField()
     recent_conflicts = serializers.IntegerField()
     last_sync_at = serializers.DateTimeField(allow_null=True)
+    pending_event_deliveries = serializers.IntegerField()
+    failed_event_deliveries = serializers.IntegerField()
+    oldest_pending_event_at = serializers.DateTimeField(allow_null=True)

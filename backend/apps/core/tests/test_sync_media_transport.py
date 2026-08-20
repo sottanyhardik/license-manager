@@ -624,6 +624,10 @@ class TestMediaLifecycleEndToEnd:
     def test_pulled_metadata_drives_a_verified_transfer(self, api, media_root):
         """pull → push → MediaSyncTask → download → SHA256 verified save."""
         make_peer("peer-B", base_url="http://b.example.test")
+        api.credentials(
+            HTTP_X_SYNC_SERVER_ID="peer-B",
+            HTTP_AUTHORIZATION="Bearer peer-b-token",
+        )
         source = CompanyModel.objects.create(iec="MED000032", name="Source Co")
         source.logo.save("logo.png", ContentFile(LOGO), save=True)
         MasterChange.objects.create(

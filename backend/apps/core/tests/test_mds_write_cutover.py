@@ -81,21 +81,18 @@ class WriteRecorder:
 
 @pytest.fixture
 def enable_mds(settings):
-    """Turn the cutover on for this test, wiring the 17-master map.
+    """Turn the write branch on without requiring an external MDS package.
 
-    ``mds_client`` is an optional, out-of-tree package that is not installed in
-    this environment (Master Sync superseded MDS in Module 04, and settings
-    self-disable when the import fails). Skip rather than error so the suite
-    reports honestly: these MDS-ON paths are genuinely unverified here.
+    The client transport is replaced by ``WriteRecorder`` below; these tests
+    only need the labels that exercise Company and UnitPrice write routing.
+    This keeps the branch executable in the normal repository test install.
     """
-    model_map = pytest.importorskip(
-        "mds_client.model_map",
-        reason="mds_client is not installed; MDS cutover is inactive (MDS_ENABLED=False)",
-    )
-    DEFAULT_MDS_MODELS = model_map.DEFAULT_MDS_MODELS
 
     settings.MDS_ENABLED = True
-    settings.MDS_MODELS = DEFAULT_MDS_MODELS
+    settings.MDS_MODELS = {
+        "core.CompanyModel": {},
+        "core.UnitPriceModel": {},
+    }
     settings.MDS_BASE_URL = "https://masters.test.local/api/v1/"
     settings.MDS_TOKEN = "test-token"
     return settings

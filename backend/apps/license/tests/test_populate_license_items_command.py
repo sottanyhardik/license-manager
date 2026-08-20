@@ -21,8 +21,8 @@ def simple_item_filters(monkeypatch):
         }
     ]
     monkeypatch.setattr(
-        "apps.license.management.commands.populate_license_items.get_item_filters",
-        lambda: definitions,
+        "apps.license.management.commands.populate_license_items.Command.get_item_definitions",
+        lambda _self: definitions,
     )
     return definitions
 
@@ -41,11 +41,16 @@ def matching_import_item(e1_norm):
         norm_class=e1_norm,
         description="Export entitlement",
     )
-    return LicenseImportItemsModel.objects.create(
+    import_item = LicenseImportItemsModel.objects.create(
         license=license_obj,
         serial_number=1,
         description="Refined sugar crystals",
     )
+    # Item-link signals may attach broad legacy labels during object creation.
+    # This command test starts from a deliberate empty association state so it
+    # verifies only the command's dry-run/transaction behavior.
+    import_item.items.clear()
+    return import_item
 
 
 @pytest.mark.django_db

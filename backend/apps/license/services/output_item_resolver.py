@@ -66,8 +66,8 @@ class OutputItemResolver:
             OutputItemNotFoundError: If item cannot be resolved or created
         """
         # If already linked, return immediately
-        if rule.output_item_id:
-            return rule.output_item
+        if rule.import_item_id:
+            return rule.import_item
 
         canonical_name = OutputItemResolver.get_canonical_output_name(rule)
 
@@ -80,8 +80,8 @@ class OutputItemResolver:
         if existing:
             # Found exact match - link and return
             with transaction.atomic():
-                rule.output_item = existing
-                rule.save(update_fields=["output_item"])
+                rule.import_item = existing
+                rule.save(update_fields=["import_item"])
             return existing
 
         # Not found - create new item with atomic get_or_create
@@ -97,8 +97,8 @@ class OutputItemResolver:
                     },
                 )
                 # Link the rule to the item
-                rule.output_item = item
-                rule.save(update_fields=["output_item"])
+                rule.import_item = item
+                rule.save(update_fields=["import_item"])
                 return item
             except Exception as e:
                 raise OutputItemNotFoundError(

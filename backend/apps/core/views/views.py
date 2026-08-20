@@ -1,4 +1,5 @@
 from django.db import models as dj_models
+from rest_framework import serializers
 
 from apps.accounts.permissions import CompanyPermission
 
@@ -439,27 +440,35 @@ ItemNameViewSet = MasterViewSet.create_viewset(
     config=enhance_config_with_fk(
         ItemNameModel,
         {
-            "search": ["name", "group__name", "sion_norm_class__norm_class"],
+            "search": ["name", "group__name", "norms__norm_class"],
             "filter": {
                 "group": {"type": "fk", "fk_endpoint": "/masters/groups/", "label_field": "name"},
                 "is_active": {"type": "exact"},
-                "sion_norm_class": {
-                    "type": "fk",
+                "norms": {
+                    "type": "m2m",
                     "fk_endpoint": "/masters/sion-classes/?is_active=true",
                     "label_field": "norm_class",
                     "display_field": "label",
                     "async": True
                 },
-                "norm_class": {"type": "related_exact", "lookup": "sion_norm_class__norm_class"},
+                "norm_class": {"type": "related_exact", "lookup": "norms__norm_class"},
             },
-            "list_display": ["group__name", "name", "sion_norm_class_label", 'display_order', "restriction_percentage"],
-            "form_fields": ["group", "name", "is_active", "sion_norm_class", 'display_order', "restriction_percentage"],
+            "list_display": ["group__name", "name", "norm_details", 'display_order', "restriction_percentage"],
+            "form_fields": ["group", "name", "is_active", "norms", 'display_order', "restriction_percentage"],
             "fk_endpoint_overrides": {
                 "group": "/masters/groups/",
-                "sion_norm_class": "/masters/sion-classes/?is_active=true"
+                "norms": "/masters/sion-classes/?is_active=true"
+            },
+            "field_meta": {
+                "norms": {
+                    "type": "fk_multi",
+                    "fk_endpoint": "/masters/sion-classes/?is_active=true",
+                    "label_field": "norm_class",
+                    "label": "Norms",
+                },
             },
             "label_field_overrides": {
-                "sion_norm_class": "norm_class"
+                "norms": "norm_class"
             },
             "ordering": ["group__name", "name"]
         }

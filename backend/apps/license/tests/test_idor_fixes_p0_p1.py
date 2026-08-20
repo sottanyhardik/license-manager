@@ -7,18 +7,21 @@ This test suite validates that the 7 critical security fixes properly prevent:
 3. Cross-company financial data leakage via services
 4. Aggregation data exposure to unauthorized users
 
-Reference: /backend/apps/license/views/ledger.py lines 237-743
-Vulnerabilities fixed:
-- P0 retrieve() (lines 237-276) - IDOR via direct license lookup
-- P0 ledger_detail() (lines 290-353) - IDOR via direct license lookup
-- P0 available_for_sale() (lines 356-391) - Data leakage via unscoped queries
-- P0 summary() (lines 279-288) - Data leakage via unscoped service call
-- P0 search() (lines 394-406) - Data leakage via unscoped service call
-- P1 company_wise() (lines 723-731) - Aggregation data leakage
-- P1 license_wise() (lines 734-743) - Aggregation data leakage
+Current supported routes:
+- retrieve/detail (`/api/license-ledger/<id>/`)
+- collection (`/api/license-ledger/license-wise/`)
+- summary (`/api/license-ledger/summary/`)
+- export (`/api/license-ledger/export/`)
+
+The old ``available_for_sale``, ``search``, ``company-wise`` and
+``company-ledger`` endpoints were retired when the canonical collection
+contract replaced their competing ledger calculations.  Their authorization
+requirements are asserted below against the supported collection/summary
+routes instead of preserving dead routes just for a test.
 """
 import pytest
 from django.test import TestCase
+from django.contrib.auth.models import Group
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from datetime import datetime
@@ -73,6 +76,9 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
             password='pass123',
             company=self.company_b,
         )
+        ledger_role, _ = Group.objects.get_or_create(name='LEDGER_MANAGER')
+        self.user_a.groups.add(ledger_role)
+        self.user_b.groups.add(ledger_role)
 
         # Create a DFIA license (owned by neither - orphan license)
         self.orphan_license = LicenseDetailsModel.objects.create(
@@ -82,7 +88,10 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
             port=self.port,
         )
 
-        # Create a license that ONLY company_a traded
+        # Create a licence traded by A and an unrelated third company.
+        self.company_c = CompanyModel.objects.create(
+            name='Unrelated C', iec='IMP_C', pan='56IMPC5678L3Z9', gst_number='27IMPC6789D2Z1',
+        )
         self.company_a_only_license = LicenseDetailsModel.objects.create(
             license_number='0312222222',
             license_date=datetime.now().date(),
@@ -119,10 +128,10 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
             qty=Decimal('100.000'),
         )
 
-        # Create a trade for company_a_only_license (company_a sells to company_b)
+        # Company B has no relationship to this trade.
         trade_a = LicenseTrade.objects.create(
             from_company=self.company_a,
-            to_company=self.company_b,
+            to_company=self.company_c,
             direction='SALE',
             license_type='DFIA',
             invoice_number='INV001',
@@ -215,6 +224,8 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
 
         self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
         self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        ledger_viewer, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
+        self.user_a.groups.add(ledger_viewer)
 
         # Create a license
         self.license = LicenseDetailsModel.objects.create(
@@ -222,14 +233,13 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
             license_date=datetime.now().date(),
             exporter=self.company_a,
             port=self.port,
-            license_form='DFIA',
         )
 
     def test_user_b_cannot_get_ledger_detail_for_company_a_license(self):
         """P0 IDOR FIX: ledger_detail blocks access to untraded licenses"""
         self.client.force_authenticate(user=self.user_b)
 
-        response = self.client.get(f'/api/license-ledger/{self.license.id}/ledger-detail/')
+        response = self.client.get(f'/api/license-ledger/{self.license.id}/')
 
         # Must be blocked
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -240,7 +250,7 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
 
         # Try to explicitly request company_b's data
         response = self.client.get(
-            f'/api/license-ledger/{self.license.id}/ledger-detail/?company={self.company_b.id}'
+            f'/api/license-ledger/{self.license.id}/?buying_company_id={self.company_b.id}'
         )
 
         # Must be blocked - user_a cannot access company_b's data
@@ -275,17 +285,9 @@ class P0_DataLeakageSummaryEndpointTest(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # Try to request company_b's summary
-        response = self.client.get(f'/api/license-ledger/summary/?company={self.company_b.id}')
+        response = self.client.get(f'/api/license-ledger/summary/?buying_company_id={self.company_b.id}')
 
-        # BEFORE FIX: Would process with company_b.id
-        # AFTER FIX: Silently overrides to company_a.id, returns only company_a data
-        # Either way, company_b data is NOT leaked
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        # Verify response contains no company_b-specific data
-        data = response.json()
-        # Summary should be scoped to company_a only
-        self.assertNotIn('company_b', str(data).lower() if 'company_name' in data else '')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class P0_DataLeakageSearchEndpointTest(APITestCase):
@@ -315,13 +317,9 @@ class P0_DataLeakageSearchEndpointTest(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # Try to search with company_b parameter
-        response = self.client.get(
-            f'/api/license-ledger/search/?q=0311045100&company={self.company_b.id}'
-        )
+        response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_b.id}')
 
-        # BEFORE FIX: Might return company_b licenses
-        # AFTER FIX: Overrides to company_a, only company_a licenses returned
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
@@ -349,6 +347,8 @@ class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
 
         self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
         self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        ledger_viewer, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
+        self.user_a.groups.add(ledger_viewer)
 
         # Create licenses owned by company_b
         self.lic_b = LicenseDetailsModel.objects.create(
@@ -356,14 +356,13 @@ class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
             license_date=datetime.now().date(),
             exporter=self.company_b,
             port=self.port,
-            license_form='DFIA',
         )
 
     def test_user_a_cannot_see_company_b_available_licenses(self):
         """P0 FIX: available_for_sale scopes to user's company trades only"""
         self.client.force_authenticate(user=self.user_a)
 
-        response = self.client.get('/api/license-ledger/available_for_sale/')
+        response = self.client.get('/api/license-ledger/license-wise/')
 
         # Should succeed but not include lic_b
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -402,11 +401,9 @@ class P1_AggregationDataLeakageCompanyWiseTest(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # Try to request company_b's aggregation
-        response = self.client.get(f'/api/license-ledger/company-wise/?company={self.company_b.id}')
+        response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_b.id}')
 
-        # BEFORE FIX: Might return company_b aggregation data
-        # AFTER FIX: Overrides to company_a, returns company_a aggregation
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class P1_AggregationDataLeakageLicenseWiseTest(APITestCase):
@@ -436,11 +433,9 @@ class P1_AggregationDataLeakageLicenseWiseTest(APITestCase):
         self.client.force_authenticate(user=self.user_a)
 
         # Try to request company_b's license-wise aggregation
-        response = self.client.get(f'/api/license-ledger/license-wise/?company={self.company_b.id}')
+        response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_b.id}')
 
-        # BEFORE FIX: Might return company_b aggregation
-        # AFTER FIX: Overrides to company_a
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class SuperuserBypassTest(APITestCase):
@@ -467,7 +462,7 @@ class SuperuserBypassTest(APITestCase):
         self.client.force_authenticate(user=self.superuser)
 
         # Superuser can request any company
-        response = self.client.get(f'/api/license-ledger/company-ledger/?company={self.company_a.id}')
+        response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_a.id}')
 
         # Should not be restricted
         self.assertNotEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -492,15 +487,6 @@ class UserWithoutCompanyTest(APITestCase):
 
         # All endpoints should deny access
         response = self.client.get('/api/license-ledger/summary/')
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-        response = self.client.get('/api/license-ledger/search/?q=test')
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-        response = self.client.get('/api/license-ledger/available_for_sale/')
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-        response = self.client.get('/api/license-ledger/company-wise/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
         response = self.client.get('/api/license-ledger/license-wise/')

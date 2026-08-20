@@ -10,8 +10,9 @@ import ConditionBadge from './ConditionBadge';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil, Plus } from "lucide-react";
+import { buildLicenseEndpoint, formatFiniteDecimal, normalizeItemOptions, normalizeLicenseBalanceData, normalizeUsageData } from "./licenseBalanceHelpers";
 
-const UNSAFE_PATH_SEGMENT_CHARS = new Set(["/", "?", "#", "\\"]);
+const normalizeArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
 
 // License Marking values map directly to the backend `condition_type` field.
 // "" is rendered as "None" and clears the restriction.
@@ -24,60 +25,6 @@ const LICENSE_MARKING_OPTIONS = [
     { value: "2%",  label: "2%"   },
 ];
 
-export function toSafeLicensePathSegment(licenseId) {
-    const value = String(licenseId ?? "").trim();
-    const hasUnsafePathSegmentChar = [...value].some((char) => {
-        const code = char.charCodeAt(0);
-        return UNSAFE_PATH_SEGMENT_CHARS.has(char) || code < 32 || code === 127;
-    });
-
-    if (!value || hasUnsafePathSegmentChar) {
-        throw new Error("A valid license id is required.");
-    }
-
-    return encodeURIComponent(value);
-}
-
-export function buildLicenseEndpoint(licenseId, suffix = "") {
-    return `licenses/${toSafeLicensePathSegment(licenseId)}/${suffix}`;
-}
-
-export function formatFiniteDecimal(value, fractionDigits = 2) {
-    const number = Number(value);
-    return Number.isFinite(number) ? number.toFixed(fractionDigits) : Number(0).toFixed(fractionDigits);
-}
-
-function normalizeArray(value) {
-    return Array.isArray(value) ? value : [];
-}
-
-export function normalizeItemOptions(data) {
-    return normalizeArray(data?.results)
-        .filter((item) => item && item.id != null && item.name != null)
-        .map((item) => ({
-            value: item.id,
-            label: String(item.name),
-        }));
-}
-
-export function normalizeUsageData(data) {
-    return {
-        boes: normalizeArray(data?.boes),
-        allotments: normalizeArray(data?.allotments),
-    };
-}
-
-export function normalizeLicenseBalanceData(data) {
-    if (!data || typeof data !== "object") {
-        return null;
-    }
-
-    return {
-        ...data,
-        export_license: normalizeArray(data.export_license),
-        import_license: normalizeArray(data.import_license),
-    };
-}
 
 // Inline Editable Text Component
 function InlineEditableText({ licenseId, text, fieldName, label, onUpdate }) {

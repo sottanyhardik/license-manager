@@ -9,7 +9,8 @@ plus the cross-cutting guarantees the forensic audit called out as unverified:
   3.  priority_ordering  — items allocated in priority order (lowest first)
   4.  partial_usage      — requested qty < available qty
   5.  exact_usage        — requested qty == available qty
-  6.  insufficient       — requested qty > available qty (errors)
+  6.  insufficient       — requested qty > available qty (reports an exact shortage
+      while persisting the valid portion)
   7.  zero_qty           — requested qty == 0
   8.  decimal_qty        — 0.123 quantity survives at Decimal(15,3)
   9.  multiple_companies — company mismatch errors
@@ -340,32 +341,36 @@ class TestGoldenQuantityBoundaries:
         assert LicenseItemPlan.objects.filter(license=lic).count() == 1
         assert_cif_invariant(lic)
 
-    def test_insufficient_quantity_raises_and_writes_nothing(self):
+    def test_insufficient_quantity_is_capped_and_reports_exact_shortage(self):
         lic = make_license()
         item = add_item(lic, serial=1, description="COCOA MASS", available="500.000")
 
-        with pytest.raises(InsufficientQuantityError) as exc:
-            plan(lic, [
-                {"import_item_id": item.id, "requested_quantity": "500.001", "unit_price": "1.00"},
-            ])
+        result = plan(lic, [
+            {"import_item_id": item.id, "requested_quantity": "500.001", "unit_price": "1.00"},
+        ])
 
-        assert exc.value.code == "INSUFFICIENT_QUANTITY"
-        assert exc.value.details["import_item_id"] == item.id
-        assert exc.value.details["available_capacity"] == "500.000"
-        assert not LicenseItemPlan.objects.filter(license=lic).exists()
+        (line,) = result["allocated_items"]
+        assert line["requested_planned_qty"] == Decimal("500.001")
+        assert line["effective_planned_qty"] == Decimal("500.000")
+        assert line["capped_qty"] == Decimal("0.001")
+        assert line["was_quantity_capped"] is True
+        assert line["allocated_quantity"] == Decimal("500.000")
+        assert LicenseItemPlan.objects.filter(license=lic).values_list(
+            "planned_quantity", flat=True,
+        ).get() == Decimal("500.000")
 
-    def test_insufficient_rolls_back_and_preserves_the_existing_plan(self):
-        """A rejected re-plan must leave the previous plan exactly as it was."""
+    def test_capped_replan_replaces_existing_plan_with_latest_valid_result(self):
+        """REPLACE mode must save the valid current result, never stale rows."""
         lic = make_license()
         item = add_item(lic, serial=1, description="COCOA MASS", available="500.000")
         plan(lic, [{"import_item_id": item.id, "requested_quantity": "100.000", "unit_price": "3.00"}])
-        before = list(LicenseItemPlan.objects.filter(license=lic).values_list("id", "planned_quantity"))
-
-        with pytest.raises(InsufficientQuantityError):
-            plan(lic, [{"import_item_id": item.id, "requested_quantity": "9999.000", "unit_price": "3.00"}])
-
-        after = list(LicenseItemPlan.objects.filter(license=lic).values_list("id", "planned_quantity"))
-        assert after == before
+        result = plan(lic, [{"import_item_id": item.id, "requested_quantity": "9999.000", "unit_price": "3.00"}])
+        (line,) = result["allocated_items"]
+        assert line["allocated_quantity"] == Decimal("500.000")
+        assert line["capped_qty"] == Decimal("9499.000")
+        assert list(LicenseItemPlan.objects.filter(license=lic).values_list(
+            "planned_quantity", "planned_cif_fc",
+        )) == [(Decimal("500.000"), Decimal("1500.00"))]
 
     def test_two_lines_on_one_group_cannot_each_take_full_capacity(self):
         """Same HSN + same description == one plan group with one shared cap."""
@@ -380,12 +385,13 @@ class TestGoldenQuantityBoundaries:
         ])
         assert ok["allocation_summary"]["total_allocated_quantity"] == Decimal("500.000")
 
-        # One more unit over the shared cap must be rejected.
-        with pytest.raises(InsufficientQuantityError):
-            plan(lic, [
-                {"import_item_id": a.id, "requested_quantity": "300.000", "unit_price": "1.00"},
-                {"import_item_id": b.id, "requested_quantity": "200.001", "unit_price": "1.00"},
-            ])
+        # The overage is reported against the second line; the valid 500 stays planned.
+        capped = plan(lic, [
+            {"import_item_id": a.id, "requested_quantity": "300.000", "unit_price": "1.00"},
+            {"import_item_id": b.id, "requested_quantity": "200.001", "unit_price": "1.00"},
+        ])
+        assert capped["allocated_items"][1]["capped_qty"] == Decimal("0.001")
+        assert capped["allocation_summary"]["total_allocated_quantity"] == Decimal("500.000")
 
 
 # ---------------------------------------------------------------------------

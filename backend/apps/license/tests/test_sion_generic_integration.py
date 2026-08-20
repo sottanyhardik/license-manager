@@ -61,7 +61,7 @@ def setup_generic_norm(db):
         # Create PERCENTAGE_CAP rule (master entitlement cap)
         SionPlanningRule.objects.create(
             sion=sion,
-            output_item=output_item,
+            import_item=output_item,
             name=name,
             max_unit_price=Decimal("100.00"),
             unit="KG",
@@ -74,7 +74,7 @@ def setup_generic_norm(db):
         # Create SPLIT_PERCENTAGE rule (for transaction splitting)
         SionPlanningRule.objects.create(
             sion=sion,
-            output_item=output_item,
+            import_item=output_item,
             name=f"{name}_SPLIT",
             max_unit_price=Decimal("100.00"),
             unit="KG",
@@ -216,7 +216,7 @@ class TestGenericNormIntegration:
         for i, (name, pct) in enumerate([("X", "50"), ("Y", "30"), ("Z", "20")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_a,
-                output_item=output_a,
+                import_item=output_a,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
@@ -230,7 +230,7 @@ class TestGenericNormIntegration:
         for i, (name, pct) in enumerate([("M", "60"), ("N", "40")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_b,
-                output_item=output_b,
+                import_item=output_b,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
@@ -270,7 +270,7 @@ class TestGenericNormIntegration:
         for i, (name, pct) in enumerate([("OUTPUT1_A", "50"), ("OUTPUT1_B", "50")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion,
-                output_item=output_1,
+                import_item=output_1,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
@@ -284,7 +284,7 @@ class TestGenericNormIntegration:
         for i, (name, pct) in enumerate([("OUTPUT2_A", "60"), ("OUTPUT2_C", "40")], start=3):
             SionPlanningRule.objects.create(
                 sion=sion,
-                output_item=output_2,
+                import_item=output_2,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",

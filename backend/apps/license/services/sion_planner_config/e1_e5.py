@@ -212,7 +212,11 @@ E5_PROFILE: dict[str, Any] = {
             "action_type": "SPLIT",
             "priority": 6,
             "config": {
-                "algorithm": "SPLIT_BY_UNIT_VALUE",
+                # The generic executor's ordered milk primitive preserves the
+                # audited E5 waterfall: 0404 is exhausted through DWP/SWP
+                # before 3502 is considered for WPC.  ``SPLIT_BY_UNIT_VALUE``
+                # is a UI bucket strategy and cannot express that ordering.
+                "algorithm": "ORDERED_MILK_0404_THEN_WPC_3502",
                 "basis": "BALANCE_CIF_PER_QUANTITY",
                 "pipeline_membership": ["OILS_THEN_NORMAL_MILK"],
                 "category": "MILK PRODUCTS",

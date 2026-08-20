@@ -4,7 +4,7 @@ import threading
 from contextlib import contextmanager
 from decimal import Decimal
 
-from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -67,6 +67,83 @@ def _instance_id(instance) -> str:
 def _related_license(instance, relation_name):
     related = getattr(instance, relation_name, None)
     return getattr(related, "license", None) if related is not None else None
+
+
+def _enqueue_replan(license_id, reason, *, source_model="", source_pk=""):
+    """Record an async replan request; never execute planning in a signal."""
+    if license_id:
+        from apps.license.services.replan_requests import mark_license_replan_source_changed
+        mark_license_replan_source_changed(
+            license_id=license_id, reason=reason, source_model=source_model, source_pk=source_pk,
+        )
+
+
+@receiver(pre_save, sender=LicenseImportItemsModel)
+@receiver(pre_save, sender=AllotmentItems)
+@receiver(pre_save, sender=RowDetails)
+def snapshot_replan_license_before_reassignment(sender, instance, **kwargs):
+    """Preserve the old licence when a debit/import row is reassigned."""
+    if not instance.pk:
+        return
+    if sender is LicenseImportItemsModel:
+        old_id = sender.objects.filter(pk=instance.pk).values_list("license_id", flat=True).first()
+    elif sender is AllotmentItems:
+        old_id = sender.objects.filter(pk=instance.pk).values_list("item__license_id", flat=True).first()
+    else:  # RowDetails
+        old_id = sender.objects.filter(pk=instance.pk).values_list("sr_number__license_id", flat=True).first()
+    instance._replan_old_license_id = old_id
+
+
+@receiver(pre_delete, sender=LicenseImportItemsModel)
+@receiver(pre_delete, sender=AllotmentItems)
+@receiver(pre_delete, sender=RowDetails)
+def snapshot_replan_license_before_delete(sender, instance, **kwargs):
+    """Deletion can invalidate relations, so retain the licence id first."""
+    if sender is LicenseImportItemsModel:
+        license_id = instance.license_id
+    elif sender is AllotmentItems:
+        license_id = getattr(getattr(instance, "item", None), "license_id", None)
+    else:
+        license_id = getattr(getattr(instance, "sr_number", None), "license_id", None)
+    instance._replan_deleted_license_id = license_id
+
+
+@receiver(post_save, sender=LicenseImportItemsModel)
+@receiver(post_delete, sender=LicenseImportItemsModel)
+def enqueue_replan_for_import_item_change(sender, instance, **kwargs):
+    if kwargs.get("raw", False):
+        return
+    source = sender._meta.label
+    _enqueue_replan(getattr(instance, "_replan_old_license_id", None), "import_item_changed", source_model=source, source_pk=instance.pk)
+    _enqueue_replan(getattr(instance, "_replan_deleted_license_id", None) or instance.license_id, "import_item_changed", source_model=source, source_pk=instance.pk)
+
+
+@receiver(post_save, sender=AllotmentItems)
+@receiver(post_delete, sender=AllotmentItems)
+def enqueue_replan_for_allotment_change(sender, instance, **kwargs):
+    if kwargs.get("raw", False):
+        return
+    source = sender._meta.label
+    _enqueue_replan(getattr(instance, "_replan_old_license_id", None), "allotment_changed", source_model=source, source_pk=instance.pk)
+    _enqueue_replan(getattr(instance, "_replan_deleted_license_id", None) or (getattr(instance, "item", None).license_id if getattr(instance, "item", None) else None), "allotment_changed", source_model=source, source_pk=instance.pk)
+
+
+@receiver(post_save, sender=RowDetails)
+@receiver(post_delete, sender=RowDetails)
+def enqueue_replan_for_boe_change(sender, instance, **kwargs):
+    if kwargs.get("raw", False):
+        return
+    source = sender._meta.label
+    _enqueue_replan(getattr(instance, "_replan_old_license_id", None), "boe_changed", source_model=source, source_pk=instance.pk)
+    import_item = getattr(instance, "sr_number", None)
+    _enqueue_replan(getattr(instance, "_replan_deleted_license_id", None) or (import_item.license_id if import_item else None), "boe_changed", source_model=source, source_pk=instance.pk)
+
+
+@receiver(m2m_changed, sender=LicenseImportItemsModel.items.through)
+def enqueue_replan_for_import_item_mapping_change(sender, instance, action, **kwargs):
+    """Item-name mappings affect SION classification and plan eligibility."""
+    if action in {"post_add", "post_remove", "post_clear"}:
+        _enqueue_replan(instance.license_id, "import_item_mapping_changed", source_model=sender._meta.label, source_pk=instance.pk)
 
 
 def _update_all_import_items_available_value(license_instance):

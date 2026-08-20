@@ -5,6 +5,7 @@ Replace your existing core/models.py with this file (backup first).
 """
 
 import uuid
+import re
 from threading import local
 
 from django.conf import settings
@@ -368,6 +369,14 @@ class ItemNameModel(MasterSyncMixin, AuditModel):
         related_name='items',
         help_text="SION norm class for restriction grouping (e.g., E1, E2)"
     )
+    # Additive transition from the historical single-norm FK.  The FK stays
+    # temporarily so deployed readers can be migrated safely; all new planning
+    # code must use ``norms``.
+    norms = models.ManyToManyField(
+        'core.SionNormClassModel', related_name='planning_items', blank=True,
+        help_text="All SION norms for which this planning item is legitimate.",
+    )
+    normalized_name = models.CharField(max_length=255, null=True, blank=True, db_index=True, editable=False)
     restriction_percentage = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -386,6 +395,15 @@ class ItemNameModel(MasterSyncMixin, AuditModel):
 
     def get_natural_key_values(self):
         return (self.name,)
+
+    @staticmethod
+    def normalize_name(value):
+        """Safe identity key: trim/collapse whitespace and compare by case."""
+        return re.sub(r"\s+", " ", str(value or "").strip()).upper()
+
+    def save(self, *args, **kwargs):
+        self.normalized_name = self.normalize_name(self.name)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

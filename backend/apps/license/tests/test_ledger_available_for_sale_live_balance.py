@@ -1,10 +1,8 @@
 """
 Regression coverage for BL-LEDGER-02's stale-balance reader in
-`LicenseLedgerViewSet.available_for_sale` (`GET /api/license-ledger/
-available_for_sale/`): the `min_balance` filter used to read the cached
-`balance__balance_cif` column directly. Now resolves against the LIVE,
-batched-computed balance instead (same fix as `ledger_service.py`'s five
-sibling `min_balance` filters).
+the supported canonical collection (`GET /api/license-ledger/license-wise/`):
+the ``min_balance`` filter must resolve against the live, batched-computed
+balance rather than the denormalized ``balance__balance_cif`` column.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -16,8 +14,9 @@ from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, Lic
 from apps.license.models.core import LicenseBalance
 from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.tests.test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
+from apps.trade.models import LicenseTrade, LicenseTradeLine
 
-AVAILABLE_FOR_SALE_URL = "/api/license-ledger/available_for_sale/"
+LICENSE_COLLECTION_URL = "/api/license-ledger/license-wise/"
 
 
 class AvailableForSaleLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCase):
@@ -40,6 +39,17 @@ class AvailableForSaleLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCas
         if debit_cif:
             boe = self.make_boe(company)
             self.make_debit_row(boe, item, cif_fc=debit_cif, qty=Decimal("100.000"))
+        # The supported ledger collection is intentionally trade-scoped.
+        # Create one real trade line per licence rather than bypassing that
+        # authorization boundary as the retired available-for-sale route did.
+        trade = LicenseTrade.objects.create(
+            from_company=company, to_company=self.make_company(), direction=LicenseTrade.DIR_SALE,
+            license_type="DFIA", invoice_number=f"AFS-{number}", invoice_date=date.today(),
+        )
+        LicenseTradeLine.objects.create(
+            trade=trade, sr_number=item, description="Widget A", qty_kg=Decimal("1.000"),
+            cif_inr=Decimal("1.00"),
+        )
         return license_obj
 
     def _stale_cache(self, license_obj, fake_balance_cif):
@@ -61,7 +71,7 @@ class AvailableForSaleLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCas
         self._stale_cache(excluded, Decimal("999999.00"))
 
         threshold = (live_included + live_excluded) / 2
-        resp = self.client.get(AVAILABLE_FOR_SALE_URL, {"min_balance": str(threshold)})
+        resp = self.client.get(LICENSE_COLLECTION_URL, {"min_balance": str(threshold)})
         self.assertEqual(resp.status_code, 200, resp.data)
 
         numbers = {lic["license_number"] for lic in resp.data["licenses"]}

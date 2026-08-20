@@ -52,6 +52,12 @@ export default function NestedFieldArray({
     itemConditionsBySerial?: Record<string, any>;
 }) {
 
+    // Some nested collections represent existing ledger/allocation rows.  In
+    // those screens their source rows must not be added or deleted; individual
+    // non-read-only fields (such as planning_target_item) can still be edited.
+    const allowAdd = !fields.some((field) => field.allow_add === false);
+    const allowRemove = !fields.some((field) => field.allow_remove === false);
+
     // Use centralized date parser from utility
     const parseDate = (dateString) => {
         return parseDateUtil(dateString);
@@ -381,6 +387,7 @@ export default function NestedFieldArray({
                         placeholder={`Select ${field.label || field.name}`}
                         className="react-select-sm"
                         isMulti={isMulti}
+                        isClearable={field.is_clearable !== false}
                     />
                 </div>
             );
@@ -624,9 +631,11 @@ export default function NestedFieldArray({
                         <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{value.length}</span>
                     )}
                 </h6>
-                <button type="button" onClick={handleAdd} className="flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20 cursor-pointer">
-                    <Plus className="size-4" aria-hidden="true" />Add Item
-                </button>
+                {allowAdd && (
+                    <button type="button" onClick={handleAdd} className="flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20 cursor-pointer">
+                        <Plus className="size-4" aria-hidden="true" />Add Item
+                    </button>
+                )}
             </div>
 
             {value.length === 0 ? (
@@ -673,7 +682,7 @@ export default function NestedFieldArray({
                                             </button>
                                         );
                                     })()}
-                                    <button
+                                    {allowRemove && <button
                                         type="button"
                                         onClick={() => handleRemove(index)}
                                         disabled={isFrozen}
@@ -681,7 +690,7 @@ export default function NestedFieldArray({
                                         className="flex size-7 cursor-pointer items-center justify-center rounded border border-destructive/30 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {isFrozen ? <Lock className="size-3" aria-hidden="true" /> : <Trash2 className="size-3" aria-hidden="true" />}
-                                    </button>
+                                    </button>}
                                 </div>
                             </div>
                             <div className="p-3">

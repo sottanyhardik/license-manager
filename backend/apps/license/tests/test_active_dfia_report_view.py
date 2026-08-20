@@ -98,16 +98,43 @@ def _workaround_broken_get_item_data():
 
 @pytest.fixture
 def license_viewer_client(db):
+    """The Active DFIA report is a reporting surface, not licence CRUD.
+
+    ``LICENSE_VIEWER`` may read its tenant-scoped CRUD rows but must not use
+    this cross-company report action.  It is intentionally exercised through
+    the established report role below.
+    """
     user = User.objects.create_user(
         username="active-dfia-viewer",
         email="active-dfia-viewer@example.com",
         password="RoleP@ssw0rd123",
     )
-    group, _ = Group.objects.get_or_create(name="LICENSE_VIEWER")
+    group, _ = Group.objects.get_or_create(name="REPORT_VIEWER")
     user.groups.add(group)
     token = RefreshToken.for_user(user)
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+    return client
+
+
+def _client_for(*, username, company=None, role=None, superuser=False):
+    if superuser:
+        user = User.objects.create_superuser(
+            username=username,
+            password="RoleP@ssw0rd123",
+            company=company,
+        )
+    else:
+        user = User.objects.create_user(
+            username=username,
+            password="RoleP@ssw0rd123",
+            company=company,
+        )
+    if role:
+        group, _ = Group.objects.get_or_create(name=role)
+        user.groups.add(group)
+    client = APIClient()
+    client.force_authenticate(user=user)
     return client
 
 
@@ -231,6 +258,91 @@ def test_active_dfia_report_is_null_filter_ignores_stale_cache(license_viewer_cl
     }
     assert stale_low.id in returned_ids
     assert stale_high.id not in returned_ids
+
+
+@pytest.mark.django_db
+def test_active_dfia_report_empty_exporter_filter_has_stable_zero_summary(
+    license_viewer_client, dfia_masters,
+):
+    """An empty valid filter result is a report, not an internal error."""
+    other_exporter = CompanyModel.objects.create(
+        iec="5222222222", name="Other DFIA Exporter",
+    )
+    _make_dfia_license("DFIA-OTHER-001", other_exporter, export_cif=Decimal("400.00"))
+
+    response = license_viewer_client.get(
+        reverse(ACTIVE_DFIA_URL_NAME),
+        {"exporter": dfia_masters["parle"].id, "is_null": "all"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["groups"] == []
+    assert response.data["grand_totals"] == {}
+    assert response.data["summary"] == {
+        "total_licenses": 0,
+        "total_sion_norms": 0,
+        "total_cif": 0,
+        "balance_cif": 0,
+    }
+
+
+@pytest.mark.django_db
+def test_active_dfia_report_rejects_invalid_exporter_filter(license_viewer_client):
+    response = license_viewer_client.get(
+        reverse(ACTIVE_DFIA_URL_NAME), {"exporter": "not-an-id"},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["exporter"] == "Invalid exporter ID."
+
+
+@pytest.mark.django_db
+def test_active_dfia_report_uses_report_permission_and_filtered_response_scope(dfia_masters):
+    """Only documented report-capable roles may use this cross-company action.
+
+    Report roles intentionally have reporting visibility across companies;
+    the explicit exporter filter must still return only that exporter's rows.
+    A licence viewer or trade viewer cannot infer licence data merely by
+    knowing the report route or another company's exporter id.
+    """
+    selected = _make_dfia_license("DFIA-AUTH-SELECTED", dfia_masters["parle"])
+    other_exporter = CompanyModel.objects.create(iec="5333333333", name="Other DFIA Exporter")
+    other = _make_dfia_license("DFIA-AUTH-OTHER", other_exporter)
+    buyer = CompanyModel.objects.create(iec="5444444444", name="DFIA Buyer")
+    seller = CompanyModel.objects.create(iec="5555555555", name="DFIA Seller")
+    unrelated = CompanyModel.objects.create(iec="5666666666", name="Unrelated Company")
+    params = {"exporter": dfia_masters["parle"].id, "is_null": "all"}
+
+    owner_client = _client_for(
+        username="active-dfia-owner", company=dfia_masters["parle"], role="LICENSE_MANAGER",
+    )
+    buyer_client = _client_for(username="active-dfia-buyer", company=buyer, role="TRADE_MANAGER")
+    seller_client = _client_for(username="active-dfia-seller", company=seller, role="TRADE_VIEWER")
+    unrelated_client = _client_for(
+        username="active-dfia-unrelated", company=unrelated, role="LICENSE_VIEWER",
+    )
+    admin_client = _client_for(username="active-dfia-admin", superuser=True)
+
+    for client in (owner_client, buyer_client, admin_client):
+        response = client.get(reverse(ACTIVE_DFIA_URL_NAME), params)
+        assert response.status_code == status.HTTP_200_OK
+        returned_numbers = {
+            row["license_number"]
+            for group in response.data["groups"]
+            for notification in group["notifications"]
+            for row in notification["licenses"]
+        }
+        assert returned_numbers == {selected.license_number}
+        assert other.license_number not in str(response.data)
+
+    for client in (seller_client, unrelated_client):
+        response = client.get(reverse(ACTIVE_DFIA_URL_NAME), params)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert selected.license_number not in str(response.data)
+
+    anonymous = APIClient().get(reverse(ACTIVE_DFIA_URL_NAME), params)
+    assert anonymous.status_code in {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN}
+    assert selected.license_number not in str(anonymous.data)
 
 
 @pytest.mark.django_db

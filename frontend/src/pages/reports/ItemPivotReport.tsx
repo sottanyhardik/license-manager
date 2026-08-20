@@ -17,6 +17,7 @@ import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
 import { openAuthedFile } from "../../utils/documentDownload";
 import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
+import { buildItemPivotReportPath, toFiniteNumber, type ItemPivotPathOptions } from "./itemPivotReportUtils";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
@@ -96,66 +97,6 @@ function useFrozenColumnOffsets(measureKeys: string[]) {
     return { makeRef, offsets };
 }
 
-type ItemPivotPathOptions = {
-    format: "json" | "excel";
-    normClass?: unknown;
-    selectedCompanies?: unknown[];
-    excludeCompanies?: unknown[];
-    minBalance?: unknown;
-    licenseStatus?: unknown;
-    expiryDateFrom?: unknown;
-    expiryDateTo?: unknown;
-    purchaseStatus?: unknown[];
-};
-
-export function toFiniteNumber(value: unknown, fallback = 0): number {
-    const parsed = Number.parseFloat(String(value ?? ""));
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function normalizeFilterValues(values?: unknown[]): string[] {
-    if (!Array.isArray(values)) {
-        return [];
-    }
-
-    return values
-        .map((value) => String(value ?? "").trim())
-        .filter(Boolean);
-}
-
-export function buildItemPivotReportPath({
-    format,
-    normClass,
-    selectedCompanies = [],
-    excludeCompanies = [],
-    minBalance = 200,
-    licenseStatus = "active",
-    expiryDateFrom,
-    expiryDateTo,
-    purchaseStatus = [],
-}: ItemPivotPathOptions): string {
-    const params = new URLSearchParams({
-        format,
-        days: "30",
-    });
-    const normClassValue = String(normClass ?? "").trim();
-    const includeCompanyIds = normalizeFilterValues(selectedCompanies);
-    const excludeCompanyIds = normalizeFilterValues(excludeCompanies);
-    const purchaseStatuses = normalizeFilterValues(purchaseStatus);
-    const expiryFrom = String(expiryDateFrom ?? "").trim();
-    const expiryTo = String(expiryDateTo ?? "").trim();
-
-    if (normClassValue) params.set("sion_norm", normClassValue);
-    if (includeCompanyIds.length > 0) params.set("company_ids", includeCompanyIds.join(","));
-    if (excludeCompanyIds.length > 0) params.set("exclude_company_ids", excludeCompanyIds.join(","));
-    params.set("min_balance", String(toFiniteNumber(minBalance, 200)));
-    params.set("license_status", String(licenseStatus || "active"));
-    if (expiryFrom) params.set("expiry_date_from", expiryFrom);
-    if (expiryTo) params.set("expiry_date_to", expiryTo);
-    if (purchaseStatuses.length > 0) params.set("purchase_status", purchaseStatuses.join(","));
-
-    return `reports/item-pivot/?${params.toString()}`;
-}
 
 // Shared style for the compact Condition / Transfer / Note action pills that
 // sit next to each DFIA number. Soft tint + coloured text/border, icon inline.

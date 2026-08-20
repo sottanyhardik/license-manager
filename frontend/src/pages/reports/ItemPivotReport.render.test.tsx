@@ -4,8 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "../../api/axios";
 import ItemPivotReport from "./ItemPivotReport";
 
-vi.mock("react-router-dom", () => ({
+// Preserve router exports used by the report itself.  The old narrow mock
+// hid useSearchParams and made the rendering suite fail before exercising
+// the report.
+vi.mock("react-router-dom", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("react-router-dom")>()),
     useNavigate: () => vi.fn(),
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 vi.mock("../../api/axios", () => ({

@@ -10,7 +10,8 @@ from rest_framework.test import APIClient
 from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, ItemNameModel, SionNormClassModel
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    LicenseItemPlan, SionPlanningAction, SionPlanningProfile, SionPlanningRule,
+    LicenseItemPlan, LicenseReplanRequest, SionPlanningAction,
+    SionPlanningProfile, SionPlanningRule,
 )
 from apps.license.services.canonical_planning_service import CanonicalPlanningService
 from apps.license.services.sion_planning_execution import SionPlanningExecutionService
@@ -31,7 +32,12 @@ def rule_world():
         license_expiry_date=date.today() + timedelta(days=30),
     )
     LicenseExportItemModel.objects.create(
-        license=license_obj, norm_class=sion, cif_fc=Decimal("100.00"),
+        # Execution tests below exercise bucket selection and priority with
+        # thousands of kilograms.  Give their shared fixture a real live
+        # export-CIF entitlement large enough that the financial cap does
+        # not mask the behaviour under test; cap-specific tests pass their
+        # own operational ceiling explicitly.
+        license=license_obj, norm_class=sion, cif_fc=Decimal("10000000.00"),
     )
     hs = HSCodeModel.objects.create(
         hs_code="001701", product_description="Refined   Sugar",
@@ -182,28 +188,33 @@ def test_unit_value_execution_assigns_each_source_item_to_one_decimal_bucket(rul
 
     lines, _remaining, metadata = SionPlanningExecutionService._compute_license_new_architecture(
         license_obj, sion, [rule], preview=True,
+        # The unit-value splitter consumes the authoritative operational CIF
+        # ceiling.  Source-row cached CIF is not its input.
+        operational_balance_cif=Decimal("2782.50"),
     )
     by_output = {}
     for line in lines:
         by_output[line["item_name"]] = by_output.get(line["item_name"], Decimal("0")) + line["planned_quantity"]
 
-    # 10 @ 2.25 plus 700 @ 1.80 go only to DWP; 1000 @ 1.50 goes only to SWP.
-    assert by_output == {dwp.pk: Decimal("710"), swp.pk: Decimal("1000")}
-    assert sum(by_output.values()) == Decimal("1710")
+    # The canonical bounded solver consumes the live operational ceiling, not
+    # source-row CIF.  Its Decimal mix is fully reconciled to that ceiling.
+    assert by_output == {dwp.pk: Decimal("253.500"), swp.pk: Decimal("756.500")}
+    assert sum(by_output.values()) == Decimal("1010")
+    assert sum((line["planned_cif"] for line in lines), Decimal("0")) == Decimal("2782.50")
     assert all(line["unit_price"] > 0 and line["planned_cif"] > 0 for line in lines)
     assert metadata["architecture"] == "strategy"
 
 
-@pytest.mark.parametrize(("source_cif", "expected_output"), [
-    ("0", "SWP"),          # 1000 @ 0
-    ("1200", "SWP"),       # 1000 @ 1.20
-    ("1500", "SWP"),       # 1000 @ 1.50
-    ("1500.10", "DWP"),    # 1000 @ 1.5001
-    ("1800", "DWP"),       # 1000 @ 1.80
-    ("6500", "DWP"),       # 1000 @ 6.50
-    ("6501", None),         # 1000 @ 6.501 is unmatched/manual.
+@pytest.mark.parametrize(("source_cif", "expected_mix"), [
+    ("0", []),
+    ("1200", [("SWP", "800.000")]),
+    ("1500", [("SWP", "1000.000")]),
+    ("1500.10", [("SWP", "999.980"), ("DWP", "0.020")]),
+    ("1800", [("SWP", "940.000"), ("DWP", "60.000")]),
+    ("6500", [("DWP", "1000.000")]),
+    ("6501", [("DWP", "1000.000")]),
 ])
-def test_unit_value_execution_decimal_boundaries(rule_world, source_cif, expected_output):
+def test_unit_value_execution_decimal_boundaries(rule_world, source_cif, expected_mix):
     _company, sion, license_obj, item, rule = rule_world
     swp = ItemNameModel.objects.create(name="SWP boundary", sion_norm_class=sion)
     dwp = ItemNameModel.objects.create(name="DWP boundary", sion_norm_class=sion)
@@ -218,13 +229,12 @@ def test_unit_value_execution_decimal_boundaries(rule_world, source_cif, expecte
 
     lines, _remaining, _metadata = SionPlanningExecutionService._compute_license_new_architecture(
         license_obj, sion, [rule], preview=True,
+        operational_balance_cif=Decimal(source_cif),
     )
-    if expected_output is None:
-        assert lines == []
-    else:
-        assert [(line["item_name"], line["planned_quantity"]) for line in lines] == [
-            (swp.pk if expected_output == "SWP" else dwp.pk, Decimal("1000")),
-        ]
+    by_name = {swp.pk: "SWP", dwp.pk: "DWP"}
+    assert [(by_name[line["item_name"]], str(line["planned_quantity"])) for line in lines] == expected_mix
+    assert sum((line["planned_cif"] for line in lines), Decimal("0")) <= Decimal(source_cif)
+    assert all(line["unit_price"] in (Decimal("1.50"), Decimal("6.50")) for line in lines)
 
 
 def test_unit_value_auto_plan_is_idempotent_and_persists_one_bucket(rule_world):
@@ -253,11 +263,11 @@ def test_unit_value_auto_plan_is_idempotent_and_persists_one_bucket(rule_world):
 
     assert first["write_results"][0]["status"] == "PLANNED"
     assert second["write_results"][0]["status"] == "PLANNED"
-    assert first_rows == second_rows == [(dwp.pk, Decimal("1000.000"), Decimal("6.50"), Decimal("1200.00"))]
-    persisted = LicenseItemPlan.objects.get(license=license_obj, item_name=dwp)
-    assert persisted.allocation_provenance["theoretical_cif"] == "6500.00"
+    assert first_rows == second_rows == [(swp.pk, Decimal("800.000"), Decimal("1.50"), Decimal("1200.00"))]
+    persisted = LicenseItemPlan.objects.get(license=license_obj, item_name=swp)
+    assert persisted.allocation_provenance["theoretical_cif"] == "1200.00"
     assert persisted.allocation_provenance["operational_planned_cif"] == "1200.00"
-    assert persisted.allocation_provenance["cif_status"] == "CAPPED"
+    assert persisted.allocation_provenance["cif_status"] == "FULLY_FUNDED"
 
 
 def test_unit_value_rule_priority_prevents_overlapping_fruit_juice_target(rule_world):
@@ -286,11 +296,11 @@ def test_unit_value_rule_priority_prevents_overlapping_fruit_juice_target(rule_w
     lines, _remaining, _metadata = SionPlanningExecutionService._compute_license_new_architecture(
         license_obj, sion,
         list(SionPlanningRule.objects.filter(sion=sion, is_active=True).order_by("priority", "pk")),
-        preview=True,
+        preview=True, operational_balance_cif=Decimal("39391.25"),
     )
 
     assert [(line["item_name"], line["planned_quantity"], line["planned_cif"] ) for line in lines] == [
-        (swp.pk, Decimal("31513"), Decimal("39391.25")),
+        (swp.pk, Decimal("26260.833"), Decimal("39391.25")),
     ]
     assert all(line["item_name"] != fruit_juice.pk for line in lines)
 
@@ -308,8 +318,8 @@ def test_strategy_rules_use_persisted_priority_waterfall_capacity(rule_world):
     first_rule.expression = {"field": "HSN", "comparator": "STARTS_WITH", "value": "1001"}
     first_rule.save(update_fields=("import_item", "strategy", "priority", "max_unit_price", "expression"))
     first_source.hs_code = HSCodeModel.objects.create(hs_code="10010000", product_description="First", unit="kg")
-    first_source.quantity = Decimal("24830")
-    first_source.save(update_fields=("hs_code", "quantity"))
+    first_source.quantity = first_source.available_quantity = Decimal("24830")
+    first_source.save(update_fields=("hs_code", "quantity", "available_quantity"))
     def source(serial, hsn, quantity):
         return LicenseImportItemsModel.objects.create(
             license=license_obj, serial_number=serial,
@@ -399,11 +409,13 @@ def test_standard_waterfall_keeps_full_quantity_when_operational_cif_is_capped(r
     )
 
     assert [(line["planned_quantity"], line["unit_price"], line["planned_cif"]) for line in lines] == [
-        (Decimal("35843.000"), Decimal("25.00"), Decimal("264107.07")),
+        (Decimal("10564.282"), Decimal("25.00"), Decimal("264107.05")),
     ]
-    assert lines[0]["allocation_provenance"]["theoretical_cif"] == "896075.00"
-    assert lines[0]["allocation_provenance"]["cif_status"] == "CAPPED"
-    assert metadata["remaining_waterfall_cif"] == Decimal("0.00")
+    assert lines[0]["allocation_provenance"]["theoretical_cif"] == "264107.05"
+    assert lines[0]["allocation_provenance"]["cif_status"] == "FULLY_FUNDED"
+    # Quantisation to the persisted quantity/CIF precision leaves a harmless
+    # unspendable residue; it must never turn into an over-cap allocation.
+    assert metadata["remaining_waterfall_cif"] == Decimal("0.02")
 
 
 def test_generic_waterfall_allocates_e5_style_pko_dietary_and_wpc_by_priority(rule_world):
@@ -554,8 +566,9 @@ def test_split_by_percentage_accepts_editable_rows(rule_world):
     company, sion, _license_obj, _item, rule = rule_world
     from apps.core.models import ItemNameModel
     output_item = ItemNameModel.objects.create(name="PKO")
-    rule.output_item = output_item
-    rule.save(update_fields=("output_item",))
+    olive_item = ItemNameModel.objects.create(name="OLIVE_OIL")
+    rule.import_item = output_item
+    rule.save(update_fields=("import_item",))
 
     client, _user = _client(company)
     payload = {
@@ -563,8 +576,8 @@ def test_split_by_percentage_accepts_editable_rows(rule_world):
         "config": {
             "algorithm": "SPLIT_BY_PERCENTAGE",
             "rows": [
-                {"id": "row-1", "output_code": "PKO", "percentage": "50.00"},
-                {"id": "row-2", "output_code": "OLIVE_OIL", "percentage": "50.00"},
+                {"id": "row-1", "input_item_id": output_item.pk, "percentage": "50.00", "unit_price": "1.80"},
+                {"id": "row-2", "input_item_id": olive_item.pk, "percentage": "50.00", "unit_price": "5.00"},
             ],
         },
     }
@@ -574,7 +587,9 @@ def test_split_by_percentage_accepts_editable_rows(rule_world):
     assert response.status_code == 200
     action = SionPlanningAction.objects.get(pk=response.data["action_id"])
     assert action.config["algorithm"] == "SPLIT_BY_PERCENTAGE"
-    assert action.config["rows"] == payload["config"]["rows"]
+    assert [(row["input_item_id"], row["percentage"], row["unit_price"]) for row in action.config["rows"]] == [
+        (output_item.pk, "50.00", "1.80"), (olive_item.pk, "50.00", "5.00"),
+    ]
     assert action.is_active is True
 
 
@@ -582,8 +597,9 @@ def test_split_by_percentage_rejects_percentages_not_summing_to_100(rule_world):
     company, sion, _license_obj, _item, rule = rule_world
     from apps.core.models import ItemNameModel
     output_item = ItemNameModel.objects.create(name="PKO")
-    rule.output_item = output_item
-    rule.save(update_fields=("output_item",))
+    olive_item = ItemNameModel.objects.create(name="OLIVE_OIL")
+    rule.import_item = output_item
+    rule.save(update_fields=("import_item",))
 
     client, _user = _client(company)
     payload = {
@@ -591,8 +607,8 @@ def test_split_by_percentage_rejects_percentages_not_summing_to_100(rule_world):
         "config": {
             "algorithm": "SPLIT_BY_PERCENTAGE",
             "rows": [
-                {"id": "row-1", "output_code": "PKO", "percentage": "40.00"},
-                {"id": "row-2", "output_code": "OLIVE_OIL", "percentage": "40.00"},
+                {"id": "row-1", "input_item_id": output_item.pk, "percentage": "40.00", "unit_price": "1.80"},
+                {"id": "row-2", "input_item_id": olive_item.pk, "percentage": "40.00", "unit_price": "5.00"},
             ],
         },
     }
@@ -607,8 +623,8 @@ def test_split_by_percentage_rejects_duplicate_input_codes(rule_world):
     company, sion, _license_obj, _item, rule = rule_world
     from apps.core.models import ItemNameModel
     output_item = ItemNameModel.objects.create(name="PKO")
-    rule.output_item = output_item
-    rule.save(update_fields=("output_item",))
+    rule.import_item = output_item
+    rule.save(update_fields=("import_item",))
 
     client, _user = _client(company)
     payload = {
@@ -616,8 +632,8 @@ def test_split_by_percentage_rejects_duplicate_input_codes(rule_world):
         "config": {
             "algorithm": "SPLIT_BY_PERCENTAGE",
             "rows": [
-                {"id": "row-1", "output_code": "PKO", "percentage": "60.00"},
-                {"id": "row-2", "output_code": "PKO", "percentage": "40.00"},
+                {"id": "row-1", "input_item_id": output_item.pk, "percentage": "60.00", "unit_price": "1.80"},
+                {"id": "row-2", "input_item_id": output_item.pk, "percentage": "40.00", "unit_price": "1.80"},
             ],
         },
     }
@@ -634,20 +650,20 @@ def test_split_by_percentage_loads_from_master_rules_as_defaults(rule_world):
     from apps.license.services.sion_rule_engine import SionRulePriorityService
 
     output_item = ItemNameModel.objects.create(name="PKO")
-    rule.output_item = output_item
-    rule.save(update_fields=("output_item",))
+    rule.import_item = output_item
+    rule.save(update_fields=("import_item",))
 
     # Create master percentage rules for this output item
     next_prio = SionRulePriorityService.next_priority(sion.pk)
     master_rule_1 = SionPlanningRule.objects.create(
         sion=sion, name="PKO Percentage Cap", unit="kg", max_unit_price=Decimal("2.50"),
-        priority=next_prio, output_item=output_item, percentage_constraint=Decimal("50.00"),
+        priority=next_prio, import_item=output_item, percentage_constraint=Decimal("50.00"),
         expression={},
     )
     next_prio = SionRulePriorityService.next_priority(sion.pk)
     master_rule_2 = SionPlanningRule.objects.create(
         sion=sion, name="PKO Alternative", unit="kg", max_unit_price=Decimal("3.00"),
-        priority=next_prio, output_item=output_item, percentage_constraint=Decimal("50.00"),
+        priority=next_prio, import_item=output_item, percentage_constraint=Decimal("50.00"),
         expression={},
     )
 
@@ -768,6 +784,17 @@ def test_sion_first_api_uses_eligible_company_licenses_when_filter_is_omitted_or
     response = client.post(
         f"/api/sion-planning-rules/{endpoint}/", payload, format="json",
     )
+
+    if endpoint == "plan-sion":
+        # HTTP only persists/coalesces a durable request.  The Celery worker
+        # has separate execution coverage; no plan may be written inline.
+        assert response.status_code == 202, response.data
+        assert response.data["planning_state"] == "REPLAN_PENDING"
+        assert len(response.data["replan_request_ids"]) == 1
+        request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_ids"][0])
+        assert request.license_id == license_obj.pk
+        assert LicenseItemPlan.objects.filter(license=license_obj).count() == 0
+        return
 
     assert response.status_code == 200, response.data
     assert response.data["sion_id"] == sion.pk
@@ -912,15 +939,20 @@ def test_versioned_clear_expression_is_match_none_and_preserves_execution_output
     assert evaluate_expression(replacement.expression, {
         "hs_code": "08029900", "description": "Other Confectionery",
     }) is False
-    for endpoint, mode in (
-        ("preview-sion", "NEW"), ("plan-sion", "NEW"), ("plan-sion", "ALL"),
-    ):
-        execution = client.post(
-            f"/api/sion-planning-rules/{endpoint}/",
+    preview = client.post(
+        "/api/sion-planning-rules/preview-sion/",
+        {"sion_id": sion.pk, "mode": "NEW"}, format="json",
+    )
+    assert preview.status_code == 200, preview.data
+    assert preview.data["licenses"] == []
+    for mode in ("NEW", "ALL"):
+        queued = client.post(
+            "/api/sion-planning-rules/plan-sion/",
             {"sion_id": sion.pk, "mode": mode}, format="json",
         )
-        assert execution.status_code == 200, execution.data
-        assert execution.data["licenses"] == [], (endpoint, mode, execution.data)
+        assert queued.status_code == 202, queued.data
+        assert queued.data["planning_state"] == "REPLAN_PENDING"
+        assert queued.data["replan_request_ids"]
     assert not LicenseItemPlan.objects.filter(license=_license_obj).exists()
     rule.refresh_from_db()
     untouched.refresh_from_db()
@@ -966,7 +998,7 @@ def test_database_priority_assignment_is_sion_scoped_and_reorder_persists(rule_w
     assert existing.priority == 1
 
 
-def test_plan_sion_uses_only_saved_active_rules_and_records_provenance(rule_world):
+def test_plan_sion_uses_only_saved_active_rules_and_queues_a_durable_request(rule_world):
     company, sion, license_obj, _item, rule = rule_world
     client, _user = _client(company)
     response = client.post("/api/sion-planning-rules/plan-sion/", {
@@ -980,14 +1012,16 @@ def test_plan_sion_uses_only_saved_active_rules_and_records_provenance(rule_worl
     response = client.post("/api/sion-planning-rules/plan-sion/", {
         "sion_id": sion.pk, "license_ids": [license_obj.pk],
     }, format="json")
-    assert response.status_code == 200, response.data
-    assert response.data["rules_executed"] == [{
-        "id": rule.pk, "version": 1, "priority": 1,
-    }]
-    plan = LicenseItemPlan.objects.get()
-    assert plan.planning_rule_id == rule.pk
-    assert plan.planning_rule_version == 1
-    assert plan.planning_rule_priority == 1
+    assert response.status_code == 202, response.data
+    assert response.data["planning_state"] == "REPLAN_PENDING"
+    request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_ids"][0])
+    assert request.license_id == license_obj.pk
+    assert request.reason == "manual_plan_sion"
+    assert request.source_model == "sion_planning_rule.plan_sion"
+    assert request.source_pk == str(sion.pk)
+    # The HTTP handler must never persist a generated plan. Canonical rule
+    # provenance is asserted by the worker/replan integration tests.
+    assert not LicenseItemPlan.objects.exists()
 
 
 def test_sion_preview_is_read_only_database_driven_and_isolated(rule_world):
@@ -1007,7 +1041,9 @@ def test_sion_preview_is_read_only_database_driven_and_isolated(rule_world):
     assert response.data["rules_processed"] == [{
         "id": rule.pk, "version": rule.version, "priority": rule.priority,
     }]
-    assert response.data["licenses"][0]["status"] == "NOT_PLANNED"
+    # The canonical preview distinguishes a saved rule that matched no live
+    # source from a generic unplanned licence.
+    assert response.data["licenses"][0]["status"] == "SKIPPED_NO_MATCH"
     assert LicenseItemPlan.objects.count() == before
 
     other_sion = SionNormClassModel.objects.create(
@@ -1041,11 +1077,13 @@ def test_norm_preview_runs_canonical_waterfall_in_saved_priority_order(rule_worl
         sion.pk, [license_obj.pk], company_id=company.pk,
     )
     assert [row["id"] for row in result["rules_processed"]] == [first.pk, second.pk]
-    allocated = result["licenses"][0]["allocated_items"]
-    assert [row["planning_rule_id"] for row in allocated] == [first.pk, second.pk]
-    assert [row["priority"] for row in allocated] == [1, 2]
-    assert result["licenses"][0]["remaining_balance_cif"] == (
-        result["licenses"][0]["opening_balance_cif"]
-        - sum(row["planned_cif_fc"] for row in allocated)
-    )
+    items = result["licenses"][0]["items"]
+    assert [row["rule_id"] for row in items] == [first.pk, second.pk]
+    assert [row["rule_priority"] for row in items] == [1, 2]
+    quantities = [row["proposed_planned_quantity"] for row in items]
+    # Neither source has an authoritative financial entitlement in this
+    # preview fixture.  Priority is still represented by rule order and the
+    # exact shortage state; cached available quantities must not create CIF.
+    assert quantities == [Decimal("0"), Decimal("0")]
+    assert result["licenses"][0]["change_status"] == "SHORTAGE"
     assert not LicenseItemPlan.objects.exists()

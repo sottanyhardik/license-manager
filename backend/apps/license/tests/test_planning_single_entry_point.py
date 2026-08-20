@@ -15,15 +15,18 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.license.models import LicenseItemPlan, SionPlanningRule, LicenseDetailsModel
+from apps.core.models import CompanyModel, HeadSIONNormsModel, SionNormClassModel
+from apps.license.models import LicenseItemPlan, SionPlanningRule, LicenseDetailsModel, LicenseImportItemsModel
 
 User = get_user_model()
 
 
 @pytest.fixture
-def licensed_client(db, dfia_license_with_imports):
+def licensed_client(db):
     """API client with LICENSE_MANAGER role for a test license."""
-    license_obj = dfia_license_with_imports
+    company = CompanyModel.objects.create(iec="PLANENTRY1", name="Planning Entry Test")
+    license_obj = LicenseDetailsModel.objects.create(license_number="PLAN-ENTRY-TEST", exporter=company)
+    LicenseImportItemsModel.objects.create(license=license_obj, serial_number=1, description="Planning test item", quantity=10, available_quantity=10)
     user = User.objects.create_user(
         username="planning-test-user",
         email="planning-test@example.com",
@@ -38,6 +41,12 @@ def licensed_client(db, dfia_license_with_imports):
     return client, license_obj
 
 
+@pytest.fixture
+def sion_for_queue(db):
+    head = HeadSIONNormsModel.objects.create(name="Planning Entry Head")
+    return SionNormClassModel.objects.create(head_norm=head, norm_class="E1", is_active=True)
+
+
 class TestPlanningWritePathConsolidation:
     """Verify all plan writes converge at the planning entry points."""
 
@@ -46,7 +55,7 @@ class TestPlanningWritePathConsolidation:
         client, license_obj = licensed_client
 
         # Get first import item
-        first_item = license_obj.import_items.first()
+        first_item = license_obj.import_license.first()
         assert first_item, "Test license must have import items"
 
         response = client.post(
@@ -71,7 +80,7 @@ class TestPlanningWritePathConsolidation:
         client, license_obj = licensed_client
 
         # Create a plan line manually in the DB (bypass the API)
-        first_item = license_obj.import_items.first()
+        first_item = license_obj.import_license.first()
         plan_line = LicenseItemPlan.objects.create(
             license=license_obj,
             import_item=first_item,
@@ -95,7 +104,7 @@ class TestPlanningWritePathConsolidation:
         """DELETE /api/license-item-plans/<id>/ must be allowed (for split removal)."""
         client, license_obj = licensed_client
 
-        first_item = license_obj.import_items.first()
+        first_item = license_obj.import_license.first()
         plan_line = LicenseItemPlan.objects.create(
             license=license_obj,
             import_item=first_item,
@@ -122,10 +131,10 @@ class TestPlanningWritePathConsolidation:
 
         assert response.status_code == 200, f"GET should succeed, got {response.status_code}"
 
-    def test_plan_sion_endpoint_is_allowed(self, licensed_client, sion_with_rules):
+    def test_plan_sion_endpoint_is_allowed(self, licensed_client, sion_for_queue):
         """POST /api/sion-planning-rules/plan-sion/ must be allowed."""
         client, license_obj = licensed_client
-        sion = sion_with_rules
+        sion = sion_for_queue
 
         response = client.post(
             "/api/sion-planning-rules/plan-sion/",
@@ -137,7 +146,7 @@ class TestPlanningWritePathConsolidation:
             format="json",
         )
 
-        assert response.status_code == 200, (
+        assert response.status_code == 202, (
             f"plan-sion should succeed, got {response.status_code}: {response.data}"
         )
 
@@ -155,7 +164,7 @@ class TestPlanningWritePathConsolidation:
         )
 
         # Could be 200 if planning succeeds or error if no rules, but not 404/405
-        assert response.status_code in (200, 400), (
+        assert response.status_code in (202, 400), (
             f"plan-license should be callable, got {response.status_code}"
         )
 
@@ -163,7 +172,7 @@ class TestPlanningWritePathConsolidation:
         """POST /api/license-item-plans/bulk-upsert/ must be allowed."""
         client, license_obj = licensed_client
 
-        first_item = license_obj.import_items.first()
+        first_item = license_obj.import_license.first()
         assert first_item, "Test license must have import items"
 
         response = client.post(
@@ -216,6 +225,6 @@ class TestPlanLicensesEndpointRemoved:
         )
 
         # Should be 404 Method Not Allowed or 404 Not Found
-        assert response.status_code == 404, (
+        assert response.status_code in (404, 405), (
             f"plan-licenses should not exist, got {response.status_code}: {response.data}"
         )

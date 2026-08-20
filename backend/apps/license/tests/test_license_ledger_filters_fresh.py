@@ -128,11 +128,12 @@ class FreshLicenseLedgerFilterTests(SimpleTestCase):
     @patch("apps.license.services.license_ledger_filters.IncentiveLicense.objects.filter")
     @patch("apps.license.services.license_ledger_filters.CanonicalLedgerService.build_collection_summary", return_value={})
     @patch("apps.license.services.license_ledger_filters.CanonicalLedgerService.build_canonical_ledger_dataset", side_effect=_dataset)
+    @patch("apps.license.services.license_ledger_filters.LicenseBalanceCalculator.calculate_financial_balance_for_licenses", return_value={1: Decimal("5000"), 2: Decimal("3000"), 3: Decimal("1000")})
     @patch("apps.license.services.license_ledger_filters.incentive_first_purchase_date_by_license", return_value={})
     @patch("apps.license.services.license_ledger_filters.first_purchase_date_by_license")
     @patch("apps.license.services.license_ledger_filters._apply_database_filters", return_value=(_Ids([1, 2, 3]), _Ids([])))
     def test_date_range_uses_global_first_purchase_before_range(
-        self, _db_filters, first_dates, _incentive_dates, build_dataset, _summary, incentive_filter,
+        self, _db_filters, first_dates, _incentive_dates, _live_balances, build_dataset, _summary, incentive_filter,
     ):
         first_dates.return_value = {
             1: date(2025, 12, 1),  # License A also has later Jan/Mar purchases.
@@ -157,11 +158,12 @@ class FreshLicenseLedgerFilterTests(SimpleTestCase):
     @patch("apps.license.services.license_ledger_filters.IncentiveLicense.objects.filter")
     @patch("apps.license.services.license_ledger_filters.CanonicalLedgerService.build_collection_summary", return_value={})
     @patch("apps.license.services.license_ledger_filters.CanonicalLedgerService.build_canonical_ledger_dataset", side_effect=_dataset)
+    @patch("apps.license.services.license_ledger_filters.LicenseBalanceCalculator.calculate_financial_balance_for_licenses", return_value={1: Decimal("5000"), 2: Decimal("3000"), 3: Decimal("1000")})
     @patch("apps.license.services.license_ledger_filters.incentive_first_purchase_date_by_license", return_value={})
     @patch("apps.license.services.license_ledger_filters.first_purchase_date_by_license", return_value={1: date(2025, 12, 1), 2: date(2026, 1, 15), 3: date(2026, 3, 20)})
     @patch("apps.license.services.license_ledger_filters._apply_database_filters", return_value=(_Ids([1, 2, 3]), _Ids([])))
     def test_min_balance_uses_canonical_summary_and_combines_with_date(
-        self, _db_filters, _first_dates, _incentive_dates, _build_dataset, _summary, incentive_filter,
+        self, _db_filters, _first_dates, _incentive_dates, _live_balances, _build_dataset, _summary, incentive_filter,
     ):
         incentive_filter.return_value.values_list.return_value = []
         result = build_filtered_license_ledger_data({

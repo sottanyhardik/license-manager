@@ -32,6 +32,45 @@ def _positive_issue(issue):
     )
 
 
+def _merge_plan_cell(existing, candidate):
+    """Coalesce plan lines targeting one canonical pivot identity.
+
+    A split plan can legitimately contain several persisted rows for the
+    same target/source item.  The report must not let the last row overwrite
+    the earlier one.  Source rows are unique by import-item id; quantitative
+    plan fields sum, while source usage/entitlement is counted once for a
+    repeated source and once per distinct source.
+    """
+    existing_sources = {row["import_item_id"]: row for row in existing.get("source_items", [])}
+    candidate_sources = {row["import_item_id"]: row for row in candidate.get("source_items", [])}
+    new_source_ids = set(candidate_sources) - set(existing_sources)
+    existing_sources.update(candidate_sources)
+    existing["source_items"] = [existing_sources[key] for key in sorted(existing_sources)]
+
+    for field in ("plan_qty", "planned_cif", "effective_planned_qty", "effective_planned_cif"):
+        existing[field] = _text(_decimal(existing.get(field)) + _decimal(candidate.get(field)))
+
+    # Repeated split rows have the same source entitlement/usage, so retain
+    # it once.  Distinct source rows contribute their own independently
+    # reconciled quantities and CIFs.
+    if new_source_ids:
+        for field in (
+            "total_qty", "percentage_target_qty", "own_excess_qty",
+            "excess_other_item_qty", "adjusted_total_qty", "allotted_qty",
+            "debited_qty", "boe_used_cif", "allotted_cif", "balance_qty",
+            "canonical_item_cif_capacity",
+        ):
+            existing[field] = _text(_decimal(existing.get(field)) + _decimal(candidate.get(field)))
+        if existing.get("available_cif") is not None and candidate.get("available_cif") is not None:
+            existing["available_cif"] = _text(_decimal(existing["available_cif"]) + _decimal(candidate["available_cif"]))
+
+    hsn_codes = {row.get("hsn_code") for row in existing["source_items"] if row.get("hsn_code")}
+    descriptions = {row.get("description") for row in existing["source_items"] if row.get("description")}
+    existing["hsn_code"] = next(iter(hsn_codes)) if len(hsn_codes) == 1 else ""
+    existing["description"] = next(iter(descriptions)) if len(descriptions) == 1 else ""
+    return existing
+
+
 class ItemPivotService:
     """Build a notification/purchase-status → licence → item matrix."""
 
@@ -157,9 +196,27 @@ class ItemPivotService:
                 canonical_item_cif_capacity = (source_total_cif * adjusted_total_qty / source_total_qty
                                                if source_total_qty > ZERO_QTY else ZERO_CIF)
                 available_cif = max(item_cif_cap - max(source_used_cif, ZERO_CIF), ZERO_CIF) if has_item_cif_cap else None
-                cells[key] = {
+                candidate_cell = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
                     "hsn_code": hsn, "description": description, "total_qty": _text(adjusted_total_qty),
+                    # A pivot cell is a projection of particular import rows,
+                    # not a substitute for them.  Keep the precise source
+                    # lineage available to the API/UI/exporter rather than
+                    # merging HSN/description strings or forcing consumers
+                    # to reverse-engineer a source from a display label.
+                    "source_items": [
+                        {
+                            "import_item_id": item.id,
+                            "serial_number": item.serial_number,
+                            "hsn_code": item.hs_code.hs_code if item.hs_code_id else "",
+                            "description": item.description or "",
+                            "quantity": _text(_decimal(item.quantity)),
+                            "allotted_quantity": _text(_decimal(item.allotted_quantity)),
+                            "debited_quantity": _text(_decimal(item.debited_quantity)),
+                            "available_quantity": _text(_decimal(item.available_quantity)),
+                        }
+                        for item in source_items
+                    ],
                     "percentage_target_qty": _text(percentage_target_qty), "own_excess_qty": _text(own_excess_qty),
                     "excess_other_item_qty": _text(excess_other_item_qty), "adjusted_total_qty": _text(adjusted_total_qty),
                     "allotted_qty": _text(max(allot_qty, ZERO_QTY)), "debited_qty": _text(max(boe_qty, ZERO_QTY)),
@@ -174,6 +231,10 @@ class ItemPivotService:
                     "priority_item_order": priority_item_order,
                     "priority_source": "active_sion_rule" if rule and rule.is_active else "unmatched",
                 }
+                cells[key] = (
+                    _merge_plan_cell(cells[key], candidate_cell)
+                    if key in cells else candidate_cell
+                )
                 # Add the column to the licence's notification/company group
                 # after its identity is known below.
 

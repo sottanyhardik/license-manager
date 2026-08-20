@@ -34,9 +34,10 @@ def _q(value: Decimal) -> Decimal:
 class ScopedSionPlanningService:
     """One calculation used by scoped preview and transactional save.
 
-    Stored ``LicenseBalance.balance_cif`` and import-item
-    ``available_quantity`` are documented current/net balances.  Consequently
-    historic debit columns are presented but are not deducted a second time.
+    Import-item ``available_quantity`` is the current/net quantity cap.  CIF
+    always comes from the live license financial balance; the denormalized
+    ``LicenseBalance.balance_cif`` field can lag reconciliation and is never
+    an authority for a new plan.
     """
 
     @classmethod
@@ -66,7 +67,7 @@ class ScopedSionPlanningService:
         if not rules:
             raise ScopedPlanningError(f"SION {sion.norm_class} has no active planning rules.")
         import_items = list(licence.import_license.prefetch_related("items").order_by("serial_number", "pk"))
-        budget = _d(getattr(getattr(licence, "balance", None), "balance_cif", 0))
+        budget = _d(licence.get_balance_cif)
         opening_cif = budget
         lines: list[dict[str, Any]] = []
         unresolved: list[dict[str, Any]] = []
@@ -134,7 +135,7 @@ class ScopedSionPlanningService:
                 "SION_input": line["label"], "split_group": str(line["rule"].rule_group_id or ""),
                 "split_percentage": str(line["percentage"]), "percentage_base_quantity": str(line["original"]),
                 "percentage_target_quantity": str(line["target_qty"]), "priority": line["priority"], "priority_sequence": line["sequence"],
-                "balance_cif_source": "LicenseBalance.balance_cif", "balance_cif_basis": "NET_CURRENT_BALANCE",
+                "balance_cif_source": "LicenseDetailsModel.get_balance_cif", "balance_cif_basis": "LIVE_FINANCIAL_BALANCE",
                 "balance_quantity_source": "LicenseImportItemsModel.available_quantity", "balance_quantity_basis": "NET_CURRENT_BALANCE",
                 "opening_balance_quantity": str(line["available_qty"]), "opening_balance_cif": str(line["opening_cif"]),
                 "actual_debited_quantity": str(line["actual_qty"]), "actual_debited_cif": str(line["actual_cif"]),

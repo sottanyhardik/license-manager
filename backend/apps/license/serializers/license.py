@@ -477,6 +477,8 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
     has_copy = serializers.SerializerMethodField()
     has_condition_sheet = serializers.SerializerMethodField()
     is_manually_planned = serializers.SerializerMethodField()
+    planning_state = serializers.SerializerMethodField()
+    planning_revision = serializers.SerializerMethodField()
 
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
@@ -904,6 +906,32 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         if v is not None:
             return bool(v)
         return LicenseItemPlan.objects.filter(license=obj).exists()
+
+    def get_planning_state(self, obj):
+        """Expose freshness without making clients infer it from task rows.
+
+        A matching source/applied revision is the only condition for CURRENT.
+        For a stale plan, surface the active durable request state; a completed
+        failure remains visibly non-current rather than being misreported as a
+        usable plan.
+        """
+        if obj.planning_source_revision == obj.planning_applied_revision:
+            return "CURRENT"
+        request = obj.replan_requests.order_by("-requested_at", "-pk").first()
+        if request is None:
+            return "REPLAN_PENDING"
+        if request.status == "running":
+            return "REPLAN_RUNNING"
+        if request.status in {"pending", "queued", "retry_pending"}:
+            return "REPLAN_PENDING"
+        return "REPLAN_FAILED"
+
+    def get_planning_revision(self, obj):
+        return {
+            "source_revision": obj.planning_source_revision,
+            "planned_revision": obj.planning_applied_revision,
+            "is_current": obj.planning_source_revision == obj.planning_applied_revision,
+        }
 
     def get_has_tl(self, obj):
         """Check if license has Transfer Letter documents.

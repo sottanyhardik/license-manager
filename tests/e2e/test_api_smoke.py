@@ -135,7 +135,12 @@ def test_item_pivot_report(api_get, sample_norm):
     )
     assert r.status_code == 200, r.text[:200]
     body = r.json()
-    assert "items" in body and "licenses_by_norm_notification" in body
+    # Item Pivot's canonical v1 contract is the normalized report matrix.
+    # Do not resurrect the retired pre-v1 ``items``/``licenses_by_norm_notification``
+    # response fields merely for this smoke check.
+    assert {"groups", "item_columns", "grand_total", "global_summary"} <= body.keys()
+    assert isinstance(body["groups"], list)
+    assert isinstance(body["item_columns"], list)
 
 
 def test_item_report_available_items(api_get):

@@ -20,12 +20,32 @@ from apps.core.models import (
 )
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    LicenseItemPlan, SionPlanningRule,
+    LicenseItemPlan, LicenseReplanRequest, SionPlanningRule,
 )
 from apps.license.services.sion_planner_config.importer import import_e1_e5_profiles
 
 
 pytestmark = pytest.mark.django_db
+
+
+def _assert_queued(response, license_obj, mode):
+    assert response.status_code == 202, response.data
+    assert response.data["license_id"] == license_obj.pk
+    assert response.data["license_number"] == license_obj.license_number
+    assert response.data["planning_state"] == "REPLAN_PENDING"
+    assert isinstance(response.data["replan_request_id"], int)
+    request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
+    assert request.license_id == license_obj.pk
+    assert LicenseItemPlan.objects.filter(license=license_obj).count() == 0
+    return request
+
+
+def _queue_auto_plan(client, license_obj, mode="NEW"):
+    """Current API contract: one durable request per licence, no inline plan."""
+    response = client.post(
+        f"/api/licenses/{license_obj.pk}/auto-plan/", {"mode": mode}, format="json",
+    )
+    return _assert_queued(response, license_obj, mode)
 
 
 @pytest.fixture
@@ -43,7 +63,9 @@ def setup_planning_env():
     SionPlanningRule.objects.filter(sion=sions["E1"]).update(is_active=True)
     SionPlanningRule.objects.filter(sion=sions["E5"]).update(is_active=True)
 
-    company = CompanyModel.objects.create(iec="AUTOPLAN-TEST", name="AutoPlan Test")
+    # IEC is a statutory 10-character identifier; keep this fixture valid so
+    # the API contract, rather than database validation, is exercised.
+    company = CompanyModel.objects.create(iec="AUTOPLAN01", name="AutoPlan Test")
     user = get_user_model().objects.create_user(
         username="autoplan-user", company=company
     )
@@ -108,17 +130,7 @@ def test_plan_license_single_sion_e1(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 200
-    data = response.data
-    assert data["license_id"] == license_obj.pk
-    assert data["license_number"] == "TEST-E1-1"
-    assert data["mode"] == "NEW"
-    assert len(data["applicable_sions"]) == 1
-    assert data["applicable_sions"][0]["sion_id"] == env["sions"]["E1"].pk
-    assert data["applicable_sions"][0]["sion_code"] == "E1"
-    assert data["applicable_sions"][0]["status"] == "EXECUTED"
-    assert len(data["applicable_sions"][0]["rules_executed"]) > 0
-    assert data["total_results"]["sions_processed"] == 1
+    _assert_queued(response, license_obj, "NEW")
 
 
 def test_plan_license_single_sion_e5(setup_planning_env):
@@ -137,11 +149,7 @@ def test_plan_license_single_sion_e5(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 200
-    data = response.data
-    assert data["applicable_sions"][0]["sion_id"] == env["sions"]["E5"].pk
-    assert data["applicable_sions"][0]["sion_code"] == "E5"
-    assert data["applicable_sions"][0]["status"] == "EXECUTED"
+    _assert_queued(response, license_obj, "NEW")
 
 
 def test_plan_license_multiple_sions(setup_planning_env):
@@ -165,12 +173,7 @@ def test_plan_license_multiple_sions(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 200
-    data = response.data
-    sion_codes = [s["sion_code"] for s in data["applicable_sions"]]
-    assert "E1" in sion_codes
-    assert "E5" in sion_codes
-    assert data["total_results"]["sions_processed"] == 2
+    _assert_queued(response, license_obj, "NEW")
 
 
 def test_plan_license_not_found(setup_planning_env):
@@ -182,8 +185,8 @@ def test_plan_license_not_found(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 400
-    assert "not found" in response.data.get("error", "").lower()
+    assert response.status_code == 404
+    assert response.data["code"] == "LICENSE_NOT_FOUND"
 
 
 def test_plan_license_no_export_manifest(setup_planning_env):
@@ -199,8 +202,7 @@ def test_plan_license_no_export_manifest(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 400
-    assert "export manifest" in response.data.get("error", "").lower()
+    _assert_queued(response, license_obj, "NEW")
 
 
 def test_plan_license_no_sion_norms(setup_planning_env):
@@ -223,15 +225,14 @@ def test_plan_license_no_sion_norms(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 400
-    assert "sion" in response.data.get("error", "").lower()
+    _assert_queued(response, license_obj, "NEW")
 
 
 def test_plan_license_company_isolation(setup_planning_env):
     """Test plan-license respects company isolation."""
     env = setup_planning_env
     other_company = CompanyModel.objects.create(
-        iec="OTHER-COMPANY", name="Other Company"
+        iec="OTHERCOMP1", name="Other Company"
     )
     license_obj = _make_test_license(
         other_company, "TEST-OTHER-COMPANY", sion=env["sions"]["E1"]
@@ -244,7 +245,7 @@ def test_plan_license_company_isolation(setup_planning_env):
     )
 
     assert response.status_code == 403
-    assert "another company" in response.data.get("error", "").lower()
+    assert "another company" in response.data["detail"].lower()
 
 
 def test_plan_license_all_mode_replans_existing(setup_planning_env):
@@ -263,7 +264,7 @@ def test_plan_license_all_mode_replans_existing(setup_planning_env):
         {"license_id": license_obj.pk, "mode": "NEW"},
         format="json",
     )
-    assert response1.status_code == 200
+    _assert_queued(response1, license_obj, "NEW")
 
     # Plan again with ALL mode
     response2 = env["client"].post(
@@ -271,14 +272,13 @@ def test_plan_license_all_mode_replans_existing(setup_planning_env):
         {"license_id": license_obj.pk, "mode": "ALL"},
         format="json",
     )
-    assert response2.status_code == 200
-    # Should still execute, not skip
-    assert response2.data["applicable_sions"][0]["status"] == "EXECUTED"
+    _assert_queued(response2, license_obj, "ALL")
+    # The second click coalesces onto the one current durable request.
+    assert response2.data["replan_request_id"] == response1.data["replan_request_id"]
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_bulk_single_license(setup_planning_env):
-    """Test plan-licenses with a single license in the list (DEPRECATED)."""
+    """The replacement API queues one durable request for one licence."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-1", sion=env["sions"]["E1"]
@@ -287,24 +287,12 @@ def test_plan_licenses_bulk_single_license(setup_planning_env):
         license_obj, "080211", "Almond", "kg", Decimal("100")
     )
 
-    response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [license_obj.pk], "mode": "NEW"},
-        format="json",
-    )
-
-    assert response.status_code == 200
-    data = response.data
-    assert data["mode"] == "NEW"
-    assert len(data["licenses_processed"]) == 1
-    assert data["licenses_processed"][0]["license_id"] == license_obj.pk
-    assert data["summary"]["total_licenses"] == 1
-    assert data["summary"]["total_sions"] == 1
+    request = _queue_auto_plan(env["client"], license_obj)
+    assert request.status == LicenseReplanRequest.STATUS_PENDING
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_bulk_multiple_licenses_same_sion(setup_planning_env):
-    """Test plan-licenses with multiple licenses, same SION (DEPRECATED)."""
+    """Bulk callers fan out bounded queue requests rather than inline work."""
     env = setup_planning_env
     licenses = []
     for i in range(2):
@@ -316,22 +304,13 @@ def test_plan_licenses_bulk_multiple_licenses_same_sion(setup_planning_env):
         )
         licenses.append(lic)
 
-    response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [lic.pk for lic in licenses], "mode": "NEW"},
-        format="json",
-    )
-
-    assert response.status_code == 200
-    data = response.data
-    assert len(data["licenses_processed"]) == 2
-    assert data["summary"]["total_licenses"] == 2
-    assert data["summary"]["total_sions"] == 1
+    requests = [_queue_auto_plan(env["client"], license) for license in licenses]
+    assert {request.license_id for request in requests} == {license.pk for license in licenses}
+    assert LicenseReplanRequest.objects.filter(pk__in=[request.pk for request in requests]).count() == 2
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_bulk_multiple_licenses_multiple_sions(setup_planning_env):
-    """Test plan-licenses with multiple licenses and multiple SIONs (DEPRECATED)."""
+    """Each licence queues independently; worker resolves all its SIONs."""
     env = setup_planning_env
     # License 1: E1 only
     lic1 = _make_test_license(
@@ -361,52 +340,32 @@ def test_plan_licenses_bulk_multiple_licenses_multiple_sions(setup_planning_env)
         lic3, "080211", "Almond", "kg", Decimal("100")
     )
 
-    response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [lic1.pk, lic2.pk, lic3.pk], "mode": "NEW"},
-        format="json",
-    )
-
-    assert response.status_code == 200
-    data = response.data
-    assert len(data["licenses_processed"]) == 3
-    assert data["summary"]["total_licenses"] == 3
-    # Should have both E1 and E5 in the log
-    sion_codes = {log["sion_code"] for log in data["summary"]["sion_execution_log"]}
-    assert "E1" in sion_codes
-    assert "E5" in sion_codes
+    requests = [_queue_auto_plan(env["client"], license) for license in (lic1, lic2, lic3)]
+    assert {request.license_id for request in requests} == {lic1.pk, lic2.pk, lic3.pk}
+    # Multi-SION resolution belongs to the serialised worker, not HTTP.
+    assert LicenseExportItemModel.objects.filter(license=lic3).count() == 2
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_empty_list(setup_planning_env):
-    """Test plan-licenses rejects empty license list (DEPRECATED)."""
+    """The single-licence endpoint rejects a missing object identifier."""
     env = setup_planning_env
-    response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [], "mode": "NEW"},
-        format="json",
-    )
+    response = env["client"].post("/api/licenses/not-a-license/auto-plan/", {"mode": "NEW"}, format="json")
 
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_one_license_fails(setup_planning_env):
-    """Test that plan-licenses fails if any license cannot be loaded (DEPRECATED)."""
+    """An unknown licence creates no durable request."""
     env = setup_planning_env
-    good_lic = _make_test_license(
-        env["company"], "TEST-GOOD", sion=env["sions"]["E1"]
-    )
     bad_id = 99999
 
     response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [good_lic.pk, bad_id], "mode": "NEW"},
+        f"/api/licenses/{bad_id}/auto-plan/", {"mode": "NEW"},
         format="json",
     )
 
-    assert response.status_code == 400
-    assert "not found" in response.data.get("error", "").lower()
+    assert response.status_code == 404
+    assert not LicenseReplanRequest.objects.filter(license_id=bad_id).exists()
 
 
 def test_plan_license_requires_license_manager_role(setup_planning_env):
@@ -451,13 +410,11 @@ def test_plan_license_default_mode_is_new(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 200
-    assert response.data["mode"] == "NEW"
+    _assert_queued(response, license_obj, "NEW")
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_default_mode_is_new(setup_planning_env):
-    """Test that default mode is NEW when not specified for bulk endpoint."""
+    """The current durable endpoint defaults mode to NEW."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-DEFAULT-MODE", sion=env["sions"]["E1"]
@@ -466,14 +423,8 @@ def test_plan_licenses_default_mode_is_new(setup_planning_env):
         license_obj, "080211", "Almond", "kg", Decimal("100")
     )
 
-    response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [license_obj.pk]},  # mode not specified
-        format="json",
-    )
-
-    assert response.status_code == 200
-    assert response.data["mode"] == "NEW"
+    request = _queue_auto_plan(env["client"], license_obj)
+    assert request.reason == "manual_auto_plan"
 
 
 def test_plan_license_response_structure(setup_planning_env):
@@ -492,35 +443,12 @@ def test_plan_license_response_structure(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 200
-    data = response.data
-
-    # Verify top-level structure
-    assert "license_id" in data
-    assert "license_number" in data
-    assert "mode" in data
-    assert "applicable_sions" in data
-    assert "total_results" in data
-
-    # Verify applicable_sions structure
-    assert isinstance(data["applicable_sions"], list)
-    if data["applicable_sions"]:
-        sion = data["applicable_sions"][0]
-        assert "sion_id" in sion
-        assert "sion_code" in sion
-        assert "status" in sion
-        assert "rules_executed" in sion
-        assert "write_results" in sion
-
-    # Verify total_results structure
-    assert "sions_processed" in data["total_results"]
-    assert "sions_executed" in data["total_results"]
-    assert "total_lines_written" in data["total_results"]
+    _assert_queued(response, license_obj, "NEW")
+    assert response.data["message"] == "Licence replanning has been queued."
 
 
-@pytest.mark.skip(reason="plan-licenses endpoint removed in Phase 2D.6 consolidation")
 def test_plan_licenses_response_structure(setup_planning_env):
-    """Test the exact response structure of plan-licenses endpoint (DEPRECATED)."""
+    """Current response exposes durable state instead of fake completion."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-RESPONSE", sion=env["sions"]["E1"]
@@ -529,31 +457,7 @@ def test_plan_licenses_response_structure(setup_planning_env):
         license_obj, "080211", "Almond", "kg", Decimal("100")
     )
 
-    response = env["client"].post(
-        "/api/sion-planning-rules/plan-licenses/",
-        {"license_ids": [license_obj.pk], "mode": "NEW"},
-        format="json",
-    )
-
-    assert response.status_code == 200
+    response = env["client"].post(f"/api/licenses/{license_obj.pk}/auto-plan/", {"mode": "NEW"}, format="json")
+    _assert_queued(response, license_obj, "NEW")
     data = response.data
-
-    # Verify top-level structure
-    assert "mode" in data
-    assert "licenses_processed" in data
-    assert "summary" in data
-
-    # Verify licenses_processed structure
-    assert isinstance(data["licenses_processed"], list)
-    if data["licenses_processed"]:
-        lic = data["licenses_processed"][0]
-        assert "license_id" in lic
-        assert "license_number" in lic
-        assert "applicable_sions" in lic
-        assert "total_lines_written" in lic
-
-    # Verify summary structure
-    assert "total_licenses" in data["summary"]
-    assert "total_sions" in data["summary"]
-    assert "total_lines_written" in data["summary"]
-    assert "sion_execution_log" in data["summary"]
+    assert set(data) >= {"license_id", "license_number", "planning_state", "replan_request_id", "message"}

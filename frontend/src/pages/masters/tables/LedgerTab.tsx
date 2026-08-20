@@ -22,7 +22,7 @@
  *   PATCH license-items/{id}/   { condition_type: "AU"|… } ← marking
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import AsyncSelect from "react-select/async";
 import Select from "react-select";
 import {
@@ -486,7 +486,10 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
     /** Which row's marking is in edit mode (dropdown visible). */
     const [markingEditingId, setMarkingEditingId] = useState<number | null>(null);
 
-    const detailItems = (detail?.import_license ?? []) as ImportItem[];
+    const detailItems = useMemo(
+        () => (detail?.import_license ?? []) as ImportItem[],
+        [detail?.import_license],
+    );
     const importItems: ImportItem[] = detailItems.map((r) => ({
         ...r,
         items_detail: localItems.find((l) => l.id === r.id)?.items_detail ?? r.items_detail ?? [],

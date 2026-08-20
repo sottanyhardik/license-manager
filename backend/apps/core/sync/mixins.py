@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from django.conf import settings
 from django.db import models
@@ -53,6 +55,22 @@ def media_sha256(file_field) -> str | None:
 
 
 SERVER_ID = getattr(settings, "SYNC_SERVER_ID", "default")
+_applying_remote_sync: ContextVar[bool] = ContextVar("applying_remote_sync", default=False)
+
+
+def remote_sync_is_applying() -> bool:
+    """Whether this execution is persisting an inbound replicated event."""
+    return _applying_remote_sync.get()
+
+
+@contextmanager
+def suppress_local_outbox():
+    """Do not turn an inbound event into a freshly-originated outbox event."""
+    token = _applying_remote_sync.set(True)
+    try:
+        yield
+    finally:
+        _applying_remote_sync.reset(token)
 
 
 class MasterSyncMixin(models.Model):
@@ -115,8 +133,16 @@ class MasterSyncMixin(models.Model):
             except Exception:
                 pass  # allow save even if NK not yet available
 
-        # Set origin_server if not already set by sync ingest
-        if not self.origin_server:
+        local_write = not remote_sync_is_applying()
+        # Local updates own a new monotonic version.  Inbound sync explicitly
+        # supplies version/origin and is shielded by suppress_local_outbox().
+        if self.pk and local_write:
+            self.sync_version = max(1, int(self.sync_version or 0)) + 1
+            self.origin_server = SERVER_ID
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"sync_version", "origin_server"}
+        elif not self.origin_server:
             self.origin_server = SERVER_ID
 
         super().save(*args, **kwargs)
@@ -124,8 +150,9 @@ class MasterSyncMixin(models.Model):
     def tombstone(self, *, bump_version: bool = True):
         """Mark this record as a tombstone (soft-delete)."""
         self.is_tombstone = True
-        if bump_version:
-            self.sync_version += 1
+        # Local saves own version advancement in ``save``.  Incrementing here
+        # as well made a normal tombstone jump two generations and broke
+        # deterministic peer conflict ordering.
         self.save(update_fields=["is_tombstone", "sync_version", "origin_server"])
 
     def is_alive(self) -> bool:

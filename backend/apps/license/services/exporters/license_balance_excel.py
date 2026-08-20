@@ -1438,8 +1438,12 @@ def build_bulk_balance_excel(request):
             _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
             _pl = _plan_map.get(_item.id)
             if _pl:
-                _bal_agg[_key]['plan_qty'] += _pl['planned_quantity']
-                _bal_agg[_key]['plan_cif'] += _pl['planned_cif']
+                # This aggregation feeds openpyxl numeric cells and the
+                # surrounding balance fields are floats.  Keep the boundary
+                # explicit: persisted plans are Decimal, but never mix the
+                # two types in Python arithmetic.
+                _bal_agg[_key]['plan_qty'] += float(_pl['planned_quantity'])
+                _bal_agg[_key]['plan_cif'] += float(_pl['planned_cif'])
             _bal_agg[_key]['sr_ids'].append(_item.serial_number)
             if not _bal_agg[_key]['description']:
                 _bal_agg[_key]['description'] = _item.description or _key

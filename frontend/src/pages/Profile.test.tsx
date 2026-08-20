@@ -5,11 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
 import type { AuthContextValue, AuthUser } from "../types";
-import Profile, {
-    buildProfilePayload,
-    getProfileErrorMessage,
-    normalizeProfileRoles,
-} from "./Profile";
+import Profile from "./Profile";
+import { buildProfilePayload, getProfileErrorMessage, normalizeProfileRoles } from "./profileUtils";
 
 vi.mock("../api/axios", () => ({
     default: {

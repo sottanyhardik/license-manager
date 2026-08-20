@@ -81,7 +81,9 @@ class QueryBreakdownTest(TestCase):
         # Assert expectations
         self.assertTrue(result['has_purchase_bill'])
         self.assertEqual(result['purchase_bill_status'], 'WITH_PURCHASE_BILL')
-        self.assertEqual(len(result['transactions']), 6)  # 1 OPENING + 5 PURCHASE
+        # No export entitlement/opening balance was created in this fixture;
+        # the canonical ledger therefore contains exactly the five purchases.
+        self.assertEqual(len(result['transactions']), 5)
         self.assertEqual(len(result['company_utilizations']), 3)  # 3 companies
         
         # Query count should be ~7 regardless of trade count

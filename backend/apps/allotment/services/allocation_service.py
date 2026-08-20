@@ -14,7 +14,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.core.constants import DEC_0
-from apps.core.utils.decimal_utils import to_decimal, decimal_division
+from apps.core.utils.decimal_utils import to_decimal
+from apps.allotment.services.paired_allocation_max import calculate_paired_allocation_max
 
 if TYPE_CHECKING:
     from apps.allotment.models import AllotmentItems
@@ -71,23 +72,21 @@ class AllocationService:
         available_qty = ItemBalanceCalculator.calculate_available_quantity(import_item)
         balance_cif_fc = ItemBalanceCalculator.calculate_item_balance(import_item)
 
-        # Start with minimum of balanced quantity and available quantity
-        max_qty = min(balanced_qty, available_qty)
-        max_value = max_qty * unit_price
-
-        # Check if value exceeds available CIF FC
-        if max_value > balance_cif_fc:
-            max_qty = decimal_division(balance_cif_fc, unit_price, decimals=3)
-            max_value = max_qty * unit_price
-
-        # Check if value exceeds balanced value with buffer
-        if max_value > balanced_value_with_buffer:
-            max_qty = decimal_division(balanced_value_with_buffer, unit_price, decimals=3)
-            max_value = max_qty * unit_price
+        # This legacy service is retained for integrations which still import
+        # it, but it must not create a second Max formula.  In particular,
+        # `decimal_division` used to return a fractional quantity whose value
+        # could exceed a ceiling once presented to cents.  Delegate to the
+        # paired Decimal contract used by the allocation API instead.
+        paired = calculate_paired_allocation_max(
+            quantity_ceiling=min(balanced_qty, available_qty),
+            cif_ceiling=min(balance_cif_fc, balanced_value_with_buffer),
+            unit_price=unit_price,
+            quantity_step=Decimal('0.001'),
+        )
 
         return {
-            'max_quantity': max_qty if max_qty > DEC_0 else DEC_0,
-            'max_value': max_value if max_value > DEC_0 else DEC_0,
+            'max_quantity': paired.quantity,
+            'max_value': paired.cif,
         }
 
     @staticmethod

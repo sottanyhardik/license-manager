@@ -123,7 +123,11 @@ describe("PlanningEditor reconciliation", () => {
         const parentRow = screen.getByText("Fats and oils").closest("tr");
         expect(parentRow).not.toBeNull();
         const parent = within(parentRow!);
-        expect(parent.getAllByText("642,277.000")).toHaveLength(2);
+        // The parent reconciliation shows total eligible, live available and
+        // effective available quantity.  With no quantity cap all three are
+        // intentionally equal; asserting all three prevents a duplicate or a
+        // missing live-balance field from being hidden by the coincidence.
+        expect(parent.getAllByText("642,277.000")).toHaveLength(3);
         expect(parent.getByText("$1,747,118.61")).toBeInTheDocument();
         expect(parent.getByText("77,997.840")).toBeInTheDocument();
         expect(parent.queryByText("Over Planned")).not.toBeInTheDocument();

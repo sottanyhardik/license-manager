@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.db.models import Sum, Q
+from apps.accounts.permissions import ReportPermission
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -14,7 +15,12 @@ def add_active_dfia_report_action(viewset_class):
     Generates Excel-like report grouped by SION norm, then by notification within each norm.
     """
 
-    @action(detail=False, methods=['get'], url_path='active-dfia-report')
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='active-dfia-report',
+        permission_classes=[ReportPermission],
+    )
     def active_dfia_report(self, request):
         """
         Generate Active DFIA report with all Excel columns, grouped by SION norm class.
@@ -29,41 +35,27 @@ def add_active_dfia_report_action(viewset_class):
             - notification: filter by specific notification number (optional)
         """
         from apps.core.models import CompanyModel
+        from apps.license.models import LicenseDetailsModel
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
-        # Get filtered queryset.
-        #
-        # IMPORTANT: `LicenseDetailsViewSet.get_queryset()` (via the shared
-        # `MasterViewSet` base, `apps/core/views/master_view.py`) calls
-        # `self.apply_advanced_filters(qs, request.query_params,
-        # filter_config)` UNCONDITIONALLY -- not only from `list()` -- and
-        # `LicenseDetailsViewSet.apply_advanced_filters` independently
-        # re-applies its OWN `is_null` filter straight against the cached
-        # `balance__balance_cif__gte`/`__lt` column whenever `is_null` is
-        # present in the request's query params (`license.py`'s
-        # `apply_advanced_filters` override). Since this action reads and
-        # resolves `is_null` itself (against the LIVE balance, see below),
-        # that generic pass would otherwise silently re-introduce the exact
-        # stale-cache bug this fix resolves -- e.g. a license whose cache
-        # is stale-low would be wrongly dropped here before ever reaching
-        # the live-balance check below. Temporarily hide `is_null` from
-        # `request.query_params` for this one call so the generic filter
-        # sees no value for it (-> no-op, since this viewset's
-        # `default_filters` has no bare `is_null` key either) -- restored
-        # immediately after. Scoped to this file/action only; the shared
-        # `apply_advanced_filters`/main list view are untouched.
-        _get_params = request._request.GET
-        _filtered_params = _get_params.copy()
-        _filtered_params.pop('is_null', None)
-        request._request.GET = _filtered_params
-        try:
-            queryset = self.filter_queryset(self.get_queryset())
-        finally:
-            request._request.GET = _get_params
+        # This is a role-authorized cross-company report, not a CRUD licence
+        # list.  Do not inherit ``LicenseDetailsViewSet.get_queryset()``:
+        # that queryset is deliberately tenant-scoped for CRUD and becomes
+        # ``.none()`` for reporting users without a home company.  It also
+        # applies the main-list cached-balance filters before this action can
+        # evaluate the authoritative live balance below.  The report owns
+        # its small, documented filter set explicitly.
+        queryset = LicenseDetailsModel.objects.all()
 
         # Filter for Parle companies if not specified
         exporter_id = request.query_params.get('exporter')
-        if not exporter_id:
+        if exporter_id:
+            from rest_framework.exceptions import ValidationError
+            try:
+                queryset = queryset.filter(exporter_id=int(exporter_id))
+            except (TypeError, ValueError):
+                raise ValidationError({"exporter": "Invalid exporter ID."})
+        else:
             # Get all Parle companies
             parle_companies = CompanyModel.objects.filter(
                 Q(name__icontains='PARLE')
@@ -412,8 +404,12 @@ def add_active_dfia_report_action(viewset_class):
             'summary': {
                 'total_licenses': len(all_licenses),
                 'total_sion_norms': len(grouped_data),
-                'total_cif': grand_totals['total_cif'],
-                'balance_cif': grand_totals['balance_cif'],
+                # ``calculate_totals`` deliberately returns an empty mapping
+                # for an empty filtered result set.  The summary is still a
+                # stable API contract in that case, rather than a 500 caused
+                # by indexing keys that only exist for non-empty groups.
+                'total_cif': grand_totals.get('total_cif', 0),
+                'balance_cif': grand_totals.get('balance_cif', 0),
             }
         })
 

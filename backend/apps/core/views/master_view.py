@@ -246,7 +246,10 @@ class MasterViewSet(viewsets.ModelViewSet):
 
         # Attributes for the generated class
         attrs = {
-            "queryset": model.objects.all(),
+            # Pagination must have a deterministic ordering even when a caller
+            # does not pass ``?ordering=``.  Without this, DRF warns and rows
+            # can move between pages as PostgreSQL chooses a different plan.
+            "queryset": model.objects.order_by("pk"),
             "serializer_class": serializer,
             "search_fields": config.get("search", ["id"]),
             "filterset_fields": filter_fields,

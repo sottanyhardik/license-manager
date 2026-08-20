@@ -1,15 +1,11 @@
 import { Inbox, Loader2, RefreshCw, Tag } from "lucide-react";
+import { normalizeNormCards } from "./normCardGridUtils";
 
 type AvailableNorm = {
     norm_class?: unknown;
     description?: unknown;
 } | string | null | undefined;
 
-export type NormalizedNormCard = {
-    normClass: string;
-    description: string;
-    isConversionNorm: boolean;
-};
 
 interface NormCardGridProps {
     availableNorms: AvailableNorm[];
@@ -19,42 +15,6 @@ interface NormCardGridProps {
     loading: boolean;
 }
 
-export const CONVERSION_NORMS = new Set(["E1", "E5", "E126", "E132"]);
-
-export function normalizeNormCards(availableNorms: unknown): NormalizedNormCard[] {
-    if (!Array.isArray(availableNorms)) {
-        return [];
-    }
-
-    const seen = new Set<string>();
-    const cards: NormalizedNormCard[] = [];
-
-    for (const normObj of availableNorms) {
-        const normClassValue = typeof normObj === "object" && normObj !== null
-            ? normObj.norm_class
-            : normObj;
-        const normClass = String(normClassValue ?? "").trim();
-
-        if (!normClass || seen.has(normClass)) {
-            continue;
-        }
-
-        const description = String(
-            typeof normObj === "object" && normObj !== null && "description" in normObj
-                ? normObj.description ?? ""
-                : "",
-        ).trim();
-
-        seen.add(normClass);
-        cards.push({
-            normClass,
-            description,
-            isConversionNorm: CONVERSION_NORMS.has(normClass),
-        });
-    }
-
-    return cards;
-}
 
 /** "Available Norms" selector grid — extracted verbatim from ItemPivotReport. */
 export default function NormCardGrid({ availableNorms, activeNormTab, setActiveNormTab, setReportData, loading }: NormCardGridProps) {

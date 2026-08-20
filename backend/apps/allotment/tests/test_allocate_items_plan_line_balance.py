@@ -3,14 +3,10 @@ Tests for plan-line balance tracking in `AllotmentActionViewSet.allocate_items`
 (backend/apps/allotment/views_actions.py).
 
 Business rule: once Auto-Plan generates a Vegetable Oil PKO/Cheese split,
-those planned quantities become FIXED commitments. A real debit has no
-item_name of its own (`AllotmentItems.item` only references the underlying
-import item), so the shared `available_quantity` can't tell which plan line
-a debit was meant to draw down. The fix: the Plan-mode grid already knows
-exactly which `LicenseItemPlan` row an allocation originates from and sends
-it as `plan_line_id` — `allocate_items` uses that to decrement THAT line's
-own `remaining_quantity`/`remaining_cif_fc` directly, independent of any
-sibling plan line on the same import item.
+those planned quantities become FIXED commitments.  Each Plan debit retains
+its exact `plan_line_id`, and residual capacity is derived from that ledger
+identity.  No mutable plan counter may be decremented or reconstructed using
+the plan line's rounded unit price.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -21,9 +17,10 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.allotment.models import AllotmentModel
+from apps.allotment.models import AllotmentModel, AllotmentItems
 from apps.core.models import CompanyModel, ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.license.services.plan_enforcement import plan_line_status_for
 
 User = get_user_model()
 
@@ -110,7 +107,7 @@ def _allocate(client, allotment_obj, item_id, qty, cif_fc, plan_line_id=None):
 
 
 @pytest.mark.django_db
-class TestPlanLineBalanceDecrement:
+class TestPlanLineLedgerResidual:
     def test_allocating_from_pko_reduces_only_pko(self, allotment_client, allotment_obj, veg_oil_split):
         resp = _allocate(
             allotment_client, allotment_obj, veg_oil_split["import_item"].id,
@@ -118,13 +115,12 @@ class TestPlanLineBalanceDecrement:
         )
         assert resp.status_code == 201, resp.data
 
-        veg_oil_split["pko_line"].refresh_from_db()
-        veg_oil_split["cheese_line"].refresh_from_db()
-        assert veg_oil_split["pko_line"].remaining_quantity == Decimal("20")
-        assert veg_oil_split["pko_line"].remaining_cif_fc == Decimal("36.00")   # 20 × 1.80
-        # Cheese's row must remain COMPLETELY unchanged.
-        assert veg_oil_split["cheese_line"].remaining_quantity == Decimal("60")
-        assert veg_oil_split["cheese_line"].remaining_cif_fc == Decimal("330")
+        pko = plan_line_status_for(veg_oil_split["pko_line"])
+        cheese = plan_line_status_for(veg_oil_split["cheese_line"])
+        assert pko["remaining_quantity"] == Decimal("20")
+        assert pko["remaining_cif_fc"] == Decimal("36.00")
+        assert cheese["remaining_quantity"] == Decimal("60")
+        assert cheese["remaining_cif_fc"] == Decimal("330")
 
     def test_second_allocation_drains_pko_to_zero(self, allotment_client, allotment_obj, veg_oil_split):
         _allocate(allotment_client, allotment_obj, veg_oil_split["import_item"].id,
@@ -138,17 +134,16 @@ class TestPlanLineBalanceDecrement:
                           "20", "36.00", plan_line_id=veg_oil_split["pko_line"].id)
         assert resp.status_code == 201, resp.data
 
-        veg_oil_split["pko_line"].refresh_from_db()
-        veg_oil_split["cheese_line"].refresh_from_db()
-        assert veg_oil_split["pko_line"].remaining_quantity == Decimal("0")
-        assert veg_oil_split["pko_line"].remaining_cif_fc == Decimal("0.00")
-        assert veg_oil_split["cheese_line"].remaining_quantity == Decimal("60")   # still untouched
+        pko = plan_line_status_for(veg_oil_split["pko_line"])
+        cheese = plan_line_status_for(veg_oil_split["cheese_line"])
+        assert pko["remaining_quantity"] == Decimal("0")
+        assert pko["remaining_cif_fc"] == Decimal("0.00")
+        assert cheese["remaining_quantity"] == Decimal("60")
 
     def test_allocating_from_cheese_after_pko_only_reduces_cheese(
         self, allotment_client, allotment_obj, veg_oil_split,
     ):
-        # Example 3 from the spec: PKO already at 20 remaining (from a prior
-        # 20kg debit), then debit 10kg from Cheese.
+        # Stale mutable counters must not influence the ledger residual.
         veg_oil_split["pko_line"].remaining_quantity = Decimal("20")
         veg_oil_split["pko_line"].remaining_cif_fc = Decimal("36.00")
         veg_oil_split["pko_line"].save(update_fields=["remaining_quantity", "remaining_cif_fc"])
@@ -159,25 +154,35 @@ class TestPlanLineBalanceDecrement:
         )
         assert resp.status_code == 201, resp.data
 
-        veg_oil_split["pko_line"].refresh_from_db()
-        veg_oil_split["cheese_line"].refresh_from_db()
-        assert veg_oil_split["pko_line"].remaining_quantity == Decimal("20")  # unaffected
-        assert veg_oil_split["cheese_line"].remaining_quantity == Decimal("50")  # 60 - 10
-        assert veg_oil_split["cheese_line"].remaining_cif_fc == Decimal("275.00")  # 50 × 5.50
+        pko = plan_line_status_for(veg_oil_split["pko_line"])
+        cheese = plan_line_status_for(veg_oil_split["cheese_line"])
+        assert pko["remaining_quantity"] == Decimal("40")
+        assert cheese["remaining_quantity"] == Decimal("50")
+        assert cheese["remaining_cif_fc"] == Decimal("275.00")
 
     def test_exhausted_plan_line_rejects_direct_api_allocation(self, allotment_client, allotment_obj, veg_oil_split):
         """Raw source availability must not bypass a zero split-child plan."""
+        # A stale stored zero must not reject an unspent line.
         veg_oil_split["pko_line"].remaining_quantity = Decimal("0")
         veg_oil_split["pko_line"].remaining_cif_fc = Decimal("0")
         veg_oil_split["pko_line"].save(update_fields=["remaining_quantity", "remaining_cif_fc"])
+        first = _allocate(
+            allotment_client, allotment_obj, veg_oil_split["import_item"].id,
+            "40", "72.00", plan_line_id=veg_oil_split["pko_line"].id,
+        )
+        assert first.status_code == 201, first.data
         resp = _allocate(
             allotment_client, allotment_obj, veg_oil_split["import_item"].id,
             "1", "1.80", plan_line_id=veg_oil_split["pko_line"].id,
         )
         assert resp.status_code == 400, resp.data
-        assert resp.data["errors"][0]["code"] == "NO_PLANNED_BALANCE"
-        veg_oil_split["pko_line"].refresh_from_db()
-        assert veg_oil_split["pko_line"].remaining_quantity == Decimal("0")
+        error = resp.data["errors"][0]
+        assert error["code"] == "NO_PLANNED_BALANCE"
+        assert error["message"] == "PKO - PLANLINE-TEST has no remaining planned quantity or value."
+        assert error["allocation_basis"] == "PLAN"
+        assert error["max_qty"] == "0.000"
+        assert error["max_cif"] == "0.00"
+        assert plan_line_status_for(veg_oil_split["pko_line"])["remaining_quantity"] == Decimal("0")
 
     def test_missing_plan_line_id_leaves_plan_lines_untouched(
         self, allotment_client, allotment_obj, veg_oil_split,
@@ -188,10 +193,8 @@ class TestPlanLineBalanceDecrement:
         resp = _allocate(allotment_client, allotment_obj, veg_oil_split["import_item"].id, "20", "36.00")
         assert resp.status_code == 201, resp.data
 
-        veg_oil_split["pko_line"].refresh_from_db()
-        veg_oil_split["cheese_line"].refresh_from_db()
-        assert veg_oil_split["pko_line"].remaining_quantity == Decimal("40")
-        assert veg_oil_split["cheese_line"].remaining_quantity == Decimal("60")
+        assert plan_line_status_for(veg_oil_split["pko_line"])["remaining_quantity"] == Decimal("40")
+        assert plan_line_status_for(veg_oil_split["cheese_line"])["remaining_quantity"] == Decimal("60")
 
     def test_stale_plan_line_id_is_rejected_without_raw_availability_fallback(
         self, allotment_client, allotment_obj, veg_oil_split,
@@ -204,3 +207,18 @@ class TestPlanLineBalanceDecrement:
         assert resp.status_code == 400, resp.data
         assert resp.data["success"] == 0
         assert resp.data["errors"][0]["code"] == "NO_PLANNED_BALANCE"
+
+    def test_deleting_ledger_debit_restores_the_same_plan_line(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        response = _allocate(
+            allotment_client, allotment_obj, veg_oil_split["import_item"].id,
+            "20", "36.00", plan_line_id=veg_oil_split["pko_line"].id,
+        )
+        assert response.status_code == 201, response.data
+        assert plan_line_status_for(veg_oil_split["pko_line"])["remaining_quantity"] == Decimal("20")
+
+        AllotmentItems.objects.get(id=response.data["created_items"][0]["id"]).delete()
+        residual = plan_line_status_for(veg_oil_split["pko_line"])
+        assert residual["remaining_quantity"] == Decimal("40")
+        assert residual["remaining_cif_fc"] == Decimal("72.00")

@@ -23,6 +23,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel
+from apps.allotment.views_actions import AllotmentActionViewSet
 from apps.core.models import CompanyModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 
@@ -30,6 +31,23 @@ User = get_user_model()
 
 LIVE_VALUE = Decimal("154802.90")
 STALE_STORED_VALUE = Decimal("7.43")
+
+
+def test_max_suggestion_is_limited_by_cif_at_unit_price():
+    """Max must produce a compatible Qty/CIF pair, not independent maxima."""
+    payload = AllotmentActionViewSet._position_payload(
+        actual_qty=Decimal("15749.000"),
+        actual_cif=Decimal("2066.75"),
+        required_qty=Decimal("2077.000"),
+        required_cif=Decimal("2066.75"),
+        unit_price=Decimal("8.821"),
+    )
+
+    suggestion = payload["basis_options"]["actual"]
+    assert suggestion["max_qty"] == "2077.000"
+    assert suggestion["max_cif"] == "2066.75"
+    assert suggestion["allocation_limit"]["paired_max_qty"] == "234.000"
+    assert suggestion["allocation_limit"]["paired_max_cif"] == "2064.12"
 
 
 @pytest.fixture
@@ -84,6 +102,7 @@ def _mock_bulk_map(item_id, live_value):
 
 def _get_available_licenses(client, allotment_obj, **params):
     url = f"/api/allotment-actions/{allotment_obj.id}/available-licenses/"
+    params.setdefault("debit_based_on", "ACTUAL")
     return client.get(url, params)
 
 

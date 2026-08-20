@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.db.models import Prefetch, Q
+from apps.accounts.permissions import ReportPermission
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -28,7 +29,12 @@ def add_license_report_action(viewset_class):
     Groups licenses by notification number for Parle exporters.
     """
 
-    @action(detail=False, methods=["get"], url_path="parle-report")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="parle-report",
+        permission_classes=[ReportPermission],
+    )
     def parle_license_report(self, request):
         """
         Generate license report for Parle exporters, grouped by notification number.

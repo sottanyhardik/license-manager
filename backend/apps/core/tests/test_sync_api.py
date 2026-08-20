@@ -103,6 +103,16 @@ class TestAuthenticationRequired:
         response = APIClient().get(reverse(MEDIA_DOWNLOAD), {"path": rel})
         assert response.status_code in (401, 403)
 
+    def test_ordinary_authenticated_user_cannot_access_peer_sync(self, locmem_cache):
+        """A browser/JWT user is never a substitute for a registered peer."""
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        user = make_user()
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}")
+        response = client.get(reverse(STATUS))
+        assert response.status_code in (401, 403)
+
 
 # ── POST /api/sync/push/ ────────────────────────────────────────────────
 
@@ -156,14 +166,23 @@ class TestPushEndpoint:
         assert applied.index("core.ItemGroupModel") < applied.index("core.ItemNameModel")
 
     def test_top_level_source_server_overrides_per_event_value(self, api):
-        """views.py rewrites each event's source_server from the envelope."""
+        """A peer may not lie in individual event metadata."""
         event = port_event("API004", "Overridden", server="lying-server")
         response = api.post(
-            reverse(PUSH), push_payload(event, source_server="truthful-server"), format="json",
+            reverse(PUSH), push_payload(event, source_server="server-A"), format="json",
         )
 
         assert response.status_code == 200
-        assert PortModel.objects.get(code="API004").origin_server == "truthful-server"
+        assert PortModel.objects.get(code="API004").origin_server == "server-A"
+
+    def test_push_rejects_a_forged_top_level_source_server(self, api):
+        response = api.post(
+            reverse(PUSH),
+            push_payload(port_event("API004F", "Forged"), source_server="truthful-server"),
+            format="json",
+        )
+        assert response.status_code == 403
+        assert not PortModel.objects.filter(code="API004F").exists()
 
     def test_push_emits_change_feed_rows(self, api):
         api.post(reverse(PUSH), push_payload(port_event("API005", "Feed")), format="json")
@@ -173,6 +192,10 @@ class TestPushEndpoint:
 
     def test_push_touches_peer_last_seen(self, api):
         peer = make_peer("server-A", base_url="http://a.example.test")
+        api.credentials(
+            HTTP_X_SYNC_SERVER_ID="server-A",
+            HTTP_AUTHORIZATION="Bearer server-a-test-token",
+        )
         assert peer.last_seen is None
 
         before = timezone.now()
@@ -578,7 +601,9 @@ class TestStatusEndpoint:
         make_peer("peer-2")
         make_peer("peer-3", is_active=False)
 
-        assert api.get(reverse(STATUS)).data["peers"] == 2
+        # ``api`` itself is a registered active peer; the inactive peer is not
+        # included in the count.
+        assert api.get(reverse(STATUS)).data["peers"] == 3
 
     def test_counts_media_tasks_by_status(self, api):
         MediaSyncTask.objects.create(
@@ -641,9 +666,14 @@ class TestMediaDownloadEndpoint:
     def test_content_type_falls_back_to_octet_stream(self, api, media_root):
         rel = write_media(media_root, "tl/letter.unknownext", b"blob")
         response = api.get(reverse(MEDIA_DOWNLOAD), {"path": rel})
-
-        assert response.status_code == 200
-        assert response["Content-Type"] == "application/octet-stream"
+        try:
+            assert response.status_code == 200
+            assert response["Content-Type"] == "application/octet-stream"
+        finally:
+            # FileResponse owns an open descriptor until the server/client
+            # closes it.  This test inspects headers without consuming the
+            # stream, so close explicitly rather than leaking a descriptor.
+            response.close()
 
     def test_bytes_are_identical_so_sha256_survives_transfer(self, api, media_root):
         content = bytes(range(256)) * 40

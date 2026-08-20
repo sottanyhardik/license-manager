@@ -80,7 +80,7 @@ def verify_ui_gaps():
     # GATE 03: 3+ split outputs supported
     try:
         result = subprocess.run(
-            ['grep', '-r', 'split.*output\|allocation.*strategy',
+            ['grep', '-r', r'split.*output\|allocation.*strategy',
              'backend/apps/license/services/database_driven_sion_planner.py'],
             capture_output=True, text=True, cwd=PROJECT_ROOT
         )
@@ -94,7 +94,7 @@ def verify_ui_gaps():
     # GATE 04: Inline field validation present
     try:
         result = subprocess.run(
-            ['grep', '-r', 'ValidationError\|validation\|error',
+            ['grep', '-r', r'ValidationError\|validation\|error',
              'backend/apps/license/views/planning_views.py'],
             capture_output=True, text=True, cwd=PROJECT_ROOT
         )
@@ -178,7 +178,7 @@ def verify_generic_engine():
     # GATE 09: No unwarranted seeder imports in production
     try:
         result = subprocess.run(
-            ['grep', '-r', 'from.*seed\|import.*seed',
+            ['grep', '-r', r'from.*seed\|import.*seed',
              'backend/apps/license/views/', '--include=*.py'],
             capture_output=True, text=True, cwd=PROJECT_ROOT
         )
@@ -214,7 +214,7 @@ def verify_write_paths():
     # GATE 11-13: API endpoints exist
     try:
         result = subprocess.run(
-            ['grep', '-r', 'class.*ViewSet\|class.*View',
+            ['grep', '-r', r'class.*ViewSet\|class.*View',
              'backend/apps/license/views/__init__.py'],
             capture_output=True, text=True, cwd=PROJECT_ROOT
         )
@@ -245,7 +245,7 @@ def verify_write_paths():
     # GATE 15: Error handling for missing config
     try:
         result = subprocess.run(
-            ['grep', 'PlannerConfigurationError\|NO_ACTIVE_PLANNING_RULES',
+            ['grep', r'PlannerConfigurationError\|NO_ACTIVE_PLANNING_RULES',
              'backend/apps/license/services/sion_planning_execution.py'],
             capture_output=True, text=True, cwd=PROJECT_ROOT
         )

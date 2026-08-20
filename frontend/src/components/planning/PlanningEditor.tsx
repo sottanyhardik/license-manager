@@ -663,7 +663,10 @@ export default function PlanningEditor({
                     memberIds,
                     total_quantity: Number(grp.total_quantity ?? 0),
                     total_qty: Number(grp.total_qty ?? grp.total_quantity ?? 0),
-                    total_utilized_qty: Number(grp.total_utilized_qty ?? 0),
+                    // Keep an omitted aggregate distinct from an explicit
+                    // zero so the view can safely use reconciled split usage
+                    // as its backwards-compatible display fallback.
+                    total_utilized_qty: grp.total_utilized_qty == null ? undefined : Number(grp.total_utilized_qty),
                     balance_qty: Number(grp.balance_qty ?? 0),
                     available_quantity: Number(grp.available_quantity ?? 0),
                     effective_available_quantity: Number(grp.effective_available_quantity ?? grp.available_quantity ?? 0),
@@ -1137,9 +1140,15 @@ export default function PlanningEditor({
                                 const status     = groupStatus(g);
                                 const planned    = g.splits.reduce((s, sp) => s + num(sp.planned_quantity), 0);
                                 const plannedCif = g.splits.reduce((s, sp) => s + num(sp.effective_planned_cif), 0);
-                                const rem        = g.available_quantity - planned;
                                 const totalQty = g.total_qty ?? g.total_quantity;
-                                const totalUtilized = g.total_utilized_qty ?? 0;
+                                // Older utilization responses omit the group aggregate while
+                                // retaining authoritative reconciled usage on every split.
+                                // Do not render a misleading zero in that case: derive the
+                                // displayed group total from those mutually-exclusive split
+                                // rows.  Newer responses still take the explicit aggregate.
+                                const totalUtilized = g.total_utilized_qty ?? g.splits.reduce(
+                                    (sum, split) => sum + num(split.effective_used_quantity), 0,
+                                );
                                 const balanceQty = g.balance_qty ?? 0;
                                 const isEditing  = editingGroupId === g.id;
                                 const isSaving   = savingGroupId === g.id;
@@ -1277,15 +1286,17 @@ export default function PlanningEditor({
                                                                     ["Percentage Target CIF", fmtUsd(num(sp.percentage_theoretical_cif ?? sp.theoretical_cif ?? sp.planned_cif_fc))],
                                                                 );
                                                             }
-                                                            if (isPercentageSplit) fields.push(
+                                                            // Reconciliation audit values are informative only when
+                                                            // usage exists.  Rendering zero-valued rows for every split
+                                                            // makes the operational balance fields hard to scan and
+                                                            // falsely suggests a recorded BOE/allotment relationship.
+                                                            if (isPercentageSplit && (num(sp.boe_used_quantity) !== 0 || num(sp.boe_used_cif) !== 0)) fields.push(
                                                                 ["BOE Used Qty", fmtQty(num(sp.boe_used_quantity))],
                                                                 ["BOE Used CIF", fmtUsd(num(sp.boe_used_cif))],
                                                             );
-                                                            if (isPercentageSplit) fields.push(
+                                                            if (isPercentageSplit && (num(sp.unlinked_allotment_quantity) !== 0 || num(sp.unlinked_allotment_cif) !== 0)) fields.push(
                                                                 ["Unlinked Allotment Qty", fmtQty(num(sp.unlinked_allotment_quantity))],
                                                                 ["Unlinked Allotment CIF", fmtUsd(num(sp.unlinked_allotment_cif))],
-                                                                ["Excess Other Item Qty", fmtQty(num(sp.excess_other_item_qty))],
-                                                                ["Excess Other Item CIF", fmtUsd(num(sp.excess_other_item_cif))],
                                                             );
                                                             fields.push(
                                                                 ["Remaining Qty", sp.remaining_entitlement_qty == null ? "Calculation contract error" : auditQty(num(sp.remaining_entitlement_qty))],
@@ -1328,7 +1339,7 @@ export default function PlanningEditor({
                                     <td />
                                     <td />
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.total_qty ?? g.total_quantity), 0))}</td>
-                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.total_utilized_qty ?? 0), 0))}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.total_utilized_qty ?? g.splits.reduce((used, split) => used + num(split.effective_used_quantity), 0)), 0))}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalAvail)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.effectivePlanned)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.balance_qty ?? 0), 0))}</td>

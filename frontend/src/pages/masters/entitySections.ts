@@ -29,8 +29,8 @@ export const ENTITY_SECTIONS = {
             title: 'Invoice Details',
             icon: 'file-earmark-text',
             color: 'var(--tb-warning)',
-            fields: ['product_name', 'invoice_no', 'invoice_date'],
-            cols: { product_name: 'col-md-4', invoice_no: 'col-md-4', invoice_date: 'col-md-4' },
+            fields: ['product_name', 'planning_target_item', 'invoice_no', 'invoice_date'],
+            cols: { product_name: 'col-md-3', planning_target_item: 'col-md-3', invoice_no: 'col-md-3', invoice_date: 'col-md-3' },
         },
         {
             title: 'Notes',

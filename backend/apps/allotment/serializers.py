@@ -112,6 +112,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
         validators = []
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
+            'search_mode', 'allocation_basis', 'planning_target_item', 'plan_line',
             'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number', 'license_id',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
@@ -150,6 +151,12 @@ class AllotmentSerializer(serializers.ModelSerializer):
     # Counts for UI display
     allotted_items_count = serializers.SerializerMethodField(read_only=True)
     allocated_licenses_count = serializers.SerializerMethodField(read_only=True)
+    # The allocation route is initialized from this persisted canonical target,
+    # never from the free-text ``item_name`` description.
+    planning_target_item_name = serializers.CharField(
+        source='planning_target_item.name', read_only=True, allow_null=True
+    )
+    planning_target_sion = serializers.SerializerMethodField(read_only=True)
 
     def get_is_boe(self, obj):
         """
@@ -193,6 +200,23 @@ class AllotmentSerializer(serializers.ModelSerializer):
         except Exception:
             return 0
 
+    def get_planning_target_sion(self, obj):
+        """Return an unambiguous SION for the target when one can be derived.
+
+        Older allotments do not persist a SION.  In that case returning null is
+        intentional: the allocation route still locks to the canonical target
+        and does not invent a SION from the free-text description.
+        """
+        if not obj.planning_target_item_id:
+            return None
+        from apps.license.models import LicenseItemPlan
+        sions = list(
+            LicenseItemPlan.objects.filter(item_name_id=obj.planning_target_item_id)
+            .values_list('import_item__license__export_license__norm_class__norm_class', flat=True)
+            .distinct()[:2]
+        )
+        return sions[0] if len(sions) == 1 else None
+
     def get_created_on(self, obj):
         if obj.created_on:
             value = obj.created_on
@@ -218,6 +242,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'cif_fc', 'cif_inr', 'exchange_rate',
             'item_name', 'contact_person', 'contact_number', 'invoice',
             'planning_target_item', 'planning_mapping_status', 'planning_mapping_source',
+            'planning_target_item_name', 'planning_target_sion',
             'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
             'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',

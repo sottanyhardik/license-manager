@@ -1,4 +1,4 @@
-import {useEffect, useState, useMemo, useRef} from "react";
+import {useCallback, useEffect, useState, useMemo, useRef} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
 import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
+import {useDebounce} from "@/hooks/useDebounce";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
@@ -23,6 +24,22 @@ interface PlanningOption {
     remaining_cif_fc?: string;
     [key: string]: any;
 }
+type SearchMode = "PLAN" | "ACTUAL";
+type AllocationBasis = "PLAN" | "ACTUAL";
+type DebitBasis = SearchMode;
+
+interface AllocationInitialization {
+    default_search_mode: SearchMode;
+    default_allocation_basis: AllocationBasis;
+    default_item: { id: number; name: string } | null;
+    planning_target_item: { id: number; name: string } | null;
+    sion: string | null;
+    has_active_plan: boolean;
+    plan_status: string;
+    plan_message: string | null;
+    reason_code?: string | null;
+    message?: string | null;
+}
 
 interface AvailableItem {
     id: number;
@@ -36,7 +53,7 @@ interface AvailableItem {
     license_expiry_date?: string;
     description: string;
     exporter_name?: string;
-    items_detail?: Array<{ name: string }>;
+    items_detail?: Array<{ id?: number; name: string }>;
     available_quantity: string;
     balance_cif_fc: string;
     // Utilization-plan status for this item's product group (always present;
@@ -55,11 +72,23 @@ interface AvailableItem {
     has_active_plan?: boolean;
     remaining_planned_qty?: string;
     remaining_planned_cif?: string;
+    display_plan_qty?: string;
+    display_plan_cif?: string;
     max_allotment_qty?: string;
     max_allotment_cif?: string;
     can_create_allotment?: boolean;
     reason_code?: string | null;
     message?: string | null;
+    actual_position?: { available_qty: string; balance_cif: string };
+    plan_position?: { exists: boolean; is_active: boolean; status: string; plan_line_id: number | null; remaining_qty: string; remaining_cif: string };
+    basis_options?: Record<"actual" | "plan", {
+        enabled: boolean;
+        max_qty: string;
+        max_cif: string;
+        allocation_limit?: { paired_max_qty: string; paired_max_cif: string; limiting_factor: string; can_allocate: boolean };
+        reason_code?: string | null;
+        message?: string | null;
+    }>;
     // Plan mode (Debit Based On = Plan) only — one row per LicenseItemPlan
     // line. `id` is the plan line's own id (unique per split row); the real
     // underlying import item is `import_item_id` — the Confirm-allot payload
@@ -73,6 +102,20 @@ interface AvailableItem {
     // Item-specific planning splits (DWP, SWP, PKO, etc.)
     // Only present when the item has planning relationships
     planning_options?: PlanningOption[];
+}
+
+function getAllocationErrorMessage(error: unknown): string {
+    const data = (error as any)?.response?.data ?? error as any;
+    const item = data?.item_name;
+    if (data?.code === "NO_PLANNED_BALANCE") return `Cannot allocate ${item || "this item"}: no planned quantity or value remains.`;
+    return data?.message || data?.detail || data?.error || data?.errors?.[0]?.message || data?.errors?.[0]?.error || "The allocation could not be completed.";
+}
+
+// API balances are decimal strings.  "0.000" is truthy in JavaScript, so
+// allocation eligibility must always use a numeric comparison.
+function decimalGreaterThan(value: string | number | null | undefined, zero: string): boolean {
+    const numeric = Number(value ?? zero);
+    return Number.isFinite(numeric) && numeric > Number(zero);
 }
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -108,13 +151,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // (see the usePurchaseStatusOptions effect below) — never hardcoded.
         purchase_status: "",
         license_status: "active",
-        item_names: "",
+        item_id: "",
         expiry_date_from: "",
         expiry_date_to: "",
         // Plan balances are the safe default; Actual is an explicit override.
         // or 'plan' (one row per LicenseItemPlan line — see AvailableItem's
         // planned_item_name/import_item_id fields).
-        debit_based_on: "PLAN"
+        debit_based_on: null as DebitBasis | null
     });
     // Purchase Status options + default selection both come from the
     // Purchase Status master (never hardcoded) — see useMasterOptions.ts.
@@ -126,12 +169,28 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             setFilters(prev => ({...prev, purchase_status: purchaseStatusOptions.map(o => o.value).join(',')}));
         }
     }, [purchaseStatusOptions]);
-    const [isFirstLoad, setIsFirstLoad] = useState(true);
+    const [hydratedRouteId, setHydratedRouteId] = useState<string | number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 20;
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // A draft is scoped to the selected balance source.  Never let a Qty/CIF
+    // entered for one Planning Target be submitted after the target changes.
+    const updateFilters = (nextFilters: typeof filters) => {
+        if (filters.debit_based_on !== nextFilters.debit_based_on || filters.item_id !== nextFilters.item_id) {
+            setAllocationData({});
+            setSelectedPlanningByItem({});
+        }
+        setFilters(nextFilters);
+    };
+
+    // Keep text inputs responsive while avoiding a full licence-query reload
+    // for each character typed into description, licence number, or HS code.
+    const debouncedDescription = useDebounce(filters.description, 400);
+    const debouncedLicenseNumber = useDebounce(filters.license_number, 400);
+    const debouncedHsCode = useDebounce(filters.hs_code, 400);
 
     // Confirm dialogs (replaces window.confirm)
     const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; allotmentItemId: number | null }>({ show: false, allotmentItemId: null });
@@ -179,7 +238,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         staleTime: Infinity,
     });
     const isPlanMode = filters.debit_based_on === "PLAN";
-    const itemFilterOptions = isPlanMode ? rawPlannedItemNames : availableItemNames;
 
     // Allotment header info (details, progress, allotted items)
     const {
@@ -191,13 +249,51 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         enabled: Boolean(id),
     });
 
-    // Set description filter from allotment item_name on first load
-    useEffect(() => {
-        if (isFirstLoad && allotment?.item_name) {
-            setFilters(prev => ({ ...prev, description: allotment.item_name }));
-            setIsFirstLoad(false);
+    // The server is authoritative for route defaults.  In particular, a
+    // Planning Target Item alone is metadata; it does not prove that a
+    // current plan exists for the target and canonical SION.
+    const {
+        data: allocationInitialization,
+        isLoading: initializationLoading,
+        isError: initializationFailed,
+        refetch: retryInitialization,
+    } = useQuery<AllocationInitialization>({
+        queryKey: ['allotment-allocation-initialization', id],
+        queryFn: () => api.get(`allotment-actions/${id}/allocation-initialization/`).then(r => r.data),
+        enabled: Boolean(id),
+    });
+
+    const itemFilterOptions = useMemo(() => {
+        const options = isPlanMode ? rawPlannedItemNames : availableItemNames;
+        if (isPlanMode && allotment?.planning_target_item && !options.some(option => String(option.value) === String(allotment.planning_target_item))) {
+            return [{ value: allotment.planning_target_item, label: allotment.planning_target_item_name || String(allotment.planning_target_item) }, ...options];
         }
-    }, [allotment, isFirstLoad]);
+        return options;
+    }, [isPlanMode, rawPlannedItemNames, availableItemNames, allotment]);
+
+    // Do not infer a Plan default from target-item presence.  The backend
+    // verifies the current plan identity and supplies the only valid default.
+    useEffect(() => {
+        if (!allotment || !allocationInitialization || hydratedRouteId === id) return;
+        const defaultItem = allocationInitialization.default_item;
+        setFilters(prev => ({
+            ...prev,
+            debit_based_on: allocationInitialization.default_search_mode,
+            item_id: defaultItem == null ? "" : String(defaultItem.id),
+            description: "",
+        }));
+        setAllocationData({});
+        setSelectedPlanningByItem({});
+        setCurrentPage(1);
+        setHydratedRouteId(id);
+    }, [allotment, allocationInitialization, hydratedRouteId, id]);
+
+    useEffect(() => {
+        // A route change must never reuse an already-hydrated target.
+        if (hydratedRouteId != null && hydratedRouteId !== id) {
+            setHydratedRouteId(null);
+        }
+    }, [id, hydratedRouteId]);
 
     // Surface allotment load failure into the error banner
     useEffect(() => {
@@ -209,9 +305,51 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     // Build API params from current filter state (skip empty values)
     const apiParams = useMemo(() => {
         const params: Record<string, string | number> = { page: currentPage, page_size: pageSize };
-        Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
+        Object.entries(filters).forEach(([k, v]) => {
+            // These free-text filters are attached below from debounced state.
+            if (k !== "description" && k !== "license_number" && k !== "hs_code" && v != null && v !== "") {
+                params[k] = v as string;
+            }
+        });
+        if (debouncedDescription) params.description = debouncedDescription;
+        if (debouncedLicenseNumber) params.license_number = debouncedLicenseNumber;
+        if (debouncedHsCode) params.hs_code = debouncedHsCode;
+        if (filters.debit_based_on === "PLAN" && filters.item_id) {
+            // The filter is the current target.  The route target only
+            // supplies the initial selection, never a later override.
+            params.planning_target_item_id = filters.item_id;
+            if (String(filters.item_id) === String(allocationInitialization?.default_item?.id) && allocationInitialization?.sion) {
+                params.sion = allocationInitialization.sion;
+            }
+        }
         return params;
-    }, [filters, currentPage, pageSize]);
+    }, [filters, currentPage, pageSize, allocationInitialization, debouncedDescription, debouncedLicenseNumber, debouncedHsCode]);
+
+    const planFiltersReady = hydratedRouteId === id
+        && filters.debit_based_on === "PLAN"
+        && Boolean(filters.item_id);
+    // Actual availability does not require a plan or a canonical Planning
+    // Target Item.  An actual item identity is ideal, but Item Description is
+    // also an established Actual-mode filter (for example, `7607`).
+    const actualFiltersReady = hydratedRouteId === id
+        && filters.debit_based_on === "ACTUAL"
+        && Boolean(filters.item_id || debouncedDescription.trim());
+    const filtersReady = planFiltersReady || actualFiltersReady;
+
+    const previousDebitBasis = useRef<DebitBasis | null>(null);
+    useEffect(() => {
+        const currentDebitBasis = filters.debit_based_on;
+        if (!currentDebitBasis) return;
+        if (previousDebitBasis.current && previousDebitBasis.current !== currentDebitBasis) {
+            // A Plan child is never an implicit selection in Actual mode.
+            // Clear drafts as well, so an old Plan response cannot be submitted
+            // after the user changes the authoritative mode.
+            setSelectedPlanningByItem({});
+            setAllocationData({});
+            setCurrentPage(1);
+        }
+        previousDebitBasis.current = currentDebitBasis;
+    }, [filters.debit_based_on]);
 
     // Available licenses list — re-fetches when filters or page changes,
     // but only after the first-load description filter has been applied.
@@ -220,13 +358,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         isLoading: initialLoading,
         isFetching: tableLoading,
     } = useQuery({
-        queryKey: ['allotments', id, 'available-licenses', apiParams],
+        queryKey: ['allotment-available-licenses', id, filters.debit_based_on, allotment?.planning_target_item ?? null, allotment?.planning_target_sion ?? null, apiParams],
         queryFn: () => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams }).then(r => r.data),
-        enabled: Boolean(id) && !isFirstLoad,
-        placeholderData: (prev) => prev,
+        enabled: Boolean(id) && filtersReady,
     });
 
-    const availableItems: AvailableItem[] = availableLicensesData?.available_items ?? availableLicensesData?.results ?? [];
+    const availableItems: AvailableItem[] = useMemo(
+        () => filtersReady ? (availableLicensesData?.available_items ?? availableLicensesData?.results ?? []) : [],
+        [filtersReady, availableLicensesData],
+    );
     const totalItems: number = availableLicensesData?.count ?? 0;
     const totalPages: number = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
 
@@ -260,8 +400,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const allocateMutation = useMutation({
-        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) =>
-            api.post(`allotment-actions/${id}/allocate-items/`, {
+        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) => {
+            const selectedPlanId = selectedPlanningByItem[payload.item.id];
+            const followsPlan = filters.debit_based_on === "PLAN" || Boolean(selectedPlanId);
+            // Description-driven Actual searches do not have a filter item ID.
+            // The candidate's canonical actual item identity is still sent for
+            // backend validation, rather than falling back to a plan identity.
+            const actualItemId = filters.item_id || payload.item.items_detail?.[0]?.id;
+            return api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
                     // Plan mode's row id is the LicenseItemPlan line's own id
                     // (unique per split row) — allocation always targets the
@@ -273,9 +419,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     // vs Cheese) this allocation was made against, so the
                     // backend can decrement THAT line's own remaining balance
                     // independently of its siblings (see allocate_items).
-                    ...(payload.item.import_item_id ? { plan_line_id: payload.item.id } : {}),
+                    ...(followsPlan ? { plan_line_id: selectedPlanId ?? payload.item.id } : {}),
+                    debit_based_on: filters.debit_based_on,
+                    search_mode: filters.debit_based_on,
+                    allocation_basis: followsPlan ? "PLAN" : "ACTUAL",
+                    ...(filters.debit_based_on === "PLAN" ? { planning_target_item_id: filters.item_id } : { actual_item_id: actualItemId }),
                 }],
-            }).then(r => r.data),
+            }).then(r => r.data);
+        },
         onSuccess: (data, { item, allocation }) => {
             if (data.errors && data.errors.length > 0) {
                 const firstErr = data.errors[0];
@@ -283,7 +434,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     setPlanModal({ error: firstErr, item });
                     return;
                 }
-                const errorMsg = `Error: ${firstErr.error}`;
+                const errorMsg = getAllocationErrorMessage(firstErr);
                 setError(errorMsg);
                 toast.error(errorMsg);
                 return;
@@ -315,7 +466,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             }
         },
         onError: (err: unknown) => {
-            const errorMsg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to allocate item";
+            const errorMsg = getAllocationErrorMessage(err);
             setError(errorMsg);
             toast.error(errorMsg);
         },
@@ -351,7 +502,26 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         setCurrentPage(1);
     }, [filters]);
 
-    const calculateMaxAllocation = (item) => {
+    const calculateMaxAllocation = useCallback((item) => {
+        // Current candidate responses carry exact Decimal-string ceilings
+        // calculated by the backend.  Prefer them over the retired browser
+        // reconstruction; the numeric conversion below is display/input
+        // plumbing only and never grants capacity beyond the server limit.
+        const selectedBasis = filters.debit_based_on === "PLAN" || selectedPlanningByItem[item.id]
+            ? "plan"
+            : "actual";
+        const serverLimit = item.basis_options?.[selectedBasis];
+        if (serverLimit) {
+            return {
+                qty: Number(serverLimit.max_qty ?? "0"),
+                value: Number(serverLimit.max_cif ?? "0"),
+                suggestedQty: Number(serverLimit.suggested_qty ?? serverLimit.max_qty ?? "0"),
+                suggestedValue: Number(serverLimit.suggested_cif ?? serverLimit.max_cif ?? "0"),
+                enabled: serverLimit.enabled,
+                reasonCode: serverLimit.reason_code,
+                message: serverLimit.message,
+            };
+        }
         if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };
 
         const unitPrice = parseFloat(allotment.unit_value_per_unit);
@@ -397,7 +567,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         const selectedPlanId = selectedPlanningByItem[item.id];
         const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
         let remainingPlanValue = Infinity;
-        if (item.import_item_id || item.has_active_plan || item.has_plan) {
+        if (filters.debit_based_on === "PLAN" || selectedPlanId) {
             // `??` deliberately preserves an authoritative decimal zero.
             const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_qty ?? item.remaining_planned_quantity ?? item.remaining_quantity ?? "0")));
             remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? item.remaining_cif_fc ?? "0"));
@@ -423,11 +593,40 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             qty: maxQty,
             value: maxValue
         };
-    };
+    }, [allotment, filters.debit_based_on, selectedPlanningByItem]);
+
+    // A response/mode change can turn a formerly valid draft into an invalid
+    // Plan allocation.  Remove it immediately; never leave a stale raw-value
+    // draft available for Confirm.
+    useEffect(() => {
+        setAllocationData(previous => {
+            let changed = false;
+            const next = { ...previous };
+            availableItems.forEach(item => {
+                const max = calculateMaxAllocation(item);
+                const draft = next[item.id];
+                if (draft && (max.qty <= 0 || max.value <= 0 || Number(draft.qty) > max.qty || Number(draft.cif_fc) > max.value)) {
+                    delete next[item.id];
+                    changed = true;
+                }
+            });
+            return changed ? next : previous;
+        });
+    }, [filters.debit_based_on, availableItems, selectedPlanningByItem, calculateMaxAllocation]);
 
     const handleQuantityChange = (itemId, qty) => {
         const item = availableItems.find(i => i.id === itemId);
         if (!item) return;
+
+        const max = calculateMaxAllocation(item);
+        if (max.qty <= 0 || max.value <= 0) {
+            setAllocationData(previous => {
+                const next = { ...previous };
+                delete next[itemId];
+                return next;
+            });
+            return;
+        }
 
         const unitPrice = parseFloat(allotment.unit_value_per_unit);
         let inputQty = parseInt(qty) || 0;
@@ -474,9 +673,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // item's plan (Original planned qty/$ minus what's already
         // allotted to its group). Clamp both qty and value together so the
         // field always ends in a valid, submittable state.
-        if (item.has_plan) {
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
-            const remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+        const selectedPlanId = selectedPlanningByItem[item.id];
+        const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
+        if (filters.debit_based_on === "PLAN" || selectedPlanId) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_quantity ?? "0")));
+            const remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif_fc ?? "0"));
             if (inputQty > remainingPlanQty) {
                 toast.error("Cannot allot quantity greater than remaining planned quantity.");
                 inputQty = remainingPlanQty;
@@ -501,6 +702,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const handleValueChange = (itemId, value) => {
         const item = availableItems.find(i => i.id === itemId);
         if (!item) return;
+
+        const max = calculateMaxAllocation(item);
+        if (max.qty <= 0 || max.value <= 0) {
+            setAllocationData(previous => {
+                const next = { ...previous };
+                delete next[itemId];
+                return next;
+            });
+            return;
+        }
 
         const unitPrice = parseFloat(allotment.unit_value_per_unit);
         let inputValue = parseFloat(value) || 0;
@@ -534,9 +745,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // Utilization-plan cap: never allow more than what's left of the
         // item's plan. Same rule as handleQuantityChange, entered from the
         // Value field instead of the Qty field.
-        if (item.has_plan) {
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
-            const remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+        const selectedPlanId = selectedPlanningByItem[item.id];
+        const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
+        if (filters.debit_based_on === "PLAN" || selectedPlanId) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_quantity ?? "0")));
+            const remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif_fc ?? "0"));
             if (inputValue > remainingPlanValue) {
                 toast.error("Cannot allot CIF value greater than remaining planned value.");
                 inputValue = remainingPlanValue;
@@ -561,23 +774,37 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const handleMaxQuantity = (item) => {
+        const basis = filters.debit_based_on === "PLAN" || selectedPlanningByItem[item.id] ? "plan" : "actual";
+        const pair = item.basis_options?.[basis]?.allocation_limit;
+        if (pair) {
+            setAllocationData({...allocationData, [item.id]: {qty: pair.paired_max_qty, cif_fc: pair.paired_max_cif}});
+            return;
+        }
         const maxAllocation = calculateMaxAllocation(item);
+        if (maxAllocation.qty <= 0 || maxAllocation.value <= 0) return;
         setAllocationData({
             ...allocationData,
             [item.id]: {
-                qty: maxAllocation.qty.toString(),
-                cif_fc: maxAllocation.value.toFixed(2)
+                qty: (maxAllocation.suggestedQty ?? maxAllocation.qty).toString(),
+                cif_fc: (maxAllocation.suggestedValue ?? maxAllocation.value).toFixed(2)
             }
         });
     };
 
     const handleMaxValue = (item) => {
+        const basis = filters.debit_based_on === "PLAN" || selectedPlanningByItem[item.id] ? "plan" : "actual";
+        const pair = item.basis_options?.[basis]?.allocation_limit;
+        if (pair) {
+            setAllocationData({...allocationData, [item.id]: {qty: pair.paired_max_qty, cif_fc: pair.paired_max_cif}});
+            return;
+        }
         const maxAllocation = calculateMaxAllocation(item);
+        if (maxAllocation.qty <= 0 || maxAllocation.value <= 0) return;
         setAllocationData({
             ...allocationData,
             [item.id]: {
-                qty: maxAllocation.qty.toString(),
-                cif_fc: maxAllocation.value.toFixed(2)
+                qty: (maxAllocation.suggestedQty ?? maxAllocation.qty).toString(),
+                cif_fc: (maxAllocation.suggestedValue ?? maxAllocation.value).toFixed(2)
             }
         });
     };
@@ -585,7 +812,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const handleConfirmAllot = (item) => {
         const max = calculateMaxAllocation(item);
         if (max.qty <= 0 || max.value <= 0) {
-            const message = item.message || 'No planned quantity or value is available for the selected item.';
+            const selectedPlanId = selectedPlanningByItem[item.id];
+            const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
+            const itemName = selectedPlan?.item_name || item.planned_item_name || item.description;
+            const message = `Cannot allocate ${itemName}: no planned quantity or value remains.`;
             setError(message);
             toast.error(message);
             return;
@@ -613,7 +843,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         setDeleteConfirm({ show: false, allotmentItemId: null });
     };
 
-    if (initialLoading) return (
+    if (initialLoading || initializationLoading) return (
         <div className="min-h-screen bg-background">
             <div className="flex justify-between items-center mb-4 animate-pulse">
                 <div>
@@ -641,6 +871,21 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 <div className="p-5 space-y-2">
                     {[1,2,3].map(i => <div key={i} className="h-[90px] rounded-lg bg-muted"></div>)}
                 </div>
+            </div>
+        </div>
+    );
+
+    if (initializationFailed) return (
+        <div className="min-h-screen bg-muted/40 p-6" role="alert">
+            <div className="max-w-xl rounded-xl border border-destructive/30 bg-card p-5 text-sm">
+                <h1 className="font-semibold text-foreground">Unable to load allocation rules. Retry before selecting licences.</h1>
+                <button
+                    type="button"
+                    onClick={() => retryInitialization()}
+                    className="mt-3 rounded bg-primary px-3 py-2 text-primary-foreground"
+                >
+                    Retry
+                </button>
             </div>
         </div>
     );
@@ -983,6 +1228,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 </div>
                 <div className="p-5">
 
+                    {allocationInitialization?.plan_status === "AMBIGUOUS_ACTIVE_PLAN" && (
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900" role="alert">
+                            <TriangleAlert className="size-4" aria-hidden="true" />
+                            <div>{allocationInitialization.message || allocationInitialization.plan_message}</div>
+                        </div>
+                    )}
+
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
                         <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
@@ -1001,11 +1253,20 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     <AllotmentFilters
                         filters={filters}
-                        setFilters={setFilters}
+                        setFilters={updateFilters}
                         availableItemNames={itemFilterOptions}
                         notificationOptions={notificationOptions}
                         purchaseStatusOptions={purchaseStatusOptions}
+                        routePlanningTarget={null}
+                        defaultSearchMode={allocationInitialization?.default_search_mode}
+                        defaultItemId={allocationInitialization?.default_item?.id ?? null}
                     />
+
+                    {filtersReady && (
+                        <div className="mb-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
+                            {filters.debit_based_on === "PLAN" ? <><strong>PLAN BALANCE MODE</strong> — Available values are based on current remaining planned Qty and CIF.</> : <><strong>ACTUAL BALANCE MODE</strong> — Available values are based on current raw licence-item availability.</>}
+                        </div>
+                    )}
 
                     <div className="max-h-[650px] overflow-y-auto pr-px">
                         {(() => {
@@ -1022,15 +1283,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             return Object.entries(groupedByLicense).map(([licenseKey, groupItems]) => {
                                 const firstItem = groupItems[0];
                                 const licenseId = firstItem.license_id || firstItem.license;
-                                const groupHasPlanning = groupItems.some(item => item.has_plan);
-                                const totalGroupQtyAllocated = groupItems.reduce((sum, item) => {
-                                    const alloc = allocationData[item.id];
-                                    return sum + (alloc ? parseFloat(alloc.qty || 0) : 0);
-                                }, 0);
-                                const totalGroupValueAllocated = groupItems.reduce((sum, item) => {
-                                    const alloc = allocationData[item.id];
-                                    return sum + (alloc ? parseFloat(alloc.cif_fc || 0) : 0);
-                                }, 0);
 
                                 return (
                                     <div key={licenseKey} className="mb-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -1073,24 +1325,18 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 const selectedPlanId = selectedPlanningByItem[item.id] || null;
                                                 const selectedPlan = selectedPlanId ? planningOptions.find(p => p.plan_line_id === selectedPlanId) : null;
 
-                                                // Determine effective max allocation based on selected planning or item availability
-                                                let effectiveMaxQty = parseFloat(item.available_quantity || "0");
-                                                let effectiveMaxValue = parseFloat(item.balance_cif_fc || "0");
-
-                                                if (selectedPlan) {
-                                                    const planRemainQty = parseFloat(selectedPlan.remaining_quantity || "0");
-                                                    const planRemainValue = parseFloat(selectedPlan.remaining_cif_fc || "0");
-                                                    effectiveMaxQty = Math.min(effectiveMaxQty, planRemainQty);
-                                                    effectiveMaxValue = Math.min(effectiveMaxValue, planRemainValue);
-                                                }
-
                                                 const maxAllocation = calculateMaxAllocation(item);
                                                 const currentAllocation = allocationData[item.id];
                                                 const qty = parseFloat(item.available_quantity || "0");
                                                 const cifFc = parseFloat(item.balance_cif_fc || "0");
                                                 const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
                                                 const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
-                                                const isBlocked = Boolean(item.import_item_id || item.has_active_plan || item.has_plan) && (maxAllocation.qty <= 0 || maxAllocation.value <= 0);
+                                                // Decimal strings such as "0.000" are truthy.  Compare their
+                                                // numeric values explicitly before exposing any Plan controls.
+                                                const planQty = Number(selectedPlan?.remaining_quantity ?? item.display_plan_qty ?? item.remaining_planned_qty ?? item.remaining_planned_quantity ?? 0);
+                                                const planCif = Number(selectedPlan?.remaining_cif_fc ?? item.display_plan_cif ?? item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? 0);
+                                                const canAllocateByPlan = decimalGreaterThan(planQty, "0.000") && decimalGreaterThan(planCif, "0.00") && decimalGreaterThan(maxAllocation.qty, "0.000") && decimalGreaterThan(maxAllocation.value, "0.00");
+                                                const isBlocked = (filters.debit_based_on === "PLAN" || Boolean(selectedPlanId)) && !canAllocateByPlan;
 
                                                 return (
                                                     <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
@@ -1114,6 +1360,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                             <div className="px-1 py-1.5 mb-1.5 bg-primary/5 rounded text-[10px] border border-primary/20">
                                                                 <div className="font-semibold text-primary mb-0.5">Planning for SR #{item.serial_number}:</div>
                                                                 <div className="space-y-1">
+                                                                    <label className="flex items-center gap-1.5 cursor-pointer hover:bg-primary/10 p-0.5 rounded">
+                                                                        <input
+                                                                            type="radio"
+                                                                            name={`planning-${item.id}`}
+                                                                            checked={selectedPlanId === null}
+                                                                            onChange={() => {
+                                                                                setSelectedPlanningByItem(prev => ({ ...prev, [item.id]: null }));
+                                                                                setAllocationData(prev => {
+                                                                                    const next = { ...prev };
+                                                                                    delete next[item.id];
+                                                                                    return next;
+                                                                                });
+                                                                            }}
+                                                                            className="cursor-pointer"
+                                                                        />
+                                                                        <span className="text-foreground font-semibold">Follow Actual</span>
+                                                                        <span className="text-muted-foreground">Uses actual available Qty and CIF</span>
+                                                                    </label>
                                                                     {planningOptions.map(plan => (
                                                                         <label key={plan.plan_line_id} className="flex items-center gap-1.5 cursor-pointer hover:bg-primary/10 p-0.5 rounded">
                                                                             <input
@@ -1121,22 +1385,26 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                                 name={`planning-${item.id}`}
                                                                                 value={plan.plan_line_id}
                                                                                 checked={selectedPlanId === plan.plan_line_id}
-                                                                                onChange={() => setSelectedPlanningByItem(prev => ({
-                                                                                    ...prev,
-                                                                                    [item.id]: plan.plan_line_id
-                                                                                }))}
+                                                                                onChange={() => {
+                                                                                    setSelectedPlanningByItem(prev => ({ ...prev, [item.id]: plan.plan_line_id }));
+                                                                                    setAllocationData(prev => {
+                                                                                        const next = { ...prev };
+                                                                                        delete next[item.id];
+                                                                                        return next;
+                                                                                    });
+                                                                                }}
                                                                                 className="cursor-pointer"
                                                                             />
-                                                                            <span className="text-foreground font-semibold">{plan.item_name}</span>
+                                                                            <span className="text-foreground font-semibold">Follow Plan: {plan.item_name}</span>
                                                                             <span className="text-muted-foreground">
-                                                                                Qty: {parseFloat(plan.remaining_quantity || "0").toFixed(3)} | Value: ₹{parseFloat(plan.remaining_cif_fc || "0").toFixed(2)}
+                                                                                Qty: {parseFloat(plan.remaining_quantity || "0").toFixed(3)} | Value: ${parseFloat(plan.remaining_cif_fc || "0").toFixed(2)}
                                                                             </span>
                                                                         </label>
                                                                     ))}
                                                                 </div>
                                                                 {selectedPlan && (
                                                                     <div className="mt-1 pt-1 border-t border-primary/20 text-[10px] font-semibold text-primary">
-                                                                        Selected: {selectedPlan.item_name} | MAX QTY: {parseFloat(selectedPlan.remaining_quantity || "0").toFixed(3)} | MAX VALUE: ₹{parseFloat(selectedPlan.remaining_cif_fc || "0").toFixed(2)}
+                                                                        Selected: {selectedPlan.item_name} | MAX QTY: {parseFloat(selectedPlan.remaining_quantity || "0").toFixed(3)} | MAX VALUE: ${parseFloat(selectedPlan.remaining_cif_fc || "0").toFixed(2)}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1168,7 +1436,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         </div>
 
                                                         {/* Allocation controls (compact inline) */}
-                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status" title="NO_PLANNED_BALANCE">No planned quantity or value is available for {item.planned_item_name || item.description}. Raw licence-item availability is informational; allotment is limited by the remaining planned balance.</div> : <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status" title={`No planned balance is available for ${selectedPlan?.item_name || item.planned_item_name || item.description}.`}>
+                                                            <strong className="mr-1">No Planned Balance</strong>
+                                                            Allocation unavailable: {selectedPlan?.item_name || item.planned_item_name || item.description} has no remaining planned quantity or value.
+                                                            <span className="block mt-1">Plan Balance: {planQty.toFixed(3)} / ${planCif.toFixed(2)}</span>
+                                                            <span className="block mt-1">Switch to Actual mode to allocate against the actual available balance, if permitted.</span>
+                                                        </div> : <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
                                                             <div className="flex items-center gap-1 flex-1 min-w-[200px]">
                                                                 <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
                                                                 <input

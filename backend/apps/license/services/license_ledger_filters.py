@@ -8,6 +8,7 @@ from django.utils.dateparse import parse_date
 from rest_framework.exceptions import ValidationError
 
 from apps.license.models import IncentiveLicense, LicenseDetailsModel
+from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.services.canonical_ledger_service import CanonicalLedgerService
 from apps.license.services.license_profit import (
     first_purchase_date_by_license,
@@ -191,7 +192,21 @@ def build_filtered_license_ledger_data(params, *, authorization_company_id=None,
         license_id, license_type, first_purchase_date=first_dates.get((license_type, license_id)),
     ) for license_id, license_type in refs]
     if filters.min_balance is not None:
-        licenses = [row for row in licenses if row["summary"]["current_balance"] >= filters.min_balance]
+        # The collection's eligibility filter is Financial Available Balance,
+        # not the presentation ledger's running total.  The latter intentionally
+        # represents only opening/purchase/sale activity and can therefore be
+        # stale with respect to BOE and allotment consumption.  Resolve the
+        # authoritative balance in one batched query path before filtering.
+        dfia_ids = [license_id for license_id, license_type in refs if license_type == "DFIA"]
+        live_dfia_balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(dfia_ids)
+        licenses = [
+            row for row in licenses
+            if (
+                live_dfia_balances.get(row["license_id"], Decimal("0"))
+                if row["license_type"] == "DFIA"
+                else row["summary"]["current_balance"]
+            ) >= filters.min_balance
+        ]
     balance_sort = filters.ordering.lstrip("-") == "balance_value"
     key = (lambda row: row["summary"]["current_balance"]) if balance_sort else (lambda row: (row.get("license_date") is not None, row.get("license_date")))
     licenses.sort(key=key, reverse=filters.ordering.startswith("-"))

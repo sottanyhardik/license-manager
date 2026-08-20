@@ -1,18 +1,10 @@
-"""
-Integration coverage for a fixed architectural bug in E1's Auto-Plan
-grouping: E1 used to group only by description (`auto_plan_shared.
-group_by_desc`), a narrower key than the HSN-aware `plan_group_key` real
-allotment-cap enforcement (`plan_enforcement.py::plan_status_for`, called
-from `views_actions.py::allocate_items`) uses. Two items sharing one
-description but DIFFERENT HS codes (the real shape of dev-DB licence
-`0311045101`) used to get pooled by Auto-Plan into ONE plan saved entirely
-on a single representative — whose OWN (HSN-aware) `plan_group_key` didn't
-cover the other member, so `plan_status_for` found zero plan rows for that
-member's narrower group and left it completely UNCONSTRAINED by any cap
-(worse than E126/E132's double-counting: not over-enforcement, but a full
-bypass). E1 now groups via the same canonical `plan_group_key` as
-enforcement (`plan_grouping.merge_items_for_classification`), so both
-members get their own correctly-scoped, independently-enforced cap.
+"""Allocation caps for independent plan lines on similarly-described E1 inputs.
+
+The retired E1 planner used to manufacture plan rows as a side effect of a
+special-purpose service. Allocation authority is now the explicit
+``LicenseItemPlan`` selected by a PLAN debit. This keeps the important
+regression: similarly named inputs with different HS codes must not let one
+item's planned capacity authorize another item's debit.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -24,10 +16,8 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.allotment.models import AllotmentModel
-from apps.core.models import CompanyModel, HSCodeModel
+from apps.core.models import CompanyModel, HSCodeModel, ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
-from apps.license.services.e1_auto_plan import compute_e1_auto_plan
-from apps.license.services.plan_enforcement import save_plan_lines_for_license
 
 User = get_user_model()
 
@@ -39,16 +29,11 @@ def _hs(code):
 
 @pytest.fixture
 def allotment_client(db):
-    user = User.objects.create_user(
-        username="e1-group-plan-cap-tester",
-        email="e1-group-plan-cap-tester@example.com",
-        password="RoleP@ssw0rd123",
-    )
+    user = User.objects.create_user(username="e1-group-plan-cap-tester", password="RoleP@ssw0rd123")
     group, _ = Group.objects.get_or_create(name="ALLOTMENT_MANAGER")
     user.groups.add(group)
-    token = RefreshToken.for_user(user)
     client = APIClient()
-    client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {RefreshToken.for_user(user).access_token}")
     return client
 
 
@@ -60,90 +45,56 @@ def allotment_obj(db):
 
 @pytest.fixture
 def mixed_hsn_same_desc_license(db):
-    """Two import items, same description, DIFFERENT HS codes — the real
-    shape of dev-DB licence 0311045101. Runs the REAL compute_e1_auto_plan
-    + save_plan_lines_for_license pipeline this fix changed, not a
-    hand-assembled end state."""
     company = CompanyModel.objects.create(iec="4033334444", name="E1 Group Plan Cap Split Co")
     license_obj = LicenseDetailsModel.objects.create(
-        license_number="E1-GROUP-PLAN-CAP-LIC",
-        license_date=date.today() - timedelta(days=30),
-        license_expiry_date=date.today() + timedelta(days=90),
-        exporter=company,
+        license_number="E1-GROUP-PLAN-CAP-LIC", license_date=date.today() - timedelta(days=30),
+        license_expiry_date=date.today() + timedelta(days=90), exporter=company,
     )
     item1 = LicenseImportItemsModel.objects.create(
         license=license_obj, serial_number=1, description="Other Confectionery Ingredients",
-        hs_code=_hs('08021100'),
-        quantity=Decimal("100.000"), available_quantity=Decimal("100.000"),
+        hs_code=_hs("08021100"), quantity=Decimal("100.000"), available_quantity=Decimal("100.000"),
         available_value=Decimal("100000.00"), condition_type="",
     )
     item2 = LicenseImportItemsModel.objects.create(
         license=license_obj, serial_number=2, description="Other Confectionery Ingredients",
-        hs_code=_hs('08029000'),
-        quantity=Decimal("50.000"), available_quantity=Decimal("50.000"),
+        hs_code=_hs("08029000"), quantity=Decimal("50.000"), available_quantity=Decimal("50.000"),
         available_value=Decimal("50000.00"), condition_type="",
     )
-    # Both `compute_e1_auto_plan` (via `get_balance_cif`) and the allocation
-    # endpoint's `available_value_calculated` fallback (via
-    # `LicenseBalanceCalculator.calculate_financial_balance`, BL-AVAIL-01)
-    # read the SAME live Financial Ledger now — genuine export credit is the
-    # single source both consume consistently, rather than faking two
-    # separate (and, since BL-AVAIL-01, one no-longer-read) values.
     LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100000.00"))
+    target, _ = ItemNameModel.objects.get_or_create(name="E1 CAP TARGET")
+    line1 = LicenseItemPlan.objects.create(license=license_obj, import_item=item1, item_name=target,
+        planned_quantity=Decimal("100"), planned_cif_fc=Decimal("300"), unit_price=Decimal("3.00"))
+    line2 = LicenseItemPlan.objects.create(license=license_obj, import_item=item2, item_name=target,
+        planned_quantity=Decimal("50"), planned_cif_fc=Decimal("150"), unit_price=Decimal("3.00"))
+    return {"license": license_obj, "item1": item1, "item2": item2, "line1": line1, "line2": line2}
 
-    lines, _ = compute_e1_auto_plan(license_obj)
-    save_plan_lines_for_license(license_obj, lines)
 
-    return {"license": license_obj, "item1": item1, "item2": item2}
-
-
-def _allocate(client, allotment_obj, item_id, qty, cif_fc):
-    url = f"/api/allotment-actions/{allotment_obj.id}/allocate-items/"
-    entry = {"item_id": item_id, "qty": str(qty), "cif_fc": str(cif_fc)}
-    return client.post(url, {"allocations": [entry]}, format="json")
+def _allocate(client, allotment, item, plan_line, qty, cif_fc):
+    return client.post(f"/api/allotment-actions/{allotment.id}/allocate-items/", {
+        "allocations": [{"item_id": item.id, "plan_line_id": plan_line.id, "qty": str(qty), "cif_fc": str(cif_fc)}],
+    }, format="json")
 
 
 @pytest.mark.django_db
-class TestE1MixedHsnGroupsPlanIndependently:
-    def test_auto_plan_saves_two_separate_lines_not_pooled(self, mixed_hsn_same_desc_license):
-        item1 = mixed_hsn_same_desc_license["item1"]
-        item2 = mixed_hsn_same_desc_license["item2"]
-        rows = list(LicenseItemPlan.objects.filter(license=mixed_hsn_same_desc_license["license"]))
-        assert len(rows) == 2
-        assert {r.import_item_id for r in rows} == {item1.id, item2.id}
-        by_item = {r.import_item_id: r for r in rows}
-        assert by_item[item1.id].planned_quantity == Decimal("100")
-        assert by_item[item2.id].planned_quantity == Decimal("50")
+class TestE1MixedHsnPlanLinesAreIndependent:
+    def test_each_item_retains_its_own_explicit_plan_line(self, mixed_hsn_same_desc_license):
+        rows = LicenseItemPlan.objects.filter(license=mixed_hsn_same_desc_license["license"])
+        assert {row.import_item_id for row in rows} == {mixed_hsn_same_desc_license["item1"].id, mixed_hsn_same_desc_license["item2"].id}
 
-    def test_item2_has_its_own_correctly_scoped_cap_not_unconstrained(
-        self, allotment_client, allotment_obj, mixed_hsn_same_desc_license,
-    ):
-        item2 = mixed_hsn_same_desc_license["item2"]
-        # item2's own plan cap is 50kg @ $3.00 = $150. $200 is chosen to be
-        # decisive: it's ABOVE item2's own real cap ($150) but BELOW what a
-        # pooled item1+item2 cap would have been ($450) — so this value can
-        # only be rejected if item2 is enforced against its OWN correct
-        # cap, not a pooled one and not left unconstrained (the two ways
-        # the pre-fix bug could have let this through).
-        resp = _allocate(allotment_client, allotment_obj, item2.id, "10", "200.00")
-        assert resp.status_code == 400, resp.data
-        assert resp.data["success"] == 0
-        error = resp.data["errors"][0]
-        assert error.get("plan_exceeded") is True
-        assert Decimal(error["original_planned_cif_fc"]) == Decimal("150")
+    def test_item2_cannot_use_item1_or_pooled_capacity(self, allotment_client, allotment_obj, mixed_hsn_same_desc_license):
+        data = mixed_hsn_same_desc_license
+        response = _allocate(allotment_client, allotment_obj, data["item2"], data["line2"], "10", "200.00")
+        assert response.status_code == 400, response.data
+        error = response.data["errors"][0]
+        assert error["code"] == "ALLOTMENT_CIF_EXCEEDS_PLAN"
+        assert Decimal(error["max_cif"]) == Decimal("150")
 
-    def test_item2_debit_within_its_own_cap_succeeds(
-        self, allotment_client, allotment_obj, mixed_hsn_same_desc_license,
-    ):
-        item2 = mixed_hsn_same_desc_license["item2"]
-        resp = _allocate(allotment_client, allotment_obj, item2.id, "10", "30.00")  # 10 * 3.00
-        assert resp.status_code == 201, resp.data
+    def test_item2_debit_within_its_own_cap_succeeds(self, allotment_client, allotment_obj, mixed_hsn_same_desc_license):
+        data = mixed_hsn_same_desc_license
+        response = _allocate(allotment_client, allotment_obj, data["item2"], data["line2"], "10", "30.00")
+        assert response.status_code == 201, response.data
 
-    def test_item1_cap_is_independent_of_item2s_group(
-        self, allotment_client, allotment_obj, mixed_hsn_same_desc_license,
-    ):
-        item1 = mixed_hsn_same_desc_license["item1"]
-        # item1's own cap is 100kg @ $3.00 = $300, entirely independent of
-        # item2's group.
-        resp = _allocate(allotment_client, allotment_obj, item1.id, "90", "270.00")
-        assert resp.status_code == 201, resp.data
+    def test_item1_capacity_is_independent(self, allotment_client, allotment_obj, mixed_hsn_same_desc_license):
+        data = mixed_hsn_same_desc_license
+        response = _allocate(allotment_client, allotment_obj, data["item1"], data["line1"], "90", "270.00")
+        assert response.status_code == 201, response.data

@@ -19,11 +19,13 @@ from django.conf import settings
 from django.http import FileResponse, Http404
 
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import SyncConflictLog, SyncPeer, SyncCursor, MediaSyncTask
+from .models import (
+    SyncConflictLog, SyncPeer, SyncCursor, MediaSyncTask, SyncEvent,
+    SyncPeerDelivery,
+)
 from .registry import get_entry, get_all_entries, get_model_labels
 from .service import (
     apply_sync_batch,
@@ -43,6 +45,7 @@ from .serializers import (
     DeleteCheckResultSerializer,
     SyncStatusSerializer,
 )
+from .authentication import PeerTokenAuthentication
 
 logger = logging.getLogger("sync.views")
 
@@ -50,20 +53,29 @@ logger = logging.getLogger("sync.views")
 MAX_CONFLICT_PAGE = 1000
 
 
-class SyncPushView(APIView):
+class PeerSyncAPIView(APIView):
+    """Private API surface accessible only to registered sync peers."""
+
+    authentication_classes = [PeerTokenAuthentication]
+
+
+class SyncPushView(PeerSyncAPIView):
     """Receive a batch of sync events from a peer server.
 
     POST /api/sync/push/
     Body: { "source_server": "...", "events": [...] }
     """
-    permission_classes = [IsAuthenticated]
-
     def post(self, request):
         serializer = SyncPushSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         events = serializer.validated_data["events"]
         source_server = serializer.validated_data["source_server"]
+        if source_server != request.auth.server_id:
+            return Response(
+                {"detail": "source_server must match the authenticated sync peer."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Override source_server in each event for consistency
         for event in events:
@@ -121,30 +133,41 @@ class SyncPushView(APIView):
         return Response(out.data, status=status.HTTP_200_OK)
 
 
-class SyncPullView(APIView):
+class SyncPullView(PeerSyncAPIView):
     """Return changes since a given timestamp (offline recovery).
 
     GET /api/sync/pull/?since=2024-01-01T00:00:00Z
     """
-    permission_classes = [IsAuthenticated]
-
     def get(self, request):
         since = request.query_params.get("since")
-        events = get_changes_since(since)
+        raw_cursor = request.query_params.get("cursor")
+        try:
+            event_cursor = max(0, int(raw_cursor)) if raw_cursor is not None else None
+        except (TypeError, ValueError):
+            event_cursor = None
+        events = get_changes_since(since, cursor=event_cursor)
 
         # Optionally filter by model_labels
         model_labels = request.query_params.getlist("model_label")
         if model_labels:
             events = [e for e in events if e["model_label"] in model_labels]
 
-        return Response({
+        # A receiver must acknowledge the source watermark, never its own wall
+        # clock.  Advancing a local cursor to ``now()`` can lose a change that
+        # committed on this server while the response was in flight.
+        # Integer outbox cursor is an acknowledgement of a concrete immutable
+        # record; do not substitute this server's wall clock.
+        response = {
             "server_id": SERVER_ID,
             "events": events,
             "count": len(events),
-        })
+        }
+        if event_cursor is not None:
+            response["cursor"] = events[-1].get("cursor") if events else event_cursor
+        return Response(response)
 
 
-class DeleteCheckView(APIView):
+class DeleteCheckView(PeerSyncAPIView):
     """Check if a delete is safe (no FK references on this server).
 
     POST /api/sync/delete-check/
@@ -152,8 +175,6 @@ class DeleteCheckView(APIView):
 
     Returns 200 with safe=True/False and list of references.
     """
-    permission_classes = [IsAuthenticated]
-
     def post(self, request):
         serializer = DeleteCheckSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -219,13 +240,11 @@ class DeleteCheckView(APIView):
         )
 
 
-class SyncStatusView(APIView):
+class SyncStatusView(PeerSyncAPIView):
     """Sync health and status dashboard.
 
     GET /api/sync/status/
     """
-    permission_classes = [IsAuthenticated]
-
     def get(self, request):
         from django.utils import timezone as tz
         from datetime import timedelta
@@ -249,17 +268,27 @@ class SyncStatusView(APIView):
             "last_sync_at": SyncCursor.objects.order_by(
                 "-last_synced_at"
             ).values_list("last_synced_at", flat=True).first(),
+            "pending_event_deliveries": SyncPeerDelivery.objects.exclude(
+                status=SyncPeerDelivery.STATUS_ACKNOWLEDGED,
+            ).count(),
+            "failed_event_deliveries": SyncPeerDelivery.objects.filter(
+                status=SyncPeerDelivery.STATUS_FAILED,
+            ).count(),
+            "oldest_pending_event_at": SyncEvent.objects.filter(
+                deliveries__status__in=[
+                    SyncPeerDelivery.STATUS_PENDING,
+                    SyncPeerDelivery.STATUS_FAILED,
+                ],
+            ).order_by("created_at").values_list("created_at", flat=True).first(),
         }
         return Response(SyncStatusSerializer(data).data)
 
 
-class MediaDownloadView(APIView):
+class MediaDownloadView(PeerSyncAPIView):
     """Serve a media file to a peer for media sync.
 
     GET /api/sync/media/download/?path=companies/logos/abc.png
     """
-    permission_classes = [IsAuthenticated]
-
     def get(self, request):
         media_path = request.query_params.get("path")
         if not media_path:
@@ -288,13 +317,11 @@ class MediaDownloadView(APIView):
         )
 
 
-class SyncConflictLogView(APIView):
+class SyncConflictLogView(PeerSyncAPIView):
     """View recent sync conflicts.
 
     GET /api/sync/conflicts/?since=2024-01-01T00:00:00Z&limit=50
     """
-    permission_classes = [IsAuthenticated]
-
     def get(self, request):
         since = request.query_params.get("since")
         try:

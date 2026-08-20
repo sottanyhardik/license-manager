@@ -152,15 +152,15 @@ def test_item_pivot_click_first_norm(logged_in_driver, frontend_url):
     driver = logged_in_driver
     driver.get(f"{frontend_url}/reports/item-pivot")
 
-    # Wait until at least one norm button shows up — the "Available Norms" buttons
-    # use btn-outline-primary / btn-outline-success (or btn-primary / btn-success
-    # if one was already active from a prior cached render).
+    # Wait until at least one canonical norm card shows up.  The report moved
+    # from Bootstrap tab classes to the accessible NormCardGrid; aria-pressed
+    # is its intentional public interaction contract and survives visual
+    # redesigns without turning this browser regression into a CSS test.
     try:
         _wait(driver, timeout=30).until(
             EC.presence_of_element_located((
                 By.CSS_SELECTOR,
-                "button.btn-outline-primary, button.btn-outline-success, "
-                "button.btn-primary, button.btn-success",
+                "button[aria-pressed]",
             ))
         )
     except TimeoutException:
@@ -169,14 +169,12 @@ def test_item_pivot_click_first_norm(logged_in_driver, frontend_url):
         except Exception:
             pass
         raise AssertionError(
-            "No norm buttons appeared. URL: "
+            "No selectable norm cards appeared. URL: "
             f"{driver.current_url}. Body: "
             f"{driver.find_element(By.TAG_NAME, 'body').text[:400]!r}"
         )
 
-    norm_buttons = driver.find_elements(
-        By.CSS_SELECTOR, "button.btn-outline-primary, button.btn-outline-success"
-    )
+    norm_buttons = driver.find_elements(By.CSS_SELECTOR, "button[aria-pressed]")
     if not norm_buttons:
         pytest.skip("no norms returned — skipping click flow")
 
@@ -190,16 +188,21 @@ def test_item_pivot_click_first_norm(logged_in_driver, frontend_url):
     # headers / overlay popups in the SPA's layout).
     driver.execute_script("arguments[0].click();", btn)
 
-    # The report table is rendered inside a card body once data arrives.
-    # Accept any of: a real table, the empty-state card, OR an explicit
-    # "active norm" pill in the page header — all three prove the click
-    # was wired up and the API call returned without crashing.
+    # The active card is immediate proof that the click reached React.  Then
+    # wait for the request lifecycle to settle into one of the canonical
+    # report states: the backend-owned summary, the legacy matrix, or a
+    # no-data state.  This verifies the actual click/load flow without
+    # coupling it to a presentation-only table class.
     try:
+        _wait(driver, timeout=10).until(
+            lambda d: btn.get_attribute("aria-pressed") == "true"
+        )
         _wait(driver, timeout=30).until(
             EC.any_of(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "table.table")),
+                EC.presence_of_element_located((By.XPATH, "//button[normalize-space()='Item Summary']")),
+                EC.presence_of_element_located((By.CSS_SELECTOR, "table")),
                 EC.text_to_be_present_in_element((By.TAG_NAME, "body"), "No licenses found"),
-                EC.text_to_be_present_in_element((By.TAG_NAME, "body"), "Loading"),
+                EC.text_to_be_present_in_element((By.TAG_NAME, "body"), "No licences match the selected filters"),
             )
         )
     except TimeoutException:
@@ -208,7 +211,7 @@ def test_item_pivot_click_first_norm(logged_in_driver, frontend_url):
         except Exception:
             pass
         raise AssertionError(
-            "norm click didn't produce a table, empty-state, or loading indicator. "
+            "norm click didn't complete into a canonical report or empty state. "
             f"URL: {driver.current_url}. "
             f"Body excerpt: {driver.find_element(By.TAG_NAME, 'body').text[:500]!r}"
         )

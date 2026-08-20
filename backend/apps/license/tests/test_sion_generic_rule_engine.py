@@ -178,7 +178,7 @@ class TestGenericRuleResolution:
         # Create rules for this output item
         rule1 = SionPlanningRule.objects.create(
             sion=sion_e126,
-            output_item=output_item_e126,
+            import_item=output_item_e126,
             name="PKO",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -189,7 +189,7 @@ class TestGenericRuleResolution:
         )
         rule2 = SionPlanningRule.objects.create(
             sion=sion_e126,
-            output_item=output_item_e126,
+            import_item=output_item_e126,
             name="OLIVE_OIL",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -210,7 +210,7 @@ class TestGenericRuleResolution:
         """Percentage rules are returned as dict mapping input->percentage."""
         SionPlanningRule.objects.create(
             sion=sion_e126,
-            output_item=output_item_e126,
+            import_item=output_item_e126,
             name="PKO",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -221,7 +221,7 @@ class TestGenericRuleResolution:
         )
         SionPlanningRule.objects.create(
             sion=sion_e126,
-            output_item=output_item_e126,
+            import_item=output_item_e126,
             name="OLIVE_OIL",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -245,7 +245,7 @@ class TestGenericRuleResolution:
         for i, (name, pct) in enumerate([("INPUT_A", "40"), ("INPUT_B", "35"), ("INPUT_C", "25")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_custom_3way,
-                output_item=output_item_custom,
+                import_item=output_item_custom,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
@@ -270,7 +270,7 @@ class TestGenericRuleResolution:
         for i, (name, pct) in enumerate([("INPUT_A", "50"), ("INPUT_B", "30"), ("INPUT_C", "15")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_custom_3way,
-                output_item=output_item_custom,
+                import_item=output_item_custom,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
@@ -347,7 +347,7 @@ class TestGenericNormSupport:
         for i, (name, pct) in enumerate([("CUSTOM_A", "40"), ("CUSTOM_B", "35"), ("CUSTOM_C", "25")], start=1):
             SionPlanningRule.objects.create(
                 sion=sion_custom_3way,
-                output_item=output_item_custom,
+                import_item=output_item_custom,
                 name=name,
                 max_unit_price=Decimal("50.00"),
                 unit="KG",
@@ -369,7 +369,7 @@ class TestGenericNormSupport:
         # E126: 50/50
         SionPlanningRule.objects.create(
             sion=sion_e126,
-            output_item=output_item_e126,
+            import_item=output_item_e126,
             name="PKO",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -380,7 +380,7 @@ class TestGenericNormSupport:
         )
         SionPlanningRule.objects.create(
             sion=sion_e126,
-            output_item=output_item_e126,
+            import_item=output_item_e126,
             name="OLIVE_OIL",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -393,7 +393,7 @@ class TestGenericNormSupport:
         # E132: 60/40
         SionPlanningRule.objects.create(
             sion=sion_e132,
-            output_item=output_item_e132,
+            import_item=output_item_e132,
             name="PKO",
             max_unit_price=Decimal("50.00"),
             unit="KG",
@@ -404,7 +404,7 @@ class TestGenericNormSupport:
         )
         SionPlanningRule.objects.create(
             sion=sion_e132,
-            output_item=output_item_e132,
+            import_item=output_item_e132,
             name="CHEESE",
             max_unit_price=Decimal("50.00"),
             unit="KG",

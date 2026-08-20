@@ -20,8 +20,6 @@ import { useLicensePurchaseProfitReportData } from "./licensePurchaseProfitRepor
 import ExcludeLicenseNumberInput from "./licensePurchaseProfitReport/ExcludeLicenseNumberInput";
 import ItemUtilizationMatrix, { type ItemMatrixCell, type ItemMatrixRow } from "./licensePurchaseProfitReport/ItemUtilizationMatrix";
 
-export { buildLicensePurchaseProfitReportPath } from "./licensePurchaseProfitReport/buildLicensePurchaseProfitReportPath";
-
 /** Parses defensively before formatting/arithmetic — the API emits plain
  * JSON numbers, but this stays resilient to a stray string slipping through. */
 function toNum(value: unknown): number {

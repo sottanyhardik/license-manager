@@ -62,8 +62,14 @@ def _issue(ctx, **overrides):
 
 
 def _consume(response):
-    if getattr(response, "streaming", False):
-        b"".join(response.streaming_content)
+    try:
+        if getattr(response, "streaming", False):
+            b"".join(response.streaming_content)
+    finally:
+        # FileResponse owns the storage handle until its response lifecycle is
+        # closed.  Test clients do not do that automatically after consuming a
+        # stream, unlike the production WSGI/ASGI server.
+        response.close()
 
 
 def test_raw_token_and_storage_path_are_never_persisted_or_exposed(invoice_context):

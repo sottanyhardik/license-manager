@@ -2,7 +2,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-import PDFViewer, { normalizePdfApiPath } from "./PDFViewer";
+import PDFViewer from "./PDFViewer";
+import { normalizePdfApiPath } from "./pdfApiPath";
 import api from "../api/axios";
 
 vi.mock("../api/axios", () => ({

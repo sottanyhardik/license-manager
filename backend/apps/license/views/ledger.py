@@ -14,8 +14,9 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
     Unified ledger view for both DFIA and Incentive licenses.
     Shows available balance for selling licenses.
 
-    SECURITY: access is role-based.  Ledger access does not depend on a user
-    company assignment.
+    SECURITY: ledger data is company-scoped for non-administrators.  A
+    ledger role grants access to the user's own trade history, not to every
+    company's licences.
 
     Returns:
     - DFIA licenses: balance_cif (available CIF $ balance)
@@ -32,23 +33,31 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         return self.ledger_detail(request, pk=pk)
 
     def _scope_company_id(self, request):
-        # ``None`` is the established shared-ledger scope.  Authorization is
-        # provided by ``LicenseLedgerViewPermission``.
-        return None
+        if request.user.is_superuser:
+            return None
+        company = getattr(request.user, "company", None)
+        if company is None:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(detail="User has no company assignment for ledger access.")
+        return company.id
 
     def _validate_filter_company(self, request):
-        """Validate an optional company filter."""
+        """Prevent a company filter from expanding a non-admin user's scope."""
         selected = request.query_params.get('buying_company_id')
         if selected:
-            from rest_framework.exceptions import ValidationError
+            from rest_framework.exceptions import PermissionDenied, ValidationError
             try:
-                int(selected)
+                selected_id = int(selected)
             except (TypeError, ValueError):
                 raise ValidationError(detail='Invalid company parameter.')
+            if not request.user.is_superuser and selected_id != self._scope_company_id(request):
+                raise PermissionDenied(detail='You can only filter your assigned company.')
 
     def _authorized_license(self, request, license_ref, license_type='AUTO'):
         """Resolve a license and apply the same object authorization everywhere."""
-        from rest_framework.exceptions import APIException, ValidationError
+        from django.db.models import Q
+        from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
+        from apps.trade.models import LicenseTrade
 
         requested_type = str(license_type or 'AUTO').strip().upper()
         allowed_types = {'AUTO', 'DFIA', 'INCENTIVE', 'ALL_INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'}
@@ -69,6 +78,24 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
                 status_code = 404
                 default_code = 'not_found'
             raise LicenseNotFound(detail={'error': f'License not found: {license_ref}'})
+
+        # A licence is discoverable by number, so role membership alone must
+        # not make it an IDOR primitive.  Scope direct detail/export access
+        # to a trade involving the caller's company, using the same trade
+        # relationship used by the collection selector.
+        if not request.user.is_superuser:
+            company_id = self._scope_company_id(request)
+            license_filters = (
+                {'lines__sr_number__license_id': license_obj.id}
+                if found_type == 'DFIA'
+                else {'incentive_lines__incentive_license_id': license_obj.id}
+            )
+            if not LicenseTrade.objects.filter(
+                Q(from_company_id=company_id) | Q(to_company_id=company_id),
+                license_type='DFIA' if found_type == 'DFIA' else 'INCENTIVE',
+                **license_filters,
+            ).exists():
+                raise PermissionDenied(detail='You do not have access to this license.')
 
         return found_type, license_obj
 

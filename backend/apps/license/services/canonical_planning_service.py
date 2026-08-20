@@ -268,9 +268,11 @@ class CanonicalPlanningService:
 
         Raises:
             LicenseNotFoundError, CompanyIsolationError, LicenseMismatchError,
-            InvalidPlanInputError, InsufficientQuantityError — all subclasses of
-            ``PlanningError``. Any raise rolls the whole transaction back, so the
-            license's previous plan is left untouched.
+            LicenseNotFoundError, CompanyIsolationError, LicenseMismatchError,
+            and InvalidPlanInputError — all subclasses of ``PlanningError``. Any
+            such raise rolls the whole transaction back, so the license's previous
+            plan is left untouched. A quantity shortage is not an error: the valid
+            portion is persisted and ``capped_qty`` reports the exact shortage.
         """
         normalized = CanonicalPlanningService._normalize_request(items)
         norm_label = (norm_class or "").strip().upper()
@@ -1143,8 +1145,8 @@ class CanonicalPlanningService:
         Two independent caps apply, and they behave differently on purpose:
 
         * Quantity (per plan GROUP) is a HARD cap. Asking for more than the group
-          can supply is a caller error — silently shrinking it would persist a plan
-          the user never asked for. Raises ``InsufficientQuantityError``.
+          can supply persists only the valid portion and reports the exact
+          ``capped_qty``; a shortage must not prevent other valid allocations.
         * CIF (per LICENSE, shared pool) is a WATERFALL. When the pool cannot cover
           ``qty × unit_price`` the effective rate drops so the full quantity is
           still planned at a lower price, and the next item sees the remainder.

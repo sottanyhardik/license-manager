@@ -166,7 +166,7 @@ function UnitValueStrategySection({
   rows,
   onChange,
   disabled = false,
-  errors = {},
+  errors: _errors = {},
 }: UnitValueStrategySectionProps) {
   const addRow = () => {
     onChange([...rows, { import_item: 0, min_unit_price: "0", max_unit_price: "0", preferred_unit_price: "0" }]);
@@ -271,7 +271,7 @@ function PercentageStrategySection({
   rows,
   onChange,
   disabled = false,
-  errors = {},
+  errors: _errors = {},
 }: PercentageStrategySectionProps) {
   const totalPercentage = rows.reduce((sum, row) => sum + parseFloat(row.percentage || "0"), 0);
 

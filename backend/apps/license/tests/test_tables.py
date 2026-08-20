@@ -1,10 +1,6 @@
 from decimal import Decimal
 from types import SimpleNamespace
 
-import pytest
-
-pytest.importorskip("django_tables2")
-
 from apps.license.tables import (
     BalanceCIFColumn,
     ColumnWithThousandsSeparator,

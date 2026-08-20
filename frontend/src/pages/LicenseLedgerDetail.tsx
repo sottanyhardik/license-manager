@@ -19,6 +19,7 @@ import StatCard from '@/components/StatCard';
 import type {
     CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization, LedgerSummary, ProfitState,
 } from '../types/canonicalLedger';
+import { buildLedgerDetailPath, normalizeLedgerDetail } from './licenseLedgerDetailUtils';
 
 // ─── Pure utilities ─────────────────────────────────────────────────────────────
 
@@ -34,33 +35,6 @@ function normalizeText(value: unknown, fallback = ''): string {
 function toFiniteNumber(value: unknown): number {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : 0;
-}
-
-function encodeLedgerPathSegment(value: unknown): string | null {
-    const normalized = normalizeText(value);
-    return normalized ? encodeURIComponent(normalized) : null;
-}
-
-export function buildLedgerDetailPath(id: unknown, companyId?: unknown): string | null {
-    const safeId = encodeLedgerPathSegment(id);
-    if (!safeId) return null;
-    const params = new URLSearchParams();
-    const safeCompanyId = normalizeText(companyId);
-    if (safeCompanyId) params.append('company', safeCompanyId);
-    const queryString = params.toString();
-    return `license-ledger/${safeId}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
-}
-
-export function normalizeLedgerDetail(value: unknown): CanonicalLedgerResponse | null {
-    if (!isRecord(value)) return null;
-
-    // Validate required fields are present
-    if (!value.license_number || !value.license_type) return null;
-
-    // Canonical ledger response should provide all required fields. The double
-    // assertion is required because `Record<string, unknown>` and the canonical
-    // shape do not structurally overlap; the guard above is the runtime check.
-    return value as unknown as CanonicalLedgerResponse;
 }
 
 function getApiErrorMessage(error: unknown, fallback: string): string {

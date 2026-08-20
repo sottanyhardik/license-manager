@@ -194,13 +194,6 @@ export interface LicensesTableProps {
 // Pure helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function fmtInr(val: unknown): string {
-    if (val === null || val === undefined || val === "") return "—";
-    const n = Number(val);
-    if (isNaN(n)) return "—";
-    return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
-
 
 function parseIndianDate(s: string | null | undefined): Date | null {
     if (!s) return null;

@@ -7,18 +7,14 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, FileSpreadsheet, Inbox, Loader2, Package, Tag } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import DataPagination from "@/components/DataPagination";
-import { reportQueryString, type ReportQueryOptions } from "./itemReport/reportQueryString";
 import { useItemReportFilters } from "./itemReport/useItemReportFilters";
 import { useItemReportData } from "./itemReport/useItemReportData";
 import ItemReportFilters from "./itemReport/ItemReportFilters";
 import ItemReportTotalsBar from "./itemReport/ItemReportTotalsBar";
 import ItemReportTable from "./itemReport/ItemReportTable";
+import { buildItemReportPath } from "./reportPaths";
 
-export { normalizeFilterValues, normalizeReportNumber } from "./itemReport/reportQueryString";
 
-export function buildItemReportPath(options: ReportQueryOptions): string {
-    return `reports/item-report/?${reportQueryString(options)}`;
-}
 
 export default function ItemReport() {
     const navigate = useNavigate();

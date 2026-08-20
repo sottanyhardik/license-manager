@@ -23,6 +23,7 @@ from django.utils import timezone
 from .models import MediaSyncTask, SyncPeer
 from .registry import get_entry
 from .mixins import media_sha256
+from .credentials import token_for_peer
 
 logger = logging.getLogger("sync.media")
 
@@ -186,15 +187,23 @@ def download_media_from_peer(peer: SyncPeer, media_path: str) -> bytes | None:
     # query parameter and make the peer serve the wrong file (or 404).
     query = urllib.parse.urlencode({"path": media_path})
     url = f"{peer.base_url.rstrip('/')}/api/sync/media/download/?{query}"
-    req = urllib.request.Request(url)
-    if peer.auth_token:
-        req.add_header("Authorization", f"Bearer {peer.auth_token}")
+    token = token_for_peer(peer.server_id)
+    if token is None:
+        logger.error("Refusing media download from %s: peer credential is not configured", peer.server_id)
+        return None
+    from .mixins import SERVER_ID
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "X-Sync-Server-ID": SERVER_ID,
+    })
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read()
     except (urllib.error.URLError, urllib.error.HTTPError) as exc:
         logger.error("Failed to download media from %s: %s", peer.server_id, exc)
+        if isinstance(exc, urllib.error.HTTPError):
+            exc.close()
         return None
     except Exception:
         # A socket read timeout raises TimeoutError, not URLError.  Anything

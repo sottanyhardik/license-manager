@@ -290,6 +290,8 @@ class ItemHeadSerializer(AuditSerializerMixin):
 class ItemNameSerializer(AuditSerializerMixin):
     group_name = serializers.CharField(source='group.name', read_only=True, required=False)
     sion_norm_class_label = serializers.SerializerMethodField()
+    norms = serializers.PrimaryKeyRelatedField(many=True, queryset=SionNormClassModel.objects.all(), required=False)
+    norm_details = serializers.SerializerMethodField()
 
     class Meta(AuditSerializerMixin.Meta):
         model = ItemNameModel
@@ -302,6 +304,13 @@ class ItemNameSerializer(AuditSerializerMixin):
                 return f"{obj.sion_norm_class.norm_class} - {obj.sion_norm_class.description}"
             return obj.sion_norm_class.norm_class
         return None
+
+    def get_norm_details(self, obj):
+        # This field is the Master List display value, not its editable M2M
+        # payload.  Keep it human-readable so the table shows ``E1, E5``
+        # rather than JSON objects/descriptions.  ``norms`` remains the
+        # structured writable list of IDs for the API and editor.
+        return ", ".join(obj.norms.order_by("norm_class").values_list("norm_class", flat=True))
 
 
 # ---- Transfer Letter ----

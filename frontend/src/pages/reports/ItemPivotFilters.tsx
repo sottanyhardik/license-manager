@@ -3,6 +3,7 @@ import Select from "react-select";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import DateRangeFilter from "../../components/DateRangeFilter";
 import { Building2, CalendarCheck, CalendarRange, DollarSign, Filter, MinusCircle, ShoppingCart, SlidersHorizontal, XCircle } from "lucide-react";
+import { normalizeMinBalance } from "./itemPivotFilterHelpers";
 
 type SelectOption = {
     value: string;
@@ -40,11 +41,6 @@ const BALANCE_OPTIONS = [
     { value: 5000, label: "Rs. 5,000" },
     { value: 10000, label: "Rs. 10,000" },
 ] as const;
-
-export function normalizeMinBalance(value: unknown, fallback = 200): number {
-    const parsed = Number.parseInt(String(value), 10);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 /** Item Pivot report filter card — extracted verbatim from ItemPivotReport. */
 export default function ItemPivotFilters({

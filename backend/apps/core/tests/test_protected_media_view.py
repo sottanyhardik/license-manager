@@ -50,6 +50,33 @@ def _client_for(user):
     return client
 
 
+def _assert_get_status(client, path, expected_status):
+    """Assert a response and close streamed files just as a WSGI server does.
+
+    ``FileResponse`` owns its open file until ``close()``.  APIClient does not
+    consume/close a streaming response automatically, but calling ``close`` on
+    an ordinary test response dispatches Django's request-finished hooks and
+    can close the active transactional connection.  Only streamed responses
+    need lifecycle handling here.
+    """
+    response = client.get(path)
+    assert response.status_code == expected_status
+    if getattr(response, "streaming", False):
+        try:
+            for _chunk in response.streaming_content:
+                pass
+        finally:
+            # ``HttpResponse.close()`` emits request_finished; this project's
+            # connection lifecycle receiver closes the transactional test
+            # connection in that signal.  Close only the FileResponse-owned
+            # file handle after consuming it, which is the resource under
+            # test and leaves the request connection usable for the next
+            # authorization assertion.
+            file_handle = getattr(response, "file_to_stream", None)
+            if file_handle is not None:
+                file_handle.close()
+
+
 def _write(media_root, rel_path, content=b"%PDF-1.4 fake\n"):
     full = media_root / rel_path
     full.parent.mkdir(parents=True, exist_ok=True)
@@ -78,15 +105,15 @@ class TestLicenseDocumentAccess:
         user = _make_user("incentive_only", roles=["INCENTIVE_LICENSE_VIEWER"])
         client = _client_for(user)
 
-        assert client.get("/api/licenses/").status_code == 403
-        assert client.get(f"/api/media/{rel}").status_code == 404
+        _assert_get_status(client, "/api/licenses/", 403)
+        _assert_get_status(client, f"/api/media/{rel}", 404)
 
     def test_license_viewer_can_still_download(self, dev_media):
         rel = self._make_doc(dev_media)
         user = _make_user("license_viewer", roles=["LICENSE_VIEWER"])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 200
+        _assert_get_status(client, f"/api/media/{rel}", 200)
 
     def test_superuser_can_always_download(self, dev_media):
         rel = self._make_doc(dev_media)
@@ -95,7 +122,7 @@ class TestLicenseDocumentAccess:
         admin = User.objects.create_superuser(username="admin1", email="admin1@example.com", password="x")
         client = _client_for(admin)
 
-        assert client.get(f"/api/media/{rel}").status_code == 200
+        _assert_get_status(client, f"/api/media/{rel}", 200)
 
 
 class TestBillOfEntryDocumentAccess:
@@ -117,14 +144,14 @@ class TestBillOfEntryDocumentAccess:
         user = _make_user("license_only", roles=["LICENSE_VIEWER"])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 404
+        _assert_get_status(client, f"/api/media/{rel}", 404)
 
     def test_boe_viewer_can_download(self, dev_media):
         rel = self._make_doc(dev_media)
         user = _make_user("boe_viewer", roles=["BOE_VIEWER"])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 200
+        _assert_get_status(client, f"/api/media/{rel}", 200)
 
 
 class TestTradeDocumentAccess:
@@ -148,14 +175,14 @@ class TestTradeDocumentAccess:
         user = _make_user("license_only2", roles=["LICENSE_VIEWER"])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 404
+        _assert_get_status(client, f"/api/media/{rel}", 404)
 
     def test_trade_viewer_can_download(self, dev_media):
         rel = self._make_doc(dev_media)
         user = _make_user("trade_viewer", roles=["TRADE_VIEWER"])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 200
+        _assert_get_status(client, f"/api/media/{rel}", 200)
 
 
 class TestUnaffectedAndOrphanPaths:
@@ -166,7 +193,7 @@ class TestUnaffectedAndOrphanPaths:
         user = _make_user("no_roles_at_all", roles=[])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 200
+        _assert_get_status(client, f"/api/media/{rel}", 200)
 
     def test_orphaned_file_under_protected_prefix_is_blocked(self, dev_media):
         # File left on disk with no owning LicenseDocumentModel row (e.g. the
@@ -176,7 +203,7 @@ class TestUnaffectedAndOrphanPaths:
         user = _make_user("license_manager_orphan", roles=["LICENSE_MANAGER"])
         client = _client_for(user)
 
-        assert client.get(f"/api/media/{rel}").status_code == 404
+        _assert_get_status(client, f"/api/media/{rel}", 404)
 
 
 class TestRegressionScopeBeyondTheOriginalLicense:
@@ -206,13 +233,13 @@ class TestRegressionScopeBeyondTheOriginalLicense:
 
         blocked_user = _make_user("cross_company_blocked", roles=["INCENTIVE_LICENSE_VIEWER"])
         blocked_client = _client_for(blocked_user)
-        assert blocked_client.get(f"/api/media/{rel_a}").status_code == 404
-        assert blocked_client.get(f"/api/media/{rel_b}").status_code == 404
+        _assert_get_status(blocked_client, f"/api/media/{rel_a}", 404)
+        _assert_get_status(blocked_client, f"/api/media/{rel_b}", 404)
 
         allowed_user = _make_user("cross_company_allowed", roles=["LICENSE_VIEWER"])
         allowed_client = _client_for(allowed_user)
-        assert allowed_client.get(f"/api/media/{rel_a}").status_code == 200
-        assert allowed_client.get(f"/api/media/{rel_b}").status_code == 200
+        _assert_get_status(allowed_client, f"/api/media/{rel_a}", 200)
+        _assert_get_status(allowed_client, f"/api/media/{rel_b}", 200)
 
     def test_unaffected_license_document_types_all_gated_the_same_way(self, dev_media):
         # LicenseDocumentModel.type varies (LICENSE COPY / TRANSFER LETTER /
@@ -229,12 +256,12 @@ class TestRegressionScopeBeyondTheOriginalLicense:
         blocked_user = _make_user("doc_type_blocked", roles=["INCENTIVE_LICENSE_VIEWER"])
         blocked_client = _client_for(blocked_user)
         for rel in (rel_copy, rel_tl, rel_other):
-            assert blocked_client.get(f"/api/media/{rel}").status_code == 404
+            _assert_get_status(blocked_client, f"/api/media/{rel}", 404)
 
         allowed_user = _make_user("doc_type_allowed", roles=["LICENSE_VIEWER"])
         allowed_client = _client_for(allowed_user)
         for rel in (rel_copy, rel_tl, rel_other):
-            assert allowed_client.get(f"/api/media/{rel}").status_code == 200
+            _assert_get_status(allowed_client, f"/api/media/{rel}", 200)
 
     def test_unaffected_trade_license_types_dfia_and_incentive_gated_the_same_way(self, dev_media):
         # LicenseTrade.license_type (DFIA vs INCENTIVE) is a different axis
@@ -266,13 +293,13 @@ class TestRegressionScopeBeyondTheOriginalLicense:
 
         blocked_user = _make_user("trade_norm_blocked", roles=["LICENSE_VIEWER"])
         blocked_client = _client_for(blocked_user)
-        assert blocked_client.get(f"/api/media/{rel_dfia}").status_code == 404
-        assert blocked_client.get(f"/api/media/{rel_incentive}").status_code == 404
+        _assert_get_status(blocked_client, f"/api/media/{rel_dfia}", 404)
+        _assert_get_status(blocked_client, f"/api/media/{rel_incentive}", 404)
 
         allowed_user = _make_user("trade_norm_allowed", roles=["TRADE_VIEWER"])
         allowed_client = _client_for(allowed_user)
-        assert allowed_client.get(f"/api/media/{rel_dfia}").status_code == 200
-        assert allowed_client.get(f"/api/media/{rel_incentive}").status_code == 200
+        _assert_get_status(allowed_client, f"/api/media/{rel_dfia}", 200)
+        _assert_get_status(allowed_client, f"/api/media/{rel_incentive}", 200)
 
     def test_unaffected_date_ranges_old_and_future_boes_gated_the_same_way(self, dev_media):
         # BillOfEntryModel.bill_of_entry_date spans a very old date and a
@@ -294,13 +321,13 @@ class TestRegressionScopeBeyondTheOriginalLicense:
 
         blocked_user = _make_user("boe_date_blocked", roles=["LICENSE_VIEWER"])
         blocked_client = _client_for(blocked_user)
-        assert blocked_client.get(f"/api/media/{rel_old}").status_code == 404
-        assert blocked_client.get(f"/api/media/{rel_future}").status_code == 404
+        _assert_get_status(blocked_client, f"/api/media/{rel_old}", 404)
+        _assert_get_status(blocked_client, f"/api/media/{rel_future}", 404)
 
         allowed_user = _make_user("boe_date_allowed", roles=["BOE_VIEWER"])
         allowed_client = _client_for(allowed_user)
-        assert allowed_client.get(f"/api/media/{rel_old}").status_code == 200
-        assert allowed_client.get(f"/api/media/{rel_future}").status_code == 200
+        _assert_get_status(allowed_client, f"/api/media/{rel_old}", 200)
+        _assert_get_status(allowed_client, f"/api/media/{rel_future}", 200)
 
     def test_unaffected_license_date_ranges_gated_the_same_way(self, dev_media):
         # LicenseDetailsModel.license_date spans an old and a recent licence;
@@ -318,10 +345,10 @@ class TestRegressionScopeBeyondTheOriginalLicense:
 
         blocked_user = _make_user("license_date_blocked", roles=["INCENTIVE_LICENSE_VIEWER"])
         blocked_client = _client_for(blocked_user)
-        assert blocked_client.get(f"/api/media/{rel_old}").status_code == 404
-        assert blocked_client.get(f"/api/media/{rel_recent}").status_code == 404
+        _assert_get_status(blocked_client, f"/api/media/{rel_old}", 404)
+        _assert_get_status(blocked_client, f"/api/media/{rel_recent}", 404)
 
         allowed_user = _make_user("license_date_allowed", roles=["LICENSE_VIEWER"])
         allowed_client = _client_for(allowed_user)
-        assert allowed_client.get(f"/api/media/{rel_old}").status_code == 200
-        assert allowed_client.get(f"/api/media/{rel_recent}").status_code == 200
+        _assert_get_status(allowed_client, f"/api/media/{rel_old}", 200)
+        _assert_get_status(allowed_client, f"/api/media/{rel_recent}", 200)

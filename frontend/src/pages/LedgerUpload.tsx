@@ -61,7 +61,7 @@ function normalizeText(value: unknown, fallback: string): string {
     return normalized || fallback;
 }
 
-export function normalizeLedgerFileTasks(value: unknown): LedgerFileTask[] {
+function normalizeLedgerFileTasks(value: unknown): LedgerFileTask[] {
     if (!Array.isArray(value)) {
         return [];
     }
@@ -99,7 +99,7 @@ export function normalizeLedgerFileTasks(value: unknown): LedgerFileTask[] {
     });
 }
 
-export function normalizeLedgerUploadErrors(value: unknown): LedgerUploadError[] {
+function normalizeLedgerUploadErrors(value: unknown): LedgerUploadError[] {
     if (!Array.isArray(value)) {
         return [];
     }
@@ -115,7 +115,7 @@ export function normalizeLedgerUploadErrors(value: unknown): LedgerUploadError[]
     });
 }
 
-export function buildAsyncUploadErrorMessage(errors: LedgerUploadError[]): string {
+function buildAsyncUploadErrorMessage(errors: LedgerUploadError[]): string {
     const shownErrors = errors
         .slice(0, MAX_ERROR_DETAILS)
         .map((error) => `${error.file}: ${error.error}`)
@@ -125,7 +125,7 @@ export function buildAsyncUploadErrorMessage(errors: LedgerUploadError[]): strin
     return `${errors.length} file(s) failed: ${shownErrors}${remaining}`;
 }
 
-export function getLedgerUploadErrorMessage(error: unknown): string {
+function getLedgerUploadErrorMessage(error: unknown): string {
     if (isRecord(error) && isRecord(error.response) && isRecord(error.response.data)) {
         const data = error.response.data;
         const detail = data.error ?? data.detail ?? data.message;
@@ -140,7 +140,7 @@ export function getLedgerUploadErrorMessage(error: unknown): string {
     return "Upload failed. Please try again.";
 }
 
-export function normalizeProgressValue(value: unknown): number {
+function normalizeProgressValue(value: unknown): number {
     const progress = Number(value);
     if (!Number.isFinite(progress)) {
         return 0;

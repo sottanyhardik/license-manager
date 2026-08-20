@@ -46,9 +46,15 @@ class TestLicense3411008090Shortage:
         config = {
             "actions": [
                 {
-                    "action_type": "SPLIT_BY_PERCENTAGE",
+                    "action_type": "MATCH",
                     "priority": 1,
+                    "config": {"rules": []},
+                },
+                {
+                    "action_type": "SPLIT",
+                    "priority": 2,
                     "config": {
+                        "algorithm": "SPLIT_BY_PERCENTAGE",
                         "category": "OIL_IMPORTS",
                         "rows": [
                             {
@@ -66,9 +72,9 @@ class TestLicense3411008090Shortage:
                 },
                 {
                     "action_type": "ALLOCATE",
-                    "priority": 2,
+                    "priority": 3,
                     "config": {
-                        "algorithm": "WATERFALL",
+                        "algorithm": "SEQUENTIAL_CIF_WATERFALL",
                         "order": ["PKO", "OLIVE"],
                     }
                 }
@@ -141,7 +147,7 @@ class TestLicense3411008090Shortage:
                     "action_type": "ALLOCATE",
                     "priority": 2,
                     "config": {
-                        "algorithm": "WATERFALL",
+                        "algorithm": "SEQUENTIAL_CIF_WATERFALL",
                         "order": ["PKO", "OLIVE"],
                     }
                 }
@@ -215,11 +221,15 @@ class TestShortageDoesNotAffectOtherInputs:
                     "action_type": "ALLOCATE",
                     "priority": 2,
                     "config": {
-                        "algorithm": "WATERFALL",
+                        "algorithm": "SEQUENTIAL_CIF_WATERFALL",
                         "order": ["PKO", "OLIVE"],
                     }
                 }
-            ]
+            ],
+            "mappings": [
+                {"source_key": "PKO", "output_key": "PKO", "rate": "10.00"},
+                {"source_key": "OLIVE", "output_key": "OLIVE", "rate": "10.00"},
+            ],
         }
 
         records = [
@@ -267,11 +277,14 @@ class TestActualPersistenceNotTargeted:
                     "action_type": "ALLOCATE",
                     "priority": 2,
                     "config": {
-                        "algorithm": "WATERFALL",
+                        "algorithm": "SEQUENTIAL_CIF_WATERFALL",
                         "order": ["TEST"],
                     }
                 }
-            ]
+            ],
+            "mappings": [
+                {"source_key": "TEST", "output_key": "TEST", "rate": "1.00"},
+            ],
         }
 
         records = [

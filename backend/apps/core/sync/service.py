@@ -16,6 +16,9 @@ All operations are idempotent: replaying the same event produces no change.
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,10 +28,57 @@ from django.db.models import ProtectedError
 from django.utils import timezone
 
 from apps.core.models import MasterChange
+from .models import SyncEvent, SyncInboxEvent, SyncPeer, SyncPeerDelivery
 from .registry import get_entry, get_all_entries, MasterSyncEntry
-from .mixins import SERVER_ID
+from .mixins import SERVER_ID, suppress_local_outbox
 
 logger = logging.getLogger("sync.service")
+
+
+def _json_payload(value: Any) -> dict:
+    """Freeze a transport payload into JSON before writing the event ledger."""
+    return json.loads(json.dumps(value, default=str, sort_keys=True))
+
+
+def _stable_event_id(event: dict[str, Any]) -> uuid.UUID:
+    """Legacy peers have no event id; derive a deterministic replay key."""
+    material = json.dumps({
+        "source": event.get("source_server", "unknown"),
+        "model": event.get("model_label"), "op": event.get("op"),
+        "version": event.get("source_version", 1), "data": event.get("data", {}),
+    }, default=str, sort_keys=True, separators=(",", ":"))
+    return uuid.uuid5(uuid.UUID("6ecbcc30-d9c1-4c54-8b0e-b5f471403a4e"), material)
+
+
+def record_sync_event(event: dict[str, Any], *, natural_key: str | None = None) -> SyncEvent:
+    """Persist an immutable event snapshot once, suitable for replay/forwarding."""
+    entry = get_entry(event["model_label"])
+    nk = natural_key if natural_key is not None else _nk_string(entry, event["data"])
+    raw_event_id = event.get("event_id")
+    try:
+        event_id = uuid.UUID(str(raw_event_id)) if raw_event_id else _stable_event_id(event)
+    except (TypeError, ValueError):
+        event_id = _stable_event_id(event)
+    defaults = {
+        "source_server": event.get("source_server", SERVER_ID),
+        "model_label": event["model_label"], "natural_key": nk,
+        "op": event["op"], "source_version": event.get("source_version", 1),
+        "payload": _json_payload(event),
+        "occurred_at": event.get("at") or timezone.now(),
+    }
+    stored, created = SyncEvent.objects.get_or_create(event_id=event_id, defaults=defaults)
+    if created:
+        # Materialise delivery obligations at the same transaction boundary as
+        # the immutable event.  A broker/network outage cannot make an event
+        # invisible to recovery, and the origin peer is excluded to avoid
+        # needless echoing of its own immutable event.
+        SyncPeerDelivery.objects.bulk_create([
+            SyncPeerDelivery(peer=peer, event=stored)
+            for peer in SyncPeer.objects.filter(is_active=True).exclude(
+                server_id=stored.source_server,
+            )
+        ], ignore_conflicts=True)
+    return stored
 
 
 # ── Result types ────────────────────────────────────────────────────────
@@ -267,8 +317,8 @@ def apply_create_or_update(
                 existing.origin_server = source_server
                 existing.synced_at = timezone.now()
                 update_fields.extend(["sync_version", "origin_server", "synced_at"])
-
-                existing.save(update_fields=update_fields)
+                with suppress_local_outbox():
+                    existing.save(update_fields=update_fields)
 
                 # Record change
                 MasterChange.objects.create(
@@ -299,7 +349,8 @@ def apply_create_or_update(
                 create_data["synced_at"] = timezone.now()
 
                 instance = Model(**create_data)
-                instance.save()
+                with suppress_local_outbox():
+                    instance.save()
 
                 MasterChange.objects.create(
                     model_label=entry.model_label,
@@ -407,9 +458,10 @@ def apply_delete(
             existing.sync_version = source_version
             existing.origin_server = source_server
             existing.synced_at = timezone.now()
-            existing.save(update_fields=[
-                "is_tombstone", "sync_version", "origin_server", "synced_at",
-            ])
+            with suppress_local_outbox():
+                existing.save(update_fields=[
+                    "is_tombstone", "sync_version", "origin_server", "synced_at",
+                ])
 
             MasterChange.objects.create(
                 model_label=entry.model_label,
@@ -468,11 +520,11 @@ def apply_sync_event(event: dict[str, Any]) -> SyncResult:
             error=f"Unknown model_label: {model_label}",
         )
 
-    if op in ("create", "update"):
-        return apply_create_or_update(entry, data, source_server, source_version)
-    elif op == "delete":
-        return apply_delete(entry, data, source_server, source_version)
-    else:
+    with suppress_local_outbox():
+        if op in ("create", "update"):
+            return apply_create_or_update(entry, data, source_server, source_version)
+        elif op == "delete":
+            return apply_delete(entry, data, source_server, source_version)
         return SyncResult(
             model_label=model_label,
             natural_key="",
@@ -498,7 +550,42 @@ def apply_sync_batch(events: list[dict[str, Any]]) -> SyncBatchResult:
 
     result = SyncBatchResult()
     for event in sorted_events:
-        r = apply_sync_event(event)
+        # Inbox insertion is the idempotency boundary.  It is deliberately
+        # before the domain write and inside one atomic block: a process crash
+        # cannot leave an acknowledgement without a recorded event outcome.
+        source = event.get("source_server", "unknown")
+        event_id = event.get("event_id") or _stable_event_id(event)
+        try:
+            event_uuid = uuid.UUID(str(event_id))
+        except (TypeError, ValueError):
+            event_uuid = _stable_event_id(event)
+        with transaction.atomic():
+            inbox, created = SyncInboxEvent.objects.get_or_create(
+                source_server=source, event_id=event_uuid,
+                defaults={"result": "received"},
+            )
+            if not created:
+                if inbox.result == "failed":
+                    r = SyncResult(
+                        model_label=event.get("model_label", ""), natural_key="",
+                        op=event.get("op", "error"), success=False, error=inbox.error,
+                    )
+                else:
+                    r = SyncResult(
+                        model_label=event.get("model_label", ""), natural_key="",
+                        op="noop",
+                    )
+            else:
+                event["event_id"] = str(event_uuid)
+                r = apply_sync_event(event)
+                inbox.result = "applied" if r.success else "failed"
+                inbox.error = r.error or r.conflict_detail
+                inbox.applied_at = timezone.now() if r.success else None
+                inbox.save(update_fields=["result", "error", "applied_at"])
+                if r.success:
+                    # Store the original immutable source payload, never a
+                    # reconstruction from current row state.
+                    record_sync_event(event, natural_key=r.natural_key)
         if not r.success:
             result.errors.append(r)
         elif r.op == "noop":
@@ -511,12 +598,26 @@ def apply_sync_batch(events: list[dict[str, Any]]) -> SyncBatchResult:
 
 # ── Delta pull (offline recovery) ──────────────────────────────────────
 
-def get_changes_since(since: str | None = None) -> list[dict[str, Any]]:
+def get_changes_since(since: str | None = None, *, cursor: int | None = None) -> list[dict[str, Any]]:
     """Return all MasterChange records since the given ISO timestamp.
 
     Used by peers to pull missed changes after being offline.
     Returns a list of event dicts ready for `apply_sync_batch`.
     """
+    # New peers consume the immutable integer cursor.  Timestamp mode remains
+    # a transition-only compatibility feed for older installations.
+    if cursor is not None:
+        events = []
+        for event in SyncEvent.objects.filter(id__gt=cursor).order_by("id"):
+            payload = dict(event.payload)
+            payload["event_id"] = str(event.event_id)
+            payload["cursor"] = event.id
+            payload.setdefault("source_server", event.source_server)
+            payload.setdefault("source_version", event.source_version)
+            payload.setdefault("at", event.occurred_at.isoformat())
+            events.append(payload)
+        return events
+
     qs = MasterChange.objects.all()
     if since:
         from django.utils.dateparse import parse_datetime
@@ -584,8 +685,12 @@ def _serialize_instance(instance: models.Model, entry: MasterSyncEntry) -> dict:
     """Serialize a model instance to a dict suitable for sync transport."""
     data = {}
     for f in instance._meta.get_fields():
-        if not hasattr(f, "attname"):
-            continue  # skip reverse relations
+        # The transport is deliberately scalar/FK only.  Reverse relations and
+        # M2M managers are local query interfaces, not JSON values and not part
+        # of this model's canonical payload.  In particular, ItemNameModel's
+        # additive ``norms`` M2M must not leak a ManyRelatedManager into pull.
+        if not getattr(f, "concrete", False) or getattr(f, "many_to_many", False):
+            continue
         name = f.name
         if name in ("id", "pk"):
             continue

@@ -32,6 +32,10 @@ def test_percentage_group_uses_exact_aggregate_quantity_and_emits_zero_member():
     assert pko["percentage_target_qty"] == Decimal("311035.656")
     assert olive["remaining_qty"] == Decimal("354798.140")
     assert pko["remaining_qty"] == Decimal("0.000")
-    assert olive["remaining_cif"] == Decimal("1773990.70")
+    # The solver's CIF target pool is the authoritative live balance
+    # (1,797,384.83), not a second full 60%-of-quantity valuation.  Once the
+    # PKO target and actual use are reconciled, the olive member may use the
+    # residual 898,734.01 only.
+    assert olive["remaining_cif"] == Decimal("898734.01")
     assert pko["remaining_cif"] == Decimal("0.00")
-    assert result["unallocated_cif"] == Decimal("23394.13")
+    assert result["unallocated_cif"] == Decimal("898650.82")

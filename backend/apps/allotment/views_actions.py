@@ -832,6 +832,14 @@ class AllotmentActionViewSet(ViewSet):
                 from apps.license.services.plan_enforcement import plan_status_for
                 plan_status = plan_status_for(license_item)
                 if plan_status is not None:
+                    if plan_status["remaining_quantity"] <= 0 or plan_status["remaining_cif_fc"] <= 0:
+                        errors.append({
+                            'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
+                            'error': 'No planned quantity or value is available for the selected item.',
+                            'max_qty': str(max(plan_status["remaining_quantity"], Decimal('0.000'))),
+                            'max_cif': str(max(plan_status["remaining_cif_fc"], Decimal('0.00'))),
+                        })
+                        continue
                     exceeds_qty = (plan_status["used_quantity"] + qty) > plan_status["original_quantity"]
                     exceeds_val = (plan_status["used_cif_fc"] + cif_fc) > plan_status["original_cif_fc"]
                     if exceeds_qty or exceeds_val:
@@ -854,6 +862,13 @@ class AllotmentActionViewSet(ViewSet):
                             'requested_cif_fc': str(cif_fc),
                         })
                         continue
+                else:
+                    errors.append({
+                        'item_id': item_id, 'code': 'NO_ACTIVE_PLAN',
+                        'error': 'No active plan is available for the selected item.',
+                        'max_qty': '0.000', 'max_cif': '0.00',
+                    })
+                    continue
                 # ------------------------------------------------------------
 
                 # Check if this item is already allocated to this allotment

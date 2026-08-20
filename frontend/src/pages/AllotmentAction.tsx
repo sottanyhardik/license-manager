@@ -584,6 +584,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const handleConfirmAllot = (item) => {
+        const max = calculateMaxAllocation(item);
+        if (max.qty <= 0 || max.value <= 0) {
+            const message = item.message || 'No planned quantity or value is available for the selected item.';
+            setError(message);
+            toast.error(message);
+            return;
+        }
         const allocation = allocationData[item.id];
         if (!allocation || parseFloat(allocation.qty) <= 0) {
             toast.error("Please enter a valid quantity");
@@ -1085,7 +1092,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 const cifFc = parseFloat(item.balance_cif_fc || "0");
                                                 const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
                                                 const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
-                                                const isBlocked = Boolean(item.import_item_id || item.has_active_plan) && (maxAllocation.qty <= 0 || maxAllocation.value <= 0);
+                                                const isBlocked = Boolean(item.import_item_id || item.has_active_plan || item.has_plan) && (maxAllocation.qty <= 0 || maxAllocation.value <= 0);
 
                                                 return (
                                                     <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">

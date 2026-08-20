@@ -17,6 +17,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.viewsets import ViewSet
 
 from apps.accounts.permissions import AllotmentPermission
@@ -25,6 +26,11 @@ from apps.core.utils.exceptions import api_error, _safe_int
 from apps.allotment.serializers import AllotmentSerializer
 from apps.license.models import LicenseImportItemsModel
 from apps.license.serializers import LicenseImportItemSerializer
+
+
+class DebitBasis:
+    PLAN = "PLAN"
+    ACTUAL = "ACTUAL"
 
 
 class AllotmentActionViewSet(ViewSet):
@@ -79,9 +85,24 @@ class AllotmentActionViewSet(ViewSet):
         # this well-tested Actual-mode path completely untouched, which is the
         # strongest guarantee that "Debit Based On = Actual" behaves exactly as
         # it always has.
-        debit_based_on = (request.query_params.get('debit_based_on') or 'PLAN').strip().lower()
-        if debit_based_on == 'plan':
+        debit_based_on = (request.query_params.get('debit_based_on') or DebitBasis.PLAN).strip().upper()
+        if debit_based_on == DebitBasis.PLAN:
+            requested_target = (
+                request.query_params.get('planning_target_item_id')
+                or request.query_params.get('item_id')
+                or request.query_params.get('item_names')
+            )
+            if allotment.planning_target_item_id and (
+                not requested_target
+                or str(requested_target).split(',')[0] != str(allotment.planning_target_item_id)
+            ):
+                raise ValidationError({
+                    'code': 'PLANNING_TARGET_MISMATCH',
+                    'message': 'The selected item does not match the allotment Planning Target Item.',
+                })
             return self._available_licenses_plan_mode(request, allotment)
+        if debit_based_on != DebitBasis.ACTUAL:
+            raise ValidationError({'code': 'INVALID_DEBIT_BASIS', 'message': 'Invalid debit basis.'})
 
         # Get query parameters for filtering
         search = request.query_params.get('search', '')
@@ -99,7 +120,7 @@ class AllotmentActionViewSet(ViewSet):
         is_restricted = request.query_params.get('is_restricted', '')
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
-        item_names = request.query_params.get('item_names', '')
+        item_names = request.query_params.get('item_id', '') or request.query_params.get('item_names', '')
         expiry_date_from = request.query_params.get('expiry_date_from', '')
         expiry_date_to = request.query_params.get('expiry_date_to', '')
 
@@ -247,7 +268,10 @@ class AllotmentActionViewSet(ViewSet):
             if item_name_list:
                 queryset = queryset.filter(items__id__in=item_name_list).distinct()
 
-        # Apply available value filters — against the LIVE computed value
+        # Actual mode's value range filters use the established live
+        # condition-pool value. Plan balances are deliberately absent from
+        # this branch; base eligibility remains the established positive raw
+        # quantity query above.
         # (available_value_calculated, via the batched available_value_
         # bulk_map — same source LicenseImportItemSerializer.get_available_
         # value uses for display), never the stored `available_value`
@@ -277,17 +301,15 @@ class AllotmentActionViewSet(ViewSet):
                 except (ValueError, TypeError, InvalidOperation):
                     max_value = None
 
-            if min_value is not None or max_value is not None:
-                from apps.license.services.condition_pool import available_value_bulk_map
-
-                candidates = list(queryset)
-                value_map = available_value_bulk_map(candidates)
-                matching_ids = [
-                    item.id for item in candidates
-                    if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
-                    and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
-                ]
-                queryset = queryset.filter(id__in=matching_ids)
+            from apps.license.services.condition_pool import available_value_bulk_map
+            candidates = list(queryset)
+            value_map = available_value_bulk_map(candidates)
+            matching_ids = [
+                item.id for item in candidates
+                if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
+                and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
+            ]
+            queryset = queryset.filter(id__in=matching_ids)
 
         # Pagination
         page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
@@ -436,11 +458,12 @@ class AllotmentActionViewSet(ViewSet):
         is_restricted = request.query_params.get('is_restricted', '')
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
-        item_names = request.query_params.get('item_names', '')
+        item_names = request.query_params.get('planning_target_item_id', '') or request.query_params.get('item_id', '') or request.query_params.get('item_names', '')
         # Deprecated alias: normalize external callers into the sole item filter.
         planned_item_names = request.query_params.get('planned_item_names', '')
         if not item_names and planned_item_names:
             item_names = planned_item_names
+        requested_sion = request.query_params.get('sion', '')
         expiry_date_from = request.query_params.get('expiry_date_from', '')
         expiry_date_to = request.query_params.get('expiry_date_to', '')
 
@@ -560,6 +583,11 @@ class AllotmentActionViewSet(ViewSet):
             item_name_list = [int(i.strip()) for i in item_names.split(',') if i.strip().isdigit()]
             if item_name_list:
                 queryset = queryset.filter(item_name_id__in=item_name_list)
+
+        if requested_sion:
+            queryset = queryset.filter(
+                import_item__license__export_license__norm_class__norm_class=requested_sion
+            )
 
         # Planned Item Name filter — the new filter this Plan-mode branch
         # exists for: narrows to plan lines tagged with one of the selected
@@ -688,7 +716,33 @@ class AllotmentActionViewSet(ViewSet):
         """
         allotment = get_object_or_404(AllotmentModel, pk=pk)
         allocations = request.data.get('allocations', [])
-
+        # Accept the legacy per-line debit field emitted by the mounted UI as
+        # well as the explicit top-level dual-mode contract.  Normalize once
+        # before validation; never infer a basis from item IDs or balances.
+        first_allocation = allocations[0] if allocations else {}
+        explicit_search_mode = (
+            request.data.get('search_mode')
+            or request.data.get('debit_based_on')
+            or first_allocation.get('search_mode')
+            or first_allocation.get('debit_based_on')
+        )
+        # Preserve the pre-dual-mode endpoint contract for integrations that
+        # have not yet sent identity/mode fields: a legacy plan_line_id is a
+        # Plan debit; every other legacy allocation is an Actual debit.  New
+        # clients must send explicit SearchMode and AllocationBasis.
+        legacy_basis = DebitBasis.PLAN if first_allocation.get('plan_line_id') else DebitBasis.ACTUAL
+        search_mode = str(explicit_search_mode or legacy_basis).strip().upper()
+        allocation_basis = str(
+            request.data.get('allocation_basis')
+            or first_allocation.get('allocation_basis')
+            or (search_mode if explicit_search_mode else legacy_basis)
+        ).strip().upper()
+        if search_mode not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
+            return Response({'code': 'INVALID_DEBIT_BASIS', 'error': 'Invalid debit basis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if allocation_basis not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
+            return Response({'code': 'INVALID_ALLOCATION_BASIS', 'error': 'Invalid allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if search_mode == DebitBasis.PLAN and allocation_basis != DebitBasis.PLAN:
+            return Response({'code': 'PLAN_MODE_REQUIRES_PLAN_BASIS', 'error': 'Plan mode requires the Plan allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
         if not allocations:
             return Response(
                 {'error': 'No allocations provided'},
@@ -711,13 +765,37 @@ class AllotmentActionViewSet(ViewSet):
                 # allocations cannot both pass the plan/availability cap.
                 license_item = LicenseImportItemsModel.objects.select_for_update().get(id=item_id)
 
+                if search_mode == DebitBasis.ACTUAL and explicit_search_mode:
+                    actual_item_id = allocation.get('actual_item_id') or request.data.get('actual_item_id')
+                    if not actual_item_id or not license_item.items.filter(id=actual_item_id).exists():
+                        errors.append({
+                            'item_id': item_id,
+                            'code': 'ACTUAL_ITEM_MISMATCH',
+                            'error': 'The selected item does not match this actual licence item.',
+                        })
+                        continue
+
                 # Plan-mode allocations name an exact canonical plan child.
                 # Lock and validate it before consulting raw licence capacity:
                 # raw availability is informational and can never revive a
                 # fully consumed (or absent) planned balance.
                 plan_line_id = allocation.get('plan_line_id')
                 locked_plan_line = None
-                if plan_line_id:
+                if allocation_basis == DebitBasis.ACTUAL and plan_line_id:
+                    errors.append({
+                        'item_id': item_id,
+                        'code': 'ACTUAL_ITEM_MISMATCH',
+                        'error': 'Actual allocations must not include a Planning Target Item plan line.',
+                    })
+                    continue
+                if allocation_basis == DebitBasis.PLAN and allotment.planning_target_item_id and not plan_line_id:
+                    errors.append({
+                        'item_id': item_id,
+                        'code': 'PLANNING_TARGET_MISMATCH',
+                        'error': 'A Planning Target Item plan line is required for this allotment.',
+                    })
+                    continue
+                if allocation_basis == DebitBasis.PLAN and plan_line_id:
                     from apps.license.models import LicenseItemPlan
                     try:
                         locked_plan_line = LicenseItemPlan.objects.select_for_update().get(
@@ -728,12 +806,34 @@ class AllotmentActionViewSet(ViewSet):
                                        'error': 'No active plan is available for the selected item.',
                                        'max_qty': '0.000', 'max_cif': '0.00'})
                         continue
+                    if (
+                        allotment.planning_target_item_id
+                        and locked_plan_line.item_name_id != allotment.planning_target_item_id
+                    ):
+                        errors.append({
+                            'item_id': item_id,
+                            'code': 'PLANNING_TARGET_MISMATCH',
+                            'error': 'The selected item does not match the allotment Planning Target Item.',
+                        })
+                        continue
                     remaining_plan_qty = locked_plan_line.remaining_quantity if locked_plan_line.remaining_quantity is not None else Decimal('0.000')
                     remaining_plan_cif = locked_plan_line.remaining_cif_fc if locked_plan_line.remaining_cif_fc is not None else Decimal('0.00')
                     if remaining_plan_qty <= 0 or remaining_plan_cif <= 0:
-                        errors.append({'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
-                                       'error': 'No planned quantity or value is available for the selected item.',
-                                       'max_qty': '0.000', 'max_cif': '0.00'})
+                        item_name = locked_plan_line.item_name.name if locked_plan_line.item_name_id else 'The selected item'
+                        if remaining_plan_qty <= 0 and remaining_plan_cif <= 0:
+                            code = 'NO_PLANNED_BALANCE'
+                            message = f'{item_name} has no remaining planned quantity or value.'
+                        elif remaining_plan_qty <= 0:
+                            code = 'NO_PLANNED_QTY_BALANCE'
+                            message = f'{item_name} has no remaining planned quantity.'
+                        else:
+                            code = 'NO_PLANNED_CIF_BALANCE'
+                            message = f'{item_name} has no remaining planned value.'
+                        errors.append({'item_id': item_id, 'code': code,
+                                       'message': message, 'error': message,
+                                       'item_name': item_name, 'allocation_basis': 'PLAN',
+                                       'max_qty': str(max(remaining_plan_qty, Decimal('0.000'))),
+                                       'max_cif': str(max(remaining_plan_cif, Decimal('0.00')))})
                         continue
                     if qty <= 0 or cif_fc <= 0:
                         errors.append({'item_id': item_id, 'code': 'INVALID_ALLOTMENT_AMOUNT',
@@ -773,6 +873,7 @@ class AllotmentActionViewSet(ViewSet):
                 if actual_available_qty < qty:
                     errors.append({
                         'item_id': item_id,
+                        'code': 'ALLOTMENT_QTY_EXCEEDS_ACTUAL' if allocation_basis == DebitBasis.ACTUAL else 'INSUFFICIENT_AVAILABLE_QTY',
                         'error': f'Insufficient available quantity. Available: {actual_available_qty}, Requested: {qty}'
                     })
                     continue
@@ -800,6 +901,7 @@ class AllotmentActionViewSet(ViewSet):
                 if available_cif < cif_fc:
                     errors.append({
                         'item_id': item_id,
+                        'code': 'ALLOTMENT_CIF_EXCEEDS_ACTUAL' if allocation_basis == DebitBasis.ACTUAL else 'INSUFFICIENT_AVAILABLE_CIF',
                         'error': f'Insufficient available CIF FC. Available: {available_cif:.2f}, Requested: {cif_fc}'
                     })
                     continue
@@ -834,8 +936,8 @@ class AllotmentActionViewSet(ViewSet):
                 # (live-summed from AllotmentItems), so create/delete/edit of
                 # an allotment automatically changes it on the next read.
                 from apps.license.services.plan_enforcement import plan_status_for
-                plan_status = plan_status_for(license_item)
-                if plan_status is not None:
+                plan_status = plan_status_for(license_item) if allocation_basis == DebitBasis.PLAN else None
+                if allocation_basis == DebitBasis.PLAN and plan_status is not None:
                     if plan_status["remaining_quantity"] <= 0 or plan_status["remaining_cif_fc"] <= 0:
                         errors.append({
                             'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
@@ -866,7 +968,7 @@ class AllotmentActionViewSet(ViewSet):
                             'requested_cif_fc': str(cif_fc),
                         })
                         continue
-                else:
+                elif allocation_basis == DebitBasis.PLAN:
                     errors.append({
                         'item_id': item_id, 'code': 'NO_ACTIVE_PLAN',
                         'error': 'No active plan is available for the selected item.',
@@ -886,6 +988,9 @@ class AllotmentActionViewSet(ViewSet):
                     existing.qty += qty
                     existing.cif_fc += cif_fc
                     existing.cif_inr += cif_inr
+                    existing.allocation_basis = allocation_basis
+                    existing.planning_target_item_id = allotment.planning_target_item_id if allocation_basis == DebitBasis.PLAN else None
+                    existing.plan_line = locked_plan_line if allocation_basis == DebitBasis.PLAN else None
                     existing.save()
                     allotment_item = existing
                 else:
@@ -896,7 +1001,10 @@ class AllotmentActionViewSet(ViewSet):
                         qty=qty,
                         cif_fc=cif_fc,
                         cif_inr=cif_inr,
-                        is_boe=False
+                        is_boe=False,
+                        allocation_basis=allocation_basis,
+                        planning_target_item_id=allotment.planning_target_item_id if allocation_basis == DebitBasis.PLAN else None,
+                        plan_line=locked_plan_line if allocation_basis == DebitBasis.PLAN else None,
                     )
 
                 created_items.append({
@@ -955,6 +1063,14 @@ class AllotmentActionViewSet(ViewSet):
         # Serialize allotment data to return updated balance
         from apps.allotment.serializers import AllotmentSerializer
         allotment_data = AllotmentSerializer(allotment).data
+
+        # A request is an allocation transaction, not a best-effort batch.
+        # Returning a 400 after an earlier row was written would otherwise
+        # leave a partial allocation behind.  Mark the enclosing atomic block
+        # for rollback before serialising the useful structured row errors.
+        if errors:
+            transaction.set_rollback(True)
+            created_items = []
 
         return Response({
             'success': len(created_items),

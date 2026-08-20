@@ -142,22 +142,22 @@ class TestPlanModeSplitRows:
             if row.get("import_item_id") == veg_oil_split["import_item"].id:
                 assert Decimal(row["available_quantity"]) != Decimal("100.000")
 
-    def test_fully_consumed_plan_line_disappears_from_the_grid(
+    def test_fully_consumed_plan_line_remains_visible_but_is_blocked(
         self, allotment_client, allotment_obj, veg_oil_split,
     ):
-        # Business rule: once a plan line's remaining balance hits 0 (fully
-        # allotted against), it's no longer "available" — it must drop out
-        # of the Plan-mode grid, exactly like an Actual-mode row whose
-        # available_quantity has been fully consumed. Its sibling (Cheese,
-        # untouched) must still appear.
+        # Keep a selected exhausted child visible so the UI can explain why
+        # raw source availability cannot be allotted.
         veg_oil_split["pko_line"].remaining_quantity = Decimal("0")
         veg_oil_split["pko_line"].remaining_cif_fc = Decimal("0")
         veg_oil_split["pko_line"].save(update_fields=["remaining_quantity", "remaining_cif_fc"])
 
         resp = _get_available_licenses(allotment_client, allotment_obj, debit_based_on="plan")
-        ids = [r["id"] for r in resp.data["available_items"]]
-        assert veg_oil_split["pko_line"].id not in ids
-        assert veg_oil_split["cheese_line"].id in ids
+        by_id = {r["id"]: r for r in resp.data["available_items"]}
+        assert veg_oil_split["pko_line"].id in by_id
+        assert by_id[veg_oil_split["pko_line"].id]["can_create_allotment"] is False
+        assert by_id[veg_oil_split["pko_line"].id]["reason_code"] == "NO_PLANNED_BALANCE"
+        assert Decimal(by_id[veg_oil_split["pko_line"].id]["max_allotment_qty"]) == Decimal("0")
+        assert veg_oil_split["cheese_line"].id in by_id
 
 
 @pytest.mark.django_db

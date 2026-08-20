@@ -165,16 +165,17 @@ class TestPlanLineBalanceDecrement:
         assert veg_oil_split["cheese_line"].remaining_quantity == Decimal("50")  # 60 - 10
         assert veg_oil_split["cheese_line"].remaining_cif_fc == Decimal("275.00")  # 50 × 5.50
 
-    def test_remaining_never_goes_negative(self, allotment_client, allotment_obj, veg_oil_split):
-        # Over-allocating beyond a plan line's own remaining balance still
-        # succeeds (the broader available_quantity/CIF checks are what
-        # actually gate the real debit) but must clamp the plan line's
-        # remaining at 0, never negative.
+    def test_exhausted_plan_line_rejects_direct_api_allocation(self, allotment_client, allotment_obj, veg_oil_split):
+        """Raw source availability must not bypass a zero split-child plan."""
+        veg_oil_split["pko_line"].remaining_quantity = Decimal("0")
+        veg_oil_split["pko_line"].remaining_cif_fc = Decimal("0")
+        veg_oil_split["pko_line"].save(update_fields=["remaining_quantity", "remaining_cif_fc"])
         resp = _allocate(
             allotment_client, allotment_obj, veg_oil_split["import_item"].id,
-            "40", "72.00", plan_line_id=veg_oil_split["pko_line"].id,
+            "1", "1.80", plan_line_id=veg_oil_split["pko_line"].id,
         )
-        assert resp.status_code == 201, resp.data
+        assert resp.status_code == 400, resp.data
+        assert resp.data["errors"][0]["code"] == "NO_PLANNED_BALANCE"
         veg_oil_split["pko_line"].refresh_from_db()
         assert veg_oil_split["pko_line"].remaining_quantity == Decimal("0")
 
@@ -192,7 +193,7 @@ class TestPlanLineBalanceDecrement:
         assert veg_oil_split["pko_line"].remaining_quantity == Decimal("40")
         assert veg_oil_split["cheese_line"].remaining_quantity == Decimal("60")
 
-    def test_stale_plan_line_id_does_not_fail_the_allocation(
+    def test_stale_plan_line_id_is_rejected_without_raw_availability_fallback(
         self, allotment_client, allotment_obj, veg_oil_split,
     ):
         nonexistent_id = veg_oil_split["cheese_line"].id + 999999
@@ -200,5 +201,6 @@ class TestPlanLineBalanceDecrement:
             allotment_client, allotment_obj, veg_oil_split["import_item"].id,
             "5", "9.00", plan_line_id=nonexistent_id,
         )
-        assert resp.status_code == 201, resp.data
-        assert resp.data["success"] == 1
+        assert resp.status_code == 400, resp.data
+        assert resp.data["success"] == 0
+        assert resp.data["errors"][0]["code"] == "NO_PLANNED_BALANCE"

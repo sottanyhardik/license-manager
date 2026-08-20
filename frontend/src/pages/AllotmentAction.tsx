@@ -52,6 +52,14 @@ interface AvailableItem {
     original_planned_cif_fc?: string;
     used_planned_cif_fc?: string;
     remaining_planned_cif_fc?: string;
+    has_active_plan?: boolean;
+    remaining_planned_qty?: string;
+    remaining_planned_cif?: string;
+    max_allotment_qty?: string;
+    max_allotment_cif?: string;
+    can_create_allotment?: boolean;
+    reason_code?: string | null;
+    message?: string | null;
     // Plan mode (Debit Based On = Plan) only — one row per LicenseItemPlan
     // line. `id` is the plan line's own id (unique per split row); the real
     // underlying import item is `import_item_id` — the Confirm-allot payload
@@ -388,9 +396,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // Same recompute-both-together pattern as the clamps above, so
         // maxQty and maxValue never end up inconsistent with each other.
         let remainingPlanValue = Infinity;
-        if (item.has_plan) {
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_quantity ?? "0")));
-            remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif_fc ?? "0"));
+        if (item.import_item_id || item.has_active_plan || item.has_plan) {
+            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(item.remaining_planned_qty ?? item.remaining_planned_quantity ?? item.remaining_quantity ?? "0")));
+            remainingPlanValue = Math.max(0, parseFloat(item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? item.remaining_cif_fc ?? "0"));
             if (maxQty > remainingPlanQty) {
                 maxQty = remainingPlanQty;
                 maxValue = maxQty * unitPrice;
@@ -1074,6 +1082,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 const cifFc = parseFloat(item.balance_cif_fc || "0");
                                                 const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
                                                 const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
+                                                const isBlocked = Boolean(item.import_item_id || item.has_active_plan) && (maxAllocation.qty <= 0 || maxAllocation.value <= 0);
 
                                                 return (
                                                     <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
@@ -1151,7 +1160,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         </div>
 
                                                         {/* Allocation controls (compact inline) */}
-                                                        <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status" title="NO_PLANNED_BALANCE">No planned quantity or value is available for {item.planned_item_name || item.description}. Raw licence-item availability is informational; allotment is limited by the remaining planned balance.</div> : <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
                                                             <div className="flex items-center gap-1 flex-1 min-w-[200px]">
                                                                 <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
                                                                 <input
@@ -1211,7 +1220,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                     'Confirm'
                                                                 )}
                                                             </button>
-                                                        </div>
+                                                        </div>}
                                                     </div>
                                                 );
                                             })}

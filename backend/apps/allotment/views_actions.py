@@ -418,7 +418,7 @@ class AllotmentActionViewSet(ViewSet):
         expiry_date_to = request.query_params.get('expiry_date_to', '')
 
         queryset = LicenseItemPlan.objects.filter(
-            remaining_quantity__gt=0
+            remaining_quantity__gte=0, remaining_cif_fc__gte=0,
         ).select_related(
             'import_item',
             'import_item__license',
@@ -601,8 +601,10 @@ class AllotmentActionViewSet(ViewSet):
             # which must always target the actual import item regardless of
             # which split row triggered it (allocation logic itself is
             # unchanged — see AllotmentAction.tsx's allocateMutation).
-            remaining_qty = plan.remaining_quantity if plan.remaining_quantity is not None else plan.planned_quantity
-            remaining_cif = plan.remaining_cif_fc if plan.remaining_cif_fc is not None else plan.planned_cif_fc
+            # A missing live remaining balance is not permission to fall back
+            # to an historical plan target or raw source availability.
+            remaining_qty = plan.remaining_quantity if plan.remaining_quantity is not None else Decimal('0.000')
+            remaining_cif = plan.remaining_cif_fc if plan.remaining_cif_fc is not None else Decimal('0.00')
             row['id'] = plan.id
             row['import_item_id'] = plan.import_item_id
             row['planned_item_name'] = plan.item_name.name if plan.item_name_id else None
@@ -612,6 +614,14 @@ class AllotmentActionViewSet(ViewSet):
             row['remaining_cif_fc'] = str(remaining_cif)
             row['available_quantity'] = str(remaining_qty)           # aliased for the existing stat-bar/Max-allocation UI
             row['balance_cif_fc'] = str(remaining_cif)
+            row['has_active_plan'] = True
+            row['remaining_planned_qty'] = str(remaining_qty)
+            row['remaining_planned_cif'] = str(remaining_cif)
+            row['max_allotment_qty'] = str(max(remaining_qty, Decimal('0.000')))
+            row['max_allotment_cif'] = str(max(remaining_cif, Decimal('0.00')))
+            row['can_create_allotment'] = remaining_qty > 0 and remaining_cif > 0
+            row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
+            row['message'] = None if row['can_create_allotment'] else f'No planned quantity or value is available for {row["planned_item_name"] or row["description"]}.'
 
         return Response({
             'allotment': allotment_data,
@@ -671,6 +681,41 @@ class AllotmentActionViewSet(ViewSet):
                 # transaction via @transaction.atomic), so two concurrent
                 # allocations cannot both pass the plan/availability cap.
                 license_item = LicenseImportItemsModel.objects.select_for_update().get(id=item_id)
+
+                # Plan-mode allocations name an exact canonical plan child.
+                # Lock and validate it before consulting raw licence capacity:
+                # raw availability is informational and can never revive a
+                # fully consumed (or absent) planned balance.
+                plan_line_id = allocation.get('plan_line_id')
+                locked_plan_line = None
+                if plan_line_id:
+                    from apps.license.models import LicenseItemPlan
+                    try:
+                        locked_plan_line = LicenseItemPlan.objects.select_for_update().get(
+                            id=plan_line_id, import_item_id=item_id,
+                        )
+                    except LicenseItemPlan.DoesNotExist:
+                        errors.append({'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
+                                       'error': 'No active plan is available for the selected item.',
+                                       'max_qty': '0.000', 'max_cif': '0.00'})
+                        continue
+                    remaining_plan_qty = locked_plan_line.remaining_quantity if locked_plan_line.remaining_quantity is not None else Decimal('0.000')
+                    remaining_plan_cif = locked_plan_line.remaining_cif_fc if locked_plan_line.remaining_cif_fc is not None else Decimal('0.00')
+                    if remaining_plan_qty <= 0 or remaining_plan_cif <= 0:
+                        errors.append({'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
+                                       'error': 'No planned quantity or value is available for the selected item.',
+                                       'max_qty': '0.000', 'max_cif': '0.00'})
+                        continue
+                    if qty <= 0 or cif_fc <= 0:
+                        errors.append({'item_id': item_id, 'code': 'INVALID_ALLOTMENT_AMOUNT',
+                                       'error': 'Quantity and value must be greater than zero.'})
+                        continue
+                    if qty > remaining_plan_qty or cif_fc > remaining_plan_cif:
+                        errors.append({'item_id': item_id,
+                                       'code': 'ALLOTMENT_QTY_EXCEEDS_PLAN' if qty > remaining_plan_qty else 'ALLOTMENT_CIF_EXCEEDS_PLAN',
+                                       'error': 'Requested allotment exceeds the remaining planned balance.',
+                                       'max_qty': str(remaining_plan_qty), 'max_cif': str(remaining_plan_cif)})
+                        continue
 
                 # Reject allocations against an already-expired license. Computed
                 # directly off license_expiry_date (the same comparison the
@@ -831,15 +876,9 @@ class AllotmentActionViewSet(ViewSet):
                 # directly, independent of any sibling plan line on the same
                 # import item. Absent for Actual-mode allocations (unchanged
                 # behavior — no plan line to decrement).
-                plan_line_id = allocation.get('plan_line_id')
-                if plan_line_id:
-                    from apps.license.models import LicenseItemPlan
+                if locked_plan_line:
                     try:
-                        # Validate plan_line_id belongs to the selected item
-                        plan_line = LicenseItemPlan.objects.select_for_update().get(
-                            id=plan_line_id,
-                            import_item_id=item_id
-                        )
+                        plan_line = locked_plan_line
                         current_remaining = (
                             plan_line.remaining_quantity
                             if plan_line.remaining_quantity is not None

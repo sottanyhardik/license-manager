@@ -27,6 +27,7 @@ import pytest
 pytest.importorskip("selenium")
 
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -274,13 +275,17 @@ def test_license_create_dropdowns_populate(logged_in_driver, frontend_url):
         # way to open a react-select menu in headless mode. ARROW_DOWN on the
         # input requires focus to already be on the input, which isn't
         # guaranteed when running after other tests in the same browser.
-        try:
-            indicator = control.find_element(By.CSS_SELECTOR, ".react-select__dropdown-indicator")
-            driver.execute_script("arguments[0].click();", indicator)
-        except Exception:
-            inp = control.find_element(By.CSS_SELECTOR, "input")
-            driver.execute_script("arguments[0].focus();", inp)
-            inp.send_keys(Keys.ARROW_DOWN)
+            # Native pointer input is important here: invoking ``element.click``
+            # through JavaScript can bypass React Select's focus lifecycle in a
+            # production preview, leaving no menu mounted even though the API
+            # data loaded successfully.  The control is the public interaction
+            # surface; the chevron is only presentation.
+            try:
+                ActionChains(driver).move_to_element(control).click().perform()
+            except Exception:
+                inp = control.find_element(By.CSS_SELECTOR, "input")
+                driver.execute_script("arguments[0].focus();", inp)
+                inp.send_keys(Keys.ARROW_DOWN)
         inp = control.find_element(By.CSS_SELECTOR, "input")
         try:
             _wait(driver, timeout=15).until(

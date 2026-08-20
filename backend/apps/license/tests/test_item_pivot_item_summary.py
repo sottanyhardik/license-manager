@@ -71,3 +71,27 @@ def test_status_uses_decimal_zero_and_ten_unit_completion_tolerance():
     assert determine_planning_status(planned_qty=Decimal("90.000"), available_qty=Decimal("100.000"), **common) == "planned"
     assert determine_planning_status(planned_qty=Decimal("89.999"), available_qty=Decimal("100.000"), **common) == "partially_planned"
     assert determine_planning_status(planned_qty=Decimal("101.000"), available_qty=Decimal("100.000"), **{**common, "over_planned_qty": Decimal("1.000")}) == "over_planned"
+
+
+def test_item_summary_uses_rule_priority_and_split_member_order_not_name():
+    def cell(item_id, name, priority=None, order=None):
+        return {
+            "canonical_item_id": item_id, "item_name": name, "sion": "E1",
+            "adjusted_total_qty": 1, "available_qty": 1, "plan_qty": 1,
+            "planning_priority": priority, "priority_item_order": order,
+            "planning_rule_id": 9 if priority else None,
+            "planning_rule_name": "Milk split" if priority == 2 else None,
+            "planning_strategy": "split_by_unit_value" if priority == 2 else None,
+            "priority_source": "active_sion_rule" if priority else "unmatched",
+        }
+
+    result = project_item_summary([{"license_id": 1, "items": {
+        "z:E1": cell(1, "ZETA", 2, 1),
+        "a:E1": cell(2, "ALPHA", 1, 0),
+        "b:E1": cell(3, "BETA", 2, 0),
+        "u:E1": cell(4, "UNMATCHED"),
+    }}])
+
+    assert [row["item_name"] for row in result["item_summary"]] == ["ALPHA", "BETA", "ZETA", "UNMATCHED"]
+    assert [row["planning_priority"] for row in result["item_summary"]] == [1, 2, 2, None]
+    assert result["item_summary"][1]["planning_rule_name"] == "Milk split"

@@ -202,6 +202,7 @@ function PurchaseStatusBadge({ code, label }) {
 }
 
 function pivotNumber(value: unknown, digits: number) {
+    if (value == null || value === '') return '—';
     const n = Number(value);
     if (!Number.isFinite(n)) return '—';
     // Backend positions are normalized; retain this final display guard so a
@@ -231,6 +232,17 @@ function PivotTotalCells({ group }: { group: any }) {
 }
 
 function FioriSummary({ summary, groups, grandTotal, onException }: { summary: any; groups: any[]; grandTotal: any; onException: (item: any, group?: any) => void }) {
+    // The backend owns the row order.  Prefixing the visible item label makes
+    // that active SION-rule priority auditable without re-sorting in React.
+    const withPriorityLabel = (group: any) => ({
+        ...group,
+        item_summary: (group?.item_summary || []).map((item: any) => ({
+            ...item,
+            item_name: item.planning_priority != null ? `${item.planning_priority} · ${item.item_name}` : item.item_name,
+        })),
+    });
+    groups = groups.map(withPriorityLabel);
+    grandTotal = withPriorityLabel(grandTotal);
     const cards = [
         ['Total Licences', summary?.license_count, 0, 'text-blue-700'], ['Total Licence CIF', summary?.total_cif, 2, 'text-blue-700'],
         ['Actual BOE CIF', summary?.actual_boe_cif, 2, 'text-amber-700'], ['Actual Allotment CIF', summary?.actual_allotment_cif, 2, 'text-amber-700'],

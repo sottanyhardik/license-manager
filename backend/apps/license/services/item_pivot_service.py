@@ -80,6 +80,13 @@ class ItemPivotService:
 
             for plan in plans_by_license[license_obj.id]:
                 provenance = plan.allocation_provenance or {}
+                rule = plan.planning_rule
+                planning_priority = plan.planning_rule_priority
+                if planning_priority is None and rule and rule.is_active:
+                    planning_priority = rule.priority
+                priority_item_order = provenance.get("unit_value_row_priority")
+                if priority_item_order is None:
+                    priority_item_order = provenance.get("member_sequence", plan.id)
                 item_name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or next((getattr(x.norm_class, "norm_class", "") for x in license_obj.export_license.all() if x.norm_class_id), "")
                 # The matrix key is identity based.  Names are presentation
@@ -159,8 +166,13 @@ class ItemPivotService:
                     "boe_used_cif": _text(max(boe_cif, ZERO_CIF)), "allotted_cif": _text(max(allot_cif, ZERO_CIF)),
                     "balance_qty": _text(max(balance_qty, ZERO_QTY)), "plan_qty": _text(max(plan_qty, ZERO_QTY)),
                     "planned_cif": _text(max(plan_cif, ZERO_CIF)), "effective_planned_qty": _text(max(plan_qty, ZERO_QTY)),
-                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "has_item_cif_cap": has_item_cif_cap, "item_cif_cap": _text(item_cif_cap) if item_cif_cap is not None else None, "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif) if available_cif is not None else None, "restriction_percent": None,
-                    "restriction_value": None,
+                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "has_item_cif_cap": has_item_cif_cap, "has_explicit_item_cif_cap": has_item_cif_cap, "item_cif_cap": _text(item_cif_cap) if item_cif_cap is not None else None, "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif) if available_cif is not None else None, "restriction_percent": None,
+                    "restriction_value": None, "planning_priority": planning_priority,
+                    "planning_rule_id": rule.id if rule else plan.planning_rule_id,
+                    "planning_rule_name": rule.name if rule else None,
+                    "planning_strategy": (rule.strategy or "STANDARD").lower() if rule else provenance.get("strategy"),
+                    "priority_item_order": priority_item_order,
+                    "priority_source": "active_sion_rule" if rule and rule.is_active else "unmatched",
                 }
                 # Add the column to the licence's notification/company group
                 # after its identity is known below.

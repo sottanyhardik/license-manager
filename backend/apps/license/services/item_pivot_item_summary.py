@@ -56,9 +56,18 @@ def project_item_summary(licenses):
                 "sion": sion, "hsn_codes": set(), "license_ids": set(), "affected_license_ids": set(),
                 **{field: ZERO_QTY for field in QTY_FIELDS}, **{field: ZERO_CIF for field in CIF_FIELDS},
                 "exception_count": 0, "has_item_cif_cap": False,
+                "priority_candidates": [],
             })
             bucket["license_ids"].add(license_row.get("license_id"))
             bucket["has_item_cif_cap"] = bucket["has_item_cif_cap"] or bool(cell.get("has_item_cif_cap"))
+            priority = cell.get("planning_priority")
+            if priority is not None:
+                bucket["priority_candidates"].append((
+                    int(priority),
+                    int(cell.get("priority_item_order") if cell.get("priority_item_order") is not None else 999999),
+                    cell.get("planning_rule_id"), cell.get("planning_rule_name"),
+                    cell.get("planning_strategy"), cell.get("priority_source") or "active_sion_rule",
+                ))
             bucket["hsn_codes"].update(filter(None, [cell.get("hsn_code")]))
             total = max(_d(cell.get("adjusted_total_qty", cell.get("total_qty"))), ZERO_QTY)
             boe_qty, allot_qty = max(_d(cell.get("debited_qty")), ZERO_QTY), max(_d(cell.get("allotted_qty")), ZERO_QTY)
@@ -96,6 +105,9 @@ def project_item_summary(licenses):
     rows = []
     for bucket in buckets.values():
         planned_qty, planned_cif = bucket["planned_qty"], bucket["planned_cif"]
+        priority = min(
+            bucket["priority_candidates"], key=lambda candidate: candidate[:2], default=None,
+        )
         row = {
             "canonical_item_id": bucket["canonical_item_id"], "item_name": bucket["item_name"],
             "sion": bucket["sion"], "hsn_codes": sorted(bucket["hsn_codes"]),
@@ -105,6 +117,12 @@ def project_item_summary(licenses):
             "average_unit_price": _out(planned_cif / planned_qty if planned_qty > ZERO_QTY else ZERO_CIF, Decimal("0.00")),
             "exception_count": bucket["exception_count"],
             "affected_license_ids": sorted(value for value in bucket["affected_license_ids"] if value is not None),
+            "planning_priority": priority[0] if priority else None,
+            "priority_item_order": priority[1] if priority else None,
+            "planning_rule_id": priority[2] if priority else None,
+            "planning_rule_name": priority[3] if priority else None,
+            "planning_strategy": priority[4] if priority else None,
+            "priority_source": priority[5] if priority else "unmatched",
         }
         if not bucket["has_item_cif_cap"]:
             row["available_cif"] = None
@@ -118,10 +136,20 @@ def project_item_summary(licenses):
         row["is_over_planned"] = values["over_planned_qty"] > ZERO_QTY or values["over_planned_cif"] > ZERO_CIF
         row["status"] = determine_planning_status(planned_qty=values["planned_qty"], available_qty=values["available_qty"], over_utilized_qty=values["over_utilized_qty"], over_utilized_cif=values["over_utilized_cif"], over_planned_qty=values["over_planned_qty"], over_planned_cif=values["over_planned_cif"])
         rows.append(row)
-    rows.sort(key=lambda row: (row["sion"], row["item_name"], row["canonical_item_id"] or -1))
+    # API order is authoritative: active SION-rule priority, then configured
+    # split-member order.  Unmatched rows intentionally follow all matched.
+    rows.sort(key=lambda row: (
+        row["sion"], row["planning_priority"] is None,
+        row["planning_priority"] if row["planning_priority"] is not None else 999999,
+        row["priority_item_order"] if row["priority_item_order"] is not None else 999999,
+        (row["item_name"] or "").casefold(), row["canonical_item_id"] or -1,
+    ))
     totals = {field: sum((_d(row[field]) for row in rows), ZERO_QTY if field in QTY_FIELDS else ZERO_CIF) for field in QTY_FIELDS + CIF_FIELDS}
     totals = {field: _out(value, Decimal("0.000") if field in QTY_FIELDS else Decimal("0.00")) for field, value in totals.items()}
     total_qty, total_cif = _d(totals["planned_qty"]), _d(totals["planned_cif"])
     totals.update({"license_count": len({lic.get("license_id") for lic in licenses}), "item_count": len(rows),
                    "weighted_average_unit_price": _out(total_cif / total_qty if total_qty > ZERO_QTY else ZERO_CIF, Decimal("0.00"))})
+    if not any(bucket["has_item_cif_cap"] for bucket in buckets.values()):
+        totals["available_cif"] = None
+        totals["balance_cif"] = None
     return {"item_summary": rows, "item_summary_totals": totals}

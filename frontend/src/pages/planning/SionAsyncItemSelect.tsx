@@ -45,11 +45,17 @@ export function SionImportItemAsyncSelect({
   const previousSion = useRef(sionId);
 
   useEffect(() => {
+    // `onChange` is commonly an inline callback from the rule editor, so its
+    // identity changes after selecting an item.  Only reset this selector
+    // when the SION actually changes; resetting on every parent render made a
+    // newly selected import item immediately disappear.
+    if (previousSion.current === sionId) return;
+
     setSearch("");
     setPage(1);
     setLoadedItems([]);
     setSelectedItem(null);
-    if (previousSion.current !== sionId && value != null) onChange(null);
+    if (value != null) onChange(null);
     previousSion.current = sionId;
   }, [sionId, onChange, value]);
 

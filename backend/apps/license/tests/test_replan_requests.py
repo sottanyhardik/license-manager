@@ -64,6 +64,13 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         assert response.data["replan_request"]["last_error_code"] == "INVALID_SION_RULE"
         assert response.data["replan_request"]["last_error_message"] == "A required SION mapping is missing."
 
+    def test_status_endpoint_accepts_canonical_license_number_from_overview_route(self):
+        self.license.license_number = "0311046297"
+        self.license.save(update_fields=["license_number"])
+        response = self.client.get("/api/licenses/0311046297/replan-status/")
+        assert response.status_code == 200, response.data
+        assert response.data["license_id"] == self.license.pk
+
     def test_worker_records_failure_instead_of_leaving_running(self):
         # Patch the imports at their source because the task imports lazily.
         request = LicenseReplanRequest.objects.create(

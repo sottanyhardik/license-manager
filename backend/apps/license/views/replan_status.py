@@ -2,6 +2,7 @@
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 from rest_framework.views import APIView
+from django.db.models import Q
 
 from apps.accounts.permissions import LicensePermission
 from apps.license.models import LicenseDetailsModel, LicenseReplanRequest
@@ -25,11 +26,19 @@ def _planning_state(license_obj):
     return "REPLAN_RUNNING" if request and request.status == LicenseReplanRequest.STATUS_RUNNING else "REPLAN_PENDING"
 
 
+def _resolve_license(license_reference):
+    """Accept the overview route's canonical licence number and legacy PK links."""
+    query = Q(license_number=str(license_reference))
+    if str(license_reference).isdigit():
+        query |= Q(pk=int(license_reference))
+    return LicenseDetailsModel.objects.filter(query).order_by("pk").first()
+
+
 class LicenseReplanStatusView(APIView):
     permission_classes = [LicensePermission]
 
     def get(self, request, license_id):
-        license_obj = LicenseDetailsModel.objects.filter(pk=license_id).first()
+        license_obj = _resolve_license(license_id)
         if not license_obj:
             raise NotFound("License not found.")
         latest = license_obj.replan_requests.order_by("-requested_at", "-pk").first()
@@ -49,7 +58,7 @@ class LicenseReplanStatusView(APIView):
 
     def post(self, request, license_id):
         # LicensePermission permits this only to LICENSE_MANAGER users.
-        license_obj = LicenseDetailsModel.objects.filter(pk=license_id).first()
+        license_obj = _resolve_license(license_id)
         if not license_obj:
             raise NotFound("License not found.")
         durable_request = request_license_replan(

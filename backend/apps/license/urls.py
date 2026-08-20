@@ -44,7 +44,7 @@ urlpatterns = [
     path("dashboard/", DashboardDataView.as_view(), name="dashboard"),
     # License PDF parse (DFIA licence copy → prefill License form)
     path("licenses/parse-pdf/", LicensePdfParseView.as_view(), name="licenses-parse-pdf"),
-    path("licenses/<int:license_id>/replan-status/", LicenseReplanStatusView.as_view(), name="license-replan-status"),
+    path("licenses/<str:license_id>/replan-status/", LicenseReplanStatusView.as_view(), name="license-replan-status"),
     # Ledger Upload endpoint
     path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
     # Ledger Task Status endpoint

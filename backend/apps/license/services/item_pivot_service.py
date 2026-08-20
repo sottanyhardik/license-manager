@@ -22,6 +22,16 @@ def _text(value):
     return str(value)
 
 
+def _positive_issue(issue):
+    """An exception is valid only when a canonical positive excess exists."""
+    return (
+        _decimal(issue.get("actual_excess_qty")) > ZERO_QTY
+        or _decimal(issue.get("planned_excess_qty")) > ZERO_QTY
+        or _decimal(issue.get("actual_excess_cif")) > ZERO_CIF
+        or _decimal(issue.get("planned_excess_cif")) > ZERO_CIF
+    )
+
+
 class ItemPivotService:
     """Build a notification/purchase-status → licence → item matrix."""
 
@@ -130,11 +140,16 @@ class ItemPivotService:
                 source_used_cif = boe_cif + allot_cif
                 # Allocate only this target's adjusted share of its source
                 # balance.  Never repeat the full licence balance per item.
+                # A licence's CIF is a shared budget.  A proportional source
+                # value is useful display information, but is *not* an item
+                # CIF cap and must never create an item-CIF exception.  Only
+                # an explicit cap supplied by canonical planning may do that.
+                explicit_item_cif_cap = provenance.get("item_cif_cap")
+                has_item_cif_cap = explicit_item_cif_cap is not None
+                item_cif_cap = _decimal(explicit_item_cif_cap) if has_item_cif_cap else None
                 canonical_item_cif_capacity = (source_total_cif * adjusted_total_qty / source_total_qty
                                                if source_total_qty > ZERO_QTY else ZERO_CIF)
-                # This is the canonical, post-usage item balance.  Consumers
-                # must not subtract actual CIF again from this value.
-                available_cif = max(canonical_item_cif_capacity - max(source_used_cif, ZERO_CIF), ZERO_CIF)
+                available_cif = max(item_cif_cap - max(source_used_cif, ZERO_CIF), ZERO_CIF) if has_item_cif_cap else None
                 cells[key] = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
                     "hsn_code": hsn, "description": description, "total_qty": _text(adjusted_total_qty),
@@ -144,7 +159,7 @@ class ItemPivotService:
                     "boe_used_cif": _text(max(boe_cif, ZERO_CIF)), "allotted_cif": _text(max(allot_cif, ZERO_CIF)),
                     "balance_qty": _text(max(balance_qty, ZERO_QTY)), "plan_qty": _text(max(plan_qty, ZERO_QTY)),
                     "planned_cif": _text(max(plan_cif, ZERO_CIF)), "effective_planned_qty": _text(max(plan_qty, ZERO_QTY)),
-                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif), "restriction_percent": None,
+                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "has_item_cif_cap": has_item_cif_cap, "item_cif_cap": _text(item_cif_cap) if item_cif_cap is not None else None, "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif) if available_cif is not None else None, "restriction_percent": None,
                     "restriction_value": None,
                 }
                 # Add the column to the licence's notification/company group
@@ -176,20 +191,30 @@ class ItemPivotService:
                 planned_qty = max(_decimal(cell["plan_qty"]), ZERO_QTY)
                 balance_after_plan = max(available_qty - planned_qty, ZERO_QTY)
                 actual_used_cif = max(_decimal(cell["boe_used_cif"]) + _decimal(cell["allotted_cif"]), ZERO_CIF)
-                capacity_cif = _decimal(cell["canonical_item_cif_capacity"])
+                has_item_cif_cap = bool(cell.get("has_item_cif_cap"))
+                item_cif_cap = _decimal(cell["item_cif_cap"]) if has_item_cif_cap else ZERO_CIF
                 over_utilized_qty = max(actual_used_qty - adjusted_qty, ZERO_QTY)
-                over_utilized_cif = max(actual_used_cif - capacity_cif, ZERO_CIF)
+                over_utilized_cif = max(actual_used_cif - item_cif_cap, ZERO_CIF) if has_item_cif_cap else ZERO_CIF
                 over_planned_qty = max(planned_qty - available_qty, ZERO_QTY)
-                over_planned_cif = max(_decimal(cell["effective_planned_cif"]) - _decimal(cell["available_cif"]), ZERO_CIF)
+                # Compare the effective (already reconciled/capped) plan to
+                # availability before planning; do not subtract it twice.
+                over_planned_cif = max(_decimal(cell["effective_planned_cif"]) - _decimal(cell["available_cif"]), ZERO_CIF) if has_item_cif_cap else ZERO_CIF
                 cell["available_qty"] = _text(available_qty)
                 cell["balance_qty_after_plan"] = _text(balance_after_plan)
-                cell.update({"actual_used_qty": _text(actual_used_qty), "actual_used_cif": _text(actual_used_cif), "over_utilized_qty": _text(over_utilized_qty), "over_utilized_cif": _text(over_utilized_cif), "over_planned_qty": _text(over_planned_qty), "over_planned_cif": _text(over_planned_cif)})
+                cell.update({"actual_used_qty": _text(actual_used_qty), "actual_used_cif": _text(actual_used_cif), "item_available_cif_before_plan": _text(available_cif) if has_item_cif_cap else None, "item_balance_cif_after_plan": _text(max(available_cif - _decimal(cell["effective_planned_cif"]), ZERO_CIF)) if has_item_cif_cap else None, "over_utilized_qty": _text(over_utilized_qty), "over_utilized_cif": _text(over_utilized_cif), "over_planned_qty": _text(over_planned_qty), "over_planned_cif": _text(over_planned_cif)})
                 from apps.license.services.item_pivot_item_summary import determine_planning_status, PLANNING_QTY_TOLERANCE
                 cell.update({"remaining_qty": _text(max(available_qty - planned_qty, ZERO_QTY)), "planning_qty_tolerance": _text(PLANNING_QTY_TOLERANCE), "is_within_planning_tolerance": planned_qty > ZERO_QTY and max(available_qty - planned_qty, ZERO_QTY) <= PLANNING_QTY_TOLERANCE, "is_over_utilized": over_utilized_qty > ZERO_QTY or over_utilized_cif > ZERO_CIF, "is_over_planned": over_planned_qty > ZERO_QTY or over_planned_cif > ZERO_CIF, "status": determine_planning_status(planned_qty=planned_qty, available_qty=available_qty, over_utilized_qty=over_utilized_qty, over_utilized_cif=over_utilized_cif, over_planned_qty=over_planned_qty, over_planned_cif=over_planned_cif)})
-                if over_utilized_qty or over_utilized_cif:
-                    issues.append({"item_key": item_key, "type": "over_utilized", "severity": "critical", "actual_excess_qty": _text(over_utilized_qty), "actual_excess_cif": _text(over_utilized_cif), "planned_excess_qty": _text(ZERO_QTY), "planned_excess_cif": _text(ZERO_CIF), "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
-                if over_planned_qty or over_planned_cif:
-                    issues.append({"item_key": item_key, "type": "over_planned", "severity": "warning", "actual_excess_qty": _text(ZERO_QTY), "actual_excess_cif": _text(ZERO_CIF), "planned_excess_qty": _text(over_planned_qty), "planned_excess_cif": _text(over_planned_cif), "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
+                if over_utilized_qty > ZERO_QTY or over_utilized_cif > ZERO_CIF:
+                    issues.append({"item_key": item_key, "canonical_item_id": cell["canonical_item_id"], "sion": cell["sion"], "type": "item_qty_over_utilized" if over_utilized_qty > ZERO_QTY else "item_cif_over_utilized", "severity": "critical", "total_qty": _text(adjusted_qty), "total_utilized_qty": _text(actual_used_qty), "actual_excess_qty": _text(over_utilized_qty), "actual_excess_cif": _text(over_utilized_cif), "planned_excess_qty": _text(ZERO_QTY), "planned_excess_cif": _text(ZERO_CIF), "item_cif_cap": cell["item_cif_cap"], "boe_used_cif": cell["boe_used_cif"], "allotted_cif": cell["allotted_cif"], "actual_used_cif": _text(actual_used_cif), "available_cif": cell["item_available_cif_before_plan"], "effective_planned_cif": cell["effective_planned_cif"], "balance_cif_after_plan": cell["item_balance_cif_after_plan"], "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
+                if over_planned_qty > ZERO_QTY or over_planned_cif > ZERO_CIF:
+                    issues.append({"item_key": item_key, "canonical_item_id": cell["canonical_item_id"], "sion": cell["sion"], "type": "item_qty_over_planned" if over_planned_qty > ZERO_QTY else "item_cif_over_planned", "severity": "warning", "total_qty": _text(adjusted_qty), "total_utilized_qty": _text(actual_used_qty), "actual_excess_qty": _text(ZERO_QTY), "actual_excess_cif": _text(ZERO_CIF), "planned_excess_qty": _text(over_planned_qty), "planned_excess_cif": _text(over_planned_cif), "item_cif_cap": cell["item_cif_cap"], "boe_used_cif": cell["boe_used_cif"], "allotted_cif": cell["allotted_cif"], "actual_used_cif": _text(actual_used_cif), "available_cif": cell["item_available_cif_before_plan"], "effective_planned_cif": cell["effective_planned_cif"], "balance_cif_after_plan": cell["item_balance_cif_after_plan"], "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
+            # Defensive guard for decimal serialization and duplicate plan rows.
+            unique_issues = {}
+            for issue in issues:
+                if not _positive_issue(issue):
+                    continue
+                unique_issues[(license_obj.id, issue.get("canonical_item_id"), issue.get("sion"), issue["type"])] = issue
+            issues = list(unique_issues.values())
             group["licenses"].append({
                 "license_id": license_obj.id, "license_number": license_obj.license_number,
                 "expiry_date": license_obj.license_expiry_date.isoformat() if license_obj.license_expiry_date else None,
@@ -249,7 +274,10 @@ class ItemPivotService:
         }
         summary["total_actual_used_cif"] = summary["actual_boe_cif"] + summary["actual_allotment_cif"]
         summary["final_balance_cif"] = max(summary["actual_balance_cif"] - summary["effective_planned_cif"], ZERO_CIF)
-        summary["overdrawn_cif"] = max(summary["effective_planned_cif"] - summary["actual_balance_cif"], ZERO_CIF)
+        # Shared licence CIF is reconciled at licence level.  Keep actual
+        # overdraw and planning overage separate; neither is an item cap.
+        summary["overdrawn_cif"] = max(summary["total_actual_used_cif"] - summary["total_cif"], ZERO_CIF)
+        summary["over_planned_cif"] = max(summary["effective_planned_cif"] - summary["actual_balance_cif"], ZERO_CIF)
         summary["planning_coverage_percent"] = (summary["effective_planned_cif"] * Decimal("100") / summary["actual_balance_cif"] if summary["actual_balance_cif"] else ZERO_CIF)
         item_summary = {}
         for group in groups:

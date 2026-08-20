@@ -31,7 +31,8 @@ def test_negative_positions_are_clamped_and_exceptions_are_positive():
     result = project_item_summary([{"license_id": 1, "items": {"1:E1": {
         "canonical_item_id": 1, "item_name": "OLIVE OIL", "sion": "E1",
         "adjusted_total_qty": 10, "debited_qty": 12, "allotted_qty": 0,
-        "boe_used_cif": 120, "allotted_cif": 0, "canonical_item_cif_capacity": 100,
+        "boe_used_cif": 120, "allotted_cif": 0, "has_item_cif_cap": True,
+        "item_cif_cap": 100, "over_utilized_cif": 20, "over_planned_cif": 150,
         "available_qty": -2, "available_cif": -20, "plan_qty": 15, "planned_cif": 150,
     }}}])
     row = result["item_summary"][0]
@@ -45,6 +46,21 @@ def test_negative_positions_are_clamped_and_exceptions_are_positive():
     for value in result["item_summary_totals"].values():
         if isinstance(value, str):
             assert Decimal(value) >= 0
+
+
+def test_common_cif_item_has_no_item_cif_position_or_cif_exception():
+    result = project_item_summary([{"license_id": 891, "items": {"181:E1": {
+        "canonical_item_id": 181, "item_name": "FRUIT JUICE", "sion": "E1",
+        "adjusted_total_qty": "613.180", "debited_qty": 0, "allotted_qty": 0,
+        "available_qty": "613.180", "plan_qty": "613.180", "boe_used_cif": 30,
+        "allotted_cif": 0, "planned_cif": 20, "available_cif": None,
+        "has_item_cif_cap": False, "over_utilized_cif": "0.00", "over_planned_cif": "0.00",
+    }}}])
+    row = result["item_summary"][0]
+    assert row["available_cif"] is None
+    assert row["balance_cif"] is None
+    assert row["over_utilized_cif"] == row["over_planned_cif"] == "0.00"
+    assert row["exception_count"] == 0
 
 
 def test_status_uses_decimal_zero_and_ten_unit_completion_tolerance():

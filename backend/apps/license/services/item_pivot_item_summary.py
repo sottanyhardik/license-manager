@@ -55,23 +55,27 @@ def project_item_summary(licenses):
                 "canonical_item_id": canonical_id, "item_name": cell.get("item_name") or item_key,
                 "sion": sion, "hsn_codes": set(), "license_ids": set(), "affected_license_ids": set(),
                 **{field: ZERO_QTY for field in QTY_FIELDS}, **{field: ZERO_CIF for field in CIF_FIELDS},
-                "exception_count": 0,
+                "exception_count": 0, "has_item_cif_cap": False,
             })
             bucket["license_ids"].add(license_row.get("license_id"))
+            bucket["has_item_cif_cap"] = bucket["has_item_cif_cap"] or bool(cell.get("has_item_cif_cap"))
             bucket["hsn_codes"].update(filter(None, [cell.get("hsn_code")]))
             total = max(_d(cell.get("adjusted_total_qty", cell.get("total_qty"))), ZERO_QTY)
             boe_qty, allot_qty = max(_d(cell.get("debited_qty")), ZERO_QTY), max(_d(cell.get("allotted_qty")), ZERO_QTY)
             boe_cif, allot_cif = max(_d(cell.get("boe_used_cif")), ZERO_CIF), max(_d(cell.get("allotted_cif")), ZERO_CIF)
             actual_qty, actual_cif = max(boe_qty + allot_qty, ZERO_QTY), max(boe_cif + allot_cif, ZERO_CIF)
-            # available_cif is a canonical post-usage capacity from the matrix;
-            # use it directly rather than subtracting BOE/allotment a second time.
+            # An item CIF position exists only when canonical planning supplied
+            # an explicit hard item cap.  The licence's shared CIF balance is
+            # not an item cap and must never be projected as one here.
+            has_item_cif_cap = bool(cell.get("has_item_cif_cap"))
             available_qty = max(_d(cell.get("available_qty", total - actual_qty)), ZERO_QTY)
-            available_cif = max(_d(cell.get("available_cif", 0)), ZERO_CIF)
+            available_cif = max(_d(cell.get("available_cif")), ZERO_CIF) if has_item_cif_cap else ZERO_CIF
             planned_qty = max(_d(cell.get("effective_planned_qty", cell.get("plan_qty"))), ZERO_QTY)
             planned_cif = max(_d(cell.get("effective_planned_cif", cell.get("planned_cif"))), ZERO_CIF)
             over_utilized_qty = max(actual_qty - total, ZERO_QTY)
-            capacity_cif = _d(cell.get("canonical_item_cif_capacity", available_cif + actual_cif))
-            over_utilized_cif = max(actual_cif - capacity_cif, ZERO_CIF)
+            # Reuse the matrix's canonical excess values.  In particular, do
+            # not infer a capacity from a proportional display allocation.
+            over_utilized_cif = max(_d(cell.get("over_utilized_cif")), ZERO_CIF) if has_item_cif_cap else ZERO_CIF
             values = {
                 "total_qty": total, "boe_used_qty": boe_qty, "allotted_qty": allot_qty,
                 "actual_used_qty": actual_qty, "available_qty": available_qty,
@@ -80,7 +84,8 @@ def project_item_summary(licenses):
                 "actual_used_cif": actual_cif, "available_cif": available_cif,
                 "planned_cif": planned_cif, "balance_cif": max(available_cif - planned_cif, ZERO_CIF),
                 "over_utilized_qty": over_utilized_qty, "over_utilized_cif": over_utilized_cif,
-                "over_planned_qty": max(planned_qty - available_qty, ZERO_QTY), "over_planned_cif": max(planned_cif - available_cif, ZERO_CIF),
+                "over_planned_qty": max(planned_qty - available_qty, ZERO_QTY),
+                "over_planned_cif": max(_d(cell.get("over_planned_cif")), ZERO_CIF) if has_item_cif_cap else ZERO_CIF,
             }
             for name, value in values.items():
                 bucket[name] += value
@@ -101,6 +106,9 @@ def project_item_summary(licenses):
             "exception_count": bucket["exception_count"],
             "affected_license_ids": sorted(value for value in bucket["affected_license_ids"] if value is not None),
         }
+        if not bucket["has_item_cif_cap"]:
+            row["available_cif"] = None
+            row["balance_cif"] = None
         values = {name: _d(row[name]) for name in QTY_FIELDS + CIF_FIELDS}
         row["remaining_qty"] = _out(max(values["available_qty"] - values["planned_qty"], ZERO_QTY), Decimal("0.000"))
         row["remaining_cif"] = _out(max(values["available_cif"] - values["planned_cif"], ZERO_CIF), Decimal("0.00"))

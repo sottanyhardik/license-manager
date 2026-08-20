@@ -196,6 +196,7 @@ interface Group {
     reconciliation_manual_required?: boolean;
     operational_status?: "PLANNED" | "MANUAL_PLANNING_REQUIRED" | "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
     planning_status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
+    presentation_status?: string;
     shortage_qty?: number;
     feasible?: boolean;
 }
@@ -216,6 +217,9 @@ export interface PlanningEditorProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function groupStatus(g: Group): PlanStatus {
+    if (g.presentation_status) {
+        return ({ planned: "completed", partially_planned: "partial", fully_utilized: "completed", over_utilized: "over", over_planned: "over", not_planned: "not_planned" } as Record<string, PlanStatus>)[g.presentation_status] ?? "not_planned";
+    }
     if (g.effective_available_quantity < 0 || g.effective_license_balance_cif < 0) return "over";
 
     // Reconciled child rows are authoritative for the operational plan.  The
@@ -641,6 +645,7 @@ export default function PlanningEditor({
                 original_cif_fc?: string | number; used_cif_fc?: string | number; remaining_cif_fc?: string | number;
                 shortage_qty?: string | number; feasible?: boolean;
                 status?: "FEASIBLE" | "SHORT" | "UNPLANNED" | "BLOCKED_UNIT_MISMATCH";
+                presentation_status?: string;
                 operational_status?: Group["operational_status"];
             }[] = Array.isArray(license?.plan_utilization) ? license.plan_utilization : [];
 
@@ -670,6 +675,7 @@ export default function PlanningEditor({
                     itemNames: grp.item_names ?? [],
                     splits: splits.length ? splits : [emptySplit()],
                     operational_status: grp.operational_status,
+                    presentation_status: grp.presentation_status,
                 };
                 const reconciledSplits = splits.filter((split) =>
                     split.remaining_quantity != null && split.remaining_cif != null,
@@ -1312,20 +1318,20 @@ export default function PlanningEditor({
                                 );
                             })}
 
-                            {/* Totals row — 10 columns: Item, HS Code, S.No, Status, Avail, Planned, UnitPrice, CIF, Remaining, Actions */}
+                            {/* Totals follow the semantic planning-position columns. */}
                             {anyPlanExists && (
                                 <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
                                     <td className="px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Totals</td>
                                     <td />
                                     <td />
                                     <td />
+                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.total_qty ?? g.total_quantity), 0))}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.total_utilized_qty ?? 0), 0))}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.totalAvail)}</td>
                                     <td className="px-4 py-2 text-right tabular-nums">{fmtQty(totals.effectivePlanned)}</td>
+                                    <td className="px-4 py-2 text-right tabular-nums">{fmtQty(groups.reduce((sum, g) => sum + (g.balance_qty ?? 0), 0))}</td>
                                     <td />{/* Unit Price — rate, not summed */}
                                     <td className="px-4 py-2 text-right tabular-nums text-primary">{fmtUsd(totals.effectiveCif)}</td>
-                                    <td className="px-4 py-2 text-right tabular-nums">
-                                        <span className="text-foreground">{fmtQty(totals.usedQuantity)}</span>
-                                    </td>
                                     <td />
                                 </tr>
                             )}

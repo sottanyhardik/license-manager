@@ -283,6 +283,12 @@ def plan_utilization_rows(
             "excess_qty": excess,
             "feasible": feasible,
             "status": canonical_status,
+            "presentation_status": (
+                "planned" if planned > DEC_000 and max(available - planned, DEC_000) <= Decimal("10.000")
+                else "partially_planned" if planned > DEC_000
+                else "fully_utilized" if available <= Decimal("10.000") and max(_dec(group["total_quantity"]) - available, DEC_000) > DEC_000
+                else "not_planned"
+            ),
             "source_records": {
                 "license_id": license_obj.id,
                 "import_item_ids": list(group["member_ids"]),

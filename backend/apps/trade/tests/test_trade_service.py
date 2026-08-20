@@ -78,6 +78,17 @@ class CounterpartCopyTests(TestCase):
         self.assertEqual(source.id, purchase.id)
         self.assertEqual(sale.id, self.sale.id)
 
+    def test_deleting_one_paired_line_deletes_the_counterpart_without_protect_loop(self):
+        _, purchase, _ = copy_sale_to_purchase(self.sale.id)
+        source_line = self.sale.lines.get()
+        counterpart_line_id = purchase.lines.get().id
+
+        source_line.delete()
+
+        from apps.trade.models import LicenseTradeLine
+        self.assertFalse(LicenseTradeLine.objects.filter(pk=source_line.pk).exists())
+        self.assertFalse(LicenseTradeLine.objects.filter(pk=counterpart_line_id).exists())
+
 
 # ---------------------------------------------------------------------------
 # parse_date_strict

@@ -439,7 +439,10 @@ class LicenseTradeLine(models.Model):
         LicenseTrade, on_delete=models.CASCADE, related_name="lines", db_index=True
     )
     counterpart_line = models.OneToOneField(
-        'self', null=True, blank=True, on_delete=models.PROTECT,
+        # A paired line is a single commercial detail.  CASCADE lets Django's
+        # collector remove both halves together (including from Admin) instead
+        # of two reciprocal PROTECT references deadlocking deletion.
+        'self', null=True, blank=True, on_delete=models.CASCADE,
         related_name='counterpart_of_line', editable=False,
     )
     transaction_pair_uuid = models.UUIDField(null=True, blank=True, db_index=True, editable=False)

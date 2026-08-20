@@ -318,12 +318,12 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
-# Replanning is deliberately isolated: it can be expensive, must not starve
-# operational tasks, and needs redelivery when a worker is interrupted.
+# Replanning uses the standard worker queue so a normal Celery worker processes
+# accepted Auto Plan requests without requiring a separate subscription.
 CELERY_TASK_ROUTES = {
-    "planning.dispatch_replan_requests": {"queue": "license_planning"},
-    "planning.replan_license": {"queue": "license_planning"},
-    "planning.recover_pending_replan_requests": {"queue": "license_planning"},
+    "planning.dispatch_replan_requests": {"queue": "celery"},
+    "planning.replan_license": {"queue": "celery"},
+    "planning.recover_pending_replan_requests": {"queue": "celery"},
 }
 CELERY_TASK_ANNOTATIONS = {
     "planning.replan_license": {

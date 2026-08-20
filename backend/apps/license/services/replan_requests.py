@@ -49,14 +49,19 @@ def _coalesce_locked(*, license_obj, reason: str, source_model: str = "", source
         return LicenseReplanRequest.objects.get(license_id=license_obj.pk, status__in=_ACTIVE), False
 
 
-def request_license_replan(*, license_id: int, reason: str, source_model: str = "", source_pk: str | int | None = None) -> LicenseReplanRequest:
-    """Create/coalesce a request without changing a source generation."""
+def request_license_replan(*, license_id: int, reason: str, source_model: str = "", source_pk: str | int | None = None, dispatch: bool = True) -> LicenseReplanRequest:
+    """Create/coalesce a request without changing a source generation.
+
+    ``dispatch=False`` is for the explicit HTTP Auto Plan action, which runs
+    the same durable request body synchronously and must not also publish a
+    duplicate Celery task after the response is returned.
+    """
     if not reason or len(reason) > 100:
         raise ValueError("reason must contain between 1 and 100 characters")
     with transaction.atomic():
         license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=license_id)
         request, created = _coalesce_locked(license_obj=license_obj, reason=reason, source_model=source_model, source_pk=str(source_pk or ""))
-        if created:
+        if created and dispatch:
             transaction.on_commit(lambda request_id=request.pk: _publish_after_commit(request_id))
         return request
 

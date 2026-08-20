@@ -905,26 +905,7 @@ export default function PlanningEditor({
         setIsPlanning(true);
         try {
             const result = await autoPlanLicense(Number(licenseId));
-            const linesWritten = result?.total_lines_written || 0;
-            const sionCode = result?.sion_code || 'Unknown';
-
-            let message: string;
-            if (linesWritten === 0) {
-                // Check if there are diagnostics explaining why no items were planned
-                const diagnostics = result.diagnostics;
-                if (diagnostics?.skip_reasons?.length) {
-                    const reasons = diagnostics.skip_reasons
-                        .map((reason) => `${reason.item_key}: ${reason.reason}`)
-                        .join('; ');
-                    message = `Planning completed for ${sionCode}: No items planned. Reasons: ${reasons}`;
-                } else {
-                    message = `Planning completed for ${sionCode}: No new eligible items were found.`;
-                }
-            } else {
-                message = `Auto-planning completed for ${sionCode}: ${linesWritten} line${linesWritten !== 1 ? 's' : ''} planned`;
-            }
-
-            toast.success(message);
+            toast.success(result.message || "Auto Plan completed.");
             await load();
             onSaved?.();
         } catch (error: unknown) {

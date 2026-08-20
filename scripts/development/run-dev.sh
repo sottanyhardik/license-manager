@@ -112,10 +112,7 @@ start() {
 start "django" "$BACKEND_DIR" "$VENV_PY" manage.py runserver 0.0.0.0:8000
 
 if [ "$RUN_CELERY" -eq 1 ]; then
-    # Include the isolated planning queue; default workers consume only
-    # `celery`, whereas Auto Plan is intentionally routed to
-    # `license_planning`.
-    start "celery-worker" "$BACKEND_DIR" "$VENV_CELERY" -A lmanagement worker -Q celery,license_planning --loglevel=info
+    start "celery-worker" "$BACKEND_DIR" "$VENV_CELERY" -A lmanagement worker -Q celery --loglevel=info
     start "celery-beat"   "$BACKEND_DIR" "$VENV_CELERY" -A lmanagement beat   --loglevel=info
 else
     warn "Skipping Celery (--no-celery)"

@@ -186,9 +186,19 @@ export async function planLicense(licenseId: number, mode: SionPlanningMode = "N
     return (await api.post("sion-planning-rules/plan-license/", { license_id: licenseId, mode })).data;
 }
 
-export async function autoPlanLicense(licenseId: number): Promise<SionPlanningPreview> {
+/** Result of the synchronous canonical Auto Plan action. */
+export type AutoPlanResponse = {
+    license_id: number;
+    license_number: string;
+    planning_state: "CURRENT";
+    replan_request_id: number;
+    message: string;
+    result: { write_results?: number; sion_ids?: number[] };
+};
+
+export async function autoPlanLicense(licenseId: number): Promise<AutoPlanResponse> {
     try {
-        const response = await api.post(`licenses/${licenseId}/auto-plan/`);
+        const response = await api.post<AutoPlanResponse>(`licenses/${licenseId}/auto-plan/`);
         return response.data;
     } catch (error) {
         console.error('[autoPlanLicense] Error:', error);

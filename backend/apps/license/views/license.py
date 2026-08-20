@@ -813,27 +813,35 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     @action(detail=True, methods=['post'], url_path='auto-plan')
     def auto_plan(self, request, pk=None):
-        """Queue authoritative Auto Plan work; never calculate it in HTTP.
-
-        Validation and planning inputs are deliberately re-read by the worker.
-        That prevents an HTTP request from observing or persisting a partial
-        replacement while concurrent source data is changing.
-        """
+        """Run the canonical Auto Plan request synchronously for this licence."""
         from apps.license.services.replan_requests import request_license_replan
+        from apps.license.tasks import replan_license_task
         license_obj = self.get_object()
         durable_request = request_license_replan(
             license_id=license_obj.pk,
             reason="manual_auto_plan",
             source_model="license.auto_plan",
             source_pk=license_obj.pk,
+            dispatch=False,
         )
+        result = replan_license_task.run(durable_request.pk)
+        durable_request.refresh_from_db()
+        if durable_request.status != durable_request.STATUS_SUCCEEDED:
+            return Response({
+                "license_id": license_obj.pk,
+                "license_number": license_obj.license_number,
+                "planning_state": durable_request.status,
+                "replan_request_id": durable_request.pk,
+                "message": durable_request.last_error_message or "Auto Plan failed.",
+            }, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             "license_id": license_obj.pk,
             "license_number": license_obj.license_number,
-            "planning_state": "REPLAN_PENDING",
+            "planning_state": "CURRENT",
             "replan_request_id": durable_request.pk,
-            "message": "Auto Plan has been queued.",
-        }, status=status.HTTP_202_ACCEPTED)
+            "message": "Auto Plan completed.",
+            "result": result,
+        })
 
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):

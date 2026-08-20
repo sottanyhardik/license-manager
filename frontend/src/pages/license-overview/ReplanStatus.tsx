@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, RotateCw } from "lucide-react";
 
 import api from "@/api/axios";
@@ -18,7 +19,7 @@ type ReplanStatusResponse = {
 };
 
 /** Lightweight, read-only polling surface for background planning work. */
-export default function ReplanStatus({ licenseId }: { licenseId: string | number }) {
+export default function ReplanStatus({ licenseId, onCompleted }: { licenseId: string | number; onCompleted?: () => void }) {
     const queryClient = useQueryClient();
     const queryKey = ["license-replan-status", String(licenseId)];
     const status = useQuery<ReplanStatusResponse>({
@@ -33,6 +34,16 @@ export default function ReplanStatus({ licenseId }: { licenseId: string | number
         mutationFn: async () => (await api.post(`licenses/${licenseId}/replan-status/`)).data,
         onSuccess: () => void queryClient.invalidateQueries({ queryKey }),
     });
+    const wasActive = useRef(false);
+    useEffect(() => {
+        const state = status.data?.planning_state;
+        if (state === "REPLAN_PENDING" || state === "REPLAN_RUNNING") {
+            wasActive.current = true;
+        } else if (state === "CURRENT" && wasActive.current) {
+            wasActive.current = false;
+            onCompleted?.();
+        }
+    }, [status.data?.planning_state, onCompleted]);
 
     if (!status.data || status.data.planning_state === "CURRENT") return null;
     const state = status.data.planning_state;

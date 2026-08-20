@@ -11,7 +11,10 @@ from django.utils import timezone
 from apps.license.models import LicenseReplanRequest
 
 logger = logging.getLogger(__name__)
-QUEUE = "license_planning"
+# Run durable replans on the default worker queue.  Local and existing server
+# workers consume `celery`; a separate queue leaves accepted HTTP requests
+# pending unless every worker is explicitly reconfigured.
+QUEUE = "celery"
 MAX_RETRIES = 3
 STALE_RUNNING_AFTER = timedelta(minutes=10)
 

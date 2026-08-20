@@ -229,7 +229,7 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         pending.refresh_from_db()
         assert result == {"dispatched": 1}
         assert pending.task_id == "recovered-task"
-        apply_async.assert_called_once_with(args=[pending.pk], queue="license_planning")
+        apply_async.assert_called_once_with(args=[pending.pk], queue="celery")
 
     def test_source_mutation_coalesces_latest_revision_before_worker_starts(self):
         request = LicenseReplanRequest.objects.create(

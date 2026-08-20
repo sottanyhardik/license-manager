@@ -4,13 +4,12 @@ The input is the canonical Licence Matrix DTO produced by ``ItemPivotService``.
 Keeping this deliberately small and pure prevents the summary, exports and UI
 from acquiring a second planning/reconciliation implementation.
 """
-from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
 
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
-QTY_FIELDS = ("total_qty", "boe_used_qty", "allotted_qty", "actual_used_qty", "available_qty", "planned_qty", "balance_qty")
-CIF_FIELDS = ("boe_used_cif", "allotted_cif", "actual_used_cif", "available_cif", "planned_cif", "balance_cif")
+QTY_FIELDS = ("total_qty", "boe_used_qty", "allotted_qty", "actual_used_qty", "available_qty", "planned_qty", "balance_qty", "over_utilized_qty", "over_planned_qty")
+CIF_FIELDS = ("boe_used_cif", "allotted_cif", "actual_used_cif", "available_cif", "planned_cif", "balance_cif", "over_utilized_cif", "over_planned_cif")
 
 
 def _d(value, default=Decimal("0")):
@@ -22,16 +21,16 @@ def _out(value, places):
 
 
 def _status(row):
-    if row["actual_used_qty"] > row["total_qty"]:
+    if row["over_utilized_qty"] > ZERO_QTY or row["over_utilized_cif"] > ZERO_CIF:
         return "Over Utilized"
-    if row["planned_qty"] > row["available_qty"]:
+    if row["over_planned_qty"] > ZERO_QTY or row["over_planned_cif"] > ZERO_CIF:
         return "Over Planned"
-    if row["planned_qty"] and row["planned_qty"] < row["available_qty"]:
+    if row["planned_qty"] > ZERO_QTY and row["balance_qty"] > ZERO_QTY:
         return "Partially Planned"
-    if row["planned_qty"]:
+    if row["planned_qty"] > ZERO_QTY:
         return "Planned"
-    if not row["available_cif"]:
-        return "No Available CIF"
+    if row["available_qty"] <= ZERO_QTY or row["available_cif"] <= ZERO_CIF:
+        return "No Available Balance"
     return "Not Planned"
 
 
@@ -55,26 +54,32 @@ def project_item_summary(licenses):
             })
             bucket["license_ids"].add(license_row.get("license_id"))
             bucket["hsn_codes"].update(filter(None, [cell.get("hsn_code")]))
-            total = _d(cell.get("adjusted_total_qty", cell.get("total_qty")))
-            boe_qty, allot_qty = _d(cell.get("debited_qty")), _d(cell.get("allotted_qty"))
-            boe_cif, allot_cif = _d(cell.get("boe_used_cif")), _d(cell.get("allotted_cif"))
-            available_qty = _d(cell.get("available_qty", total - boe_qty - allot_qty))
-            planned_qty = _d(cell.get("effective_planned_qty", cell.get("plan_qty")))
-            # Matrix cells own this field.  The fallback is only for older
-            # persisted rows where the canonical balance allocation is absent.
-            available_cif = _d(cell.get("available_cif", cell.get("planned_cif", 0)))
-            planned_cif = _d(cell.get("effective_planned_cif", cell.get("planned_cif")))
+            total = max(_d(cell.get("adjusted_total_qty", cell.get("total_qty"))), ZERO_QTY)
+            boe_qty, allot_qty = max(_d(cell.get("debited_qty")), ZERO_QTY), max(_d(cell.get("allotted_qty")), ZERO_QTY)
+            boe_cif, allot_cif = max(_d(cell.get("boe_used_cif")), ZERO_CIF), max(_d(cell.get("allotted_cif")), ZERO_CIF)
+            actual_qty, actual_cif = max(boe_qty + allot_qty, ZERO_QTY), max(boe_cif + allot_cif, ZERO_CIF)
+            # available_cif is a canonical post-usage capacity from the matrix;
+            # use it directly rather than subtracting BOE/allotment a second time.
+            available_qty = max(_d(cell.get("available_qty", total - actual_qty)), ZERO_QTY)
+            available_cif = max(_d(cell.get("available_cif", 0)), ZERO_CIF)
+            planned_qty = max(_d(cell.get("effective_planned_qty", cell.get("plan_qty"))), ZERO_QTY)
+            planned_cif = max(_d(cell.get("effective_planned_cif", cell.get("planned_cif"))), ZERO_CIF)
+            over_utilized_qty = max(actual_qty - total, ZERO_QTY)
+            capacity_cif = _d(cell.get("canonical_item_cif_capacity", available_cif + actual_cif))
+            over_utilized_cif = max(actual_cif - capacity_cif, ZERO_CIF)
             values = {
                 "total_qty": total, "boe_used_qty": boe_qty, "allotted_qty": allot_qty,
-                "actual_used_qty": boe_qty + allot_qty, "available_qty": available_qty,
-                "planned_qty": planned_qty, "balance_qty": available_qty - planned_qty,
+                "actual_used_qty": actual_qty, "available_qty": available_qty,
+                "planned_qty": planned_qty, "balance_qty": max(available_qty - planned_qty, ZERO_QTY),
                 "boe_used_cif": boe_cif, "allotted_cif": allot_cif,
-                "actual_used_cif": boe_cif + allot_cif, "available_cif": available_cif,
-                "planned_cif": planned_cif, "balance_cif": available_cif - planned_cif,
+                "actual_used_cif": actual_cif, "available_cif": available_cif,
+                "planned_cif": planned_cif, "balance_cif": max(available_cif - planned_cif, ZERO_CIF),
+                "over_utilized_qty": over_utilized_qty, "over_utilized_cif": over_utilized_cif,
+                "over_planned_qty": max(planned_qty - available_qty, ZERO_QTY), "over_planned_cif": max(planned_cif - available_cif, ZERO_CIF),
             }
             for name, value in values.items():
                 bucket[name] += value
-            if values["actual_used_qty"] > total or planned_qty > available_qty:
+            if any(values[name] > ZERO_QTY for name in ("over_utilized_qty", "over_planned_qty")) or any(values[name] > ZERO_CIF for name in ("over_utilized_cif", "over_planned_cif")):
                 bucket["exception_count"] += 1
                 bucket["affected_license_ids"].add(license_row.get("license_id"))
 

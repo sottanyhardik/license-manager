@@ -25,3 +25,23 @@ def test_projection_does_not_duplicate_same_value_source_rows():
     result = project_item_summary([{"license_id": 1, "items": {"1:E1": row}}])
     assert result["item_summary"][0]["boe_used_qty"] == "10.000"
     assert result["item_summary"][0]["actual_used_qty"] == "10.000"
+
+
+def test_negative_positions_are_clamped_and_exceptions_are_positive():
+    result = project_item_summary([{"license_id": 1, "items": {"1:E1": {
+        "canonical_item_id": 1, "item_name": "OLIVE OIL", "sion": "E1",
+        "adjusted_total_qty": 10, "debited_qty": 12, "allotted_qty": 0,
+        "boe_used_cif": 120, "allotted_cif": 0, "canonical_item_cif_capacity": 100,
+        "available_qty": -2, "available_cif": -20, "plan_qty": 15, "planned_cif": 150,
+    }}}])
+    row = result["item_summary"][0]
+    assert row["available_qty"] == row["balance_qty"] == "0.000"
+    assert row["available_cif"] == row["balance_cif"] == "0.00"
+    assert row["over_utilized_qty"] == "2.000"
+    assert row["over_utilized_cif"] == "20.00"
+    assert row["over_planned_qty"] == "15.000"
+    assert row["over_planned_cif"] == "150.00"
+    assert row["status"] == "Over Utilized"
+    for value in result["item_summary_totals"].values():
+        if isinstance(value, str):
+            assert Decimal(value) >= 0

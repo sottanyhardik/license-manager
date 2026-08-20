@@ -113,6 +113,7 @@ class ItemPivotService:
                     percentage_target_qty + own_excess_qty - excess_other_item_qty
                     if is_percentage else total_qty
                 )
+                adjusted_total_qty = max(adjusted_total_qty, ZERO_QTY)
                 if is_percentage:
                     balance_qty = adjusted_total_qty - own_actual_qty
                 else:
@@ -129,18 +130,21 @@ class ItemPivotService:
                 source_used_cif = boe_cif + allot_cif
                 # Allocate only this target's adjusted share of its source
                 # balance.  Never repeat the full licence balance per item.
-                available_cif = ((source_total_cif - source_used_cif) * adjusted_total_qty / source_total_qty
-                                 if source_total_qty > ZERO_QTY else ZERO_CIF)
+                canonical_item_cif_capacity = (source_total_cif * adjusted_total_qty / source_total_qty
+                                               if source_total_qty > ZERO_QTY else ZERO_CIF)
+                # This is the canonical, post-usage item balance.  Consumers
+                # must not subtract actual CIF again from this value.
+                available_cif = max(canonical_item_cif_capacity - max(source_used_cif, ZERO_CIF), ZERO_CIF)
                 cells[key] = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
                     "hsn_code": hsn, "description": description, "total_qty": _text(adjusted_total_qty),
                     "percentage_target_qty": _text(percentage_target_qty), "own_excess_qty": _text(own_excess_qty),
                     "excess_other_item_qty": _text(excess_other_item_qty), "adjusted_total_qty": _text(adjusted_total_qty),
-                    "allotted_qty": _text(allot_qty), "debited_qty": _text(boe_qty),
-                    "boe_used_cif": _text(boe_cif), "allotted_cif": _text(allot_cif),
-                    "balance_qty": _text(balance_qty), "plan_qty": _text(plan_qty),
-                    "planned_cif": _text(plan_cif), "effective_planned_qty": _text(plan_qty),
-                    "effective_planned_cif": _text(plan_cif), "available_cif": _text(available_cif), "restriction_percent": None,
+                    "allotted_qty": _text(max(allot_qty, ZERO_QTY)), "debited_qty": _text(max(boe_qty, ZERO_QTY)),
+                    "boe_used_cif": _text(max(boe_cif, ZERO_CIF)), "allotted_cif": _text(max(allot_cif, ZERO_CIF)),
+                    "balance_qty": _text(max(balance_qty, ZERO_QTY)), "plan_qty": _text(max(plan_qty, ZERO_QTY)),
+                    "planned_cif": _text(max(plan_cif, ZERO_CIF)), "effective_planned_qty": _text(max(plan_qty, ZERO_QTY)),
+                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif), "restriction_percent": None,
                     "restriction_value": None,
                 }
                 # Add the column to the licence's notification/company group
@@ -167,15 +171,23 @@ class ItemPivotService:
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])
                 used_qty = _decimal(cell["debited_qty"]) + _decimal(cell["allotted_qty"])
-                available_qty = adjusted_qty - used_qty
-                planned_qty = _decimal(cell["plan_qty"])
-                balance_after_plan = available_qty - planned_qty
+                actual_used_qty = max(used_qty, ZERO_QTY)
+                available_qty = max(adjusted_qty - actual_used_qty, ZERO_QTY)
+                planned_qty = max(_decimal(cell["plan_qty"]), ZERO_QTY)
+                balance_after_plan = max(available_qty - planned_qty, ZERO_QTY)
+                actual_used_cif = max(_decimal(cell["boe_used_cif"]) + _decimal(cell["allotted_cif"]), ZERO_CIF)
+                capacity_cif = _decimal(cell["canonical_item_cif_capacity"])
+                over_utilized_qty = max(actual_used_qty - adjusted_qty, ZERO_QTY)
+                over_utilized_cif = max(actual_used_cif - capacity_cif, ZERO_CIF)
+                over_planned_qty = max(planned_qty - available_qty, ZERO_QTY)
+                over_planned_cif = max(_decimal(cell["effective_planned_cif"]) - _decimal(cell["available_cif"]), ZERO_CIF)
                 cell["available_qty"] = _text(available_qty)
                 cell["balance_qty_after_plan"] = _text(balance_after_plan)
-                if available_qty < ZERO_QTY:
-                    issues.append({"item_key": item_key, "type": "over_utilized", "severity": "critical", "actual_excess_qty": _text(-available_qty), "planned_excess_qty": _text(ZERO_QTY), "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
-                if balance_after_plan < ZERO_QTY:
-                    issues.append({"item_key": item_key, "type": "over_planned", "severity": "warning", "actual_excess_qty": _text(ZERO_QTY), "planned_excess_qty": _text(-balance_after_plan), "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
+                cell.update({"actual_used_qty": _text(actual_used_qty), "actual_used_cif": _text(actual_used_cif), "over_utilized_qty": _text(over_utilized_qty), "over_utilized_cif": _text(over_utilized_cif), "over_planned_qty": _text(over_planned_qty), "over_planned_cif": _text(over_planned_cif)})
+                if over_utilized_qty or over_utilized_cif:
+                    issues.append({"item_key": item_key, "type": "over_utilized", "severity": "critical", "actual_excess_qty": _text(over_utilized_qty), "actual_excess_cif": _text(over_utilized_cif), "planned_excess_qty": _text(ZERO_QTY), "planned_excess_cif": _text(ZERO_CIF), "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
+                if over_planned_qty or over_planned_cif:
+                    issues.append({"item_key": item_key, "type": "over_planned", "severity": "warning", "actual_excess_qty": _text(ZERO_QTY), "actual_excess_cif": _text(ZERO_CIF), "planned_excess_qty": _text(over_planned_qty), "planned_excess_cif": _text(over_planned_cif), "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
             group["licenses"].append({
                 "license_id": license_obj.id, "license_number": license_obj.license_number,
                 "expiry_date": license_obj.license_expiry_date.isoformat() if license_obj.license_expiry_date else None,
@@ -251,8 +263,8 @@ class ItemPivotService:
             actual_qty = boe_qty + allotted_qty
             planned_cif = values("planned_cif", ZERO_CIF)
             actual_cif = values("boe_used_cif", ZERO_CIF) + values("allotted_cif", ZERO_CIF)
-            available_qty = total_qty - actual_qty
-            balance_qty = available_qty - planned_qty
+            available_qty = max(total_qty - actual_qty, ZERO_QTY)
+            balance_qty = max(available_qty - planned_qty, ZERO_QTY)
             contributing = [
                 {"license_id": cell["license_id"], "license_number": cell["license_number"], "available_qty": cell["available_qty"], "planned_qty": cell["plan_qty"], "planned_excess_qty": _text(max(-_decimal(cell["balance_qty_after_plan"]), ZERO_QTY))}
                 for cell in cells if _decimal(cell["balance_qty_after_plan"]) < ZERO_QTY
@@ -266,7 +278,7 @@ class ItemPivotService:
                 "license_count": len(cells), "total_qty": _text(total_qty), "boe_used_qty": _text(boe_qty),
                 "allotted_qty": _text(allotted_qty), "actual_used_qty": _text(actual_qty),
                 "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty_after_plan": _text(balance_qty),
-                "actual_used_cif": _text(actual_cif), "available_cif_before_plan": None,
+                "actual_used_cif": _text(max(actual_cif, ZERO_CIF)), "available_cif_before_plan": None,
                 "planned_cif": _text(planned_cif), "balance_cif_after_plan": None,
                 "average_planned_unit_price": _text(planned_cif / planned_qty) if planned_qty else None,
                 "status": status, "planned_excess_qty": _text(sum((_decimal(row["planned_excess_qty"]) for row in contributing), ZERO_QTY)),

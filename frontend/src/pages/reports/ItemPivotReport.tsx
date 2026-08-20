@@ -204,8 +204,9 @@ function PurchaseStatusBadge({ code, label }) {
 function pivotNumber(value: unknown, digits: number) {
     const n = Number(value);
     if (!Number.isFinite(n)) return '—';
-    const text = Math.abs(n).toLocaleString('en-IN', {minimumFractionDigits: digits, maximumFractionDigits: digits});
-    return n < 0 ? `(${text})` : text;
+    // Backend positions are normalized; retain this final display guard so a
+    // malformed response can never present a negative business balance.
+    return Math.max(n, 0).toLocaleString('en-IN', {minimumFractionDigits: digits, maximumFractionDigits: digits});
 }
 
 function PivotTotalCells({ group }: { group: any }) {

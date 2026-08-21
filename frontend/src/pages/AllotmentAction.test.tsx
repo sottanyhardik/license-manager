@@ -32,6 +32,7 @@ vi.mock("./AllotmentFilters", () => ({
             <output data-testid="planning-target">{filters.item_id}</output>
             <button type="button" onClick={() => setFilters({ ...filters, item_id: "217" })}>Switch planning target</button>
             <button type="button" onClick={() => setFilters({ ...filters, item_id: "" })}>Clear planning target</button>
+            <button type="button" onClick={() => setFilters({ ...filters, description: "Independent description" })}>Set item description</button>
         </div>
     ),
 }));
@@ -181,6 +182,17 @@ describe("AllotmentAction canonical paired Max", () => {
         const planCalls = mockedGet.mock.calls.filter(([url]) => url === "allotment-actions/9722/available-licenses/");
         const lastParams = planCalls[planCalls.length - 1]?.[1]?.params as Record<string, unknown>;
         expect(lastParams).not.toHaveProperty("planning_target_item_id");
+    });
+
+    it("sends an independently entered description after the normal debounce", async () => {
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+        fireEvent.click(screen.getByRole("button", { name: "Set item description" }));
+        await waitFor(() => {
+            const planCalls = mockedGet.mock.calls.filter(([url]) => url === "allotment-actions/9722/available-licenses/");
+            const params = planCalls[planCalls.length - 1]?.[1]?.params as Record<string, unknown>;
+            expect(params.description).toBe("Independent description");
+        }, { timeout: 1000 });
     });
 
     it("keeps Actual mode on the canonical Actual path even when a row has plan metadata", async () => {

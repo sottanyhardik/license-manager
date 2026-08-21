@@ -1,4 +1,5 @@
 import Select from "react-select";
+import { useRef } from "react";
 import HybridSelect from "../components/HybridSelect";
 import DateRangeFilter from "../components/DateRangeFilter";
 import { Filter, XCircle } from "lucide-react";
@@ -17,6 +18,25 @@ interface AllotmentFiltersProps {
 /** Allotment-action filter card — extracted verbatim from AllotmentAction. */
 export default function AllotmentFilters({ filters, setFilters, availableItemNames, notificationOptions, purchaseStatusOptions, routePlanningTarget, defaultSearchMode = "ACTUAL", defaultItemId = null }: AllotmentFiltersProps) {
     const isPlanMode = filters.debit_based_on === "PLAN";
+    // Keep only the value that this control wrote itself.  A user edit clears
+    // this marker, so clearing the target never destroys independent text.
+    const autoCopiedDescription = useRef<string | null>(null);
+
+    const setPlanningTarget = (selected: { value: unknown; label: string } | null) => {
+        const itemId = selected ? String(selected.value) : "";
+        if (!isPlanMode) {
+            setFilters({ ...filters, item_id: itemId });
+            return;
+        }
+
+        const nextDescription = selected
+            ? selected.label
+            : filters.description === autoCopiedDescription.current
+                ? ""
+                : filters.description;
+        autoCopiedDescription.current = selected ? selected.label : null;
+        setFilters({ ...filters, item_id: itemId, description: nextDescription });
+    };
     return (
                     <div className="mb-3 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
                         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
@@ -59,7 +79,7 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                             const item = availableItemNames.find(i => String(i.value) === String(filters.item_id));
                                             return item || {value: filters.item_id, label: filters.item_id};
                                         })() : null}
-                                        onChange={(selected) => setFilters({...filters, item_id: selected ? String(selected.value) : ''})}
+                                        onChange={setPlanningTarget}
                                         options={availableItemNames}
                                         placeholder={isPlanMode ? "Select a planning item" : "Select an actual item to find available licences"}
                                         className="basic-multi-select"
@@ -109,7 +129,12 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                         className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                                         placeholder="Filter by item description..."
                                         value={filters.description}
-                                        onChange={(e) => setFilters({...filters, description: e.target.value})}
+                                        onChange={(e) => {
+                                            if (autoCopiedDescription.current !== null && e.target.value !== autoCopiedDescription.current) {
+                                                autoCopiedDescription.current = null;
+                                            }
+                                            setFilters({...filters, description: e.target.value});
+                                        }}
                                     />
                                 </div>
                                 <div>

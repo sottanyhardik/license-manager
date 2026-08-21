@@ -192,10 +192,6 @@ function UnitValueStrategySection({
             value={row.import_item || null}
             onChange={(itemId) => updateRow(idx, "import_item", itemId || 0)}
             disabled={disabled}
-            excludeIds={rows
-              .filter((r, i) => i !== idx && r.import_item)
-              .map((r) => r.import_item)
-              .filter((id) => id > 0)}
             placeholder="Search import item..."
           />
           <div className="grid grid-cols-3 gap-2">

@@ -271,7 +271,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             ...prev,
             debit_based_on: allocationInitialization.default_search_mode,
             item_id: defaultItem == null ? "" : String(defaultItem.id),
-            description: "",
+            // This runs only once per route identity, so later filter edits
+            // and allocation refetches remain entirely user-owned.
+            description: allotment.item_name || "",
         }));
         setAllocationData({});
         setCurrentPage(1);

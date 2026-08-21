@@ -30,6 +30,7 @@ vi.mock("./AllotmentFilters", () => ({
     default: ({ filters, setFilters }: { filters: Record<string, string>; setFilters: (next: Record<string, string>) => void }) => (
         <div>
             <output data-testid="planning-target">{filters.item_id}</output>
+            <output data-testid="item-description">{filters.description}</output>
             <button type="button" onClick={() => setFilters({ ...filters, item_id: "217" })}>Switch planning target</button>
             <button type="button" onClick={() => setFilters({ ...filters, item_id: "" })}>Clear planning target</button>
             <button type="button" onClick={() => setFilters({ ...filters, description: "Independent description" })}>Set item description</button>
@@ -193,6 +194,28 @@ describe("AllotmentAction canonical paired Max", () => {
             const params = planCalls[planCalls.length - 1]?.[1]?.params as Record<string, unknown>;
             expect(params.description).toBe("Independent description");
         }, { timeout: 1000 });
+    });
+
+    it("initializes Item Description from the allotment header and sends it in PLAN mode", async () => {
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+        expect(screen.getByTestId("item-description")).toHaveTextContent("BOPP");
+        await waitFor(() => {
+            const calls = mockedGet.mock.calls.filter(([url]) => url === "allotment-actions/9722/available-licenses/");
+            const params = calls[calls.length - 1]?.[1]?.params as Record<string, unknown>;
+            expect(params.description).toBe("BOPP");
+        }, { timeout: 1000 });
+    });
+
+    it("does not let planning-target changes overwrite the initialized description", async () => {
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+        expect(screen.getByTestId("item-description")).toHaveTextContent("BOPP");
+        fireEvent.click(screen.getByRole("button", { name: "Switch planning target" }));
+        await waitFor(() => expect(screen.getByTestId("planning-target")).toHaveTextContent("217"));
+        expect(screen.getByTestId("item-description")).toHaveTextContent("BOPP");
+        fireEvent.click(screen.getByRole("button", { name: "Clear planning target" }));
+        expect(screen.getByTestId("item-description")).toHaveTextContent("BOPP");
     });
 
     it("keeps Actual mode on the canonical Actual path even when a row has plan metadata", async () => {

@@ -1,8 +1,11 @@
 """Canonical allocation scenarios against the production action endpoints."""
 from datetime import date, timedelta
 from decimal import Decimal
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
+from django.db import close_old_connections
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
@@ -143,6 +146,51 @@ class TestCanonicalAllocationScenarios:
         assert replay.status_code == 400
         assert replay.data["code"] == "ALLOTMENT_REQUIREMENT_EXHAUSTED"
         assert AllotmentItems.objects.filter(allotment=target, item=final).count() == 1
+
+    @pytest.mark.django_db(transaction=True)
+    def test_12b_concurrent_final_confirms_serialize_on_locked_allotment(self, company):
+        """Two independent request connections race for one final requirement.
+
+        This deliberately uses neither mocked transactions nor mocked locks:
+        the second request must wait on the parent allotment row, then see the
+        first request's committed ledger debit and fail the exhaustion gate.
+        """
+        target = allotment(company, qty="24443.000", price="4.451")
+        prior = source(company, "12B-P", qty="22546.000", cif="100352.25")
+        left = source(company, "12B-L", qty="1897.000", cif="8443.54")
+        right = source(company, "12B-R", qty="1897.000", cif="8443.54")
+        user = User.objects.create_user(username="concurrent-allocation", password="test-pass-123")
+        group, _ = Group.objects.get_or_create(name="ALLOTMENT_MANAGER")
+        user.groups.add(group)
+        token = str(RefreshToken.for_user(user).access_token)
+        setup_client = APIClient()
+        setup_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        assert allocate(setup_client, target, prior.pk, "22546", "100352.25").status_code == 201
+        start = Barrier(2)
+
+        def submit(item):
+            close_old_connections()
+            try:
+                client = APIClient()
+                client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+                start.wait(timeout=10)
+                response = allocate(client, target, item.pk, "1897", "8443.54")
+                return response.status_code, getattr(response, "data", {})
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(submit, (left, right)))
+
+        statuses = sorted(status for status, _ in results)
+        assert statuses == [201, 400], results
+        rejected = next(data for status, data in results if status == 400)
+        assert rejected["code"] == "ALLOTMENT_REQUIREMENT_EXHAUSTED"
+        target.refresh_from_db()
+        assert target.alloted_quantity == Decimal("24443.000")
+        assert target.allotted_value == Decimal("108795.79")
+        assert target.balanced_quantity == Decimal("0.000")
+        assert AllotmentItems.objects.filter(allotment=target).count() == 2
 
     def test_13_parent_cap_blocks_second_source(self, api, company):
         target = allotment(company, qty="100.000")

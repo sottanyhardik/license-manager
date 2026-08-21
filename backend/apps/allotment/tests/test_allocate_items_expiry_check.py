@@ -363,7 +363,7 @@ class TestAllocateItemsExpiryScopedPerCompanyInSameRequest:
     rejection onto -- or a pass onto -- an unrelated company's item, even
     when both are submitted together in a single allocate-items call."""
 
-    def test_batch_with_two_companies_rejects_only_the_expired_one(
+    def test_batch_with_expired_row_rolls_back_the_entire_command(
         self, allotment_client, allotment_obj,
     ):
         expired_company = CompanyModel.objects.create(iec="4077771111", name="Batch Expired Co")
@@ -407,15 +407,14 @@ class TestAllocateItemsExpiryScopedPerCompanyInSameRequest:
             format="json",
         )
 
-        # Overall status is 201 whenever at least one item succeeds (mixed
-        # batch result) -- see allocate_items' final Response: it is 400
-        # only when created_items is empty. The per-item errors array is
-        # what actually reports the expired item's rejection.
-        assert resp.status_code == 201, resp.data
-        assert resp.data["success"] == 1
+        # Allocation is an atomic command.  A caller must never receive an
+        # apparent partial success and then retry a batch that has silently
+        # consumed capacity from only some rows.
+        assert resp.status_code == 400, resp.data
+        assert resp.data["success"] == 0
         assert len(resp.data["errors"]) == 1
         assert resp.data["errors"][0]["item_id"] == expired_item.id
         assert "expired" in resp.data["errors"][0]["error"].lower()
 
         assert not AllotmentItems.objects.filter(allotment=allotment_obj, item=expired_item).exists()
-        assert AllotmentItems.objects.filter(allotment=allotment_obj, item=active_item).exists()
+        assert not AllotmentItems.objects.filter(allotment=allotment_obj, item=active_item).exists()

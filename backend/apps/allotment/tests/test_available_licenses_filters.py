@@ -100,6 +100,16 @@ def _mock_bulk_map(item_id, live_value):
     return _map
 
 
+@pytest.fixture(autouse=True)
+def live_actual_cif(monkeypatch):
+    """The quantity-only fixtures still model a usable live CIF position.
+    Value-specific tests replace this with their exact live balance map."""
+    monkeypatch.setattr(
+        "apps.license.services.condition_pool.available_value_bulk_map",
+        lambda items: {item.id: LIVE_VALUE for item in items},
+    )
+
+
 def _get_available_licenses(client, allotment_obj, **params):
     url = f"/api/allotment-actions/{allotment_obj.id}/available-licenses/"
     params.setdefault("debit_based_on", "ACTUAL")
@@ -131,6 +141,15 @@ class TestAvailableQuantityFilter:
         resp = _get_available_licenses(allotment_client, allotment_obj, available_quantity_lte="30000")
         ids = [row["id"] for row in resp.data["available_items"]]
         assert stale_value_item.id not in ids
+
+    def test_zero_live_actual_cif_removes_candidate_server_side(self, allotment_client, allotment_obj, stale_value_item):
+        with patch(
+            "apps.license.services.condition_pool.available_value_bulk_map",
+            side_effect=_mock_bulk_map(stale_value_item.id, Decimal("0.00")),
+        ):
+            resp = _get_available_licenses(allotment_client, allotment_obj)
+        assert resp.status_code == 200
+        assert stale_value_item.id not in [row["id"] for row in resp.data["available_items"]]
 
 
 class TestAvailableValueFilterUsesLiveValue:

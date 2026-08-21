@@ -128,17 +128,34 @@ class TestCanonicalAllocationScenarios:
         allocate(api, target, item.pk, "50")
         assert AllotmentItems.objects.filter(allotment=target, item=item).count() == 1
 
+    def test_12a_final_allocation_replay_is_rejected(self, api, company):
+        target = allotment(company, qty="24443.000", price="4.451")
+        first = source(company, "12A", qty="22546.000", cif="100352.25")
+        final = source(company, "12B", qty="1897.000", cif="8443.54")
+        assert allocate(api, target, first.pk, "22546", "100352.25").status_code == 201
+        first_final = allocate(api, target, final.pk, "1897", "8443.54")
+        assert first_final.status_code == 201, first_final.data
+        target.refresh_from_db()
+        assert target.alloted_quantity == Decimal("24443.000")
+        assert target.allotted_value == Decimal("108795.79")
+        assert target.balanced_quantity == Decimal("0.000")
+        replay = allocate(api, target, final.pk, "1897", "8443.54")
+        assert replay.status_code == 400
+        assert replay.data["code"] == "ALLOTMENT_REQUIREMENT_EXHAUSTED"
+        assert AllotmentItems.objects.filter(allotment=target, item=final).count() == 1
+
     def test_13_parent_cap_blocks_second_source(self, api, company):
         target = allotment(company, qty="100.000")
         assert allocate(api, target, source(company, "13A").pk, "100").status_code == 201
         assert allocate(api, target, source(company, "13B").pk, "1").status_code == 400
 
-    def test_14_best_effort_batch_keeps_valid_sibling(self, api, company):
+    def test_14_invalid_batch_rolls_back_valid_sibling(self, api, company):
         good, bad, target = source(company, "14A"), source(company, "14B", qty="10.000", cif="100.00"), allotment(company)
         response = api.post(f"/api/allotment-actions/{target.pk}/allocate-items/", {"allocations": [
             {"item_id": good.pk, "qty": "10", "cif_fc": "100"}, {"item_id": bad.pk, "qty": "11", "cif_fc": "110"},
         ]}, format="json")
-        assert response.status_code == 201 and response.data["success"] == 1 and len(response.data["errors"]) == 1
+        assert response.status_code == 400 and response.data["success"] == 0 and len(response.data["errors"]) == 1
+        assert not AllotmentItems.objects.filter(allotment=target).exists()
 
     def test_15_missing_source_rejected(self, api, company):
         response = allocate(api, allotment(company), 999999999, "1")

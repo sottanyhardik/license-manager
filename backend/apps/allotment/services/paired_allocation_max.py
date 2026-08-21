@@ -15,9 +15,12 @@ class PairedAllocationMaximum:
     unit_price: Decimal
     quantity_step: Decimal
     limiting_factor: str
+    final_settlement_applied: bool = False
+    rounding_adjustment: Decimal = ZERO_CIF
 
 
-def calculate_paired_allocation_max(*, quantity_ceiling, cif_ceiling, unit_price, quantity_step):
+def calculate_paired_allocation_max(*, quantity_ceiling, cif_ceiling, unit_price, quantity_step,
+                                    settlement_quantity=None, settlement_cif=None):
     quantity_ceiling = max(Decimal(str(quantity_ceiling)), ZERO_QTY)
     cif_ceiling = max(Decimal(str(cif_ceiling)), ZERO_CIF)
     unit_price = Decimal(str(unit_price))
@@ -28,6 +31,20 @@ def calculate_paired_allocation_max(*, quantity_ceiling, cif_ceiling, unit_price
     # allocation step; otherwise a fractional quantity ceiling can leak into
     # a whole-unit Max response.
     stepped_quantity_ceiling = (quantity_ceiling / quantity_step).to_integral_value(rounding=ROUND_DOWN) * quantity_step
+    # A final row may settle the authoritative residual CIF by one cent when
+    # its whole-unit quantity exhausts the remaining requirement.  This is a
+    # settlement, not a general epsilon for partial allocations.
+    if settlement_quantity is not None and settlement_cif is not None:
+        target_qty = Decimal(str(settlement_quantity))
+        target_cif = Decimal(str(settlement_cif))
+        nominal = (target_qty * unit_price).quantize(MONEY_QUANTUM, rounding=ROUND_UP)
+        if (target_qty == stepped_quantity_ceiling and target_qty > ZERO_QTY
+                and target_cif >= ZERO_CIF and target_cif <= cif_ceiling
+                and abs(nominal - target_cif) <= MONEY_QUANTUM):
+            return PairedAllocationMaximum(
+                target_qty, target_cif, quantity_ceiling, cif_ceiling, unit_price,
+                quantity_step, "FINAL_SETTLEMENT", True, target_cif - nominal,
+            )
     by_cif = (cif_ceiling / unit_price / quantity_step).to_integral_value(rounding=ROUND_DOWN) * quantity_step
     quantity = max(min(stepped_quantity_ceiling, by_cif), ZERO_QTY)
     # Allocation CIF is conservatively rounded upward to the cent.  This is

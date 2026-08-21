@@ -487,7 +487,7 @@ export default function NestedFieldArray({
 
         // Handle different field types
         switch (field.type) {
-            case "number":
+            case "number": {
                 // BOE amounts are deliberately text inputs with a decimal
                 // keyboard. Native number inputs normalise partial values in
                 // some browsers, which makes controlled values such as `1.`
@@ -506,6 +506,7 @@ export default function NestedFieldArray({
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
                 );
+            }
             case "integer":
                 return (
                     <input

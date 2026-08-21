@@ -27,6 +27,18 @@ from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, Li
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def live_actual_cif(monkeypatch):
+    """Candidate fixtures represent usable licence positions, so give them a
+    live (not stored-plan) CIF balance.  Production obtains this through the
+    condition pool; the focused plan-query fixtures intentionally do not set
+    up that unrelated ledger."""
+    monkeypatch.setattr(
+        "apps.license.services.condition_pool.available_value_bulk_map",
+        lambda items: {item.id: Decimal("1000000.00") for item in items},
+    )
+
+
 @pytest.fixture
 def allotment_client(db):
     user = User.objects.create_user(
@@ -235,3 +247,18 @@ class TestPlanModeRangeFilters:
             allotment_client, allotment_obj, debit_based_on="plan", available_quantity_gte="not-a-number",
         )
         assert resp.status_code == 200
+
+    def test_range_filter_uses_effective_plan_limit_not_raw_plan_residual(
+        self, allotment_client, allotment_obj, veg_oil_split, monkeypatch,
+    ):
+        # PKO retains 30 in its plan, but only 20 is live on the licence.
+        # A PLAN min of 25 must exclude it; filtering the plan residual alone
+        # would incorrectly return it.
+        veg_oil_split["import_item"].available_quantity = Decimal("20.000")
+        veg_oil_split["import_item"].save(update_fields=["available_quantity"])
+        response = _get_available_licenses(
+            allotment_client, allotment_obj, debit_based_on="PLAN", available_quantity_gte="25",
+        )
+        ids = {row["id"] for row in response.data["available_items"]}
+        assert veg_oil_split["pko_line"].id not in ids
+        assert veg_oil_split["cheese_line"].id not in ids

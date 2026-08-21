@@ -112,13 +112,6 @@ function getAllocationErrorMessage(error: unknown): string {
     return data?.message || data?.detail || data?.error || data?.errors?.[0]?.message || data?.errors?.[0]?.error || "The allocation could not be completed.";
 }
 
-// API balances are decimal strings.  "0.000" is truthy in JavaScript, so
-// allocation eligibility must always use a numeric comparison.
-function decimalGreaterThan(value: string | number | null | undefined, zero: string): boolean {
-    const numeric = Number(value ?? zero);
-    return Number.isFinite(numeric) && numeric > Number(zero);
-}
-
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
     const {id: paramId} = useParams();
     const navigate = useNavigate();
@@ -129,8 +122,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const id = propId || paramId;
 
     const [allocationData, setAllocationData] = useState({});
-    // Track selected planning per item (key: item.id, value: selected plan_line_id or null)
-    const [selectedPlanningByItem, setSelectedPlanningByItem] = useState<Record<number, number | null>>({});
     // When an allot is rejected for exceeding the utilization plan, we stash the
     // item here so the planning panel can open and retry the allot after editing.
     const [planModal, setPlanModal] = useState(null);
@@ -182,7 +173,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const updateFilters = (nextFilters: typeof filters) => {
         if (filters.debit_based_on !== nextFilters.debit_based_on || filters.item_id !== nextFilters.item_id) {
             setAllocationData({});
-            setSelectedPlanningByItem({});
         }
         setFilters(nextFilters);
     };
@@ -284,7 +274,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             description: "",
         }));
         setAllocationData({});
-        setSelectedPlanningByItem({});
         setCurrentPage(1);
         setHydratedRouteId(id);
     }, [allotment, allocationInitialization, hydratedRouteId, id]);
@@ -327,8 +316,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [filters, currentPage, pageSize, allocationInitialization, debouncedDescription, debouncedLicenseNumber, debouncedHsCode]);
 
     const planFiltersReady = hydratedRouteId === id
-        && filters.debit_based_on === "PLAN"
-        && Boolean(filters.item_id);
+        && filters.debit_based_on === "PLAN";
     // Actual availability does not require a plan or a canonical Planning
     // Target Item.  An actual item identity is ideal, but Item Description is
     // also an established Actual-mode filter (for example, `7607`).
@@ -345,7 +333,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             // A Plan child is never an implicit selection in Actual mode.
             // Clear drafts as well, so an old Plan response cannot be submitted
             // after the user changes the authoritative mode.
-            setSelectedPlanningByItem({});
             setAllocationData({});
             setCurrentPage(1);
         }
@@ -406,8 +393,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     const allocateMutation = useMutation({
         mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) => {
-            const selectedPlanId = selectedPlanningByItem[payload.item.id];
-            const followsPlan = filters.debit_based_on === "PLAN" || Boolean(selectedPlanId);
+            const followsPlan = filters.debit_based_on === "PLAN";
             // Description-driven Actual searches do not have a filter item ID.
             // The candidate's canonical actual item identity is still sent for
             // backend validation, rather than falling back to a plan identity.
@@ -424,7 +410,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     // vs Cheese) this allocation was made against, so the
                     // backend can decrement THAT line's own remaining balance
                     // independently of its siblings (see allocate_items).
-                    ...(followsPlan ? { plan_line_id: selectedPlanId ?? payload.item.id } : {}),
+                    ...(followsPlan ? { plan_line_id: payload.item.id } : {}),
                     debit_based_on: filters.debit_based_on,
                     search_mode: filters.debit_based_on,
                     allocation_basis: followsPlan ? "PLAN" : "ACTUAL",
@@ -458,6 +444,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             // Invalidate so allotment header re-fetches updated balances + available list
             invalidateAllotment();
+            qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] });
+            setAllocationData(previous => {
+                const next = { ...previous };
+                delete next[item.id];
+                return next;
+            });
 
             // Scroll to transfer letter if balance is now exactly 0
             if (data.allotment) {
@@ -508,97 +500,21 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [filters]);
 
     const calculateMaxAllocation = useCallback((item) => {
-        // Current candidate responses carry exact Decimal-string ceilings
-        // calculated by the backend.  Prefer them over the retired browser
-        // reconstruction; the numeric conversion below is display/input
-        // plumbing only and never grants capacity beyond the server limit.
-        const selectedBasis = filters.debit_based_on === "PLAN" || selectedPlanningByItem[item.id]
-            ? "plan"
-            : "actual";
-        const serverLimit = item.basis_options?.[selectedBasis];
-        if (serverLimit) {
-            return {
-                qty: Number(serverLimit.max_qty ?? "0"),
-                value: Number(serverLimit.max_cif ?? "0"),
-                suggestedQty: Number(serverLimit.suggested_qty ?? serverLimit.max_qty ?? "0"),
-                suggestedValue: Number(serverLimit.suggested_cif ?? serverLimit.max_cif ?? "0"),
-                enabled: serverLimit.enabled,
-                reasonCode: serverLimit.reason_code,
-                message: serverLimit.message,
-            };
-        }
-        if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };
-
-        const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        // Use balanced_quantity directly from backend (already calculated: required - allotted)
-        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
-        const requiredValue = parseFloat(allotment.required_value || 0);
-        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
-        const allottedValue = parseFloat(allotment.allotted_value || 0);
-        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        // Floor to integer — backend's calculate_available_quantity() rounds DOWN
-        // to whole units, so any fractional part of the stored available_quantity
-        // would be rejected on submit.
-        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
-        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
-
-        // Max quantity is the minimum of balanced quantity and available quantity
-        let maxQty = Math.floor(Math.min(balancedQty, availableQty));
-
-        // Calculate value for this quantity
-        let maxValue = maxQty * unitPrice;
-
-        // Check if value exceeds available CIF FC (using balance_cif_fc)
-        if (maxValue > availableCifFc) {
-            // Adjust quantity based on available CIF FC
-            maxQty = Math.floor(availableCifFc / unitPrice);
-            maxValue = maxQty * unitPrice;
-        }
-
-        // Check if value exceeds balanced value (with $10 buffer already included)
-        if (maxValue > balancedValueWithBuffer) {
-            // Adjust quantity based on balanced value with buffer
-            maxQty = Math.floor(balancedValueWithBuffer / unitPrice);
-            maxValue = maxQty * unitPrice;
-        }
-
-        // Utilization-plan cap: the item can never be allotted past its
-        // Remaining Planned Qty/$ (Original plan minus what's already
-        // allotted to the group — see plan_status_for on the backend).
-        // Effective Max = min(Available, Remaining Planned). Absent when the
-        // item has no plan (has_plan false) — unconstrained, as before.
-        // Same recompute-both-together pattern as the clamps above, so
-        // maxQty and maxValue never end up inconsistent with each other.
-        const selectedPlanId = selectedPlanningByItem[item.id];
-        const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
-        let remainingPlanValue = Infinity;
-        if (filters.debit_based_on === "PLAN" || selectedPlanId) {
-            // `??` deliberately preserves an authoritative decimal zero.
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_qty ?? item.remaining_planned_quantity ?? item.remaining_quantity ?? "0")));
-            remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? item.remaining_cif_fc ?? "0"));
-            if (maxQty > remainingPlanQty) {
-                maxQty = remainingPlanQty;
-                maxValue = maxQty * unitPrice;
-            }
-            if (maxValue > remainingPlanValue) {
-                maxQty = Math.floor(remainingPlanValue / unitPrice);
-                maxValue = maxQty * unitPrice;
-            }
-        }
-
-        // Belt-and-suspenders: clamp maxValue to all caps (restricted CIF +
-        // balanced value + remaining plan) and truncate to 2 decimal places.
-        // Math.floor(X/Y)*Y can drift past X by a float-epsilon, and
-        // .toFixed(2) can round half-cents UP — this line ensures the
-        // requested cif_fc never crosses the backend's check.
-        maxValue = Math.min(maxValue, availableCifFc, balancedValueWithBuffer, remainingPlanValue);
-        maxValue = Math.floor(maxValue * 100) / 100;
-
+        // One server-generated paired Decimal cap is the only client cap.
+        // React may display this value; it must not rebuild it from balances.
+        const basis = filters.debit_based_on === "PLAN" ? "plan" : "actual";
+        const limit = item.basis_options?.[basis];
+        const pair = limit?.allocation_limit;
         return {
-            qty: maxQty,
-            value: maxValue
+            qty: Number(pair?.paired_max_qty ?? "0"),
+            value: Number(pair?.paired_max_cif ?? "0"),
+            qtyText: pair?.paired_max_qty ?? "0",
+            valueText: pair?.paired_max_cif ?? "0",
+            enabled: Boolean(limit?.enabled && pair?.can_allocate),
+            reasonCode: limit?.reason_code,
+            message: limit?.message,
         };
-    }, [allotment, filters.debit_based_on, selectedPlanningByItem]);
+    }, [filters.debit_based_on]);
 
     // A response/mode change can turn a formerly valid draft into an invalid
     // Plan allocation.  Remove it immediately; never leave a stale raw-value
@@ -617,218 +533,53 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             });
             return changed ? next : previous;
         });
-    }, [filters.debit_based_on, availableItems, selectedPlanningByItem, calculateMaxAllocation]);
+    }, [filters.debit_based_on, availableItems, calculateMaxAllocation]);
 
     const handleQuantityChange = (itemId, qty) => {
         const item = availableItems.find(i => i.id === itemId);
-        if (!item) return;
-
-        const max = calculateMaxAllocation(item);
-        if (max.qty <= 0 || max.value <= 0) {
-            setAllocationData(previous => {
-                const next = { ...previous };
-                delete next[itemId];
-                return next;
-            });
-            return;
-        }
-
-        const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        let inputQty = parseInt(qty) || 0;
-
-        // Get balance quantities and values with buffer
-        // Use balanced_quantity from backend (already calculated: required - allotted)
-        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
-        const requiredValue = parseFloat(allotment.required_value || 0);
-        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
-        const allottedValue = parseFloat(allotment.allotted_value || 0);
-        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
-        // Floor: backend rounds available_quantity DOWN to whole units, so we must too.
-        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
-
-        // Show warning if user tries to exceed limits
-        if (inputQty > balancedQty) {
-            toast.warning(`Quantity adjusted to balanced quantity: ${balancedQty}`);
-            inputQty = balancedQty;
-        }
-        if (inputQty > availableQty) {
-            toast.warning(`Quantity adjusted to available quantity: ${availableQty}`);
-            inputQty = availableQty;
-        }
-
-        // Calculate value from quantity
-        let allocateCifFc = inputQty * unitPrice;
-
-        // If calculated value exceeds balanced value with buffer, adjust quantity down
-        if (allocateCifFc > balancedValueWithBuffer) {
-            inputQty = Math.floor(balancedValueWithBuffer / unitPrice);
-            allocateCifFc = inputQty * unitPrice;
-            toast.warning(`Quantity adjusted to match value limit: ${inputQty}`);
-        }
-
-        // If calculated value exceeds available CIF FC, adjust quantity down
-        if (allocateCifFc > availableCifFc) {
-            inputQty = Math.floor(availableCifFc / unitPrice);
-            allocateCifFc = inputQty * unitPrice;
-            toast.warning(`Quantity adjusted to available CIF: ${inputQty}`);
-        }
-
-        // Utilization-plan cap: never allow more than what's left of the
-        // item's plan (Original planned qty/$ minus what's already
-        // allotted to its group). Clamp both qty and value together so the
-        // field always ends in a valid, submittable state.
-        const selectedPlanId = selectedPlanningByItem[item.id];
-        const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
-        if (filters.debit_based_on === "PLAN" || selectedPlanId) {
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_quantity ?? "0")));
-            const remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif_fc ?? "0"));
-            if (inputQty > remainingPlanQty) {
-                toast.error("Cannot allot quantity greater than remaining planned quantity.");
-                inputQty = remainingPlanQty;
-                allocateCifFc = inputQty * unitPrice;
-            }
-            if (allocateCifFc > remainingPlanValue) {
-                toast.error("Cannot allot CIF value greater than remaining planned value.");
-                inputQty = Math.floor(remainingPlanValue / unitPrice);
-                allocateCifFc = inputQty * unitPrice;
-            }
-        }
-
-        setAllocationData({
-            ...allocationData,
-            [itemId]: {
-                qty: inputQty.toString(),
-                cif_fc: allocateCifFc.toFixed(2)
-            }
-        });
+        if (!item || !calculateMaxAllocation(item).enabled) return;
+        // Keep manual input intact. The locked server mutation validates the
+        // Qty/CIF pair and reports any stale or over-cap value precisely.
+        setAllocationData(previous => ({
+            ...previous,
+            [itemId]: { qty, cif_fc: previous[itemId]?.cif_fc || "" },
+        }));
     };
 
     const handleValueChange = (itemId, value) => {
         const item = availableItems.find(i => i.id === itemId);
-        if (!item) return;
-
-        const max = calculateMaxAllocation(item);
-        if (max.qty <= 0 || max.value <= 0) {
-            setAllocationData(previous => {
-                const next = { ...previous };
-                delete next[itemId];
-                return next;
-            });
-            return;
-        }
-
-        const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        let inputValue = parseFloat(value) || 0;
-
-        // Get balance values with buffer
-        const balancedQty = parseInt(allotment.balanced_quantity || 0);
-        const requiredValue = parseFloat(allotment.required_value || 0);
-        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
-        const allottedValue = parseFloat(allotment.allotted_value || 0);
-        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
-
-        // Constrain to balanced value with buffer
-        if (inputValue > balancedValueWithBuffer) {
-            inputValue = balancedValueWithBuffer;
-        }
-
-        // Constrain to available CIF FC
-        if (inputValue > availableCifFc) {
-            inputValue = availableCifFc;
-        }
-
-        // Calculate quantity from value (round down to integer)
-        let allocateQty = Math.floor(inputValue / unitPrice);
-
-        // Constrain to balanced quantity
-        if (allocateQty > balancedQty) {
-            allocateQty = balancedQty;
-        }
-
-        // Utilization-plan cap: never allow more than what's left of the
-        // item's plan. Same rule as handleQuantityChange, entered from the
-        // Value field instead of the Qty field.
-        const selectedPlanId = selectedPlanningByItem[item.id];
-        const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
-        if (filters.debit_based_on === "PLAN" || selectedPlanId) {
-            const remainingPlanQty = Math.max(0, Math.floor(parseFloat(selectedPlan?.remaining_quantity ?? item.remaining_planned_quantity ?? "0")));
-            const remainingPlanValue = Math.max(0, parseFloat(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif_fc ?? "0"));
-            if (inputValue > remainingPlanValue) {
-                toast.error("Cannot allot CIF value greater than remaining planned value.");
-                inputValue = remainingPlanValue;
-                allocateQty = Math.floor(inputValue / unitPrice);
-            }
-            if (allocateQty > remainingPlanQty) {
-                toast.error("Cannot allot quantity greater than remaining planned quantity.");
-                allocateQty = remainingPlanQty;
-            }
-        }
-
-        // Recalculate value based on adjusted quantity
-        const adjustedValue = (allocateQty * unitPrice).toFixed(2);
-
-        setAllocationData({
-            ...allocationData,
-            [itemId]: {
-                qty: allocateQty.toString(),
-                cif_fc: adjustedValue
-            }
-        });
+        if (!item || !calculateMaxAllocation(item).enabled) return;
+        setAllocationData(previous => ({
+            ...previous,
+            [itemId]: { qty: previous[itemId]?.qty || "", cif_fc: value },
+        }));
     };
 
     const handleMaxQuantity = (item) => {
-        const basis = filters.debit_based_on === "PLAN" || selectedPlanningByItem[item.id] ? "plan" : "actual";
-        const pair = item.basis_options?.[basis]?.allocation_limit;
-        if (pair) {
-            setAllocationData({...allocationData, [item.id]: {qty: pair.paired_max_qty, cif_fc: pair.paired_max_cif}});
-            return;
-        }
         const maxAllocation = calculateMaxAllocation(item);
-        if (maxAllocation.qty <= 0 || maxAllocation.value <= 0) return;
-        setAllocationData({
-            ...allocationData,
-            [item.id]: {
-                qty: (maxAllocation.suggestedQty ?? maxAllocation.qty).toString(),
-                cif_fc: (maxAllocation.suggestedValue ?? maxAllocation.value).toFixed(2)
-            }
-        });
+        if (!maxAllocation.enabled) return;
+        setAllocationData({...allocationData, [item.id]: {qty: maxAllocation.qtyText, cif_fc: maxAllocation.valueText}});
     };
 
     const handleMaxValue = (item) => {
-        const basis = filters.debit_based_on === "PLAN" || selectedPlanningByItem[item.id] ? "plan" : "actual";
-        const pair = item.basis_options?.[basis]?.allocation_limit;
-        if (pair) {
-            setAllocationData({...allocationData, [item.id]: {qty: pair.paired_max_qty, cif_fc: pair.paired_max_cif}});
-            return;
-        }
         const maxAllocation = calculateMaxAllocation(item);
-        if (maxAllocation.qty <= 0 || maxAllocation.value <= 0) return;
-        setAllocationData({
-            ...allocationData,
-            [item.id]: {
-                qty: (maxAllocation.suggestedQty ?? maxAllocation.qty).toString(),
-                cif_fc: (maxAllocation.suggestedValue ?? maxAllocation.value).toFixed(2)
-            }
-        });
+        if (!maxAllocation.enabled) return;
+        setAllocationData({...allocationData, [item.id]: {qty: maxAllocation.qtyText, cif_fc: maxAllocation.valueText}});
     };
 
     const handleConfirmAllot = (item) => {
         const max = calculateMaxAllocation(item);
         if (max.qty <= 0 || max.value <= 0) {
-            const selectedPlanId = selectedPlanningByItem[item.id];
-            const selectedPlan = selectedPlanId ? item.planning_options?.find(plan => plan.plan_line_id === selectedPlanId) : null;
-            const itemName = selectedPlan?.item_name || item.planned_item_name || item.description;
-            const message = `Cannot allocate ${itemName}: no planned quantity or value remains.`;
+            const itemName = item.planned_item_name || item.description;
+            const message = max.message || `Cannot allocate ${itemName}: no available quantity or value remains.`;
             setError(message);
             toast.error(message);
             return;
         }
         const allocation = allocationData[item.id];
-        if (!allocation || parseFloat(allocation.qty) <= 0) {
-            toast.error("Please enter a valid quantity");
-            setError("Please enter a valid quantity");
+        if (!allocation || parseFloat(allocation.qty) <= 0 || parseFloat(allocation.cif_fc) <= 0) {
+            toast.error("Enter a positive quantity and CIF value.");
+            setError("Enter a positive quantity and CIF value.");
             return;
         }
         setError("");
@@ -1336,22 +1087,20 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         {/* ── ITEMS WITH ITEM-SPECIFIC PLANNING ── */}
                                         <div className="p-2 space-y-3">
                                             {groupItems.map((item, itemIdx) => {
-                                                const planningOptions = item.planning_options || [];
-                                                const selectedPlanId = selectedPlanningByItem[item.id] || null;
-                                                const selectedPlan = selectedPlanId ? planningOptions.find(p => p.plan_line_id === selectedPlanId) : null;
-
                                                 const maxAllocation = calculateMaxAllocation(item);
                                                 const currentAllocation = allocationData[item.id];
-                                                const qty = parseFloat(item.available_quantity || "0");
-                                                const cifFc = parseFloat(item.balance_cif_fc || "0");
-                                                const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
-                                                const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
-                                                // Decimal strings such as "0.000" are truthy.  Compare their
-                                                // numeric values explicitly before exposing any Plan controls.
-                                                const planQty = Number(selectedPlan?.remaining_quantity ?? item.display_plan_qty ?? item.remaining_planned_qty ?? item.remaining_planned_quantity ?? 0);
-                                                const planCif = Number(selectedPlan?.remaining_cif_fc ?? item.display_plan_cif ?? item.remaining_planned_cif ?? item.remaining_planned_cif_fc ?? 0);
-                                                const canAllocateByPlan = decimalGreaterThan(planQty, "0.000") && decimalGreaterThan(planCif, "0.00") && decimalGreaterThan(maxAllocation.qty, "0.000") && decimalGreaterThan(maxAllocation.value, "0.00");
-                                                const isBlocked = (filters.debit_based_on === "PLAN" || Boolean(selectedPlanId)) && !canAllocateByPlan;
+                                                // Both figures are always shown. In Plan mode the row's
+                                                // legacy available_* fields describe the plan line, so use
+                                                // the explicit canonical positions for the common UI.
+                                                const actualQty = parseFloat(item.actual_position?.available_qty ?? item.available_quantity ?? "0");
+                                                const actualCif = parseFloat(item.actual_position?.balance_cif ?? item.balance_cif_fc ?? "0");
+                                                const planQty = parseFloat(item.plan_position?.remaining_qty ?? item.remaining_planned_qty ?? "0");
+                                                const planCif = parseFloat(item.plan_position?.remaining_cif ?? item.remaining_planned_cif ?? "0");
+                                                const plannedQty = parseFloat(item.original_planned_quantity ?? "0");
+                                                const plannedCif = parseFloat(item.original_planned_cif_fc ?? "0");
+                                                const average = actualQty > 0 ? (actualCif / actualQty).toFixed(2) : '0.00';
+                                                const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0 && parseFloat(currentAllocation.cif_fc) > 0;
+                                                const isBlocked = !maxAllocation.enabled;
 
                                                 return (
                                                     <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
@@ -1370,60 +1119,6 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                             </div>
                                                         )}
 
-                                                        {/* Item-specific planning selector */}
-                                                        {planningOptions.length > 0 && !isPlanMode && (
-                                                            <div className="px-1 py-1.5 mb-1.5 bg-primary/5 rounded text-[10px] border border-primary/20">
-                                                                <div className="font-semibold text-primary mb-0.5">Planning for SR #{item.serial_number}:</div>
-                                                                <div className="space-y-1">
-                                                                    <label className="flex items-center gap-1.5 cursor-pointer hover:bg-primary/10 p-0.5 rounded">
-                                                                        <input
-                                                                            type="radio"
-                                                                            name={`planning-${item.id}`}
-                                                                            checked={selectedPlanId === null}
-                                                                            onChange={() => {
-                                                                                setSelectedPlanningByItem(prev => ({ ...prev, [item.id]: null }));
-                                                                                setAllocationData(prev => {
-                                                                                    const next = { ...prev };
-                                                                                    delete next[item.id];
-                                                                                    return next;
-                                                                                });
-                                                                            }}
-                                                                            className="cursor-pointer"
-                                                                        />
-                                                                        <span className="text-foreground font-semibold">Follow Actual</span>
-                                                                        <span className="text-muted-foreground">Uses actual available Qty and CIF</span>
-                                                                    </label>
-                                                                    {planningOptions.map(plan => (
-                                                                        <label key={plan.plan_line_id} className="flex items-center gap-1.5 cursor-pointer hover:bg-primary/10 p-0.5 rounded">
-                                                                            <input
-                                                                                type="radio"
-                                                                                name={`planning-${item.id}`}
-                                                                                value={plan.plan_line_id}
-                                                                                checked={selectedPlanId === plan.plan_line_id}
-                                                                                onChange={() => {
-                                                                                    setSelectedPlanningByItem(prev => ({ ...prev, [item.id]: plan.plan_line_id }));
-                                                                                    setAllocationData(prev => {
-                                                                                        const next = { ...prev };
-                                                                                        delete next[item.id];
-                                                                                        return next;
-                                                                                    });
-                                                                                }}
-                                                                                className="cursor-pointer"
-                                                                            />
-                                                                            <span className="text-foreground font-semibold">Follow Plan: {plan.item_name}</span>
-                                                                            <span className="text-muted-foreground">
-                                                                                Qty: {parseFloat(plan.remaining_quantity || "0").toFixed(3)} | Value: ${parseFloat(plan.remaining_cif_fc || "0").toFixed(2)}
-                                                                            </span>
-                                                                        </label>
-                                                                    ))}
-                                                                </div>
-                                                                {selectedPlan && (
-                                                                    <div className="mt-1 pt-1 border-t border-primary/20 text-[10px] font-semibold text-primary">
-                                                                        Selected: {selectedPlan.item_name} | MAX QTY: {parseFloat(selectedPlan.remaining_quantity || "0").toFixed(3)} | MAX VALUE: ${parseFloat(selectedPlan.remaining_cif_fc || "0").toFixed(2)}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
                                                         {/* Item identifier + availability info (compact inline) */}
                                                         <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px] flex-wrap">
                                                             <div className="flex items-center gap-1.5">
@@ -1437,25 +1132,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                     )}
                                                             </div>
                                                             <div className="flex items-center gap-1.5 text-muted-foreground ml-auto">
-                                                                <span>Available: <span className="font-semibold text-foreground">{qty.toFixed(3)}</span></span>
-                                                                <span>CIF: <span className="font-semibold text-foreground">₹{cifFc.toFixed(2)}</span></span>
+                                                                <span>Actual Qty: <span className="font-semibold text-foreground">{actualQty.toFixed(3)}</span></span>
+                                                                <span>Actual $: <span className="font-semibold text-foreground">${actualCif.toFixed(2)}</span></span>
                                                                 <span>Avg: <span className="font-semibold text-foreground">{average}</span></span>
-                                                                {!isPlanMode && item.has_plan && (() => {
-                                                                    const remQty = Number(selectedPlan?.remaining_quantity ?? item.remaining_planned_quantity ?? 0);
-                                                                    const remVal = Number(selectedPlan?.remaining_cif_fc ?? item.remaining_planned_cif_fc ?? 0);
-                                                                    return (
-                                                                        <span>Plan: <span className="font-semibold text-foreground">{remQty.toFixed(3)} / ${remVal.toFixed(2)}</span></span>
-                                                                    );
-                                                                })()}
+                                                                {item.plan_position?.exists && <>
+                                                                    <span>Planned Qty: <span className="font-semibold text-foreground">{plannedQty.toFixed(3)}</span></span>
+                                                                    <span>Planned $: <span className="font-semibold text-foreground">${plannedCif.toFixed(2)}</span></span>
+                                                                    <span>Plan Remaining Qty: <span className="font-semibold text-foreground">{planQty.toFixed(3)}</span></span>
+                                                                    <span>Plan Remaining $: <span className="font-semibold text-foreground">${planCif.toFixed(2)}</span></span>
+                                                                </>}
+                                                                <span>Max Qty: <span className="font-semibold text-foreground">{maxAllocation.qty.toFixed(3)}</span></span>
+                                                                <span>Max $: <span className="font-semibold text-foreground">${maxAllocation.value.toFixed(2)}</span></span>
                                                             </div>
                                                         </div>
 
                                                         {/* Allocation controls (compact inline) */}
-                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status" title={`No planned balance is available for ${selectedPlan?.item_name || item.planned_item_name || item.description}.`}>
-                                                            <strong className="mr-1">No Planned Balance</strong>
-                                                            Allocation unavailable: {selectedPlan?.item_name || item.planned_item_name || item.description} has no remaining planned quantity or value.
-                                                            <span className="block mt-1">Plan Balance: {planQty.toFixed(3)} / ${planCif.toFixed(2)}</span>
-                                                            <span className="block mt-1">Switch to Actual mode to allocate against the actual available balance, if permitted.</span>
+                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status">
+                                                            <strong className="mr-1">Allocation unavailable</strong>
+                                                            {maxAllocation.message || "No quantity or CIF remains for the selected mode."}
                                                         </div> : <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
                                                             <div className="flex items-center gap-1 flex-1 min-w-[200px]">
                                                                 <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
@@ -1538,8 +1232,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <div className="rounded-xl border-2 border-dashed border-border bg-card">
                             <EmptyState
                                 icon={Inbox}
-                                title="No available license items found"
-                                description="Try adjusting the filters above"
+                                title={availableLicensesData?.code === "ALLOTMENT_REQUIREMENT_EXHAUSTED" ? "Allotment fully allocated" : (isPlanMode ? "No applicable active plan" : "No available license items found")}
+                                description={availableLicensesData?.code === "ALLOTMENT_REQUIREMENT_EXHAUSTED" ? "No further licence allocation is required." : (isPlanMode ? "PLAN remains selected. Choose ACTUAL to allocate from live licence availability." : "Try adjusting the filters above")}
                             />
                         </div>
                     )}

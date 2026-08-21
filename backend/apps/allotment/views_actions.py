@@ -5,7 +5,7 @@ from io import BytesIO
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from reportlab.lib import colors
@@ -41,6 +41,8 @@ class SearchMode:
 class AllocationBasis:
     PLAN = "PLAN"
     ACTUAL = "ACTUAL"
+
+
 
 
 class AllotmentActionViewSet(ViewSet):
@@ -80,8 +82,16 @@ class AllotmentActionViewSet(ViewSet):
         plan_qty = max(Decimal(str((plan_status or {}).get('remaining_quantity', zero_qty))), zero_qty)
         plan_cif = max(Decimal(str((plan_status or {}).get('remaining_cif_fc', zero_cif))), zero_cif)
         plan_active = bool(plan and plan.is_active and not plan.is_deleted and not plan.is_cancelled)
-        actual_max_qty, actual_max_cif = min(actual_qty, required_qty), min(actual_cif, required_cif)
-        plan_max_qty, plan_max_cif = min(actual_qty, plan_qty, required_qty), min(actual_cif, plan_cif, required_cif)
+        from apps.allotment.services.allocation_availability import calculate_allocation_availability
+        availability = calculate_allocation_availability(
+            actual_quantity=actual_qty, actual_cif=actual_cif,
+            plan_quantity=plan_qty, plan_cif=plan_cif,
+            allotment_quantity=required_qty, allotment_cif=required_cif,
+            unit_price=unit_price or 0, quantity_step=Decimal('1.000'),
+            settlement_quantity=required_qty, settlement_cif=required_cif,
+        )
+        actual_max_qty, actual_max_cif = availability.actual_effective_quantity, availability.actual_effective_cif
+        plan_max_qty, plan_max_cif = availability.plan_effective_quantity, availability.plan_effective_cif
         plan_enabled = plan_active and plan_max_qty > zero_qty and plan_max_cif > zero_cif
         actual_enabled = actual_max_qty > zero_qty and actual_max_cif > zero_cif
         if not plan_active:
@@ -92,11 +102,6 @@ class AllotmentActionViewSet(ViewSet):
             plan_reason, plan_message = 'NO_ACTUAL_BALANCE', 'No actual licence balance is available.'
         else:
             plan_reason = plan_message = None
-        from apps.allotment.services.paired_allocation_max import calculate_paired_allocation_max
-        # Whole-unit step is the current configured allocation precision.
-        # This is deliberately carried in the contract, not assumed by React.
-        actual_pair = calculate_paired_allocation_max(quantity_ceiling=actual_max_qty, cif_ceiling=actual_max_cif, unit_price=unit_price or 0, quantity_step=Decimal('1.000'))
-        plan_pair = calculate_paired_allocation_max(quantity_ceiling=plan_max_qty, cif_ceiling=plan_max_cif, unit_price=unit_price or 0, quantity_step=Decimal('1.000'))
         return {
             'actual_position': {'available_qty': str(actual_qty), 'balance_cif': str(actual_cif)},
             'allotment_requirement': {'remaining_qty': str(required_qty), 'remaining_cif': str(required_cif)},
@@ -110,14 +115,14 @@ class AllotmentActionViewSet(ViewSet):
                 # suggested_* remain compatibility aliases for the paired
                 # limit.  They are never independently calculated.
                 'actual': {'enabled': actual_enabled, 'max_qty': str(actual_max_qty), 'max_cif': str(actual_max_cif),
-                           'suggested_qty': str(actual_pair.quantity), 'suggested_cif': str(actual_pair.cif),
-                           'allocation_limit': {'quantity_ceiling': str(actual_pair.quantity_ceiling), 'cif_ceiling': str(actual_pair.cif_ceiling), 'unit_price': str(actual_pair.unit_price), 'quantity_step': str(actual_pair.quantity_step), 'paired_max_qty': str(actual_pair.quantity), 'paired_max_cif': str(actual_pair.cif), 'limiting_factor': actual_pair.limiting_factor, 'can_allocate': actual_enabled},
+                           'effective_qty_limit': str(actual_max_qty), 'effective_cif_limit': str(actual_max_cif), 'suggested_qty': str(availability.actual_paired_quantity), 'suggested_cif': str(availability.actual_paired_cif),
+                           'allocation_limit': {'quantity_ceiling': str(actual_max_qty), 'cif_ceiling': str(actual_max_cif), 'unit_price': str(unit_price or 0), 'quantity_step': '1.000', 'paired_max_qty': str(availability.actual_paired_quantity), 'paired_max_cif': str(availability.actual_paired_cif), 'limiting_factor': 'CANONICAL', 'can_allocate': actual_enabled},
                            'reason_code': None if actual_enabled else 'NO_ACTUAL_BALANCE',
                            'message': None if actual_enabled else 'No actual licence balance is available.'},
                 'plan': {'enabled': plan_enabled,
                          'max_qty': str(plan_max_qty), 'max_cif': str(plan_max_cif),
-                         'suggested_qty': str(plan_pair.quantity), 'suggested_cif': str(plan_pair.cif),
-                         'allocation_limit': {'quantity_ceiling': str(plan_pair.quantity_ceiling), 'cif_ceiling': str(plan_pair.cif_ceiling), 'unit_price': str(plan_pair.unit_price), 'quantity_step': str(plan_pair.quantity_step), 'paired_max_qty': str(plan_pair.quantity), 'paired_max_cif': str(plan_pair.cif), 'limiting_factor': plan_pair.limiting_factor, 'can_allocate': plan_enabled},
+                         'effective_qty_limit': str(plan_max_qty), 'effective_cif_limit': str(plan_max_cif), 'suggested_qty': str(availability.plan_paired_quantity), 'suggested_cif': str(availability.plan_paired_cif),
+                         'allocation_limit': {'quantity_ceiling': str(plan_max_qty), 'cif_ceiling': str(plan_max_cif), 'unit_price': str(unit_price or 0), 'quantity_step': '1.000', 'paired_max_qty': str(availability.plan_paired_quantity), 'paired_max_cif': str(availability.plan_paired_cif), 'limiting_factor': 'CANONICAL', 'can_allocate': plan_enabled},
                          'reason_code': plan_reason, 'message': plan_message},
             },
         }
@@ -252,6 +257,16 @@ class AllotmentActionViewSet(ViewSet):
         """
         allotment = get_object_or_404(
             AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
+        has_quantity_requirement = Decimal(str(allotment.required_quantity or 0)) > 0
+        remaining_qty = allotment.balanced_quantity if has_quantity_requirement else None
+        remaining_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
+        # A completed target has no usable candidate in either debit basis.
+        if (remaining_qty is not None and remaining_qty <= 0) or (remaining_cif is not None and remaining_cif <= 0):
+            return Response({
+                'allotment': AllotmentSerializer(allotment, context={'request': request}).data,
+                'available_items': [], 'count': 0, 'page': 1, 'page_size': 20,
+                'total_pages': 0, 'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
+            })
 
         # 'plan' mode is a self-contained branch (see _available_licenses_plan_mode)
         # deliberately NOT sharing filter-application code with the Actual-mode
@@ -530,7 +545,7 @@ class AllotmentActionViewSet(ViewSet):
         allotment_data['required_value_with_buffer'] = str(float(allotment_data.get('required_value', 0)) + 20)
 
         available_items_data = license_serializer.data
-        requirement_qty = allotment.balanced_quantity
+        requirement_qty = allotment.balanced_quantity if Decimal(str(allotment.required_quantity or 0)) > 0 else None
         requirement_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
 
         # Attach each item's utilization-plan status — the SAME
@@ -600,6 +615,20 @@ class AllotmentActionViewSet(ViewSet):
                 plan=active_target_plan,
                 item_name=row.get('description'),
             ))
+
+        # A candidate is useful only when both independent ACTUAL caps can
+        # still debit.  This deliberately happens server-side after the live
+        # Balance CIF calculation, rather than relying on the stored value or
+        # asking the browser to hide a stale row.
+        available_items_data = [
+            row for row in available_items_data
+            if Decimal(row['basis_options']['actual']['effective_qty_limit']) > Decimal('0')
+            and Decimal(row['basis_options']['actual']['effective_cif_limit']) > Decimal('0')
+        ]
+        # The SQL quantity predicate above is only a cheap first pass.  Keep
+        # the response count honest for the page actually returned after the
+        # authoritative live-CIF exclusion.
+        total_count = len(available_items_data) if total_count == len(paginated_items) else total_count
 
         return Response({
             'allotment': allotment_data,
@@ -790,14 +819,6 @@ class AllotmentActionViewSet(ViewSet):
             remaining_cif = plan_status['remaining_cif_fc']
             if remaining_qty <= 0 or remaining_cif <= 0:
                 continue
-            if min_qty is not None and remaining_qty < min_qty:
-                continue
-            if max_qty is not None and remaining_qty > max_qty:
-                continue
-            if min_cif is not None and remaining_cif < min_cif:
-                continue
-            if max_cif is not None and remaining_cif > max_cif:
-                continue
             active_plan_ids.append(plan_id)
         queryset = queryset.filter(id__in=active_plan_ids)
 
@@ -840,7 +861,7 @@ class AllotmentActionViewSet(ViewSet):
         allotment_data['required_value_with_buffer'] = str(float(allotment_data.get('required_value', 0)) + 20)
 
         available_items_data = license_serializer.data
-        requirement_qty = allotment.balanced_quantity
+        requirement_qty = allotment.balanced_quantity if Decimal(str(allotment.required_quantity or 0)) > 0 else None
         requirement_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
         for row, plan in zip(available_items_data, paginated_plans):
             # `id` must be unique PER ROW (two split rows share the same
@@ -890,6 +911,29 @@ class AllotmentActionViewSet(ViewSet):
                 item_name=row['planned_item_name'] or row['description'],
             ))
 
+        # PLAN range filters and eligibility use the canonical PLAN ceiling,
+        # not the historical plan target or a residual that can exceed live
+        # licence/allotment availability.  This also removes rows immediately
+        # once any mandatory PLAN cap is exhausted.
+        def _plan_candidate_is_usable(row):
+            option = row['basis_options']['plan']
+            qty = Decimal(option['effective_qty_limit'])
+            cif = Decimal(option['effective_cif_limit'])
+            if not option['enabled'] or qty <= 0 or cif <= 0:
+                return False
+            if min_qty is not None and qty < min_qty:
+                return False
+            if max_qty is not None and qty > max_qty:
+                return False
+            if min_cif is not None and cif < min_cif:
+                return False
+            if max_cif is not None and cif > max_cif:
+                return False
+            return True
+
+        available_items_data = [row for row in available_items_data if _plan_candidate_is_usable(row)]
+        total_count = len(available_items_data) if total_count == len(paginated_plans) else total_count
+
         return Response({
             'allotment': allotment_data,
             'available_items': available_items_data,
@@ -928,6 +972,22 @@ class AllotmentActionViewSet(ViewSet):
         # reading balances so allocations against distinct licence items
         # serialize instead of both spending the same remaining budget.
         allotment = get_object_or_404(AllotmentModel.objects.select_for_update(), pk=pk)
+        # Never rely on a candidate response or cached model property from a
+        # prior request.  This locked read is the replay/concurrency gate.
+        committed = AllotmentItems.objects.filter(allotment_id=allotment.id).aggregate(
+            qty=Sum('qty'),
+            cif=Sum('cif_fc'),
+        )
+        committed_qty = Decimal(str(committed['qty'] or 0))
+        committed_cif = Decimal(str(committed['cif'] or 0))
+        remaining_requirement_qty = max(Decimal(str(allotment.required_quantity or 0)) - committed_qty, Decimal('0.000'))
+        remaining_requirement_cif = max(Decimal(str(allotment.required_value or 0)) - committed_cif, Decimal('0.00'))
+        if remaining_requirement_qty <= 0 or (allotment.required_value > 0 and remaining_requirement_cif <= 0):
+            return Response({
+                'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
+                'detail': 'This allotment is already fully allocated.',
+                'error': 'This allotment is already fully allocated.',
+            }, status=status.HTTP_400_BAD_REQUEST)
         allocations = request.data.get('allocations', [])
         # Accept the legacy per-line debit field emitted by the mounted UI as
         # well as the explicit top-level dual-mode contract.  Normalize once
@@ -970,6 +1030,14 @@ class AllotmentActionViewSet(ViewSet):
             qty = Decimal(str(allocation.get('qty', 0)))
             cif_fc = Decimal(str(allocation.get('cif_fc', 0)))
             cif_inr = Decimal(str(allocation.get('cif_inr', 0)))
+
+            if qty > remaining_requirement_qty or (allotment.required_value > 0 and cif_fc > remaining_requirement_cif):
+                errors.append({
+                    'item_id': item_id,
+                    'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
+                    'error': 'Allocation exceeds the remaining allotment requirement.',
+                })
+                continue
 
             try:
                 unit_price = Decimal(str(allotment.unit_value_per_unit or 0))
@@ -1081,7 +1149,17 @@ class AllotmentActionViewSet(ViewSet):
                 # match it exactly.  Run this after expiry/identity checks so
                 # a prohibited licence never reports a misleading amount
                 # validation first.
-                if qty <= 0 or cif_fc <= 0 or (unit_price > 0 and cif_fc != canonical_cif):
+                remaining_required_qty = max(
+                    Decimal(str(allotment.required_quantity)) - Decimal(str(allotment.alloted_quantity)), Decimal('0.000')
+                )
+                remaining_required_cif = max(
+                    Decimal(str(allotment.required_value)) - Decimal(str(allotment.allotted_value)), Decimal('0.00')
+                )
+                final_settlement = (
+                    qty == remaining_required_qty and cif_fc == remaining_required_cif
+                    and abs(canonical_cif - remaining_required_cif) <= Decimal('0.01')
+                )
+                if qty <= 0 or cif_fc <= 0 or (unit_price > 0 and cif_fc != canonical_cif and not final_settlement):
                     errors.append({
                         'item_id': item_id,
                         'code': 'ALLOCATION_PAIR_MISMATCH',
@@ -1213,6 +1291,8 @@ class AllotmentActionViewSet(ViewSet):
                     'cif_fc': str(cif_fc),
                     'cif_inr': str(cif_inr)
                 })
+                remaining_requirement_qty = max(remaining_requirement_qty - qty, Decimal('0.000'))
+                remaining_requirement_cif = max(remaining_requirement_cif - cif_fc, Decimal('0.00'))
 
                 # No plan counter is mutated here.  The exact plan-line FK on
                 # this new ledger debit is the sole residual authority, so a
@@ -1235,11 +1315,19 @@ class AllotmentActionViewSet(ViewSet):
         from apps.allotment.serializers import AllotmentSerializer
         allotment_data = AllotmentSerializer(allotment).data
 
-        # A multi-row request is deliberately best-effort: an invalid or
-        # expired licence must not prevent unrelated valid licence rows from
-        # being allocated.  Each created row remains protected by the parent
-        # allotment and import-item locks above; the response exposes every
-        # rejected row explicitly instead of claiming a fully atomic batch.
+        # A request is an atomic command, not a best-effort import.  Returning
+        # an error after persisting only some rows makes retries double-debit
+        # stock and plan capacity.  Mark the enclosing transaction for rollback
+        # so no allocation, signal-driven balance refresh, or on-commit work
+        # survives a rejected row.
+        if errors:
+            transaction.set_rollback(True)
+            return Response({
+                'success': 0,
+                'created_items': [],
+                'errors': errors,
+                'allotment': allotment_data,
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             'success': len(created_items),

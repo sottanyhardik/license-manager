@@ -31,6 +31,7 @@ vi.mock("./AllotmentFilters", () => ({
         <div>
             <output data-testid="planning-target">{filters.item_id}</output>
             <button type="button" onClick={() => setFilters({ ...filters, item_id: "217" })}>Switch planning target</button>
+            <button type="button" onClick={() => setFilters({ ...filters, item_id: "" })}>Clear planning target</button>
         </div>
     ),
 }));
@@ -165,5 +166,70 @@ describe("AllotmentAction canonical paired Max", () => {
         expect(screen.getByPlaceholderText("Value")).toHaveValue(null);
         expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
         expect(mockedPost).not.toHaveBeenCalled();
+    });
+
+    it("keeps PLAN candidate retrieval active after clearing the optional planning target", async () => {
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+
+        fireEvent.click(screen.getByRole("button", { name: "Clear planning target" }));
+        await waitFor(() => expect(screen.getByTestId("planning-target")).toHaveTextContent(""));
+        await waitFor(() => expect(mockedGet).toHaveBeenCalledWith(
+            "allotment-actions/9722/available-licenses/",
+            expect.objectContaining({ params: expect.objectContaining({ page: 1, page_size: 20 }) }),
+        ));
+        const planCalls = mockedGet.mock.calls.filter(([url]) => url === "allotment-actions/9722/available-licenses/");
+        const lastParams = planCalls[planCalls.length - 1]?.[1]?.params as Record<string, unknown>;
+        expect(lastParams).not.toHaveProperty("planning_target_item_id");
+    });
+
+    it("keeps Actual mode on the canonical Actual path even when a row has plan metadata", async () => {
+        const actualInitialization = {
+            ...initialization,
+            default_search_mode: "ACTUAL",
+            default_allocation_basis: "ACTUAL",
+            default_item: { id: 216, name: "ALUMINIUM FOIL" },
+            has_active_plan: false,
+            plan_status: "NO_ACTIVE_PLAN",
+        };
+        const actualItem = {
+            ...availableItem(1, "ALUMINIUM FOIL"),
+            basis_options: {
+                actual: {
+                    enabled: true,
+                    allocation_limit: { paired_max_qty: "50", paired_max_cif: "441.05", can_allocate: true },
+                },
+                plan: { enabled: false, allocation_limit: { paired_max_qty: "0", paired_max_cif: "0", can_allocate: false } },
+            },
+            planning_options: [{ plan_line_id: 99, item_name: "UNRELATED PLAN", remaining_quantity: "1", remaining_cif_fc: "1" }],
+        };
+        mockedGet.mockImplementation((url: string) => {
+            if (url === "masters/notification-numbers/") return Promise.resolve({ data: { results: [] } });
+            if (url === "item-report/available-items/") return Promise.resolve({ data: [{ id: 216, name: "ALUMINIUM FOIL" }] });
+            if (url === "item-report/planned-item-names/") return Promise.resolve({ data: [] });
+            if (url === "allotments/9722/") return Promise.resolve({ data: allotment });
+            if (url === "allotment-actions/9722/allocation-initialization/") return Promise.resolve({ data: actualInitialization });
+            if (url === "allotment-actions/9722/available-licenses/") return Promise.resolve({ data: { count: 1, available_items: [actualItem] } });
+            return Promise.reject(new Error(`Unexpected GET ${url}`));
+        });
+
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+        expect(screen.queryByText("Follow Plan: UNRELATED PLAN")).not.toBeInTheDocument();
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+        await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1));
+        expect(mockedPost.mock.calls[0][1]).toEqual({
+            allocations: [expect.objectContaining({
+                item_id: 1,
+                qty: "50",
+                cif_fc: "441.05",
+                debit_based_on: "ACTUAL",
+                allocation_basis: "ACTUAL",
+                actual_item_id: "216",
+            })],
+        });
+        const submittedPayload = mockedPost.mock.calls[0][1] as { allocations: Record<string, unknown>[] };
+        expect(submittedPayload.allocations[0]).not.toHaveProperty("plan_line_id");
     });
 });

@@ -163,13 +163,26 @@ export function useMasterFormData({
             // The BOE PDF import can identify an existing BOE before the user
             // submits. Apply its carried parsed values after loading the
             // existing record, so nothing has to be entered or uploaded again.
-            const boeParsedPatch = location.state?.boeParsedPatch;
+            const boePatchStorageKey = `boePdfParsePatch:${recordId}`;
+            let storedBoePatch: Record<string, any> | null = null;
+            try {
+                const rawPatch = sessionStorage.getItem(boePatchStorageKey);
+                storedBoePatch = rawPatch ? JSON.parse(rawPatch) : null;
+            } catch {
+                storedBoePatch = null;
+            }
+            const boeParsedPatch = location.state?.boeParsedPatch || storedBoePatch;
             if (boeParsedPatch && entityName === 'bill-of-entries') {
                 const carriedFile = location.state?.boePdfFile || null;
                 if (carriedFile) {
                     setBoePdfFile(carriedFile);
                 }
                 setFormData({ ...data, ...boeParsedPatch });
+                try {
+                    sessionStorage.removeItem(boePatchStorageKey);
+                } catch {
+                    // Session storage is only a resilience layer for the redirect.
+                }
                 toast.info('Existing BOE opened with PDF values ready to review and save.');
                 navigate(location.pathname, { replace: true, state: null });
             }

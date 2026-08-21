@@ -312,6 +312,11 @@ export default function MasterForm({
             // already exists, so open its edit form and carry the complete
             // parsed patch and selected file with the user.
             if (!isEdit && existing_boe_id) {
+                try {
+                    sessionStorage.setItem(`boePdfParsePatch:${existing_boe_id}`, JSON.stringify(patch));
+                } catch {
+                    // Navigation state below remains the primary handoff channel.
+                }
                 toast.info(`BOE ${parsed.be_number} already exists — opening it with the PDF values ready to save.`);
                 navigate(`/bill-of-entries/${existing_boe_id}/edit`, {
                     state: { boeParsedPatch: patch, boePdfFile },

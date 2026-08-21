@@ -93,40 +93,27 @@ export default function NestedFieldArray({
         onChange(newArray);
     };
 
+    const getFieldId = (index, fieldName) =>
+        `nested-${fieldKey || "field"}-${index}-${fieldName}`.replace(/[^A-Za-z0-9_-]/g, "-");
+
     const handleChange = (index, fieldName, fieldValue) => {
         const newArray = [...value];
         const updates: Record<string, any> = {[fieldName]: fieldValue};
 
-        // Enforce decimal precision for BOE numeric fields using ROUND_HALF_UP strategy
-        if (fieldKey === 'item_details' && ['cif_inr', 'cif_fc', 'qty'].includes(fieldName) && fieldValue !== '' && fieldValue !== null) {
-            const numVal = parseFloat(fieldValue);
-            if (!isNaN(numVal)) {
-                // Determine decimal places: cif_inr and cif_fc use 2dp, qty uses 3dp
-                const decimalPlaces = (fieldName === 'qty') ? 3 : 2;
-                // ROUND_HALF_UP: Math.round() in JavaScript rounds 0.5 away from zero
-                const factor = Math.pow(10, decimalPlaces);
-                const rounded = Math.round(numVal * factor) / factor;
-                updates[fieldName] = rounded.toFixed(decimalPlaces);
-            }
-        }
+        // Keep the active BOE input exactly as typed. Formatting it on every
+        // keystroke (for example, changing "1" into "1.00") prevents normal
+        // multi-digit keyboard entry in this controlled input.
 
-        // Bill of Entry calculations for item_details
+        // Calculate only the opposite CIF field. The active field is never
+        // reformatted or replaced while the user is typing.
         if (entityName === "bill-of-entries" && fieldKey === "item_details") {
-            // Calculate cif_fc from cif_inr when cif_inr changes
-            if (fieldName === "cif_inr" && fieldValue && formData.exchange_rate) {
-                const cifInr = parseFloat(fieldValue);
-                const exchangeRate = parseFloat(formData.exchange_rate);
-                if (!isNaN(cifInr) && !isNaN(exchangeRate) && exchangeRate > 0) {
-                    updates.cif_fc = (cifInr / exchangeRate).toFixed(2);
-                }
-            }
-
-            // Calculate cif_inr from cif_fc when cif_fc changes
-            if (fieldName === "cif_fc" && fieldValue && formData.exchange_rate) {
-                const cifFc = parseFloat(fieldValue);
-                const exchangeRate = parseFloat(formData.exchange_rate);
-                if (!isNaN(cifFc) && !isNaN(exchangeRate) && exchangeRate > 0) {
-                    updates.cif_inr = (cifFc * exchangeRate).toFixed(2);
+            const enteredValue = parseFloat(fieldValue);
+            const exchangeRate = parseFloat(formData.exchange_rate);
+            if (!isNaN(enteredValue) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                if (fieldName === "cif_inr") {
+                    updates.cif_fc = (enteredValue / exchangeRate).toFixed(2);
+                } else if (fieldName === "cif_fc") {
+                    updates.cif_inr = (enteredValue * exchangeRate).toFixed(2);
                 }
             }
         }
@@ -169,6 +156,7 @@ export default function NestedFieldArray({
     const renderNestedField = (field, item, index, isFrozen = false) => {
         // Use nullish coalescing to preserve 0 values
         const fieldValue = item[field.name] ?? "";
+        const fieldId = getFieldId(index, field.name);
 
         // Frozen number fields (cif_inr, cif_fc, qty) render as read-only display
         if (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name)) {
@@ -255,6 +243,8 @@ export default function NestedFieldArray({
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <AsyncCreatableSelect
+                        inputId={fieldId}
+                        name={fieldId}
                         cacheOptions={false}
                         defaultOptions={false}
                         value={currentOption}
@@ -325,6 +315,8 @@ export default function NestedFieldArray({
             return (
                 <div className="w-full">
                     <DatePicker
+                        id={fieldId}
+                        name={fieldId}
                         selected={parseDate(fieldValue)}
                         onChange={(date: Date | null) => handleChange(index, field.name, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
@@ -378,6 +370,8 @@ export default function NestedFieldArray({
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <AsyncSelectField
+                        inputId={fieldId}
+                        name={fieldId}
                         endpoint={endpoint}
                         labelField={labelField}
                         value={fieldValue}
@@ -410,6 +404,8 @@ export default function NestedFieldArray({
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <Select
+                        inputId={fieldId}
+                        name={fieldId}
                         options={options}
                         value={selectedOption}
                         onChange={(selected) => handleChange(index, field.name, selected ? selected.value : null)}
@@ -444,6 +440,7 @@ export default function NestedFieldArray({
                         className="form-check-input"
                         role="switch"
                         id={`switch-${field.name}-${index}`}
+                        name={`switch-${field.name}-${index}`}
                         checked={boolValue}
                         onChange={(e) => handleChange(index, field.name, e.target.checked)}
                     />
@@ -460,6 +457,8 @@ export default function NestedFieldArray({
                 <div>
                     <input
                         type="file"
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         onChange={(e) => {
                             const file = e.target.files[0];
@@ -489,9 +488,18 @@ export default function NestedFieldArray({
         // Handle different field types
         switch (field.type) {
             case "number":
+                // BOE amounts are deliberately text inputs with a decimal
+                // keyboard. Native number inputs normalise partial values in
+                // some browsers, which makes controlled values such as `1.`
+                // and `1.00` difficult to continue editing.
+                const isBoeItemNumber = fieldKey === "item_details"
+                    && ["cif_inr", "cif_fc", "qty"].includes(field.name);
                 return (
                     <input
-                        type="number"
+                        type={isBoeItemNumber ? "text" : "number"}
+                        id={fieldId}
+                        name={fieldId}
+                        inputMode={isBoeItemNumber ? "decimal" : undefined}
                         step={['cif_inr', 'cif_fc', 'qty'].includes(field.name) ? "0.001" : "0.01"}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
@@ -502,6 +510,8 @@ export default function NestedFieldArray({
                 return (
                     <input
                         type="number"
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
@@ -510,6 +520,8 @@ export default function NestedFieldArray({
             case "textarea":
                 return (
                     <textarea
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         rows={field.name === "description" ? 3 : 2}
                         value={fieldValue}
@@ -520,6 +532,8 @@ export default function NestedFieldArray({
                 return (
                     <input
                         type="text"
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
@@ -716,9 +730,16 @@ export default function NestedFieldArray({
                                             const bsCol = FIELD_WIDTHS[fieldKey]?.[field.name]
                                                 || (isTextarea ? "col-12" : "col-md-4");
                                             const colClass = colToSpan(bsCol);
+                                            const fieldId = getFieldId(index, field.name);
+                                            const isReadOnlyDisplay = (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name))
+                                                || field.readonly || field.read_only;
+                                            const hasOwnLabel = field.type === "boolean"
+                                                || typeof item[field.name] === "boolean"
+                                                || field.name.startsWith("is_")
+                                                || field.name.startsWith("has_");
                                             return (
                                                 <div key={field.name} className={cn(colClass, isFrozen ? "pointer-events-none opacity-70" : "")}>
-                                                    <label className="mb-1 block text-[12px] font-semibold text-muted-foreground">
+                                                    <label htmlFor={isReadOnlyDisplay || hasOwnLabel ? undefined : fieldId} className="mb-1 block text-[12px] font-semibold text-muted-foreground">
                                                         {field.label || field.name.replace(/_/g, ' ')}
                                                         {field.required && <span className="ml-0.5 text-destructive">*</span>}
                                                     </label>

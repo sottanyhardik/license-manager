@@ -83,6 +83,8 @@ export default function AsyncSelectField({
     debounceDelay = 300,
     getOptionSubtitle = undefined,
     ariaLabel = undefined,
+    inputId = undefined,
+    name = undefined,
     onMenuOpen = undefined,
     onMenuClose = undefined,
 }) {
@@ -387,6 +389,8 @@ export default function AsyncSelectField({
                 onMenuOpen={onMenuOpen}
                 onMenuClose={onMenuClose}
                 aria-label={ariaLabel}
+                inputId={inputId}
+                name={name}
                 styles={{
                     control: (base) => ({
                         ...base,

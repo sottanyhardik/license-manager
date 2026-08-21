@@ -88,6 +88,9 @@ export async function createSionPlanningRule(payload: SionPlanningRule): Promise
 export async function updateSionPlanningRule(id: number, payload: Partial<SionPlanningRule>): Promise<SionPlanningRule> {
     return (await api.patch(`sion-planning-rules/${id}/`, payload)).data;
 }
+export async function deleteSionPlanningRule(id: number): Promise<void> {
+    await api.delete(`sion-planning-rules/${id}/`);
+}
 export type ImportItemOption = { id: number; name: string; unit?: string; sionCode?: string };
 export type ImportItemPage = { items: ImportItemOption[]; nextPage: number | null };
 

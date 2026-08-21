@@ -11,12 +11,32 @@ const API_BASE = API_HOST ? `${API_HOST}/api/` : "/api/";
 const api = axios.create({
     baseURL: API_BASE,
     headers: {"Content-Type": "application/json"},
+    // Django's default names differ from Axios' defaults. This keeps
+    // session-authenticated browser requests valid as a fallback while the
+    // application normally authenticates with a bearer token.
+    xsrfCookieName: "csrftoken",
+    xsrfHeaderName: "X-CSRFToken",
 });
+
+const getCookie = (name) => {
+    if (typeof document === "undefined") return null;
+    const prefix = `${name}=`;
+    const cookie = document.cookie.split(";").map(part => part.trim()).find(part => part.startsWith(prefix));
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+};
 
 // Attach access token on every request
 api.interceptors.request.use((config) => {
     const access = localStorage.getItem("access");
     if (access) config.headers.Authorization = `Bearer ${access}`;
+
+    // Axios only injects an XSRF header automatically in certain same-origin
+    // configurations. Set Django's standard header explicitly so a browser
+    // session cookie can never cause a legitimate form submission to fail.
+    const csrfToken = getCookie("csrftoken");
+    if (csrfToken && !config.headers["X-CSRFToken"]) {
+        config.headers["X-CSRFToken"] = csrfToken;
+    }
     return config;
 });
 

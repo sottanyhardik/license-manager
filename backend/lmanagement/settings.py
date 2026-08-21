@@ -241,8 +241,11 @@ AUTH_USER_MODEL = "accounts.User"
 # ---------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework.authentication.SessionAuthentication",  # Session auth for browser
         "apps.core.authentication.JWTAuthenticationFromQueryParam",  # JWT auth for API
+        # JWT must be evaluated before a browser's session cookie. Otherwise
+        # SessionAuthentication can reject a valid bearer-token mutation for a
+        # missing CSRF token before JWT authentication is reached.
+        "rest_framework.authentication.SessionAuthentication",  # Browser/admin fallback
     ),
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend"

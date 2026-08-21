@@ -40,7 +40,7 @@ export default function AllotmentFilters({ filters, setFilters, availableItemNam
                                     is_expired: "all",
                                     is_restricted: "all",
                                     purchase_status: purchaseStatusOptions.map(o => o.value).join(','),
-                                    license_status: "active",
+                                    license_status: "all",
                                     item_id: defaultItemId == null ? "" : String(defaultItemId),
                                     expiry_date_from: "",
                                     expiry_date_to: "",

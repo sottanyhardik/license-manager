@@ -142,7 +142,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // Purchase Status default is applied once the master data loads
         // (see the usePurchaseStatusOptions effect below) — never hardcoded.
         purchase_status: "",
-        license_status: "active",
+        // "All" is deliberately unrestricted: expired licences remain
+        // visible until the user explicitly selects an expiry restriction.
+        license_status: "all",
         item_id: "",
         expiry_date_from: "",
         expiry_date_to: "",
@@ -416,6 +418,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     debit_based_on: filters.debit_based_on,
                     search_mode: filters.debit_based_on,
                     allocation_basis: followsPlan ? "PLAN" : "ACTUAL",
+                    license_status: filters.license_status,
                     ...(filters.debit_based_on === "PLAN" ? { planning_target_item_id: filters.item_id } : { actual_item_id: actualItemId }),
                 }],
             }).then(r => r.data);

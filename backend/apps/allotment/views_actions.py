@@ -1010,6 +1010,15 @@ class AllotmentActionViewSet(ViewSet):
             or first_allocation.get('allocation_basis')
             or (search_mode if explicit_search_mode else legacy_basis)
         ).strip().upper()
+        # The available-items License Status filter is part of the allocation
+        # intent as well: an explicit "all" permits the user to debit an
+        # expired licence surfaced by that filter.  Legacy callers retain the
+        # historical safety default and are still rejected for expiry.
+        requested_license_status = str(
+            request.data.get('license_status')
+            or first_allocation.get('license_status')
+            or 'active'
+        ).strip().lower()
         if search_mode not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
             return Response({'code': 'INVALID_DEBIT_BASIS', 'error': 'Invalid debit basis.'}, status=status.HTTP_400_BAD_REQUEST)
         if allocation_basis not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
@@ -1136,7 +1145,8 @@ class AllotmentActionViewSet(ViewSet):
                 # fooled by a stale flag between nightly recalculation runs.
                 from django.utils import timezone
                 license_expiry_date = license_item.license.license_expiry_date
-                if license_expiry_date and license_expiry_date < timezone.now().date():
+                if (requested_license_status != 'all'
+                        and license_expiry_date and license_expiry_date < timezone.now().date()):
                     errors.append({
                         'item_id': item_id,
                         'error': f'License has expired on {license_expiry_date}. Cannot allocate against an expired license.'

@@ -9,6 +9,7 @@ import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
 import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
+import {formatDate} from "../utils/dateFormatter";
 import {useDebounce} from "@/hooks/useDebounce";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
@@ -361,6 +362,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         queryKey: ['allotment-available-licenses', id, filters.debit_based_on, allotment?.planning_target_item ?? null, allotment?.planning_target_sion ?? null, apiParams],
         queryFn: () => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams }).then(r => r.data),
         enabled: Boolean(id) && filtersReady,
+        // Changing a filter should refresh just the results, not blank the
+        // workspace and make the page appear to reload.
+        placeholderData: (previousData) => previousData,
+        refetchOnWindowFocus: false,
     });
 
     const availableItems: AvailableItem[] = useMemo(
@@ -1315,10 +1320,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                     {licenseKey}
                                                 </button>
                                                 <span className="text-muted-foreground">|</span>
-                                                <span className="text-muted-foreground">{firstItem.license_expiry_date ? new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</span>
+                                                <span className="text-muted-foreground">{formatDate(firstItem.license_expiry_date) || '—'}</span>
                                                 <span className="text-foreground font-semibold">{firstItem.exporter_name || '—'}</span>
                                                 {firstItem.license_expiry_date && (
-                                                    <span className="text-muted-foreground">Exp: {new Date(firstItem.license_expiry_date).toLocaleDateString('en-IN', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
+                                                    <span className="text-muted-foreground">Exp: {formatDate(firstItem.license_expiry_date) || '—'}</span>
                                                 )}
                                                 {firstItem.notification_number && (
                                                     <span className="text-muted-foreground">Notif: {firstItem.notification_number}</span>

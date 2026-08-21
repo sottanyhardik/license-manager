@@ -14,6 +14,7 @@ export interface UseMasterFormDataOptions {
     /** Called after a successful fetchRecord when parse data is found in location state */
     applyLicenseParse: (data: Record<string, any>, fileOverride?: File | null, opts?: Record<string, any>) => void;
     setLicensePdfFile: (f: File | null) => void;
+    setBoePdfFile: (f: File | null) => void;
 }
 
 export function useMasterFormData({
@@ -24,6 +25,7 @@ export function useMasterFormData({
     navigate,
     applyLicenseParse,
     setLicensePdfFile,
+    setBoePdfFile,
 }: UseMasterFormDataOptions) {
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [metadata, setMetadata] = useState<Record<string, any>>({});
@@ -155,6 +157,20 @@ export function useMasterFormData({
                 // attached on this render — setLicensePdfFile is async.
                 applyLicenseParse(parseData, carriedFile);
                 // Clear the state so a manual reload doesn't re-apply it.
+                navigate(location.pathname, { replace: true, state: null });
+            }
+
+            // The BOE PDF import can identify an existing BOE before the user
+            // submits. Apply its carried parsed values after loading the
+            // existing record, so nothing has to be entered or uploaded again.
+            const boeParsedPatch = location.state?.boeParsedPatch;
+            if (boeParsedPatch && entityName === 'bill-of-entries') {
+                const carriedFile = location.state?.boePdfFile || null;
+                if (carriedFile) {
+                    setBoePdfFile(carriedFile);
+                }
+                setFormData({ ...data, ...boeParsedPatch });
+                toast.info('Existing BOE opened with PDF values ready to review and save.');
                 navigate(location.pathname, { replace: true, state: null });
             }
         } catch (err: any) {

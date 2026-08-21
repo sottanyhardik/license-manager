@@ -65,55 +65,9 @@ class RowDetailsSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # New BOE usage gets a target automatically only where the active
-        # configured planner yields one legal target.  Split ambiguity remains
-        # a deliberate user decision rather than a name-based heuristic.
-        source = attrs.get("sr_number") or getattr(self.instance, "sr_number", None)
-        requested_target = attrs.get("planning_target_item")
-        if source and requested_target is None:
-            # Preserve an existing explicit mapping on partial updates and
-            # validate it against the current configuration rather than
-            # replacing it with an invented blank probe.
-            if self.instance and self.instance.planning_target_item_id:
-                from apps.license.services.planning_actual_target_mapping import apply_deterministic_target_mapping
-                apply_deterministic_target_mapping(self.instance, source)
-                attrs["planning_mapping_status"] = self.instance.planning_mapping_status
-                attrs["planning_mapping_source"] = self.instance.planning_mapping_source
-                return attrs
-            from apps.license.services.planning_actual_target_mapping import apply_deterministic_target_mapping
-            probe = type("TargetProbe", (), {
-                "planning_target_item_id": None,
-                "planning_mapping_status": "UNMAPPED_AMBIGUOUS",
-                "planning_mapping_source": "",
-            })()
-            apply_deterministic_target_mapping(probe, source)
-            if probe.planning_target_item_id:
-                from apps.core.models import ItemNameModel
-                attrs["planning_target_item"] = ItemNameModel.objects.get(pk=probe.planning_target_item_id)
-                attrs["planning_mapping_status"] = probe.planning_mapping_status
-                attrs["planning_mapping_source"] = probe.planning_mapping_source
-            else:
-                attrs["planning_mapping_status"] = probe.planning_mapping_status
-                attrs["planning_mapping_source"] = probe.planning_mapping_source
-        elif requested_target:
-            # DRF does not attach the child instance while validating a nested
-            # BOE payload.  Preserve an unchanged persisted mapping so the
-            # parent form can be saved after later rule configuration changes;
-            # any newly selected target is still validated strictly below.
-            detail_id = attrs.get("id")
-            if detail_id:
-                existing_target_id = RowDetails.objects.filter(pk=detail_id).values_list(
-                    "planning_target_item_id", flat=True
-                ).first()
-                if existing_target_id == requested_target.pk:
-                    return attrs
-            from apps.license.services.planning_actual_target_mapping import validate_explicit_target
-            try:
-                validate_explicit_target(source, requested_target.pk)
-            except ValueError as exc:
-                raise serializers.ValidationError({"planning_target_item": str(exc)}) from exc
-            attrs["planning_mapping_status"] = "MAPPED_EXPLICIT"
-            attrs["planning_mapping_source"] = "USER_SELECTED"
+        # Planning target metadata belongs to the BOE header.  RowDetails
+        # stopped storing these fields in migration 0009; adding them to this
+        # nested payload makes Django reject a PDF-imported BOE at save time.
         return attrs
 
     class Meta:

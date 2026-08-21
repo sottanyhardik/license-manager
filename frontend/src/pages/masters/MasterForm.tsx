@@ -127,6 +127,7 @@ export default function MasterForm({
         navigate,
         applyLicenseParse: (data, fileOverride, opts) => applyLicenseParseRef.fn(data, fileOverride, opts),
         setLicensePdfFile,
+        setBoePdfFile,
     });
 
     // ---------- Hook 2: field change calculations ----------
@@ -266,7 +267,7 @@ export default function MasterForm({
             const { data } = await api.post("bill-of-entries/parse-pdf/", fd, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
-            const { parsed, prefill, matched_allotment_id, matched_company_id, matched_port_id, company_created, licences } = data;
+            const { parsed, prefill, matched_allotment_id, matched_company_id, matched_port_id, company_created, licences, existing_boe_id } = data;
 
             // Build patch — only fields we successfully extracted/matched
             const patch: Record<string, any> = {};
@@ -305,6 +306,17 @@ export default function MasterForm({
                     cif_fc:  Number(r.cif_fc.toFixed(2)),
                     qty:     Number(r.qty.toFixed(3)),
                 }));
+            }
+
+            // Avoid a duplicate BOE submission: the parser found this BOE
+            // already exists, so open its edit form and carry the complete
+            // parsed patch and selected file with the user.
+            if (!isEdit && existing_boe_id) {
+                toast.info(`BOE ${parsed.be_number} already exists — opening it with the PDF values ready to save.`);
+                navigate(`/bill-of-entries/${existing_boe_id}/edit`, {
+                    state: { boeParsedPatch: patch, boePdfFile },
+                });
+                return;
             }
 
             setFormData(prev => ({ ...prev, ...patch }));

@@ -20,18 +20,7 @@ export const AuthContext = createContext<AuthContextValue>({
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 // How often to check for idle state
 const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
-// Refresh the access token this many ms before it actually expires
-const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 // ─────────────────────────────────────────────────────────────────────────────
-
-function getTokenExpiryMs(token: string): number | null {
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.exp * 1000; // JWT exp is in seconds, convert to ms
-    } catch {
-        return null;
-    }
-}
 
 function getStoredUser(): AuthUser | null {
     const storedUser = localStorage.getItem("user");
@@ -50,13 +39,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const loadUserCalled = useRef(false);
     const lastActivityRef = useRef(Date.now());
     const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const clearTimers = () => {
         if (idleTimerRef.current) clearInterval(idleTimerRef.current);
-        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
         idleTimerRef.current = null;
-        refreshTimerRef.current = null;
     };
 
     const logout = useCallback(async (reason?: string) => {
@@ -81,34 +67,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
-    // Proactively refresh the access token before it expires so the user
-    // never sees a 401 mid-request while actively working. Uses the configured
-    // api client (not raw axios) to ensure consistency with API_BASE and other interceptors.
-    const scheduleProactiveRefresh = useCallback(() => {
-        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-
-        const access = localStorage.getItem("access");
-        if (!access) return;
-
-        const expiry = getTokenExpiryMs(access);
-        if (!expiry) return;
-
-        const delay = Math.max(expiry - Date.now() - TOKEN_REFRESH_BUFFER_MS, 10_000);
-
-        refreshTimerRef.current = setTimeout(async () => {
-            const refresh = localStorage.getItem("refresh");
-            if (!refresh) return;
-            try {
-                const {data} = await api.post("auth/refresh/", {refresh});
-                localStorage.setItem("access", data.access);
-                if (data.refresh) localStorage.setItem("refresh", data.refresh);
-                scheduleProactiveRefresh(); // schedule next refresh for the new token
-            } catch {
-                logout('session_expired');
-            }
-        }, delay);
-    }, [logout]);
-
     // Reset the idle clock whenever the user interacts with the page
     const resetActivity = useCallback(() => {
         lastActivityRef.current = Date.now();
@@ -127,17 +85,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!user) return;
 
-        const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-        events.forEach(e => window.addEventListener(e, resetActivity, {passive: true}));
+        // `scroll` does not bubble from nested scroll containers. Capture it
+        // on document so activity in page panels, tables and dialogs counts as
+        // activity just like clicks and keyboard input.
+        const windowEvents = ['mousemove', 'keydown', 'click', 'touchstart', 'focus'];
+        const documentEvents = ['scroll', 'wheel', 'pointerdown', 'keydown', 'touchstart'];
+        windowEvents.forEach(e => window.addEventListener(e, resetActivity, {passive: true}));
+        documentEvents.forEach(e => document.addEventListener(e, resetActivity, {capture: true, passive: true}));
         lastActivityRef.current = Date.now();
         startIdleTimer();
-        scheduleProactiveRefresh();
 
         return () => {
-            events.forEach(e => window.removeEventListener(e, resetActivity));
+            windowEvents.forEach(e => window.removeEventListener(e, resetActivity));
+            documentEvents.forEach(e => document.removeEventListener(e, resetActivity, true));
             clearTimers();
         };
-    }, [user, resetActivity, startIdleTimer, scheduleProactiveRefresh]);
+    }, [user, resetActivity, startIdleTimer]);
 
     const loadUser = async () => {
         if (loadUserCalled.current) return;

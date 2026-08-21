@@ -297,9 +297,9 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     # Access tokens are stateless and CANNOT be revoked (only refresh tokens can be
     # blacklisted), so a long-lived access token is a long-lived bearer credential if
-    # it ever leaks. Keep it short (default 30 min) — the frontend proactively
-    # refreshes ~5 min before expiry via the (rotating, blacklist-on-rotation) refresh
-    # token, so sessions still last as long as the refresh token. Tunable via env.
+    # it ever leaks. Keep it short (default 30 min). The frontend refreshes it
+    # through one queued refresh request on the next authenticated API call, so
+    # active sessions last as long as the refresh token. Tunable via env.
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("ACCESS_TOKEN_MINUTES", "30"))),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 

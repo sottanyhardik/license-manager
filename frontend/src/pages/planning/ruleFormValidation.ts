@@ -66,7 +66,6 @@ export function validatePlanningRule(
         errors.unit_value_rows = "Add at least one import item";
     } else if (strategy === "SPLIT_BY_UNIT_VALUE") {
         const rows = allocation?.unit_value_rows ?? [];
-        const seenItems = new Set<number>();
         const parsedRows: Array<{ index: number; min: string; max: string }> = [];
         for (const [index, row] of rows.entries()) {
             const rowLabel = `Row ${index + 1}`;
@@ -74,11 +73,9 @@ export function validatePlanningRule(
                 errors.unit_value_rows = `${rowLabel}: Import item is required`;
                 break;
             }
-            if (seenItems.has(row.import_item)) {
-                errors.unit_value_rows = "Each import item may only be selected once";
-                break;
-            }
-            seenItems.add(row.import_item);
+            // A Unit Value strategy intentionally permits one import item in
+            // multiple non-overlapping price bands (for example RUTILE below
+            // and above a calculated average threshold).
             if (!decimalPattern.test(row.min_unit_price) || !decimalPattern.test(row.max_unit_price)) {
                 errors.unit_value_rows = `${rowLabel}: Min and Max Unit Price must be valid decimals`;
                 break;

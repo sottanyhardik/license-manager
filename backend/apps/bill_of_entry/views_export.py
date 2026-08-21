@@ -230,15 +230,15 @@ def add_grouped_export_action(viewset_class):
             0.45 * inch,  # Unit Price ($)
             0.73 * inch,  # Value ($)    (+0.08)
             0.45 * inch,  # Exchange Rate
-            0.93 * inch,  # Item Name
+            0.80 * inch,  # Item Name
             0.50 * inch,  # Invoice
-            0.90 * inch,  # Exporter — 0.90" = 60pt usable, "PGP GLASS…" ≈ 51pt, fits 1 line
+            0.83 * inch,  # Exporter
             0.98 * inch,  # License No.  (+0.20)
             0.65 * inch,  # Lic. Date
             0.54 * inch,  # Lic. Port
             0.28 * inch,  # Item Sr.
             0.50 * inch,  # BOE Qty.
-            0.70 * inch,  # BOE $.       (+0.12)
+            0.90 * inch,  # BOE $.
             0.92 * inch,  # BOE CIF      (+0.10)
         ]  # total = 11.35"
 
@@ -273,6 +273,7 @@ def add_grouped_export_action(viewset_class):
 
                 table_data = [table_header]
                 sr_no = 1
+                dfia_subtotal_rows = []
 
                 for port_code in sorted(ports_dict.keys()):
                     port_total_qty = 0
@@ -334,9 +335,10 @@ def add_grouped_export_action(viewset_class):
                                     (_decimal_or_default(detail['cif_fc']) for detail in boe['license_details']),
                                     Decimal('0'),
                                 )
+                                dfia_subtotal_rows.append(len(table_data))
                                 table_data.append([
-                                    '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-                                    'Total DFIA allocation',
+                                    '', '', '', '', '', '', '', '', '', '',
+                                    'Total DFIA allocation', '', '', '', '',
                                     pdf_exporter.format_number(total_dfia_qty, decimals=0),
                                     pdf_exporter.format_number(total_dfia_value),
                                     '',
@@ -373,6 +375,17 @@ def add_grouped_export_action(viewset_class):
                     additional_styles.append(
                         ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                     )
+
+                for subtotal_row in dfia_subtotal_rows:
+                    additional_styles.extend([
+                        ('SPAN', (10, subtotal_row), (14, subtotal_row)),
+                        ('BACKGROUND', (10, subtotal_row), (17, subtotal_row), colors.HexColor('#dbeafe')),
+                        ('TEXTCOLOR', (10, subtotal_row), (17, subtotal_row), colors.HexColor('#1e3a8a')),
+                        ('FONTNAME', (10, subtotal_row), (17, subtotal_row), 'Helvetica-Bold'),
+                        ('ALIGN', (10, subtotal_row), (14, subtotal_row), 'LEFT'),
+                        ('TOPPADDING', (10, subtotal_row), (17, subtotal_row), 4),
+                        ('BOTTOMPADDING', (10, subtotal_row), (17, subtotal_row), 4),
+                    ])
 
                 # Port Total rows — bold + subtle header background
                 for row_idx, row in enumerate(table_data):
@@ -606,24 +619,44 @@ def add_grouped_export_action(viewset_class):
                                     (_decimal_or_default(detail['cif_fc']) for detail in boe['license_details']),
                                     Decimal('0'),
                                 )
-                                total_fill = PatternFill(start_color='DCE6F1', end_color='DCE6F1', fill_type='solid')
-                                total_columns = {
-                                    16: 'Total DFIA allocation',
-                                    17: total_dfia_qty,
-                                    18: total_dfia_value,
-                                }
-                                for col_idx in range(1, len(headers) + 1):
-                                    cell = ws.cell(row=row, column=col_idx, value=total_columns.get(col_idx, ''))
+                                # A merged label band keeps the subtotal
+                                # readable and leaves Qty / DFIA $ aligned
+                                # precisely beneath their table headers.
+                                label_start_col = 12
+                                label_end_col = 16
+                                qty_col = 17
+                                value_col = 18
+                                total_fill = PatternFill(start_color='D9EAF7', end_color='D9EAF7', fill_type='solid')
+                                value_fill = PatternFill(start_color='B8D8F0', end_color='B8D8F0', fill_type='solid')
+                                ws.merge_cells(
+                                    start_row=row,
+                                    start_column=label_start_col,
+                                    end_row=row,
+                                    end_column=label_end_col,
+                                )
+
+                                label_cell = ws.cell(row=row, column=label_start_col, value='Total DFIA allocation')
+                                label_cell.border = border
+                                label_cell.fill = total_fill
+                                label_cell.font = Font(bold=True, size=12, color='17365D')
+                                label_cell.alignment = Alignment(horizontal='left', vertical='center')
+
+                                for col_idx, value, number_format in [
+                                    (qty_col, total_dfia_qty, '#,##0'),
+                                    (value_col, total_dfia_value, '#,##0.00'),
+                                ]:
+                                    cell = ws.cell(row=row, column=col_idx, value=value)
                                     cell.border = border
-                                    cell.fill = total_fill
-                                    cell.font = Font(bold=True, size=12)
-                                    cell.alignment = Alignment(
-                                        horizontal='right' if col_idx in total_columns else 'center',
-                                        vertical='center',
-                                        wrap_text=True,
-                                    )
-                                ws.cell(row=row, column=17).number_format = '#,##0'
-                                ws.cell(row=row, column=18).number_format = '#,##0.00'
+                                    cell.fill = value_fill
+                                    cell.font = Font(bold=True, size=12, color='17365D')
+                                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                                    cell.number_format = number_format
+                                # BOE CIF is intentionally left empty on the
+                                # DFIA subtotal row, but retains the same band.
+                                trailing_cell = ws.cell(row=row, column=19, value='')
+                                trailing_cell.border = border
+                                trailing_cell.fill = total_fill
+                                ws.row_dimensions[row].height = 22
                                 row += 1
 
                         sr_no += 1

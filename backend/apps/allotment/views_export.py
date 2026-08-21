@@ -236,22 +236,23 @@ def add_grouped_export_action(viewset_class):
                         0.45 * inch,  # Unit Price ($)
                         0.75 * inch,  # Value ($)
                         0.45 * inch,  # Exchange Rate
-                        1.80 * inch,  # Item Name
-                        0.50 * inch,  # Invoice
-                        0.60 * inch,  # ETA
+                        1.60 * inch,  # Item Name
+                        0.45 * inch,  # Invoice
+                        0.55 * inch,  # ETA
                         1.05 * inch,  # DFIA No.
-                        0.90 * inch,  # Exporter  — "PGP GLASS…" fits at 0.90"
+                        0.80 * inch,  # Exporter
                         0.65 * inch,  # DFIA Date
                         0.54 * inch,  # DFIA Port
                         0.32 * inch,  # Item Sr.
-                        0.55 * inch,  # DFIA Qty.
-                        0.68 * inch,  # DFIA $.
+                        0.65 * inch,  # DFIA Qty.
+                        0.98 * inch,  # DFIA $.
                     ]  # total = 11.35"
 
                     sr_no = 1
                     item_total_qty = 0
                     item_total_value = 0
                     item_total_inr = 0
+                    dfia_subtotal_rows = []
 
                     for allot in allotments:
                         allot_cif_inr = allot['value'] * allot.get('exchange_rate', DEFAULT_EXCHANGE_RATE)
@@ -309,9 +310,10 @@ def add_grouped_export_action(viewset_class):
                                 (_decimal_or_default(detail['dfia_value']) for detail in allot['details']),
                                 Decimal('0'),
                             )
+                            dfia_subtotal_rows.append(len(table_data))
                             table_data.append([
-                                '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-                                'Total DFIA allocation',
+                                '', '', '', '', '', '', '', '', '', '',
+                                'Total DFIA allocation', '', '', '', '',
                                 pdf_exporter.format_number(total_dfia_qty, decimals=0),
                                 pdf_exporter.format_number(total_dfia_value),
                             ])
@@ -322,14 +324,16 @@ def add_grouped_export_action(viewset_class):
                     company_total_value += item_total_value
                     company_total_inr += item_total_inr
 
-                    # Totals row — Qty in col 3, Value$ in col 5, DFIA $ in col 16
+                    # Totals row — only columns that exist in this PDF table.
+                    # CIF INR has no dedicated column here and must not be
+                    # placed under the DFIA $ heading.
                     table_data.append([
                         '', 'Total', '',
                         pdf_exporter.format_number(item_total_qty, decimals=0),
                         '',
                         pdf_exporter.format_number(item_total_value),
                         '', '', '', '', '', '', '', '', '', '',
-                        pdf_exporter.format_number(item_total_inr)
+                        ''
                     ])
 
                     # col 7 = Item Name, col 10 = DFIA No., col 11 = Exporter — left-align
@@ -342,6 +346,20 @@ def add_grouped_export_action(viewset_class):
                         additional_styles.append(
                             ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                         )
+
+                    # A multi-line allocation gets a dedicated, readable
+                    # subtotal band.  The DFIA detail cells are intentionally
+                    # spanned, while Qty and DFIA $ remain under their headers.
+                    for subtotal_row in dfia_subtotal_rows:
+                        additional_styles.extend([
+                            ('SPAN', (10, subtotal_row), (14, subtotal_row)),
+                            ('BACKGROUND', (10, subtotal_row), (16, subtotal_row), colors.HexColor('#dbeafe')),
+                            ('TEXTCOLOR', (10, subtotal_row), (16, subtotal_row), colors.HexColor('#1e3a8a')),
+                            ('FONTNAME', (10, subtotal_row), (16, subtotal_row), 'Helvetica-Bold'),
+                            ('ALIGN', (10, subtotal_row), (14, subtotal_row), 'LEFT'),
+                            ('TOPPADDING', (10, subtotal_row), (16, subtotal_row), 4),
+                            ('BOTTOMPADDING', (10, subtotal_row), (16, subtotal_row), 4),
+                        ])
 
                     # Approved rows — light green
                     row_idx = 1
@@ -596,24 +614,38 @@ def add_grouped_export_action(viewset_class):
                                 (_decimal_or_default(detail['dfia_value']) for detail in allot['details']),
                                 Decimal('0'),
                             )
-                            total_fill = PatternFill(start_color='DCE6F1', end_color='DCE6F1', fill_type='solid')
-                            total_columns = {
-                                len(main_headers) + 4: 'Total DFIA allocation',
-                                len(main_headers) + 5: total_dfia_qty,
-                                len(main_headers) + 6: total_dfia_value,
-                            }
-                            for col_idx in range(1, len(main_headers) + len(license_headers) + 1):
-                                cell = ws.cell(row=row, column=col_idx, value=total_columns.get(col_idx, ''))
+                            # Merge the blank descriptive cells so the label
+                            # never wraps vertically beside the DFIA totals.
+                            label_start_col = len(main_headers) + 1
+                            label_end_col = len(main_headers) + 4
+                            qty_col = label_end_col + 1
+                            value_col = label_end_col + 2
+                            total_fill = PatternFill(start_color='D9EAF7', end_color='D9EAF7', fill_type='solid')
+                            value_fill = PatternFill(start_color='B8D8F0', end_color='B8D8F0', fill_type='solid')
+                            ws.merge_cells(
+                                start_row=row,
+                                start_column=label_start_col,
+                                end_row=row,
+                                end_column=label_end_col,
+                            )
+
+                            label_cell = ws.cell(row=row, column=label_start_col, value='Total DFIA allocation')
+                            label_cell.border = border
+                            label_cell.fill = total_fill
+                            label_cell.font = Font(bold=True, size=12, color='17365D')
+                            label_cell.alignment = Alignment(horizontal='left', vertical='center')
+
+                            for col_idx, value, number_format in [
+                                (qty_col, total_dfia_qty, '#,##0'),
+                                (value_col, total_dfia_value, '#,##0.00'),
+                            ]:
+                                cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
-                                cell.fill = total_fill
-                                cell.font = Font(bold=True, size=12)
-                                cell.alignment = Alignment(
-                                    horizontal='right' if col_idx in total_columns else 'center',
-                                    vertical='center',
-                                    wrap_text=True,
-                                )
-                            ws.cell(row=row, column=len(main_headers) + 5).number_format = '#,##0'
-                            ws.cell(row=row, column=len(main_headers) + 6).number_format = '#,##0.00'
+                                cell.fill = value_fill
+                                cell.font = Font(bold=True, size=12, color='17365D')
+                                cell.alignment = Alignment(horizontal='right', vertical='center')
+                                cell.number_format = number_format
+                            ws.row_dimensions[row].height = 22
                             row += 1
 
                         sr_no += 1

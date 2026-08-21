@@ -518,7 +518,12 @@ export function useMasterFormSubmit({
             }
 
             // Handle field-level errors
-            if (err.response?.data && typeof err.response.data === 'object') {
+            if (err.response?.status >= 500) {
+                // Reverse proxies may return an HTML error page. Never render
+                // that markup as a validation error or discard the form data.
+                setError("The server could not save this record. Your changes are still on this page; please try again shortly.");
+                toast.error("Server error while saving. Your entered values have been kept.");
+            } else if (err.response?.data && typeof err.response.data === 'object') {
                 // Format backend errors using utility
                 const formattedErrors = validateFormUtil.formatBackendErrors(err.response.data);
                 setFieldErrors(formattedErrors);
@@ -614,15 +619,13 @@ export function useMasterFormSubmit({
                 } else if (err.response?.data?.message) {
                     errorMsg = err.response.data.message;
                 } else if (typeof err.response?.data === 'string') {
-                    errorMsg = err.response.data;
+                    errorMsg = "The server returned an unexpected response. Your entered values have been kept.";
                 } else if (err.response?.status === 400) {
                     errorMsg = "Invalid data provided. Please check your input.";
                 } else if (err.response?.status === 403) {
                     errorMsg = "You don't have permission to perform this action.";
                 } else if (err.response?.status === 404) {
                     errorMsg = "Record not found.";
-                } else if (err.response?.status === 500) {
-                    errorMsg = "Server error occurred. Please try again or contact support.";
                 } else if (err.message) {
                     errorMsg = `Error: ${err.message}`;
                 }

@@ -542,12 +542,31 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     const handleQuantityChange = (itemId, qty) => {
         const item = availableItems.find(i => i.id === itemId);
-        if (!item || !calculateMaxAllocation(item).enabled) return;
-        // Keep manual input intact. The locked server mutation validates the
-        // Qty/CIF pair and reports any stale or over-cap value precisely.
+        const maximum = item && calculateMaxAllocation(item);
+        if (!item || !maximum?.enabled) return;
+
+        // Qty and CIF are a pair.  The server has already calculated the
+        // executable maximum after intersecting actual, plan and allotment
+        // caps.  Clamp to that pair before calculating the visible Value so a
+        // user cannot type a quantity whose value would exceed Balance/Plan
+        // CIF (e.g. $999 at $10/unit becomes 99 / $990, never 100 / $1,000).
+        const requestedQty = Number(qty);
+        if (!qty || !Number.isFinite(requestedQty) || requestedQty <= 0) {
+            setAllocationData(previous => ({
+                ...previous,
+                [itemId]: { qty, cif_fc: "" },
+            }));
+            return;
+        }
+        const boundedQty = Math.min(requestedQty, maximum.qty);
+        const unitPrice = Number(allotment?.unit_value_per_unit || 0);
+        const calculatedCif = Math.round((boundedQty * unitPrice + Number.EPSILON) * 100) / 100;
+        // Preserve the server's one-cent final-settlement pair exactly when
+        // the typed quantity reaches its executable maximum.
+        const cif = boundedQty === maximum.qty ? maximum.value : calculatedCif;
         setAllocationData(previous => ({
             ...previous,
-            [itemId]: { qty, cif_fc: previous[itemId]?.cif_fc || "" },
+            [itemId]: { qty: String(boundedQty), cif_fc: String(cif) },
         }));
     };
 

@@ -153,6 +153,21 @@ describe("AllotmentAction canonical paired Max", () => {
         });
     });
 
+    it("updates Value from Qty and clamps both fields to the server Max pair", async () => {
+        renderScreen();
+        const qtyInput = await screen.findByPlaceholderText("Qty");
+        const valueInput = screen.getByPlaceholderText("Value");
+
+        fireEvent.change(qtyInput, { target: { value: "100" } });
+        expect(valueInput).toHaveValue(882.1);
+
+        // The fixture's server pair is 234 / 2064.12.  Typing past it must
+        // never leave a CIF-invalid pair in the row.
+        fireEvent.change(qtyInput, { target: { value: "300" } });
+        expect(qtyInput).toHaveValue(234);
+        expect(valueInput).toHaveValue(2064.12);
+    });
+
     it("clears a Max draft when the planning target changes, so it cannot be saved against the later target", async () => {
         renderScreen();
         await screen.findByPlaceholderText("Qty");

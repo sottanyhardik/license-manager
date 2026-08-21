@@ -31,7 +31,7 @@ export default function PageHeader({
     return (
         <div
             className={cn(
-                "mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3",
+                "app-page-header mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3",
                 "border-b border-border/60 pb-4",
                 className
             )}

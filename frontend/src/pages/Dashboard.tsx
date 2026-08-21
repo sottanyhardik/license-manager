@@ -123,7 +123,7 @@ export default function Dashboard() {
     };
 
     const headerActions = (
-        <>
+        <div className="dashboard-page space-y-5">
             <Button variant="outline" size="sm" onClick={fetchDashboardData} disabled={loading}>
                 <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
@@ -138,7 +138,7 @@ export default function Dashboard() {
                     <Plus className="size-4" />New BOE
                 </Button>
             )}
-        </>
+        </div>
     );
 
     if (loading) {

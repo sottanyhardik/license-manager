@@ -323,6 +323,25 @@ def add_grouped_export_action(viewset_class):
                                     pdf_exporter.format_number(detail['cif_inr'])
                                 ])
 
+                            # Preserve every BOE item line and add a clear
+                            # DFIA subtotal only for a multi-line allocation.
+                            if len(boe['license_details']) > 1:
+                                total_dfia_qty = sum(
+                                    (_decimal_or_default(detail['qty']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                total_dfia_value = sum(
+                                    (_decimal_or_default(detail['cif_fc']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                table_data.append([
+                                    '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+                                    'Total DFIA allocation',
+                                    pdf_exporter.format_number(total_dfia_qty, decimals=0),
+                                    pdf_exporter.format_number(total_dfia_value),
+                                    '',
+                                ])
+
                         sr_no += 1
                         port_total_qty += boe['total_quantity']
                         port_total_value += boe['total_fc']
@@ -576,6 +595,35 @@ def add_grouped_export_action(viewset_class):
                                 target_lines_d = 3 if longest_detail > 30 else 2
                                 ws.row_dimensions[row].height = max(28, target_lines_d * 16)
 
+                                row += 1
+
+                            if len(boe['license_details']) > 1:
+                                total_dfia_qty = sum(
+                                    (_decimal_or_default(detail['qty']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                total_dfia_value = sum(
+                                    (_decimal_or_default(detail['cif_fc']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                total_fill = PatternFill(start_color='DCE6F1', end_color='DCE6F1', fill_type='solid')
+                                total_columns = {
+                                    16: 'Total DFIA allocation',
+                                    17: total_dfia_qty,
+                                    18: total_dfia_value,
+                                }
+                                for col_idx in range(1, len(headers) + 1):
+                                    cell = ws.cell(row=row, column=col_idx, value=total_columns.get(col_idx, ''))
+                                    cell.border = border
+                                    cell.fill = total_fill
+                                    cell.font = Font(bold=True, size=12)
+                                    cell.alignment = Alignment(
+                                        horizontal='right' if col_idx in total_columns else 'center',
+                                        vertical='center',
+                                        wrap_text=True,
+                                    )
+                                ws.cell(row=row, column=17).number_format = '#,##0'
+                                ws.cell(row=row, column=18).number_format = '#,##0.00'
                                 row += 1
 
                         sr_no += 1

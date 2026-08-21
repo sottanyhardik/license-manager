@@ -21,13 +21,13 @@ export default function AdminLayout({ children }) {
     usePageTitle();
 
     return (
-        <div className="flex min-h-screen flex-col bg-background">
+        <div className="app-shell flex min-h-screen flex-col bg-background">
             {!isInIframe && <TopNav />}
 
-            <main id="main-content" className="flex-1 overflow-y-auto">
+            <main id="main-content" className="app-shell__main flex-1 overflow-y-auto">
                 <div
                     className={[
-                        "page-enter mx-auto w-full max-w-[100%]",
+                        "app-shell__content page-enter mx-auto w-full max-w-[100%]",
                         isInIframe ? "px-5 py-4" : "container-fluid",
                     ].join(" ")}
                 >

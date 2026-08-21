@@ -1107,6 +1107,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             parseFloat(detail.cif_fc || 0).toFixed(2)
                                         ];
                                     });
+                                    if (allotment.allotment_details.length > 1) {
+                                        rows.push([
+                                            '', '', '', '', '', '', '', 'Total DFIA allocation',
+                                            parseInt(allotment.alloted_quantity || 0).toLocaleString(),
+                                            `$${parseFloat(allotment.allotted_value || 0).toLocaleString('en-US', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2,
+                                            })}`,
+                                        ]);
+                                    }
                                     const tsv = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\n');
                                     navigator.clipboard.writeText(tsv).then(() => {
                                         toast.success('Copied to clipboard!');
@@ -1184,14 +1194,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </tr>
                                 ))}
                                 </tbody>
-                                <tfoot>
-                                <tr className="bg-muted/40 border-t-2 border-border">
-                                    <th scope="row" colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
-                                    <td className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
-                                    <td className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</td>
-                                    <td></td>
-                                </tr>
-                                </tfoot>
+                                {allotment.allotment_details.length > 1 && <tfoot>
+                                    <tr className="bg-primary/5 border-t-2 border-primary/30">
+                                        <th scope="row" colSpan={8} className="px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total DFIA allocation</th>
+                                        <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Quantity">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
+                                        <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Dollar value">${parseFloat(allotment.allotted_value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>}
                             </table>
                         </div>
                     </div>

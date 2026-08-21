@@ -183,7 +183,7 @@ export default function DataTable({
 
     if (loading) {
         return (
-            <div className="table-responsive-mobile">
+            <div className="app-data-table table-responsive-mobile" role="region" aria-label="Data table" tabIndex={0}>
                 <TableSkeleton colCount={Math.max(columns.length, 3)} rowCount={7} />
             </div>
         );
@@ -202,7 +202,7 @@ export default function DataTable({
     }
 
     return (
-        <div className="table-responsive-mobile">
+        <div className="app-data-table table-responsive-mobile" role="region" aria-label="Data table" tabIndex={0}>
             <table className="table table-hover">
                 <thead>
                     <tr>

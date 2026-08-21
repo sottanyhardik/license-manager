@@ -296,6 +296,25 @@ def add_grouped_export_action(viewset_class):
                                     pdf_exporter.format_number(detail['dfia_qty'], decimals=0),
                                     pdf_exporter.format_number(detail['dfia_value']),
                                 ])
+
+                        # Keep every DFIA item line, then make the combined
+                        # allocation explicit when this allotment spans more
+                        # than one DFIA item.
+                        if len(allot['details']) > 1:
+                            total_dfia_qty = sum(
+                                (_decimal_or_default(detail['dfia_qty']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            total_dfia_value = sum(
+                                (_decimal_or_default(detail['dfia_value']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            table_data.append([
+                                '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+                                'Total DFIA allocation',
+                                pdf_exporter.format_number(total_dfia_qty, decimals=0),
+                                pdf_exporter.format_number(total_dfia_value),
+                            ])
                         sr_no += 1
 
                     # Add to company totals
@@ -568,6 +587,34 @@ def add_grouped_export_action(viewset_class):
                             for col_idx in range(1, len(main_headers) + 1):
                                 ws.merge_cells(start_row=start_row_for_allot, start_column=col_idx,
                                                end_row=row - 1, end_column=col_idx)
+
+                            total_dfia_qty = sum(
+                                (_decimal_or_default(detail['dfia_qty']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            total_dfia_value = sum(
+                                (_decimal_or_default(detail['dfia_value']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            total_fill = PatternFill(start_color='DCE6F1', end_color='DCE6F1', fill_type='solid')
+                            total_columns = {
+                                len(main_headers) + 4: 'Total DFIA allocation',
+                                len(main_headers) + 5: total_dfia_qty,
+                                len(main_headers) + 6: total_dfia_value,
+                            }
+                            for col_idx in range(1, len(main_headers) + len(license_headers) + 1):
+                                cell = ws.cell(row=row, column=col_idx, value=total_columns.get(col_idx, ''))
+                                cell.border = border
+                                cell.fill = total_fill
+                                cell.font = Font(bold=True, size=12)
+                                cell.alignment = Alignment(
+                                    horizontal='right' if col_idx in total_columns else 'center',
+                                    vertical='center',
+                                    wrap_text=True,
+                                )
+                            ws.cell(row=row, column=len(main_headers) + 5).number_format = '#,##0'
+                            ws.cell(row=row, column=len(main_headers) + 6).number_format = '#,##0.00'
+                            row += 1
 
                         sr_no += 1
 

@@ -113,9 +113,15 @@ def generate_allotment_pdf_bytes(allotment):
             (license_obj.notification_number.code if license_obj and license_obj.notification_number_id else 'N/A'),
         ])
 
-    total_qty_allotted = sum(int(d.qty) for d in allotment.allotment_details.all())
-    total_cif = sum(float(d.cif_fc) for d in allotment.allotment_details.all())
-    detail_data.append(['Total', '', '', '', '', f"{total_qty_allotted:,} {unit_display}", f"{total_cif:,.2f}", ''])
+    # A total line is useful only when more than one DFIA item is shown.  The
+    # individual item lines above remain intact in either case.
+    if allotment.allotment_details.count() > 1:
+        total_qty_allotted = sum(int(d.qty) for d in allotment.allotment_details.all())
+        total_cif = sum(float(d.cif_fc) for d in allotment.allotment_details.all())
+        detail_data.append([
+            'Total DFIA allocation', '', '', '', '',
+            f"{total_qty_allotted:,} {unit_display}", f"{total_cif:,.2f}", '',
+        ])
 
     detail_table = Table(
         detail_data,
@@ -133,8 +139,10 @@ def generate_allotment_pdf_bytes(allotment):
         ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        *([
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ] if len(detail_data) > 2 else []),
     ]))
     elements.append(detail_table)
 

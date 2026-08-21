@@ -92,7 +92,7 @@ export default function StatCard({
             onClick={onClick}
             className={cn(
                 // Base card — clean, no left border
-                "relative flex w-full items-center overflow-hidden rounded-xl border border-border/70 bg-card text-left",
+                "app-stat-card relative flex w-full items-center overflow-hidden rounded-xl border border-border/70 bg-card text-left",
                 compact ? "gap-3 px-3.5 py-3" : "gap-3.5 px-4 py-3.5",
                 // Subtle gradient wash at top via pseudo-element
                 "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-16 before:bg-gradient-to-b before:to-transparent",

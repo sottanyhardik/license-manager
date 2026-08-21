@@ -1102,7 +1102,7 @@ const LicenseRow = memo(function LicenseRow({
         <article
             aria-label={`License ${item.license_number || item.id}`}
             className={cn(
-                "overflow-hidden rounded-2xl border border-l-[3px] bg-card shadow-sm transition-shadow",
+                "license-row overflow-hidden rounded-2xl border border-l-[3px] bg-card shadow-sm transition-shadow",
                 expanded ? "shadow-md" : "hover:shadow-md",
                 borderAccentCls(item)
             )}
@@ -1124,7 +1124,7 @@ const LicenseRow = memo(function LicenseRow({
                 aria-controls={`license-content-${item.id}`}
                 className="group w-full cursor-pointer text-left"
             >
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5">
+                <div className="license-row__header flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5">
                     {/* License number — primary visual anchor; click opens merged PDF */}
                     <button
                         type="button"
@@ -1143,7 +1143,7 @@ const LicenseRow = memo(function LicenseRow({
                     </button>
 
                     {/* Dates row */}
-                    <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="license-row__metadata flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {item.license_date && (
                             <span className="flex items-center gap-1">
                                 <Calendar className="size-3" aria-hidden="true" />
@@ -1175,30 +1175,24 @@ const LicenseRow = memo(function LicenseRow({
                         <span className="text-xs text-muted-foreground">{item.purchase_status_label}</span>
                     )}
 
-                    {/* Spacer */}
-                    <span className="flex-1" />
-
-                    {/* Status badge */}
-                    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold", status.badge)}>
-                        <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden="true" />
-                        {status.label}
-                    </span>
-
-                    {/* Balance — collapsed only */}
-                    {!expanded && (
-                        <span className="text-sm font-bold tabular-nums text-foreground">
-                            Balance CIF <span className="ml-1">${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="license-row__summary">
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold", status.badge)}>
+                            <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden="true" />
+                            {status.label}
                         </span>
-                    )}
-
-                    {/* Chevron */}
-                    <ChevronDown
+                        {!expanded && (
+                            <span className="text-sm font-bold tabular-nums text-foreground">
+                                Balance CIF <span className="ml-1">${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </span>
+                        )}
+                        <ChevronDown
                         className={cn(
                             "size-4 shrink-0 text-muted-foreground/60 transition-transform duration-200",
                             expanded && "rotate-180"
                         )}
                         aria-hidden="true"
-                    />
+                        />
+                    </span>
                 </div>
             </div>
 
@@ -1418,7 +1412,7 @@ export default function LicensesTable({
     }
 
     return (
-        <div className="flex flex-col gap-2" role="list" aria-label="Licenses">
+        <div className="license-list flex flex-col gap-2" role="list" aria-label="Licenses">
             {data.map((item) => (
                 <LicenseRow
                     key={item.id}

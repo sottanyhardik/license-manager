@@ -69,6 +69,7 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
                         <span className="font-bold">License {license.license_number}</span>
                         <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
                         <span className="text-xs text-primary-foreground/80">License date: {license.license_date}</span>
+                        <span className="text-xs text-primary-foreground/80">Expiry: {license.expiry_date}</span>
                         {license.sion_norms && <span className="text-xs text-primary-foreground/80">SION: {license.sion_norms}</span>}
                         {license.transactions[0] && (
                             <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-xs font-semibold underline underline-offset-2">View details</button>

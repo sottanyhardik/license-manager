@@ -31,6 +31,7 @@ export type LicenseWiseEntry = {
     license_id: string | number;
     license_number: string;
     license_date: string;
+    expiry_date: string;
     license_type: string;
     sion_norms: string;
     transactions: LicenseLedgerTransaction[];
@@ -181,7 +182,7 @@ export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
             ]);
             const fallbackPurchaseTotal = companies.reduce((total, company) => total + company.purchase_total, 0);
             const fallbackSaleTotal = companies.reduce((total, company) => total + company.sale_total, 0);
-            return [{ license_id: normalizeId(licenseId, 'unknown-license'), license_number: normalizeText(license.license_number, 'Unknown license'), license_date: normalizeText(license.license_date, '-'), license_type: normalizeText(license.license_type, 'UNKNOWN'), sion_norms: normalizeText(license.sion_norms), transactions, purchase_total: toFiniteNumber(summary.total_purchase), sale_total: toFiniteNumber(summary.total_sale), purchase_bill_total: toFiniteNumber(summary.total_purchase_bill_inr) || fallbackPurchaseTotal, sale_bill_total: toFiniteNumber(summary.total_sale_bill_inr) || fallbackSaleTotal, current_balance: toFiniteNumber(summary.current_balance), profit_loss: toFiniteNumber(summary.total_profit_loss) || companies.reduce((total, company) => total + company.profit_loss, 0), companies }];
+            return [{ license_id: normalizeId(licenseId, 'unknown-license'), license_number: normalizeText(license.license_number, 'Unknown license'), license_date: normalizeText(license.license_date, '-'), expiry_date: normalizeText(license.expiry_date, '-'), license_type: normalizeText(license.license_type, 'UNKNOWN'), sion_norms: normalizeText(license.sion_norms), transactions, purchase_total: toFiniteNumber(summary.total_purchase), sale_total: toFiniteNumber(summary.total_sale), purchase_bill_total: toFiniteNumber(summary.total_purchase_bill_inr) || fallbackPurchaseTotal, sale_bill_total: toFiniteNumber(summary.total_sale_bill_inr) || fallbackSaleTotal, current_balance: toFiniteNumber(summary.current_balance), profit_loss: toFiniteNumber(summary.total_profit_loss) || companies.reduce((total, company) => total + company.profit_loss, 0), companies }];
         }), ...(rawCompanyGroups.length > 0 ? { company_groups } : {}),
         ...(rawGrandTotal ? { grand_total: { license_count: toFiniteNumber(rawGrandTotal.license_count), total_purchase_bill_inr: toFiniteNumber(rawGrandTotal.total_purchase_bill_inr), total_sale_bill_inr: toFiniteNumber(rawGrandTotal.total_sale_bill_inr), total_balance: toFiniteNumber(rawGrandTotal.total_balance), total_profit_loss_inr: toFiniteNumber(rawGrandTotal.total_profit_loss_inr) } } : {}),
     };

@@ -185,6 +185,7 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
             'license_id': data['license_id'],
             'license_number': data['license_number'],
             'license_date': data['license_date'],
+            'expiry_date': data.get('expiry_date'),
             'license_type': data['license_type'],
             'sion_norms': data.get('sion_norms') or '',
             # Flat, transaction-level rows for the screen ledger.  Keep the

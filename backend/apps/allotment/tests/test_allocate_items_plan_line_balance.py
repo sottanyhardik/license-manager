@@ -10,6 +10,7 @@ the plan line's rounded unit price.
 """
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -108,6 +109,62 @@ def _allocate(client, allotment_obj, item_id, qty, cif_fc, plan_line_id=None):
 
 @pytest.mark.django_db
 class TestPlanLineLedgerResidual:
+    def test_hosted_shape_accepts_plan_residual_with_independent_cif_limit(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        """Regression for the 1033 / $18,601.24 PLAN allocation shape.
+
+        The plan permits up to $25,825 while the allotment's canonical unit
+        value makes the submitted $18,601.24 pair valid.  The plan is a cap,
+        not an instruction to debit its whole remaining CIF.
+        """
+        item = veg_oil_split["import_item"]
+        line = veg_oil_split["pko_line"]
+        item.quantity = item.available_quantity = Decimal("1033.000")
+        item.save(update_fields=["quantity", "available_quantity"])
+        _set_live_balance(veg_oil_split["license"], Decimal("43562.68"))
+        line.planned_quantity = line.remaining_quantity = Decimal("1033.000")
+        line.planned_cif_fc = line.remaining_cif_fc = Decimal("25825.00")
+        line.save(update_fields=[
+            "planned_quantity", "remaining_quantity", "planned_cif_fc", "remaining_cif_fc",
+        ])
+        allotment_obj.unit_value_per_unit = Decimal("18.007")
+        allotment_obj.save(update_fields=["unit_value_per_unit"])
+
+        response = _allocate(
+            allotment_client, allotment_obj, item.id, "1033.000", "18601.24", plan_line_id=line.id,
+        )
+
+        assert response.status_code == 201, response.data
+        saved = AllotmentItems.objects.get(id=response.data["created_items"][0]["id"])
+        assert saved.qty == Decimal("1033.000")
+        assert saved.cif_fc == Decimal("18601.24")
+        residual = plan_line_status_for(line)
+        assert residual["remaining_quantity"] == Decimal("0.000")
+        assert residual["remaining_cif_fc"] == Decimal("7223.76")
+
+    def test_unexpected_write_failure_is_logged_and_returns_safe_500(
+        self, allotment_client, allotment_obj, veg_oil_split, caplog,
+    ):
+        with patch(
+            "apps.allotment.views_actions.AllotmentItems.objects.create",
+            side_effect=RuntimeError("database implementation defect"),
+        ):
+            response = _allocate(
+                allotment_client,
+                allotment_obj,
+                veg_oil_split["import_item"].id,
+                "20",
+                "36.00",
+                plan_line_id=veg_oil_split["pko_line"].id,
+            )
+
+        assert response.status_code == 500
+        assert response.data == {"error": "Failed to allocate licence item."}
+        assert "database implementation defect" not in str(response.data)
+        assert not AllotmentItems.objects.filter(allotment=allotment_obj).exists()
+        assert any(record.message == "Allocation failed" for record in caplog.records)
+
     def test_allocating_from_pko_reduces_only_pko(self, allotment_client, allotment_obj, veg_oil_split):
         resp = _allocate(
             allotment_client, allotment_obj, veg_oil_split["import_item"].id,

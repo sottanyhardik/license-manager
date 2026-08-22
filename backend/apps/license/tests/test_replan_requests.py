@@ -42,6 +42,32 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         assert LicenseReplanRequest.objects.filter(license=self.license).count() == 1
         delay.assert_called_once()
 
+    def test_unique_constraint_fallback_leaves_calling_transaction_usable(self):
+        """A raced active-request insert must not poison allocation's atomic block."""
+        existing = LicenseReplanRequest.objects.create(
+            license=self.license,
+            reason="already-active",
+            status=LicenseReplanRequest.STATUS_PENDING,
+        )
+        from apps.license.services.replan_requests import _coalesce_locked
+
+        # Simulate the gap in which another producer commits the active row
+        # after this worker's first lookup but before its insert.
+        with transaction.atomic():
+            with patch("django.db.models.query.QuerySet.first", return_value=None):
+                resolved, created = _coalesce_locked(
+                    license_obj=self.license,
+                    reason="allotment_changed",
+                    scope=LicenseReplanRequest.SCOPE_LICENSE,
+                    sion_id=None,
+                )
+            assert resolved.pk == existing.pk
+            assert created is False
+            # This query is the regression assertion: it would raise
+            # TransactionManagementError if IntegrityError were caught in the
+            # same atomic block as the failed insert.
+            assert LicenseReplanRequest.objects.filter(pk=existing.pk).exists()
+
     def test_worker_is_idempotent_after_success(self):
         request = LicenseReplanRequest.objects.create(
             license=self.license, reason="manual", status=LicenseReplanRequest.STATUS_SUCCEEDED,

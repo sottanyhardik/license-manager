@@ -42,11 +42,20 @@ def _coalesce_locked(*, license_obj, reason: str, scope: str, sion_id: int | Non
         active.refresh_from_db(fields=["trigger_count", "source_revision"])
         return active, False
     try:
-        return LicenseReplanRequest.objects.create(
-            license_id=license_obj.pk, reason=reason, source_revision=license_obj.planning_source_revision,
-            source_model=source_model, source_pk=str(source_pk or ""), scope=scope, sion_id=sion_id,
-            status=LicenseReplanRequest.STATUS_PENDING,
-        ), True
+        # This helper may be called from an allocation post_save signal while
+        # the allocation request's outer atomic block is still open.  A
+        # concurrent/legacy producer can race the conditional unique index.
+        # Let the IntegrityError escape this *nested* atomic block first;
+        # catching it inside the same block would leave that connection marked
+        # for rollback and the fallback get() would raise
+        # TransactionManagementError.
+        with transaction.atomic():
+            request = LicenseReplanRequest.objects.create(
+                license_id=license_obj.pk, reason=reason, source_revision=license_obj.planning_source_revision,
+                source_model=source_model, source_pk=str(source_pk or ""), scope=scope, sion_id=sion_id,
+                status=LicenseReplanRequest.STATUS_PENDING,
+            )
+        return request, True
     except IntegrityError:
         return LicenseReplanRequest.objects.get(license_id=license_obj.pk, status__in=_ACTIVE), False
 

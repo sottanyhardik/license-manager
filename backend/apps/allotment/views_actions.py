@@ -1,4 +1,5 @@
 # allotment/views_actions.py
+import logging
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
 from io import BytesIO
@@ -27,6 +28,7 @@ from apps.allotment.serializers import AllotmentSerializer
 from apps.license.models import LicenseImportItemsModel
 from apps.license.serializers import LicenseImportItemSerializer
 
+logger = logging.getLogger(__name__)
 
 class DebitBasis:
     PLAN = "PLAN"
@@ -960,8 +962,28 @@ class AllotmentActionViewSet(ViewSet):
         })
 
     @action(detail=True, methods=['post'], url_path='allocate-items')
-    @transaction.atomic
     def allocate_items(self, request, pk=None):
+        """Public allocation boundary: never leak internal database failures."""
+        first = request.data.get('allocations', [None]) if isinstance(request.data, dict) else [None]
+        first = first[0] if isinstance(first, list) and first and isinstance(first[0], dict) else {}
+        try:
+            return self._allocate_items_atomic(request, pk=pk)
+        except Exception:
+            logger.exception(
+                "Allocation failed",
+                extra={
+                    "allotment_id": pk,
+                    "licence_item_id": first.get("item_id"),
+                    "plan_line_id": first.get("plan_line_id"),
+                },
+            )
+            return Response(
+                {"error": "Failed to allocate licence item."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @transaction.atomic
+    def _allocate_items_atomic(self, request, pk=None):
         """
         Allocate selected license import items to this allotment.
 
@@ -1005,10 +1027,15 @@ class AllotmentActionViewSet(ViewSet):
                 'error': 'This allotment is already fully allocated.',
             }, status=status.HTTP_400_BAD_REQUEST)
         allocations = request.data.get('allocations', [])
+        if not isinstance(allocations, list) or not allocations:
+            return Response(
+                {'code': 'INVALID_ALLOCATIONS', 'error': 'allocations must be a non-empty list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # Accept the legacy per-line debit field emitted by the mounted UI as
         # well as the explicit top-level dual-mode contract.  Normalize once
         # before validation; never infer a basis from item IDs or balances.
-        first_allocation = allocations[0] if allocations else {}
+        first_allocation = allocations[0] if isinstance(allocations[0], dict) else {}
         explicit_search_mode = (
             request.data.get('search_mode')
             or request.data.get('debit_based_on')
@@ -1041,20 +1068,25 @@ class AllotmentActionViewSet(ViewSet):
             return Response({'code': 'INVALID_ALLOCATION_BASIS', 'error': 'Invalid allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
         if search_mode == DebitBasis.PLAN and allocation_basis != DebitBasis.PLAN:
             return Response({'code': 'PLAN_MODE_REQUIRES_PLAN_BASIS', 'error': 'Plan mode requires the Plan allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not allocations:
-            return Response(
-                {'error': 'No allocations provided'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         created_items = []
         errors = []
 
         for allocation in allocations:
+            if not isinstance(allocation, dict):
+                errors.append({'code': 'INVALID_ALLOCATION', 'error': 'Each allocation must be an object.'})
+                continue
             item_id = allocation.get('item_id')
-            qty = Decimal(str(allocation.get('qty', 0)))
-            cif_fc = Decimal(str(allocation.get('cif_fc', 0)))
-            cif_inr = Decimal(str(allocation.get('cif_inr', 0)))
+            try:
+                qty = Decimal(str(allocation.get('qty', 0)))
+                cif_fc = Decimal(str(allocation.get('cif_fc', 0)))
+                cif_inr = Decimal(str(allocation.get('cif_inr', 0)))
+            except (InvalidOperation, TypeError, ValueError):
+                errors.append({
+                    'item_id': item_id,
+                    'code': 'INVALID_ALLOCATION_AMOUNT',
+                    'error': 'Quantity and CIF values must be valid numbers.',
+                })
+                continue
 
             if qty > remaining_requirement_qty or (allotment.required_value > 0 and cif_fc > remaining_requirement_cif):
                 errors.append({
@@ -1292,22 +1324,28 @@ class AllotmentActionViewSet(ViewSet):
                     existing.search_mode = search_mode
                     existing.planning_target_item_id = locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None
                     existing.plan_line = locked_plan_line if allocation_basis == DebitBasis.PLAN else None
-                    existing.save()
+                    # A signal/database failure must roll back only this
+                    # candidate write.  Without the savepoint the outer action
+                    # transaction becomes broken and later serialisation turns
+                    # the useful validation error into an HTTP 500.
+                    with transaction.atomic():
+                        existing.save()
                     allotment_item = existing
                 else:
                     # Create new allotment item
-                    allotment_item = AllotmentItems.objects.create(
-                        allotment=allotment,
-                        item=license_item,
-                        qty=qty,
-                        cif_fc=cif_fc,
-                        cif_inr=cif_inr,
-                        is_boe=False,
-                        allocation_basis=allocation_basis,
-                        search_mode=search_mode,
-                        planning_target_item_id=locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None,
-                        plan_line=locked_plan_line if allocation_basis == DebitBasis.PLAN else None,
-                    )
+                    with transaction.atomic():
+                        allotment_item = AllotmentItems.objects.create(
+                            allotment=allotment,
+                            item=license_item,
+                            qty=qty,
+                            cif_fc=cif_fc,
+                            cif_inr=cif_inr,
+                            is_boe=False,
+                            allocation_basis=allocation_basis,
+                            search_mode=search_mode,
+                            planning_target_item_id=locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None,
+                            plan_line=locked_plan_line if allocation_basis == DebitBasis.PLAN else None,
+                        )
 
                 created_items.append({
                     'id': allotment_item.id,
@@ -1330,9 +1368,18 @@ class AllotmentActionViewSet(ViewSet):
                     'error': 'License import item not found'
                 })
             except Exception:
-                import logging as _log
-                _log.getLogger(__name__).exception("allocate_items: failed for item_id %s", item_id)
-                errors.append({'item_id': item_id, 'error': 'Allocation failed; check server logs'})
+                # Unexpected persistence, signal, or programming errors are
+                # not client validation errors.  Propagate to the public
+                # boundary after the outer transaction rolls back.
+                logger.exception(
+                    "Allocation failed",
+                    extra={
+                        "allotment_id": allotment.id,
+                        "licence_item_id": item_id,
+                        "plan_line_id": allocation.get("plan_line_id"),
+                    },
+                )
+                raise
 
         # Refresh allotment to get updated balanced_quantity
         allotment.refresh_from_db()

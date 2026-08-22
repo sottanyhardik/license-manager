@@ -82,6 +82,7 @@ interface AvailableItem {
     message?: string | null;
     actual_position?: { available_qty: string; balance_cif: string };
     plan_position?: { exists: boolean; is_active: boolean; status: string; plan_line_id: number | null; remaining_qty: string; remaining_cif: string };
+    allotment_requirement?: { remaining_qty: string; remaining_cif: string };
     basis_options?: Record<"actual" | "plan", {
         enabled: boolean;
         max_qty: string;
@@ -1144,6 +1145,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 const actualCif = parseFloat(item.actual_position?.balance_cif ?? item.balance_cif_fc ?? "0");
                                                 const planQty = parseFloat(item.plan_position?.remaining_qty ?? item.remaining_planned_qty ?? "0");
                                                 const planCif = parseFloat(item.plan_position?.remaining_cif ?? item.remaining_planned_cif ?? "0");
+                                                const remainingRequirementCif = parseFloat(item.allotment_requirement?.remaining_cif ?? "0");
                                                 const plannedQty = parseFloat(item.original_planned_quantity ?? "0");
                                                 const plannedCif = parseFloat(item.original_planned_cif_fc ?? "0");
                                                 const average = actualQty > 0 ? (actualCif / actualQty).toFixed(2) : '0.00';
@@ -1190,7 +1192,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                     <span>Plan Remaining $: <span className="font-semibold text-foreground">${planCif.toFixed(2)}</span></span>
                                                                 </>}
                                                                 <span>Max Qty: <span className="font-semibold text-foreground">{maxAllocation.qty.toFixed(3)}</span></span>
-                                                                <span>Max $: <span className="font-semibold text-foreground">${maxAllocation.value.toFixed(2)}</span></span>
+                                                                <span>Max $: <span className="font-semibold text-foreground">${(remainingRequirementCif || maxAllocation.value).toFixed(2)}</span>{remainingRequirementCif > 0 && <span className="ml-1">+$20 buf</span>}</span>
                                                             </div>
                                                         </div>
 

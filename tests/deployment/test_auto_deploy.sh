@@ -1,64 +1,84 @@
 #!/usr/bin/env bash
-# Mock-only contract tests for scripts/deployment/auto-deploy.sh.
+# Mock-only zero-argument contract tests for the established auto deploy flow.
+# No command in this file opens a network connection or uses a real credential.
 set -Eeuo pipefail
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-SHA=0123456789012345678901234567890123456789
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/bin"
-: > "$TMP/known_hosts"
-CANDIDATE="$TMP/repo"
-mkdir -p "$CANDIDATE/scripts/deployment"
-cp "$ROOT/scripts/deployment/auto-deploy.sh" "$CANDIDATE/scripts/deployment/"
-git -C "$CANDIDATE" init -q
-git -C "$CANDIDATE" add scripts/deployment/auto-deploy.sh
-git -C "$CANDIDATE" -c user.name=test -c user.email=test@example.invalid commit -qm fixture
-SCRIPT="$CANDIDATE/scripts/deployment/auto-deploy.sh"
-SHA="$(git -C "$CANDIDATE" rev-parse HEAD)"
+mkdir -p "$TMP/bin" "$TMP/repo/scripts/deployment"
+cp "$ROOT/scripts/deployment/auto-deploy.sh" "$TMP/repo/scripts/deployment/"
+git -C "$TMP/repo" init -q
+git -C "$TMP/repo" add scripts/deployment/auto-deploy.sh
+git -C "$TMP/repo" -c user.name=test -c user.email=test@example.invalid commit -qm fixture
+SCRIPT="$TMP/repo/scripts/deployment/auto-deploy.sh"
+
 cat > "$TMP/bin/ssh" <<'EOF'
 #!/usr/bin/env bash
-count_file="${DEPLOY_TEST_TMP}/ssh-count"
-count=0; [[ -f "$count_file" ]] && count=$(cat "$count_file")
-count=$((count + 1)); printf '%s' "$count" > "$count_file"
-if [[ "${SSH_FAIL_CALL:-0}" == "$count" ]]; then exit 42; fi
+set -euo pipefail
+printf 'ssh\n' >> "$DEPLOY_TEST_EVENTS"
+printf '%s\n' "$*" >> "$DEPLOY_TEST_SSH_ARGS"
+count=$(grep -c '^' "$DEPLOY_TEST_EVENTS")
 cat >/dev/null || true
+[[ "${MOCK_SSH_FAILURE_EVENT:-0}" != "$count" ]] || exit 42
+EOF
+cat > "$TMP/bin/scp" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'scp\n' >> "$DEPLOY_TEST_EVENTS"
 EOF
 cat > "$TMP/bin/curl" <<'EOF'
 #!/usr/bin/env bash
-[[ "${CURL_FAIL:-0}" == 1 ]] && exit 41
-exit 0
+set -euo pipefail
+printf 'curl\n' >> "$DEPLOY_TEST_EVENTS"
+printf '200'
 EOF
-chmod +x "$TMP/bin/"{ssh,curl}
-base_env=(
-  "PATH=$TMP/bin:$PATH" "DEPLOY_TEST_TMP=$TMP"
-  "DEPLOY_TARGET_HOST=staging.example.invalid" "DEPLOY_TARGET_USER=deployer"
-  "DEPLOY_REMOTE_ROOT=/srv/license-manager" "DEPLOY_KNOWN_HOSTS_FILE=$TMP/known_hosts"
-  "DEPLOY_BACKUP_COMMAND=/usr/local/bin/backup-license-manager"
-  "DEPLOY_WEB_SERVICE=license-web" "DEPLOY_WORKER_SERVICE=license-worker"
-  "DEPLOY_BEAT_SERVICE=license-beat" "DEPLOY_HEALTH_URL=https://staging.example.invalid/api/health/"
-  "DJANGO_SECRET_KEY=placeholder" "DATABASE_URL=postgres://placeholder"
-  "REDIS_URL=redis://placeholder" "CELERY_BROKER_URL=redis://placeholder"
-  "CELERY_RESULT_BACKEND=redis://placeholder" "ALLOWED_HOSTS=staging.example.invalid"
-  "CSRF_TRUSTED_ORIGINS=https://staging.example.invalid"
-)
-run() { (cd "$CANDIDATE" && env "${base_env[@]}" "$@"); }
-expect_ok() { "$@"; }
-expect_fail() { if "$@"; then echo "expected failure: $*" >&2; exit 1; fi; }
-expect_ok bash "$SCRIPT" --help
-expect_fail run bash "$SCRIPT" --release-sha "$SHA"
-expect_fail run bash "$SCRIPT" --environment invalid --release-sha "$SHA"
-expect_fail run bash "$SCRIPT" --environment staging
-expect_fail run bash "$SCRIPT" --environment production --release-sha "$SHA" --execute
-expect_ok run bash "$SCRIPT" --environment production --release-sha "$SHA" --confirm-production
-expect_ok run bash "$SCRIPT" --environment staging --release-sha "$SHA" --dry-run
-expect_fail bash -c 'cd "$1" && env "${@:2}"' _ "$CANDIDATE" "${base_env[@]}" DEPLOY_HEALTH_URL= bash "$SCRIPT" --environment staging --release-sha "$SHA"
-expect_ok run bash "$SCRIPT" --environment staging --release-sha "$SHA" --preflight-only --execute
-rm -f "$TMP/ssh-count"
-expect_fail bash -c 'cd "$1" && env "${@:2}"' _ "$CANDIDATE" "${base_env[@]}" DEPLOY_TEST_TMP="$TMP" SSH_FAIL_CALL=2 bash "$SCRIPT" --environment staging --release-sha "$SHA" --execute
-rm -f "$TMP/ssh-count"
-expect_fail bash -c 'cd "$1" && env "${@:2}"' _ "$CANDIDATE" "${base_env[@]}" DEPLOY_TEST_TMP="$TMP" SSH_FAIL_CALL=3 bash "$SCRIPT" --environment staging --release-sha "$SHA" --execute
-rm -f "$TMP/ssh-count"
-expect_fail bash -c 'cd "$1" && env "${@:2}"' _ "$CANDIDATE" "${base_env[@]}" DEPLOY_TEST_TMP="$TMP" SSH_FAIL_CALL=4 bash "$SCRIPT" --environment staging --release-sha "$SHA" --execute
-rm -f "$TMP/ssh-count"
-expect_fail bash -c 'cd "$1" && env "${@:2}"' _ "$CANDIDATE" "${base_env[@]}" DEPLOY_TEST_TMP="$TMP" CURL_FAIL=1 bash "$SCRIPT" --environment staging --release-sha "$SHA" --execute
-echo "auto-deploy mock contract tests: passed"
+chmod +x "$TMP/bin/ssh" "$TMP/bin/scp" "$TMP/bin/curl"
+
+run_deploy() {
+  (
+    cd "$TMP/repo"
+    # A tracked modification is intentional: the operator contract must not
+    # reject a normal dirty worktree or alter it in order to proceed.
+    printf 'operator change\n' >> deployment-note.txt
+    env PATH="$TMP/bin:$PATH" \
+      DEPLOY_TEST_EVENTS="$TMP/events" \
+      DEPLOY_TEST_SSH_ARGS="$TMP/ssh-args" \
+      DEPLOY_PASSWORD='not-a-real-secret' \
+      bash "$SCRIPT" </dev/null
+  )
+}
+
+rm -f "$TMP/events" "$TMP/ssh-args"
+run_deploy >"$TMP/output" 2>&1
+
+# Three configured servers, with one remote deploy then one health check each.
+[[ $(grep -c '^ssh$' "$TMP/events") -eq 3 ]]
+[[ $(grep -c '^curl$' "$TMP/events") -eq 3 ]]
+[[ $(wc -l < "$TMP/ssh-args") -eq 3 ]]
+[[ $(sed -n '1p' "$TMP/events") == ssh ]]
+[[ $(sed -n '2p' "$TMP/events") == curl ]]
+[[ $(sed -n '3p' "$TMP/events") == ssh ]]
+[[ $(sed -n '4p' "$TMP/events") == curl ]]
+[[ $(sed -n '5p' "$TMP/events") == ssh ]]
+[[ $(sed -n '6p' "$TMP/events") == curl ]]
+! grep -Fq 'not-a-real-secret' "$TMP/output"
+
+# A real remote-stage failure must leave a non-zero deploy result. The script
+# continues to report the remaining configured servers then returns failure.
+rm -f "$TMP/events" "$TMP/ssh-args"
+if (
+  cd "$TMP/repo"
+  env PATH="$TMP/bin:$PATH" \
+    DEPLOY_TEST_EVENTS="$TMP/events" \
+    DEPLOY_TEST_SSH_ARGS="$TMP/ssh-args" \
+    DEPLOY_PASSWORD='not-a-real-secret' \
+    MOCK_SSH_FAILURE_EVENT=3 \
+    bash "$SCRIPT" </dev/null
+) >"$TMP/failure-output" 2>&1; then
+  echo 'expected mocked remote deployment failure' >&2
+  exit 1
+fi
+! grep -Fq 'not-a-real-secret' "$TMP/failure-output"
+
+echo 'auto-deploy zero-argument mock contract: passed'

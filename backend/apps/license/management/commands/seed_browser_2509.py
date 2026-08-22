@@ -15,6 +15,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
+from apps.bill_of_entry.models import BillOfEntryModel
 from apps.core.models import (
     CompanyModel,
     HeadSIONNormsModel,
@@ -30,11 +31,13 @@ from apps.license.models import (
     LicenseExportItemModel,
     LicenseImportItemsModel,
     LicenseItemPlan,
+    LicensePurchase,
     LicenseReplanRequest,
     SionPlanningAction,
     SionPlanningProfile,
     SionPlanningRule,
 )
+from apps.trade.models import LicenseTrade
 
 
 LICENSE_ID = 2509
@@ -50,6 +53,9 @@ QUEUE_LICENSE_START = 2510
 QUEUE_LICENSE_COUNT = 12
 QUEUE_POSITION_QUANTITY = Decimal("100.000")
 QUEUE_POSITION_CIF = Decimal("1000.00")
+BOE_NUMBER = "E2E-BOE-2509"
+PURCHASE_INVOICE = "E2E-PURCHASE-2509"
+SALE_INVOICE = "E2E-SALE-2509"
 
 
 def _get_or_report_conflict(model, lookup: dict, defaults: dict, label: str):
@@ -102,6 +108,9 @@ class Command(BaseCommand):
 
         company = _get_or_report_conflict(
             CompanyModel, {"iec": "2509000000"}, {"name": "E2E Browser Exporter"}, "company",
+        )
+        counterparty = _get_or_report_conflict(
+            CompanyModel, {"iec": "2509000001"}, {"name": "E2E Browser Counterparty"}, "counterparty",
         )
         head, _ = HeadSIONNormsModel.objects.get_or_create(name="E2E Browser SION")
         sion = _get_or_report_conflict(
@@ -289,6 +298,68 @@ class Command(BaseCommand):
             },
         )
         AllotmentItems.objects.filter(allotment=queue_allotment).delete()
+
+        # Populate the other operational lists through their supported domain
+        # models.  These are intentionally modest headers: browser checks need
+        # genuine persisted records without fabricating financial calculations.
+        boe, _ = BillOfEntryModel.objects.update_or_create(
+            bill_of_entry_number=BOE_NUMBER,
+            bill_of_entry_date=date.today(),
+            defaults={
+                "company": company,
+                "port": port,
+                "exchange_rate": Decimal("1.0000"),
+                "product_name": item_name.name,
+                "invoice_no": "E2E-BOE-INVOICE-2509",
+                "invoice_date": date.today(),
+                "planning_target_item": item_name,
+                "planning_mapping_status": "MAPPED",
+                "planning_mapping_source": "managed_browser_seed",
+            },
+        )
+        boe.allotment.set([allotment])
+        LicensePurchase.objects.update_or_create(
+            license=license_obj,
+            invoice_number=PURCHASE_INVOICE,
+            defaults={
+                "purchasing_entity": company,
+                "supplier": counterparty,
+                "invoice_date": date.today(),
+                "mode": LicensePurchase.MODE_AMOUNT,
+                "amount_source": LicensePurchase.SRC_CIF_INR,
+                "cif_inr": Decimal("89283.10"),
+                "markup_pct": Decimal("100.000000"),
+                "amount_inr": Decimal("89283.10"),
+            },
+        )
+        purchase_trade, _ = LicenseTrade.objects.update_or_create(
+            direction=LicenseTrade.DIR_PURCHASE,
+            from_company=counterparty,
+            invoice_number=PURCHASE_INVOICE,
+            defaults={
+                "to_company": company,
+                "invoice_date": date.today(),
+                "license_type": LicenseTrade.LICENSE_TYPE_DFIA,
+                "subtotal_amount": Decimal("89283.10"),
+                "total_amount": Decimal("89283.10"),
+                "remarks": "Managed browser purchase fixture",
+            },
+        )
+        purchase_trade.boes.set([boe])
+        sale_trade, _ = LicenseTrade.objects.update_or_create(
+            direction=LicenseTrade.DIR_SALE,
+            to_company=counterparty,
+            invoice_number=SALE_INVOICE,
+            defaults={
+                "from_company": company,
+                "invoice_date": date.today(),
+                "license_type": LicenseTrade.LICENSE_TYPE_DFIA,
+                "subtotal_amount": Decimal("80359.10"),
+                "total_amount": Decimal("80359.10"),
+                "remarks": "Managed browser sale fixture",
+            },
+        )
+        sale_trade.boes.set([boe])
 
         # Twelve independently eligible positions make the browser test prove
         # the real server-backed 10-item queue and its 11th-item refill.

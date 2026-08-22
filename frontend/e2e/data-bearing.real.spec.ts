@@ -102,6 +102,47 @@ test.describe("isolated data-bearing operational workflows", () => {
     await page.screenshot({ path: testInfo.outputPath("real-queue-refilled.png"), fullPage: true });
   });
 
+  test("PLAN and ACTUAL modes retain the seeded allotment context", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/allotments/1/allocate", { waitUntil: "networkidle" });
+    await expect(page.getByText("PLAN BALANCE MODE", { exact: false })).toBeVisible();
+    const debitBasis = page.locator("label:has-text('Debit Based On')").locator("..").locator("select");
+    await debitBasis.selectOption("ACTUAL");
+    await expect(page.getByText("ACTUAL BALANCE MODE", { exact: false })).toBeVisible();
+    await expect(page.locator('input[placeholder="Filter by item description..."]')).toHaveValue("E2E ALUMINIUM FOIL 2509");
+    await expectNoDocumentOverflow(page);
+  });
+
+  test("persisted BOE, purchase, sale, ledger, planning and report routes load without server errors", async ({ page }, testInfo) => {
+    const failures: string[] = [];
+    const pageErrors: string[] = [];
+    page.on("requestfailed", request => failures.push(`${request.method()} ${new URL(request.url()).pathname}`));
+    page.on("pageerror", error => pageErrors.push(error.message));
+    await signIn(page);
+
+    // These are live frontend routes backed by the seeded local Django API,
+    // not mocked responses.  The assertions intentionally keep each page's
+    // normal table/empty-state semantics intact.
+    for (const [route, evidence] of [
+      ["/licenses", "3411008090"],
+      ["/planning", "Planning"],
+      ["/bill-of-entries", "Bill Of Entries"],
+      ["/trades", "Trades"],
+      ["/license-ledger", "License Ledger"],
+      ["/reports/license-purchase-profit", "Purchase"],
+      ["/reports/item-pivot", "Item"],
+      ["/reconciliation", "Reconciliation"],
+      ["/pdf-viewer", "PDF"],
+    ] as const) {
+      await page.goto(route, { waitUntil: "networkidle" });
+      await expect(page.locator("body")).toContainText(evidence, { timeout: 10_000 });
+      await expectNoDocumentOverflow(page);
+    }
+    expect(pageErrors).toEqual([]);
+    expect(failures).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath("real-operational-routes.png"), fullPage: true });
+  });
+
   test("seeded populated route is responsive at required compact viewports", async ({ page }, testInfo) => {
     await signIn(page);
     for (const viewport of [

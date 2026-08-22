@@ -413,6 +413,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         qc.invalidateQueries({ queryKey: ['allotments', id] });
     };
 
+    // Keep the existing query key intact: its filters, debounce values and
+    // current page are part of that key.  Invalidating this prefix therefore
+    // reloads the exact grid the user is looking at, rather than resetting it.
+    const refreshAvailableLicenses = async () => {
+        await qc.cancelQueries({ queryKey: ['allotment-available-licenses', id] });
+        await qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] });
+    };
+
     const allocateMutation = useMutation({
         mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) => {
             const followsPlan = filters.debit_based_on === "PLAN";
@@ -470,10 +478,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             // promotes candidate 11 after candidate 1 is exhausted; a partial
             // allocation stays because the backend continues to return it
             // with its recalculated balances.
-            await qc.cancelQueries({ queryKey: ['allotment-available-licenses', id] });
             await Promise.all([
                 qc.invalidateQueries({ queryKey: ['allotments', id] }),
-                qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] }),
+                refreshAvailableLicenses(),
             ]);
 
             // Scroll to transfer letter if balance is now exactly 0
@@ -497,11 +504,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const deleteAllocationMutation = useMutation({
         mutationFn: (allotmentItemId: number) =>
             api.delete(`allotment-actions/${id}/delete-item/${allotmentItemId}/`).then(r => r.data),
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
             const successMsg = data.message || "Successfully removed allocation";
             setSuccess(successMsg);
             toast.success(successMsg);
             invalidateAllotment();
+            await refreshAvailableLicenses();
         },
         onError: (err: unknown) => {
             const errorMsg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to delete allocation";

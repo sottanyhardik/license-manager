@@ -325,7 +325,24 @@ class AllotmentItems(AuditModel):
 
     class Meta:
         ordering = ["qty"]
-        unique_together = ("item", "allotment")
+        constraints = [
+            # PLAN debits are identified by their exact plan line.  A legacy
+            # PLAN debit may have no plan_line, so keeping the historical
+            # item/allotment uniqueness would reject every later mapped debit
+            # with an IntegrityError before signals can run.
+            models.UniqueConstraint(
+                fields=["item", "allotment", "plan_line"],
+                name="allotment_unique_item_plan_line",
+            ),
+            # Preserve the one-row invariant for actual and legacy-unmapped
+            # allocations. PostgreSQL treats NULLs as distinct in the
+            # three-column constraint above, hence this partial constraint.
+            models.UniqueConstraint(
+                fields=["item", "allotment"],
+                condition=models.Q(plan_line__isnull=True),
+                name="allotment_unique_item_without_plan_line",
+            ),
+        ]
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['allotment', 'status']),

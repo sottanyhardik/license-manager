@@ -143,6 +143,33 @@ class TestPlanLineLedgerResidual:
         assert residual["remaining_quantity"] == Decimal("0.000")
         assert residual["remaining_cif_fc"] == Decimal("7223.76")
 
+    def test_plan_line_allocation_can_follow_legacy_unmapped_plan_debit(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        """The old item/allotment uniqueness must not block a mapped PLAN row."""
+        item = veg_oil_split["import_item"]
+        line = veg_oil_split["pko_line"]
+        AllotmentItems.objects.create(
+            allotment=allotment_obj,
+            item=item,
+            qty=Decimal("10.000"),
+            cif_fc=Decimal("18.00"),
+            allocation_basis="PLAN",
+            search_mode="PLAN",
+            plan_line=None,
+        )
+
+        response = _allocate(
+            allotment_client, allotment_obj, item.id, "20.000", "36.00", plan_line_id=line.id,
+        )
+
+        assert response.status_code == 201, response.data
+        rows = AllotmentItems.objects.filter(allotment=allotment_obj, item=item)
+        assert rows.count() == 2
+        mapped = rows.get(plan_line=line)
+        assert mapped.qty == Decimal("20.000")
+        assert mapped.cif_fc == Decimal("36.00")
+
     def test_unexpected_write_failure_is_logged_and_returns_safe_500(
         self, allotment_client, allotment_obj, veg_oil_split, caplog,
     ):

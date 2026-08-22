@@ -41,11 +41,13 @@ def calculate_allocation_availability(*, actual_quantity, actual_cif,
     actual_pair = calculate_paired_allocation_max(
         quantity_ceiling=actual_q, cif_ceiling=actual_v, unit_price=unit_price,
         quantity_step=quantity_step, settlement_quantity=settlement_quantity, settlement_cif=settlement_cif,
+        settlement_source_cif_ceiling=actual_cif,
     )
     plan_q, plan_v = min(actual_q, plan_quantity), min(actual_v, plan_cif)
     plan_pair = calculate_paired_allocation_max(
         quantity_ceiling=plan_q, cif_ceiling=plan_v, unit_price=unit_price,
         quantity_step=quantity_step, settlement_quantity=settlement_quantity, settlement_cif=settlement_cif,
+        settlement_source_cif_ceiling=min(actual_cif, plan_cif),
     )
     return AllocationAvailability(
         actual_quantity, actual_cif, plan_quantity, plan_cif, allotment_quantity, allotment_cif,

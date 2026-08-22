@@ -229,6 +229,32 @@ class TestCanonicalAllocationScenarios:
         )
         assert maximum.quantity == Decimal("234") and maximum.cif == Decimal("2064.12")
 
+    def test_final_whole_kg_uses_twenty_dollar_settlement_buffer(self):
+        maximum = calculate_paired_allocation_max(
+            quantity_ceiling=Decimal("1.000"),
+            cif_ceiling=Decimal("17.93"),
+            unit_price=Decimal("18.007"),
+            quantity_step=Decimal("1.000"),
+            settlement_quantity=Decimal("1.000"),
+            settlement_cif=Decimal("17.93"),
+            settlement_source_cif_ceiling=Decimal("100.00"),
+        )
+        assert maximum.quantity == Decimal("1.000")
+        assert maximum.cif == Decimal("18.01")
+        assert maximum.final_settlement_applied is True
+
+    def test_final_settlement_buffer_never_bypasses_licence_cif_cap(self):
+        maximum = calculate_paired_allocation_max(
+            quantity_ceiling=Decimal("1.000"),
+            cif_ceiling=Decimal("17.93"),
+            unit_price=Decimal("18.007"),
+            quantity_step=Decimal("1.000"),
+            settlement_quantity=Decimal("1.000"),
+            settlement_cif=Decimal("17.93"),
+            settlement_source_cif_ceiling=Decimal("18.00"),
+        )
+        assert maximum.quantity == Decimal("0.000")
+
     @pytest.mark.parametrize("case,qty,cif", [(19, "1", "10"), (20, "25", "250"), (21, "500", "5000")])
     def test_19_20_21_canonical_value_pair(self, api, company, case, qty, cif):
         item, target = source(company, f"{case}"), allotment(company)

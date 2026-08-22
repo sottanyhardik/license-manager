@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_DOWN, ROUND_UP
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
 MONEY_QUANTUM = Decimal("0.01")
+FINAL_SETTLEMENT_BUFFER = Decimal("20.00")
 
 
 @dataclass(frozen=True)
@@ -20,7 +21,8 @@ class PairedAllocationMaximum:
 
 
 def calculate_paired_allocation_max(*, quantity_ceiling, cif_ceiling, unit_price, quantity_step,
-                                    settlement_quantity=None, settlement_cif=None):
+                                    settlement_quantity=None, settlement_cif=None,
+                                    settlement_source_cif_ceiling=None):
     quantity_ceiling = max(Decimal(str(quantity_ceiling)), ZERO_QTY)
     cif_ceiling = max(Decimal(str(cif_ceiling)), ZERO_CIF)
     unit_price = Decimal(str(unit_price))
@@ -38,12 +40,26 @@ def calculate_paired_allocation_max(*, quantity_ceiling, cif_ceiling, unit_price
         target_qty = Decimal(str(settlement_quantity))
         target_cif = Decimal(str(settlement_cif))
         nominal = (target_qty * unit_price).quantize(MONEY_QUANTUM, rounding=ROUND_UP)
+        source_cif_ceiling = Decimal(str(
+            settlement_source_cif_ceiling if settlement_source_cif_ceiling is not None else cif_ceiling
+        ))
+        # Close the final whole-unit quantity when the only shortfall is the
+        # allotment's value residual.  Licence/PLAN CIF caps remain absolute;
+        # only the allotment value is allowed to exceed its residual by the
+        # commercial $20 settlement buffer.
         if (target_qty == stepped_quantity_ceiling and target_qty > ZERO_QTY
-                and target_cif >= ZERO_CIF and target_cif <= cif_ceiling
+                and target_cif >= ZERO_CIF and nominal <= source_cif_ceiling
                 and abs(nominal - target_cif) <= MONEY_QUANTUM):
             return PairedAllocationMaximum(
                 target_qty, target_cif, quantity_ceiling, cif_ceiling, unit_price,
                 quantity_step, "FINAL_SETTLEMENT", True, target_cif - nominal,
+            )
+        if (target_qty == stepped_quantity_ceiling and target_qty > ZERO_QTY
+                and target_cif >= ZERO_CIF and nominal <= source_cif_ceiling
+                and nominal <= target_cif + FINAL_SETTLEMENT_BUFFER):
+            return PairedAllocationMaximum(
+                target_qty, nominal, quantity_ceiling, cif_ceiling, unit_price,
+                quantity_step, "FINAL_SETTLEMENT", True, nominal - target_cif,
             )
     by_cif = (cif_ceiling / unit_price / quantity_step).to_integral_value(rounding=ROUND_DOWN) * quantity_step
     quantity = max(min(stepped_quantity_ceiling, by_cif), ZERO_QTY)

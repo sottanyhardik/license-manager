@@ -1088,7 +1088,15 @@ class AllotmentActionViewSet(ViewSet):
                 })
                 continue
 
-            if qty > remaining_requirement_qty or (allotment.required_value > 0 and cif_fc > remaining_requirement_cif):
+            final_settlement_request = (
+                qty == remaining_requirement_qty
+                and cif_fc <= remaining_requirement_cif + Decimal('20.00')
+            )
+            if qty > remaining_requirement_qty or (
+                allotment.required_value > 0
+                and cif_fc > remaining_requirement_cif
+                and not final_settlement_request
+            ):
                 errors.append({
                     'item_id': item_id,
                     'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
@@ -1214,8 +1222,16 @@ class AllotmentActionViewSet(ViewSet):
                     Decimal(str(allotment.required_value)) - Decimal(str(allotment.allotted_value)), Decimal('0.00')
                 )
                 final_settlement = (
-                    qty == remaining_required_qty and cif_fc == remaining_required_cif
-                    and abs(canonical_cif - remaining_required_cif) <= Decimal('0.01')
+                    qty == remaining_required_qty
+                    and (
+                        # Preserve the existing one-cent closing settlement.
+                        (cif_fc == remaining_required_cif
+                         and abs(canonical_cif - remaining_required_cif) <= Decimal('0.01'))
+                        # A whole-unit close may instead use the canonical
+                        # CIF pair up to the commercial $20 buffer.
+                        or (cif_fc == canonical_cif
+                            and canonical_cif <= remaining_required_cif + Decimal('20.00'))
+                    )
                 )
                 if qty <= 0 or cif_fc <= 0 or (unit_price > 0 and cif_fc != canonical_cif and not final_settlement):
                     errors.append({
@@ -1292,7 +1308,11 @@ class AllotmentActionViewSet(ViewSet):
                     Decimal(str(allotment.required_value)) - Decimal(str(allotment.allotted_value)),
                     Decimal('0.00'),
                 )
-                if allotment.required_value > 0 and cif_fc > remaining_value:
+                if (
+                    allotment.required_value > 0
+                    and cif_fc > remaining_value
+                    and not final_settlement
+                ):
                     errors.append({
                         'item_id': item_id,
                         'code': 'ALLOTMENT_REQUIREMENT_EXCEEDED',

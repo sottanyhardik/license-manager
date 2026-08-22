@@ -390,9 +390,6 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         self._audit("RULE_DEACTIVATED", rule=rule)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    def _company_id(self):
-        return None if self.request.user.is_superuser else self.request.user.company_id
-
     @staticmethod
     def _allocation_action_for(rule):
         profile = SionPlanningProfile.objects.filter(
@@ -422,7 +419,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         try:
             result = (
                 SionRulePlanningService.plan if persist else SionRulePlanningService.preview
-            )(self.get_object(), request.data.get("license_ids"), company_id=self._company_id())
+            )(self.get_object(), request.data.get("license_ids"), company_id=None)
         except CompanyIsolationError as exc:
             return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
         except PlanningError as exc:
@@ -570,9 +567,6 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             )
         requested_ids = identifiers.get("license_ids") or []
         queryset = LicenseDetailsModel.objects.all()
-        company_id = self._company_id()
-        if company_id is not None:
-            queryset = queryset.filter(exporter_id=company_id)
         if requested_ids:
             queryset = queryset.filter(pk__in=requested_ids)
         else:
@@ -622,7 +616,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         try:
             result = SionRulePlanningService.preview_sion(
                 identifiers["sion_id"], identifiers.get("license_ids"),
-                company_id=self._company_id(), mode=identifiers["mode"],
+                company_id=None, mode=identifiers["mode"],
             )
         except CompanyIsolationError as exc:
             return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
@@ -765,10 +759,6 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         license_obj = LicenseDetailsModel.objects.filter(pk=values["license_id"]).first()
         if not license_obj:
             return Response({"code": "LICENSE_NOT_FOUND", "detail": "License not found."}, status=status.HTTP_404_NOT_FOUND)
-        company_id = self._company_id()
-        if company_id is not None and license_obj.exporter_id != company_id:
-            return Response({"code": "COMPANY_MISMATCH", "detail": "License belongs to another company."}, status=status.HTTP_403_FORBIDDEN)
-
         from apps.license.services.replan_requests import request_license_replan
         durable_request = request_license_replan(
             license_id=license_obj.pk,

@@ -25,6 +25,8 @@ NAVY = colors.HexColor("#17365D")
 BLUE = colors.HexColor("#1F4E78")
 PALE_BLUE = colors.HexColor("#D9EAF7")
 PALE_RED = colors.HexColor("#FCE8E6")
+PALE_GREEN = colors.HexColor("#EDF7F0")
+PALE_SALE = colors.HexColor("#EEF4FB")
 GREY = colors.HexColor("#666666")
 
 
@@ -40,6 +42,15 @@ def _text(value) -> str:
     return escape(str(value)) if value not in (None, "") else "-"
 
 
+def _cell_text(value, *, bold=False):
+    """Wrap long names/items safely so PDF rows never overlap each other."""
+    tag_open = "<b>" if bold else ""
+    tag_close = "</b>" if bold else ""
+    return Paragraph(
+        f"{tag_open}{_text(value)}{tag_close}",
+        ParagraphStyle("LedgerCell", fontName="Helvetica", fontSize=6.2, leading=8),
+    )
+
 def _invoice_cell(row):
     """Render only canonical document metadata; never resolve a document here."""
     document = row.get("invoice_document") or {}
@@ -50,7 +61,7 @@ def _invoice_cell(row):
         return Paragraph(
             f'<link href="{escape(str(url), {"\"": "&quot;"})}" color="#1F4E78"><u>{number}</u></link><br/>'
             f'<font size="5.5" color="#666666">{status}</font>',
-            ParagraphStyle("InvoiceLink", fontName="Helvetica", fontSize=6.5, leading=8),
+            ParagraphStyle("InvoiceLink", fontName="Helvetica", fontSize=6.3, leading=8.5),
         )
     if document.get("status") == "COPY_UNAVAILABLE":
         return Paragraph(
@@ -72,7 +83,7 @@ def _page_footer(canvas, doc) -> None:
     canvas.restoreState()
 
 
-def _table(rows, widths, *, numeric_from=0, total_row=None, font_size=7):
+def _table(rows, widths, *, numeric_from=0, total_row=None, font_size=7, transaction_rows=None, total_label_through=None):
     table = Table(rows, repeatRows=1, colWidths=widths, hAlign="LEFT")
     commands = [
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
@@ -95,6 +106,17 @@ def _table(rows, widths, *, numeric_from=0, total_row=None, font_size=7):
             ("FONTNAME", (0, total_row), (-1, total_row), "Helvetica-Bold"),
             ("BACKGROUND", (0, total_row), (-1, total_row), PALE_BLUE),
         ])
+        if total_label_through is not None:
+            commands.extend([
+                ("SPAN", (0, total_row), (total_label_through, total_row)),
+                ("ALIGN", (0, total_row), (total_label_through, total_row), "LEFT"),
+                ("LEFTPADDING", (0, total_row), (total_label_through, total_row), 5),
+            ])
+    for row_index, transaction_type in transaction_rows or []:
+        # Make linked purchase/sale entries immediately scannable without
+        # changing the canonical debit/credit values shown in their columns.
+        background = PALE_GREEN if transaction_type == "PURCHASE" else PALE_SALE
+        commands.append(("BACKGROUND", (0, row_index), (-1, row_index), background))
     table.setStyle(TableStyle(commands))
     return table
 
@@ -216,26 +238,41 @@ def _render_detail(elements, data, styles) -> None:
                "Purchase (INR)", "Sale (INR)", "Balance ($)", "P/L (INR)"]
     for group in groups:
         company_name = group.get("company_name") or "-"
+        # These are canonical FC totals already calculated per company.  For
+        # a legacy/single-group detail payload, use the licence summary rather
+        # than recomputing from displayed rows.
+        credit_total = group.get("purchase_value")
+        debit_total = group.get("sale_value")
+        if credit_total is None and len(groups) == 1:
+            credit_total = data["summary"].get("total_purchase")
+        if debit_total is None and len(groups) == 1:
+            debit_total = data["summary"].get("total_sale")
         elements.append(Paragraph(_text(company_name), styles["CompanyHeading"]))
         rows = [headers]
+        transaction_row_styles = []
         for row in all_rows:
             if group.get("company_id") is not None and row.get("company_id") != group.get("company_id"):
                 continue
+            transaction_type = row.get("type") or "-"
             rows.append([
-                _date(row.get("date")), row.get("party_name") or ("Opening Balance" if row.get("type") == "OPENING" else "-"),
-                _invoice_cell(row), row.get("type") or "-", ", ".join(row.get("item_names") or []) or "-",
+                _date(row.get("date")), _cell_text(row.get("party_name") or ("Opening Balance" if transaction_type == "OPENING" else "-")),
+                _invoice_cell(row), _cell_text(transaction_type, bold=True), ", ".join(row.get("item_names") or []) or "-",
                 _number(row.get("purchase_amount")), _number(row.get("sale_amount")), _number(row.get("purchase_bill_amount")),
-                _number(row.get("sale_bill_amount")), _number(row.get("license_running_balance")),
+                _number(row.get("sale_bill_amount")), "",
                 _number(row.get("profit_loss_inr")),
             ])
+            if transaction_type in {"PURCHASE", "SALE"}:
+                transaction_row_styles.append((len(rows) - 1, transaction_type))
         rows.append([
-            f"Total — {company_name}", "", "", "", "", "", "",
+            f"LICENSE TOTAL — {data.get('license_number') or '-'} · {company_name}", "", "", "", "",
+            _number(credit_total), _number(debit_total),
             _number(group.get("purchase_total")), _number(group.get("sale_total")),
             _number(group.get("current_balance")), _number(group.get("profit_loss")),
         ])
         elements.append(_table(
-            rows, [17*mm, 27*mm, 25*mm, 19*mm, 28*mm, 21*mm, 21*mm, 25*mm, 25*mm, 22*mm, 25*mm],
-            numeric_from=5, total_row=len(rows)-1, font_size=6,
+            rows, [17*mm, 27*mm, 27*mm, 19*mm, 27*mm, 21*mm, 21*mm, 25*mm, 25*mm, 22*mm, 25*mm],
+            numeric_from=5, total_row=len(rows)-1, font_size=6.2, transaction_rows=transaction_row_styles,
+            total_label_through=4,
         ))
         elements.append(Spacer(1, 6 * mm))
 

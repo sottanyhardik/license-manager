@@ -4,6 +4,19 @@ export type LedgerTransaction = {
     amount: number;
 };
 
+export type LicenseLedgerTransaction = {
+    trade_id: string | number;
+    invoice_date: string;
+    invoice_number: string;
+    transaction_type: string;
+    company_name: string;
+    party_name: string;
+    item_names: string[];
+    sion_norms: string;
+    amount: number;
+    bill_amount: number;
+};
+
 export type LedgerCompany = {
     company_id: string | number;
     company_name: string;
@@ -19,6 +32,14 @@ export type LicenseWiseEntry = {
     license_number: string;
     license_date: string;
     license_type: string;
+    sion_norms: string;
+    transactions: LicenseLedgerTransaction[];
+    purchase_total: number;
+    sale_total: number;
+    purchase_bill_total: number;
+    sale_bill_total: number;
+    current_balance: number;
+    profit_loss: number;
     companies: LedgerCompany[];
 };
 
@@ -99,6 +120,27 @@ function normalizeTransactions(value: unknown): LedgerTransaction[] {
     });
 }
 
+function normalizeLedgerTransactions(value: unknown): LicenseLedgerTransaction[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((row, index) => {
+        if (!isRecord(row)) return [];
+        const transaction_type = normalizeText(row.type, 'UNKNOWN');
+        if (transaction_type !== 'PURCHASE' && transaction_type !== 'SALE') return [];
+        return [{
+            trade_id: normalizeId(row.id ?? row.trade_id, index),
+            invoice_date: normalizeText(row.date ?? row.invoice_date, '-'),
+            invoice_number: normalizeText(row.invoice_number, '-'),
+            transaction_type,
+            company_name: normalizeText(row.company_name, 'Unknown company'),
+            party_name: normalizeText(row.party_name, 'N/A'),
+            item_names: Array.isArray(row.item_names) ? row.item_names.map((item) => normalizeText(item)).filter(Boolean) : [],
+            sion_norms: normalizeText(row.sion_norms),
+            amount: toFiniteNumber(row.amount),
+            bill_amount: toFiniteNumber(row.bill_amount),
+        }];
+    });
+}
+
 export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
     const rawLicenses = isRecord(value) && Array.isArray(value.licenses) ? value.licenses : [];
     const rawCompanyGroups = isRecord(value) && Array.isArray(value.company_groups) ? value.company_groups : [];
@@ -128,7 +170,18 @@ export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
                 if (!isRecord(company)) return [];
                 return [{ company_id: normalizeId(company.company_id, index), company_name: normalizeText(company.company_name, 'Unknown company'), purchases: normalizeTransactions(company.purchases), sales: normalizeTransactions(company.sales), purchase_total: toFiniteNumber(company.purchase_total), sale_total: toFiniteNumber(company.sale_total), profit_loss: toFiniteNumber(company.profit_loss) }];
             });
-            return [{ license_id: normalizeId(licenseId, 'unknown-license'), license_number: normalizeText(license.license_number, 'Unknown license'), license_date: normalizeText(license.license_date, '-'), license_type: normalizeText(license.license_type, 'UNKNOWN'), companies }];
+            const summary = isRecord(license.summary) ? license.summary : {};
+            const detailedTransactions = normalizeLedgerTransactions(license.transactions);
+            // Older running API instances return the established `companies`
+            // shape without detailed rows. Keep the ledger useful while they
+            // reload by rendering those purchase/sale entries as a fallback.
+            const transactions = detailedTransactions.length > 0 ? detailedTransactions : companies.flatMap((company) => [
+                ...company.purchases.map((transaction) => ({ trade_id: transaction.trade_id, invoice_date: transaction.invoice_date, invoice_number: '-', transaction_type: 'PURCHASE', company_name: company.company_name, party_name: '—', item_names: [], sion_norms: normalizeText(license.sion_norms), amount: 0, bill_amount: transaction.amount })),
+                ...company.sales.map((transaction) => ({ trade_id: transaction.trade_id, invoice_date: transaction.invoice_date, invoice_number: '-', transaction_type: 'SALE', company_name: company.company_name, party_name: '—', item_names: [], sion_norms: normalizeText(license.sion_norms), amount: 0, bill_amount: transaction.amount })),
+            ]);
+            const fallbackPurchaseTotal = companies.reduce((total, company) => total + company.purchase_total, 0);
+            const fallbackSaleTotal = companies.reduce((total, company) => total + company.sale_total, 0);
+            return [{ license_id: normalizeId(licenseId, 'unknown-license'), license_number: normalizeText(license.license_number, 'Unknown license'), license_date: normalizeText(license.license_date, '-'), license_type: normalizeText(license.license_type, 'UNKNOWN'), sion_norms: normalizeText(license.sion_norms), transactions, purchase_total: toFiniteNumber(summary.total_purchase), sale_total: toFiniteNumber(summary.total_sale), purchase_bill_total: toFiniteNumber(summary.total_purchase_bill_inr) || fallbackPurchaseTotal, sale_bill_total: toFiniteNumber(summary.total_sale_bill_inr) || fallbackSaleTotal, current_balance: toFiniteNumber(summary.current_balance), profit_loss: toFiniteNumber(summary.total_profit_loss) || companies.reduce((total, company) => total + company.profit_loss, 0), companies }];
         }), ...(rawCompanyGroups.length > 0 ? { company_groups } : {}),
         ...(rawGrandTotal ? { grand_total: { license_count: toFiniteNumber(rawGrandTotal.license_count), total_purchase_bill_inr: toFiniteNumber(rawGrandTotal.total_purchase_bill_inr), total_sale_bill_inr: toFiniteNumber(rawGrandTotal.total_sale_bill_inr), total_balance: toFiniteNumber(rawGrandTotal.total_balance), total_profit_loss_inr: toFiniteNumber(rawGrandTotal.total_profit_loss_inr) } } : {}),
     };

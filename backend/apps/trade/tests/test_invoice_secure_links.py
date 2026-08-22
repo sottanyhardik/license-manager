@@ -127,22 +127,21 @@ def test_expired_or_missing_document_does_not_consume_view(invoice_context):
     assert access.view_count == 0
 
 
-def test_cross_company_issue_and_authenticated_replay_are_blocked(invoice_context):
+def test_cross_company_issue_is_allowed_but_authenticated_replay_is_blocked(invoice_context):
     user, other_user, trade, storage_name = invoice_context
-    with pytest.raises(Exception) as exc:
-        issue_invoice_view_link(
-            trade=trade,
-            storage_name=storage_name,
-            document_type=InvoiceDocumentAccessToken.TYPE_PURCHASE_UPLOADED,
-            user=other_user,
-        )
-    assert "Cross-company" in str(exc.value)
+    issued = issue_invoice_view_link(
+        trade=trade,
+        storage_name=storage_name,
+        document_type=InvoiceDocumentAccessToken.TYPE_PURCHASE_UPLOADED,
+        user=other_user,
+    )
+    assert issued["secure_url"]
 
     url = _issue(invoice_context)["secure_url"]
     client = APIClient()
     client.force_authenticate(other_user)
     assert client.get(url).status_code == 404
-    assert InvoiceDocumentAccessToken.objects.get().view_count == 0
+    assert InvoiceDocumentAccessToken.objects.filter(view_count=0).count() == 2
     assert InvoiceDocumentAuditEvent.objects.filter(
         event=InvoiceDocumentAuditEvent.EVENT_FORBIDDEN
     ).exists()

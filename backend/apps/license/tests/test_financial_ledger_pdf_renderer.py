@@ -39,6 +39,7 @@ def _license():
         "company_groups": [{
             "company_id": 7, "company_name": "LABDHI MERCANTILE LLP",
             "purchase_total": Decimal("4583719.00"), "sale_total": Decimal("6524056.00"),
+            "purchase_value": Decimal("192806.27"), "sale_value": Decimal("76320.50"),
             "current_balance": Decimal("116485.77"), "profit_loss": Decimal("1940337.00"),
         }],
     }
@@ -137,7 +138,7 @@ def test_detail_pdf_extracts_rows_parties_items_and_canonical_totals():
         "LICENSE LEDGER STATEMENT", "Golden Exporter", "Golden Supplier", "Golden Buyer",
         "Golden Item A", "Golden Item B", "PURCHASE", "SALE", "1,92,806.27", "76,320.50",
         "45,83,719.00", "65,24,056.00", "1,16,485.77", "19,40,337.00",
-        "Total — LABDHI MERCANTILE LLP",
+        "LICENSE TOTAL — 0310833996 · LABDHI MERCANTILE LLP",
     ):
         assert expected in text
     assert "N/A" not in text

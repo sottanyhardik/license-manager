@@ -52,6 +52,71 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 
 // ─── LicenseWiseLedger sub-component ─────────────────────────────────────────
 
+function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate> }) {
+    const { licenses } = normalizeLicenseWiseData(data);
+    const fmtInr = (value: number) => `₹${formatIndianNumber(value, 2)}`;
+    const fmtFc = (value: number) => formatIndianNumber(value, 2);
+
+    if (licenses.length === 0) {
+        return <EmptyState icon={Inbox} title="No transactions found" description="No purchase or sale transactions match the current filters" />;
+    }
+
+    return (
+        <div className="space-y-5 p-3" data-testid="transaction-ledger">
+            {licenses.map((license) => (
+                <section key={license.license_id} className="overflow-hidden rounded-md border border-border" aria-label={`Transactions for license ${license.license_number}`}>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 bg-primary px-4 py-2.5 text-primary-foreground">
+                        <span className="font-bold">License {license.license_number}</span>
+                        <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
+                        <span className="text-xs text-primary-foreground/80">License date: {license.license_date}</span>
+                        {license.sion_norms && <span className="text-xs text-primary-foreground/80">SION: {license.sion_norms}</span>}
+                        {license.transactions[0] && (
+                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-xs font-semibold underline underline-offset-2">View details</button>
+                        )}
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[1200px] border-collapse text-xs">
+                            <thead>
+                                <tr className="border-b bg-muted/70 text-left text-muted-foreground">
+                                    <th className="px-3 py-2 font-semibold">Company</th><th className="px-3 py-2 font-semibold">SION</th>
+                                    <th className="px-3 py-2 font-semibold">Date</th><th className="px-3 py-2 font-semibold">Counterparty</th>
+                                    <th className="px-3 py-2 font-semibold">Invoice</th><th className="px-3 py-2 font-semibold">Transaction</th>
+                                    <th className="px-3 py-2 font-semibold">Product</th><th className="px-3 py-2 text-right font-semibold">FC Amount</th>
+                                    <th className="px-3 py-2 text-right font-semibold">INR Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {license.transactions.map((transaction) => {
+                                    const isPurchase = transaction.transaction_type === 'PURCHASE';
+                                    return <tr key={`${transaction.transaction_type}-${transaction.trade_id}`} className={cn("border-b last:border-b-0", isPurchase ? "bg-success/[0.06]" : "bg-info/[0.06]")}>
+                                        <td className="px-3 py-2 font-medium">{transaction.company_name}</td>
+                                        <td className="px-3 py-2">{transaction.sion_norms || license.sion_norms || '—'}</td>
+                                        <td className="px-3 py-2 whitespace-nowrap">{transaction.invoice_date}</td>
+                                        <td className="px-3 py-2">{transaction.party_name}</td>
+                                        <td className="px-3 py-2 font-medium">{transaction.invoice_number}</td>
+                                        <td className="px-3 py-2"><Badge variant={isPurchase ? 'default' : 'info'} className={cn("text-[10px]", isPurchase && "bg-success hover:bg-success")}>{transaction.transaction_type}</Badge></td>
+                                        <td className="px-3 py-2">{transaction.item_names.join(', ') || '—'}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{fmtFc(transaction.amount)}</td>
+                                        <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtInr(transaction.bill_amount)}</td>
+                                    </tr>;
+                                })}
+                                <tr className="border-t-2 border-primary bg-primary/5 font-bold">
+                                    <td colSpan={6} className="px-3 py-2 uppercase">License Total</td>
+                                    <td className="px-3 py-2 text-muted-foreground">Purchase / Sale</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">{fmtFc(license.purchase_total)} / {fmtFc(license.sale_total)}</td>
+                                    <td className={cn("px-3 py-2 text-right tabular-nums", license.profit_loss >= 0 ? "text-success" : "text-destructive")}>
+                                        {fmtInr(license.purchase_bill_total)} / {fmtInr(license.sale_bill_total)} · Balance {fmtFc(license.current_balance)}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            ))}
+        </div>
+    );
+}
+
 function LicenseWiseLedger({
     data,
     navigate,
@@ -295,9 +360,38 @@ export default function LicenseLedger() {
         Promise.all([
             api.get(`license-ledger/license-wise/?${paramsKey}`),
             api.get(`license-ledger/summary/?${paramsKey}`),
-        ]).then(([ledgerResponse, summaryResponse]) => {
+        ]).then(async ([ledgerResponse, summaryResponse]) => {
             if (version !== requestVersion.current) return;
-            setCompanyWiseData(normalizeLicenseWiseData(ledgerResponse.data));
+            const rawLedger = ledgerResponse.data;
+            const rawLicenses = isRecord(rawLedger) && Array.isArray(rawLedger.licenses) ? rawLedger.licenses : [];
+            // A server that has not yet reloaded may still return the legacy
+            // company-only collection payload. Its detail endpoint contains
+            // the full canonical rows, so enrich only those affected licenses.
+            const details = await Promise.allSettled(rawLicenses.flatMap((license) => {
+                if (!isRecord(license) || license.license_id == null || (Array.isArray(license.transactions) && license.transactions.length > 0)) return [];
+                const licenseType = encodeURIComponent(normalizeText(license.license_type, 'AUTO'));
+                return [api.get(`license-ledger/${encodeURIComponent(String(license.license_id))}/?license_type=${licenseType}`)];
+            }));
+            if (version !== requestVersion.current) return;
+            const detailByLicense = new Map(details.flatMap((result) => {
+                if (result.status !== 'fulfilled' || !isRecord(result.value.data) || result.value.data.license_id == null) return [];
+                return [[String(result.value.data.license_id), result.value.data] as const];
+            }));
+            const enrichedLedger = isRecord(rawLedger) ? {
+                ...rawLedger,
+                licenses: rawLicenses.map((license) => {
+                    if (!isRecord(license)) return license;
+                    const detail = detailByLicense.get(String(license.license_id));
+                    if (!detail) return license;
+                    return {
+                        ...license,
+                        transactions: Array.isArray(detail.display_transactions) ? detail.display_transactions : detail.transactions,
+                        summary: detail.summary,
+                        sion_norms: license.sion_norms ?? detail.sion_norms,
+                    };
+                }),
+            } : rawLedger;
+            setCompanyWiseData(normalizeLicenseWiseData(enrichedLedger));
             setSummary(summaryResponse.data);
         }).catch(error => {
             if (version !== requestVersion.current) return;
@@ -398,6 +492,22 @@ export default function LicenseLedger() {
                                 <option value="balance_value">Lowest Balance</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div>
+                        <label htmlFor="ledger-license-numbers" className="mb-1.5 block text-xs font-semibold text-muted-foreground">License Numbers</label>
+                        <Input id="ledger-license-numbers" value={filters.licenseNumbers}
+                            onChange={(event) => updateFilter('licenseNumbers', event.target.value)}
+                            placeholder="Paste comma-separated license numbers, e.g. 3111004973, 3111004966" />
+                        <p className="mt-1 text-[11px] text-muted-foreground">Shows only the listed licenses; spaces and duplicate numbers are ignored.</p>
+                    </div>
+
+                    <div>
+                        <label htmlFor="ledger-exclude-license-numbers" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Exclude License Numbers</label>
+                        <Input id="ledger-exclude-license-numbers" value={filters.excludeLicenseNumbers}
+                            onChange={(event) => updateFilter('excludeLicenseNumbers', event.target.value)}
+                            placeholder="Paste comma-separated license numbers to exclude" />
+                        <p className="mt-1 text-[11px] text-muted-foreground">Hides the listed licenses; spaces and duplicate numbers are ignored.</p>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
@@ -519,12 +629,12 @@ export default function LicenseLedger() {
                 </div>
             )}
 
-            {/* ── Company-wise ledger card ────────────────────────── */}
+            {/* ── Transaction ledger ───────────────────────────────── */}
             <Card>
                 <CardHeader className="border-b py-2 px-3">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-muted-foreground">
-                            {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
+                            Transaction Ledger — {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
                         </span>
                         {companyWiseLoading && (
                             <span className="text-xs text-muted-foreground">Loading…</span>
@@ -538,7 +648,7 @@ export default function LicenseLedger() {
                             <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
                         </div>
                     ) : companyWiseData ? (
-                        <LicenseWiseLedger
+                        <TransactionLedger
                             data={companyWiseData}
                             navigate={navigate}
                         />

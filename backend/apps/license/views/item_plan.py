@@ -112,31 +112,11 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["license", "import_item"]
 
-    def _company_id(self):
-        user = self.request.user
-        if user.is_superuser:
-            return None
-        company_id = getattr(user, "company_id", None)
-        if not company_id:
-            raise PermissionDenied("A company-scoped user is required.")
-        return company_id
-
     def _authorized_licenses(self):
-        queryset = LicenseDetailsModel.objects.all()
-        company_id = self._company_id()
-        return queryset if company_id is None else queryset.filter(exporter_id=company_id)
+        return LicenseDetailsModel.objects.all()
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        company_id = self._company_id()
-        if company_id is None:
-            return queryset
-        return queryset.filter(import_item__license__exporter_id=company_id)
-
-    def _assert_item_access(self, item):
-        company_id = self._company_id()
-        if company_id is not None and item.license.exporter_id != company_id:
-            raise PermissionDenied("This planning item belongs to another company.")
+        return super().get_queryset()
 
     def create(self, request, *args, **kwargs):
         """Direct plan line creation is disabled. Use /planning page instead."""
@@ -179,7 +159,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
                 license_id=license_id,
                 items=items_input,
                 force_replan=True,
-                company_id=self._company_id(),
+                company_id=None,
             )
         except PlanningError as exc:
             error = exc.as_dict()
@@ -223,7 +203,7 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             raw_ids = [part.strip() for part in raw_ids[0].split(",") if part.strip()]
         try:
             common = dict(
-                company_id=self._company_id(),
+                company_id=None,
                 hsn=request.query_params.get("hsn", ""),
                 product=request.query_params.get("product", ""),
                 logic=request.query_params.get("logic", "AND"),

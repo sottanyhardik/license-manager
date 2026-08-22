@@ -13,6 +13,7 @@ Both filters now resolve against the SAME live, batched
 `LicenseBalanceCalculator.calculate_financial_balance_for_licenses` figure
 used everywhere else in the app.
 """
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -81,6 +82,32 @@ class LicenseAdvancedFiltersLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, T
         null_ids = {row["id"] for row in null_resp.data["results"]}
         self.assertIn(null_live.id, null_ids, "Live balance < 200 must be classified null")
         self.assertNotIn(non_null_live.id, null_ids, "Live balance >= 200 must not be classified null")
+
+    def test_current_flags_query_names_use_live_expiry_and_balance(self):
+        """The frontend sends ``flags__is_*`` names from the filter schema.
+
+        They must not be passed through to a direct child-table lookup, because
+        those flags are asynchronously refreshed and can be stale.
+        """
+        company = self.make_company()
+        license_obj = self._make_license_with_live_balance(
+            company, export_cif=Decimal("5000.00"), debit_cif=Decimal("1000.00"),
+        )
+        license_obj.license_expiry_date = date.today() + timedelta(days=10)
+        license_obj.save(update_fields=["license_expiry_date"])
+        license_obj.flags.is_expired = True
+        license_obj.flags.is_null = True
+        license_obj.flags.save(update_fields=["is_expired", "is_null"])
+
+        response = self.client.get("/api/licenses/", {
+            "flags__is_expired": "false",
+            "flags__is_null": "false",
+            "page_size": 200,
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertIn(license_obj.id, ids)
 
     def test_balance_range_filter_uses_live_balance_not_stale_cache(self):
         company = self.make_company()

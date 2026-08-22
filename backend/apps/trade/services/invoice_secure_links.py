@@ -41,15 +41,13 @@ def canonical_company_for_trade(trade: LicenseTrade):
     return trade.to_company or trade.from_company
 
 
-def _assert_can_issue(user, trade: LicenseTrade, company) -> None:
+def _assert_can_issue(user) -> None:
     if not user or not user.is_authenticated:
         raise PermissionDenied("Authentication is required.")
     if user.is_superuser:
         return
     if not user.has_any_role(INVOICE_READ_ROLES):
         raise PermissionDenied("Trade invoice access is not permitted.")
-    if not user.company_id or not company or user.company_id != company.id:
-        raise PermissionDenied("Cross-company invoice access is not permitted.")
 
 
 def document_matches_trade(*, trade, document_type, storage_name, document_version="") -> bool:
@@ -106,7 +104,7 @@ def issue_invoice_view_link(
         raise ValidationError("Invoice document does not belong to this trade/version.")
 
     company = canonical_company_for_trade(trade)
-    _assert_can_issue(user, trade, company)
+    _assert_can_issue(user)
 
     lifetime = ttl_seconds
     if lifetime is None:

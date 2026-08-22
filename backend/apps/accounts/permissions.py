@@ -133,10 +133,8 @@ class LicenseLedgerViewPermission(permissions.BasePermission):
     """
     View license ledger — trade/license roles or LEDGER_MANAGER.
 
-    Collection and licence-level company scoping is applied by the ledger
-    viewset because the authoritative relationship is a trade, not a field
-    on either licence model.  This permission retains the request-company
-    check for any view action that invokes ``check_object_permissions``.
+    Ledger access is role-based and is not dependent on a user-company
+    assignment.
     """
 
     def has_permission(self, request, view):
@@ -148,22 +146,6 @@ class LicenseLedgerViewPermission(permissions.BasePermission):
             'TRADE_VIEWER', 'TRADE_MANAGER',
             'LICENSE_MANAGER', 'LEDGER_MANAGER',
         ])
-
-    def has_object_permission(self, request, view, obj):
-        """Reject an explicit cross-company request for non-admin users."""
-        if request.user.is_superuser:
-            return True
-        company = getattr(request.user, 'company', None)
-        if company is None:
-            return False
-        requested_company = request.query_params.get('company')
-        if requested_company is None:
-            return True
-        try:
-            return int(requested_company) == company.id
-        except (TypeError, ValueError):
-            return False
-
 
 class AccountAccessPermission(permissions.BasePermission):
     """

@@ -5,13 +5,14 @@ export type LicenseLedgerFilters = {
     company: SelectValue; licenseType: string; minBalance: string; search: string;
     ordering: string; activeOnly: boolean; norm: SelectValue; purchaseStatus: SelectValue;
     purchaseBill: string; purchaseDateFrom: string; purchaseDateTo: string;
+    licenseNumbers: string; excludeLicenseNumbers: string;
 };
 
 export function defaultLicenseLedgerFilters(date = new Date()): LicenseLedgerFilters {
     const { fyStart, fyEnd } = getFinancialYearRange(date);
     return { company: null, licenseType: "ALL", minBalance: "", search: "",
         ordering: "-license_date", activeOnly: false, norm: null, purchaseStatus: null,
-        purchaseBill: "ALL", purchaseDateFrom: fyStart, purchaseDateTo: fyEnd };
+        purchaseBill: "ALL", purchaseDateFrom: fyStart, purchaseDateTo: fyEnd, licenseNumbers: "", excludeLicenseNumbers: "" };
 }
 
 const selected = (value: SelectValue): string => {
@@ -31,6 +32,8 @@ export function buildLicenseLedgerParams(filters: LicenseLedgerFilters): URLSear
         norm: selected(filters.norm), purchase_status: selected(filters.purchaseStatus),
         purchase_bill: filters.purchaseBill === "ALL" ? "" : filters.purchaseBill,
         purchase_date_from: filters.purchaseDateFrom, purchase_date_to: filters.purchaseDateTo,
+        license_numbers: filters.licenseNumbers.trim(),
+        exclude_license_numbers: filters.excludeLicenseNumbers.trim(),
     };
     Object.entries(values).forEach(([key, value]) => { if (value) params.set(key, value); });
     return params;

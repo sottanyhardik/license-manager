@@ -2,6 +2,7 @@
 import logging
 from decimal import Decimal
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -409,6 +410,32 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         return Response(data)
 
+    @action(detail=True, methods=['get'], url_path='check-validity')
+    def check_validity(self, request, pk=None):
+        """Return the current, non-mutating validity state for a licence.
+
+        The frontend's ``checkLicenseValidity`` client has always called this
+        route.  Validity is intentionally calculated from today's date instead
+        of trusting the denormalized ``flags.is_expired`` value, which may be
+        refreshed asynchronously.
+        """
+        license_obj = self.get_object()
+        today = timezone.localdate()
+        expiry_date = license_obj.license_expiry_date
+        is_expired = expiry_date is not None and expiry_date < today
+        is_active = license_obj.is_active
+        is_valid = is_active and not is_expired
+
+        return Response({
+            'license_id': license_obj.pk,
+            'license_number': license_obj.license_number,
+            'is_valid': is_valid,
+            'is_active': is_active,
+            'is_expired': is_expired,
+            'license_expiry_date': expiry_date,
+            'days_until_expiry': (expiry_date - today).days if expiry_date else None,
+        })
+
     def get_object(self):
         """
         Override to support lookup by either pk (ID) or license_number.
@@ -482,18 +509,6 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
         qs = super().get_queryset()
 
-        # License records are tenant-owned. Role permissions decide whether a
-        # user may use this API; the queryset decides which company's objects
-        # they may address, including detail actions selected directly by URL
-        # (for example ``/<id>/plan-utilization/``).  Keeping the scope here
-        # makes ``get_object()`` return 404 for foreign IDs across every
-        # licence-detail action instead of relying on each action to remember
-        # an object-level company check.
-        user = self.request.user
-        if user.is_authenticated and not user.is_superuser:
-            company_id = getattr(user, 'company_id', None)
-            qs = qs.filter(exporter_id=company_id) if company_id else qs.none()
-
         # Restore original default filters if they were cleared
         if skip_default_filters:
             self.default_filters = original_default_filters
@@ -553,8 +568,11 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # Get default filters
         default_filters = getattr(self, "default_filters", {})
 
-        # Handle is_expired filter - apply default if not provided
-        is_expired_value = params.get('is_expired')
+        # The current filter schema exposes the child-table paths
+        # (``flags__is_expired`` / ``flags__is_null``); older callers use the
+        # short aliases.  Both must use the live calculations below rather
+        # than falling through to MasterViewSet's stale stored-flag filter.
+        is_expired_value = params.get('is_expired', params.get('flags__is_expired'))
 
         # Special case: if user explicitly selects "all", don't apply any filter
         if is_expired_value and is_expired_value.lower() == "all":
@@ -573,7 +591,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 qs = qs.filter(Q(license_expiry_date__gte=today) | Q(license_expiry_date__isnull=True))
 
         # Handle is_null filter - apply default if not provided
-        is_null_value = params.get('is_null')
+        is_null_value = params.get('is_null', params.get('flags__is_null'))
 
         # Special case: if user explicitly selects "all", don't apply any filter
         if is_null_value and is_null_value.lower() == "all":
@@ -647,9 +665,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # Create a new QueryDict-like object
         from django.http import QueryDict
         filtered_params = QueryDict(mutable=True)
+        custom_filter_keys = (
+            'is_expired', 'flags__is_expired', 'is_null', 'flags__is_null',
+            'is_planned', 'balance__balance_cif_min', 'balance__balance_cif_max',
+        )
         for key, value in params.items():
-            if key not in ('is_expired', 'is_null', 'is_planned',
-                           'balance__balance_cif_min', 'balance__balance_cif_max'):
+            if key not in custom_filter_keys:
                 # Handle array format for purchase_status
                 if key == 'purchase_status[]':
                     # Frontend sends purchase_status[] for multi-select
@@ -659,7 +680,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                     filtered_params[key] = value
 
         # Create a copy of filter_config without custom-handled fields
-        filtered_config = {k: v for k, v in filter_config.items() if k not in ('is_expired', 'is_null', 'is_planned')}
+        filtered_config = {
+            k: v for k, v in filter_config.items()
+            if k not in ('is_expired', 'flags__is_expired', 'is_null', 'flags__is_null', 'is_planned')
+        }
 
         # Call parent method with filtered params and config
         qs = super().apply_advanced_filters(qs, filtered_params, filtered_config)

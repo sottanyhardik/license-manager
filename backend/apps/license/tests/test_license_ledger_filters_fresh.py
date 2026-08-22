@@ -66,6 +66,17 @@ class FreshLicenseLedgerFilterTests(SimpleTestCase):
             LicenseLedgerFilters.from_query_params({"license_type": "AUTO"})
         self.assertIn("license_type", raised.exception.detail)
 
+    def test_license_numbers_are_parsed_as_a_deduplicated_csv_list(self):
+        filters = LicenseLedgerFilters.from_query_params({
+            "license_numbers": " 3111004973,3111004966, 3111004973 ,,0311044946 ",
+            "exclude_license_numbers": " 0311044676, 0311044676, 0311051203 ",
+        })
+        self.assertEqual(
+            filters.license_numbers,
+            ("3111004973", "3111004966", "0311044946"),
+        )
+        self.assertEqual(filters.exclude_license_numbers, ("0311044676", "0311051203"))
+
     def test_every_license_type_is_applied_at_queryset_level(self):
         all_dfia, all_incentive = _apply_database_filters(
             LicenseLedgerFilters(license_type="ALL"), None,

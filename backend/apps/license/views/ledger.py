@@ -14,9 +14,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
     Unified ledger view for both DFIA and Incentive licenses.
     Shows available balance for selling licenses.
 
-    SECURITY: ledger data is company-scoped for non-administrators.  A
-    ledger role grants access to the user's own trade history, not to every
-    company's licences.
+    Access is role-based.  Ledger users can view the shared ledger regardless
+    of whether their account has a company assignment.
 
     Returns:
     - DFIA licenses: balance_cif (available CIF $ balance)
@@ -32,32 +31,9 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         """Preserve the router's established per-license endpoint."""
         return self.ledger_detail(request, pk=pk)
 
-    def _scope_company_id(self, request):
-        if request.user.is_superuser:
-            return None
-        company = getattr(request.user, "company", None)
-        if company is None:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied(detail="User has no company assignment for ledger access.")
-        return company.id
-
-    def _validate_filter_company(self, request):
-        """Prevent a company filter from expanding a non-admin user's scope."""
-        selected = request.query_params.get('buying_company_id')
-        if selected:
-            from rest_framework.exceptions import PermissionDenied, ValidationError
-            try:
-                selected_id = int(selected)
-            except (TypeError, ValueError):
-                raise ValidationError(detail='Invalid company parameter.')
-            if not request.user.is_superuser and selected_id != self._scope_company_id(request):
-                raise PermissionDenied(detail='You can only filter your assigned company.')
-
     def _authorized_license(self, request, license_ref, license_type='AUTO'):
-        """Resolve a license and apply the same object authorization everywhere."""
-        from django.db.models import Q
-        from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
-        from apps.trade.models import LicenseTrade
+        """Resolve a license for an already-authorized ledger user."""
+        from rest_framework.exceptions import APIException, ValidationError
 
         requested_type = str(license_type or 'AUTO').strip().upper()
         allowed_types = {'AUTO', 'DFIA', 'INCENTIVE', 'ALL_INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'}
@@ -78,24 +54,6 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
                 status_code = 404
                 default_code = 'not_found'
             raise LicenseNotFound(detail={'error': f'License not found: {license_ref}'})
-
-        # A licence is discoverable by number, so role membership alone must
-        # not make it an IDOR primitive.  Scope direct detail/export access
-        # to a trade involving the caller's company, using the same trade
-        # relationship used by the collection selector.
-        if not request.user.is_superuser:
-            company_id = self._scope_company_id(request)
-            license_filters = (
-                {'lines__sr_number__license_id': license_obj.id}
-                if found_type == 'DFIA'
-                else {'incentive_lines__incentive_license_id': license_obj.id}
-            )
-            if not LicenseTrade.objects.filter(
-                Q(from_company_id=company_id) | Q(to_company_id=company_id),
-                license_type='DFIA' if found_type == 'DFIA' else 'INCENTIVE',
-                **license_filters,
-            ).exists():
-                raise PermissionDenied(detail='You do not have access to this license.')
 
         return found_type, license_obj
 
@@ -165,9 +123,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         Get canonical summary statistics for every authorized ledger licence.
         """
         from apps.license.services.license_ledger_export import build_license_ledger_data
-        self._validate_filter_company(request)
         return Response(build_license_ledger_data(
-            request.query_params, company_id=self._scope_company_id(request),
+            request.query_params,
         )['summary'])
 
     @action(detail=True, methods=['get'])
@@ -184,14 +141,21 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         """
         from apps.license.services.canonical_ledger_service import CanonicalLedgerService
         from apps.license.serializers import CanonicalLedgerSerializer
+        from rest_framework.exceptions import ValidationError
         license_type = request.query_params.get('license_type', 'AUTO')
+        company_value = request.query_params.get('company')
+        try:
+            company_id = int(company_value) if company_value else None
+        except (TypeError, ValueError):
+            raise ValidationError({'company': 'Company must be a valid numeric ID.'})
         found_type, license = self._authorized_license(request, pk, license_type)
 
         # Delegate all calculation to CanonicalLedgerService (single source of truth).
         # The API is a transparent serialization layer with NO business logic.
         dataset = CanonicalLedgerService.build_canonical_ledger_dataset(
             license_id=license.id,
-            license_type=found_type
+            license_type=found_type,
+            company_id=company_id,
         )
 
         from apps.license.services.license_ledger_export import enrich_invoice_documents
@@ -210,12 +174,11 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         Returns trades grouped by license, then by company within each license.
         Structure: license → [company → purchases/sales/totals]
 
-        The collection is role-authorized, with no optional filter parameters.
+        The collection is role-authorized and accepts the public ledger filters.
         """
         from apps.license.services.license_ledger_export import build_license_ledger_data
-        self._validate_filter_company(request)
         collection = build_license_ledger_data(
-            request.query_params, company_id=self._scope_company_id(request),
+            request.query_params,
         )
         datasets = collection['licenses']
         return Response({'licenses': [{
@@ -223,6 +186,12 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
             'license_number': data['license_number'],
             'license_date': data['license_date'],
             'license_type': data['license_type'],
+            'sion_norms': data.get('sion_norms') or '',
+            # Flat, transaction-level rows for the screen ledger.  Keep the
+            # established company summary alongside it for older consumers.
+            'transactions': data.get('display_transactions') or [],
+            'summary': data.get('summary') or {},
+            'individual_ledger_projection': data.get('individual_ledger_projection') or {},
             'companies': data['license_wise_companies'],
         } for data in datasets],
             # Canonical reporting hierarchy. The UI consumes this verbatim;
@@ -253,9 +222,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
             )
             license_ref = (license_obj.id, found_type)
 
-        self._validate_filter_company(request)
         canonical_data = build_license_ledger_data(
-            request.query_params, company_id=self._scope_company_id(request), license_ref=license_ref,
+            request.query_params, license_ref=license_ref,
         )
         from apps.license.services.license_ledger_export import enrich_invoice_documents
         enrich_invoice_documents(

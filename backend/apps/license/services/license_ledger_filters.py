@@ -67,6 +67,8 @@ class LicenseLedgerFilters:
     purchase_bill: str = "ALL"
     purchase_date_from: object = None
     purchase_date_to: object = None
+    license_numbers: tuple[str, ...] = ()
+    exclude_license_numbers: tuple[str, ...] = ()
 
     @classmethod
     def from_query_params(cls, params):
@@ -91,6 +93,12 @@ class LicenseLedgerFilters:
         purchase_bill = text("purchase_bill", "ALL").upper()
         if purchase_bill not in {"ALL", "WITH_PURCHASE_BILL", "NO_PURCHASE_BILL"}:
             purchase_bill = "ALL"
+        license_numbers = tuple(dict.fromkeys(
+            number.strip() for number in text("license_numbers").split(",") if number.strip()
+        ))
+        exclude_license_numbers = tuple(dict.fromkeys(
+            number.strip() for number in text("exclude_license_numbers").split(",") if number.strip()
+        ))
         return cls(
             company_id=company_id, license_type=license_type, min_balance=min_balance,
             search=text("search"), ordering=ordering,
@@ -99,6 +107,8 @@ class LicenseLedgerFilters:
             purchase_bill=purchase_bill,
             purchase_date_from=parse_date(text("purchase_date_from")),
             purchase_date_to=parse_date(text("purchase_date_to")),
+            license_numbers=license_numbers,
+            exclude_license_numbers=exclude_license_numbers,
         )
 
 
@@ -148,6 +158,12 @@ def _apply_database_filters(filters, authorization_company_id):
     if filters.purchase_status:
         dfia = dfia.filter(purchase_status__code=filters.purchase_status)
         incentive = IncentiveLicense.objects.none()
+    if filters.license_numbers:
+        dfia = dfia.filter(license_number__in=filters.license_numbers)
+        incentive = incentive.filter(license_number__in=filters.license_numbers)
+    if filters.exclude_license_numbers:
+        dfia = dfia.exclude(license_number__in=filters.exclude_license_numbers)
+        incentive = incentive.exclude(license_number__in=filters.exclude_license_numbers)
 
     if filters.purchase_bill != "ALL":
         dfia_bill = LicenseTradeLine.objects.filter(

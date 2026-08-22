@@ -83,6 +83,7 @@ class CanonicalLedgerService:
     @staticmethod
     def build_canonical_ledger_dataset(
         license_id: int, license_type: str = "DFIA", *, first_purchase_date=_FIRST_PURCHASE_UNSET,
+        company_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Build the authoritative ledger dataset for a license.
@@ -93,6 +94,8 @@ class CanonicalLedgerService:
         Args:
             license_id: License ID (LicenseDetailsModel or IncentiveLicense)
             license_type: License type (DFIA, INCENTIVE, RODTEP, ROSTL, MEIS)
+            company_id: Optional explicit ledger-company scope. This filters
+                ledger data, not the caller's authorization.
 
         Returns:
             Dict with structure:
@@ -239,6 +242,11 @@ class CanonicalLedgerService:
 
         # Fetch and normalize transactions
         raw_transactions = _fetch_transactions(license_obj, license_type)
+        if company_id is not None:
+            raw_transactions = [
+                transaction for transaction in raw_transactions
+                if transaction.get('company_id') == company_id
+            ]
 
         # Compute purchase bill presence (check for any PURCHASE with non-zero bill)
         has_purchase_bill = _has_purchase_bill(raw_transactions)
@@ -353,6 +361,7 @@ class CanonicalLedgerService:
             dataset['transactions'].append({
                 'date': txn_date,
                 'id': txn_id,
+                'invoice_number': txn_data.get('invoice_number') or '',
                 'type': txn_type,
                 'company_id': company_id,
                 'company_name': company_name,
@@ -427,6 +436,28 @@ class CanonicalLedgerService:
         # ── Screen reconciliation summary (additive; recomputes nothing) ────
         dataset['summary'] = _build_summary(dataset)
         dataset['license_wise_companies'] = _build_license_wise_companies(dataset)
+        # The one individual-license presentation contract shared by the UI,
+        # PDF and Excel.  Amounts and closing balance are canonical values
+        # computed above; consumers must only format these fields.
+        dataset['individual_ledger_projection'] = {
+            'transaction_rows': dataset['display_transactions'],
+            'total_credit_fc': dataset['summary']['total_purchase'],
+            'total_debit_fc': dataset['summary']['total_sale'],
+            'total_purchase_inr': dataset['summary']['total_purchase_bill_inr'],
+            'total_sale_inr': dataset['summary']['total_sale_bill_inr'],
+            'closing_balance_fc': dataset['summary']['current_balance'],
+            'profit_loss_inr': dataset['summary']['total_profit_loss'],
+            'total_row': {
+                'company_name': '', 'sion_norms': dataset.get('sion_norms') or '',
+                'license_number': dataset['license_number'], 'date': None,
+                'particulars': 'LICENSE TOTAL', 'invoice_number': '', 'type': '', 'item_names': [],
+                'credit_fc': dataset['summary']['total_purchase'], 'debit_fc': dataset['summary']['total_sale'],
+                'purchase_inr': dataset['summary']['total_purchase_bill_inr'],
+                'sale_inr': dataset['summary']['total_sale_bill_inr'],
+                'balance_fc': dataset['summary']['current_balance'],
+                'profit_loss_inr': dataset['summary']['total_profit_loss'],
+            },
+        }
 
         # ── Add purchase-not-present detection flag ────
         dataset['has_purchase_bill'] = _has_purchase_bill(dataset['transactions'])

@@ -111,8 +111,8 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
     _style_header(sheet[2])
 
     for data in licenses:
-        summary = data.get("summary") or {}
-        transactions = list(data.get("display_transactions") or [])
+        projection = data.get("individual_ledger_projection") or {}
+        transactions = list(projection.get("transaction_rows") or [])
         companies = data.get("license_wise_companies") or []
         company_names = {company.get("company_id"): company.get("company_name") for company in companies}
         for transaction in transactions:
@@ -126,7 +126,7 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
                 _display(", ".join(transaction.get("item_names") or [])),
                 transaction.get("purchase_amount"), transaction.get("sale_amount"),
                 transaction.get("purchase_bill_amount"), transaction.get("sale_bill_amount"),
-                transaction.get("license_running_balance"), transaction.get("profit_loss_inr"),
+                None, transaction.get("profit_loss_inr"),
             ])
             if document.get("document_exists") and document.get("secure_url"):
                 invoice_cell = sheet.cell(row, 6)
@@ -141,9 +141,10 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
         row = sheet.max_row + 1
         sheet.append([
             None, _display(data.get("sion_norms")), _display(data.get("license_number")),
-            None, "LICENSE TOTAL", None, None, None, None, None,
-            summary.get("total_purchase_bill_inr"), summary.get("total_sale_bill_inr"),
-            summary.get("current_balance"), summary.get("total_profit_loss"),
+            None, "LICENSE TOTAL", None, None, None,
+            projection.get("total_credit_fc"), projection.get("total_debit_fc"),
+            projection.get("total_purchase_inr"), projection.get("total_sale_inr"),
+            projection.get("closing_balance_fc"), projection.get("profit_loss_inr"),
         ])
         for cell in sheet[row]:
             cell.font = Font(bold=True, color=NAVY)

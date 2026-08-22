@@ -70,12 +70,13 @@ class InvoiceDocumentView(APIView):
             raise Http404()
 
         # If an authenticated identity accompanies the bearer token it may not
-        # substitute a different user/company.  Anonymous access remains valid
+        # substitute a different user.  Company assignment does not limit
+        # ledger-authorized invoice access. Anonymous access remains valid
         # because the high-entropy, short-lived URL itself is the PDF/Excel-safe
         # capability (browsers cannot attach the SPA's Authorization header).
         user = request.user if getattr(request.user, "is_authenticated", False) else None
         if user and not user.is_superuser:
-            if user.id != access.issued_to_id or user.company_id != access.authorized_company_id:
+            if user.id != access.issued_to_id:
                 _audit(access, InvoiceDocumentAuditEvent.EVENT_FORBIDDEN, request, reason="identity_mismatch")
                 raise Http404()
 

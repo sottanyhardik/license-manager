@@ -158,28 +158,21 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
         # Should succeed - company_a traded this license
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_user_b_cannot_retrieve_license_company_a_traded(self):
-        """P0 IDOR FIX: User B cannot access license that only Company A traded"""
+    def test_user_b_can_retrieve_license_company_a_traded(self):
+        """Ledger access is not restricted by the user's company."""
         self.client.force_authenticate(user=self.user_b)
 
-        # User B tries to retrieve company_a_only_license
-        # VULNERABILITY: Without fix, this would succeed (no company check)
-        # FIX: Now validates LicenseTrade exists for user_b.company
         response = self.client.get(f'/api/license-ledger/{self.company_a_only_license.id}/')
 
-        # Must be blocked - company_b did not trade this license
-        # (Even though company_b received it, the license exists in trades,
-        # but we block because company_b is not the OWNER/DIRECT TRADER)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_user_cannot_access_orphan_license(self):
-        """User cannot access a license no company traded"""
+    def test_user_can_access_orphan_license(self):
+        """Ledger access does not require a trade for the user's company."""
         self.client.force_authenticate(user=self.user_a)
 
         response = self.client.get(f'/api/license-ledger/{self.orphan_license.id}/')
 
-        # Should be blocked - no LicenseTrade exists
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_superuser_can_retrieve_any_license(self):
         """Superuser bypasses company check"""
@@ -470,7 +463,7 @@ class SuperuserBypassTest(APITestCase):
 
 class UserWithoutCompanyTest(APITestCase):
     """
-    Verify users without company assignment cannot access ledger.
+    Verify ledger-role users do not need a company assignment.
     """
 
     def setUp(self):
@@ -481,13 +474,14 @@ class UserWithoutCompanyTest(APITestCase):
             password='pass123',
         )
 
-    def test_user_without_company_denied_access(self):
-        """User without company assignment gets 403"""
+    def test_user_without_company_can_access_ledger(self):
+        """A ledger-role user without a company assignment gets ledger data."""
+        ledger_role, _ = Group.objects.get_or_create(name='LEDGER_MANAGER')
+        self.user_no_company.groups.add(ledger_role)
         self.client.force_authenticate(user=self.user_no_company)
 
-        # All endpoints should deny access
         response = self.client.get('/api/license-ledger/summary/')
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         response = self.client.get('/api/license-ledger/license-wise/')
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

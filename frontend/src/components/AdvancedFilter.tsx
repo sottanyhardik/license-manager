@@ -82,7 +82,10 @@ export default function AdvancedFilter({
 
     const handleResetFilters = () => {
         setSearchTerm("");
-        setFilterValues(defaultFilters);
+        // “Clear” must mean no restrictions. Default filters are appropriate
+        // for an initial view, but restoring them here can leave a list empty
+        // even after the user explicitly clears the form.
+        setFilterValues({});
     };
 
     // shared style token for react-select border

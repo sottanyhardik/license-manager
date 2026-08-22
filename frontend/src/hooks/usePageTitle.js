@@ -34,6 +34,7 @@ const PATH_TITLES = [
     { pattern: '/incentive-licenses',                           title: 'Incentive Licenses' },
     // License Ledger
     { pattern: '/license-ledger/:licenseId/:itemId',            title: 'Ledger Detail' },
+    { pattern: '/license-ledger/:licenseId',                    title: 'Ledger Detail' },
     { pattern: '/license-ledger',                               title: 'License Ledger' },
     // Reports
     { pattern: '/reports/download-license',                     title: 'Download License' },

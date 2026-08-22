@@ -239,6 +239,11 @@ export default function AppRoutes() {
                         <AdminLayout><LicenseLedgerDetail /></AdminLayout>
                     </ProtectedRoute>
                 } />
+                <Route path="/license-ledger/:licenseId" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                        <AdminLayout><LicenseLedgerDetail /></AdminLayout>
+                    </ProtectedRoute>
+                } />
 
                 {/* License Overview dashboard — replaces the old Balance Workspace */}
                 <Route path="/licenses/:id/overview" element={

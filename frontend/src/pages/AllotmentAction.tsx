@@ -143,9 +143,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         // Purchase Status default is applied once the master data loads
         // (see the usePurchaseStatusOptions effect below) — never hardcoded.
         purchase_status: "",
-        // "All" is deliberately unrestricted: expired licences remain
-        // visible until the user explicitly selects an expiry restriction.
-        license_status: "all",
+        // Available licences start with an active-only view; users can still
+        // deliberately switch the filter to All or Expired.
+        license_status: "active",
         item_id: "",
         expiry_date_from: "",
         expiry_date_to: "",

@@ -228,7 +228,9 @@ class PurchasedLicenseOpeningPolicyTests(CanonicalLedgerServiceTestBase):
 
         result = CanonicalLedgerService.build_canonical_ledger_dataset(self.license.id)
 
-        self.assertEqual(result['opening_balance'], Decimal('0.00'))
+        # Original licence CIF remains published as metadata; the purchase
+        # event alone seeds the running ledger so it is not counted twice.
+        self.assertEqual(result['opening_balance'], Decimal('89283.10'))
         self.assertEqual(result['license_running_balance'], Decimal('8924.00'))
         self.assertEqual(result['transactions'][-1]['license_running_balance'], Decimal('8924.00'))
         self.assertEqual([row['type'] for row in result['transactions']], ['PURCHASE', 'SALE'])

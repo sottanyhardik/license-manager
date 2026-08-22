@@ -813,35 +813,29 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     @action(detail=True, methods=['post'], url_path='auto-plan')
     def auto_plan(self, request, pk=None):
-        """Run the canonical Auto Plan request synchronously for this licence."""
+        """Queue the canonical Auto Plan request for this licence.
+
+        Planning is intentionally executed only by the durable worker after
+        the source transaction commits.  Keeping this convenience endpoint
+        enqueue-only gives it the same locking, revision, retry and audit
+        semantics as the planning workspace endpoints.
+        """
         from apps.license.services.replan_requests import request_license_replan
-        from apps.license.tasks import replan_license_task
         license_obj = self.get_object()
         durable_request = request_license_replan(
             license_id=license_obj.pk,
             reason="manual_auto_plan",
             source_model="license.auto_plan",
             source_pk=license_obj.pk,
-            dispatch=False,
+            dispatch=True,
         )
-        result = replan_license_task.run(durable_request.pk)
-        durable_request.refresh_from_db()
-        if durable_request.status != durable_request.STATUS_SUCCEEDED:
-            return Response({
-                "license_id": license_obj.pk,
-                "license_number": license_obj.license_number,
-                "planning_state": durable_request.status,
-                "replan_request_id": durable_request.pk,
-                "message": durable_request.last_error_message or "Auto Plan failed.",
-            }, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             "license_id": license_obj.pk,
             "license_number": license_obj.license_number,
-            "planning_state": "CURRENT",
+            "planning_state": "REPLAN_PENDING",
             "replan_request_id": durable_request.pk,
-            "message": "Auto Plan completed.",
-            "result": result,
-        })
+            "message": "Licence replanning has been queued.",
+        }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):

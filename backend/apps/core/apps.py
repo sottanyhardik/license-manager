@@ -7,6 +7,9 @@ class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
+        # Register drf-spectacular extensions.  Importing this module is
+        # schema-only and has no effect on API request handling.
+        from apps.core import openapi  # noqa: F401
         try:
             from apps.core import cache_signals  # noqa: F401
             cache_signals.connect_m2m_signals()

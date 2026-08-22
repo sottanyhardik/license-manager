@@ -193,7 +193,7 @@ describe("AllotmentAction canonical paired Max", () => {
         await waitFor(() => expect(screen.getByTestId("planning-target")).toHaveTextContent(""));
         await waitFor(() => expect(mockedGet).toHaveBeenCalledWith(
             "allotment-actions/9722/available-licenses/",
-            expect.objectContaining({ params: expect.objectContaining({ page: 1, page_size: 20 }) }),
+            expect.objectContaining({ params: expect.objectContaining({ page: 1, page_size: 10 }) }),
         ));
         const planCalls = mockedGet.mock.calls.filter(([url]) => url === "allotment-actions/9722/available-licenses/");
         const lastParams = planCalls[planCalls.length - 1]?.[1]?.params as Record<string, unknown>;
@@ -281,5 +281,92 @@ describe("AllotmentAction canonical paired Max", () => {
         });
         const submittedPayload = mockedPost.mock.calls[0][1] as { allocations: Record<string, unknown>[] };
         expect(submittedPayload.allocations[0]).not.toHaveProperty("plan_line_id");
+    });
+});
+
+describe("AllotmentAction live candidate queue", () => {
+    function queueCandidate(sequence: number) {
+        return {
+            ...availableItem(sequence, `Candidate ${sequence}`),
+            license_id: sequence,
+            license_number: `LIC-${String(sequence).padStart(2, "0")}`,
+            serial_number: String(sequence),
+        };
+    }
+
+    it("keeps a unique ten-row server queue and promotes 11 then 12 after confirmed completions", async () => {
+        let candidates = Array.from({ length: 12 }, (_, index) => queueCandidate(index + 1));
+        mockedGet.mockImplementation((url: string) => {
+            if (url === "masters/notification-numbers/") return Promise.resolve({ data: { results: [] } });
+            if (url === "item-report/available-items/") return Promise.resolve({ data: [] });
+            if (url === "item-report/planned-item-names/") return Promise.resolve({ data: [{ id: 216, name: "ALUMINIUM FOIL" }] });
+            if (url === "allotments/9722/") return Promise.resolve({ data: allotment });
+            if (url === "allotment-actions/9722/allocation-initialization/") return Promise.resolve({ data: initialization });
+            if (url === "allotment-actions/9722/available-licenses/") return Promise.resolve({ data: { count: candidates.length, available_items: candidates.slice(0, 10) } });
+            return Promise.reject(new Error(`Unexpected GET ${url}`));
+        });
+        mockedPost.mockImplementation(() => {
+            candidates = candidates.slice(1);
+            return Promise.resolve({ data: { allotment } });
+        });
+
+        renderScreen();
+        await screen.findByText("LIC-01");
+        expect(screen.getByText("LIC-10")).toBeInTheDocument();
+        expect(screen.queryByText("LIC-11")).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[0]);
+        await waitFor(() => expect(screen.queryByText("LIC-01")).not.toBeInTheDocument());
+        expect(screen.getAllByTitle("View license document")).toHaveLength(10);
+
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[0]);
+        await waitFor(() => expect(screen.queryByText("LIC-02")).not.toBeInTheDocument());
+        expect(screen.getByText("LIC-12")).toBeInTheDocument();
+        expect(screen.getAllByTitle("View license document")).toHaveLength(10);
+    });
+
+    it("keeps a partially allocated candidate in the queue after the authoritative refresh", async () => {
+        const candidate = queueCandidate(1);
+        mockedGet.mockImplementation((url: string) => {
+            if (url === "masters/notification-numbers/") return Promise.resolve({ data: { results: [] } });
+            if (url === "item-report/available-items/") return Promise.resolve({ data: [] });
+            if (url === "item-report/planned-item-names/") return Promise.resolve({ data: [{ id: 216, name: "ALUMINIUM FOIL" }] });
+            if (url === "allotments/9722/") return Promise.resolve({ data: allotment });
+            if (url === "allotment-actions/9722/allocation-initialization/") return Promise.resolve({ data: initialization });
+            if (url === "allotment-actions/9722/available-licenses/") return Promise.resolve({ data: { count: 1, available_items: [{ ...candidate, basis_options: { ...candidate.basis_options, plan: { ...candidate.basis_options.plan, allocation_limit: { paired_max_qty: "100", paired_max_cif: "882.10", can_allocate: true } } } }] } });
+            return Promise.reject(new Error(`Unexpected GET ${url}`));
+        });
+        mockedPost.mockResolvedValue({ data: { allotment } });
+
+        renderScreen();
+        await screen.findByText("LIC-01");
+        mockedPost.mockClear();
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+        await waitFor(() => expect(mockedPost.mock.calls.filter(([url]) => url === "allotment-actions/9722/allocate-items/")).toHaveLength(1));
+        expect(await screen.findByText("LIC-01")).toBeInTheDocument();
+        expect(screen.getByPlaceholderText("Qty")).toHaveValue(null);
+    });
+
+    it("does not remove a candidate after a failed allocation and prevents a rapid double submit", async () => {
+        let rejectPost: (reason?: unknown) => void = () => undefined;
+        const pendingPost = new Promise<{ data: unknown }>((_resolve, reject) => {
+            rejectPost = reject;
+        });
+        mockedPost.mockReturnValue(pendingPost as never);
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+        mockedPost.mockClear();
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        const confirm = screen.getByRole("button", { name: "Confirm" });
+        fireEvent.click(confirm);
+        fireEvent.click(confirm);
+        await waitFor(() => expect(mockedPost.mock.calls.filter(([url]) => url === "allotment-actions/9722/allocate-items/")).toHaveLength(1));
+        expect(screen.getAllByTitle("View license document")).toHaveLength(1);
+        rejectPost({ response: { data: { message: "Server cap changed" } } });
+        await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Server cap changed"));
+        expect(screen.getAllByTitle("View license document")).toHaveLength(1);
     });
 });

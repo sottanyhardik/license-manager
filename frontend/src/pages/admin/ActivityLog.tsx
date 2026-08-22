@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getTodayRange, getLastNDaysRange, getThisMonthRange } from "@/utils/dateRangePresets";
+import { useSmoothListFilters } from "@/hooks/useSmoothListFilters";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,9 +82,12 @@ export default function ActivityLog() {
     const { user } = useContext(AuthContext);
     const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState<FilterState>({
+    const initialFilters: FilterState = {
         username: "", action: "", module: "", date_from: "", date_to: "", search: "", limit: "200",
-    });
+    };
+    const {
+        filters, appliedFilters, isDebouncing, setTextFilter, setImmediateFilter, replaceFilters,
+    } = useSmoothListFilters(initialFilters);
     const abortRef = useRef<AbortController | null>(null);
 
     const fetchLogs = useCallback(async () => {
@@ -92,7 +96,7 @@ export default function ActivityLog() {
         setLoading(true);
         try {
             const params = Object.fromEntries(
-                Object.entries(filters).filter(([, v]) => v !== ""),
+                Object.entries(appliedFilters).filter(([, v]) => v !== ""),
             );
             const { data } = await api.get("masters/activity-logs/", {
                 params,
@@ -107,15 +111,20 @@ export default function ActivityLog() {
         } finally {
             setLoading(false);
         }
-    }, [filters]);
+    }, [appliedFilters]);
 
     useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
-    const handleFilter = (key: keyof FilterState, value: string) =>
-        setFilters(prev => ({ ...prev, [key]: value }));
+    const handleFilter = (key: keyof FilterState, value: string) => {
+        if (key === "username" || key === "module" || key === "search") {
+            setTextFilter(key, value);
+        } else {
+            setImmediateFilter(key, value);
+        }
+    };
 
     const clearFilters = () =>
-        setFilters(f => ({ ...f, action: "", username: "", module: "", search: "", date_from: "", date_to: "" }));
+        replaceFilters({ ...filters, action: "", username: "", module: "", search: "", date_from: "", date_to: "" });
 
     return (
         <>
@@ -133,7 +142,7 @@ export default function ActivityLog() {
 
             {/* ── Filters ──────────────────────────────────────────── */}
             <Card className="mb-3">
-                <CardContent className="grid grid-cols-2 gap-3 py-3 md:grid-cols-3 lg:grid-cols-6">
+                <CardContent className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                     {user?.is_superuser && (
                         <div>
                             <Label className="mb-1 text-xs" htmlFor="f-user">Username</Label>
@@ -168,7 +177,7 @@ export default function ActivityLog() {
                             onChange={e => handleFilter("module", e.target.value)}
                         />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                         <DateRangeFilter
                             label="Date"
                             fromId="f-from"
@@ -177,7 +186,7 @@ export default function ActivityLog() {
                             toValue={filters.date_to}
                             onFromChange={(v) => handleFilter("date_from", v)}
                             onToChange={(v) => handleFilter("date_to", v)}
-                            onClear={() => setFilters(prev => ({ ...prev, date_from: "", date_to: "" }))}
+                            onClear={() => replaceFilters({ ...filters, date_from: "", date_to: "" })}
                             presets={[
                                 { label: "Today", range: getTodayRange },
                                 { label: "Last 7 Days", range: () => getLastNDaysRange(7) },
@@ -237,6 +246,9 @@ export default function ActivityLog() {
             {/* ── Log table ─────────────────────────────────────────── */}
             <Card>
                 <CardContent className="p-0">
+                    {(isDebouncing || (loading && logs.length > 0)) && (
+                        <div role="status" className="border-b border-border/60 px-4 py-1.5 text-xs text-muted-foreground">Updating results…</div>
+                    )}
                     {loading ? (
                         <div className="flex flex-col items-center gap-2 p-12 text-center">
                             <RefreshCw className="size-6 animate-spin text-primary" aria-hidden="true" />

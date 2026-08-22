@@ -123,7 +123,7 @@ export default function Dashboard() {
     };
 
     const headerActions = (
-        <div className="dashboard-page space-y-5">
+        <div className="dashboard-page-actions flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={fetchDashboardData} disabled={loading}>
                 <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
@@ -143,7 +143,7 @@ export default function Dashboard() {
 
     if (loading) {
         return (
-            <>
+            <section className="dashboard-page dashboard-page--loading" aria-busy="true" aria-label="Loading dashboard">
                 <PageHeader pretitle="Overview" title="Dashboard" description={dateLabel} actions={headerActions} />
                 <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                     {[...Array(5)].map((_, i) => <SkeletonStat key={i} />)}
@@ -151,12 +151,12 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     {[...Array(3)].map((_, i) => <SkeletonStat key={i} />)}
                 </div>
-            </>
+            </section>
         );
     }
 
     return (
-        <>
+        <section className="dashboard-page" aria-label="Dashboard overview">
             <PageHeader pretitle="Overview" title="Dashboard" description={dateLabel} actions={headerActions} />
 
             {/* License KPIs */}
@@ -354,6 +354,6 @@ export default function Dashboard() {
                     </CardContent>
                 </Card>
             )}
-        </>
+        </section>
     );
 }

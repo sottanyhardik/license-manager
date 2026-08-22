@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
-from apps.allotment.models import AllotmentModel
+from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.models import (
     CompanyModel,
     HeadSIONNormsModel,
@@ -26,6 +26,7 @@ from apps.core.models import (
 )
 from apps.license.models import (
     LicenseDetailsModel,
+    LicenseBalance,
     LicenseExportItemModel,
     LicenseImportItemsModel,
     LicenseItemPlan,
@@ -43,6 +44,12 @@ AVAILABLE_CIF = Decimal("2066.75")
 UNIT_PRICE = Decimal("8.821")
 MAX_QUANTITY = Decimal("234.000")
 MAX_CIF = Decimal("2064.12")
+QUEUE_ITEM_NAME = "E2E QUEUE MATERIAL 2509"
+QUEUE_INVOICE = "E2E-QUEUE-2509"
+QUEUE_LICENSE_START = 2510
+QUEUE_LICENSE_COUNT = 12
+QUEUE_POSITION_QUANTITY = Decimal("100.000")
+QUEUE_POSITION_CIF = Decimal("1000.00")
 
 
 def _get_or_report_conflict(model, lookup: dict, defaults: dict, label: str):
@@ -110,6 +117,13 @@ class Command(BaseCommand):
             "canonical item",
         )
         item_name.norms.add(sion)
+        queue_item_name = _get_or_report_conflict(
+            ItemNameModel,
+            {"name": QUEUE_ITEM_NAME},
+            {"sion_norm_class": sion, "display_order": 2},
+            "queue item",
+        )
+        queue_item_name.norms.add(sion)
 
         scheme = _get_or_report_conflict(
             SchemeCode, {"code": "E2E2509"}, {"label": "E2E Browser Scheme"}, "scheme code",
@@ -174,6 +188,23 @@ class Command(BaseCommand):
         )
         if rule.sion_id != sion.pk or rule.import_item_id != item_name.pk:
             raise CommandError("Conflicting planning rule E2E2509:RULE:001 has different canonical references.")
+        queue_rule, _ = SionPlanningRule.objects.get_or_create(
+            stable_key="E2E2509:RULE:QUEUE",
+            defaults={
+                "sion": sion,
+                "name": QUEUE_ITEM_NAME,
+                "execution_output": QUEUE_ITEM_NAME,
+                "import_item": queue_item_name,
+                "expression": {"field": "DESCRIPTION", "operator": "CONTAINS", "value": "E2E QUEUE"},
+                "max_unit_price": Decimal("10.000"),
+                "unit": "kg",
+                "priority": 2,
+                "is_active": True,
+                "strategy": "STANDARD",
+            },
+        )
+        if queue_rule.sion_id != sion.pk or queue_rule.import_item_id != queue_item_name.pk:
+            raise CommandError("Conflicting planning rule E2E2509:RULE:QUEUE has different canonical references.")
         action, _ = SionPlanningAction.objects.get_or_create(
             profile=profile,
             stable_key="E2E2509:ACTION:001",
@@ -238,6 +269,96 @@ class Command(BaseCommand):
                 "is_allotted": False,
             },
         )
+        # The browser gate deliberately performs mutations.  Reset only its
+        # own deterministic parent rows so rerunning the supported command
+        # yields exactly the same authoritative fixture state.
+        AllotmentItems.objects.filter(allotment=allotment).delete()
+
+        queue_allotment, _ = AllotmentModel.objects.update_or_create(
+            invoice=QUEUE_INVOICE,
+            defaults={
+                "company": company,
+                "item_name": QUEUE_ITEM_NAME,
+                "planning_target_item": queue_item_name,
+                "planning_mapping_status": "MAPPED",
+                "planning_mapping_source": "managed_browser_seed",
+                "required_quantity": Decimal("1000.000"),
+                "unit_value_per_unit": Decimal("10.000"),
+                "exchange_rate": Decimal("1.000000"),
+                "is_allotted": False,
+            },
+        )
+        AllotmentItems.objects.filter(allotment=queue_allotment).delete()
+
+        # Twelve independently eligible positions make the browser test prove
+        # the real server-backed 10-item queue and its 11th-item refill.
+        for offset in range(QUEUE_LICENSE_COUNT):
+            queue_license_id = QUEUE_LICENSE_START + offset
+            queue_license_number = f"3411009{offset + 1:03d}"
+            queue_license, _ = LicenseDetailsModel.objects.get_or_create(
+                pk=queue_license_id,
+                defaults={
+                    "license_number": queue_license_number,
+                    "license_date": date.today() - timedelta(days=30),
+                    "license_expiry_date": date.today() + timedelta(days=365),
+                    "exporter": company,
+                    "scheme_code": scheme,
+                    "notification_number": notification,
+                    "port": port,
+                },
+            )
+            if queue_license.license_number != queue_license_number:
+                raise CommandError(f"Queue licence id {queue_license_id} is occupied by another licence.")
+            queue_license.license_date = date.today() - timedelta(days=30)
+            queue_license.license_expiry_date = date.today() + timedelta(days=365)
+            queue_license.exporter = company
+            queue_license.scheme_code = scheme
+            queue_license.notification_number = notification
+            queue_license.port = port
+            queue_license.save(update_fields=[
+                "license_date", "license_expiry_date", "exporter", "scheme_code",
+                "notification_number", "port",
+            ])
+            LicenseExportItemModel.objects.update_or_create(
+                license=queue_license,
+                description=f"{QUEUE_ITEM_NAME} credit {offset + 1}",
+                defaults={
+                    "item": queue_item_name,
+                    "norm_class": sion,
+                    "net_quantity": QUEUE_POSITION_QUANTITY,
+                    "cif_fc": QUEUE_POSITION_CIF,
+                },
+            )
+            queue_import, _ = LicenseImportItemsModel.objects.update_or_create(
+                license=queue_license,
+                serial_number=1,
+                defaults={
+                    "description": QUEUE_ITEM_NAME,
+                    "quantity": QUEUE_POSITION_QUANTITY,
+                    "available_quantity": QUEUE_POSITION_QUANTITY,
+                    "cif_fc": QUEUE_POSITION_CIF,
+                },
+            )
+            queue_import.items.set([queue_item_name])
+            LicenseBalance.objects.update_or_create(
+                license=queue_license,
+                defaults={"balance_cif": QUEUE_POSITION_CIF},
+            )
+            LicenseItemPlan.objects.filter(import_item=queue_import).delete()
+            LicenseItemPlan.objects.create(
+                import_item=queue_import,
+                license=queue_license,
+                item_name=queue_item_name,
+                planning_rule=queue_rule,
+                planning_rule_version=queue_rule.version,
+                planning_rule_priority=queue_rule.priority,
+                planned_quantity=QUEUE_POSITION_QUANTITY,
+                planned_cif_fc=QUEUE_POSITION_CIF,
+                unit_price=Decimal("10.000"),
+                remaining_quantity=QUEUE_POSITION_QUANTITY,
+                remaining_cif_fc=QUEUE_POSITION_CIF,
+                allocation_provenance={"source": "managed_browser_seed"},
+            )
         # Signals may have queued a request while the graph was built.  The
         # seed represents an already persisted current plan, so clear only
         # this licence's seed-time work and make the revisions equal.
@@ -249,5 +370,6 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"Seeded licence {LICENSE_NUMBER} (id={license_obj.pk}), allotment={allotment.pk}, "
+            f"queue_allotment={queue_allotment.pk}, queue_licences={QUEUE_LICENSE_COUNT}, "
             f"max={MAX_QUANTITY}/{MAX_CIF}."
         ))

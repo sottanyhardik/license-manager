@@ -165,7 +165,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [purchaseStatusOptions]);
     const [hydratedRouteId, setHydratedRouteId] = useState<string | number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 20;
+    // The candidate area is a working queue, not an unbounded search-result
+    // table.  The server remains responsible for eligibility and ordering;
+    // asking it for ten rows gives a completed row an immediate successor on
+    // the next invalidation without client-side balance calculations.
+    const pageSize = 10;
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -351,7 +355,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         isFetching: tableLoading,
     } = useQuery({
         queryKey: ['allotment-available-licenses', id, filters.debit_based_on, allotment?.planning_target_item ?? null, allotment?.planning_target_sion ?? null, apiParams],
-        queryFn: () => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams }).then(r => r.data),
+        // React Query aborts an obsolete query when its key changes.  Passing
+        // its signal to Axios is important here: an old filter/refill response
+        // must not put a completed candidate back into the live queue.
+        queryFn: ({ signal }) => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams, signal }).then(r => r.data),
         enabled: Boolean(id) && filtersReady,
         // Changing a filter should refresh just the results, not blank the
         // workspace and make the page appear to reload.
@@ -359,10 +366,20 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         refetchOnWindowFocus: false,
     });
 
-    const availableItems: AvailableItem[] = useMemo(
-        () => filtersReady ? (availableLicensesData?.available_items ?? availableLicensesData?.results ?? []) : [],
-        [filtersReady, availableLicensesData],
-    );
+    const availableItems: AvailableItem[] = useMemo(() => {
+        if (!filtersReady) return [];
+        const serverItems: AvailableItem[] = availableLicensesData?.available_items ?? availableLicensesData?.results ?? [];
+        // A PLAN line and an ACTUAL licence item have different canonical row
+        // identities.  Deduplicate only identical server candidates, rather
+        // than collapsing legitimate split plan lines from the same licence.
+        const seen = new Set<string>();
+        return serverItems.filter(item => {
+            const identity = `${filters.debit_based_on}:${item.id}`;
+            if (seen.has(identity)) return false;
+            seen.add(identity);
+            return true;
+        }).slice(0, pageSize);
+    }, [filtersReady, availableLicensesData, filters.debit_based_on, pageSize]);
     const totalItems: number = availableLicensesData?.count ?? 0;
     const totalPages: number = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
 
@@ -423,7 +440,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 }],
             }).then(r => r.data);
         },
-        onSuccess: (data, { item, allocation }) => {
+        onSuccess: async (data, { item, allocation }) => {
             if (data.errors && data.errors.length > 0) {
                 const firstErr = data.errors[0];
                 if (firstErr.plan_exceeded) {
@@ -447,14 +464,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 return next;
             });
 
-            // Invalidate so allotment header re-fetches updated balances + available list
-            invalidateAllotment();
-            qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] });
-            setAllocationData(previous => {
-                const next = { ...previous };
-                delete next[item.id];
-                return next;
-            });
+            // Stop an older in-flight list request before requesting the
+            // authoritative queue again.  The refreshed first page naturally
+            // promotes candidate 11 after candidate 1 is exhausted; a partial
+            // allocation stays because the backend continues to return it
+            // with its recalculated balances.
+            await qc.cancelQueries({ queryKey: ['allotment-available-licenses', id] });
+            await Promise.all([
+                qc.invalidateQueries({ queryKey: ['allotments', id] }),
+                qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] }),
+            ]);
 
             // Scroll to transfer letter if balance is now exactly 0
             if (data.allotment) {
@@ -592,6 +611,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const handleConfirmAllot = (item) => {
+        // A mutation is deliberately single-flight at the screen level.  The
+        // backend remains the authority, but this prevents a rapid double
+        // click from creating two identical POSTs before React paints the
+        // disabled state.
+        if (allocateMutation.isPending) return;
         const max = calculateMaxAllocation(item);
         if (max.qty <= 0 || max.value <= 0) {
             const itemName = item.planned_item_name || item.description;
@@ -672,11 +696,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     return (
         <div className={cn(
-            "flex flex-col",
-            isModal ? "h-full" : "min-h-screen p-6 bg-muted/40"
+            "allotment-action-page flex flex-col",
+            isModal ? "h-full" : "min-h-screen bg-muted/40 p-4 sm:p-6"
         )}>
             {!isModal && (
-                <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/80 px-4 py-3 shadow-sm backdrop-blur-sm">
                     <div>
                         <h4 className="font-bold text-foreground flex items-center gap-1.5">
                             <Network className="size-4" aria-hidden="true" />
@@ -861,7 +885,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div className="mb-3 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                <div className="mb-4 overflow-hidden rounded-xl border border-border/80 bg-card shadow-md shadow-primary/5">
                     <div className="flex justify-between items-center border-b border-border/60 px-5 py-3">
                         <h6 className="font-semibold text-foreground flex items-center gap-1.5">
                             <CheckSquare className="size-4" aria-hidden="true" />
@@ -911,7 +935,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     </div>
                     <div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                            <table className="min-w-[980px] w-full text-sm">
                                 <thead className="bg-muted/40 border-b-2 border-border">
                                 <tr>
                                     <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-[12px] p-2">License</th>
@@ -1006,7 +1030,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 </div>
             )}
 
-            <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="mb-5 overflow-hidden rounded-xl border border-border/80 bg-card shadow-md shadow-primary/5">
                 <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
                     <div className="flex items-center gap-2">
                         <ListChecks className="size-4 text-primary" aria-hidden="true" />
@@ -1058,7 +1082,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                     )}
 
-                    <div className="max-h-[650px] overflow-y-auto pr-px">
+                    <div className="allotment-candidate-queue max-h-[650px] overflow-y-auto pr-1">
                         {(() => {
                             // Group items by license
                             const groupedByLicense: Record<string, AvailableItem[]> = {};
@@ -1075,7 +1099,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 const licenseId = firstItem.license_id || firstItem.license;
 
                                 return (
-                                    <div key={licenseKey} className="mb-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                                    <div key={licenseKey} className="mb-3 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:shadow-primary/5">
                                         {/* ── LICENSE HEADER (compact) ── */}
                                         <div className="px-3 py-1.5 bg-muted/50 border-b border-border/60 text-[12px]">
                                             <div className="flex items-center gap-2 flex-wrap">
@@ -1144,7 +1168,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         )}
 
                                                         {/* Item identifier + availability info (compact inline) */}
-                                                        <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px] flex-wrap">
+                                                        <div className="mb-1.5 flex flex-col gap-2 text-[11px] sm:flex-row sm:items-center sm:justify-between">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="font-semibold text-foreground">SR #{item.serial_number}</span>
                                                                 {item.condition_type
@@ -1155,7 +1179,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                         </span>
                                                                     )}
                                                             </div>
-                                                            <div className="flex items-center gap-1.5 text-muted-foreground ml-auto">
+                                                            <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground sm:ml-auto">
                                                                 <span>Actual Qty: <span className="font-semibold text-foreground">{actualQty.toFixed(3)}</span></span>
                                                                 <span>Actual $: <span className="font-semibold text-foreground">${actualCif.toFixed(2)}</span></span>
                                                                 <span>Avg: <span className="font-semibold text-foreground">{average}</span></span>
@@ -1174,12 +1198,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status">
                                                             <strong className="mr-1">Allocation unavailable</strong>
                                                             {maxAllocation.message || "No quantity or CIF remains for the selected mode."}
-                                                        </div> : <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
-                                                            <div className="flex items-center gap-1 flex-1 min-w-[200px]">
+                                                        </div> : <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                                            <div className="flex min-w-[200px] flex-1 items-center gap-1 sm:min-w-[200px]">
                                                                 <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
                                                                 <input
                                                                     type="number"
-                                                                    className="flex h-7 flex-1 rounded border border-input bg-card px-1.5 py-0.5 text-[0.78rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                                    className="flex h-11 flex-1 rounded border border-input bg-card px-2 py-1 text-base outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring sm:h-7 sm:px-1.5 sm:py-0.5 sm:text-[0.78rem]"
                                                                     value={currentAllocation?.qty || ""}
                                                                     onChange={(e) => handleQuantityChange(item.id, e.target.value)}
                                                                     placeholder="Qty"
@@ -1189,18 +1213,18 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                     title={`Max: ${maxAllocation.qty}`}
                                                                 />
                                                                 <button
-                                                                    className="rounded border border-border bg-card px-1.5 py-0.5 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap"
+                                                                    className="min-h-11 rounded border border-border bg-card px-2 py-1 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap sm:min-h-0 sm:px-1.5 sm:py-0.5"
                                                                     type="button"
                                                                     onClick={() => handleMaxQuantity(item)}
                                                                     title={`Set to max: ${maxAllocation.qty}`}
                                                                 >Max</button>
                                                             </div>
 
-                                                            <div className="flex items-center gap-1 flex-1 min-w-[200px]">
+                                                            <div className="flex min-w-[200px] flex-1 items-center gap-1 sm:min-w-[200px]">
                                                                 <label className="text-muted-foreground font-semibold whitespace-nowrap">Value:</label>
                                                                 <input
                                                                     type="number"
-                                                                    className="flex h-7 flex-1 rounded border border-input bg-card px-1.5 py-0.5 text-[0.78rem] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
+                                                                    className="flex h-11 flex-1 rounded border border-input bg-card px-2 py-1 text-base outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring sm:h-7 sm:px-1.5 sm:py-0.5 sm:text-[0.78rem]"
                                                                     value={currentAllocation?.cif_fc || ""}
                                                                     onChange={(e) => handleValueChange(item.id, e.target.value)}
                                                                     placeholder="Value"
@@ -1209,7 +1233,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                     title={`Max: ${maxAllocation.value.toFixed(2)}`}
                                                                 />
                                                                 <button
-                                                                    className="rounded border border-border bg-card px-1.5 py-0.5 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap"
+                                                                    className="min-h-11 rounded border border-border bg-card px-2 py-1 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap sm:min-h-0 sm:px-1.5 sm:py-0.5"
                                                                     type="button"
                                                                     onClick={() => handleMaxValue(item)}
                                                                     title={`Set to max: ${maxAllocation.value.toFixed(2)}`}
@@ -1225,7 +1249,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                                         : "bg-muted text-muted-foreground cursor-not-allowed"
                                                                 )}
                                                                 onClick={() => handleConfirmAllot(item)}
-                                                                disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
+                                                                disabled={!isReady || allocateMutation.isPending}
                                                                 title="Allocate this item"
                                                             >
                                                                 {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (

@@ -22,13 +22,17 @@ pytestmark = pytest.mark.django_db
 
 
 def queue_then_execute(client, license_obj, *, sion_id, company_id):
-    """Execute the synchronous Auto Plan HTTP contract and return its result."""
+    """Queue through HTTP, then execute the same canonical durable worker."""
     response = client.post(f"/api/licenses/{license_obj.pk}/auto-plan/")
-    assert response.status_code == 200, response.data
+    assert response.status_code == 202, response.data
     request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
     assert request.license_id == license_obj.pk
+    assert request.status == LicenseReplanRequest.STATUS_PENDING
+    from apps.license.tasks import replan_license_task
+    result = replan_license_task.run(request.pk)
+    request.refresh_from_db()
     assert request.status == LicenseReplanRequest.STATUS_SUCCEEDED
-    return response.data["result"]
+    return result
 
 
 def test_strategy_source_match_expression_hsn_and_description():

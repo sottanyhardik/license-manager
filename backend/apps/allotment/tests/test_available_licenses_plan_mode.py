@@ -17,6 +17,8 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.test import APIClient
 
@@ -106,6 +108,50 @@ def _get_available_licenses(client, allotment_obj, **params):
 
 @pytest.mark.django_db
 class TestPlanModeSplitRows:
+    def test_plan_candidate_query_count_is_constant_for_a_paginated_response(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        """The ledger status pass must not turn row count into extra queries.
+
+        PLAN availability needs a full, authoritative status pass before it
+        can paginate.  This regression guard exercises one row and the whole
+        matching page and asserts that serialising the additional plan row
+        does not add a per-row database query.  It deliberately uses a small
+        tolerance for authentication/backend framework bookkeeping while
+        catching an N+1 return in this endpoint.
+        """
+        # Add enough split lines to distinguish a bounded batch read from an
+        # accidental per-row relation/aggregate query.
+        for index in range(6):
+            item_name = ItemNameModel.objects.create(name=f"PERF-PLAN-{index}")
+            LicenseItemPlan.objects.create(
+                license=veg_oil_split["license"],
+                import_item=veg_oil_split["import_item"],
+                item_name=item_name,
+                planned_quantity=Decimal("1.000"),
+                unit_price=Decimal("1.00"),
+                planned_cif_fc=Decimal("1.00"),
+                remaining_quantity=Decimal("1.000"),
+                remaining_cif_fc=Decimal("1.00"),
+            )
+
+        with CaptureQueriesContext(connection) as one_row_queries:
+            one_row = _get_available_licenses(
+                allotment_client, allotment_obj, debit_based_on="PLAN", page_size=1,
+            )
+        with CaptureQueriesContext(connection) as full_page_queries:
+            full_page = _get_available_licenses(
+                allotment_client, allotment_obj, debit_based_on="PLAN", page_size=20,
+            )
+
+        assert one_row.status_code == full_page.status_code == 200
+        assert len(full_page.data["available_items"]) == 8
+        # Batch loaders and relation prefetches make query volume independent
+        # of page rows.  A small allowance covers serializer work only needed
+        # when a populated page exposes a second related import item, while
+        # still rejecting a per-row query regression across eight rows.
+        assert len(full_page_queries) <= len(one_row_queries) + 2
+
     def test_actual_mode_shows_full_import_item_quantity_unaffected_by_plan(
         self, allotment_client, allotment_obj, veg_oil_split,
     ):

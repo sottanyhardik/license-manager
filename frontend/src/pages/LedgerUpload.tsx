@@ -369,7 +369,7 @@ const LedgerUpload = () => {
     const busy = uploading || asyncUploading;
 
     return (
-        <div>
+        <div className="ledger-upload-page space-y-1">
             {/* Header */}
             <PageHeader
                 pretitle="Ledger"
@@ -391,7 +391,7 @@ const LedgerUpload = () => {
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 {/* Main upload */}
                 <div className="lg:col-span-2">
-                    <Card>
+                    <Card className="overflow-hidden border-border/80 shadow-md shadow-primary/5">
                         <CardHeader className="border-b">
                             <CardTitle className="flex items-center gap-2 text-sm">
                                 <CloudUpload className="size-4 text-primary" />Upload Files
@@ -406,7 +406,7 @@ const LedgerUpload = () => {
                                 onDragOver={handleDrag}
                                 onDrop={handleDrop}
                                 className={cn(
-                                    "mb-4 flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-9 text-center transition-colors",
+                                    "mb-4 flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-9 text-center shadow-inner transition-all duration-200",
                                     dragActive ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/60",
                                 )}
                             >

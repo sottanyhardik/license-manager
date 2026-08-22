@@ -107,7 +107,7 @@ export default function LicenseOverviewPage() {
     };
 
     return (
-        <div>
+        <div className="license-overview-page space-y-1">
             <PageHeader
                 pretitle="Licence"
                 title={`License Overview — ${summary?.license_number ?? id}`}
@@ -134,7 +134,7 @@ export default function LicenseOverviewPage() {
             {id && <ReplanStatus licenseId={id} />}
 
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-                <TabsList className="mb-4 flex-wrap">
+                <TabsList className="mb-5 flex h-auto flex-wrap gap-1 rounded-xl border border-border/70 bg-card/80 p-1.5 shadow-sm">
                     {TABS.map((t) => (
                         <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
                     ))}

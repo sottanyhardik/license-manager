@@ -360,6 +360,7 @@ export default function MasterList() {
     const {
         data: listResponse,
         isLoading: loading,
+        isFetching: isRefreshing,
         isError: listFailed,
         error: listError,
     } = useQuery({
@@ -755,6 +756,9 @@ export default function MasterList() {
             {/* Table */}
             <div className="surface-card mt-4">
                 <div className="p-3.5">
+                    {isRefreshing && !loading && (
+                        <div role="status" className="mb-2 text-xs text-muted-foreground">Updating results…</div>
+                    )}
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (
                         loading ? (

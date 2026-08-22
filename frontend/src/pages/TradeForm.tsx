@@ -828,9 +828,9 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="trade-form-page min-h-screen bg-background">
             {/* Compact Header */}
-            <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm backdrop-blur-sm">
                 <div>
                     <h4 className="mb-0 font-bold text-foreground flex items-center gap-1.5">
                         <ArrowLeftRight className="size-4" aria-hidden="true" />
@@ -894,7 +894,7 @@ export default function TradeForm() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
                     {/* From Company */}
                     <div>
-                        <div className="rounded-xl border border-border bg-card h-full">
+                        <div className="h-full rounded-xl border border-border/80 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:shadow-primary/5">
                             <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
                                 <h6 className="font-semibold m-0">
                                     <Building2 className="size-4" aria-hidden="true" />

@@ -74,7 +74,7 @@ class TestLedgerReconciliationMatrixSmokingGun(TestCase):
     def test_summary_balance_uses_display_rule_without_double_counting_opening(self):
         dataset = self._dataset()
         self.assertEqual(dataset["opening_balance"], Decimal("1000.00"))
-        self.assertEqual(dataset["license_running_balance"], Decimal("1000.00"))
+        self.assertEqual(dataset["license_running_balance"], Decimal("0.00"))
         # A purchase records the acquisition already represented by the export
         # item's opening CIF. The display summary deliberately suppresses the
         # synthetic opening row whenever a purchase exists, so it reports the
@@ -83,17 +83,18 @@ class TestLedgerReconciliationMatrixSmokingGun(TestCase):
         self.assertEqual(dataset["summary"]["total_purchase"], Decimal("200.00"))
         self.assertEqual(dataset["summary"]["total_sale"], Decimal("200.00"))
         self.assertEqual(dataset["summary"]["current_balance"], Decimal("0.00"))
-        self.assertNotEqual(dataset["summary"]["current_balance"], dataset["closing_balance"])
+        # With the acquisition represented once by PURCHASE, display and
+        # running balances reconcile exactly.
+        self.assertEqual(dataset["summary"]["current_balance"], dataset["closing_balance"])
 
     def test_opening_purchase_and_sale_are_all_accounted_for_once(self):
         dataset = self._dataset()
         transactions = dataset["transactions"]
-        self.assertEqual([row["type"] for row in transactions], ["OPENING", "PURCHASE", "SALE"])
+        self.assertEqual([row["type"] for row in transactions], ["PURCHASE", "SALE"])
         self.assertEqual(len(dataset["display_transactions"]), 2)
         self.assertIsNone(dataset["opening_display"])
         self.assertEqual(
-            dataset["opening_balance"]
-            + sum((row["purchase_amount"] or Decimal("0.00")) for row in dataset["display_transactions"])
+            sum((row["purchase_amount"] or Decimal("0.00")) for row in dataset["display_transactions"])
             - sum((row["sale_amount"] or Decimal("0.00")) for row in dataset["display_transactions"]),
             dataset["license_running_balance"],
         )
@@ -107,7 +108,7 @@ class TestLedgerReconciliationMatrixSmokingGun(TestCase):
         non_opening_rows = [row for row in dataset["transactions"] if row["type"] != "OPENING"]
 
         self.assertEqual(raw_count, 2)
-        self.assertEqual(len(opening_rows), 1)
+        self.assertEqual(len(opening_rows), 0)
         self.assertEqual(len(non_opening_rows), raw_count)
         self.assertEqual(len(dataset["display_transactions"]), raw_count)
         self.assertTrue(all(row["type"] != "OPENING" for row in dataset["display_transactions"]))

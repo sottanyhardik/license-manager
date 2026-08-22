@@ -50,7 +50,7 @@ def user_with_role(db):
 def test_license_items_require_authentication(license_item):
     response = APIClient().get(reverse("license:license-items-list"))
 
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db

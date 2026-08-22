@@ -13,15 +13,25 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Configuration
-SERVER_USER="django"
-SERVER_NAMES=("Global" "Labdhi" "Server3")
-SERVER_HOSTS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
-SERVER_DOMAINS=("license-manager.duckdns.org" "labdhi.duckdns.org" "license-tractor.duckdns.org")
-APP_PATH="/home/django/license-manager"
+# Configuration is intentionally environment supplied: this diagnostic must
+# never select a production target or sudo credential by default.
+: "${HEALTH_SERVER_USER:?HEALTH_SERVER_USER is required}"
+: "${HEALTH_SERVER_NAMES:?HEALTH_SERVER_NAMES is required (comma separated)}"
+: "${HEALTH_SERVER_HOSTS:?HEALTH_SERVER_HOSTS is required (comma separated)}"
+: "${HEALTH_SERVER_DOMAINS:?HEALTH_SERVER_DOMAINS is required (comma separated)}"
+: "${HEALTH_APP_PATH:?HEALTH_APP_PATH is required}"
+: "${HEALTH_KNOWN_HOSTS_FILE:?HEALTH_KNOWN_HOSTS_FILE is required}"
+[[ -r "$HEALTH_KNOWN_HOSTS_FILE" ]] || { echo "HEALTH_KNOWN_HOSTS_FILE must be readable." >&2; exit 2; }
+
+IFS=',' read -r -a SERVER_NAMES <<< "$HEALTH_SERVER_NAMES"
+IFS=',' read -r -a SERVER_HOSTS <<< "$HEALTH_SERVER_HOSTS"
+IFS=',' read -r -a SERVER_DOMAINS <<< "$HEALTH_SERVER_DOMAINS"
+[[ "${#SERVER_NAMES[@]}" -eq "${#SERVER_HOSTS[@]}" && "${#SERVER_HOSTS[@]}" -eq "${#SERVER_DOMAINS[@]}" ]] || { echo "Health server names, hosts, and domains must have matching counts." >&2; exit 2; }
+SERVER_USER="$HEALTH_SERVER_USER"
+APP_PATH="$HEALTH_APP_PATH"
 VENV_BIN="$APP_PATH/venv/bin"
 BACKEND_PATH="$APP_PATH/backend"
-PASSWORD="admin"
+PASSWORD="${HEALTH_SUDO_PASSWORD:-}"
 FIX_MODE=false
 
 if [[ "$1" == "--fix" ]]; then
@@ -51,7 +61,8 @@ info() { echo -e "  ${BLUE}→  $1${NC}"; }
 ssh_run() {
     local host="$1"
     local cmd="$2"
-    ssh -o StrictHostKeyChecking=no \
+    ssh -o UserKnownHostsFile="$HEALTH_KNOWN_HOSTS_FILE" \
+        -o StrictHostKeyChecking=yes \
         -o ConnectTimeout=10 \
         -o BatchMode=yes \
         "$SERVER_USER@$host" "$cmd" 2>/dev/null
@@ -60,10 +71,17 @@ ssh_run() {
 ssh_sudo() {
     local host="$1"
     local cmd="$2"
-    ssh -o StrictHostKeyChecking=no \
+    local sudo_command
+    if [[ -n "$PASSWORD" ]]; then
+        sudo_command="printf '%s\\n' $(printf '%q' "$PASSWORD") | sudo -S -- $cmd"
+    else
+        sudo_command="sudo -n -- $cmd"
+    fi
+    ssh -o UserKnownHostsFile="$HEALTH_KNOWN_HOSTS_FILE" \
+        -o StrictHostKeyChecking=yes \
         -o ConnectTimeout=10 \
         -o BatchMode=yes \
-        "$SERVER_USER@$host" "echo '$PASSWORD' | sudo -S $cmd" 2>/dev/null
+        "$SERVER_USER@$host" "$sudo_command" 2>/dev/null
 }
 
 check_server() {

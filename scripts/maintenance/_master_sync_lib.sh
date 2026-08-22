@@ -12,27 +12,38 @@ ok()   { echo -e "${GREEN}✓${NC} $*"; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*"; }
 
-SERVER_USER="${MASTER_SYNC_USER:-${SYNC_REMOTE_USER:-django}}"
-PASSWORD="${MASTER_SYNC_PASSWORD:-${SYNC_PASSWORD:-admin}}"
+# Hosts are intentionally supplied by the calling environment.  Maintenance
+# commands must never silently select a production peer.
+: "${MASTER_SYNC_USER:=${SYNC_REMOTE_USER:?MASTER_SYNC_USER or SYNC_REMOTE_USER is required}}"
+: "${MASTER_SYNC_WINNER_IP:=${SYNC_SOURCE_IP:?MASTER_SYNC_WINNER_IP or SYNC_SOURCE_IP is required}}"
+: "${MASTER_SYNC_LABDHI_IP:=${SYNC_FOLLOWER1:?MASTER_SYNC_LABDHI_IP or SYNC_FOLLOWER1 is required}}"
+: "${MASTER_SYNC_TRACTOR_IP:=${SYNC_FOLLOWER2:?MASTER_SYNC_TRACTOR_IP or SYNC_FOLLOWER2 is required}}"
+SERVER_USER="$MASTER_SYNC_USER"
+# Password authentication is intentionally opt-in.  A historical fallback
+# credential made maintenance commands unsafe to run from an arbitrary shell.
+PASSWORD="${MASTER_SYNC_PASSWORD:-${SYNC_PASSWORD:-}}"
+KNOWN_HOSTS_FILE="${MASTER_SYNC_KNOWN_HOSTS:-${SYNC_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}}"
 REMOTE_PATH="${MASTER_SYNC_REMOTE_PATH:-${SYNC_REMOTE_PATH:-/home/django/license-manager/backend}}"
 VENV_ACTIVATE="${MASTER_SYNC_VENV:-${SYNC_VENV:-/home/django/license-manager/venv/bin/activate}}"
-WINNER_IP="${MASTER_SYNC_WINNER_IP:-${SYNC_SOURCE_IP:-143.110.252.201}}"
+WINNER_IP="$MASTER_SYNC_WINNER_IP"
 WINNER_LABEL="${MASTER_SYNC_WINNER_LABEL:-license-manager}"
 
 SERVERS=(
     "${WINNER_IP}:license-manager"
-    "${MASTER_SYNC_LABDHI_IP:-${SYNC_FOLLOWER1:-139.59.92.226}}:labdhi"
-    "${MASTER_SYNC_TRACTOR_IP:-${SYNC_FOLLOWER2:-165.232.185.220}}:tractor"
+    "${MASTER_SYNC_LABDHI_IP}:labdhi"
+    "${MASTER_SYNC_TRACTOR_IP}:tractor"
 )
 
 master_sync_setup_ssh() {
-    if command -v sshpass &>/dev/null; then
-        SSH_BIN="sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-        SCP_BIN="sshpass -p $PASSWORD scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+    [ -r "$KNOWN_HOSTS_FILE" ] || { err "Pinned known-hosts file is required: $KNOWN_HOSTS_FILE"; return 1; }
+    if [ -n "$PASSWORD" ] && command -v sshpass &>/dev/null; then
+        warn "Password SSH is enabled explicitly; prefer key-based automation."
+        export SSHPASS="$PASSWORD"
+        SSH_BIN="sshpass -e ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o LogLevel=ERROR"
+        SCP_BIN="sshpass -e scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o LogLevel=ERROR"
     else
-        warn "sshpass not installed — will prompt for password each connection"
-        SSH_BIN="ssh"
-        SCP_BIN="scp"
+        SSH_BIN="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o LogLevel=ERROR"
+        SCP_BIN="scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS_FILE -o LogLevel=ERROR"
     fi
     SSH="$SSH_BIN"
     SCP="$SCP_BIN"

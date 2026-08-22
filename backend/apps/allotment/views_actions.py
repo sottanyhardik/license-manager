@@ -701,6 +701,12 @@ class AllotmentActionViewSet(ViewSet):
             'import_item__items',
             'import_item__items__sion_norm_class',
             'import_item__license__export_license',
+            # LicenseImportItemSerializer always exposes planning_options.
+            # PLAN rows serialise the underlying import item too, so load the
+            # related lines and their labels in the original candidate query
+            # rather than issuing one plan query and one item-name query per
+            # response row.
+            'import_item__utilization_plans__item_name',
         ).order_by('import_item__license__license_expiry_date', 'import_item__serial_number')
 
         if search:
@@ -804,7 +810,16 @@ class AllotmentActionViewSet(ViewSet):
         # debits recorded against its ``plan_line`` FK.  It cannot be safely
         # filtered on the old mutable remaining_* columns.
         from apps.license.services.plan_enforcement import plan_line_status_for_many
-        plan_statuses = plan_line_status_for_many(queryset)
+        # PLAN eligibility is ledger-derived and therefore cannot safely be
+        # expressed as a stored-column SQL predicate.  The status helper has
+        # to inspect every filtered plan line, so materialise that ordered
+        # scope once and reuse it for status calculation, pagination and the
+        # response total.  Previously the helper materialised ``queryset``
+        # and the view then issued a second filtered slice query plus a count
+        # query.  Reusing the same immutable read removes those redundant
+        # round trips without changing the candidate set or its order.
+        filtered_plans = list(queryset)
+        plan_statuses = plan_line_status_for_many(filtered_plans)
         def _decimal_filter(value):
             try:
                 return Decimal(value) if value else None
@@ -820,15 +835,16 @@ class AllotmentActionViewSet(ViewSet):
             if remaining_qty <= 0 or remaining_cif <= 0:
                 continue
             active_plan_ids.append(plan_id)
-        queryset = queryset.filter(id__in=active_plan_ids)
+        active_plan_id_set = set(active_plan_ids)
 
         # Pagination — same slice-then-count pattern as Actual mode.
         page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
         page_size = min(_safe_int(request.query_params.get('page_size'), default=20, minimum=1), 100)
         start = (page - 1) * page_size
         end = start + page_size
-        paginated_plans = list(queryset[start:end])
-        total_count = queryset.count()
+        eligible_plans = [plan for plan in filtered_plans if plan.id in active_plan_id_set]
+        paginated_plans = eligible_plans[start:end]
+        total_count = len(eligible_plans)
 
         # Serialize each row's underlying import item through the EXISTING
         # serializer — license/HS/description/exporter/condition/items_detail

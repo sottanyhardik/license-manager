@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthContext } from "../../context/AuthContext";
@@ -43,11 +44,13 @@ const authValue = {
 
 function renderList() {
     render(
-        <MemoryRouter>
-            <AuthContext.Provider value={authValue}>
-                <UserList />
-            </AuthContext.Provider>
-        </MemoryRouter>,
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+            <MemoryRouter>
+                <AuthContext.Provider value={authValue}>
+                    <UserList />
+                </AuthContext.Provider>
+            </MemoryRouter>
+        </QueryClientProvider>,
     );
 }
 
@@ -90,5 +93,21 @@ describe("UserList", () => {
         expect(screen.getByText("No roles")).toBeInTheDocument();
         expect(screen.getByText("Inactive")).toBeInTheDocument();
         expect(screen.getAllByRole("button", { name: "" })).toHaveLength(1);
+    });
+
+    it("debounces a text filter without replacing the page shell", async () => {
+        renderList();
+        await screen.findByText("manager");
+        vi.mocked(listUsers).mockClear();
+        vi.useFakeTimers();
+        const input = screen.getByPlaceholderText("Search by username or email…");
+        input.focus();
+        fireEvent.change(input, { target: { value: "manager" } });
+        expect(input).toHaveFocus();
+        expect(screen.getByText("User Management")).toBeInTheDocument();
+        expect(listUsers).not.toHaveBeenCalled();
+        await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+        expect(listUsers).toHaveBeenCalledWith({ search: "manager" }, expect.anything());
+        vi.useRealTimers();
     });
 });

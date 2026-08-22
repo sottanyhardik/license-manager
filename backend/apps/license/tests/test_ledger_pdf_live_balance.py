@@ -61,9 +61,11 @@ class CanonicalLedgerLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCase
         # Get canonical dataset
         dataset = CanonicalLedgerService.build_canonical_ledger_dataset(license_obj.id)
 
-        # Verify balance reflects the purchase (10000 opening + 5000 purchase = 15000)
+        # A purchase is the acquisition already represented by the licence
+        # face value, so it must be credited once rather than double-counted
+        # with the opening metadata.
         self.assertEqual(dataset['opening_balance'], Decimal("10000.00"))
-        self.assertEqual(dataset['license_running_balance'], Decimal("15000.00"))
+        self.assertEqual(dataset['license_running_balance'], Decimal("5000.00"))
 
         # Verify transactions are recorded
         self.assertGreater(len(dataset['transactions']), 0)
@@ -82,10 +84,9 @@ class CanonicalLedgerPdfSemanticParityTests(LicenseBalanceLedgerFixtureMixin, Te
         Verify that canonical ledger API dataset matches what PDF uses.
         Golden scenario: Opening balance + purchase (increases) + sale (decreases).
 
-        **Semantics:**
-        - OPENING: Sets initial balance
-        - PURCHASE: Company buys goods, balance INCREASES (credit to license)
-        - SALE: Company sells goods, balance DECREASES (debit from license)
+        **Semantics:** a PURCHASE is the canonical acquisition event when it
+        exists; the licence face value remains metadata and is not seeded into
+        the running ledger a second time.
         """
         from apps.license.services.canonical_ledger_service import CanonicalLedgerService
         from apps.license.models import LicenseExportItemModel, LicenseImportItemsModel
@@ -161,8 +162,9 @@ class CanonicalLedgerPdfSemanticParityTests(LicenseBalanceLedgerFixtureMixin, Te
 
         # Verify key metrics
         self.assertEqual(dataset['opening_balance'], opening_balance)
-        # Opening: 10000 + Purchase (credit): 2000 - Sale (debit): 3000 = 9000
-        expected_balance = opening_balance + purchase_amount - sale_amount
+        # Purchase (credit): 2000 - Sale (debit): 3000 = -1000.  The original
+        # licence CIF remains visible as metadata but is not double-counted.
+        expected_balance = purchase_amount - sale_amount
         self.assertEqual(dataset['license_running_balance'], expected_balance)
 
         # Verify company utilization for Company A

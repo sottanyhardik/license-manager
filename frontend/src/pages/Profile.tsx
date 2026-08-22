@@ -184,12 +184,12 @@ export default function Profile() {
                             </div>
 
                             {editing && (
-                                <div className="mt-5 flex gap-2 border-t border-border/70 pt-4">
-                                    <Button onClick={handleSave} disabled={saving}>
+                                <div className="mt-5 flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row">
+                                    <Button className="w-full sm:w-auto" onClick={handleSave} disabled={saving}>
                                         <Check className="size-4" />
                                         {saving ? "Saving…" : "Save Changes"}
                                     </Button>
-                                    <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                                    <Button className="w-full sm:w-auto" variant="outline" onClick={handleCancel} disabled={saving}>
                                         Cancel
                                     </Button>
                                 </div>

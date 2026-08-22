@@ -1,12 +1,16 @@
-import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { reportEntities, masterEntities } from "../routes/config";
 import { REPORT_ROLES } from "../routes/authorizationRoles";
-import CommandPalette from "./CommandPalette";
-import { ChevronDown, Gauge, Search, ShieldCheck } from "lucide-react";
+import { ChevronDown, Gauge, Menu, Search, ShieldCheck, X } from "lucide-react";
 import Icon from "@/components/Icon";
+
+// cmdk and its dialog primitives are only useful after the user opens global
+// search.  Keeping them out of the navigation chunk materially reduces the
+// authenticated first-paint payload without changing the command workflow.
+const CommandPalette = lazy(() => import("./CommandPalette"));
 
 const NAV_GROUPS = [
     {
@@ -123,6 +127,9 @@ export default function TopNav() {
     const { theme, toggleTheme } = useTheme();
     const location = useLocation();
     const [cmdOpen, setCmdOpen] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const mobileDrawerRef = useRef<HTMLDivElement | null>(null);
+    const mobileTriggerRef = useRef<HTMLButtonElement | null>(null);
 
     const isPathActive = (path) =>
         location.pathname === path || location.pathname.startsWith(path + "/");
@@ -131,6 +138,14 @@ export default function TopNav() {
 
     const openCmd = useCallback(() => setCmdOpen(true), []);
     const closeCmd = useCallback(() => setCmdOpen(false), []);
+    const closeMobileNav = useCallback(() => {
+        setMobileOpen(false);
+        window.requestAnimationFrame(() => mobileTriggerRef.current?.focus());
+    }, []);
+    const visibleGroups = NAV_GROUPS.map(group => ({
+        ...group,
+        items: group.items.filter(item => !item.roles || hasAnyRole(item.roles)),
+    })).filter(group => group.items.length > 0);
 
     useEffect(() => {
         const handler = (e) => {
@@ -143,9 +158,33 @@ export default function TopNav() {
         return () => document.removeEventListener("keydown", handler);
     }, []);
 
+    useEffect(() => {
+        if (!mobileOpen) return;
+        document.body.classList.add("tb-mobile-nav-open");
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") { event.preventDefault(); closeMobileNav(); return; }
+            if (event.key !== "Tab") return;
+            const nodes = mobileDrawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            if (!nodes?.length) return;
+            const first = nodes[0];
+            const last = nodes[nodes.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        const frame = window.requestAnimationFrame(() => mobileDrawerRef.current?.querySelector<HTMLElement>("button, a[href]")?.focus());
+        return () => {
+            document.body.classList.remove("tb-mobile-nav-open");
+            window.cancelAnimationFrame(frame);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [closeMobileNav, mobileOpen]);
+
+    useEffect(() => setMobileOpen(false), [location.pathname]);
+
     return (
         <>
-            <nav className="tb-nav top-nav" aria-label="Main navigation">
+            <nav className="tb-nav top-nav top-nav--premium" aria-label="Main navigation">
                 {/* Brand */}
                 <Link to="/" className="tb-nav-brand">
                     <span className="tb-nav-brand-mark" aria-hidden="true">
@@ -155,22 +194,20 @@ export default function TopNav() {
                 </Link>
 
                 {/* Nav items */}
-                <div className="tb-nav-scroller nav-items-scroller">
+                <div className="tb-nav-scroller nav-items-scroller" aria-label="Primary sections">
                     <Link to="/dashboard" className={`tb-nav-trigger${isDashActive ? " is-active" : ""}`}>
                         <Gauge className="size-4" aria-hidden="true" />
                         Dashboard
                     </Link>
 
-                    {NAV_GROUPS.map(group => {
-                        const visible = group.items.filter(item => !item.roles || hasAnyRole(item.roles));
-                        if (visible.length === 0) return null;
+                    {visibleGroups.map(group => {
                         return (
                             <NavMenu
                                 key={group.label}
                                 icon={group.icon}
                                 label={group.label}
-                                isActive={isGroupActive(visible)}
-                                items={visible.map(item => (
+                                isActive={isGroupActive(group.items)}
+                                items={group.items.map(item => (
                                     <MenuItem
                                         key={item.path}
                                         to={item.path}
@@ -217,7 +254,7 @@ export default function TopNav() {
                 </div>
 
                 {/* Right-side controls */}
-                <div className="flex items-center gap-1 ml-2 shrink-0">
+                <div className="tb-nav__utilities flex items-center gap-1 ml-2 shrink-0" aria-label="Session controls">
                     {/* Command palette search trigger — pill style on wider viewports */}
                     <button
                         type="button"
@@ -271,10 +308,74 @@ export default function TopNav() {
                             ].filter(Boolean)}
                         />
                     )}
+                    <button
+                        ref={mobileTriggerRef}
+                        type="button"
+                        className="tb-nav-mobile-toggle"
+                        aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+                        aria-expanded={mobileOpen}
+                        aria-controls="mobile-navigation-drawer"
+                        onClick={() => setMobileOpen(open => !open)}
+                        data-testid="mobile-nav-toggle"
+                    >
+                        <Menu className="size-5" aria-hidden="true" />
+                    </button>
                 </div>
             </nav>
 
-            <CommandPalette open={cmdOpen} onClose={closeCmd} />
+            {mobileOpen && (
+                <div className="tb-mobile-nav-layer" role="presentation">
+                    <button type="button" className="tb-mobile-nav-backdrop" aria-label="Close navigation menu" onClick={closeMobileNav} />
+                    <aside
+                        id="mobile-navigation-drawer"
+                        ref={mobileDrawerRef}
+                        className="tb-mobile-nav-drawer"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Main navigation"
+                        data-testid="mobile-nav-drawer"
+                    >
+                        <div className="tb-mobile-nav-header">
+                            <span className="tb-nav-brand-mark" aria-hidden="true"><ShieldCheck className="size-4" /></span>
+                            <span className="tb-mobile-nav-title">License Manager</span>
+                            <button type="button" className="tb-mobile-nav-close" onClick={closeMobileNav} aria-label="Close navigation menu"><X className="size-5" aria-hidden="true" /></button>
+                        </div>
+                        <div className="tb-mobile-nav-body">
+                            <Link to="/dashboard" className={`tb-mobile-nav-link${isDashActive ? " is-active" : ""}`} onClick={closeMobileNav}><Gauge className="size-4" aria-hidden="true" /> Dashboard</Link>
+                            {visibleGroups.map(group => (
+                                <section className="tb-mobile-nav-group" key={group.label} aria-label={group.label}>
+                                    <div className="tb-mobile-nav-group-label"><Icon name={group.icon} className="size-3.5" aria-hidden="true" />{group.label}</div>
+                                    {group.items.map(item => (
+                                        <Link key={item.path} to={item.path} className={`tb-mobile-nav-link${isPathActive(item.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={item.icon} className="size-4" aria-hidden="true" />{item.label}</Link>
+                                    ))}
+                                </section>
+                            ))}
+                            {hasAnyRole(REPORT_ROLES) && (
+                                <section className="tb-mobile-nav-group" aria-label="Reports">
+                                    <div className="tb-mobile-nav-group-label"><Icon name="bar-chart-line" className="size-3.5" aria-hidden="true" />Reports</div>
+                                    {reportEntities.map(report => <Link key={report.path} to={report.path} className={`tb-mobile-nav-link${isPathActive(report.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={report.icon} className="size-4" aria-hidden="true" />{report.label}</Link>)}
+                                </section>
+                            )}
+                            <section className="tb-mobile-nav-group" aria-label="Masters">
+                                <div className="tb-mobile-nav-group-label"><Icon name="database" className="size-3.5" aria-hidden="true" />Masters</div>
+                                {masterEntities.filter(master => !master.deprecated).map(master => <Link key={master.path} to={master.path} className={`tb-mobile-nav-link${isPathActive(master.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={master.icon} className="size-4" aria-hidden="true" />{master.label}</Link>)}
+                            </section>
+                        </div>
+                        <div className="tb-mobile-nav-footer">
+                            <button type="button" className="tb-mobile-nav-utility" onClick={() => { closeMobileNav(); openCmd(); }}><Search className="size-4" aria-hidden="true" /> Search</button>
+                            <Link to="/profile" className="tb-mobile-nav-utility" onClick={closeMobileNav}><Icon name="person" className="size-4" aria-hidden="true" /> Profile</Link>
+                            <button type="button" className="tb-mobile-nav-utility" onClick={toggleTheme}><Icon name={theme === "dark" ? "sun" : "moon"} className="size-4" aria-hidden="true" />{theme === "dark" ? "Light mode" : "Dark mode"}</button>
+                            <button type="button" className="tb-mobile-nav-utility is-danger" onClick={() => logout()}><Icon name="box-arrow-right" className="size-4" aria-hidden="true" /> Sign out</button>
+                        </div>
+                    </aside>
+                </div>
+            )}
+
+            {cmdOpen && (
+                <Suspense fallback={null}>
+                    <CommandPalette open={cmdOpen} onClose={closeCmd} />
+                </Suspense>
+            )}
         </>
     );
 }

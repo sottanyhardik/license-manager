@@ -462,7 +462,11 @@ class DirectReportAuthorizationTests(TestCase):
             with self.subTest(url=url):
                 response = client.get(url)
 
-                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+                # JWT authentication advertises a Bearer challenge, so an
+                # unauthenticated request is correctly a 401. The following
+                # test retains the distinct authenticated-but-forbidden 403
+                # assertion.
+                self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_direct_report_urls_require_report_role(self):
         client = self._authenticated_client(username="not-report-authorized")

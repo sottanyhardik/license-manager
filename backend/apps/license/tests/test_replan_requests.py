@@ -5,6 +5,7 @@ from django.db import transaction
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from apps.core.models import HeadSIONNormsModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseReplanRequest
 from apps.license.services.replan_requests import (
     mark_license_replan_source_changed,
@@ -199,14 +200,19 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         planner.assert_not_called()
         delay.assert_called_once_with([durable_request.pk])
 
-    @patch("apps.license.tasks.dispatch_replan_requests.delay")
+    @patch("apps.license.tasks.replan_sion_batch.delay")
     def test_plan_sion_endpoint_queues_each_explicit_license_without_inline_planning(self, delay):
         other = LicenseDetailsModel.objects.create(license_number="ASYNC-REPLAN-3")
+        sion = SionNormClassModel.objects.create(
+            head_norm=HeadSIONNormsModel.objects.create(name="Async replan"),
+            norm_class="ASYNC-RP",
+            is_active=True,
+        )
         with patch("apps.license.services.sion_rule_engine.SionRulePlanningService.plan_sion") as planner:
             with self.captureOnCommitCallbacks(execute=True):
                 response = self.client.post(
                     "/api/sion-planning-rules/plan-sion/",
-                    {"sion_id": 1, "license_ids": [self.license.pk, other.pk], "mode": "ALL"},
+                    {"sion_id": sion.pk, "license_ids": [self.license.pk, other.pk], "mode": "ALL"},
                     format="json",
                 )
 
@@ -215,7 +221,7 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         assert len(response.data["replan_request_ids"]) == 2
         assert set(LicenseReplanRequest.objects.filter(pk__in=response.data["replan_request_ids"]).values_list("license_id", flat=True)) == {self.license.pk, other.pk}
         planner.assert_not_called()
-        assert delay.call_count == 2
+        delay.assert_called_once_with(response.data["replan_request_ids"])
 
     def test_import_item_reassignment_queues_both_licenses(self):
         other = LicenseDetailsModel.objects.create(license_number="ASYNC-REPLAN-2")

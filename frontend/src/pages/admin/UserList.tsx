@@ -1,5 +1,6 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Search, Users } from "lucide-react";
 
@@ -20,6 +21,7 @@ import {
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { useSmoothListFilters } from "@/hooks/useSmoothListFilters";
 
 interface UserRecord {
     id: number;
@@ -43,37 +45,34 @@ export default function UserList() {
     const navigate = useNavigate();
     const { user: currentUser } = useContext(AuthContext);
 
-    const [users, setUsers] = useState<UserRecord[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-    const [roleFilter, setRoleFilter] = useState("");
-    const [activeFilter, setActiveFilter] = useState("");
     const [confirmDelete, setConfirmDelete] = useState<UserRecord | null>(null);
+    const queryClient = useQueryClient();
+    const {
+        filters, appliedFilters, isDebouncing, setTextFilter, setImmediateFilter,
+    } = useSmoothListFilters({ search: "", role: "", is_active: "" });
 
-    const fetchUsers = useCallback(async () => {
-        setLoading(true);
-        try {
+    const userQuery = useQuery({
+        queryKey: ["admin-users", appliedFilters],
+        queryFn: async ({ signal }) => {
             const params: Record<string, string> = {};
-            if (search) params.search = search;
-            if (roleFilter) params.role = roleFilter;
-            if (activeFilter !== "") params.is_active = activeFilter;
-            const { data } = await listUsers(params);
-            setUsers(Array.isArray(data) ? data : data.results ?? []);
-        } catch (err: unknown) {
-            toast.error(getErrorMessage(err as Error));
-        } finally {
-            setLoading(false);
-        }
-    }, [search, roleFilter, activeFilter]);
-
-    useEffect(() => { fetchUsers(); }, [fetchUsers]);
+            if (appliedFilters.search) params.search = appliedFilters.search;
+            if (appliedFilters.role) params.role = appliedFilters.role;
+            if (appliedFilters.is_active !== "") params.is_active = appliedFilters.is_active;
+            const { data } = await listUsers(params, signal);
+            return (Array.isArray(data) ? data : data.results ?? []) as UserRecord[];
+        },
+        placeholderData: previous => previous,
+    });
+    const users = userQuery.data ?? [];
+    const loading = userQuery.isLoading;
+    const refreshing = userQuery.isFetching && !loading;
 
     const handleDelete = async (userId: number) => {
         try {
             await deleteUser(userId);
             toast.success("User deleted");
             setConfirmDelete(null);
-            fetchUsers();
+            await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
         } catch (err: unknown) {
             toast.error(getErrorMessage(err as Error));
         }
@@ -99,17 +98,17 @@ export default function UserList() {
             {/* Filters */}
             <Card className="mb-3">
                 <CardContent className="flex flex-wrap items-center gap-2 py-3">
-                    <div className="relative min-w-[220px] flex-1">
+                    <div className="relative min-w-0 basis-full sm:min-w-[220px] sm:flex-1">
                         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             className="h-9 pl-8"
                             placeholder="Search by username or email…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            value={filters.search}
+                            onChange={(e) => setTextFilter("search", e.target.value)}
                         />
                     </div>
-                    <Select value={roleFilter || ALL} onValueChange={(v) => setRoleFilter(v === ALL ? "" : v)}>
-                        <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
+                    <Select value={filters.role || ALL} onValueChange={(v) => setImmediateFilter("role", v === ALL ? "" : v)}>
+                        <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Roles</SelectItem>
                             {Object.keys(ROLE_LABELS).map((code) => (
@@ -117,8 +116,8 @@ export default function UserList() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Select value={activeFilter || ALL} onValueChange={(v) => setActiveFilter(v === ALL ? "" : v)}>
-                        <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+                    <Select value={filters.is_active || ALL} onValueChange={(v) => setImmediateFilter("is_active", v === ALL ? "" : v)}>
+                        <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Status</SelectItem>
                             <SelectItem value="true">Active</SelectItem>
@@ -131,6 +130,17 @@ export default function UserList() {
             {/* Table */}
             <Card>
                 <CardContent className="p-0">
+                    {(isDebouncing || refreshing) && (
+                        <div role="status" className="border-b border-border/60 px-4 py-1.5 text-xs text-muted-foreground">
+                            Updating results…
+                        </div>
+                    )}
+                    {userQuery.isError && (
+                        <div role="alert" className="flex items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+                            <span>{getErrorMessage(userQuery.error as Error)}</span>
+                            <Button size="sm" variant="outline" onClick={() => userQuery.refetch()}>Retry</Button>
+                        </div>
+                    )}
                     {loading ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">

@@ -261,17 +261,21 @@ class CanonicalLedgerService:
             and to_decimal(row.get('amount'), DEC_0) > DEC_0
             for row in raw_transactions
         )
-        if has_valid_purchase:
-            opening_balance = DEC_0
+        # The licence face value remains published as immutable metadata even
+        # when a PURCHASE is the canonical acquisition event.  Only the
+        # *running-ledger seed* is suppressed in that case: replacing the
+        # metadata value itself made API/PDF consumers report a false zero
+        # original CIF for purchased licences.
+        opening_seed = DEC_0 if has_valid_purchase else opening_balance
         if opening_balance > DEC_0:
             dataset['opening_balance'] = opening_balance
 
         # Process transactions in deterministic order (date, then ID)
-        running_balance = opening_balance
+        running_balance = opening_seed
         company_balances: Dict[int, Decimal] = {}  # Track per-company balances
 
         # Add opening transaction first (if opening balance exists)
-        if opening_balance > DEC_0:
+        if opening_seed > DEC_0:
             dataset['transactions'].append({
                 'date': metadata['license_date'],
                 'id': 0,  # Opening is transaction 0
@@ -285,7 +289,7 @@ class CanonicalLedgerService:
                 # presented to a CA as a transaction that never happened.
                 'party_id': None,
                 'party_name': None,
-                'amount': opening_balance,
+                'amount': opening_seed,
                 'bill_amount': None,
                 'item_names': [],
                 'is_commission': False,

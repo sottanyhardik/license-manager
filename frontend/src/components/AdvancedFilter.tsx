@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Filter, X, Zap } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
@@ -11,7 +11,8 @@ import DateRangeFilter from "./DateRangeFilter";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
- * choice, exclude_fk, button_group. Auto-applies with 800ms debounce.
+ * choice, exclude_fk, button_group. Text input applies after a 400ms debounce;
+ * select, date and toggle controls apply immediately.
  * All state/logic preserved verbatim — only Bootstrap markup → Tailwind.
  */
 export default function AdvancedFilter({
@@ -35,6 +36,18 @@ export default function AdvancedFilter({
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
 
+    const toApiParams = useCallback((nextValues = filterValues, nextSearch = searchTerm) => {
+        const params: Record<string, any> = {};
+        if (nextSearch) params.search = nextSearch;
+        Object.entries(nextValues).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === "") return;
+            if (key.endsWith("_from")) params[`${key.replace("_from", "")}__gte`] = value;
+            else if (key.endsWith("_to")) params[`${key.replace("_to", "")}__lte`] = value;
+            else params[key] = value;
+        });
+        return params;
+    }, [filterValues, searchTerm]);
+
     useEffect(() => {
         if (isInitialMount.current) {
             isInitialMount.current = false;
@@ -53,23 +66,19 @@ export default function AdvancedFilter({
     useEffect(() => {
         if (isAutoApplyInitialMount.current) { isAutoApplyInitialMount.current = false; return; }
         if (skipNextAutoApply.current) { skipNextAutoApply.current = false; return; }
-        const timeoutId = setTimeout(() => {
-            const params: Record<string, any> = {};
-            if (searchTerm) params.search = searchTerm;
-            Object.entries(filterValues).forEach(([key, value]) => {
-                if (value !== null && value !== undefined && value !== "") {
-                    if (key.endsWith("_from")) params[`${key.replace("_from", "")}__gte`] = value;
-                    else if (key.endsWith("_to")) params[`${key.replace("_to", "")}__lte`] = value;
-                    else params[key] = value;
-                }
-            });
-            onFilterChange(params);
-        }, 800);
+        const timeoutId = setTimeout(() => onFilterChange(toApiParams()), 400);
         return () => clearTimeout(timeoutId);
-    }, [searchTerm, filterValues, onFilterChange]);
+    }, [searchTerm, filterValues, onFilterChange, toApiParams]);
 
-    const handleFilterChange = (field, value) =>
-        setFilterValues((prev) => ({ ...prev, [field]: value }));
+    const handleFilterChange = (field, value, immediate = false) =>
+        setFilterValues((prev) => {
+            const next = { ...prev, [field]: value };
+            if (immediate) {
+                skipNextAutoApply.current = true;
+                onFilterChange(toApiParams(next));
+            }
+            return next;
+        });
 
     const handleResetFilters = () => {
         setSearchTerm("");
@@ -106,8 +115,8 @@ export default function AdvancedFilter({
                             label={`${label} Range`}
                             fromValue={fromValue}
                             toValue={toValue}
-                            onFromChange={(v) => handleFilterChange(`${fieldName}_from`, v)}
-                            onToChange={(v) => handleFilterChange(`${fieldName}_to`, v)}
+                            onFromChange={(v) => handleFilterChange(`${fieldName}_from`, v, true)}
+                            onToChange={(v) => handleFilterChange(`${fieldName}_to`, v, true)}
                         />
                     </Col>
                 );
@@ -140,7 +149,7 @@ export default function AdvancedFilter({
                     return (
                         <Col key={fieldName}>
                             <Label className="mb-1.5">{label}</Label>
-                            <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "")} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
+                            <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
                         </Col>
                     );
                 }
@@ -157,7 +166,7 @@ export default function AdvancedFilter({
                                         <button
                                             key={val}
                                             type="button"
-                                            onClick={() => handleFilterChange(fieldName, val)}
+                                            onClick={() => handleFilterChange(fieldName, val, true)}
                                             className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/15 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
                                         >{lbl}</button>
                                     );
@@ -201,7 +210,7 @@ export default function AdvancedFilter({
                                 const active = filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === "");
                                 const colorCls = choice.value === "" ? "" : choice.value === "YES" ? "border-destructive text-destructive" : choice.value === "NO" ? "border-success text-success" : choice.value === "PARTIAL" ? "border-warning text-warning" : "";
                                 return (
-                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value)} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
+                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
                                         {choice.label}
                                     </button>
                                 );
@@ -224,7 +233,7 @@ export default function AdvancedFilter({
                         <Select
                             options={choiceOpts}
                             value={selectedChoices}
-                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "")}
+                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "", true)}
                             isClearable isMulti
                             placeholder={`Select ${label.toLowerCase()}`}
                             classNamePrefix="react-select"
@@ -262,7 +271,7 @@ export default function AdvancedFilter({
                     <DebouncedSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
-                        delay={800}
+                        delay={400}
                         placeholder={`Search by ${searchFields.join(", ")}`}
                     />
                 </div>
@@ -288,7 +297,7 @@ export default function AdvancedFilter({
                                 <X className="size-3.5" />Clear Filters
                             </Button>
                             <span className="flex items-center gap-1 text-[11.5px] text-muted-foreground">
-                                <Zap className="size-3.5" />Filters apply automatically as you type
+                                <Zap className="size-3.5" />Text filters apply after 400ms; selections apply immediately
                             </span>
                         </div>
                     </CardContent>

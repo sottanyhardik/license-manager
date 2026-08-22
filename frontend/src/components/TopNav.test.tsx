@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -43,5 +43,25 @@ describe("TopNav authorization visibility", () => {
         );
 
         expect(screen.getByRole("button", { name: /reports/i })).toBeInTheDocument();
+    });
+
+    it("provides an accessible mobile drawer without changing the available destinations", () => {
+        render(
+            <MemoryRouter>
+                <ThemeContext.Provider value={{ theme: "light", toggleTheme: vi.fn() }}>
+                    <AuthContext.Provider value={authValue as never}>
+                        <TopNav />
+                    </AuthContext.Provider>
+                </ThemeContext.Provider>
+            </MemoryRouter>,
+        );
+
+        const trigger = screen.getByTestId("mobile-nav-toggle");
+        fireEvent.click(trigger);
+        expect(screen.getByTestId("mobile-nav-drawer")).toBeInTheDocument();
+        expect(screen.getAllByRole("link", { name: /licenses/i }).length).toBeGreaterThan(0);
+
+        fireEvent.keyDown(document, { key: "Escape" });
+        expect(screen.queryByTestId("mobile-nav-drawer")).not.toBeInTheDocument();
     });
 });

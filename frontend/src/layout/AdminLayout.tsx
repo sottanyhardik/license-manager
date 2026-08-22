@@ -21,13 +21,13 @@ export default function AdminLayout({ children }) {
     usePageTitle();
 
     return (
-        <div className="app-shell flex min-h-screen flex-col bg-background">
+        <div className="app-shell app-shell--admin flex min-h-screen flex-col bg-background">
             {!isInIframe && <TopNav />}
 
-            <main id="main-content" className="app-shell__main flex-1 overflow-y-auto">
+            <main id="main-content" className="app-shell__main flex-1 overflow-y-auto" tabIndex={-1}>
                 <div
                     className={[
-                        "app-shell__content page-enter mx-auto w-full max-w-[100%]",
+                        "app-shell__content app-shell__content--admin page-enter mx-auto w-full max-w-[100%]",
                         isInIframe ? "px-5 py-4" : "container-fluid",
                     ].join(" ")}
                 >
@@ -45,7 +45,7 @@ export default function AdminLayout({ children }) {
 
             {!isInIframe && (
                 <footer
-                    className="sticky bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-sm"
+                    className="app-shell__quick-actions sticky bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-sm"
                     aria-label="Quick actions"
                     style={{ height: 44 }}
                 >

@@ -124,7 +124,7 @@ export default function ReconciliationPanel() {
     const val = (key: string) => (summary ? pick(summary as Record<string, unknown>, key) : null);
 
     return (
-        <>
+        <div className="reconciliation-page space-y-1">
             <PageHeader
                 pretitle="Operations"
                 title="BOE / Invoice Reconciliation"
@@ -149,7 +149,7 @@ export default function ReconciliationPanel() {
                 <StatCard label="CIF Difference" value={val("cif_difference") as ReactNode} icon={IndianRupee} tone="danger" loading={summaryLoading} onClick={() => setActiveTab("cif-comparison")} />
             </div>
 
-            <Card>
+            <Card className="overflow-hidden border-border/80 shadow-md shadow-primary/5">
                 <CardContent className="pt-4">
                     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
                         <TabsList className="flex h-auto flex-wrap justify-start gap-1">
@@ -194,6 +194,6 @@ export default function ReconciliationPanel() {
             <ReconciliationAuditLog />
 
             {confirmDialog}
-        </>
+        </div>
     );
 }

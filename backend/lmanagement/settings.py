@@ -357,6 +357,13 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "DGFT import/export licence, allotment, BOE and trade management API.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    # ``allocation_basis`` and ``search_mode`` deliberately share the same
+    # ACTUAL/PLAN choices while retaining distinct runtime fields.  A stable
+    # schema component name documents that shared wire enum without a noisy
+    # duplicate-choice warning.
+    "ENUM_NAME_OVERRIDES": {
+        "AllocationBasisEnum": [("ACTUAL", "Actual"), ("PLAN", "Plan")],
+    },
 }
 
 # ---------------------------------------------------------------------

@@ -247,7 +247,7 @@ class BoeCandidateDimensionRegressionTests(LicenseBalanceLedgerFixtureMixin, Tes
         client = APIClient()
         resp = client.get(f"/api/licenses/{license_obj.id}/balance-ledger/")
 
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
 
 
 class RecalculateViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):

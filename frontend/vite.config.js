@@ -1,16 +1,18 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react-oxc'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), '')
+  return {
   plugins: [react(), tailwindcss()],
   base: '/',  // Ensures assets are loaded from root, not port 8000
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: env.VITE_API_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -39,53 +41,20 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunks - separate large dependencies
           if (id.includes('node_modules')) {
-            // Excel (exceljs is ~1.5 MB on its own — must be its own chunk)
-            if (id.includes('exceljs')) {
-              return 'vendor-excel';
-            }
-
-            // PDF generation
-            if (id.includes('jspdf')) {
-              return 'vendor-pdf';
-            }
-
-            // Date pickers / date utilities
-            if (id.includes('react-datepicker') || id.includes('date-fns') || id.includes('moment')) {
-              return 'vendor-date';
-            }
-
             // React core libraries
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
               return 'vendor-react';
             }
-
-            // UI libraries (Bootstrap, react-select, etc.)
-            if (id.includes('react-select') || id.includes('react-bootstrap') || id.includes('bootstrap')) {
-              return 'vendor-ui';
-            }
-
-            // Toast/notification libraries
-            if (id.includes('react-toastify')) {
-              return 'vendor-toast';
-            }
-
-            // All other node_modules
-            return 'vendor-other';
           }
 
           // Application shell code used on first paint.
           if (
             id.includes('/layout/') ||
-            id.includes('/components/ui/') ||
-            id.includes('/components/primitives/') ||
             id.includes('/components/Icon') ||
             id.includes('/components/TopNav') ||
-            id.includes('/components/CommandPalette') ||
             id.includes('/components/LoadingFallback') ||
             id.includes('/components/ErrorScreen') ||
-            id.includes('/components/GlobalErrorBoundary') ||
-            id.includes('/components/TaskFAB') ||
-            id.includes('/components/TaskDrawer')
+            id.includes('/components/GlobalErrorBoundary')
           ) {
             return 'app-shell';
           }
@@ -130,4 +99,5 @@ export default defineConfig({
       'axios',
     ],
   },
+  }
 })

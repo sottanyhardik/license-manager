@@ -173,7 +173,8 @@ function LicenseWiseLedger({
                     </div>
 
                     {/* ── Companies table ────────────────────────────── */}
-                    <table className="w-full border-collapse text-[12.5px]">
+                    <div className="overflow-x-auto" role="region" aria-label={`Companies for ${lic.license_number}`} tabIndex={0}>
+                    <table className="min-w-[680px] w-full border-collapse text-[12.5px]">
                         <thead>
                             <tr className="border-b-2 border-border bg-muted/50">
                                 <th scope="col" className="w-[30%] px-3 py-[7px] text-left font-bold text-foreground">Company</th>
@@ -251,6 +252,7 @@ function LicenseWiseLedger({
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             ))}
         </div>
@@ -477,7 +479,7 @@ export default function LicenseLedger() {
                             </div>
                         </CardHeader>
                         <CardContent className="px-3 py-2">
-                            <div className="grid grid-cols-4 divide-x divide-border text-center">
+                            <div className="grid grid-cols-2 divide-x divide-y divide-border text-center sm:grid-cols-4 sm:divide-y-0">
                                 <SummaryItem label="Total Value" value={`$ ${formatIndianNumber(summary.dfia?.total_value_usd, 2)}`} tone="primary" />
                                 <SummaryItem label="Balance" value={`$ ${formatIndianNumber(summary.dfia?.balance_value_usd, 2)}`} tone="success" />
                                 <SummaryItem label="Purchase" value={`₹${formatIndianNumber(summary.dfia?.purchase_amount_inr, 0)}`} tone="warning" />
@@ -502,7 +504,7 @@ export default function LicenseLedger() {
                             </div>
                         </CardHeader>
                         <CardContent className="px-3 py-2">
-                            <div className="grid grid-cols-4 divide-x divide-border text-center">
+                            <div className="grid grid-cols-2 divide-x divide-y divide-border text-center sm:grid-cols-4 sm:divide-y-0">
                                 <SummaryItem label="Total Value" value={`₹${formatIndianNumber(summary.incentive?.total_value_inr, 2)}`} tone="primary" />
                                 <SummaryItem label="Balance" value={`₹${formatIndianNumber(summary.incentive?.balance_value_inr, 2)}`} tone="success" />
                                 <SummaryItem label="Purchase" value={`₹${formatIndianNumber(summary.incentive?.purchase_amount_inr, 0)}`} tone="warning" />

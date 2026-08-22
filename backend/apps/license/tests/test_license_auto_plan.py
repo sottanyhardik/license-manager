@@ -31,21 +31,21 @@ def make_license(company, number="TEST-AUTO-PLAN"):
     )
 
 
-def test_auto_plan_runs_the_durable_request_inline_without_celery(manager_client):
+def test_auto_plan_queues_a_durable_request_without_running_the_planner_inline(manager_client):
     client, company = manager_client
     license_obj = make_license(company)
     with patch("apps.license.services.sion_rule_engine.SionRulePlanningService.plan_sion") as planner, \
          patch("apps.license.views.sion_planning_rule.SionPlanningRuleViewSet._resolve_sions_for_license", return_value=(license_obj, [])), \
          patch("apps.license.tasks.dispatch_replan_requests.delay"):
         response = client.post(f"/api/licenses/{license_obj.pk}/auto-plan/", format="json")
-    assert response.status_code == 200, response.data
-    assert response.data["planning_state"] == "CURRENT"
+    assert response.status_code == 202, response.data
+    assert response.data["planning_state"] == "REPLAN_PENDING"
     request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
     assert request.license_id == license_obj.pk
     assert request.reason == "manual_auto_plan"
-    assert request.status == LicenseReplanRequest.STATUS_SUCCEEDED
+    assert request.status == LicenseReplanRequest.STATUS_PENDING
     assert not LicenseItemPlan.objects.filter(license=license_obj).exists()
-    planner.assert_not_called()  # no SION is configured for this fixture
+    planner.assert_not_called()
 
 
 def test_repeated_auto_plan_clicks_coalesce(manager_client):

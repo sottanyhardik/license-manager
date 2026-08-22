@@ -116,6 +116,13 @@ def plan_utilization_rows(
         items = list(license_obj.import_license.all())
     items = sorted(items, key=lambda it: it.serial_number or 0)
 
+    # Item.available_quantity is a denormalized post-commit convenience
+    # field.  A planning read made in the same transaction as an allotment
+    # must instead use the Balance Engine's batched live calculation so a
+    # just-created debit cannot temporarily inflate plan feasibility.
+    from apps.license.services.balance_calculator import ItemBalanceCalculator
+    live_available_by_item = ItemBalanceCalculator.calculate_available_quantity_for_items(items)
+
     # Resolve every group's original/allotted/baseline totals in one batched
     # pass.  The former per-group `plan_status_for_ids` path repeated aggregate
     # queries for every row and grew linearly with the number of planning items.
@@ -161,7 +168,12 @@ def plan_utilization_rows(
             if name_obj.id not in group["_item_name_ids"]:
                 group["_item_name_ids"].add(name_obj.id)
                 group["item_names"].append({"id": name_obj.id, "name": name})
-        group["available_quantity"] += _dec(item.available_quantity)
+        # Retain an explicitly lower persisted availability (for example a
+        # reconciled/manual restriction) while preventing a stale, higher
+        # denormalized value from masking a just-written live debit.
+        stored_available = _dec(item.available_quantity, DEC_000)
+        live_available = _dec(live_available_by_item.get(item.id), DEC_000)
+        group["available_quantity"] += min(stored_available, live_available)
         group["total_quantity"] += _dec(item.quantity)
         group["balance_cif_fc"] += _dec(item.available_value, DEC_0)
         member_plan = plan_map.get(item.id)

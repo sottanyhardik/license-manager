@@ -588,7 +588,12 @@ class CanonicalPlanningService:
                         "The selected SION produced no plannable lines.",
                         sion_id=sion.pk, license_id=license_obj.pk,
                     )
-                had_plan = LicenseItemPlan.objects.filter(license_id=license_obj.pk).exists()
+                had_plan = LicenseItemPlan.objects.filter(
+                    license_id=license_obj.pk,
+                    is_active=True,
+                    is_deleted=False,
+                    is_cancelled=False,
+                ).exists()
                 candidates.append((license_obj, generated, had_plan))
 
             results = []
@@ -852,7 +857,12 @@ class CanonicalPlanningService:
     def _generated_plan_matches_current(license_id: int, items: List[Dict[str, Any]]) -> bool:
         """Content idempotency: identical repeats preserve plan row ids/audit data."""
         current = list(
-            LicenseItemPlan.objects.filter(license_id=license_id).values(
+            LicenseItemPlan.objects.filter(
+                license_id=license_id,
+                is_active=True,
+                is_deleted=False,
+                is_cancelled=False,
+            ).values(
                 "import_item_id", "item_name_id", "planned_quantity",
                 "unit_price", "planned_cif_fc", "note", "planning_rule_id",
                 "planning_rule_version", "planning_rule_priority",
@@ -1168,7 +1178,12 @@ class CanonicalPlanningService:
         from django.db.models import DecimalField, Sum, Value
         from django.db.models.functions import Coalesce
 
-        existing_cif = LicenseItemPlan.objects.filter(license_id=license_obj.pk).aggregate(
+        existing_cif = LicenseItemPlan.objects.filter(
+            license_id=license_obj.pk,
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        ).aggregate(
             t=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
         )["t"] or DEC_0
 

@@ -39,7 +39,12 @@ def plan_map_for_license(license_id) -> dict:
     """Per-import-item plan map for a single license (see _build_map)."""
     from apps.license.models import LicenseItemPlan
     return _build_map(
-        LicenseItemPlan.objects.filter(license_id=license_id).select_related("item_name")
+        LicenseItemPlan.objects.filter(
+            license_id=license_id,
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        ).select_related("item_name")
     )
 
 
@@ -50,5 +55,10 @@ def plan_map_for_import_items(item_ids) -> dict:
     if not ids:
         return {}
     return _build_map(
-        LicenseItemPlan.objects.filter(import_item_id__in=ids).select_related("item_name")
+        LicenseItemPlan.objects.filter(
+            import_item_id__in=ids,
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        ).select_related("item_name")
     )

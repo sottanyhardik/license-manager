@@ -14,6 +14,7 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.models import CompanyModel, ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 
@@ -137,6 +138,57 @@ def test_bulk_upsert_returns_structured_400_for_unknown_item_name(license_manage
     assert response.data["code"] == "INVALID_INPUT"
     assert response.data["details"]["item_name_ids"] == [999999999]
     assert not LicenseItemPlan.objects.filter(license=license_obj).exists()
+
+
+@pytest.mark.django_db
+def test_bulk_replace_supersedes_used_split_lines_without_nulling_allotment_identity(
+    license_manager_client, planned_license,
+):
+    """A re-plan must not SET NULL two used splits onto one legacy identity."""
+    license_obj, item = planned_license
+    first_name = ItemNameModel.objects.create(name="Historical split one")
+    second_name = ItemNameModel.objects.create(name="Historical split two")
+    first_plan = LicenseItemPlan.objects.create(
+        license=license_obj, import_item=item, item_name=first_name,
+        planned_quantity=Decimal("40.000"), unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("40.00"),
+    )
+    second_plan = LicenseItemPlan.objects.create(
+        license=license_obj, import_item=item, item_name=second_name,
+        planned_quantity=Decimal("60.000"), unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("60.00"),
+    )
+    allotment = AllotmentModel.objects.create(
+        company=license_obj.exporter, required_quantity=Decimal("100.000"),
+    )
+    first_debit = AllotmentItems.objects.create(
+        allotment=allotment, item=item, plan_line=first_plan,
+        allocation_basis="PLAN", search_mode="PLAN", qty=Decimal("10.000"), cif_fc=Decimal("10.00"),
+    )
+    second_debit = AllotmentItems.objects.create(
+        allotment=allotment, item=item, plan_line=second_plan,
+        allocation_basis="PLAN", search_mode="PLAN", qty=Decimal("20.000"), cif_fc=Decimal("20.00"),
+    )
+
+    response = _bulk(license_manager_client, license_obj, (item, "10.000", "1.00", "10.00"))
+
+    assert response.status_code == 200, response.data
+    first_plan.refresh_from_db()
+    second_plan.refresh_from_db()
+    first_debit.refresh_from_db()
+    second_debit.refresh_from_db()
+    assert not first_plan.is_active
+    assert not second_plan.is_active
+    assert first_debit.plan_line_id == first_plan.id
+    assert second_debit.plan_line_id == second_plan.id
+    active_plans = LicenseItemPlan.objects.filter(license=license_obj, is_active=True)
+    assert active_plans.count() == 1
+    assert active_plans.get().planned_quantity == Decimal("10.000")
+
+    list_response = license_manager_client.get(PLANS_URL, {"license": license_obj.id})
+    listed = list_response.data.get("results", list_response.data)
+    assert list_response.status_code == 200
+    assert [row["id"] for row in listed] == [active_plans.get().id]
 
 
 @pytest.mark.django_db

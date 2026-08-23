@@ -116,7 +116,11 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
         return LicenseDetailsModel.objects.all()
 
     def get_queryset(self):
-        return super().get_queryset()
+        return super().get_queryset().filter(
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        )
 
     def create(self, request, *args, **kwargs):
         """Direct plan line creation is disabled. Use /planning page instead."""

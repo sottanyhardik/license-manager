@@ -247,7 +247,30 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
         return baseline_cache[item_id]
 
     if delete_existing:
-        LicenseItemPlan.objects.filter(license=license_obj).delete()
+        # A PLAN-mode allotment holds the exact plan-line FK as its immutable
+        # debit identity. Deleting a used plan makes Django set that FK to
+        # NULL. If two split lines were used by the same allotment and import
+        # item, those SET NULL updates violate the partial uniqueness rule for
+        # legacy/unmapped allocations.
+        #
+        # Retain referenced lines as inactive historical versions. They remain
+        # available for audit and ledger links, while current-plan calculations
+        # exclude them. Unreferenced rows retain the previous delete behaviour.
+        from apps.allotment.models import AllotmentItems
+
+        existing_plans = LicenseItemPlan.objects.select_for_update().filter(
+            license=license_obj,
+        )
+        referenced_plan_ids = list(
+            AllotmentItems.objects.filter(plan_line_id__in=existing_plans.values("pk"))
+            .values_list("plan_line_id", flat=True)
+            .distinct()
+        )
+        if referenced_plan_ids:
+            existing_plans.filter(pk__in=referenced_plan_ids).update(is_active=False)
+            existing_plans.exclude(pk__in=referenced_plan_ids).delete()
+        else:
+            existing_plans.delete()
 
     created = []
     for ln in lines:

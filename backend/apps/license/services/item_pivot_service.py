@@ -79,7 +79,12 @@ class ItemPivotService:
         licenses = list(licenses)
         ids = [license_obj.id for license_obj in licenses]
         plans = list(
-            LicenseItemPlan.objects.filter(license_id__in=ids)
+            LicenseItemPlan.objects.filter(
+                license_id__in=ids,
+                is_active=True,
+                is_deleted=False,
+                is_cancelled=False,
+            )
             .select_related("item_name", "import_item", "planning_rule")
             .order_by("planning_rule_priority", "id")
         )

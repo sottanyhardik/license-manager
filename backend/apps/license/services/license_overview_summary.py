@@ -166,7 +166,12 @@ def _total_planned_cif(license_obj) -> Decimal:
     """
     from apps.license.models import LicenseItemPlan
 
-    result = LicenseItemPlan.objects.filter(license=license_obj).aggregate(
+    result = LicenseItemPlan.objects.filter(
+        license=license_obj,
+        is_active=True,
+        is_deleted=False,
+        is_cancelled=False,
+    ).aggregate(
         total=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField())
     )
     return result["total"]

@@ -110,6 +110,7 @@ class PlannedReportView(APIView):
 
         plans = (
             LicenseItemPlan.objects
+            .filter(is_active=True, is_deleted=False, is_cancelled=False)
             .select_related(
                 'item_name',
                 'import_item',

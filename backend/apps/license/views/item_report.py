@@ -316,7 +316,12 @@ class ItemReportView(APIView):
         # Fetch all LicenseItemPlan records for these licenses
         plans = (
             LicenseItemPlan.objects
-            .filter(license_id__in=_license_ids)
+            .filter(
+                license_id__in=_license_ids,
+                is_active=True,
+                is_deleted=False,
+                is_cancelled=False,
+            )
             .select_related('import_item', 'item_name')
         )
 

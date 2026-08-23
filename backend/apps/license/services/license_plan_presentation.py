@@ -324,7 +324,12 @@ class LicensePlanPresentationService:
         # Fetch all plans for all licenses
         all_plans = (
             LicenseItemPlan.objects
-            .filter(license_id__in=license_ids)
+            .filter(
+                license_id__in=license_ids,
+                is_active=True,
+                is_deleted=False,
+                is_cancelled=False,
+            )
             .select_related('item_name')
         )
 
@@ -482,7 +487,12 @@ class LicensePlanPresentationService:
 
         plans_qs = (
             LicenseItemPlan.objects
-            .filter(license_id=license_id)
+            .filter(
+                license_id=license_id,
+                is_active=True,
+                is_deleted=False,
+                is_cancelled=False,
+            )
             .select_related('item_name')
         )
 

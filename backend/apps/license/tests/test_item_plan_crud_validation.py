@@ -14,7 +14,7 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.core.models import CompanyModel
+from apps.core.models import CompanyModel, ItemNameModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 
 User = get_user_model()
@@ -80,6 +80,63 @@ def test_bulk_exact_capacity_and_cif_persists_canonical_pair(license_manager_cli
     assert row.planned_quantity == Decimal("100.000")
     # The canonical service derives CIF from qty × price; caller-supplied CIF is not trusted.
     assert row.planned_cif_fc == Decimal("1000.00")
+
+
+@pytest.mark.django_db
+def test_bulk_upsert_accepts_the_item_pivot_manual_plan_payload(license_manager_client, planned_license):
+    """Regression for the manual Item Pivot save payload shape.
+
+    ``planned_cif_fc`` is display data; the canonical writer derives the
+    persisted amount from quantity × unit price, while retaining the supplied
+    valid item-name label.
+    """
+    license_obj, item = planned_license
+    item.quantity = Decimal("6122.740")
+    item.available_quantity = Decimal("6122.000")
+    item.save(update_fields=["quantity", "available_quantity"])
+    LicenseExportItemModel.objects.filter(license=license_obj).update(cif_fc=Decimal("24961.44"))
+    item_name = ItemNameModel.objects.create(name="Other confectionery ingredients")
+
+    response = license_manager_client.post(BULK_URL, {
+        "license": license_obj.id,
+        "lines": [{
+            "import_item": item.id,
+            "item_name": item_name.id,
+            "planned_quantity": 6122,
+            "unit_price": 2.7,
+            "planned_cif_fc": 16529.4,
+            "note": "",
+        }],
+    }, format="json")
+
+    assert response.status_code == 200, response.data
+    row = LicenseItemPlan.objects.get(license=license_obj)
+    assert row.item_name_id == item_name.id
+    assert row.planned_quantity == Decimal("6122.000")
+    assert row.unit_price == Decimal("2.70")
+    assert row.planned_cif_fc == Decimal("16529.40")
+
+
+@pytest.mark.django_db
+def test_bulk_upsert_returns_structured_400_for_unknown_item_name(license_manager_client, planned_license):
+    license_obj, item = planned_license
+
+    response = license_manager_client.post(BULK_URL, {
+        "license": license_obj.id,
+        "lines": [{
+            "import_item": item.id,
+            "item_name": 999999999,
+            "planned_quantity": 1,
+            "unit_price": 1,
+            "planned_cif_fc": 1,
+            "note": "",
+        }],
+    }, format="json")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "INVALID_INPUT"
+    assert response.data["details"]["item_name_ids"] == [999999999]
+    assert not LicenseItemPlan.objects.filter(license=license_obj).exists()
 
 
 @pytest.mark.django_db

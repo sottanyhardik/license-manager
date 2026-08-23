@@ -83,6 +83,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from django.db import transaction
 
 from apps.core.constants import DEC_0, DEC_000
+from apps.core.models import ItemNameModel
 from apps.core.utils.decimal_utils import to_decimal
 from apps.license.models import (
     LicenseDetailsModel,
@@ -302,6 +303,7 @@ class CanonicalPlanningService:
             CanonicalPlanningService._assert_items_belong_to_license(
                 normalized, items_by_id, license_obj,
             )
+            CanonicalPlanningService._assert_item_names_exist(normalized)
 
             # LIVE balance (Module 1). Never the cached balance_cif column.
             opening_balance = quantize_cif(license_obj.get_balance_cif or DEC_0)
@@ -962,8 +964,24 @@ class CanonicalPlanningService:
                 )
 
             item_name_id = raw.get("item_name_id", raw.get("item_name"))
-            if item_name_id in ("",):
+            if item_name_id in (None, ""):
                 item_name_id = None
+            else:
+                try:
+                    # A bad split-label id previously reached persistence as a
+                    # foreign-key error, turning a malformed client payload
+                    # into a 500 after the valid plan work had begun.
+                    item_name_id = int(item_name_id)
+                except (TypeError, ValueError):
+                    raise InvalidPlanInputError(
+                        f"items[{index}].item_name_id must be an integer or null, got {item_name_id!r}",
+                        index=index, import_item_id=item_id,
+                    )
+                if item_name_id <= 0:
+                    raise InvalidPlanInputError(
+                        f"items[{index}].item_name_id must be a positive integer or null, got {item_name_id!r}",
+                        index=index, import_item_id=item_id,
+                    )
 
             normalized.append({
                 "index": index,
@@ -1113,6 +1131,30 @@ class CanonicalPlanningService:
             foreign_items=foreign,
             missing_items=sorted(missing),
         )
+
+    @staticmethod
+    def _assert_item_names_exist(normalized) -> None:
+        """Reject stale split-label IDs before the plan replacement begins.
+
+        ``item_name`` is optional, but when supplied it must reference a real
+        master row.  Checking it before persistence keeps the API's normal
+        structured 400 contract instead of leaking a database IntegrityError.
+        """
+        requested_ids = {
+            row["item_name_id"] for row in normalized
+            if row["item_name_id"] is not None
+        }
+        if not requested_ids:
+            return
+        found_ids = set(
+            ItemNameModel.objects.filter(pk__in=requested_ids).values_list("pk", flat=True)
+        )
+        missing_ids = sorted(requested_ids - found_ids)
+        if missing_ids:
+            raise InvalidPlanInputError(
+                f"Unknown item_name id(s): {missing_ids}",
+                item_name_ids=missing_ids,
+            )
 
     @staticmethod
     def _is_already_planned(license_obj, opening_balance: Decimal) -> bool:

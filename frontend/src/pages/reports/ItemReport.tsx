@@ -124,8 +124,7 @@ export default function ItemReport() {
 
     return (
         <div className="min-h-screen bg-background">
-            {/* Tabler-style page header */}
-            <div className="page-header">
+            <div className="page-header sticky top-0 z-10 border-b border-border bg-background/95 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
                 <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
@@ -142,7 +141,7 @@ export default function ItemReport() {
                     </div>
                     <h1>Item Report</h1>
                     {reportData && (
-                        <div className="mt-1 flex items-center gap-1 text-[12.5px] text-muted-foreground">
+                        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                             <CalendarDays className="size-3.5" aria-hidden="true" />
                             {reportData.report_date}
                             <span className="mx-2 opacity-50">•</span>
@@ -208,12 +207,12 @@ export default function ItemReport() {
             )}
 
             {/* Report Table */}
-            <div className="row">
+            <div className="row mt-3">
                 <div className="col-span-full">
                     {loading && (
                         <Card>
-                            <CardContent className="flex flex-col items-center py-12 text-center">
-                                <Loader2 className="mb-3 size-10 animate-spin text-primary" />
+                            <CardContent className="flex flex-col items-center py-8 text-center">
+                                <Loader2 className="mb-2 size-8 animate-spin text-primary" />
                                 <h5 className="text-muted-foreground">Loading Item Report…</h5>
                                 <p className="text-muted-foreground text-sm">Please wait while we fetch the data</p>
                             </CardContent>
@@ -236,8 +235,8 @@ export default function ItemReport() {
                                 <Inbox className="size-4" aria-hidden="true" />
                                 <h5 className="mt-3 text-muted-foreground">No items found</h5>
                                 <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
-                                <div className="mt-3 text-left" style={{maxWidth: '600px', margin: '0 auto'}}>
-                                    <p className="text-sm text-muted-foreground mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
+                                <div className="mx-auto mt-3 max-w-[600px] text-left">
+                                    <p className="mb-2 text-sm text-muted-foreground"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
                                     <ul className="text-sm text-muted-foreground">
                                         <li>Setting License Status to "All"</li>
                                         <li>Lowering the Min Balance (CIF) to 100</li>

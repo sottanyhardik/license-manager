@@ -41,8 +41,9 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
     VULNERABILITY: Endpoint found licenses by ID without company scoping.
     User A could retrieve license ID 123 even if Company A never traded it.
 
-    FIX: Added LicenseTrade.exists() check before returning license.
-    Validates that user.company traded this license in either direction.
+    Ledger visibility is role based. Accounts migration 0004 deliberately
+    removed ``User.company``; these fixtures must not recreate that retired
+    relation.
     """
 
     def setUp(self):
@@ -69,12 +70,10 @@ class P0_IDORRetrieveEndpointTest(APITestCase):
         self.user_a = User.objects.create_user(
             username='user_a',
             password='pass123',
-            company=self.company_a,
         )
         self.user_b = User.objects.create_user(
             username='user_b',
             password='pass123',
-            company=self.company_b,
         )
         ledger_role, _ = Group.objects.get_or_create(name='LEDGER_MANAGER')
         self.user_a.groups.add(ledger_role)
@@ -199,7 +198,8 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
 
     VULNERABILITY: Same as retrieve() - no company scoping.
 
-    FIX: Added explicit LicenseTrade.exists() check before returning details.
+    Ledger detail access is role based; a company query parameter is a
+    reporting filter rather than an account ownership boundary.
     """
 
     def setUp(self):
@@ -215,10 +215,11 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
             name='Company B', iec='CB', pan='34CB5678L3Z9', gst_number='27CB6789D2Z1'
         )
 
-        self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
-        self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        self.user_a = User.objects.create_user(username='user_a', password='pass')
+        self.user_b = User.objects.create_user(username='user_b', password='pass')
         ledger_viewer, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
         self.user_a.groups.add(ledger_viewer)
+        self.user_b.groups.add(ledger_viewer)
 
         # Create a license
         self.license = LicenseDetailsModel.objects.create(
@@ -228,26 +229,24 @@ class P0_IDORLedgerDetailEndpointTest(APITestCase):
             port=self.port,
         )
 
-    def test_user_b_cannot_get_ledger_detail_for_company_a_license(self):
-        """P0 IDOR FIX: ledger_detail blocks access to untraded licenses"""
+    def test_role_authorized_user_can_get_ledger_detail(self):
+        """Role access intentionally does not depend on the retired company FK."""
         self.client.force_authenticate(user=self.user_b)
 
         response = self.client.get(f'/api/license-ledger/{self.license.id}/')
 
-        # Must be blocked
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_ledger_detail_validates_company_parameter(self):
-        """P0 FIX: Company parameter must match user's company"""
+    def test_ledger_detail_rejects_invalid_company_parameter(self):
+        """The public reporting filter remains type-safe."""
         self.client.force_authenticate(user=self.user_a)
 
         # Try to explicitly request company_b's data
         response = self.client.get(
-            f'/api/license-ledger/{self.license.id}/?buying_company_id={self.company_b.id}'
+            f'/api/license-ledger/{self.license.id}/?company=not-an-id'
         )
 
-        # Must be blocked - user_a cannot access company_b's data
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class P0_DataLeakageSummaryEndpointTest(APITestCase):
@@ -257,7 +256,7 @@ class P0_DataLeakageSummaryEndpointTest(APITestCase):
     VULNERABILITY: Passed raw request.query_params to service.
     Service could be exploited via company parameter to return other companies' data.
 
-    FIX: Forces company_id in params to user.company before calling service.
+    Company is a reporting filter, not an account field.
     """
 
     def setUp(self):
@@ -270,17 +269,20 @@ class P0_DataLeakageSummaryEndpointTest(APITestCase):
             name='Company B', iec='CB', pan='34CB5678L3Z9', gst_number='27CB6789D2Z1'
         )
 
-        self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
-        self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        self.user_a = User.objects.create_user(username='user_a', password='pass')
+        self.user_b = User.objects.create_user(username='user_b', password='pass')
+        role, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
+        self.user_a.groups.add(role)
+        self.user_b.groups.add(role)
 
-    def test_user_a_cannot_request_company_b_summary(self):
-        """P0 FIX: summary endpoint forces company_id to user's company"""
+    def test_role_authorized_user_can_request_company_summary(self):
+        """Company summaries are available to all ledger viewers."""
         self.client.force_authenticate(user=self.user_a)
 
         # Try to request company_b's summary
         response = self.client.get(f'/api/license-ledger/summary/?buying_company_id={self.company_b.id}')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class P0_DataLeakageSearchEndpointTest(APITestCase):
@@ -289,7 +291,7 @@ class P0_DataLeakageSearchEndpointTest(APITestCase):
 
     VULNERABILITY: Passed raw query_params to service without company scoping.
 
-    FIX: Forces company_id before calling search_licenses().
+    Company is a reporting filter, not an account field.
     """
 
     def setUp(self):
@@ -302,17 +304,20 @@ class P0_DataLeakageSearchEndpointTest(APITestCase):
             name='Company B', iec='CB', pan='34CB5678L3Z9', gst_number='27CB6789D2Z1'
         )
 
-        self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
-        self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        self.user_a = User.objects.create_user(username='user_a', password='pass')
+        self.user_b = User.objects.create_user(username='user_b', password='pass')
+        role, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
+        self.user_a.groups.add(role)
+        self.user_b.groups.add(role)
 
-    def test_user_a_cannot_request_company_b_search(self):
-        """P0 FIX: search forces company_id to user's company"""
+    def test_role_authorized_user_can_request_company_search(self):
+        """Company filters are available to all ledger viewers."""
         self.client.force_authenticate(user=self.user_a)
 
         # Try to search with company_b parameter
         response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_b.id}')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
@@ -322,7 +327,7 @@ class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
     VULNERABILITY: Queries all DFIA and Incentive licenses without company scoping.
     Direct database queries without LicenseTrade filter.
 
-    FIX: Queries LicenseTrade to get user's company's license IDs, filters DB queries.
+    The role-authorized collection still excludes licences without ledger trades.
     """
 
     def setUp(self):
@@ -338,8 +343,8 @@ class P0_DataLeakageAvailableForSaleEndpointTest(APITestCase):
             name='Company B', iec='CB', pan='34CB5678L3Z9', gst_number='27CB6789D2Z1'
         )
 
-        self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
-        self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        self.user_a = User.objects.create_user(username='user_a', password='pass')
+        self.user_b = User.objects.create_user(username='user_b', password='pass')
         ledger_viewer, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
         self.user_a.groups.add(ledger_viewer)
 
@@ -373,7 +378,7 @@ class P1_AggregationDataLeakageCompanyWiseTest(APITestCase):
     VULNERABILITY: Passed raw query_params to service.
     Could return aggregation data for all companies.
 
-    FIX: Forces company_id to user's company before calling service.
+    Company is a reporting filter, not an account field.
     """
 
     def setUp(self):
@@ -386,17 +391,20 @@ class P1_AggregationDataLeakageCompanyWiseTest(APITestCase):
             name='Company B', iec='CB', pan='34CB5678L3Z9', gst_number='27CB6789D2Z1'
         )
 
-        self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
-        self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        self.user_a = User.objects.create_user(username='user_a', password='pass')
+        self.user_b = User.objects.create_user(username='user_b', password='pass')
+        role, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
+        self.user_a.groups.add(role)
+        self.user_b.groups.add(role)
 
-    def test_user_a_cannot_request_company_b_wise_trades(self):
-        """P1 FIX: company_wise forces company_id to user's company"""
+    def test_role_authorized_user_can_request_company_wise_trades(self):
+        """Company filtering does not depend on the removed user relation."""
         self.client.force_authenticate(user=self.user_a)
 
         # Try to request company_b's aggregation
         response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_b.id}')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class P1_AggregationDataLeakageLicenseWiseTest(APITestCase):
@@ -405,7 +413,7 @@ class P1_AggregationDataLeakageLicenseWiseTest(APITestCase):
 
     VULNERABILITY: Same as company_wise.
 
-    FIX: Forces company_id to user's company before calling service.
+    Company is a reporting filter, not an account field.
     """
 
     def setUp(self):
@@ -418,17 +426,20 @@ class P1_AggregationDataLeakageLicenseWiseTest(APITestCase):
             name='Company B', iec='CB', pan='34CB5678L3Z9', gst_number='27CB6789D2Z1'
         )
 
-        self.user_a = User.objects.create_user(username='user_a', password='pass', company=self.company_a)
-        self.user_b = User.objects.create_user(username='user_b', password='pass', company=self.company_b)
+        self.user_a = User.objects.create_user(username='user_a', password='pass')
+        self.user_b = User.objects.create_user(username='user_b', password='pass')
+        role, _ = Group.objects.get_or_create(name='TRADE_VIEWER')
+        self.user_a.groups.add(role)
+        self.user_b.groups.add(role)
 
-    def test_user_a_cannot_request_company_b_license_wise_trades(self):
-        """P1 FIX: license_wise forces company_id to user's company"""
+    def test_role_authorized_user_can_request_company_license_wise_trades(self):
+        """Company filtering does not depend on the removed user relation."""
         self.client.force_authenticate(user=self.user_a)
 
         # Try to request company_b's license-wise aggregation
         response = self.client.get(f'/api/license-ledger/license-wise/?buying_company_id={self.company_b.id}')
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class SuperuserBypassTest(APITestCase):

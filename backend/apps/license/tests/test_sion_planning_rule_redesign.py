@@ -32,7 +32,7 @@ def redesign_setup():
     olive_item = ItemNameModel.objects.create(name="OLIVE_OIL", sion_norm_class=sion_e126, is_active=True)
 
     company = CompanyModel.objects.create(iec="REDESIGN01", name="Redesign Test")
-    user = get_user_model().objects.create_user(username="redesign-user", company=company)
+    user = get_user_model().objects.create_user(username="redesign-user")
     role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(role)
 

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, X, KeyRound } from "lucide-react";
+import { ArrowLeft, Check, X, KeyRound, ShieldCheck, UserRound } from "lucide-react";
 
 import { createUser, getAvailableRoles, getUser, resetPassword, updateUser } from "../../api/users";
 import { AuthContext } from "../../context/AuthContext";
@@ -143,22 +143,28 @@ export default function UserForm() {
     };
 
     return (
-        <div className="mx-auto max-w-3xl">
-            <div className="mb-5 flex items-center gap-3">
-                <Button variant="outline" size="sm" onClick={() => navigate("/admin/users")}>
+        <div className="mx-auto max-w-4xl pb-20">
+            <div className="mb-5 border-b border-border pb-4">
+                <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={() => navigate("/admin/users")}>
                     <ArrowLeft className="size-4" />
-                    Back
+                    Back to users
                 </Button>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                    {isEdit ? "Edit User" : "Create User"}
-                </h1>
+                <div className="flex items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
+                        <UserRound className="size-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-semibold tracking-tight text-foreground">{isEdit ? "Edit user access" : "Create user"}</h1>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">Manage account details, operational roles, and access flags.</p>
+                    </div>
+                </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 {/* Account details */}
                 <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Account Details</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-2">
+                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Account details</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2">
                         <div>
                             <Label className="mb-1.5 required" htmlFor="username">Username</Label>
                             <Input id="username" name="username" value={form.username} onChange={handleChange}
@@ -192,8 +198,8 @@ export default function UserForm() {
 
                 {/* Access flags */}
                 <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Access Flags</CardTitle></CardHeader>
-                    <CardContent className="flex flex-wrap gap-x-8 gap-y-3 pt-5">
+                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Access flags</CardTitle></CardHeader>
+                    <CardContent className="flex flex-wrap gap-x-8 gap-y-3 pt-4">
                         <label className="flex cursor-pointer items-center gap-2.5 text-sm">
                             <Switch checked={form.is_active} onCheckedChange={(c) => setFlag("is_active", c)} />
                             Active
@@ -213,8 +219,8 @@ export default function UserForm() {
 
                 {/* Roles */}
                 <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Roles</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-2 pt-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Roles</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 lg:grid-cols-3">
                         {availableRoles.map((code) => {
                             const checked = form.roles.includes(code);
                             return (
@@ -233,8 +239,8 @@ export default function UserForm() {
                     </CardContent>
                 </Card>
 
-                {/* Actions */}
-                <div className="flex gap-2">
+                <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 shadow-sm backdrop-blur sm:left-[var(--sidebar-width,0px)] sm:px-6">
+                  <div className="mx-auto flex max-w-4xl flex-wrap gap-2">
                     <Button type="submit" disabled={saving}>
                         <Check className="size-4" />
                         {saving ? "Saving…" : isEdit ? "Save Changes" : "Create User"}
@@ -249,6 +255,7 @@ export default function UserForm() {
                             Reset Password
                         </Button>
                     )}
+                  </div>
                 </div>
             </form>
 

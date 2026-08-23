@@ -62,7 +62,7 @@ def rule_world():
 
 
 def _client(company):
-    user = get_user_model().objects.create_user(username="rule-manager", company=company)
+    user = get_user_model().objects.create_user(username="rule-manager")
     role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(role)
     client = APIClient()
@@ -840,9 +840,9 @@ def test_concurrent_identical_plan_creates_one_stable_row(rule_world):
     )
 
 
-def test_rule_api_permissions_and_company_isolation(rule_world):
+def test_rule_api_permissions_and_role_authorized_cross_company_preview(rule_world):
     company, sion, _license_obj, _item, rule = rule_world
-    viewer = get_user_model().objects.create_user(username="rule-viewer", company=company)
+    viewer = get_user_model().objects.create_user(username="rule-viewer")
     viewer_group, _ = Group.objects.get_or_create(name="LICENSE_VIEWER")
     viewer.groups.add(viewer_group)
     viewer_client = APIClient()
@@ -869,7 +869,10 @@ def test_rule_api_permissions_and_company_isolation(rule_world):
         f"/api/sion-planning-rules/{rule.pk}/test/",
         {"license_ids": [foreign_license.pk]}, format="json",
     )
-    assert response.status_code == 403
+    # Accounts migration 0004 removed User.company. Planning permissions are
+    # role-based, so a LICENSE_MANAGER may preview a saved rule for any
+    # licence; company is not an authorization attribute.
+    assert response.status_code == 200
 
 
 def test_plan_sion_rejects_an_inactive_sion_with_structured_error(rule_world):

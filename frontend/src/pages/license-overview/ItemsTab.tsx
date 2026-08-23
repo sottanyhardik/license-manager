@@ -59,9 +59,9 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
     }
 
     return (
-        <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+        <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-lg border border-border/70 bg-card">
+            <table className="w-full min-w-[1120px] text-[13px]">
+                <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
                     <tr>
                         <SortableHeader label="Product Description" sortKey="description" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
                         <SortableHeader label="HSN Code" sortKey="hs_code" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
@@ -85,18 +85,18 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
                         </tr>
                     )}
                     {rows.map((row) => (
-                        <tr key={row.id} className="border-t border-border/60 hover:bg-muted/20">
-                            <td className="px-3 py-2">{row.description ?? "—"}</td>
-                            <td className="px-3 py-2">{row.hs_code ?? "—"}</td>
-                            <td className="px-3 py-2">{row.unit ?? "—"}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.total_qty)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.total_cif)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.debited_qty)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.debited_cif)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.allotted_qty)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.allotted_cif)}</td>
-                            <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtNum(row.balance_qty)}</td>
-                            <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtNum(row.balance_cif)}</td>
+                        <tr key={row.id} className="border-t border-border/60 hover:bg-muted/30">
+                            <td className="max-w-[280px] truncate px-3 py-1.5" title={row.description ?? ""}>{row.description ?? "—"}</td>
+                            <td className="px-3 py-1.5">{row.hs_code ?? "—"}</td>
+                            <td className="px-3 py-1.5">{row.unit ?? "—"}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.total_qty)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.total_cif)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.debited_qty)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.debited_cif)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_qty)}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_cif)}</td>
+                            <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.balance_qty)}</td>
+                            <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.balance_cif)}</td>
                         </tr>
                     ))}
                 </tbody>

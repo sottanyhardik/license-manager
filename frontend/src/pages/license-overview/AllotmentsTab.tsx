@@ -122,9 +122,9 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                     })}
                 </div>
             ) : (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                <div className="max-h-[calc(100vh-17rem)] overflow-auto rounded-lg border border-border/70 bg-card">
+                    <table className="w-full min-w-[800px] text-[13px]">
+                        <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
                             <tr>
                                 <SortableHeader label="Allotment Number" sortKey="allotment_number" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
                                 <SortableHeader label="Date" sortKey="date" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
@@ -137,14 +137,14 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                         </thead>
                         <tbody>
                             {rows.map((a) => (
-                                <tr key={a.allotment_number} className="border-t border-border/60 hover:bg-muted/20">
-                                    <td className="px-3 py-2 font-mono text-xs">{a.allotment_number}</td>
-                                    <td className="whitespace-nowrap px-3 py-2">{fmtDate(a.date)}</td>
-                                    <td className="px-3 py-2">{a.customer ?? "—"}</td>
-                                    <td className="px-3 py-2">{a.product ?? "—"}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums">{fmtNum(a.quantity)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums">{fmtNum(a.cif_fc)}</td>
-                                    <td className="px-3 py-2">
+                            <tr key={a.allotment_number} className="border-t border-border/60 hover:bg-muted/30">
+                                    <td className="px-3 py-1.5 font-mono text-xs">{a.allotment_number}</td>
+                                    <td className="whitespace-nowrap px-3 py-1.5">{fmtDate(a.date)}</td>
+                                    <td className="px-3 py-1.5">{a.customer ?? "—"}</td>
+                                    <td className="px-3 py-1.5">{a.product ?? "—"}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(a.quantity)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(a.cif_fc)}</td>
+                                    <td className="px-3 py-1.5">
                                         <Badge variant={overviewAllotmentStatusVariant(a.status)}>{a.status}</Badge>
                                     </td>
                                 </tr>
@@ -154,13 +154,13 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                 </div>
             )}
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-violet-50/60 px-4 py-2.5 ring-1 ring-violet-200/60 dark:bg-violet-500/10 dark:ring-violet-500/20">
-                <span className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-widest text-violet-700 dark:text-violet-400">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                <span className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-widest text-primary">
                     <Package className="size-3.5" /> Total Allotted
                 </span>
                 <div className="flex items-center gap-4">
-                    <span className="text-[11px] text-violet-700 dark:text-violet-400">Qty: <b>{fmtNum(totalQty)}</b></span>
-                    <span className="text-base font-bold tabular-nums text-violet-700 dark:text-violet-400">{fmtNum(totalCif)}</span>
+                    <span className="text-[11px] text-primary">Qty: <b>{fmtNum(totalQty)}</b></span>
+                    <span className="text-base font-bold tabular-nums text-primary">{fmtNum(totalCif)}</span>
                 </div>
             </div>
         </div>

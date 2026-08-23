@@ -16,7 +16,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def manager_client():
     company = CompanyModel.objects.create(iec="AUTOPLAN01", name="Auto Plan Test")
-    user = get_user_model().objects.create_user(username="auto-plan-user", company=company)
+    user = get_user_model().objects.create_user(username="auto-plan-user")
     role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(role)
     client = APIClient()
@@ -59,18 +59,19 @@ def test_repeated_auto_plan_clicks_coalesce(manager_client):
     assert LicenseReplanRequest.objects.filter(license=license_obj).count() == 1
 
 
-def test_auto_plan_rejects_missing_or_foreign_license(manager_client):
+def test_auto_plan_rejects_missing_license_and_accepts_role_authorized_license(manager_client):
     client, company = manager_client
     assert client.post("/api/licenses/999999/auto-plan/", format="json").status_code == 404
     foreign = CompanyModel.objects.create(iec="AUTOPLAN02", name="Foreign")
     foreign_license = make_license(foreign, "TEST-AUTO-FOREIGN")
-    assert client.post(f"/api/licenses/{foreign_license.pk}/auto-plan/", format="json").status_code == 404
+    with patch("apps.license.tasks.dispatch_replan_requests.delay"):
+        assert client.post(f"/api/licenses/{foreign_license.pk}/auto-plan/", format="json").status_code == 202
 
 
 def test_auto_plan_requires_license_manager_role(manager_client):
     _, company = manager_client
     license_obj = make_license(company, "TEST-AUTO-PERMISSION")
-    user = get_user_model().objects.create_user(username="auto-plan-viewer", company=company)
+    user = get_user_model().objects.create_user(username="auto-plan-viewer")
     client = APIClient()
     client.force_authenticate(user)
     assert client.post(f"/api/licenses/{license_obj.pk}/auto-plan/", format="json").status_code == 403

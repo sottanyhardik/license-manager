@@ -79,17 +79,17 @@ export default function SionNormCard({ licenseId, isActive }: SionNormCardProps)
     };
 
     return (
-        <Card>
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
-                <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
-                        <Layers3 className="size-5" aria-hidden="true" />
+        <Card className="border-border/70 shadow-sm">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/15 bg-primary/10 text-primary">
+                        <Layers3 className="size-4" aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                        <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                        <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground">
                             SION Norm
                         </div>
-                        <div className="mt-0.5 text-lg font-semibold text-foreground">
+                        <div className="mt-0.5 text-base font-semibold text-foreground">
                             {isLoading ? (
                                 <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
                             ) : (
@@ -112,7 +112,7 @@ export default function SionNormCard({ licenseId, isActive }: SionNormCardProps)
 
                 {currentNorm && (
                     <div className="min-w-0 text-right">
-                        <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                        <div className="text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground">
                             Description
                         </div>
                         <div className="mt-0.5 truncate text-sm font-medium text-foreground">

@@ -217,6 +217,7 @@ export default function MasterForm({
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
+    const isLicenseForm = entityName === "licenses";
 
     // ---------- Hook 3: form submit ----------
     const { handleSubmit } = useMasterFormSubmit({
@@ -662,9 +663,9 @@ export default function MasterForm({
     }
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className={cn("min-h-screen bg-background", isLicenseForm && "license-form-workspace")}>
             {/* Compact Header */}
-            <div className="flex justify-between items-center mb-4">
+            <div className={cn("mb-4 flex items-center justify-between", isLicenseForm && "sticky top-0 z-20 -mx-1 border-b border-border/70 bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90")}>
                 <div>
                     <h4 className="mb-0 font-bold text-foreground">
                         <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
@@ -706,8 +707,8 @@ export default function MasterForm({
                 </Button>
             </div>
 
-            <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-                <div className="border-b border-border/70 px-6 py-4">
+            <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", isLicenseForm && "border-border/70 shadow-none")}>
+                <div className={cn("border-b border-border/70 px-6 py-4", isLicenseForm && "px-4 py-3 sm:px-5")}>
                     <div className="flex items-center justify-between">
                         <h6 className="mb-0 font-semibold">
                             <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
@@ -718,7 +719,7 @@ export default function MasterForm({
                         )}
                     </div>
                 </div>
-                <div className="p-6">
+                <div className={cn("p-6", isLicenseForm && "p-4 sm:p-5")}>
                     {error && (
                         <Alert variant="destructive" className="mb-4">
                             <TriangleAlert className="size-4" />
@@ -874,25 +875,40 @@ export default function MasterForm({
                                             const visibleFields = section.fields.filter((f: string) => activeFields.includes(f));
                                             if (visibleFields.length === 0) return null;
                                             return (
-                                                <div key={section.title} className="rounded-md bg-muted/60 px-5 py-4" style={{ borderLeft: `3px solid ${section.color}` }}>
-                                                    <div className="mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]" style={{ color: section.color }}>
+                                                <section
+                                                    key={section.title}
+                                                    aria-labelledby={`section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
+                                                    className={cn(
+                                                        "rounded-md bg-muted/60 px-5 py-4",
+                                                        isLicenseForm && "rounded-lg border border-border/60 bg-card px-3 py-3 shadow-none sm:px-4"
+                                                    )}
+                                                    style={isLicenseForm ? undefined : { borderLeft: `3px solid ${section.color}` }}
+                                                >
+                                                    <div
+                                                        id={`section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
+                                                        className={cn(
+                                                            "mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]",
+                                                            isLicenseForm && "mb-2.5 text-primary"
+                                                        )}
+                                                        style={isLicenseForm ? undefined : { color: section.color }}
+                                                    >
                                                         <span className="inline-flex items-center gap-1.5"><FileText className="size-3.5 opacity-70" aria-hidden="true" />{section.title}</span>
                                                     </div>
-                                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                                                    <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3", isLicenseForm && "gap-x-3 gap-y-2.5")}>
                                                         {visibleFields.map((f: string) => renderOneField(f, section.cols?.[f]))}
                                                     </div>
-                                                </div>
+                                                </section>
                                             );
                                         })}
                                         {remainingFields.length > 0 && (
-                                            <div className="rounded-md border-l-[3px] border-l-border bg-muted/60 px-5 py-4">
+                                            <section className={cn("rounded-md border-l-[3px] border-l-border bg-muted/60 px-5 py-4", isLicenseForm && "rounded-lg border border-border/60 bg-card px-3 py-3 sm:px-4")}>
                                                 <div className="mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                                                     <MoreHorizontal className="size-4" aria-hidden="true" /> Other Fields
                                                 </div>
                                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                                                     {remainingFields.map((f: string) => renderOneField(f))}
                                                 </div>
-                                            </div>
+                                            </section>
                                         )}
                                     </div>
                                 );
@@ -1011,7 +1027,7 @@ export default function MasterForm({
                         )}
 
                         {/* Action Buttons */}
-                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4">
+                        <div className={cn("mt-4 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(15,23,42,0.06)] backdrop-blur sm:-mx-5 sm:px-5")}>
                             <Button
                                 type="submit"
                                 size="lg"

@@ -90,26 +90,26 @@ export default function StatCard({ icon: Icon, title, value, helper, accent, hig
     return (
         <div
             className={cn(
-                "flex flex-col gap-3 rounded-xl border border-border/60 p-4 ring-1 transition-shadow",
+                "flex min-w-0 flex-col gap-1.5 rounded-lg border border-border/60 p-3 ring-1 transition-shadow",
                 styles.tint,
                 highlighted ? cn(styles.ringHighlighted, "shadow-sm") : styles.ring
             )}
         >
             <div className="flex items-center gap-2">
-                <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", styles.iconChip, styles.icon)}>
-                    <Icon className="size-4" aria-hidden="true" />
+                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", styles.iconChip, styles.icon)}>
+                    <Icon className="size-3.5" aria-hidden="true" />
                 </span>
-                <span className="truncate text-sm font-medium text-muted-foreground">{title}</span>
+                <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
             </div>
             <div
                 className={cn(
                     "tabular-nums font-bold text-foreground",
-                    highlighted ? "text-[2.75rem] leading-none" : "text-4xl leading-none"
+                    highlighted ? "text-2xl leading-none" : "text-xl leading-none"
                 )}
             >
                 {value}
             </div>
-            {helper && <div className="text-xs text-muted-foreground">{helper}</div>}
+            {helper && <div className="truncate text-[11px] text-muted-foreground" title={helper}>{helper}</div>}
         </div>
     );
 }

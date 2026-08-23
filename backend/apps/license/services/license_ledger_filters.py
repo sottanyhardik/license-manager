@@ -76,10 +76,16 @@ class LicenseLedgerFilters:
             value = params.get(name, default)
             return str(value).strip() if value is not None else default
 
+        company_value = text("buying_company_id")
         try:
-            company_id = int(text("buying_company_id")) if text("buying_company_id") else None
+            company_id = int(company_value) if company_value else None
         except ValueError:
-            company_id = None
+            # A malformed company filter must never silently become an
+            # unfiltered ledger request.  Besides being surprising to users,
+            # that fallback can broaden a reporting result unexpectedly.
+            raise ValidationError({
+                "buying_company_id": "Buying company must be a valid numeric ID."
+            })
         try:
             min_balance = Decimal(text("min_balance")) if text("min_balance") else None
             if min_balance is not None and (not min_balance.is_finite() or min_balance < 0):

@@ -101,10 +101,10 @@ def _render_license_list(sheet, canonical_data: dict) -> None:
 
 def _render_detail(sheet, licenses: list[dict]) -> None:
     headers = (
-        "Company", "SION", "License Number", "Date", "Expiry Date", "Particulars", "Invoice Number", "Type", "Items",
+        "Company", "SION", "License Number", "Date", "Particulars", "Invoice Number", "Type", "Items",
         "Credit ($)", "Debit ($)", "Purchase (₹)", "Sale (₹)", "Balance ($)", "P/L (₹)",
     )
-    sheet.merge_cells("A1:O1")
+    sheet.merge_cells("A1:N1")
     sheet["A1"] = "FINANCIAL TRADE LEDGER — INDIVIDUAL LICENSES"
     _style_title(sheet["A1"])
     sheet.append(headers)
@@ -112,7 +112,12 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
 
     for data in licenses:
         projection = data.get("individual_ledger_projection") or {}
-        transactions = list(projection.get("transaction_rows") or [])
+        # ``individual_ledger_projection`` is an optional, already-materialised
+        # canonical view.  Older/detail DTOs expose the equally canonical
+        # ``display_transactions`` instead.  The exporter must retain that
+        # established contract rather than rendering an empty ledger or
+        # deriving new amounts itself.
+        transactions = list(projection.get("transaction_rows") or data.get("display_transactions") or [])
         companies = data.get("license_wise_companies") or []
         company_names = {company.get("company_id"): company.get("company_name") for company in companies}
         for transaction in transactions:
@@ -121,7 +126,7 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
             sheet.append([
                 _display(company_names.get(transaction.get("company_id")) or transaction.get("company_name")),
                 _display(data.get("sion_norms")), _display(data.get("license_number")),
-                transaction.get("date"), data.get("expiry_date"), _display(transaction.get("party_name")),
+                transaction.get("date"), _display(transaction.get("party_name")),
                 _display(document.get("invoice_number")), _display(transaction.get("type")),
                 _display(", ".join(transaction.get("item_names") or [])),
                 transaction.get("purchase_amount"), transaction.get("sale_amount"),
@@ -129,22 +134,25 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
                 None, transaction.get("profit_loss_inr"),
             ])
             if document.get("document_exists") and document.get("secure_url"):
-                invoice_cell = sheet.cell(row, 7)
+                invoice_cell = sheet.cell(row, 6)
                 invoice_cell.hyperlink = document["secure_url"]
                 invoice_cell.style = "Hyperlink"
                 invoice_cell.comment = openpyxl.comments.Comment(
                     "SIGNED" if document.get("signed") else "UNSIGNED", "License Manager",
                 )
             elif document.get("status") == "COPY_UNAVAILABLE":
-                sheet.cell(row, 7).comment = openpyxl.comments.Comment("Copy unavailable", "License Manager")
+                sheet.cell(row, 6).comment = openpyxl.comments.Comment("Copy unavailable", "License Manager")
             _format_flat_detail_row(sheet, row)
         row = sheet.max_row + 1
         sheet.append([
             None, _display(data.get("sion_norms")), _display(data.get("license_number")),
-            None, None, "LICENSE TOTAL", None, None, None,
-            projection.get("total_credit_fc"), projection.get("total_debit_fc"),
-            projection.get("total_purchase_inr"), projection.get("total_sale_inr"),
-            projection.get("closing_balance_fc"), projection.get("profit_loss_inr"),
+            None, "LICENSE TOTAL", None, None, None,
+            projection.get("total_credit_fc", data.get("summary", {}).get("total_purchase")),
+            projection.get("total_debit_fc", data.get("summary", {}).get("total_sale")),
+            projection.get("total_purchase_inr", data.get("summary", {}).get("total_purchase_bill_inr")),
+            projection.get("total_sale_inr", data.get("summary", {}).get("total_sale_bill_inr")),
+            projection.get("closing_balance_fc", data.get("summary", {}).get("current_balance")),
+            projection.get("profit_loss_inr", data.get("summary", {}).get("total_profit_loss")),
         ])
         for cell in sheet[row]:
             cell.font = Font(bold=True, color=NAVY)
@@ -152,25 +160,25 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
         _format_flat_detail_row(sheet, row)
 
     sheet.freeze_panes = "A3"
-    sheet.auto_filter.ref = f"A2:O{max(sheet.max_row, 2)}"
+    sheet.auto_filter.ref = f"A2:N{max(sheet.max_row, 2)}"
     sheet.print_title_rows = "1:2"
-    sheet.print_area = f"A1:O{max(sheet.max_row, 1)}"
+    sheet.print_area = f"A1:N{max(sheet.max_row, 1)}"
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.page_setup.fitToHeight = 0
     sheet.oddFooter.left.text = "Financial Trade Ledger"
     sheet.oddFooter.center.text = "Page &P of &N"
-    _set_widths(sheet, (28, 18, 22, 15, 15, 31, 24, 20, 34, 17, 17, 19, 19, 18, 19))
+    _set_widths(sheet, (28, 18, 22, 15, 31, 24, 20, 34, 17, 17, 19, 19, 18, 19))
 
 
 def _format_flat_detail_row(sheet, row: int) -> None:
-    for column in (4, 5):
+    for column in (4,):
         if isinstance(sheet.cell(row, column).value, (date, datetime)):
             sheet.cell(row, column).number_format = DATE_FORMAT
-    for column in (10, 11, 14):
+    for column in (9, 10, 13):
         sheet.cell(row, column).number_format = USD_FORMAT
-    for column in (12, 13, 15):
+    for column in (11, 12, 14):
         sheet.cell(row, column).number_format = INR_FORMAT
     for cell in sheet[row]:
         cell.alignment = Alignment(vertical="top", wrap_text=True)

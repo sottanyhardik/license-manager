@@ -62,10 +62,10 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
     }
 
     return (
-        <div className="space-y-5 p-3" data-testid="transaction-ledger">
+        <div className="space-y-3 p-2 sm:p-3" data-testid="transaction-ledger">
             {licenses.map((license) => (
                 <section key={license.license_id} className="overflow-hidden rounded-md border border-border" aria-label={`Transactions for license ${license.license_number}`}>
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 bg-primary px-4 py-2.5 text-primary-foreground">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-primary px-3 py-2 text-primary-foreground">
                         <span className="font-bold">License {license.license_number}</span>
                         <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
                         <span className="text-xs text-primary-foreground/80">License date: {license.license_date}</span>
@@ -77,7 +77,7 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[1200px] border-collapse text-xs">
-                            <thead>
+                            <thead className="sticky top-0 z-10">
                                 <tr className="border-b bg-muted/70 text-left text-muted-foreground">
                                     <th className="px-3 py-2 font-semibold">Company</th><th className="px-3 py-2 font-semibold">SION</th>
                                     <th className="px-3 py-2 font-semibold">Date</th><th className="px-3 py-2 font-semibold">Counterparty</th>
@@ -130,13 +130,13 @@ function LicenseWiseLedger({
 
     if (company_groups.length > 0) {
         return (
-            <div className="space-y-5 p-3" data-testid="company-sion-ledger">
+        <div className="space-y-3 p-2 sm:p-3" data-testid="company-sion-ledger">
                 {company_groups.map((company) => (
                     <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-md border border-border">
-                        <h2 className="flex items-center gap-2 bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
+                        <h2 className="flex items-center gap-2 bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">
                             <Building2 className="size-4" aria-hidden="true" />{company.company_name}
                         </h2>
-                        <div className="space-y-4 p-3">
+                        <div className="space-y-3 p-2 sm:p-3">
                             {company.sion_groups.map((sion) => (
                                 <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded border border-border">
                                     <div className="flex flex-wrap items-center gap-x-5 gap-y-1 bg-muted px-3 py-2">
@@ -465,8 +465,8 @@ export default function LicenseLedger() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-4 p-3">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                <CardContent className="space-y-3 p-3">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
                         <div className="lg:col-span-2">
                             <label id="ledger-company-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Company Filter</label>
                             <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id"
@@ -511,7 +511,7 @@ export default function LicenseLedger() {
                         <p className="mt-1 text-[11px] text-muted-foreground">Hides the listed licenses; spaces and duplicate numbers are ignored.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
                         <div>
                             <label htmlFor="ledger-license-type" className="mb-1.5 block text-xs font-semibold text-muted-foreground">License Type</label>
                             <Select value={filters.licenseType} onValueChange={(value) => updateFilter('licenseType', value)}>
@@ -649,7 +649,7 @@ export default function LicenseLedger() {
                             <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
                         </div>
                     ) : companyWiseData ? (
-                        <TransactionLedger
+                        <LicenseWiseLedger
                             data={companyWiseData}
                             navigate={navigate}
                         />

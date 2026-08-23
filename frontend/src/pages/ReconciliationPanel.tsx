@@ -124,7 +124,7 @@ export default function ReconciliationPanel() {
     const val = (key: string) => (summary ? pick(summary as Record<string, unknown>, key) : null);
 
     return (
-        <div className="reconciliation-page space-y-1">
+        <div className="reconciliation-page space-y-3">
             <PageHeader
                 pretitle="Operations"
                 title="BOE / Invoice Reconciliation"
@@ -139,7 +139,7 @@ export default function ReconciliationPanel() {
                 }
             />
 
-            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
                 <StatCard label="Total BOE" value={val("total_boe") as ReactNode} icon={ReceiptText} tone="primary" loading={summaryLoading} />
                 <StatCard label="Total Import Invoices" value={val("total_import_invoices") as ReactNode} icon={FileText} tone="info" loading={summaryLoading} />
                 <StatCard label="Matched" value={val("matched") as ReactNode} icon={CheckCircle2} tone="success" loading={summaryLoading} />
@@ -149,10 +149,11 @@ export default function ReconciliationPanel() {
                 <StatCard label="CIF Difference" value={val("cif_difference") as ReactNode} icon={IndianRupee} tone="danger" loading={summaryLoading} onClick={() => setActiveTab("cif-comparison")} />
             </div>
 
-            <Card className="overflow-hidden border-border/80 shadow-md shadow-primary/5">
-                <CardContent className="pt-4">
+            <Card className="overflow-hidden border-border/80 shadow-sm shadow-primary/5">
+                <CardContent className="p-2 sm:p-3">
                     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-                        <TabsList className="flex h-auto flex-wrap justify-start gap-1">
+                        <div className="overflow-x-auto pb-1">
+                        <TabsList className="flex h-9 min-w-max justify-start gap-1" aria-label="Reconciliation work queues">
                             <TabsTrigger value="missing-boe">Missing BOE</TabsTrigger>
                             <TabsTrigger value="missing-invoice">Missing Invoice</TabsTrigger>
                             <TabsTrigger value="duplicate-debits">Duplicate Debits</TabsTrigger>
@@ -162,29 +163,30 @@ export default function ReconciliationPanel() {
                             <TabsTrigger value="multi-boe">Multiple BOEs</TabsTrigger>
                             <TabsTrigger value="multi-invoice">Multiple Invoices</TabsTrigger>
                         </TabsList>
+                        </div>
 
-                        <TabsContent value="missing-boe" className="mt-3">
+                        <TabsContent value="missing-boe" className="mt-2">
                             <MissingBoeTab />
                         </TabsContent>
-                        <TabsContent value="missing-invoice" className="mt-3">
+                        <TabsContent value="missing-invoice" className="mt-2">
                             <MissingInvoiceTab />
                         </TabsContent>
-                        <TabsContent value="duplicate-debits" className="mt-3">
+                        <TabsContent value="duplicate-debits" className="mt-2">
                             <DuplicateDebitsTab />
                         </TabsContent>
-                        <TabsContent value="duplicate-boes" className="mt-3">
+                        <TabsContent value="duplicate-boes" className="mt-2">
                             <DuplicateBoesTab confirmDangerousAction={confirmDangerousAction} />
                         </TabsContent>
-                        <TabsContent value="cif-comparison" className="mt-3">
+                        <TabsContent value="cif-comparison" className="mt-2">
                             <ComparisonTab kind="cif" />
                         </TabsContent>
-                        <TabsContent value="qty-comparison" className="mt-3">
+                        <TabsContent value="qty-comparison" className="mt-2">
                             <ComparisonTab kind="qty" />
                         </TabsContent>
-                        <TabsContent value="multi-boe" className="mt-3">
+                        <TabsContent value="multi-boe" className="mt-2">
                             <MultiLinkTab kind="boe" />
                         </TabsContent>
-                        <TabsContent value="multi-invoice" className="mt-3">
+                        <TabsContent value="multi-invoice" className="mt-2">
                             <MultiLinkTab kind="invoice" />
                         </TabsContent>
                     </Tabs>

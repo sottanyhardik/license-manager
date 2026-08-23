@@ -132,17 +132,17 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                         onPurchaseStatusChange={handlePurchaseStatusChange}
                     />
 
-                    <div className="mt-8">
+                    <div className="mt-3">
                         <SionNormCard licenseId={licenseId} isActive={isActive} />
                     </div>
 
-                    <div className="mt-8">
+                    <div className="mt-3">
                         <LicenseMetricsGrid summary={summary.summary} />
                     </div>
                 </>
             )}
 
-            <div className="mt-10 space-y-5">
+            <div className="mt-5 space-y-3">
                 {/* `!ledgerQuery.data` guard: once the ledger has loaded once,
                     a later invalidateQueries()-triggered refetch (e.g. after a
                     hide/restore BOE action) must never swap this spinner back
@@ -180,11 +180,11 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                         )}
 
                         {showFinancialSections ? (
-                            <Card>
-                                <CardHeader>
+                            <Card className="border-border/70 shadow-sm">
+                                <CardHeader className="px-4 py-3">
                                     <CardTitle>Financial Ledger</CardTitle>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="px-4 pb-4">
                                     <FinancialLedgerTable rows={ledgerQuery.data.financial_ledger.rows} />
                                 </CardContent>
                             </Card>
@@ -192,11 +192,11 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                             <NoTradeActivityBanner />
                         )}
 
-                        <Card>
-                            <CardHeader>
+                        <Card className="border-border/70 shadow-sm">
+                            <CardHeader className="px-4 py-3">
                                 <CardTitle>Customs Ledger — Running Balance</CardTitle>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="px-4 pb-4">
                                 <CustomsLedgerTable
                                     rows={ledgerQuery.data.customs_ledger.rows}
                                     summary={ledgerQuery.data.customs_ledger.summary}
@@ -207,31 +207,31 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                             </CardContent>
                         </Card>
 
-                        <Card>
-                            <CardHeader>
+                        <Card className="border-border/70 shadow-sm">
+                            <CardHeader className="px-4 py-3">
                                 <CardTitle>Customs Ledger — Item Detail</CardTitle>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="px-4 pb-4">
                                 <CustomsLedgerSection licenseId={licenseId ?? ""} />
                             </CardContent>
                         </Card>
 
                         {showFinancialSections && (
                             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                                <Card>
-                                    <CardHeader>
+                                <Card className="border-border/70 shadow-sm">
+                                    <CardHeader className="px-4 py-3">
                                         <CardTitle>Financial Summary</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
+                                    <CardContent className="px-4 pb-4">
                                         <FinancialSummarySection summary={ledgerQuery.data.financial_ledger.summary} />
                                     </CardContent>
                                 </Card>
 
-                                <Card>
-                                    <CardHeader>
+                                <Card className="border-border/70 shadow-sm">
+                                    <CardHeader className="px-4 py-3">
                                         <CardTitle>Final Reconciliation</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
+                                    <CardContent className="px-4 pb-4">
                                         <FinalReconciliationSection reconciliation={ledgerQuery.data.reconciliation} />
                                     </CardContent>
                                 </Card>

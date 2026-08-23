@@ -107,8 +107,9 @@ export default function LicenseOverviewPage() {
     };
 
     return (
-        <div className="license-overview-page space-y-1">
+        <div className="license-overview-page mx-auto max-w-[1600px] space-y-3">
             <PageHeader
+                className="mb-0 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm sm:px-5"
                 pretitle="Licence"
                 title={`License Overview — ${summary?.license_number ?? id}`}
                 description={summary?.importer ?? undefined}
@@ -134,13 +135,13 @@ export default function LicenseOverviewPage() {
             {id && <ReplanStatus licenseId={id} />}
 
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-                <TabsList className="mb-5 flex h-auto flex-wrap gap-1 rounded-xl border border-border/70 bg-card/80 p-1.5 shadow-sm">
+                <TabsList className="sticky top-2 z-10 mb-0 flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-border/70 bg-card/95 p-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90">
                     {TABS.map((t) => (
                         <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>
                     ))}
                 </TabsList>
 
-                <TabsContent value="overview">
+                <TabsContent value="overview" className="mt-3">
                     <OverviewTab
                         licenseId={id}
                         isActive={activeTab === "overview"}
@@ -148,13 +149,13 @@ export default function LicenseOverviewPage() {
                         onShowHiddenBoeChange={setShowHiddenBoe}
                     />
                 </TabsContent>
-                <TabsContent value="boes">
+                <TabsContent value="boes" className="mt-3">
                     <BoesTab licenseId={id} isActive={activeTab === "boes"} />
                 </TabsContent>
-                <TabsContent value="allotments">
+                <TabsContent value="allotments" className="mt-3">
                     <AllotmentsTab licenseId={id} isActive={activeTab === "allotments"} />
                 </TabsContent>
-                <TabsContent value="planning">
+                <TabsContent value="planning" className="mt-3">
                     {id && (
                         <PlanningEditor
                             licenseId={parseInt(id, 10)}
@@ -164,10 +165,10 @@ export default function LicenseOverviewPage() {
                         />
                     )}
                 </TabsContent>
-                <TabsContent value="items">
+                <TabsContent value="items" className="mt-3">
                     <ItemsTab licenseId={id} isActive={activeTab === "items"} />
                 </TabsContent>
-                <TabsContent value="invoice-ledger">
+                <TabsContent value="invoice-ledger" className="mt-3">
                     <InvoiceLedgerTab licenseId={id} isActive={activeTab === "invoice-ledger"} />
                 </TabsContent>
             </Tabs>

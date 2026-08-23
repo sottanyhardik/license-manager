@@ -38,7 +38,6 @@ def license_manager_client(db, tartaric_acid_license):
         username="item-plan-manager",
         email="item-plan-manager@example.com",
         password="RoleP@ssw0rd123",
-        company=license_obj.exporter,
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(group)

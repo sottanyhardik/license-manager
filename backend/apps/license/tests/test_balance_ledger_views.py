@@ -1490,7 +1490,6 @@ class HideBoeRestoreBoeViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
             username=f"hide-boe-{uuid.uuid4().hex[:8]}",
             email=f"{uuid.uuid4().hex[:8]}@example.com",
             password="testpass123!",
-            company=company,
         )
         for role in roles:
             group, _ = Group.objects.get_or_create(name=role)

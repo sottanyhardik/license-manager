@@ -369,7 +369,7 @@ const LedgerUpload = () => {
     const busy = uploading || asyncUploading;
 
     return (
-        <div className="ledger-upload-page space-y-1">
+        <div className="ledger-upload-page space-y-3">
             {/* Header */}
             <PageHeader
                 pretitle="Ledger"
@@ -388,16 +388,16 @@ const LedgerUpload = () => {
 
             <TaskStatusModal fileTasks={asyncFileTasks} show={showTaskModal} onHide={() => setShowTaskModal(false)} />
 
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
                 {/* Main upload */}
                 <div className="lg:col-span-2">
-                    <Card className="overflow-hidden border-border/80 shadow-md shadow-primary/5">
-                        <CardHeader className="border-b">
+                    <Card className="overflow-hidden border-border/80 shadow-sm">
+                        <CardHeader className="border-b py-3">
                             <CardTitle className="flex items-center gap-2 text-sm">
                                 <CloudUpload className="size-4 text-primary" />Upload Files
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="pt-5">
+                        <CardContent className="pt-3">
                             {/* Drop zone */}
                             <label
                                 htmlFor="file-input"
@@ -406,17 +406,17 @@ const LedgerUpload = () => {
                                 onDragOver={handleDrag}
                                 onDrop={handleDrop}
                                 className={cn(
-                                    "mb-4 flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-9 text-center shadow-inner transition-all duration-200",
+                                    "mb-3 flex min-h-[132px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition-colors duration-200",
                                     dragActive ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/60",
                                 )}
                             >
-                                <CloudUpload className={`mb-2 size-10 ${dragActive ? "text-primary" : "text-muted-foreground/60"}`} />
-                                <p className="mb-1 font-semibold text-foreground">{dragActive ? "Drop files here" : "Drag & drop your ledger files"}</p>
-                                <small className="mb-3 text-muted-foreground">or click to browse</small>
-                                <span className="pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-gradient-to-br from-primary to-primary/80 px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+                                <CloudUpload className={`mb-1.5 size-8 ${dragActive ? "text-primary" : "text-muted-foreground/60"}`} />
+                                <p className="mb-0.5 text-sm font-semibold text-foreground">{dragActive ? "Drop files here" : "Drag & drop ledger files"}</p>
+                                <small className="mb-2 text-xs text-muted-foreground">or click to browse</small>
+                                <span className="pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
                                     <FolderOpen className="size-3.5" />Browse Files
                                 </span>
-                                <small className="mt-3 block text-muted-foreground">CSV or HTM/HTML files · Max 50MB per file</small>
+                                <small className="mt-2 block text-xs text-muted-foreground">CSV or HTM/HTML · Max 50MB per file</small>
                                 <input ref={fileInputRef} id="file-input" type="file" accept=".csv,.htm,.html" multiple onChange={handleFileChange} className="hidden" />
                             </label>
 
@@ -508,7 +508,7 @@ const LedgerUpload = () => {
                             )}
 
                             {/* Upload button */}
-                            <Button size="lg" className="w-full" onClick={handleUpload} disabled={files.length === 0 || busy}>
+                            <Button className="w-full sm:w-auto" onClick={handleUpload} disabled={files.length === 0 || busy}>
                                 {busy ? (
                                     <>
                                         <Loader2 className="size-4 animate-spin" />
@@ -524,14 +524,14 @@ const LedgerUpload = () => {
                     {/* Sync results */}
                     {results.length > 0 && (
                         <Card className="mt-3">
-                            <CardHeader className="border-b">
+                            <CardHeader className="border-b py-3">
                                 <CardTitle className="flex items-center gap-2 text-sm">
                                     <ListChecks className="size-4 text-success" />
                                     Upload Results
                                     <Badge variant="success">{results.filter((r) => r.success).length}/{results.length} succeeded</Badge>
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="max-h-[500px] overflow-y-auto pt-4">
+                            <CardContent className="max-h-[420px] overflow-y-auto pt-3">
                                 {results.map((result, index) => (
                                     <div key={`${result.fileName}-${index}`} className={cn(
                                         "mb-2 rounded-lg border px-3.5 py-2.5 text-[13px]",
@@ -582,13 +582,13 @@ const LedgerUpload = () => {
 
                 {/* Instructions */}
                 <div className="lg:col-span-1">
-                    <Card>
-                        <CardHeader className="border-b">
+                    <Card className="xl:sticky xl:top-3">
+                        <CardHeader className="border-b py-3">
                             <CardTitle className="flex items-center gap-2 text-sm">
                                 <Info className="size-4 text-primary" />File Format Guide
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="pt-4">
+                        <CardContent className="pt-3">
                             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Required CSV Columns</div>
                             <div className="mb-3 flex flex-wrap gap-1">
                                 {["Regn.No.", "Regn.Date", "Lic.No.", "Lic.Date", "IEC", "Scheme.Cd.", "Port", "Notification"].map((col) => (

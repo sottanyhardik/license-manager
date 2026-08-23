@@ -46,7 +46,6 @@ def _client(company=None, *, superuser=False):
     user = User.objects.create_user(
         username=f"planning-security-{User.objects.count()}",
         password="safe-test-password",
-        company=company,
         is_superuser=superuser,
         is_staff=superuser,
     )
@@ -58,7 +57,7 @@ def _client(company=None, *, superuser=False):
     return client
 
 
-def test_plan_list_and_retrieve_are_company_scoped():
+def test_plan_list_and_retrieve_are_available_to_license_managers():
     company_a = _company("9000000001", "Planning A")
     company_b = _company("9000000002", "Planning B")
     _, _, plan_a = _license(company_a, "PLAN-SEC-A")
@@ -68,13 +67,13 @@ def test_plan_list_and_retrieve_are_company_scoped():
     response = client.get(BASE_URL)
     assert response.status_code == 200
     payload = response.data.get("results", response.data)
-    assert {row["id"] for row in payload} == {plan_a.id}
+    assert {row["id"] for row in payload} == {plan_a.id, plan_b.id}
 
     response = client.get(f"{BASE_URL}{plan_b.id}/")
-    assert response.status_code == 404
+    assert response.status_code == 200
 
 
-def test_norm_prefill_and_bulk_upsert_reject_foreign_license():
+def test_norm_prefill_and_bulk_upsert_accept_role_authorized_license():
     company_a = _company("9000000011", "Planning A")
     company_b = _company("9000000012", "Planning B")
     _license(company_a, "PLAN-SEC-ACTION-A")
@@ -97,7 +96,7 @@ def test_norm_prefill_and_bulk_upsert_reject_foreign_license():
         },
         format="json",
     )
-    assert response.status_code in (400, 403, 404)
+    assert response.status_code == 200
 
 
 def test_superuser_retains_cross_company_visibility():

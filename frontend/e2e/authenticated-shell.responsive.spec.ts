@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoBasicSemanticViolations, expectNoSeriousOrCriticalAxeViolations } from "./accessibilityHelpers";
 
 const localUser = {
   id: 1,
@@ -63,6 +64,10 @@ test.describe("authenticated shell visual mock", () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/dashboard", { waitUntil: "networkidle" });
       await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+      await expectNoBasicSemanticViolations(page);
+      if (viewport.name === "mobile-390" || viewport.name === "desktop") {
+        await expectNoSeriousOrCriticalAxeViolations(page, "main");
+      }
       await expectNoDocumentOverflow(page);
       await page.screenshot({ path: testInfo.outputPath(`dashboard-${viewport.name}.png`), fullPage: true });
     }

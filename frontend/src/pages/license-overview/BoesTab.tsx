@@ -94,7 +94,7 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
 
     return (
         <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card px-3 py-2">
                 <div className="flex items-center gap-2">
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-500/15">
                         <Receipt className="size-3.5 text-amber-700 dark:text-amber-400" aria-hidden="true" />
@@ -154,9 +154,9 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                     ))}
                 </div>
             ) : (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                <div className="max-h-[calc(100vh-19rem)] overflow-auto rounded-lg border border-border/70 bg-card">
+                    <table className="w-full min-w-[900px] text-[13px]">
+                        <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
                             <tr>
                                 <SortableHeader label="BOE No." sortKey="bill_of_entry_number" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
                                 <SortableHeader label="Date" sortKey="bill_of_entry_date" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
@@ -170,7 +170,7 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                         </thead>
                         <tbody>
                             {rows.map((b, idx) => (
-                                <tr key={`${b.bill_of_entry_number}-${idx}`} className="border-t border-border/60 hover:bg-muted/20">
+                                <tr key={`${b.bill_of_entry_number}-${idx}`} className="border-t border-border/60 hover:bg-muted/30">
                                     <td className="px-3 py-1.5 font-mono text-[10.5px]">{b.bill_of_entry_number || "—"}</td>
                                     <td className="whitespace-nowrap px-3 py-1.5 text-[10.5px]">{fmtDate(b.bill_of_entry_date)}</td>
                                     <td className="px-3 py-1.5 text-[10.5px]">{b.port || "—"}</td>
@@ -189,7 +189,7 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
             )}
 
             {rows.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50/60 px-4 py-2.5 ring-1 ring-amber-200/60 dark:bg-amber-500/10 dark:ring-amber-500/20">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2">
                     <span className="text-[10.5px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                         Total CIF{search ? " (filtered)" : ""}
                     </span>

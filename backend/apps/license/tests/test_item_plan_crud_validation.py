@@ -42,7 +42,7 @@ def license_manager_client(db, planned_license):
     license_obj, _ = planned_license
     user = User.objects.create_user(
         username="item-plan-api-manager", email="item-plan-api-manager@example.com",
-        password="RoleP@ssw0rd123", company=license_obj.exporter,
+        password="RoleP@ssw0rd123",
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(group)

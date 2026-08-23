@@ -16,21 +16,24 @@ interface LinkTradeModalProps {
 /** "Link Trade" search modal — extracted verbatim from MasterList. */
 export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSearch, setLinkSearch, linkSearching, linkResults, confirmLink }: LinkTradeModalProps) {
     return (
-        <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45" onClick={closeLinkModal}>
+        <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45 p-3" onClick={closeLinkModal}>
             <div
-                className="w-[480px] max-w-[95vw] rounded-xl bg-card p-6 shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="link-trade-title"
+                className="max-h-[calc(100dvh-1.5rem)] w-[480px] max-w-[95vw] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="mb-4 flex items-center justify-between">
-                    <h6 className="m-0 flex items-center gap-1.5 font-bold text-primary">
+                    <h2 id="link-trade-title" className="m-0 flex items-center gap-1.5 text-sm font-bold text-foreground">
                         <LinkIcon className="size-4" aria-hidden="true" />
                         Link Trade: <span className="text-primary">{linkModalTrade.invoice_number || 'No Invoice'}</span>
-                    </h6>
+                    </h2>
                     <button
                         type="button"
                         onClick={closeLinkModal}
                         className="inline-flex size-7 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-muted-foreground/70 hover:text-foreground"
-                        aria-label="Close"
+                        aria-label="Close link trade dialog"
                     >
                         <X className="size-4" aria-hidden="true" />
                     </button>
@@ -39,7 +42,8 @@ export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSea
                 <input
                     autoFocus
                     type="text"
-                    className="mb-3 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                    aria-label="Search unlinked trades by invoice number"
+                    className="mb-3 flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
                     placeholder="Search by invoice number..."
                     value={linkSearch}
                     onChange={e => setLinkSearch(e.target.value)}
@@ -62,7 +66,7 @@ export default function LinkTradeModal({ linkModalTrade, closeLinkModal, linkSea
                     <div
                         key={t.id}
                         {...clickable(() => confirmLink(t))}
-                        className="mb-2 flex cursor-pointer items-center justify-between rounded-xl border border-border px-3 py-2.5 transition-colors hover:bg-muted/40"
+                        className="mb-2 flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-2.5 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                         <div>
                             <div className="text-[14.5px] font-semibold text-foreground">{t.invoice_number || 'No Invoice'}</div>

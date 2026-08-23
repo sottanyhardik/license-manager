@@ -122,13 +122,11 @@ def _client_for(*, username, company=None, role=None, superuser=False):
         user = User.objects.create_superuser(
             username=username,
             password="RoleP@ssw0rd123",
-            company=company,
         )
     else:
         user = User.objects.create_user(
             username=username,
             password="RoleP@ssw0rd123",
-            company=company,
         )
     if role:
         group, _ = Group.objects.get_or_create(name=role)

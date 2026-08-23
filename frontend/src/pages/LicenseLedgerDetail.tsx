@@ -129,7 +129,7 @@ function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined })
     return (
         <div
             data-testid="ledger-summary-cards"
-            className="grid grid-cols-1 gap-3 px-5 pt-5 sm:grid-cols-2 xl:grid-cols-4"
+            className="grid grid-cols-1 gap-2 px-3 pt-3 sm:grid-cols-2 xl:grid-cols-4"
         >
             <StatCard
                 compact
@@ -196,7 +196,7 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
     // never the licence suffix above.
     const billSuffix = billCurrency === 'USD' ? '($)' : '(₹)';
     return (
-        <thead>
+        <thead className="sticky top-0 z-10">
             <tr className="border-b-2 border-primary/20 bg-primary/8">
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
                 <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
@@ -415,22 +415,22 @@ export default function LicenseLedgerDetail() {
     return (
         <div className="min-h-screen bg-muted/40">
             {/* ── Tally-style toolbar ───────────────────────────── */}
-            <div className="border-b-2 border-border-strong bg-foreground px-5 py-2.5">
-                <div className="flex items-center justify-between">
+            <div className="sticky top-0 z-20 border-b border-border-strong bg-foreground px-3 py-2 shadow-sm sm:px-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                         <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
                             <ArrowLeft className="size-4" aria-hidden="true" />Back
                         </Button>
                         <span className="text-[1.1rem] font-medium text-white">License Ledger</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => runExport('pdf')}>
                             {exporting === 'pdf' ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}Preview PDF
                         </Button>
                         <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => runExport('xlsx')}>
                             {exporting === 'xlsx' ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}Download Excel
                         </Button>
-                        <span className="ml-1 text-[14.5px] text-white/70">
+                        <span className="ml-1 hidden text-xs text-white/70 lg:inline">
                             {formatDate(new Date().toISOString())}
                         </span>
                     </div>
@@ -439,7 +439,7 @@ export default function LicenseLedgerDetail() {
 
             {/* ── Purchase warning ──────────────────────────────── */}
             {showPurchaseWarning && (
-                <div className="flex items-center gap-4 border-l-[5px] border-warning bg-warning/10 px-5 py-3.5">
+                <div className="mx-3 mt-3 flex items-center gap-3 rounded-md border border-warning/30 border-l-4 border-warning bg-warning/10 px-3 py-2.5 sm:mx-5">
                     <TriangleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
                     <div>
                         <strong className="mb-1 block text-sm font-semibold text-warning">⚠️ Action Required</strong>
@@ -456,19 +456,19 @@ export default function LicenseLedgerDetail() {
             )}
 
             {/* ── License header ────────────────────────────────── */}
-            <div className="border border-t-0 border-border bg-card px-7 py-6 shadow-sm">
-                <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-3">
-                    <div className="md:col-span-2">
-                        <h4 className="mb-3.5 flex items-center gap-3 text-[1.1rem] font-semibold text-foreground">
+            <div className="mx-3 mt-3 rounded-lg border border-border bg-card px-3 py-3 shadow-sm sm:mx-5 sm:px-4">
+                <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div>
+                        <h4 className="mb-2 flex flex-wrap items-center gap-2 text-base font-semibold text-foreground">
                             {String(ledger.license_number)}
                             <Badge
                                 variant={isDFIA ? "default" : "info"}
-                                className="text-[12px] px-3 py-1"
+                                className="px-2 py-0.5 text-[11px]"
                             >
                                 {String(ledger.license_type)}
                             </Badge>
                         </h4>
-                        <div className="grid grid-cols-1 gap-3 text-[15px] sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-[13px] sm:grid-cols-2 xl:grid-cols-3">
                             <div>
                                 <span className="mr-2.5 text-muted-foreground">Exporter:</span>
                                 <strong>{normalizeText(ledger.exporter_name, 'N/A')}</strong>
@@ -512,12 +512,12 @@ export default function LicenseLedgerDetail() {
 
                     {/* Balance panel */}
                     <div className="text-right">
-                        <div className="inline-block rounded-md border-2 border-border bg-muted/60 px-5 py-5 text-right">
-                            <div className="mb-2 text-[13.5px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <div className="inline-block rounded-md border border-border bg-muted/60 px-3 py-2 text-right">
+                            <div className="mb-0.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                                 CURRENT BALANCE
                             </div>
                             <div className={cn(
-                                "text-[1.75rem] font-bold tabular-nums",
+                                "text-xl font-bold tabular-nums",
                                 currentBalance >= 0 ? "text-success" : "text-destructive",
                             )}>
                                 {formatCurrency(currentBalanceValue, balanceCurrency)}
@@ -560,12 +560,12 @@ export default function LicenseLedgerDetail() {
                     <div
                         data-testid="ledger-opening-state"
                         className={cn(
-                            "mx-5 mt-5 overflow-hidden rounded-md border border-border shadow-md",
-                            companiesGrouped.length ? "mb-0" : "mb-5",
+                            "mx-3 mt-3 overflow-hidden rounded-lg border border-border shadow-sm sm:mx-5",
+                            companiesGrouped.length ? "mb-0" : "mb-3",
                         )}
                     >
                         {/* Starting state — deliberately NOT a company group header */}
-                        <div className="flex items-center justify-between border-b border-border bg-muted px-5 py-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-1 border-b border-border bg-muted px-3 py-2">
                             <div className="flex items-center gap-2">
                                 <Wallet className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                                 <span className="text-[15px] font-bold text-foreground">Opening Balance</span>
@@ -615,20 +615,20 @@ export default function LicenseLedgerDetail() {
                     );
                     const companyBalance = companyUtilization ? toFiniteNumber(companyUtilization.utilization_balance) : 0;
 
-                    const marginTop = ci === 0 && !openingBlock ? "mt-5" : "mt-3";
-                    const marginBottom = ci === companiesGrouped.length - 1 ? "mb-5" : "mb-0";
+                    const marginTop = ci === 0 && !openingBlock ? "mt-3" : "mt-2";
+                    const marginBottom = ci === companiesGrouped.length - 1 ? "mb-3" : "mb-0";
 
                     return (
                         <div
                             key={company.company_id ?? ci}
                             data-testid="ledger-company-block"
                             className={cn(
-                                "mx-5 overflow-hidden rounded-md border border-border shadow-md",
+                                "mx-3 overflow-hidden rounded-lg border border-border shadow-sm sm:mx-5",
                                 marginTop, marginBottom,
                             )}
                         >
                             {/* Company header */}
-                            <div className="flex items-center justify-between bg-primary px-5 py-2.5 text-primary-foreground">
+                            <div className="flex flex-wrap items-center justify-between gap-1 bg-primary px-3 py-2 text-primary-foreground">
                                 <div className="flex items-center gap-2">
                                     <Building2 className="size-4 shrink-0" aria-hidden="true" />
                                     <span data-testid="ledger-company-group" className="text-[15px] font-bold">

@@ -13,15 +13,15 @@ interface TradeConfigCardProps {
  *  Extracted verbatim from TradeForm (state passed through as props). */
 export default function TradeConfigCard({ formData, setFormData, id, autoCreatePaired, setAutoCreatePaired, directionMeta }: TradeConfigCardProps) {
     return (
-                <div className="rounded-xl border border-border bg-card mb-3">
-                    <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
-                        <h6 className="font-semibold m-0">
+                <section className="mb-3 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                    <div className="flex min-h-10 items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                        <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-foreground">
                             <SlidersHorizontal className="size-4" aria-hidden="true" />
                             Trade Configuration
-                        </h6>
+                        </h2>
                     </div>
-                    <div className="p-4">
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="p-3">
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                             <div>
                                 <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                     TRANSACTION TYPE <span className="text-destructive">*</span>
@@ -33,7 +33,8 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                                         return (
                                             <button key={val} type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, direction: val }))}
-                                                className="inline-flex items-center gap-1.5"
+                                                aria-pressed={active}
+                                                className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                                 style={{
                                                     border: `2px solid ${active ? m.color : 'var(--tb-border-soft)'}`,
                                                     background: active ? m.soft : 'var(--tb-card-bg)',
@@ -60,7 +61,8 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                                         return (
                                             <button key={m.val} type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, license_type: m.val, incentive_license: m.val === 'DFIA' ? null : prev.incentive_license }))}
-                                                className="inline-flex items-center gap-1.5"
+                                                aria-pressed={active}
+                                                className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                                 style={{
                                                     border: `2px solid ${active ? m.color : 'var(--tb-border-soft)'}`,
                                                     background: active ? m.soft : 'var(--tb-card-bg)',
@@ -77,7 +79,7 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                             </div>
                         </div>
                         {!id && ['PURCHASE', 'SALE'].includes(formData.direction) && (
-                            <div className="flex items-center gap-2 mt-3 p-2 rounded bg-info/10 border border-info/30">
+                            <div className="mt-3 flex items-center gap-2 rounded-md border border-info/30 bg-info/10 px-2.5 py-2">
                                 <input
                                     type="checkbox"
                                     id="autoCreatePaired"
@@ -92,6 +94,6 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                             </div>
                         )}
                     </div>
-                </div>
+                </section>
     );
 }

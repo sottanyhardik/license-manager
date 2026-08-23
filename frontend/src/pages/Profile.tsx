@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Pencil, Check, AlertCircle, CheckCircle2, X } from "lucide-react";
+import { Pencil, Check, AlertCircle, CheckCircle2, X, KeyRound, UserRound } from "lucide-react";
 
 import { AuthContext } from "../context/AuthContext";
 import type { AuthUser } from "../types";
@@ -125,12 +125,11 @@ export default function Profile() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-                {/* Avatar card */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[280px_1fr]">
                 <Card>
-                    <CardContent className="flex flex-col items-center pt-6 text-center">
+                    <CardContent className="flex flex-col items-center p-5 text-center">
                         <div
-                            className="mb-3.5 flex size-18 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-2xl font-bold tracking-tight text-white shadow-lg"
+                            className="mb-3.5 flex size-16 items-center justify-center rounded-full border border-primary/20 bg-primary text-xl font-bold tracking-tight text-primary-foreground shadow-sm"
                             aria-hidden="true"
                         >
                             {initials}
@@ -143,26 +142,30 @@ export default function Profile() {
                             <Badge variant="success">Active</Badge>
                             {user.is_superuser && <Badge>Superuser</Badge>}
                         </div>
+                        <div className="mt-5 w-full border-t border-border pt-4 text-left">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Account access</p>
+                            <p className="mt-1 text-[12px] text-muted-foreground">Your roles determine which business workflows are available to you.</p>
+                        </div>
                     </CardContent>
                 </Card>
 
                 {/* Details */}
                 <div className="flex flex-col gap-4">
                     <Card>
-                        <CardHeader className="border-b">
+                        <CardHeader className="border-b py-3">
                             <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm">Account Details</CardTitle>
+                                <CardTitle className="flex items-center gap-2 text-sm"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" />Account details</CardTitle>
                                 {editing && <Badge variant="default">Editing</Badge>}
                             </div>
                         </CardHeader>
-                        <CardContent className="pt-5">
-                            <div className="mb-5">
+                        <CardContent className="pt-4">
+                            <div className="mb-4">
                                 <Label className="mb-1.5" htmlFor="username">Username</Label>
                                 <Input id="username" value={user.username} disabled readOnly />
                                 <p className="mt-1.5 text-[11.5px] text-muted-foreground">Username cannot be changed.</p>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div>
                                     <Label className="mb-1.5" htmlFor="first_name">First Name</Label>
                                     {editing
@@ -184,7 +187,7 @@ export default function Profile() {
                             </div>
 
                             {editing && (
-                                <div className="mt-5 flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row">
+                                <div className="mt-4 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row">
                                     <Button className="w-full sm:w-auto" onClick={handleSave} disabled={saving}>
                                         <Check className="size-4" />
                                         {saving ? "Saving…" : "Save Changes"}
@@ -199,10 +202,10 @@ export default function Profile() {
 
                     {roles.length > 0 && (
                         <Card>
-                            <CardHeader className="border-b">
-                                <CardTitle className="text-sm">Assigned Roles</CardTitle>
+                            <CardHeader className="border-b py-3">
+                                <CardTitle className="flex items-center gap-2 text-sm"><KeyRound className="size-4 text-muted-foreground" aria-hidden="true" />Assigned roles</CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-4">
+                            <CardContent className="pt-3">
                                 <div className="flex flex-wrap gap-1.5">
                                     {roles.map((role) => (
                                         <Badge

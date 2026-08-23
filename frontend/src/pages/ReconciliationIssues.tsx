@@ -147,7 +147,7 @@ export default function ReconciliationIssues() {
                 description="Portfolio-wide view of licenses with reconciliation problems. Read-only — open a license's Balance workspace to fix any issue."
             />
 
-            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
                 <StatCard label="Total BOE" value={val("total_boe") as ReactNode} icon={ReceiptText} tone="primary" loading={summaryLoading} />
                 <StatCard label="Total Import Invoices" value={val("total_import_invoices") as ReactNode} icon={FileText} tone="info" loading={summaryLoading} />
                 <StatCard label="Matched" value={val("matched") as ReactNode} icon={CheckCircle2} tone="success" loading={summaryLoading} />
@@ -157,10 +157,11 @@ export default function ReconciliationIssues() {
                 <StatCard label="CIF Difference" value={val("cif_difference") as ReactNode} icon={IndianRupee} tone="danger" loading={summaryLoading} onClick={() => setActiveTab("cif-comparison")} />
             </div>
 
-            <Card>
-                <CardContent className="pt-4">
+            <Card className="overflow-hidden border-border/80 shadow-sm shadow-primary/5">
+                <CardContent className="p-2 sm:p-3">
                     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as IssueTabValue)}>
-                        <TabsList className="flex h-auto flex-wrap justify-start gap-1">
+                        <div className="overflow-x-auto pb-1">
+                        <TabsList className="flex h-9 min-w-max justify-start gap-1" aria-label="Reconciliation issues">
                             <TabsTrigger value="missing-boe">Missing BOE</TabsTrigger>
                             <TabsTrigger value="missing-invoice">Missing Invoice</TabsTrigger>
                             <TabsTrigger value="duplicate-debits">Duplicate Debits</TabsTrigger>
@@ -168,9 +169,10 @@ export default function ReconciliationIssues() {
                             <TabsTrigger value="cif-comparison">CIF Comparison</TabsTrigger>
                             <TabsTrigger value="qty-comparison">Quantity Comparison</TabsTrigger>
                         </TabsList>
+                        </div>
 
                         {/* Missing BOE — SALE trade lines with no BOE linked at all. */}
-                        <TabsContent value="missing-boe" className="mt-3">
+                        <TabsContent value="missing-boe" className="mt-2">
                             <IssueTable
                                 tabKey="missing-boe"
                                 endpoint="reconciliation/missing-boe/"
@@ -187,7 +189,7 @@ export default function ReconciliationIssues() {
                         </TabsContent>
 
                         {/* Missing Invoice — BOEs with a blank invoice_no. */}
-                        <TabsContent value="missing-invoice" className="mt-3">
+                        <TabsContent value="missing-invoice" className="mt-2">
                             <IssueTable
                                 tabKey="missing-invoice"
                                 endpoint="reconciliation/missing-invoice/"
@@ -203,7 +205,7 @@ export default function ReconciliationIssues() {
                         </TabsContent>
 
                         {/* Duplicate Debits — a SALE trade-line debit AND a BOE debit row for the same sr_number. */}
-                        <TabsContent value="duplicate-debits" className="mt-3">
+                        <TabsContent value="duplicate-debits" className="mt-2">
                             <IssueTable
                                 tabKey="duplicate-debits"
                                 endpoint="reconciliation/duplicate-debits/"
@@ -223,7 +225,7 @@ export default function ReconciliationIssues() {
 
                         {/* Duplicate BOEs — near-duplicate BOE records. No license field on this
                             endpoint (see duplicate_boes() in queries.py), so no license link here. */}
-                        <TabsContent value="duplicate-boes" className="mt-3">
+                        <TabsContent value="duplicate-boes" className="mt-2">
                             <IssueTable
                                 tabKey="duplicate-boes"
                                 endpoint="reconciliation/duplicate-boes/"
@@ -239,7 +241,7 @@ export default function ReconciliationIssues() {
                         {/* CIF Comparison — invoice CIF vs linked-BOE debit CIF beyond tolerance.
                             No license field on this endpoint (see _linked_trade_comparison() in
                             queries.py), so no license link here. */}
-                        <TabsContent value="cif-comparison" className="mt-3">
+                        <TabsContent value="cif-comparison" className="mt-2">
                             <IssueTable
                                 tabKey="cif-comparison"
                                 endpoint="reconciliation/cif-comparison/"
@@ -256,7 +258,7 @@ export default function ReconciliationIssues() {
                         </TabsContent>
 
                         {/* Quantity Comparison — invoice qty vs linked-BOE debit qty beyond tolerance. */}
-                        <TabsContent value="qty-comparison" className="mt-3">
+                        <TabsContent value="qty-comparison" className="mt-2">
                             <IssueTable
                                 tabKey="qty-comparison"
                                 endpoint="reconciliation/qty-comparison/"

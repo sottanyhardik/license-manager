@@ -12,6 +12,22 @@ cd backend && source ../.venv/bin/activate
 ### `update_license_ownership`
 Fetches current ownership & transfer history for DFIA licenses from the DGFT portal and syncs to one or more servers.
 
+Before running it, supply the current DGFT browser-session values through the
+process environment or the deployment secret store. They are required and have
+no committed fallback values:
+
+```bash
+export DGFT_APP_ID='...'
+export DGFT_SESSION_ID='...'
+export DGFT_CSRF_TOKEN='...'
+# Optional when DGFT requires load-balancer affinity:
+export DGFT_AWSALB='...'
+```
+
+Do not put these values in source, shell history, fixture files, or command
+arguments. Refresh them through the approved secret-management process when
+the DGFT session expires.
+
 ```bash
 # Interactive server selection (recommended first-run)
 python manage.py update_license_ownership

@@ -31,7 +31,6 @@ def licensed_client(db):
         username="planning-test-user",
         email="planning-test@example.com",
         password="TestP@ss123",
-        company=license_obj.exporter,
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(group)

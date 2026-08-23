@@ -285,6 +285,9 @@ export default function Settings() {
 
     if (currentUser && !currentUser.is_superuser) return <Navigate to="/403" replace />;
 
+    const activeUsers = users.filter((user) => user.is_active).length;
+    const assignedRoles = new Set(users.flatMap((user) => user.roles ?? [])).size;
+
     return (
         <>
             <PageHeader
@@ -299,9 +302,24 @@ export default function Settings() {
                 }
             />
 
+            <section aria-label="Access administration summary" className="mb-3 grid overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-3">
+                <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Directory users</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : users.length}</p>
+                </div>
+                <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active accounts</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{loading ? "—" : activeUsers}</p>
+                </div>
+                <div className="px-3 py-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Roles in use</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : assignedRoles}</p>
+                </div>
+            </section>
+
             {/* ── User management card ───────────────────────────────── */}
             <Card>
-                <CardHeader className="border-b">
+                <CardHeader className="border-b px-4 py-3">
                     <div className="flex items-center gap-2">
                         <Users className="size-4 text-muted-foreground" aria-hidden="true" />
                         <span className="text-[13.5px] font-semibold text-foreground">User Management</span>
@@ -314,10 +332,10 @@ export default function Settings() {
                     {loading ? (
                         <TableSkeleton />
                     ) : (
-                        <div className="overflow-x-auto">
+                        <div className="max-h-[calc(100vh-23rem)] overflow-auto">
                             <table className="table table-hover mb-0">
                                 <thead>
-                                    <tr>
+                                    <tr className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
                                         <th scope="col" className="pl-4">User</th>
                                         <th scope="col">Email</th>
                                         <th scope="col">Name</th>
@@ -334,7 +352,7 @@ export default function Settings() {
                                             <td className="pl-4 pt-3">
                                                 <div className="flex items-start gap-2.5">
                                                     <div
-                                                        className="mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-[12px] font-bold text-white"
+                                                        className="mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-primary-foreground"
                                                         aria-hidden="true"
                                                     >
                                                         {user.username[0].toUpperCase()}

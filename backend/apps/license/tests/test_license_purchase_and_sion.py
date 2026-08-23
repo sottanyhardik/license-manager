@@ -157,9 +157,6 @@ class PurchaseAndSionTestFixture:
             password="testpass123!",
             is_superuser=is_superuser,
         )
-        if company and not is_superuser:
-            user.company = company
-            user.save()
         return user
 
     def make_sion_norm_class(self, norm_class="E1", description="Test SION"):

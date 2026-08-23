@@ -56,9 +56,7 @@ def split_percent_setup():
     )
 
     company = CompanyModel.objects.create(iec="SPLITPCT01", name="Split by % Test")
-    user = get_user_model().objects.create_user(
-        username="split-pct-user", company=company
-    )
+    user = get_user_model().objects.create_user(username="split-pct-user")
     role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(role)
 

@@ -41,15 +41,15 @@ export function AllocationStrategyEditor({
   };
 
   return (
-    <div className="space-y-4 border rounded p-4">
+    <section className="space-y-3 rounded-lg border border-border/70 bg-card p-3" aria-label="Allocation strategy settings">
       <div>
-        <label className="block text-sm font-medium mb-2">Strategy</label>
+        <label className="mb-1 block text-xs font-semibold text-foreground">Strategy</label>
         <select
           aria-label="Allocation strategy"
           value={strategy}
           onChange={(e) => handleStrategyChange(e.target.value as PlanningStrategy)}
           disabled={disabled}
-          className="border border-gray-300 rounded px-2 py-1"
+          className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="STANDARD">Standard (single item)</option>
           <option value="SPLIT_BY_UNIT_VALUE">Split by Unit Value</option>
@@ -58,18 +58,20 @@ export function AllocationStrategyEditor({
       </div>
 
       {showStrategyWarning && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
-          <p className="text-sm mb-2">Changing strategy will clear existing rows. Continue?</p>
-          <div className="space-x-2">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-2.5" role="alert">
+          <p className="mb-2 text-sm text-foreground">Changing strategy will clear existing rows. Continue?</p>
+          <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={() => pendingStrategy && handleConfirmStrategyChange(pendingStrategy)}
-              className="bg-yellow-600 text-white px-3 py-1 rounded text-sm"
+              className="h-8 rounded-md bg-warning px-3 text-sm font-medium text-warning-foreground hover:bg-warning/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Continue
             </button>
             <button
+              type="button"
               onClick={() => { setShowStrategyWarning(false); setPendingStrategy(null); }}
-              className="border border-gray-300 px-3 py-1 rounded text-sm"
+              className="h-8 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Cancel
             </button>
@@ -99,7 +101,7 @@ export function AllocationStrategyEditor({
         />
       )}
       {strategy === "SPLIT_BY_UNIT_VALUE" && errors.unit_value_rows && (
-        <p role="alert" className="text-sm text-red-600">{errors.unit_value_rows}</p>
+        <p role="alert" className="text-sm text-destructive">{errors.unit_value_rows}</p>
       )}
 
       {strategy === "SPLIT_BY_PERCENT" && (
@@ -111,7 +113,7 @@ export function AllocationStrategyEditor({
           errors={errors}
         />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -148,7 +150,7 @@ function StandardStrategySection({
         error={error}
         placeholder="Search import item..."
       />
-      <p className="text-xs text-gray-500">Rule name will be auto-derived from the selected item.</p>
+      <p className="text-xs text-muted-foreground">Rule name will be auto-derived from the selected item.</p>
     </div>
   );
 }
@@ -184,9 +186,9 @@ function UnitValueStrategySection({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-600">Select import items and define price ranges for allocation.</p>
+      <p className="text-xs text-muted-foreground">Select import items and define price ranges for allocation.</p>
       {rows.map((row, idx) => (
-        <div key={idx} className="bg-gray-50 p-3 rounded space-y-2">
+        <div key={idx} className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2.5">
           <SionImportItemAsyncSelect
             sionId={sionId}
             value={row.import_item || null}
@@ -196,7 +198,7 @@ function UnitValueStrategySection({
           />
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs text-gray-600">Min Unit Price</label>
+              <label className="text-xs text-muted-foreground">Min Unit Price</label>
               <input
                 aria-label={`Minimum unit price row ${idx + 1}`}
                 type="text"
@@ -204,12 +206,12 @@ function UnitValueStrategySection({
                 inputMode="decimal"
                 onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && updateRow(idx, "min_unit_price", e.target.value)}
                 disabled={disabled}
-                className="border border-gray-300 rounded px-2 py-1 w-full text-sm"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="0.00"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Max Unit Price</label>
+              <label className="text-xs text-muted-foreground">Max Unit Price</label>
               <input
                 aria-label={`Maximum unit price row ${idx + 1}`}
                 type="text"
@@ -217,36 +219,38 @@ function UnitValueStrategySection({
                 inputMode="decimal"
                 onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && updateRow(idx, "max_unit_price", e.target.value)}
                 disabled={disabled}
-                className="border border-gray-300 rounded px-2 py-1 w-full text-sm"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="0.00"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Preferred Unit Price</label>
+              <label className="text-xs text-muted-foreground">Preferred Unit Price</label>
               <input
                 type="text"
                 value={row.preferred_unit_price}
                 inputMode="decimal"
                 onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && updateRow(idx, "preferred_unit_price", e.target.value)}
                 disabled={disabled}
-                className="border border-gray-300 rounded px-2 py-1 w-full text-sm"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="0.00"
               />
             </div>
           </div>
           <button
+            type="button"
             onClick={() => removeRow(idx)}
             disabled={disabled}
-            className="text-red-600 text-xs hover:underline"
+            className="text-xs font-medium text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Remove
           </button>
         </div>
       ))}
       <button
+        type="button"
         onClick={addRow}
         disabled={disabled}
-        className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
+        className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         + Add Item
       </button>
@@ -287,9 +291,9 @@ function PercentageStrategySection({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-600">Percentages must sum to 100%. Each row has its own unit price for CIF calculation.</p>
+      <p className="text-xs text-muted-foreground">Percentages must sum to 100%. Each row has its own unit price for CIF calculation.</p>
       {rows.map((row, idx) => (
-        <div key={idx} className="bg-gray-50 p-3 rounded space-y-2">
+        <div key={idx} className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-2.5">
           <SionImportItemAsyncSelect
             sionId={sionId}
             value={row.import_item || null}
@@ -303,7 +307,7 @@ function PercentageStrategySection({
           />
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs text-gray-600">Percentage</label>
+              <label className="text-xs text-muted-foreground">Percentage</label>
               <input
                 aria-label={`Percentage row ${idx + 1}`}
                 type="text"
@@ -311,12 +315,12 @@ function PercentageStrategySection({
                 inputMode="decimal"
                 onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && updateRow(idx, "percentage", e.target.value)}
                 disabled={disabled}
-                className="border border-gray-300 rounded px-2 py-1 w-full text-sm"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="0.00"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">Unit Price</label>
+              <label className="text-xs text-muted-foreground">Unit Price</label>
               <input
                 aria-label={`Unit price row ${idx + 1}`}
                 type="text"
@@ -324,24 +328,25 @@ function PercentageStrategySection({
                 inputMode="decimal"
                 onChange={(e) => /^\d*(\.\d*)?$/.test(e.target.value) && updateRow(idx, "unit_price", e.target.value)}
                 disabled={disabled}
-                className="border border-gray-300 rounded px-2 py-1 w-full text-sm"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="0.00"
               />
             </div>
           </div>
           <button
+            type="button"
             onClick={() => removeRow(idx)}
             disabled={disabled}
-            className="text-red-600 text-xs hover:underline"
+            className="text-xs font-medium text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Remove
           </button>
         </div>
       ))}
-      <div className="bg-blue-50 p-2 rounded">
+      <div className="rounded-md border border-primary/20 bg-primary/5 p-2">
         <p className="text-sm font-medium">Total: {totalPercentage.toFixed(2)}%</p>
         {Math.abs(totalPercentage - 100) > 0.001 && (
-          <p className="text-xs text-red-600">
+          <p className="text-xs text-destructive">
             {totalPercentage < 100
               ? `${(100 - totalPercentage).toFixed(2)}% remaining — Percentages must total 100%.`
               : `${(totalPercentage - 100).toFixed(2)}% over — Percentages must total 100%.`}
@@ -349,9 +354,10 @@ function PercentageStrategySection({
         )}
       </div>
       <button
+        type="button"
         onClick={addRow}
         disabled={disabled}
-        className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
+        className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         + Add Item
       </button>

@@ -46,9 +46,9 @@ export default function LicenseDetailsHeader({
     onPurchaseStatusChange,
 }: LicenseDetailsHeaderProps) {
     return (
-        <div className="relative overflow-hidden rounded-xl border border-border/60 bg-card/95 px-5 py-4 shadow-[0_2px_16px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.04)] backdrop-blur-sm">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:grid-cols-7">
+        <section aria-label="Licence identity and status" className="overflow-hidden rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm sm:px-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="grid flex-1 grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-7">
                     <HeaderField icon={FileText} label="License Number" value={summary.license_number ?? "—"} />
                     <HeaderField icon={Folder} label="File Number" value={summary.file_number ?? "—"} />
                     <HeaderField
@@ -108,7 +108,7 @@ export default function LicenseDetailsHeader({
                     </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2 self-start">
                     <Badge variant={licenseOverviewStatusVariant(summary.status)}>{summary.status}</Badge>
                     {canRecalculate && (
                         <Button size="sm" variant="outline" onClick={onRecalculate} disabled={recalculating}>
@@ -118,13 +118,13 @@ export default function LicenseDetailsHeader({
                     )}
                 </div>
             </div>
-        </div>
+        </section>
     );
 }
 
 function FieldLabel({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
     return (
-        <div className="flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+        <div className="flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground">
             <Icon className="size-3" aria-hidden="true" />
             {label}
         </div>
@@ -135,7 +135,7 @@ function HeaderField({ icon, label, value, title }: { icon: LucideIcon; label: s
     return (
         <div className="min-w-0">
             <FieldLabel icon={icon} label={label} />
-            <div className="mt-0.5 truncate text-sm font-medium text-foreground" title={title}>
+            <div className="mt-0.5 truncate text-[13px] font-semibold text-foreground" title={title}>
                 {value}
             </div>
         </div>

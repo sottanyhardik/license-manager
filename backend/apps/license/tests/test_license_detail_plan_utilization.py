@@ -72,8 +72,6 @@ def license_with_split_serials(db):
 def test_license_detail_adds_grouped_plan_utilization_without_changing_import_license(
     viewer, license_with_split_serials,
 ):
-    viewer.company = license_with_split_serials.exporter
-    viewer.save(update_fields=["company"])
     client = _client_for_user(viewer)
 
     response = client.get(reverse("license:licenses-detail", args=[license_with_split_serials.pk]))

@@ -77,9 +77,9 @@ export default function MdsStatusCard() {
     const badge = status ? healthBadge(status) : null;
 
     return (
-        <Card className="mt-4">
+        <Card className="mt-3">
             {/* ── Card header ───────────────────────────────────── */}
-            <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
                 <DatabaseZap className="size-4 text-muted-foreground" aria-hidden="true" />
                 <span className="text-[13.5px] font-semibold text-foreground">Master Data Service</span>
                 {badge && (
@@ -110,14 +110,14 @@ export default function MdsStatusCard() {
 
                 {/* Loading */}
                 {loading && (
-                    <p className="px-5 py-6 text-center text-[12.5px] text-muted-foreground">
+                    <p className="px-4 py-5 text-center text-[12.5px] text-muted-foreground">
                         Loading sync status…
                     </p>
                 )}
 
                 {/* Error */}
                 {!loading && error && (
-                    <div className="flex flex-col items-center gap-2.5 px-5 py-8 text-center text-[12.5px] text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2.5 px-4 py-6 text-center text-[12.5px] text-muted-foreground">
                         <AlertTriangle className="size-5 text-warning" aria-hidden="true" />
                         <span>Could not load Master-Data Service status.</span>
                         <Button
@@ -135,7 +135,7 @@ export default function MdsStatusCard() {
 
                 {/* Disabled */}
                 {!loading && !error && status && !status.enabled && (
-                    <div className="flex flex-col items-center gap-2 px-5 py-8 text-center text-[12.5px] text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[12.5px] text-muted-foreground">
                         <CloudOff className="size-5" aria-hidden="true" />
                         Master Data Service not enabled
                     </div>
@@ -143,9 +143,9 @@ export default function MdsStatusCard() {
 
                 {/* Enabled */}
                 {!loading && !error && status && status.enabled && (
-                    <div className="p-5">
+                    <div className="p-4">
                         {/* Base URL row */}
-                        <div className="mb-3.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
                             <span className="font-medium">Base URL</span>
                             <code className="rounded-md border border-border/60 bg-muted px-1.5 py-px text-[11.5px] text-foreground break-all">
                                 {status.base_url || "—"}

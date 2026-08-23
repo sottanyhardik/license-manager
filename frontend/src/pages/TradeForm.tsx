@@ -828,14 +828,14 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="trade-form-page min-h-screen bg-background">
+        <main className="trade-form-page min-h-screen bg-background" aria-labelledby="trade-form-title">
             {/* Compact Header */}
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm backdrop-blur-sm">
                 <div>
-                    <h4 className="mb-0 font-bold text-foreground flex items-center gap-1.5">
+                    <h1 id="trade-form-title" className="mb-0 flex items-center gap-1.5 text-base font-bold text-foreground">
                         <ArrowLeftRight className="size-4" aria-hidden="true" />
                         {isEdit ? 'Edit Trade' : 'New Trade'}
-                    </h4>
+                    </h1>
                     <small className="text-muted-foreground flex items-center gap-1.5">
                         {isEdit ? 'Update trade details' : 'Create a new trade transaction'}
                         {formData.direction && (() => {
@@ -891,17 +891,17 @@ export default function TradeForm() {
                 />
 
                 {/* Company Snapshots */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
+                <div className="mb-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
                     {/* From Company */}
                     <div>
-                        <div className="h-full rounded-xl border border-border/80 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:shadow-primary/5">
-                            <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
-                                <h6 className="font-semibold m-0">
+                        <section className="h-full overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                            <div className="flex min-h-10 items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                                <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-foreground">
                                     <Building2 className="size-4" aria-hidden="true" />
                                     From Company
-                                </h6>
+                                </h2>
                             </div>
-                            <div className="p-5">
+                            <div className="p-3">
 
                                 <div className="mb-3">
                                     <label className="mb-1.5 block text-sm font-medium">From Company <span className="text-destructive">*</span></label>
@@ -962,19 +962,19 @@ export default function TradeForm() {
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
                     </div>
 
                     {/* To Company */}
                     <div>
-                        <div className="rounded-xl border border-border bg-card h-full">
-                            <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
-                                <h6 className="font-semibold m-0">
+                        <section className="h-full overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                            <div className="flex min-h-10 items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                                <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-foreground">
                                     <Building2 className="size-4" aria-hidden="true" />
                                     To Company
-                                </h6>
+                                </h2>
                             </div>
-                            <div className="p-5">
+                            <div className="p-3">
                                 <div className="mb-3">
                                     <label className="mb-1.5 block text-sm font-medium">To Company <span className="text-destructive">*</span></label>
                                     <HybridSelect
@@ -1034,7 +1034,7 @@ export default function TradeForm() {
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
                     </div>
                 </div>
 
@@ -1618,6 +1618,6 @@ export default function TradeForm() {
                     entityId={id}
                 />
             )}
-        </div>
+        </main>
     );
 }

@@ -100,9 +100,9 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
     };
 
     return (
-        <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+        <div className="max-h-[calc(100vh-18rem)] overflow-auto rounded-lg border border-border/70 bg-card">
+            <table className="w-full min-w-[1500px] text-[13px]">
+                <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
                     <tr>
                         {HEADERS.map((h) => (
                             <th key={h} scope="col" className="whitespace-nowrap px-3 py-2 text-left font-semibold">
@@ -127,9 +127,9 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
                         return (
                             <Fragment key={row.sr}>
                                 <tr className={cn("border-t border-border/60", financialLedgerRowClass(row.row_kind, row.mismatched))}>
-                                    <td className="px-3 py-2">{row.sr}</td>
-                                    <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.date)}</td>
-                                    <td className="whitespace-nowrap px-3 py-2 font-medium">
+                                    <td className="px-3 py-1.5">{row.sr}</td>
+                                    <td className="whitespace-nowrap px-3 py-1.5">{fmtDate(row.date)}</td>
+                                    <td className="whitespace-nowrap px-3 py-1.5 font-medium">
                                         {isExpandable ? (
                                             <button
                                                 type="button"
@@ -159,23 +159,23 @@ export default function FinancialLedgerTable({ rows }: FinancialLedgerTableProps
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="px-3 py-2">{row.document_number ?? "—"}</td>
-                                    <td className="px-3 py-2" title={row.linked_boe_numbers?.join(", ")}>
+                                    <td className="px-3 py-1.5">{row.document_number ?? "—"}</td>
+                                    <td className="px-3 py-1.5" title={row.linked_boe_numbers?.join(", ")}>
                                         {row.boe_number ?? "—"}
                                     </td>
-                                    <td className="whitespace-nowrap px-3 py-2">
+                                    <td className="whitespace-nowrap px-3 py-1.5">
                                         {row.boe_date_display ?? fmtDate(row.boe_date)}
                                     </td>
-                                    <td className="px-3 py-2">{row.company ?? "—"}</td>
-                                    <td className="px-3 py-2">{row.item_name ?? "—"}</td>
-                                    <td className="px-3 py-2">{fmtInvoiceNumbers(row.invoice_numbers)}</td>
-                                    <td className="px-3 py-2 text-right">{fmtNum(row.qty)}</td>
-                                    <td className="px-3 py-2 text-right">{fmtNum(row.cif_usd)}</td>
-                                    <td className="px-3 py-2 text-right">{fmtNum(row.cif_inr)}</td>
-                                    <td className="px-3 py-2 text-right">{fmtNum(row.credit)}</td>
-                                    <td className="px-3 py-2 text-right">{fmtNum(row.debit)}</td>
-                                    <td className="px-3 py-2 text-right font-medium">{fmtNum(row.running_balance)}</td>
-                                    <td className="px-3 py-2">{row.remarks ?? "—"}</td>
+                                    <td className="px-3 py-1.5">{row.company ?? "—"}</td>
+                                    <td className="px-3 py-1.5">{row.item_name ?? "—"}</td>
+                                    <td className="px-3 py-1.5">{fmtInvoiceNumbers(row.invoice_numbers)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.qty)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.cif_usd)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.cif_inr)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.credit)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.debit)}</td>
+                                    <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.running_balance)}</td>
+                                    <td className="px-3 py-1.5">{row.remarks ?? "—"}</td>
                                 </tr>
                                 {!isCollapsed && hasChildren &&
                                     row.children!.map((child, idx) => (

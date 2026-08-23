@@ -97,6 +97,10 @@ export default defineConfig(({ mode }) => {
       'react-dom',
       'react-router-dom',
       'axios',
+      // Dashboard is lazy-loaded, but its trend panel imports Recharts.  Keep
+      // the browser bundle pre-optimised so Vite never serves a transient
+      // missing dependency while the lazy route is resolving.
+      'recharts',
     ],
   },
   }

@@ -14,9 +14,9 @@ function InvoiceTable({ title, rows }: { title: string; rows: InvoiceLedgerRow[]
     return (
         <div>
             <h3 className="mb-2 text-sm font-semibold text-foreground">{title}</h3>
-            <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full text-sm">
-                    <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+            <div className="max-h-[calc(100vh-18rem)] overflow-auto rounded-lg border border-border/70 bg-card">
+                <table className="w-full min-w-[760px] text-[13px]">
+                    <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
                         <tr>
                             <th scope="col" className="px-3 py-2 text-left font-semibold">Invoice Number</th>
                             <th scope="col" className="px-3 py-2 text-left font-semibold">Invoice Date</th>
@@ -36,16 +36,16 @@ function InvoiceTable({ title, rows }: { title: string; rows: InvoiceLedgerRow[]
                             </tr>
                         )}
                         {rows.map((row) => (
-                            <tr key={row.invoice_number} className="border-t border-border/60 hover:bg-muted/20">
-                                <td className="px-3 py-2 font-medium">{row.invoice_number}</td>
-                                <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.invoice_date)}</td>
-                                <td className="px-3 py-2">{row.company_name ?? "—"}</td>
-                                <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.amount)}</td>
+                            <tr key={row.invoice_number} className="border-t border-border/60 hover:bg-muted/30">
+                                <td className="px-3 py-1.5 font-medium">{row.invoice_number}</td>
+                                <td className="whitespace-nowrap px-3 py-1.5">{fmtDate(row.invoice_date)}</td>
+                                <td className="px-3 py-1.5">{row.company_name ?? "—"}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.amount)}</td>
                                 {/* `gst` is always `null` on the wire — GST amount isn't tracked in
                                     this schema — so it is never rendered as `0` or blank. */}
-                                <td className="px-3 py-2 text-right text-muted-foreground">Not tracked</td>
-                                <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtNum(row.total)}</td>
-                                <td className="px-3 py-2">
+                                <td className="px-3 py-1.5 text-right text-muted-foreground">Not tracked</td>
+                                <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.total)}</td>
+                                <td className="px-3 py-1.5">
                                     <Badge variant={invoiceLedgerStatusVariant(row.status)}>{row.status}</Badge>
                                 </td>
                             </tr>
@@ -87,7 +87,7 @@ export default function InvoiceLedgerTab({ licenseId, isActive }: InvoiceLedgerT
     }
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-3">
             {data.warning.show_warning && (
                 <Alert variant="warning">
                     <AlertTriangle className="size-4" />

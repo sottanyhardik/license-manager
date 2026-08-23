@@ -15,18 +15,18 @@ export default function BoeParsePanel({
     setBoeParseSummary, handleParseBoePdf,
 }: BoeParsePanelProps) {
     return (
-                        <section className="rounded-lg border border-border bg-card mb-4 p-5">
-                            <div className="flex items-start gap-4 flex-wrap">
+                        <section className="mb-3 rounded-lg border border-border bg-card p-3 shadow-sm" aria-labelledby="boe-import-title">
+                            <div className="flex flex-wrap items-start gap-3">
                                 <span
                                     aria-hidden="true"
-                                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary/5 text-primary"
+                                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/5 text-primary"
                                 >
                                     <FileText className="size-4" aria-hidden="true" />
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-[15px] font-semibold text-foreground tracking-tight">
+                                    <h2 id="boe-import-title" className="text-sm font-semibold text-foreground">
                                         Import from BOE PDF
-                                    </div>
+                                    </h2>
                                     <div className="mt-1 text-[0.8125rem] text-muted-foreground">
                                         Upload an ICEGATE BOE, then click <strong>Fetch</strong> to prefill the form and item rows.
                                     </div>
@@ -43,7 +43,7 @@ export default function BoeParsePanel({
                                         />
                                         <button
                                             type="button"
-                                            className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
+                                            className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                             onClick={handleParseBoePdf}
                                             disabled={!boePdfFile || boeParsing}
                                         >
@@ -57,7 +57,7 @@ export default function BoeParsePanel({
                                 </div>
                             </div>
                             {boeParseSummary && (
-                                <div className="mt-3 rounded-lg border bg-muted/40 px-4 py-3 text-[0.8125rem]">
+                                <div className="mt-3 rounded-md border bg-muted/40 px-3 py-2.5 text-[0.8125rem]" role="status" aria-live="polite">
                                     <div className="text-foreground">
                                         <strong>BE {boeParseSummary.be_number}</strong>
                                         <span className="text-muted-foreground/70"> · </span>{boeParseSummary.be_date}

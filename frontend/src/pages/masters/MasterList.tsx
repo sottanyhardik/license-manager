@@ -386,6 +386,7 @@ export default function MasterList() {
 
     // Derive list data and metadata from query result
     const data = listResponse?.results ?? [];
+    const totalRecords = listResponse?.count ?? data.length;
     const totalPages = listResponse?.total_pages ?? 1;
     const hasNext = listResponse?.has_next ?? false;
     const hasPrevious = listResponse?.has_previous ?? false;
@@ -647,7 +648,7 @@ export default function MasterList() {
     return (
         <div className="min-h-screen bg-[--tb-body-bg]">
             {/* Tabler-style page header */}
-            <div className="page-header">
+            <div className={cn("page-header", entityName === "licenses" && "mb-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm")}>
                 <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
@@ -661,6 +662,14 @@ export default function MasterList() {
                         {entityTitle}
                     </div>
                     <h1>{entityTitle}</h1>
+                    {entityName === "licenses" && (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">Licence workspace</span>
+                            <span aria-hidden="true" className="text-border">•</span>
+                            <span className="tabular-nums">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
+                            {isRefreshing && <span role="status">Updating…</span>}
+                        </div>
+                    )}
                 </div>
                 <div className="page-actions">
                     <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">
@@ -754,8 +763,8 @@ export default function MasterList() {
             />
 
             {/* Table */}
-            <div className="surface-card mt-4">
-                <div className="p-3.5">
+            <div className={cn("surface-card mt-4", entityName === "licenses" && "mt-3 overflow-hidden border-border/70 shadow-sm")}>
+                <div className={cn("p-3.5", entityName === "licenses" && "p-2 sm:p-3")}>
                     {isRefreshing && !loading && (
                         <div role="status" className="mb-2 text-xs text-muted-foreground">Updating results…</div>
                     )}

@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
     RefreshCw, LogIn, LogOut, Eye, PlusCircle, Pencil, Trash2,
-    Download, Upload, FileDown, Search, ScrollText, FileX,
+    Download, Upload, FileDown, Search, ScrollText, FileX, SlidersHorizontal,
 } from "lucide-react";
 
 import api from "../../api/axios";
@@ -82,6 +82,7 @@ export default function ActivityLog() {
     const { user } = useContext(AuthContext);
     const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
+    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const initialFilters: FilterState = {
         username: "", action: "", module: "", date_from: "", date_to: "", search: "", limit: "200",
     };
@@ -126,6 +127,8 @@ export default function ActivityLog() {
     const clearFilters = () =>
         replaceFilters({ ...filters, action: "", username: "", module: "", search: "", date_from: "", date_to: "" });
 
+    const secondaryFilterCount = [filters.module, filters.date_from, filters.date_to].filter(Boolean).length;
+
     return (
         <>
             <PageHeader
@@ -142,10 +145,10 @@ export default function ActivityLog() {
 
             {/* ── Filters ──────────────────────────────────────────── */}
             <Card className="mb-3">
-                <CardContent className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+                <CardContent className="flex flex-wrap items-end gap-2 p-2">
                     {user?.is_superuser && (
-                        <div>
-                            <Label className="mb-1 text-xs" htmlFor="f-user">Username</Label>
+                        <div className="min-w-[160px] flex-1">
+                            <Label className="mb-1 text-[11px]" htmlFor="f-user">Username</Label>
                             <Input
                                 id="f-user"
                                 className="h-8"
@@ -155,8 +158,8 @@ export default function ActivityLog() {
                             />
                         </div>
                     )}
-                    <div>
-                        <Label className="mb-1 text-xs" htmlFor="f-action">Action</Label>
+                    <div className="min-w-[150px]">
+                        <Label className="mb-1 text-[11px]" htmlFor="f-action">Action</Label>
                         <Select value={filters.action || ALL} onValueChange={v => handleFilter("action", v === ALL ? "" : v)}>
                             <SelectTrigger id="f-action" size="sm">
                                 <SelectValue placeholder="All Actions" />
@@ -167,17 +170,28 @@ export default function ActivityLog() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div>
-                        <Label className="mb-1 text-xs" htmlFor="f-module">Module</Label>
+                    <div className="min-w-[180px] flex-[1.5]">
+                        <Label className="mb-1 text-[11px]" htmlFor="f-search">Search</Label>
                         <Input
-                            id="f-module"
+                            id="f-search"
                             className="h-8"
-                            placeholder="e.g. licenses"
-                            value={filters.module}
-                            onChange={e => handleFilter("module", e.target.value)}
+                            placeholder="IP, description…"
+                            value={filters.search}
+                            onChange={e => handleFilter("search", e.target.value)}
                         />
                     </div>
-                    <div className="sm:col-span-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setMoreFiltersOpen((open) => !open)} aria-expanded={moreFiltersOpen}>
+                        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+                        More filters{secondaryFilterCount ? ` (${secondaryFilterCount})` : ""}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>Clear</Button>
+                </CardContent>
+                {moreFiltersOpen && (
+                    <CardContent className="grid grid-cols-1 gap-3 border-t border-border bg-muted/20 p-3 sm:grid-cols-2">
+                        <div>
+                            <Label className="mb-1 text-[11px]" htmlFor="f-module">Module</Label>
+                            <Input id="f-module" className="h-8" placeholder="e.g. licenses" value={filters.module} onChange={e => handleFilter("module", e.target.value)} />
+                        </div>
                         <DateRangeFilter
                             label="Date"
                             fromId="f-from"
@@ -194,18 +208,8 @@ export default function ActivityLog() {
                                 { label: "This Month", range: getThisMonthRange },
                             ]}
                         />
-                    </div>
-                    <div>
-                        <Label className="mb-1 text-xs" htmlFor="f-search">Search</Label>
-                        <Input
-                            id="f-search"
-                            className="h-8"
-                            placeholder="IP, description…"
-                            value={filters.search}
-                            onChange={e => handleFilter("search", e.target.value)}
-                        />
-                    </div>
-                </CardContent>
+                    </CardContent>
+                )}
             </Card>
 
             {/* ── Action summary chips ──────────────────────────────── */}
@@ -295,7 +299,7 @@ export default function ActivityLog() {
                                                     <td className="px-3 py-2">
                                                         <div className="flex items-center gap-2">
                                                             <div
-                                                                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-[10px] font-bold text-white"
+                                                                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
                                                                 aria-hidden="true"
                                                             >
                                                                 {(log.username || "?")[0].toUpperCase()}

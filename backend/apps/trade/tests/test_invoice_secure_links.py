@@ -27,12 +27,12 @@ def invoice_context(settings, tmp_path):
     company = CompanyModel.objects.create(name="Ledger Buyer", iec="LEDGERBUY1")
     outsider = CompanyModel.objects.create(name="Other Company", iec="OTHERCOMP1")
     user = User.objects.create_user(
-        username="invoice-viewer", email="invoice-viewer@example.com", password="x", company=company
+        username="invoice-viewer", email="invoice-viewer@example.com", password="x"
     )
     group, _ = Group.objects.get_or_create(name="TRADE_VIEWER")
     user.groups.add(group)
     other_user = User.objects.create_user(
-        username="outside-viewer", email="outside-viewer@example.com", password="x", company=outsider
+        username="outside-viewer", email="outside-viewer@example.com", password="x"
     )
     other_user.groups.add(group)
     supplier = CompanyModel.objects.create(name="Supplier", iec="SUPPLIER1")

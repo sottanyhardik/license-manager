@@ -137,7 +137,6 @@ def test_parle_license_report_rejects_crud_viewer_without_leaking_filtered_rows(
     user = User.objects.create_user(
         username="parle-crud-viewer",
         password="RoleP@ssw0rd123",
-        company=report_masters["other"],
     )
     group, _ = Group.objects.get_or_create(name="LICENSE_VIEWER")
     user.groups.add(group)

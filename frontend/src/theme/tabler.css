@@ -33,7 +33,8 @@
     --tb-border-strong:  #CDD2DA;
 
     --tb-text:           #111827;
-    --tb-text-secondary: #6B7280;
+    /* Meets AA contrast on the white and soft-blue enterprise surfaces. */
+    --tb-text-secondary: #5E6673;
     --tb-text-tertiary:  #9CA3AF;
     --tb-text-muted:     #C4C9D4;
 
@@ -81,6 +82,16 @@
     --tb-sp-5: 20px;
     --tb-sp-6: 24px;
     --tb-sp-8: 32px;
+
+    /* Operational density contract — shared by every route and primitive. */
+    --tb-control-sm: 32px;
+    --tb-control-md: 36px;
+    --tb-control-lg: 40px;
+    --tb-table-row: 36px;
+    --tb-content-max: 1600px;
+    --tb-z-sticky: 20;
+    --tb-z-dropdown: 1000;
+    --tb-z-modal: 1050;
 
     /* Radii */
     --tb-r-sm: 6px;

@@ -272,7 +272,12 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                 <Label htmlFor="customs-ledger-show-hidden" className="text-xs font-medium text-muted-foreground">
                     Show Hidden BOEs
                 </Label>
-                <Switch id="customs-ledger-show-hidden" checked={showHidden} onCheckedChange={onShowHiddenChange} />
+                <Switch
+                    id="customs-ledger-show-hidden"
+                    aria-label="Show hidden BOEs"
+                    checked={showHidden}
+                    onCheckedChange={onShowHiddenChange}
+                />
             </div>
 
             {/* Bulk action toolbar — appears only while >=1 row is selected,
@@ -337,7 +342,7 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                 </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-border">
+            <div className="overflow-x-auto rounded-lg border border-border" tabIndex={0} aria-label="Customs ledger table; scroll horizontally to view all columns">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>

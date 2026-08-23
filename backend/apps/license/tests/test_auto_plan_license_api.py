@@ -66,9 +66,7 @@ def setup_planning_env():
     # IEC is a statutory 10-character identifier; keep this fixture valid so
     # the API contract, rather than database validation, is exercised.
     company = CompanyModel.objects.create(iec="AUTOPLAN01", name="AutoPlan Test")
-    user = get_user_model().objects.create_user(
-        username="autoplan-user", company=company
-    )
+    user = get_user_model().objects.create_user(username="autoplan-user")
     role, _ = Group.objects.get_or_create(name="LICENSE_MANAGER")
     user.groups.add(role)
 
@@ -228,8 +226,8 @@ def test_plan_license_no_sion_norms(setup_planning_env):
     _assert_queued(response, license_obj, "NEW")
 
 
-def test_plan_license_company_isolation(setup_planning_env):
-    """Test plan-license respects company isolation."""
+def test_plan_license_allows_role_authorized_license(setup_planning_env):
+    """Planning access is role based after removal of ``User.company``."""
     env = setup_planning_env
     other_company = CompanyModel.objects.create(
         iec="OTHERCOMP1", name="Other Company"
@@ -244,8 +242,7 @@ def test_plan_license_company_isolation(setup_planning_env):
         format="json",
     )
 
-    assert response.status_code == 403
-    assert "another company" in response.data["detail"].lower()
+    _assert_queued(response, license_obj, "NEW")
 
 
 def test_plan_license_all_mode_replans_existing(setup_planning_env):
@@ -376,9 +373,7 @@ def test_plan_license_requires_license_manager_role(setup_planning_env):
     )
 
     # Create a user without LICENSE_MANAGER role
-    viewer_user = get_user_model().objects.create_user(
-        username="viewer", company=env["company"]
-    )
+    viewer_user = get_user_model().objects.create_user(username="viewer")
     role, _ = Group.objects.get_or_create(name="LICENSE_VIEWER")
     viewer_user.groups.add(role)
 

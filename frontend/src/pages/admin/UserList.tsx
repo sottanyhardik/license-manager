@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Search, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, ShieldCheck, Users } from "lucide-react";
 
 import { deleteUser, listUsers } from "../../api/users";
 import { AuthContext } from "../../context/AuthContext";
@@ -66,6 +66,8 @@ export default function UserList() {
     const users = userQuery.data ?? [];
     const loading = userQuery.isLoading;
     const refreshing = userQuery.isFetching && !loading;
+    const activeUsers = users.filter((user) => user.is_active).length;
+    const superusers = users.filter((user) => user.is_superuser).length;
 
     const handleDelete = async (userId: number) => {
         try {
@@ -95,20 +97,38 @@ export default function UserList() {
                 }
             />
 
+            <section aria-label="User access summary" className="mb-3 grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-3">
+                <div className="border-b border-r border-border px-3 py-2.5 sm:border-b-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Users</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : users.length}</p>
+                </div>
+                <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{loading ? "—" : activeUsers}</p>
+                </div>
+                <div className="col-span-2 flex items-center gap-2 px-3 py-2.5 sm:col-span-1">
+                    <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><ShieldCheck className="size-4" aria-hidden="true" /></span>
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Super administrators</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">{loading ? "—" : superusers}</p>
+                    </div>
+                </div>
+            </section>
+
             {/* Filters */}
             <Card className="mb-3">
-                <CardContent className="flex flex-wrap items-center gap-2 py-3">
+                <CardContent className="flex flex-wrap items-center gap-2 p-2">
                     <div className="relative min-w-0 basis-full sm:min-w-[220px] sm:flex-1">
                         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
-                            className="h-9 pl-8"
+                            className="h-8 pl-8"
                             placeholder="Search by username or email…"
                             value={filters.search}
                             onChange={(e) => setTextFilter("search", e.target.value)}
                         />
                     </div>
                     <Select value={filters.role || ALL} onValueChange={(v) => setImmediateFilter("role", v === ALL ? "" : v)}>
-                        <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-full sm:w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Roles</SelectItem>
                             {Object.keys(ROLE_LABELS).map((code) => (
@@ -117,7 +137,7 @@ export default function UserList() {
                         </SelectContent>
                     </Select>
                     <Select value={filters.is_active || ALL} onValueChange={(v) => setImmediateFilter("is_active", v === ALL ? "" : v)}>
-                        <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-full sm:w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Status</SelectItem>
                             <SelectItem value="true">Active</SelectItem>
@@ -142,10 +162,10 @@ export default function UserList() {
                         </div>
                     )}
                     {loading ? (
-                        <div className="overflow-x-auto">
+                        <div className="max-h-[calc(100vh-20rem)] overflow-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <tr className="sticky top-0 z-10 border-b border-border bg-muted/95 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm">
                                         <th scope="col" className="px-4 py-2.5">User</th>
                                         <th scope="col" className="px-4 py-2.5">Email</th>
                                         <th scope="col" className="px-4 py-2.5">Roles</th>
@@ -174,10 +194,10 @@ export default function UserList() {
                             action={<Button size="sm" onClick={() => navigate("/admin/users/create")}><Plus className="size-4" />Add User</Button>}
                         />
                     ) : (
-                        <div className="overflow-x-auto">
+                        <div className="max-h-[calc(100vh-20rem)] overflow-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <tr className="sticky top-0 z-10 border-b border-border bg-muted/95 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm">
                                         <th scope="col" className="px-4 py-2.5">User</th>
                                         <th scope="col" className="px-4 py-2.5">Email</th>
                                         <th scope="col" className="px-4 py-2.5">Roles</th>

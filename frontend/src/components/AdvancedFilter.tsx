@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Filter, X, Zap } from "lucide-react";
+import { ChevronDown, Filter, SlidersHorizontal, X, Zap } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
@@ -31,6 +31,7 @@ export default function AdvancedFilter({
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
     const [filterValues, setFilterValues] = useState({ ...defaultFilters, ...initialFiltersWithoutSearch });
+    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const isInitialMount = useRef(true);
     const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
@@ -88,12 +89,25 @@ export default function AdvancedFilter({
         setFilterValues({});
     };
 
+    const humanize = (fieldName: string) => fieldName
+        .replace(/__?(gte|lte|icontains|exact)$/i, "")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/^Balance Balance /, "Balance ");
+    const isLicenseFilter = Object.keys(filterConfig).some((name) => /license|exporter|notification|norm|purchase|expired|balance/i.test(name));
+    const primaryFilterNames = isLicenseFilter
+        ? ["exporter", "license_number", "notification_number", "norm_class", "purchase_status", "license_status", "is_expired"]
+        : Object.keys(filterConfig).slice(0, 6);
+    const primaryEntries = Object.entries(filterConfig).filter(([field]) => primaryFilterNames.includes(field));
+    const secondaryEntries = Object.entries(filterConfig).filter(([field]) => !primaryFilterNames.includes(field));
+    const activeEntries = Object.entries(filterValues).filter(([field, value]) => value !== "" && value !== null && value !== undefined && value !== "all" && String(value) !== String(defaultFilters[field] ?? ""));
+
     // shared style token for react-select border
     const rsControl = (base) => ({ ...base, minHeight: "38px", borderColor: "var(--tb-border)" });
 
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
-        const label = fieldName.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        const label = humanize(fieldName);
 
         // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
         const Col = ({ wide = false, children }) => (
@@ -280,29 +294,23 @@ export default function AdvancedFilter({
                 </div>
             )}
 
-            {/* Filter card */}
+            {/* Compact primary toolbar with progressive disclosure. */}
             {Object.keys(filterConfig).length > 0 && (
                 <Card>
-                    <CardContent className="pt-4">
-                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                            <Filter className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                            <span>Filters</span>
+                    <CardContent className="p-3">
+                        <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                            <span className="flex items-center gap-1.5"><Filter className="size-3.5 text-muted-foreground" aria-hidden="true" /> Filters</span>
+                            <span className="ml-auto flex items-center gap-1 text-[11.5px] font-normal text-muted-foreground"><Zap className="size-3.5" />400ms text debounce</span>
                         </div>
-
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {Object.entries(filterConfig).map(([fieldName, config]) =>
-                                renderFilterField(fieldName, config)
-                            )}
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                            {primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}
                         </div>
-
-                        <div className="mt-3 flex items-center justify-between">
-                            <Button variant="outline" size="sm" onClick={handleResetFilters}>
-                                <X className="size-3.5" />Clear Filters
-                            </Button>
-                            <span className="flex items-center gap-1 text-[11.5px] text-muted-foreground">
-                                <Zap className="size-3.5" />Text filters apply after 400ms; selections apply immediately
-                            </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {secondaryEntries.length > 0 && <Button variant="outline" size="sm" onClick={() => setMoreFiltersOpen((open) => !open)} aria-expanded={moreFiltersOpen}><SlidersHorizontal className="size-3.5" />More Filters{activeEntries.filter(([field]) => !primaryFilterNames.includes(field)).length > 0 ? ` (${activeEntries.filter(([field]) => !primaryFilterNames.includes(field)).length})` : ""}<ChevronDown className={moreFiltersOpen ? "size-3.5 rotate-180" : "size-3.5"} /></Button>}
+                            <Button variant="ghost" size="sm" onClick={handleResetFilters}><X className="size-3.5" />Clear</Button>
                         </div>
+                        {activeEntries.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/60 pt-2" aria-label="Active filters">{activeEntries.map(([field, value]) => <span key={field} className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px]"><span className="text-muted-foreground">{humanize(field)}:</span>{String(value)}<button type="button" onClick={() => handleFilterChange(field, "", true)} aria-label={`Remove ${humanize(field)} filter`} className="rounded-full p-0.5 hover:bg-primary/10"><X className="size-3" /></button></span>)}</div>}
+                        {moreFiltersOpen && <div className="mt-3 grid grid-cols-1 gap-3 border-t border-border/60 pt-3 sm:grid-cols-2 lg:grid-cols-3">{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</div>}
                     </CardContent>
                 </Card>
             )}

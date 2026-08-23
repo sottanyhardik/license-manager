@@ -13,7 +13,7 @@ import {formatDate} from "../utils/dateFormatter";
 import {useDebounce} from "@/hooks/useDebounce";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
-import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, ChevronDown, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
@@ -123,6 +123,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const id = propId || paramId;
 
     const [allocationData, setAllocationData] = useState({});
+    const [transferLetterOpen, setTransferLetterOpen] = useState(false);
     // When an allot is rejected for exceeding the utilization plan, we stash the
     // item here so the planning panel can open and retry the allot after editing.
     const [planModal, setPlanModal] = useState(null);
@@ -705,11 +706,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     return (
         <div className={cn(
-            "allotment-action-page flex flex-col",
-            isModal ? "h-full" : "min-h-screen bg-muted/40 p-4 sm:p-6"
+            "allotment-action-page flex min-h-0 flex-col",
+            isModal ? "h-full" : "h-[calc(100vh-1rem)] bg-muted/40 p-2 sm:h-[calc(100vh-2rem)] sm:p-3"
         )}>
             {!isModal && (
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+                <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-card/80 px-3 py-2 shadow-sm backdrop-blur-sm">
                     <div>
                         <h4 className="font-bold text-foreground flex items-center gap-1.5">
                             <Network className="size-4" aria-hidden="true" />
@@ -765,7 +766,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                             <button
                                 className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                                onClick={() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' })}
+                                onClick={() => {
+                                    setTransferLetterOpen(true);
+                                    window.setTimeout(() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' }), 0);
+                                }}
                                 title="Generate Transfer Letter"
                             >
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
@@ -785,7 +789,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             )}
 
             {/* Scrollable content area */}
-            <div className="flex-1 overflow-y-auto pr-2">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
 
             {allotment && (() => {
                 const unitPrice = parseFloat(allotment.unit_value_per_unit || 0);
@@ -806,11 +810,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     : 'bg-warning/10 text-warning';
 
                 return (
-                    <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <div className="mb-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         {/* Header */}
-                        <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-                            <div className="flex items-center gap-3">
-                                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-1.5">
+                            <div className="flex items-center gap-2">
+                                <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20">
                                     <ListChecks className="size-4 text-primary" aria-hidden="true" />
                                 </div>
                                 <div>
@@ -832,57 +836,57 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
 
                         {/* 4-column stat grid with dividers */}
-                        <div className="grid grid-cols-2 divide-y divide-border/40 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                        <div className="grid grid-cols-2 divide-y divide-border/40 sm:grid-cols-4 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
                             {/* Unit Price */}
-                            <div className="flex flex-col px-5 py-4">
-                                <div className="mb-2 flex items-center gap-1.5">
+                            <div className="flex flex-col px-3 py-2">
+                                <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-info" />
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Unit Price</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-info">
+                                <span className="text-base font-extrabold leading-none tabular-nums text-info">
                                     {unitPrice.toFixed(3)}
                                 </span>
-                                <span className="mt-1.5 text-[11px] text-muted-foreground">USD per unit</span>
+                                <span className="mt-1 text-[10px] text-muted-foreground">USD per unit</span>
                             </div>
 
                             {/* Required */}
-                            <div className="flex flex-col px-5 py-4">
-                                <div className="mb-2 flex items-center gap-1.5">
+                            <div className="flex flex-col px-3 py-2">
+                                <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-muted-foreground/40" />
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Required</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-foreground">
+                                <span className="text-base font-extrabold leading-none tabular-nums text-foreground">
                                     {requiredQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold text-muted-foreground">
+                                <span className="mt-1 text-[10px] font-semibold text-muted-foreground">
                                     ${requiredValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
 
                             {/* Allotted */}
-                            <div className="flex flex-col px-5 py-4 bg-success/[0.04]">
-                                <div className="mb-2 flex items-center gap-1.5">
+                            <div className="flex flex-col bg-success/[0.04] px-3 py-2">
+                                <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-success" />
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-success">Allotted</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-success">
+                                <span className="text-base font-extrabold leading-none tabular-nums text-success">
                                     {allotedQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold text-success">
+                                <span className="mt-1 text-[10px] font-semibold text-success">
                                     ${allotedValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
 
                             {/* Balance */}
-                            <div className={cn("flex flex-col px-5 py-4", balanceQty <= 0 ? "bg-success/[0.06]" : "bg-primary/10")}>
-                                <div className="mb-2 flex items-center gap-1.5">
+                            <div className={cn("flex flex-col px-3 py-2", balanceQty <= 0 ? "bg-success/[0.06]" : "bg-primary/10")}>
+                                <div className="mb-1 flex items-center gap-1.5">
                                     <span className={cn("size-2 shrink-0 rounded-full", balanceQty <= 0 ? "bg-success" : "bg-primary")} />
                                     <span className={cn("text-[10px] font-bold uppercase tracking-widest", balanceQty <= 0 ? "text-success" : "text-primary")}>Balance</span>
                                 </div>
-                                <span className={cn("text-[1.65rem] font-extrabold leading-none tabular-nums", balanceQty <= 0 ? "text-success" : "text-primary")}>
+                                <span className={cn("text-base font-extrabold leading-none tabular-nums", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     {balanceQty.toLocaleString()}
                                 </span>
-                                <span className={cn("mt-1.5 text-[11px] font-semibold", balanceQty <= 0 ? "text-success" : "text-primary")}>
+                                <span className={cn("mt-1 text-[10px] font-semibold", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     ${balanceValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     <span className="ml-1 font-normal opacity-50">+$20 buf</span>
                                 </span>
@@ -894,8 +898,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div className="mb-4 overflow-hidden rounded-xl border border-border/80 bg-card shadow-md shadow-primary/5">
-                    <div className="flex justify-between items-center border-b border-border/60 px-5 py-3">
+                <div className="mb-3 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm shadow-primary/5">
+                    <div className="flex justify-between items-center border-b border-border/60 px-3 py-2">
                         <h6 className="font-semibold text-foreground flex items-center gap-1.5">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
@@ -945,7 +949,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     <div>
                         <div className="overflow-x-auto">
                             <table className="min-w-[980px] w-full text-sm">
-                                <thead className="bg-muted/40 border-b-2 border-border">
+                                <thead className="sticky top-0 z-10 bg-muted/95 border-b-2 border-border">
                                 <tr>
                                     <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-[12px] p-2">License</th>
                                     <th scope="col" className="min-w-[70px] whitespace-nowrap font-semibold text-[12px] p-2">Serial</th>
@@ -953,8 +957,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <th scope="col" className="min-w-[80px] whitespace-nowrap font-semibold text-[12px] p-2">HSN Code</th>
                                     <th scope="col" className="min-w-[160px] font-semibold text-[12px] p-2">Exporter</th>
                                     <th scope="col" className="min-w-[140px] font-semibold text-[12px] p-2">Transfer<br/>Status</th>
-                                    <th scope="col" className="min-w-[100px] font-semibold text-[13.5px] px-2 py-3">License<br/>Date</th>
-                                    <th scope="col" className="min-w-[100px] font-semibold text-[13.5px] px-2 py-3">Expiry<br/>Date</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-[12px] p-2">License<br/>Date</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-[12px] p-2">Expiry<br/>Date</th>
                                     <th scope="col" className="min-w-[80px] text-right font-semibold text-[12px] p-2">Allotted<br/>Qty</th>
                                     <th scope="col" className="min-w-[90px] text-right font-semibold text-[12px] p-2">Allotted<br/>Value</th>
                                     <th scope="col" className="min-w-[64px] whitespace-nowrap font-semibold text-[12px] p-2">Action</th>
@@ -1021,26 +1025,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 </div>
             )}
 
-            {/* Transfer Letter Generation */}
-            {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div id="transfer-letter-section">
-                    <TransferLetterForm
-                        instanceId={id}
-                        instanceType="allotment"
-                        items={allotment.allotment_details.map(detail => ({
-                            id: detail.id,
-                            license_number: detail.license_number || '-',
-                            cif_fc: detail.cif_fc || 0,
-                            purchase_status: detail.purchase_status || 'N/A'
-                        }))}
-                        onSuccess={(msg) => toast.success(msg)}
-                        onError={(msg) => toast.error(msg)}
-                    />
-                </div>
-            )}
-
-            <div className="mb-5 overflow-hidden rounded-xl border border-border/80 bg-card shadow-md shadow-primary/5">
-                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
+            <div className="mb-3 overflow-hidden rounded-xl border border-border/80 bg-card shadow-md shadow-primary/5">
+                <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
                     <div className="flex items-center gap-2">
                         <ListChecks className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available License Items</span>
@@ -1049,7 +1035,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         )}
                     </div>
                 </div>
-                <div className="p-5">
+                <div className="p-3">
 
                     {allocationInitialization?.plan_status === "AMBIGUOUS_ACTIVE_PLAN" && (
                         <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900" role="alert">
@@ -1286,15 +1272,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                     )}
 
-                    {!tableLoading && availableItems.length === 0 && (
-                        <div className="rounded-xl border-2 border-dashed border-border bg-card">
-                            <EmptyState
-                                icon={Inbox}
-                                title={availableLicensesData?.code === "ALLOTMENT_REQUIREMENT_EXHAUSTED" ? "Allotment fully allocated" : (isPlanMode ? "No applicable active plan" : "No available license items found")}
-                                description={availableLicensesData?.code === "ALLOTMENT_REQUIREMENT_EXHAUSTED" ? "No further licence allocation is required." : (isPlanMode ? "PLAN remains selected. Choose ACTUAL to allocate from live licence availability." : "Try adjusting the filters above")}
-                            />
+                    {!tableLoading && availableItems.length === 0 && (availableLicensesData?.code === "ALLOTMENT_REQUIREMENT_EXHAUSTED" ? (
+                        <div className="flex min-h-12 items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 text-sm font-medium text-success" role="status">
+                            <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Allotment fully allocated — no further licence allocation is required.
                         </div>
-                    )}
+                    ) : (
+                        <div className="rounded-xl border-2 border-dashed border-border bg-card"><EmptyState icon={Inbox} title={isPlanMode ? "No applicable active plan" : "No available license items found"} description={isPlanMode ? "PLAN remains selected. Choose ACTUAL to allocate from live licence availability." : "Try adjusting the filters above"} /></div>
+                    ))}
 
                     {/* Pagination */}
                     {totalPages > 1 && (
@@ -1359,6 +1343,31 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
                 </div>
             </div>
+
+            {/* Secondary paperwork stays below allocation so the operational
+                grid is immediately visible without scrolling past a form. */}
+            {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
+                <section id="transfer-letter-section" className="mb-3 overflow-hidden rounded-lg border border-border bg-card">
+                    <button type="button" onClick={() => setTransferLetterOpen(open => !open)} aria-expanded={transferLetterOpen} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <span className="flex min-w-0 items-center gap-2"><FileText className="size-4 shrink-0 text-primary" aria-hidden="true" /><span><span className="block text-[13px] font-bold text-foreground">Generate Transfer Letter</span><span className="block text-[11px] text-muted-foreground">{allotment.allotment_details.length} selected licence{allotment.allotment_details.length === 1 ? "" : "s"} · expand to manage recipients</span></span></span>
+                        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", transferLetterOpen && "rotate-180")} aria-hidden="true" />
+                    </button>
+                    <div className={transferLetterOpen ? "border-t border-border/60" : "hidden"}>
+                    <TransferLetterForm
+                        instanceId={id}
+                        instanceType="allotment"
+                        items={allotment.allotment_details.map(detail => ({
+                            id: detail.id,
+                            license_number: detail.license_number || '-',
+                            cif_fc: detail.cif_fc || 0,
+                            purchase_status: detail.purchase_status || 'N/A'
+                        }))}
+                        onSuccess={(msg) => toast.success(msg)}
+                        onError={(msg) => toast.error(msg)}
+                    />
+                    </div>
+                </section>
+            )}
 
             {/* End scrollable content area */}
             </div>

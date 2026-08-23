@@ -6,9 +6,11 @@ in `apps/license/views/dashboard.py`.
 """
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 
+from apps.core.models import HeadSIONNormsModel, SionNormClassModel
 from apps.license.models import LicenseBalance, LicenseDetailsModel, LicenseExportItemModel
 from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.views.dashboard import DashboardDataView
@@ -103,3 +105,52 @@ class ExpiringLicensesLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCas
         # Only `counted` (live balance >= 100) should add to the baseline;
         # `not_counted` (live balance 0) must not, regardless of its stale cache.
         self.assertEqual(stats["expiring_soon"], before_count + 1)
+
+
+class DashboardQueryRegressionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
+    """Query budgets for the dashboard's request-local read paths.
+
+    The financial-balance service has its own documented bulk-query budget;
+    these tests isolate the dashboard ORM work so a future related-manager
+    call cannot reintroduce an N+1 query for every expiring licence.
+    """
+
+    def test_expiring_license_rows_use_the_prefetched_norms(self):
+        company = self.make_company()
+        head_norm = HeadSIONNormsModel.objects.create(name="Dashboard query budget")
+        norm = SionNormClassModel.objects.create(head_norm=head_norm, norm_class="DASHQ")
+        licenses = []
+        for offset in range(3):
+            license_obj = self.make_license(company)
+            license_obj.license_expiry_date = date.today() + timedelta(days=offset + 1)
+            license_obj.save()
+            LicenseExportItemModel.objects.create(license=license_obj, norm_class=norm)
+            licenses.append(license_obj)
+
+        balances = {license_obj.id: Decimal("100.00") for license_obj in licenses}
+        with patch.object(
+            LicenseBalanceCalculator,
+            "calculate_financial_balance_for_licenses",
+            return_value=balances,
+        ):
+            # One candidate query plus one targeted export/norm prefetch.
+            # Before the regression fix the related-manager filter below
+            # executed an additional query for every displayed licence.
+            with self.assertNumQueries(2):
+                rows = DashboardDataView()._get_expiring_licenses()
+
+        self.assertEqual([row["license_number"] for row in rows], [
+            license_obj.license_number for license_obj in licenses
+        ])
+        self.assertTrue(all(row["sion_norms"] == ["DASHQ"] for row in rows))
+
+    def test_monthly_trend_uses_one_grouped_database_query(self):
+        company = self.make_company()
+        self.make_boe(company, number="DASHBOARD-TREND-ONE")
+        self.make_boe(company, number="DASHBOARD-TREND-TWO")
+
+        with self.assertNumQueries(1):
+            trend = DashboardDataView()._get_boe_monthly_trend()
+
+        self.assertEqual(len(trend), 6)
+        self.assertEqual(sum(row["count"] for row in trend), 2)

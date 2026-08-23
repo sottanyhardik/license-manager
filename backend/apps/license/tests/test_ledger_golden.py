@@ -155,9 +155,6 @@ class GoldenLedgerTestFixture:
             password="testpass123!",
             is_superuser=is_superuser,
         )
-        if company and not is_superuser:
-            user.company = company
-            user.save()
         return user
 
 

@@ -64,17 +64,20 @@ export default function PDFViewer() {
 
     if (loading) {
         return (
-            <div className="flex h-screen flex-col items-center justify-center gap-3 bg-background">
-                <Loader2 className="size-9 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Generating PDF…</p>
+            <div className="flex h-screen flex-col items-center justify-center gap-3 bg-muted/30 px-4">
+                <div className="flex min-w-[18rem] flex-col items-center gap-3 rounded-lg border bg-card px-6 py-5 shadow-sm">
+                    <Loader2 className="size-7 animate-spin text-primary" />
+                    <p className="text-sm font-medium text-foreground">Generating PDF…</p>
+                    <p className="text-xs text-muted-foreground">This may take a moment for larger reports.</p>
+                </div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-6">
-                <div className="w-full max-w-lg rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-destructive">
+            <div className="flex h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4">
+                <div role="alert" className="w-full max-w-lg rounded-lg border border-destructive/30 bg-card p-5 text-destructive shadow-sm">
                     <div className="mb-2 flex items-center gap-2 text-base font-semibold">
                         <TriangleAlert className="size-5" />Error Loading PDF
                     </div>
@@ -88,16 +91,16 @@ export default function PDFViewer() {
     }
 
     return (
-        <div className="m-0 h-screen w-screen p-0">
+        <div className="m-0 h-screen w-screen bg-muted/30 p-0">
             {pdfUrl && <iframe src={pdfUrl} className="size-full border-none" title="PDF Viewer" />}
             <Button
                 type="button"
                 onClick={() => window.location.reload()}
                 title="Refresh PDF"
                 aria-label="Refresh PDF"
-                className="fixed bottom-5 right-5 z-[1000] size-14 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
+                className="fixed bottom-4 right-4 z-[1000] size-11 rounded-full shadow-md transition-transform hover:scale-105 active:scale-95"
             >
-                <RefreshCw className="size-6" />
+                <RefreshCw className="size-4" />
             </Button>
         </div>
     );

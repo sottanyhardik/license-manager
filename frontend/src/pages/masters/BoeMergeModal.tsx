@@ -16,14 +16,14 @@ interface BoeMergeModalProps {
 /** BOE merge modal — extracted verbatim from MasterList. */
 export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCandidatesLoading, mergeCandidates, mergeBoeSource, setMergeBoeSource, mergeBoeLoading, doMerge }: BoeMergeModalProps) {
     return (
-                <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45" onClick={closeMergeModal}>
-                    <div className="w-[560px] max-w-[95vw] rounded-xl bg-card p-6 shadow-[0_8px_32px_rgba(0,0,0,0.18)]" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45 p-3" onClick={closeMergeModal}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="merge-boe-title" className="max-h-[calc(100dvh-1.5rem)] w-[560px] max-w-[95vw] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-[0_8px_32px_rgba(0,0,0,0.18)]" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
-                            <h6 className="m-0 font-bold text-primary flex items-center gap-1.5">
+                            <h2 id="merge-boe-title" className="m-0 flex items-center gap-1.5 text-sm font-bold text-foreground">
                                 <Layers className="size-4" aria-hidden="true" />
                                 Merge BOE: <span className="text-violet-600">{mergeBoeTarget.bill_of_entry_number}</span>
-                            </h6>
-                            <button onClick={closeMergeModal} className="flex items-center justify-center bg-transparent border-none text-[1.2rem] cursor-pointer text-muted-foreground/70 hover:text-foreground">
+                            </h2>
+                            <button type="button" onClick={closeMergeModal} aria-label="Close merge BOE dialog" className="flex size-8 items-center justify-center rounded bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                                 <X className="size-4" aria-hidden="true" />
                             </button>
                         </div>
@@ -56,11 +56,13 @@ export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCa
                         {mergeCandidates.map(candidate => {
                             const isSelected = mergeBoeSource?.id === candidate.id;
                             return (
-                                <div
+                                <button
+                                    type="button"
                                     key={candidate.id}
                                     onClick={() => setMergeBoeSource((prev: any) => prev?.id === candidate.id ? null : candidate)}
+                                    aria-pressed={isSelected}
                                     className={cn(
-                                        "flex items-center justify-between px-3.5 py-2.5 rounded-xl mb-2 cursor-pointer border-2 transition-all duration-150",
+                                        "mb-2 flex w-full items-center justify-between rounded-lg border-2 px-3 py-2 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                         isSelected
                                             ? "border-violet-500 bg-muted/60"
                                             : "border-border bg-card"
@@ -84,7 +86,7 @@ export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCa
                                             <span className="text-[11px] text-violet-600 font-bold">✓ Selected</span>
                                         )}
                                     </div>
-                                </div>
+                                </button>
                             );
                         })}
 

@@ -7,6 +7,7 @@ import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import PageHeader from "@/components/PageHeader";
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {
     return (
@@ -40,22 +41,19 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
         fetchBOE();
     }, [id]);
 
-    if (loading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
+    if (loading) return <div role="status" className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">Loading…</div>;
 
     return (
-        <div className={isModal ? "" : "py-1"}>
+        <div className={isModal ? "" : "space-y-3 py-1"}>
             {!isModal && (
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                        Generate Transfer Letter
-                        {boe?.bill_of_entry_number && (
-                            <span className="ml-2 text-base font-medium text-muted-foreground">· BOE {boe.bill_of_entry_number}</span>
-                        )}
-                    </h1>
-                    <Button variant="outline" onClick={() => navigate("/bill-of-entries")}>
+                <PageHeader
+                    pretitle="Documents"
+                    title="Generate Transfer Letter"
+                    description={boe?.bill_of_entry_number ? `BOE ${boe.bill_of_entry_number}` : undefined}
+                    actions={<Button variant="outline" size="sm" onClick={() => navigate("/bill-of-entries")}>
                         <ArrowLeft className="size-4" />Back to BOE List
-                    </Button>
-                </div>
+                    </Button>}
+                />
             )}
 
             {error && (
@@ -66,8 +64,8 @@ export default function BOETransferLetter({ boeId: propId, isModal = false, onCl
 
             {boe && (
                 <>
-                    <Card className="mb-4">
-                        <CardContent className="grid grid-cols-2 gap-4 pt-5 md:grid-cols-4">
+                    <Card>
+                        <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 p-3 md:grid-cols-4">
                             <Detail label="BOE Number" value={boe.bill_of_entry_number} />
                             <Detail label="BOE Date" value={boe.bill_of_entry_date} />
                             <Detail label="Company" value={boe.company_name || boe.company?.name} />

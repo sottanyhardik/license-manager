@@ -149,7 +149,11 @@ def check_delete_on_peers(model_label: str, natural_key: dict) -> list[dict]:
         "natural_key": natural_key,
     }, default=str).encode("utf-8")
 
-    for peer in SyncPeer.objects.filter(is_active=True):
+    # Conflict reporting is part of the delete API's observable response.
+    # ``SyncPeer`` deliberately has no model-level ordering, so relying on the
+    # database's physical row order made response ordering (and therefore the
+    # peer assigned to a sequential transport result) nondeterministic.
+    for peer in SyncPeer.objects.filter(is_active=True).order_by("server_id"):
         token = token_for_peer(peer.server_id)
         if token is None:
             conflicts.append({

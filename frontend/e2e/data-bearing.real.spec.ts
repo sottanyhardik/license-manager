@@ -137,6 +137,13 @@ test.describe("isolated data-bearing operational workflows", () => {
     ] as const) {
       await page.goto(route, { waitUntil: "networkidle" });
       await expect(page.locator("body")).toContainText(evidence, { timeout: 10_000 });
+      if (route === "/trades") {
+        // The deterministic isolated seed creates both directions.  Keep this
+        // assertion here so the real route smoke cannot pass on a heading-only
+        // or empty state after a list/serializer/query change.
+        await expect(page.getByText("E2E-PURCHASE-2509", { exact: true })).toBeVisible();
+        await expect(page.getByText("E2E-SALE-2509", { exact: true })).toBeVisible();
+      }
       await expectNoDocumentOverflow(page);
     }
     expect(pageErrors).toEqual([]);

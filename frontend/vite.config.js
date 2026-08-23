@@ -32,6 +32,10 @@ export default defineConfig(({ mode }) => {
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    // Hashed chunks are immutable and may still be requested by tabs that were
+    // open while a new version is deployed.  Keep them until an explicit
+    // release cleanup so those tabs can finish loading lazy routes.
+    emptyOutDir: false,
     manifest: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,

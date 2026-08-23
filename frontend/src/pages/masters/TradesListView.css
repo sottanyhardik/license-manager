@@ -1,0 +1,18 @@
+/* Route-scoped accessibility repairs.  These deliberately do not modify the
+   shared token system or other master-list routes. */
+.trades-list-view .entity-card-stat-label {
+    color: var(--tb-text-secondary) !important;
+}
+
+/* Button uses Radix Slot for its Add New link.  The existing broad `a` reset
+   can otherwise inherit the page foreground.  :has keeps this repair limited
+   to the rendered Trades route. */
+body:has(.trades-list-view) .page-actions a[data-slot="button"] {
+    color: var(--primary-foreground) !important;
+}
+
+.trades-list-view .trade-pair-purchase,
+.trades-list-view .trade-pair-companies,
+.trades-list-view .trade-pair-toggle {
+    color: var(--tb-brand-active) !important;
+}

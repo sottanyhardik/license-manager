@@ -3,10 +3,11 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Prefetch
 
 from apps.accounts.permissions import TradePermission
 from apps.core.views import MasterViewSet
-from .models import LicenseTrade, LicenseTradeLine, LicenseTradePayment
+from .models import IncentiveTradeLine, LicenseTrade, LicenseTradeLine, LicenseTradePayment
 from .serializers import (
     LicenseTradeSerializer,
     TradeLineSimpleSerializer,
@@ -276,18 +277,24 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.select_related(
-            'from_company', 'to_company', 'incentive_license', 'linked_trade',
+            'from_company', 'to_company', 'incentive_license', 'linked_trade', 'counterpart',
             'created_by', 'modified_by',
         )
+
+        # Every nested relation below is represented by LicenseTradeSerializer.
+        # Keep these prefetches narrow and relation-aware: the previous
+        # ``lines__sr_number__items`` loaded every item-name relation even though
+        # the serializer only needs the SR's licence for its label.  More
+        # importantly, ``paired_trades`` and payment rows are prefetched so
+        # serializer helpers never issue one aggregate/lookup per trade.
+        paired_trade_queryset = LicenseTrade.objects.prefetch_related('payments')
         qs = qs.prefetch_related(
             'boes',
-            'lines',
-            'lines__sr_number',
-            'lines__sr_number__license',
-            'lines__sr_number__items',
-            'incentive_lines',
-            'incentive_lines__incentive_license',
+            Prefetch('lines', queryset=LicenseTradeLine.objects.select_related('sr_number__license')),
+            Prefetch('incentive_lines', queryset=IncentiveTradeLine.objects.select_related('incentive_license')),
             'payments',
+            Prefetch('paired_trades', queryset=paired_trade_queryset),
+            'linked_trade__payments',
         )
         return qs
 

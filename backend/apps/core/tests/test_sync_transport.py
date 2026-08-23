@@ -258,6 +258,26 @@ class TestCheckDeleteOnPeers:
         assert conflicts[0]["server"] == "peer-C"
         assert conflicts[0]["references"] == ["license.LicenseDetailsModel: 4 record(s)"]
 
+    def test_active_peers_are_checked_in_stable_server_id_order(self):
+        """Transport responses must not be assigned by physical DB row order."""
+        make_peer("peer-C", base_url="http://c.example.test")
+        make_peer("peer-B", base_url="http://b.example.test")
+
+        with patched_urlopen(responses=[
+            FakeHTTPResponse({"safe": True, "references": []}),
+            FakeHTTPResponse({"safe": False, "references": ["license.LicenseDetailsModel: 4 record(s)"]}),
+        ]) as urlopen:
+            conflicts = check_delete_on_peers("core.PortModel", self.NK)
+
+        assert [request.full_url for request in sent_requests(urlopen)] == [
+            "http://b.example.test/api/sync/delete-check/",
+            "http://c.example.test/api/sync/delete-check/",
+        ]
+        assert conflicts == [{
+            "server": "peer-C",
+            "references": ["license.LicenseDetailsModel: 4 record(s)"],
+        }]
+
     def test_409_response_is_read_as_a_conflict(self):
         """The peer's own API answers 409 for a blocked delete."""
         make_peer("peer-B")

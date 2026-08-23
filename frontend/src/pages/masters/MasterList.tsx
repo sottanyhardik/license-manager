@@ -17,19 +17,71 @@ import DetailTable from "../../components/primitives/DetailTable";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
 import {openLicenseCopyPdf} from "../../utils/licenseCopyPdf";
-import {clickable} from "../../utils/clickable";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
+import TradesListView from "./TradesListView";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
+import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
+
+type TradeListItem = {
+    id: number;
+    direction?: string;
+    linked_trade_info?: { id: number } | null;
+    [key: string]: any;
+};
+
+type TradeGroup =
+    | { type: "single"; trade: TradeListItem; pairKey: string }
+    | { type: "pair"; sale: TradeListItem; purchase: TradeListItem; pairKey: string };
+
+const EMPTY_LIST: any[] = [];
+
+/**
+ * Keeps the list's existing linked-trade presentation while avoiding an O(n²)
+ * `Array.find` for every row. The API guarantees unique trade IDs; retaining
+ * the first occurrence also preserves the previous `find` behaviour if a
+ * malformed response contains a duplicate ID.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function groupLinkedTrades(trades: TradeListItem[]): TradeGroup[] {
+    const byId = new Map<number, TradeListItem>();
+    for (const trade of trades) {
+        if (!byId.has(trade.id)) byId.set(trade.id, trade);
+    }
+
+    const seen = new Set<number>();
+    const groups: TradeGroup[] = [];
+    for (const trade of trades) {
+        if (seen.has(trade.id)) continue;
+        seen.add(trade.id);
+
+        const partnerId = trade.linked_trade_info?.id;
+        const partner = partnerId == null ? undefined : byId.get(partnerId);
+        if (partner && !seen.has(partner.id)) {
+            seen.add(partner.id);
+            const sale = trade.direction?.includes("SALE") ? trade : partner;
+            const purchase = trade.direction?.includes("PURCHASE") ? trade : partner;
+            groups.push({
+                type: "pair",
+                sale,
+                purchase,
+                pairKey: `pair-${Math.min(trade.id, partner.id)}`,
+            });
+            continue;
+        }
+
+        groups.push({ type: "single", trade, pairKey: `single-${trade.id}` });
+    }
+    return groups;
+}
 
 /**
  * Generic Master List Page
@@ -71,7 +123,6 @@ export default function MasterList() {
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
     const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
-    const [metadata, setMetadata] = useState<Record<string, any>>({});
     const [error, setError] = useState("");
 
     // Pagination state
@@ -132,7 +183,7 @@ export default function MasterList() {
         } catch (err) { toast.error(err.response?.data?.error || 'Failed to link trades'); }
     };
 
-    const [expandedPairs, setExpandedPairs] = useState(new Set());
+    const [expandedPairs, setExpandedPairs] = useState<Set<string>>(() => new Set());
     const [pdfLoading, setPdfLoading] = useState(false);
     const togglePair = (pairKey) => {
         setExpandedPairs(prev => {
@@ -163,7 +214,7 @@ export default function MasterList() {
         });
     };
 
-    const [expandedTrades, setExpandedTrades] = useState(new Set());
+    const [expandedTrades, setExpandedTrades] = useState<Set<number>>(() => new Set());
     const toggleTrade = (id) => {
         setExpandedTrades(prev => {
             const next = new Set(prev);
@@ -317,19 +368,6 @@ export default function MasterList() {
         }
     }, [entityName, location.search]);
 
-    // Update filterParams when backend default filters are received (for UI display only)
-    useEffect(() => {
-        if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
-        const backendDefaults = metadata.default_filters || {};
-        const hardcodedDefaults = getDefaultFilters(entityName);
-        if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
-            setFilterParams(backendDefaults);
-            setCurrentPage(1);
-            backendDefaultsApplied.current = true;
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [metadata.default_filters]);
-
     // ---------------------------------------------------------------------------
     // Main list query — re-runs whenever entity, page, size, or filters change.
     // TanStack handles request de-duplication and cancellation.
@@ -385,16 +423,17 @@ export default function MasterList() {
     });
 
     // Derive list data and metadata from query result
-    const data = listResponse?.results ?? [];
+    const data = listResponse?.results ?? EMPTY_LIST;
     const totalRecords = listResponse?.count ?? data.length;
     const totalPages = listResponse?.total_pages ?? 1;
     const hasNext = listResponse?.has_next ?? false;
     const hasPrevious = listResponse?.has_previous ?? false;
 
-    // Sync metadata from response (needed for filter_fields, list_display, etc.)
-    useEffect(() => {
-        if (!listResponse) return;
-        setMetadata({
+    // Metadata is response-derived. Keeping it out of local state avoids a
+    // second complete MasterList render after every successful list request.
+    const metadata = useMemo<Record<string, any>>(() => {
+        if (!listResponse) return {};
+        return {
             list_display: listResponse.list_display || [],
             form_fields: listResponse.form_fields || [],
             search_fields: listResponse.search_fields || [],
@@ -406,8 +445,28 @@ export default function MasterList() {
             field_meta: listResponse.field_meta || {},
             default_filters: listResponse.default_filters || {},
             inline_editable: listResponse.inline_editable || [],
-        });
+        };
     }, [listResponse]);
+
+    // Update filterParams when backend default filters are received (for UI display only).
+    useEffect(() => {
+        if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
+        const backendDefaults = metadata.default_filters || {};
+        const hardcodedDefaults = getDefaultFilters(entityName);
+        if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
+            setFilterParams(backendDefaults);
+            setCurrentPage(1);
+            backendDefaultsApplied.current = true;
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [metadata.default_filters]);
+
+    // Group once per response. Expansion, modal, and other local UI state no
+    // longer repeats linked-trade grouping work for a large page of results.
+    const tradeGroups = useMemo(
+        () => entityName === "trades" ? groupLinkedTrades(data as TradeListItem[]) : [],
+        [entityName, data],
+    );
 
     // Surface list load failure to the error banner
     useEffect(() => {
@@ -486,6 +545,33 @@ export default function MasterList() {
             toast.error(err.response?.data?.detail || "Failed to delete record");
         }
     };
+
+    // Trade mutations remain owned here so the presentation component cannot
+    // alter endpoints, permissions, filter persistence, or cache invalidation.
+    const handleCopyTradeToCounterpart = useCallback(async (item: TradeListItem) => {
+        const destination = item.direction === 'SALE' ? 'Purchase' : 'Sale';
+        const confirmed = await confirmDangerousAction(
+            `Copy to ${destination}`,
+            `Create the linked ${destination} with the same companies, licence lines and commercial amounts?`,
+        );
+        if (!confirmed) return;
+
+        try {
+            const endpoint = item.direction === 'SALE' ? 'copy-to-purchase' : 'copy-to-sale';
+            const response = await api.post(`trades/${item.id}/${endpoint}/`);
+            toast.success(response.data.created ? `Linked ${destination} created` : `Linked ${destination} already exists`);
+            invalidateList();
+            navigate(`/trades/${response.data.counterpart.id}/edit`);
+        } catch (err) {
+            toast.error(err.response?.data?.error || `Failed to copy to ${destination}`);
+        }
+    }, [confirmDangerousAction, invalidateList, navigate]);
+
+    const handleTradeTransferLetter = useCallback((item: TradeListItem) => {
+        setTransferLetterType('trade');
+        setTransferLetterEntityId(item.id);
+        setShowTransferLetterModal(true);
+    }, []);
 
     const handleToggleBoolean = async (item, field, newValue) => {
         // Optimistic UI update via query cache
@@ -995,214 +1081,27 @@ export default function MasterList() {
                         />
                     )}
 
-                    {/* Trades Card Layout */}
+                    {/* Trades — dedicated presentation component; list lifecycle and mutations remain above. */}
                     {entityName === 'trades' && (
-                        loading ? (
-                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted-foreground">Loading Trades...</div></div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground"><Inbox className="size-4" aria-hidden="true" /><div className="mt-2">No trades found</div></div>
-                        ) : (() => {
-                            const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-
-                            const renderTradeCard = (item) => {
-                                const directionTone =
-                                    item.direction === 'SALE'             ? 'success'
-                                  : item.direction === 'PURCHASE'         ? 'info'
-                                  : item.direction === 'COMMISSION_SALE'  ? 'warning'
-                                  :                                          'primary';
-                                const accent =
-                                    item.direction === 'SALE'             ? 'success'
-                                  : item.direction === 'PURCHASE'         ? 'info'
-                                  : item.direction === 'COMMISSION_SALE'  ? 'warning'
-                                  :                                          'primary';
-                                const counterpart = item.counterpart_info || item.linked_trade_info;
-                                const isLinked = !!(item.counterpart_id || counterpart);
-                                const copyToCounterpart = async () => {
-                                    const destination = item.direction === 'SALE' ? 'Purchase' : 'Sale';
-                                    const confirmed = await confirmDangerousAction(
-                                        `Copy to ${destination}`,
-                                        `Create the linked ${destination} with the same companies, licence lines and commercial amounts?`,
-                                    );
-                                    if (!confirmed) return;
-                                    try {
-                                        const endpoint = item.direction === 'SALE' ? 'copy-to-purchase' : 'copy-to-sale';
-                                        const response = await api.post(`trades/${item.id}/${endpoint}/`);
-                                        toast.success(response.data.created ? `Linked ${destination} created` : `Linked ${destination} already exists`);
-                                        invalidateList();
-                                        navigate(`/trades/${response.data.counterpart.id}/edit`);
-                                    } catch (err) {
-                                        toast.error(err.response?.data?.error || `Failed to copy to ${destination}`);
-                                    }
-                                };
-                                const detailRows = item.lines || [];
-                                return (
-                                    <EntityCard
-                                        key={item.id}
-                                        accent={accent}
-                                        title={item.invoice_number || <span className="italic font-normal text-muted-foreground">No Invoice</span>}
-                                        headerChips={[
-                                            { tone: directionTone, label: item.direction_label || item.direction },
-                                            item.license_type_label && { label: item.license_type_label },
-                                            item.invoice_date       && { icon: 'calendar3', label: item.invoice_date },
-                                        ].filter(Boolean)}
-                                        summary={[
-                                            { label: 'Total',     value: fmtInr(item.total_amount) },
-                                            { label: 'Paid/Rcvd', value: fmtInr(item.paid_or_received), tone: 'success' },
-                                            { label: 'Due',       value: fmtInr(item.due_amount), tone: item.due_amount > 0 ? 'danger' : undefined },
-                                        ]}
-                                        actions={[
-                                            { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
-                                                onClick: () => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); },
-                                                children: 'TL' },
-                                            ...(item.direction === 'SALE' ? [
-                                                { icon: 'file-pdf', title: 'Invoice (With Sign)', tone: 'success',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: true }, responseType: 'blob' });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_with_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
-                                                            window.URL.revokeObjectURL(url);
-                                                        } catch { toast.error('Failed to generate invoice'); }
-                                                    } },
-                                                { icon: 'file-pdf', title: 'Invoice (Without Sign)', tone: 'warning',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: false }, responseType: 'blob' });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_without_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
-                                                            window.URL.revokeObjectURL(url);
-                                                        } catch { toast.error('Failed to generate invoice'); }
-                                                    } },
-                                            ] : []),
-                                            canWrite && !isLinked && (item.direction === 'PURCHASE' || item.direction === 'SALE') && {
-                                                icon: 'copy',
-                                                label: item.direction === 'SALE' ? 'Copy to Purchase' : 'Copy to Sale',
-                                                title: item.direction === 'SALE' ? 'Copy this Sale to a linked Purchase' : 'Copy this Purchase to a linked Sale',
-                                                tone: 'info', onClick: copyToCounterpart,
-                                            },
-                                            isLinked && { icon: 'link-45deg', title: `View Linked ${counterpart?.type === 'purchase' ? 'Purchase' : 'Sale'}`, tone: 'success',
-                                                label: `Linked ${counterpart?.type === 'purchase' ? 'Purchase' : 'Sale'}`,
-                                                onClick: () => navigate(`/trades/${counterpart.id}/edit`) },
-                                            canWrite && !isLinked && { icon: 'link-45deg', title: 'Link to existing trade', tone: 'primary',
-                                                onClick: () => openLinkModal(item) },
-                                            canWrite && { icon: 'pencil-fill', title: 'Edit', tone: 'primary',
-                                                onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); } },
-                                            canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
-                                        ].filter(Boolean)}
-                                        viewOpen={expandedTrades.has(item.id)}
-                                        onView={() => toggleTrade(item.id)}
-                                        detailLabel={detailRows.length ? `${detailRows.length} Line${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
-                                        detail={() => (
-                                            <DetailTable
-                                                columns={[
-                                                    { key: 'sr_number_label', label: 'Sr#',        nowrap: true,
-                                                        render: (v, row) => v || (row.sr_number != null ? String(row.sr_number) : '—') },
-                                                    { key: 'description',     label: 'Description', muted: true },
-                                                    { key: 'hsn_code',        label: 'HSN',         nowrap: true,
-                                                        render: v => v ? <code>{v}</code> : '—' },
-                                                    { key: 'qty_kg',          label: 'Qty (KG)',   align: 'right', nowrap: true,
-                                                        render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—' },
-                                                    { key: 'cif_fc',          label: 'CIF FC $',   align: 'right', nowrap: true,
-                                                        render: v => v ? `$${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—' },
-                                                    { key: 'cif_inr',         label: 'CIF INR',    align: 'right', nowrap: true,
-                                                        render: v => v ? fmtInr(v) : '—' },
-                                                    { key: 'amount_inr',      label: 'Amount',     align: 'right', nowrap: true, bold: true,
-                                                        render: v => fmtInr(v) },
-                                                ]}
-                                                rows={detailRows}
-                                                emptyMessage="No trade lines."
-                                            />
-                                        )}
-                                    >
-                                        <div className="flex flex-wrap items-center gap-4">
-                                            <div className="flex min-w-[220px] flex-1 items-center gap-3">
-                                                <div>
-                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">From</div>
-                                                    <div className="text-[14.5px] font-medium text-foreground">{item.from_company_label || '—'}</div>
-                                                </div>
-                                                <ArrowRight className="size-4" aria-hidden="true" />
-                                                <div>
-                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">To</div>
-                                                    <div className="text-[14.5px] font-medium text-foreground">{item.to_company_label || '—'}</div>
-                                                </div>
-                                            </div>
-                                            {item.boes && item.boes.length > 0 && (
-                                                <div className="min-w-[100px]">
-                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">BOE</div>
-                                                    <div className="text-[13.5px] font-medium text-primary">{item.boes.map(b => b.bill_of_entry_number).join(', ')}</div>
-                                                </div>
-                                            )}
-                                            {item.incentive_license && (
-                                                <div className="min-w-[100px]">
-                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Incentive Lic</div>
-                                                    <div className="text-[13.5px] font-medium text-success">{item.incentive_license}</div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </EntityCard>
-                                );
-                            };
-
-                            // Group linked trades into pairs; keep unpaired as singles
-                            const seen = new Set();
-                            const tradeGroups = [];
-                            data.forEach(trade => {
-                                if (seen.has(trade.id)) return;
-                                seen.add(trade.id);
-                                const linked = trade.linked_trade_info;
-                                if (linked) {
-                                    const partner = data.find(t => t.id === linked.id);
-                                    if (partner && !seen.has(partner.id)) {
-                                        seen.add(partner.id);
-                                        const sale = trade.direction.includes('SALE') ? trade : partner;
-                                        const purchase = trade.direction.includes('PURCHASE') ? trade : partner;
-                                        tradeGroups.push({ type: 'pair', sale, purchase, pairKey: `pair-${Math.min(trade.id, partner.id)}` });
-                                        return;
-                                    }
-                                }
-                                tradeGroups.push({ type: 'single', trade, pairKey: `single-${trade.id}` });
-                            });
-
-                            return (
-                                <div>
-                                    {tradeGroups.map(group => {
-                                        if (group.type === 'single') {
-                                            return renderTradeCard(group.trade);
-                                        }
-                                        // Paired group
-                                        const { sale, purchase, pairKey } = group;
-                                        const isExpanded = expandedPairs.has(pairKey);
-                                        const companies = `${sale.from_company_label || '-'} ↔ ${sale.to_company_label || '-'}`;
-                                        return (
-                                            <div key={pairKey} className="mb-2.5 overflow-hidden rounded-[--tb-r-md] border border-[#a5b4fc] border-l-4 border-l-[#6366f1] shadow-sm">
-                                                <div
-                                                    className="flex cursor-pointer flex-wrap items-center gap-2 bg-primary/5 px-3.5 py-2.5"
-                                                    {...clickable(() => togglePair(pairKey))}
-                                                >
-                                                    <span className="rounded-[--tb-r-sm] bg-success/10 px-2 py-0.5 text-xs font-bold text-success">Sale</span>
-                                                    <LinkIcon className="size-4" aria-hidden="true" />
-                                                    <span className="rounded-[--tb-r-sm] bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">Purchase</span>
-                                                    <span className="flex-1 text-[0.82rem] font-semibold text-primary">{companies}</span>
-                                                    <span className="text-[12.5px] text-muted-foreground">
-                                                        {sale.invoice_date || ''}
-                                                    </span>
-                                                    <span className="text-[12.5px] text-muted-foreground">
-                                                        Sale: {fmtInr(sale.total_amount)} · Purchase: {fmtInr(purchase.total_amount)}
-                                                    </span>
-                                                    <ChevronDown className={cn('size-4 text-primary transition-transform', isExpanded && 'rotate-180')} />
-                                                </div>
-                                                {isExpanded && (
-                                                    <div className="flex flex-col gap-2 bg-[--tb-sunken] p-2">
-                                                        {renderTradeCard(sale)}
-                                                        {renderTradeCard(purchase)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()
+                        <TradesListView
+                            loading={loading}
+                            data={data}
+                            tradeGroups={tradeGroups}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            onOpenLink={openLinkModal}
+                            onCopyToCounterpart={handleCopyTradeToCounterpart}
+                            onTransferLetter={handleTradeTransferLetter}
+                            expandedTrades={expandedTrades}
+                            onToggleTrade={toggleTrade}
+                            expandedPairs={expandedPairs}
+                            onTogglePair={togglePair}
+                        />
                     )}
 
                     {/* Incentive Licenses Card Layout */}

@@ -1,11 +1,44 @@
 # trade/serializers.py
 
+from decimal import Decimal
+
 from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
-    LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment
+    LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment, q2
 )
+
+
+def _payment_total(instance):
+    """Return the canonical settlement total without defeating list prefetches.
+
+    ``LicenseTrade.paid_or_received`` deliberately remains the authoritative
+    model property for callers that did not load payments.  On the trade list,
+    however, the view has already fetched the exact payment rows required by
+    the response.  Calling the property there used ``aggregate()`` once (and
+    again through ``due_amount``) for every result, which turned a paginated
+    list into an N+1 query path.  Summing the same prefetched Decimal values
+    preserves the existing q2 rounding and null semantics.
+    """
+    payments = getattr(instance, '_prefetched_objects_cache', {}).get('payments')
+    if payments is None:
+        return instance.paid_or_received
+    return q2(sum((payment.amount for payment in payments), Decimal('0')))
+
+
+class PrefetchedPaymentTotalField(serializers.DecimalField):
+    """A DecimalField with the legacy representation and prefetch-aware value."""
+
+    def get_attribute(self, instance):
+        return _payment_total(instance)
+
+
+class PrefetchedDueAmountField(serializers.DecimalField):
+    """The existing due calculation, without an extra aggregate per trade."""
+
+    def get_attribute(self, instance):
+        return q2(instance.total_amount) - q2(_payment_total(instance))
 
 
 class LicenseTradePaymentSerializer(serializers.ModelSerializer):
@@ -91,8 +124,8 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     incentive_license = serializers.SerializerMethodField()
 
     # Computed fields
-    paid_or_received = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
-    due_amount = serializers.DecimalField(max_digits=20, decimal_places=2, read_only=True)
+    paid_or_received = PrefetchedPaymentTotalField(max_digits=20, decimal_places=2, read_only=True)
+    due_amount = PrefetchedDueAmountField(max_digits=20, decimal_places=2, read_only=True)
 
     # Linked trade fields
     auto_create_paired = serializers.BooleanField(write_only=True, required=False, default=False)
@@ -113,7 +146,14 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
     def get_linked_trade_info(self, obj):
         lt = obj.linked_trade
         if not lt:
-            lt = obj.paired_trades.first()
+            # ``first()`` issues a query even when the relation was prefetched
+            # on several Django versions.  The prefetch retains the model's
+            # declared ordering, so selecting its first cached value has the
+            # same observable result as the previous call.
+            paired_trades = getattr(obj, '_prefetched_objects_cache', {}).get('paired_trades')
+            lt = paired_trades[0] if paired_trades else None
+            if paired_trades is None:
+                lt = obj.paired_trades.first()
         if not lt:
             return None
         return {
@@ -122,8 +162,8 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             'direction_label': lt.get_direction_display(),
             'invoice_number': lt.invoice_number,
             'total_amount': str(lt.total_amount),
-            'paid_or_received': str(lt.paid_or_received),
-            'due_amount': str(lt.due_amount),
+            'paid_or_received': str(_payment_total(lt)),
+            'due_amount': str(q2(lt.total_amount) - q2(_payment_total(lt))),
         }
 
     def to_internal_value(self, data):

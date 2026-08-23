@@ -1,0 +1,372 @@
+==================================================================
+DB-01 REGRESSION VERIFICATION
+Finding: on_delete=CASCADE on nullable master-data FKs (PortModel,
+CompanyModel) -- fixed by switching to on_delete=PROTECT on:
+  LicenseDetailsModel.port
+  BillOfEntryModel.company, BillOfEntryModel.port
+  AllotmentModel.company, AllotmentModel.port, AllotmentModel.related_company
+plus MasterViewSet.perform_destroy translating ProtectedError -> DRF 400.
+Date: 2026-08-07
+==================================================================
+
+-------------------------------------------------------------------
+PART 1 of 3: New/extended regression test file, isolated run
+File under test:
+  backend/apps/core/tests/test_masterdata_delete_protection.py
+
+Command:
+  cd backend && python -m pytest apps/core/tests/test_masterdata_delete_protection.py -v --no-migrations --no-cov
+
+NOTE on --no-migrations: see PART 3 below -- a pre-existing migration
+graph ordering issue (unrelated to DB-01's own logic, but triggered by
+the *presence* of this fix's new migrations) prevents pytest-django
+from building a from-scratch test database via full migration replay
+in the current working tree. --no-migrations builds the schema
+directly from model state (Django's syncdb-style creation), which
+sidesteps that unrelated migration-ordering blocker and lets the
+actual DB-01 model/view logic be exercised and asserted on. This is
+a workaround for a verification-environment limitation, not a dodge of the fix itself.
+-------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 19 items
+
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_deleting_referenced_port_does_not_touch_unrelated_license PASSED [  5%]
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_deleting_referenced_port_is_blocked_and_license_survives PASSED [ 10%]
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_deleting_referenced_port_via_boe_and_allotment_is_blocked PASSED [ 15%]
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_unreferenced_port_can_still_be_deleted PASSED [ 21%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_company_referenced_by_allotment_is_blocked PASSED [ 26%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_company_referenced_by_boe_is_blocked PASSED [ 31%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_company_referenced_only_as_related_company_is_blocked PASSED [ 36%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_referenced_company_does_not_touch_unrelated_company PASSED [ 42%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_exporter_field_still_uses_set_null_and_archives_name PASSED [ 47%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_unreferenced_company_can_still_be_deleted PASSED [ 52%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_referenced_company_via_api_returns_400_not_500_or_204 PASSED [ 57%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_referenced_port_via_api_returns_400_not_500_or_204 PASSED [ 63%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_unreferenced_company_via_api_still_succeeds PASSED [ 68%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_unreferenced_port_via_api_still_succeeds PASSED [ 73%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_incentive_license_company_and_port_fks_are_unaffected_out_of_scope PASSED [ 78%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_makemigrations_has_no_unapplied_model_changes PASSED [ 84%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_protection_holds_across_several_independent_companies PASSED [ 89%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_protection_holds_regardless_of_license_issue_date PASSED [ 94%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_sibling_norm_class_fk_was_not_touched_by_this_fix PASSED [100%]
+
+============================== 19 passed in 1.35s ==============================
+
+-------------------------------------------------------------------
+PART 2 of 3: Broader regression sweep (goes beyond the fixed models)
+
+Command:
+  cd backend && python -m pytest apps/core/tests apps/license/tests apps/bill_of_entry/tests apps/allotment/tests --no-migrations -q --no-cov
+
+Purpose: confirm the CASCADE->PROTECT change on the 6 FKs did not
+regress any other Port/Company/License/BOE/Allotment/master-data
+behavior across the full existing test suites for those four apps
+(1200+ tests spanning many unaffected companies, ports, license
+types, norm classes, and date ranges beyond the two cited in the
+finding -- port 513/INNSA1 and company 138/Sigma Chemtrade).
+-------------------------------------------------------------------
+_ TestMilkStageDelegatesToSharedSplitter.test_milk_avg_above_ceiling_all_dwp_no_swp _
+apps/license/tests/test_e1_plan.py:287: in test_milk_avg_above_ceiling_all_dwp_no_swp
+    assert dwp.planned_cif == Decimal('250.0000')
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = E1PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkStageDelegatesToSharedSplitter.test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate _
+apps/license/tests/test_e1_plan.py:311: in test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+    assert dwp.unit_price == Decimal('5.0000')
+E   AssertionError: assert Decimal('6.5000') == Decimal('5.0000')
+E    +  where Decimal('6.5000') = E1PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).unit_price
+E    +  and   Decimal('5.0000') = Decimal('5.0000')
+_ TestMilkStageDelegatesToSharedSplitter.test_multiple_milk_items_planned_independently_in_order _
+apps/license/tests/test_e1_plan.py:300: in test_multiple_milk_items_planned_independently_in_order
+    assert {ln.step for ln in m2_lines} == {'SWP'}   # avg = 50/50 = 1.0 < 1.5
+E   AssertionError: assert set() == {'SWP'}
+E     
+E     Extra items in the right set:
+E     'SWP'
+E     Use -v to get more diff
+________ TestSpecialValidation.test_not_triggered_runs_oils_before_milk ________
+apps/license/tests/test_e5_plan.py:165: in test_not_triggered_runs_oils_before_milk
+    assert _cif(result, 'DWP') == Decimal('250.0000')
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = _cif(E5PlanResult(lines=[E5PlanLine(key='oil', category='PALM KERNEL OIL', step='PALM KERNEL OIL', planned_qty=Decimal('100...mal('6.5000'), planned_cif=Decimal('325.0000'))], remaining_cif=Decimal('4495.00'), special_validation_triggered=False), 'DWP')
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+____ TestMilkPerItemNoAveraging.test_0404_avg_above_ceiling_all_dwp_no_swp _____
+apps/license/tests/test_e5_plan.py:222: in test_0404_avg_above_ceiling_all_dwp_no_swp
+    assert dwp.planned_cif == Decimal('250.0000')   # 50*5
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkPerItemNoAveraging.test_all_0404_items_processed_before_any_3502_item _
+apps/license/tests/test_e5_plan.py:270: in test_all_0404_items_processed_before_any_3502_item
+    assert result.remaining_cif == Decimal('700')   # 1000 - 50 (DWP) - 250 (WPC)
+E   AssertionError: assert Decimal('685.0') == Decimal('700')
+E    +  where Decimal('685.0') = E5PlanResult(lines=[E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('10'), unit_price=De...imal('25.0000'), planned_cif=Decimal('250.0000'))], remaining_cif=Decimal('685.0'), special_validation_triggered=False).remaining_cif
+E    +  and   Decimal('700') = Decimal('700')
+_ TestMilkPerItemNoAveraging.test_mixed_licence_items_never_blended_into_one_rate _
+apps/license/tests/test_e5_plan.py:254: in test_mixed_licence_items_never_blended_into_one_rate
+    assert dwp and dwp[0].key == 'm' and dwp[0].planned_cif == Decimal('250.0000')
+E   AssertionError: assert ([E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))] and 'm' == 'm'
+E     
+E       m and Decimal('300.0000') == Decimal('250.0000'))
+E    +  where Decimal('300.0000') = E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkPerItemNoAveraging.test_multiple_0404_items_planned_independently_in_input_order _
+apps/license/tests/test_e5_plan.py:285: in test_multiple_0404_items_planned_independently_in_input_order
+    assert _cif(result, 'DWP') == Decimal('250.0000')
+E   AssertionError: assert Decimal('300.0000') == Decimal('250.0000')
+E    +  where Decimal('300.0000') = _cif(E5PlanResult(lines=[E5PlanLine(key='m1', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))], remaining_cif=Decimal('0'), special_validation_triggered=False), 'DWP')
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+________________ TestMilkConfigConstants.test_e1_config_prices _________________
+apps/license/tests/test_milk_planner.py:15: in test_e1_config_prices
+    assert MILK_CONFIG.dwp_price == Decimal('5')
+E   AssertionError: assert Decimal('6.5') == Decimal('5')
+E    +  where Decimal('6.5') = MilkConfig(dwp_price=Decimal('6.5'), dwp_min_price=Decimal('4.40'), swp_price=Decimal('1.5'), wpc_price=Decimal('25')).dwp_price
+E    +  and   Decimal('5') = Decimal('5')
+_ TestPlanMilk0404Only.test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over _
+apps/license/tests/test_milk_planner.py:31: in test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+    assert planned['DWP'] == Decimal('250')      # 50 * 5.00
+E   AssertionError: assert Decimal('300') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+___ TestPlanMilkMixedRunsSequentially.test_runs_0404_then_3502_sequentially ____
+apps/license/tests/test_milk_planner.py:101: in test_runs_0404_then_3502_sequentially
+    assert planned['DWP'] == Decimal('250')    # 50 * 5
+E   AssertionError: assert Decimal('325.0') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+______________ TestPlanMilkEdgeCases.test_tolerant_type_coercion _______________
+apps/license/tests/test_milk_planner.py:120: in test_tolerant_type_coercion
+    assert planned['DWP'] == Decimal('250')
+E   AssertionError: assert Decimal('325.0') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+=========================== short test summary info ============================
+FAILED apps/license/tests/test_e1_auto_plan.py::TestComputeE1AutoPlanParity::test_milk_step_only_invokes_shared_milk_splitter_for_milk_products
+FAILED apps/license/tests/test_update_balance_cif_command.py::test_update_balance_cif_updates_split_balance_row
+FAILED apps/license/tests/test_update_balance_cif_command.py::test_update_balance_cif_recreates_missing_balance_row
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_multiple_milk_items_planned_independently_in_order
+FAILED apps/license/tests/test_e5_plan.py::TestSpecialValidation::test_not_triggered_runs_oils_before_milk
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_0404_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_all_0404_items_processed_before_any_3502_item
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_mixed_licence_items_never_blended_into_one_rate
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_multiple_0404_items_planned_independently_in_input_order
+FAILED apps/license/tests/test_milk_planner.py::TestMilkConfigConstants::test_e1_config_prices
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilk0404Only::test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkMixedRunsSequentially::test_runs_0404_then_3502_sequentially
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkEdgeCases::test_tolerant_type_coercion
+============ 15 failed, 1198 passed, 3 skipped in 216.10s (0:03:36) ============
+
+ANALYSIS OF THE 15 PRE-EXISTING FAILURES ABOVE:
+All 15 are in apps/license/tests/test_milk_planner.py,
+test_e1_plan.py, test_e5_plan.py, test_e1_auto_plan.py, and
+test_update_balance_cif_command.py. Every one is a milk-planner unit
+price/config assertion (e.g. MILK_CONFIG.dwp_price expected 5, got
+6.5) or a balance_cif command assertion -- these exercise E1/E5
+planning math and the update_balance_cif management command, which
+have zero code path through PortModel/CompanyModel FKs or
+MasterViewSet.perform_destroy. They match uncommitted, in-progress
+changes already visible in 'git status' for this working tree
+(backend/apps/license/services/norm_plan.py, planner_factory.py,
+e126_auto_plan.py, e132_auto_plan.py -- unrelated concurrent-session
+work per this repo's known concurrent-sessions-data-loss-risk note).
+They are pre-existing and orthogonal to DB-01; confirmed identical
+across two separate runs. No test touching Port/Company/BOE/Allotment
+delete behavior, MasterViewSet, or the 6 changed FKs failed.
+
+-------------------------------------------------------------------
+PART 3 of 3: NEW REGRESSION FOUND -- migration-graph ordering blocker
+introduced by this fix's own migrations (distinct from the CASCADE->
+PROTECT logic itself, but a real side effect of applying it)
+-------------------------------------------------------------------
+
+Attempting the SAME test file with a normal (non --no-migrations)
+pytest-django run -- i.e. a full from-scratch migration replay, the
+same thing 'manage.py test' / CI / a brand-new dev clone would do:
+
+Command:
+  cd backend && python -m pytest apps/core/tests/test_masterdata_delete_protection.py -v
+
+Result: every single test errors during test-database setup, before
+any test body runs:
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 19 items
+
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_deleting_referenced_port_does_not_touch_unrelated_license ERROR [  5%]
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_deleting_referenced_port_is_blocked_and_license_survives ERROR [ 10%]
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_deleting_referenced_port_via_boe_and_allotment_is_blocked ERROR [ 15%]
+apps/core/tests/test_masterdata_delete_protection.py::TestPortDeleteProtection::test_unreferenced_port_can_still_be_deleted ERROR [ 21%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_company_referenced_by_allotment_is_blocked ERROR [ 26%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_company_referenced_by_boe_is_blocked ERROR [ 31%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_company_referenced_only_as_related_company_is_blocked ERROR [ 36%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_deleting_referenced_company_does_not_touch_unrelated_company ERROR [ 42%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_exporter_field_still_uses_set_null_and_archives_name ERROR [ 47%]
+apps/core/tests/test_masterdata_delete_protection.py::TestCompanyDeleteProtection::test_unreferenced_company_can_still_be_deleted ERROR [ 52%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_referenced_company_via_api_returns_400_not_500_or_204 ERROR [ 57%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_referenced_port_via_api_returns_400_not_500_or_204 ERROR [ 63%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_unreferenced_company_via_api_still_succeeds ERROR [ 68%]
+apps/core/tests/test_masterdata_delete_protection.py::TestMasterViewSetApiDeleteProtection::test_delete_unreferenced_port_via_api_still_succeeds ERROR [ 73%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_incentive_license_company_and_port_fks_are_unaffected_out_of_scope ERROR [ 78%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_makemigrations_has_no_unapplied_model_changes ERROR [ 84%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_protection_holds_across_several_independent_companies ERROR [ 89%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_protection_holds_regardless_of_license_issue_date ERROR [ 94%]
+apps/core/tests/test_masterdata_delete_protection.py::TestDeleteProtectionRegressionScope::test_sibling_norm_class_fk_was_not_touched_by_this_fix ERROR [100%]
+
+==================================== ERRORS ====================================
+_ ERROR at setup of TestPortDeleteProtection.test_deleting_referenced_port_does_not_touch_unrelated_license _
+../.venv/lib/python3.14/site-packages/django/db/backends/utils.py:103: in _execute
+    return self.cursor.execute(sql)
+../.venv/lib/python3.14/site-packages/psycopg/cursor.py:117: in execute
+    raise ex.with_traceback(None)
+E   psycopg.errors.UndefinedColumn: column ai.item_id does not exist
+E   LINE 60:     ON ai.item_id = lii.id
+E                   ^
+
+The above exception was the direct cause of the following exception:
+../.venv/lib/python3.14/site-packages/pytest_django/plugin.py:565: in _django_setup_unittest
+    request.getfixturevalue("django_db_setup")
+../.venv/lib/python3.14/site-packages/pytest_django/fixtures.py:144: in django_db_setup
+    db_cfg = setup_databases(
+../.venv/lib/python3.14/site-packages/django/test/utils.py:207: in setup_databases
+    connection.creation.create_test_db(
+../.venv/lib/python3.14/site-packages/django/db/backends/base/creation.py:85: in create_test_db
+    call_command(
+../.venv/lib/python3.14/site-packages/django/core/management/__init__.py:195: in call_command
+    return command.execute(*args, **defaults)
+../.venv/lib/python3.14/site-packages/django/core/management/base.py:464: in execute
+    output = self.handle(*args, **options)
+../.venv/lib/python3.14/site-packages/django/core/management/base.py:111: in wrapper
+    res = handle_func(*args, **kwargs)
+../.venv/lib/python3.14/site-packages/django/core/management/commands/migrate.py:354: in handle
+    post_migrate_state = executor.migrate(
+../.venv/lib/python3.14/site-packages/django/db/migrations/executor.py:137: in migrate
+    state = self._migrate_all_forwards(
+../.venv/lib/python3.14/site-packages/django/db/migrations/executor.py:169: in _migrate_all_forwards
+    state = self.apply_migration(
+../.venv/lib/python3.14/site-packages/django/db/migrations/executor.py:257: in apply_migration
+    state = migration.apply(state, schema_editor)
+../.venv/lib/python3.14/site-packages/django/db/migrations/migration.py:132: in apply
+    operation.database_forwards(
+../.venv/lib/python3.14/site-packages/django/db/migrations/operations/special.py:199: in database_forwards
+    self.code(from_state.apps, schema_editor)
+apps/core/migrations/0003_create_materialized_views.py:19: in _create_views
+    create_materialized_views()
+apps/core/materialized_views.py:262: in create_materialized_views
+    cursor.execute(sql)
+../.venv/lib/python3.14/site-packages/django/db/backends/utils.py:79: in execute
+    return self._execute_with_wrappers(
+../.venv/lib/python3.14/site-packages/django/db/backends/utils.py:92: in _execute_with_wrappers
+    return executor(sql, params, many, context)
+../.venv/lib/python3.14/site-packages/django/db/backends/utils.py:100: in _execute
+    with self.db.wrap_database_errors:
+../.venv/lib/python3.14/site-packages/django/db/utils.py:94: in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+../.venv/lib/python3.14/site-packages/django/db/backends/utils.py:103: in _execute
+    return self.cursor.execute(sql)
+../.venv/lib/python3.14/site-packages/psycopg/cursor.py:117: in execute
+    raise ex.with_traceback(None)
+E   django.db.utils.ProgrammingError: column ai.item_id does not exist
+E   LINE 60:     ON ai.item_id = lii.id
+E                   ^
+---------------------------- Captured stdout setup -----------------------------
+Operations to perform:
+  Synchronize unmigrated apps: corsheaders, django_extensions, django_filters, drf_spectacular, humanize, messages, rest_framework, runserver_nostatic, staticfiles
+  Apply all migrations: accounts, admin, allotment, auth, bill_of_entry, contenttypes, core, license, reconciliation, sessions, tasks, token_blacklist, trade
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+... (repeats identically for the remaining 18 tests; full raw file
+     available at /tmp/db01_migration_blocker.txt) ...
+
+LINE 60:     ON ai.item_id = lii.id
+                ^
+============================== 19 errors in 1.91s ==============================
+
+ROOT CAUSE (confirmed by direct inspection of the migration graph,
+not just the symptom):
+
+core/migrations/0003_create_materialized_views.py runs raw SQL that
+joins allotment_allotmentitems (aliased 'ai') on ai.item_id, but its
+'dependencies' list only names ('core','0002_...'), ('license',
+'0005_...'), and ('bill_of_entry','0002_initial') -- it has NO
+dependency edge on the allotment app at all. AllotmentItems.item (the
+FK that becomes column item_id) is not added until
+allotment/0002_initial, one migration AFTER allotment/0001_initial.
+With no explicit edge, Django's full-graph topological sort is free
+to place core.0003 before allotment.0002_initial -- exactly the same
+class of latent bug core/migrations/0003's own docstring already
+documents happening once before for bill_of_entry (bit-for-bit same
+paragraph: '...it happened to land after by luck until an unrelated
+... migration addition shifted the sort order and surfaced it...').
+
+Direct proof that DB-01's own new migrations are what flipped the
+order (computed via Django's MigrationExecutor.migration_plan() over
+the full leaf-node set with an empty applied-migrations set, i.e.
+exactly what a from-scratch test/CI database build does):
+
+  BEFORE DB-01 migrations existed (license/0017, bill_of_entry/0006,
+  allotment/0004 removed from a scratch copy of backend/):
+    allotment.0002_initial at plan index 23
+    core.0003_create_materialized_views at plan index 35
+    -> allotment.0002_initial correctly runs BEFORE core.0003. OK.
+
+  AFTER (current working tree, with the 3 DB-01 migrations present):
+    core.0003_create_materialized_views at plan index 29
+    allotment.0002_initial at plan index 38
+    -> core.0003 now runs BEFORE allotment.0002_initial. BROKEN.
+
+So adding 3 new leaf migrations (one per app: license, bill_of_entry,
+allotment) for the DB-01 fix shifted Django's topological-sort tie-
+breaking enough to flip this pre-existing, latent, undeclared-
+dependency bug from 'accidentally fine' to 'always fails' on any
+from-scratch migration replay.
+
+SCOPE / IMPACT of this NEW finding:
+  - Blocks: pytest/manage.py test creating a fresh test database from
+    zero (confirmed above, blocks the ENTIRE suite, not just DB-01's
+    tests -- apps/core/tests/test_master_filter_types.py, which has
+    nothing to do with DB-01, fails identically).
+  - Blocks: 'manage.py migrate' on any brand-new/empty database (a
+    new dev clone, a new CI runner, a fresh staging environment).
+  - Does NOT affect the existing real 'lmanagement' Postgres DB via a
+    normal incremental 'manage.py migrate': core.0003 is already
+    recorded as applied there (it ran long ago), so Django's executor
+    only needs to plan the still-unapplied migrations -- the 3 new
+    DB-01 ones -- which have no ordering conflict among themselves.
+    (Reasoned from Django's migration-executor semantics; the real DB
+    itself was not touched to confirm this, per the no-migrate-on-
+    real-DB constraint.)
+  - This is a pre-existing latent bug (missing dependency edge,
+    exact same class already called out in that migration's own
+    comments for a different app) that this fix's migrations merely
+    triggered by changing the tie-break order -- not something the
+    DB-01 fix's author introduced by editing that file. But it is a
+    real, blocking regression in this fix's *deployment/CI surface*
+    that needs a human decision: add an explicit dependency
+    ('allotment', '0002_initial') to
+    core/migrations/0003_create_materialized_views.py.  NOT applied
+    here -- out of scope for a regression-test pass, and it edits a
+    migration file outside the six FKs this fix touched.
+
+-------------------------------------------------------------------
+END OF REGRESSION OUTPUT
+-------------------------------------------------------------------

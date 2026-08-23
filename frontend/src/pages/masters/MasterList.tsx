@@ -12,19 +12,76 @@ import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import OwnershipDetailsModal from "../../components/OwnershipDetailsModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
-import { EntityCard, DetailTable } from "../../components/ui";
+import EntityCard from "../../components/primitives/EntityCard";
+import DetailTable from "../../components/primitives/DetailTable";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
-import {clickable} from "../../utils/clickable";
+import {openLicenseCopyPdf} from "../../utils/licenseCopyPdf";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
+import GenericMasterCards from "./tables/GenericMasterCards";
+import LicensesTable from "./tables/LicensesTable";
+import TradesListView from "./TradesListView";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BookCheck, Building2, Calendar, CalendarX, ChevronDown, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Link as LinkIcon, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
+
+type TradeListItem = {
+    id: number;
+    direction?: string;
+    linked_trade_info?: { id: number } | null;
+    [key: string]: any;
+};
+
+type TradeGroup =
+    | { type: "single"; trade: TradeListItem; pairKey: string }
+    | { type: "pair"; sale: TradeListItem; purchase: TradeListItem; pairKey: string };
+
+const EMPTY_LIST: any[] = [];
+
+/**
+ * Keeps the list's existing linked-trade presentation while avoiding an O(n²)
+ * `Array.find` for every row. The API guarantees unique trade IDs; retaining
+ * the first occurrence also preserves the previous `find` behaviour if a
+ * malformed response contains a duplicate ID.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function groupLinkedTrades(trades: TradeListItem[]): TradeGroup[] {
+    const byId = new Map<number, TradeListItem>();
+    for (const trade of trades) {
+        if (!byId.has(trade.id)) byId.set(trade.id, trade);
+    }
+
+    const seen = new Set<number>();
+    const groups: TradeGroup[] = [];
+    for (const trade of trades) {
+        if (seen.has(trade.id)) continue;
+        seen.add(trade.id);
+
+        const partnerId = trade.linked_trade_info?.id;
+        const partner = partnerId == null ? undefined : byId.get(partnerId);
+        if (partner && !seen.has(partner.id)) {
+            seen.add(partner.id);
+            const sale = trade.direction?.includes("SALE") ? trade : partner;
+            const purchase = trade.direction?.includes("PURCHASE") ? trade : partner;
+            groups.push({
+                type: "pair",
+                sale,
+                purchase,
+                pairKey: `pair-${Math.min(trade.id, partner.id)}`,
+            });
+            continue;
+        }
+
+        groups.push({ type: "single", trade, pairKey: `single-${trade.id}` });
+    }
+    return groups;
+}
 
 /**
  * Generic Master List Page
@@ -66,7 +123,6 @@ export default function MasterList() {
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
     const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
-    const [metadata, setMetadata] = useState<Record<string, any>>({});
     const [error, setError] = useState("");
 
     // Pagination state
@@ -83,7 +139,7 @@ export default function MasterList() {
     const [selectedLicenseId, setSelectedLicenseId] = useState(null);
 
     // Tracks license IDs currently fetching ownership from DGFT
-    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState(() => new Set());
+    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState<Set<number>>(() => new Set());
 
     // Ownership details modal state
     const [showOwnershipModal, setShowOwnershipModal] = useState(false);
@@ -127,7 +183,7 @@ export default function MasterList() {
         } catch (err) { toast.error(err.response?.data?.error || 'Failed to link trades'); }
     };
 
-    const [expandedPairs, setExpandedPairs] = useState(new Set());
+    const [expandedPairs, setExpandedPairs] = useState<Set<string>>(() => new Set());
     const [pdfLoading, setPdfLoading] = useState(false);
     const togglePair = (pairKey) => {
         setExpandedPairs(prev => {
@@ -158,7 +214,7 @@ export default function MasterList() {
         });
     };
 
-    const [expandedTrades, setExpandedTrades] = useState(new Set());
+    const [expandedTrades, setExpandedTrades] = useState<Set<number>>(() => new Set());
     const toggleTrade = (id) => {
         setExpandedTrades(prev => {
             const next = new Set(prev);
@@ -273,17 +329,12 @@ export default function MasterList() {
             }
         });
 
-        // Parse URL query parameters
+        // Parse URL query parameters — keep in API format (__gte/__lte) so filterParams
+        // is always in API format. uiFilterParams derives the UI format for display.
         const urlParams = new URLSearchParams(location.search);
         const urlFilters: Record<string, string> = {};
         for (const [key, value] of urlParams.entries()) {
-            if (key.endsWith('__gte')) {
-                urlFilters[`${key.replace('__gte', '')}_from`] = value;
-            } else if (key.endsWith('__lte')) {
-                urlFilters[`${key.replace('__lte', '')}_to`] = value;
-            } else {
-                urlFilters[key] = value;
-            }
+            urlFilters[key] = value;
         }
 
         const hasUrlFilters = Object.keys(urlFilters).length > 0;
@@ -317,32 +368,47 @@ export default function MasterList() {
         }
     }, [entityName, location.search]);
 
-    // Update filterParams when backend default filters are received (for UI display only)
-    useEffect(() => {
-        if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
-        const backendDefaults = metadata.default_filters || {};
-        const hardcodedDefaults = getDefaultFilters(entityName);
-        if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
-            setFilterParams(backendDefaults);
-            setCurrentPage(1);
-            backendDefaultsApplied.current = true;
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [metadata.default_filters]);
-
     // ---------------------------------------------------------------------------
     // Main list query — re-runs whenever entity, page, size, or filters change.
     // TanStack handles request de-duplication and cancellation.
     // ---------------------------------------------------------------------------
-    const queryParams = useMemo(() => ({
-        page: currentPage,
-        page_size: pageSize,
-        ...filterParams,
-    }), [currentPage, pageSize, filterParams]);
+    const queryParams = useMemo(() => {
+        const params: Record<string, string | number> = { page: currentPage, page_size: pageSize, ...filterParams };
+        // A numeric (or comma-separated numeric) search on Allotments is a
+        // licence-number lookup.  Send it through the exact backend filter so
+        // multiple supplied licences use OR semantics; normal text remains the
+        // existing general `search` behaviour.
+        if (entityName === 'allotments' && typeof params.search === 'string') {
+            const licences = [...new Set(params.search.split(',').map(value => value.trim()).filter(Boolean))];
+            if (licences.length > 0 && licences.every(value => /^\d+$/.test(value))) {
+                params.license_number = licences.join(',');
+                delete params.search;
+            }
+        }
+        return params;
+    }, [currentPage, pageSize, filterParams, entityName]);
+
+    /** Convert API-format filterParams (license_date__gte) to UI format (license_date_from)
+     *  for correct display in AdvancedFilter inputs. */
+    const uiFilterParams = useMemo<Record<string, string>>(() => {
+        const ui: Record<string, string> = {};
+        for (const [key, value] of Object.entries(filterParams)) {
+            const v = String(value ?? "");
+            if (key.endsWith("__gte")) {
+                ui[`${key.slice(0, -5)}_from`] = v;
+            } else if (key.endsWith("__lte")) {
+                ui[`${key.slice(0, -5)}_to`] = v;
+            } else {
+                ui[key] = v;
+            }
+        }
+        return ui;
+    }, [filterParams]);
 
     const {
         data: listResponse,
         isLoading: loading,
+        isFetching: isRefreshing,
         isError: listFailed,
         error: listError,
     } = useQuery({
@@ -367,15 +433,17 @@ export default function MasterList() {
     });
 
     // Derive list data and metadata from query result
-    const data = listResponse?.results ?? [];
+    const data = listResponse?.results ?? EMPTY_LIST;
+    const totalRecords = listResponse?.count ?? data.length;
     const totalPages = listResponse?.total_pages ?? 1;
     const hasNext = listResponse?.has_next ?? false;
     const hasPrevious = listResponse?.has_previous ?? false;
 
-    // Sync metadata from response (needed for filter_fields, list_display, etc.)
-    useEffect(() => {
-        if (!listResponse) return;
-        setMetadata({
+    // Metadata is response-derived. Keeping it out of local state avoids a
+    // second complete MasterList render after every successful list request.
+    const metadata = useMemo<Record<string, any>>(() => {
+        if (!listResponse) return {};
+        return {
             list_display: listResponse.list_display || [],
             form_fields: listResponse.form_fields || [],
             search_fields: listResponse.search_fields || [],
@@ -387,8 +455,28 @@ export default function MasterList() {
             field_meta: listResponse.field_meta || {},
             default_filters: listResponse.default_filters || {},
             inline_editable: listResponse.inline_editable || [],
-        });
+        };
     }, [listResponse]);
+
+    // Update filterParams when backend default filters are received (for UI display only).
+    useEffect(() => {
+        if (backendDefaultsApplied.current && Object.keys(filterParams).length > 0) return;
+        const backendDefaults = metadata.default_filters || {};
+        const hardcodedDefaults = getDefaultFilters(entityName);
+        if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
+            setFilterParams(backendDefaults);
+            setCurrentPage(1);
+            backendDefaultsApplied.current = true;
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [metadata.default_filters]);
+
+    // Group once per response. Expansion, modal, and other local UI state no
+    // longer repeats linked-trade grouping work for a large page of results.
+    const tradeGroups = useMemo(
+        () => entityName === "trades" ? groupLinkedTrades(data as TradeListItem[]) : [],
+        [entityName, data],
+    );
 
     // Surface list load failure to the error banner
     useEffect(() => {
@@ -404,6 +492,21 @@ export default function MasterList() {
         qc.invalidateQueries({ queryKey: ['entity-list', entityName] });
     }, [qc, entityName]);
 
+    // Fetch DGFT ownership for a single license — extracted from inline card
+    const handleFetchOwnership = useCallback(async (item: { id: number; license_number?: string }) => {
+        setFetchingOwnershipIds(prev => { const n = new Set(prev); n.add(item.id); return n; });
+        try {
+            const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
+            const owner = r.data?.current_owner?.name || '—';
+            toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
+            invalidateList();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
+        } finally {
+            setFetchingOwnershipIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+        }
+    }, [invalidateList]);
+
     useEffect(() => {
         if (!linkModalTrade) return;
         const t = setTimeout(() => searchTradesForLink(linkSearch), 350);
@@ -411,22 +514,24 @@ export default function MasterList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [linkSearch, linkModalTrade]);
 
-    const handleFilterChange = useCallback((filters) => {
-        // Convert Django-style date filters back to UI format for state persistence
-        const convertedFilters: Record<string, string> = {};
-        Object.entries(filters).forEach(([key, value]) => {
-            if (key.endsWith('__gte')) {
-                convertedFilters[`${key.replace('__gte', '')}_from`] = value as string;
-            } else if (key.endsWith('__lte')) {
-                convertedFilters[`${key.replace('__lte', '')}_to`] = value as string;
-            } else {
-                convertedFilters[key] = value as string;
-            }
-        });
-        // Store the UI-format filters; useQuery will re-run with the raw filters via queryParams
-        setFilterParams(filters); // Use raw API format — queryParams derives from filterParams directly
+    const handleFilterChange = useCallback((filters: Record<string, unknown>) => {
+        // filters arrives in API format (license_date__gte etc.) from AdvancedFilter.
+        // Keep in API format — queryParams spreads filterParams directly into the API call.
+        // uiFilterParams (derived via useMemo) converts back to UI format for display.
+        setFilterParams(filters as Record<string, string>);
         setCurrentPage(1);
     }, []);
+
+    useEffect(() => {
+        if (entityName !== 'allotments') return;
+        const params = new URLSearchParams();
+        Object.entries(filterParams).forEach(([key, value]) => {
+            if (value !== '' && value != null) params.set(key, String(value));
+        });
+        params.set('page', String(currentPage));
+        const nextSearch = params.toString();
+        if (nextSearch !== location.search.slice(1)) navigate({ search: nextSearch }, { replace: true });
+    }, [entityName, filterParams, currentPage, location.search, navigate]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -461,6 +566,33 @@ export default function MasterList() {
             toast.error(err.response?.data?.detail || "Failed to delete record");
         }
     };
+
+    // Trade mutations remain owned here so the presentation component cannot
+    // alter endpoints, permissions, filter persistence, or cache invalidation.
+    const handleCopyTradeToCounterpart = useCallback(async (item: TradeListItem) => {
+        const destination = item.direction === 'SALE' ? 'Purchase' : 'Sale';
+        const confirmed = await confirmDangerousAction(
+            `Copy to ${destination}`,
+            `Create the linked ${destination} with the same companies, licence lines and commercial amounts?`,
+        );
+        if (!confirmed) return;
+
+        try {
+            const endpoint = item.direction === 'SALE' ? 'copy-to-purchase' : 'copy-to-sale';
+            const response = await api.post(`trades/${item.id}/${endpoint}/`);
+            toast.success(response.data.created ? `Linked ${destination} created` : `Linked ${destination} already exists`);
+            invalidateList();
+            navigate(`/trades/${response.data.counterpart.id}/edit`);
+        } catch (err) {
+            toast.error(err.response?.data?.error || `Failed to copy to ${destination}`);
+        }
+    }, [confirmDangerousAction, invalidateList, navigate]);
+
+    const handleTradeTransferLetter = useCallback((item: TradeListItem) => {
+        setTransferLetterType('trade');
+        setTransferLetterEntityId(item.id);
+        setShowTransferLetterModal(true);
+    }, []);
 
     const handleToggleBoolean = async (item, field, newValue) => {
         // Optimistic UI update via query cache
@@ -621,22 +753,30 @@ export default function MasterList() {
         .join(" ");
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-[--tb-body-bg]">
             {/* Tabler-style page header */}
-            <div className="page-header">
-                <div style={{ minWidth: 0 }}>
+            <div className={cn("page-header", entityName === "licenses" && "mb-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm")}>
+                <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
                             href="/"
                             onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            style={{ color: 'inherit', textDecoration: 'none' }}
+                            className="text-inherit no-underline"
                         >
                             Home
                         </a>
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         {entityTitle}
                     </div>
                     <h1>{entityTitle}</h1>
+                    {entityName === "licenses" && (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">Licence workspace</span>
+                            <span aria-hidden="true" className="text-border">•</span>
+                            <span className="tabular-nums">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
+                            {isRefreshing && <span role="status">Updating…</span>}
+                        </div>
+                    )}
                 </div>
                 <div className="page-actions">
                     <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">
@@ -725,13 +865,18 @@ export default function MasterList() {
                 filterConfig={metadata.filter_config || {}}
                 searchFields={metadata.search_fields || []}
                 onFilterChange={handleFilterChange}
-                initialFilters={filterParams}
-                defaultFilters={metadata.default_filters || {}}
+                initialFilters={uiFilterParams}
+                defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
+                resetToDefaults={entityName === 'allotments'}
+                isUpdating={isRefreshing}
             />
 
             {/* Table */}
-            <div className="surface-card mt-4">
-                <div style={{ padding: '14px 16px' }}>
+            <div className={cn("surface-card mt-4", entityName === "licenses" && "mt-3 overflow-hidden border-border/70 shadow-sm")}>
+                <div className={cn("p-3.5", entityName === "licenses" && "p-2 sm:p-3")}>
+                    {isRefreshing && !loading && (
+                        <div role="status" className="mb-2 text-xs text-muted-foreground">Updating results…</div>
+                    )}
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (
                         loading ? (
@@ -756,19 +901,19 @@ export default function MasterList() {
                                     const invoiceChip = canEditInvoice
                                         ? (editingInvoiceId === item.id
                                             ? (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                <span className="inline-flex items-center gap-1">
                                                     <input
                                                         autoFocus
                                                         value={invoiceDraft}
                                                         onChange={e => setInvoiceDraft(e.target.value)}
                                                         onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
                                                         placeholder="Invoice number"
-                                                        style={{ fontSize: '0.82rem', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--success-color)', width: 160, outline: 'none' }}
+                                                        className="w-40 rounded-md border border-success px-2 py-0.5 text-[0.82rem] outline-none"
                                                     />
-                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, background: 'var(--success-color)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} className="cursor-pointer rounded-md bg-success px-2 py-0.5 text-xs text-white disabled:opacity-50">
                                                         {invoiceSaving ? '…' : 'Save'}
                                                     </button>
-                                                    <button type="button" onClick={cancelInvoiceEdit} style={{ fontSize: 12, padding: '3px 7px', borderRadius: 6, background: 'var(--surface-sunken)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', cursor: 'pointer' }}>✕</button>
+                                                    <button type="button" onClick={cancelInvoiceEdit} className="cursor-pointer rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">✕</button>
                                                 </span>
                                             )
                                             : (
@@ -776,7 +921,7 @@ export default function MasterList() {
                                                     type="button"
                                                     onClick={() => startInvoiceEdit(item)}
                                                     title="Click to edit invoice number"
-                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.82rem', color: 'var(--success-text)', background: 'var(--success-bg)', border: '1px solid var(--success-border)', padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
+                                                    className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-success bg-success/10 px-2 py-0.5 text-[0.82rem] font-medium text-success"
                                                 >
                                                     {item.invoice_no
                                                         ? (<><Receipt className="size-4" aria-hidden="true" /> {item.invoice_no}</>)
@@ -787,12 +932,24 @@ export default function MasterList() {
                                             ))
                                         : null;
 
+                                    const boeTitleEl = item.bill_of_entry_number ? (
+                                        <Link
+                                            to={`/bill-of-entries/${item.id}/edit`}
+                                            onClick={() => {
+                                                saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
+                                            }}
+                                            className="font-mono text-[16px] font-bold tracking-tight text-inherit underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded"
+                                        >
+                                            {item.bill_of_entry_number}
+                                        </Link>
+                                    ) : '—';
+
                                     return (
                                         <EntityCard
                                             key={item.id}
                                             className={hasDispute ? 'is-dispute' : ''}
                                             accent={hasDispute ? 'danger' : 'primary'}
-                                            title={item.bill_of_entry_number || '—'}
+                                            title={boeTitleEl}
                                             headerChips={[
                                                 item.bill_of_entry_date && { icon: 'calendar3', label: item.bill_of_entry_date },
                                                 item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
@@ -808,12 +965,14 @@ export default function MasterList() {
                                                 { label: 'CIF (INR)', value: fmtInr(item.total_inr) },
                                                 { label: 'CIF (FC)',  value: item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
                                                 { label: 'Qty (MT)',  value: fmtQty(item.total_quantity) },
+                                                { label: 'Unit Price', value: item.unit_price ? Number(item.unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
                                             ]}
                                             actions={[
                                                 hasDispute && {
                                                     icon: 'check2-circle', title: 'Resolve Dispute', tone: 'danger',
                                                     onClick: async () => {
-                                                        if (!window.confirm(`Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`)) return;
+                                                        const confirmed = await confirmDangerousAction('Resolve Dispute', `Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`);
+                                                        if (!confirmed) return;
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
                                                             toast.success(response.data.message || 'Dispute resolved');
@@ -830,7 +989,8 @@ export default function MasterList() {
                                                 (!item.product_name || item.product_name.trim() === '') && {
                                                     icon: 'arrow-repeat', title: 'Update Product Name', tone: 'info',
                                                     onClick: async () => {
-                                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) return;
+                                                        const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
+                                                        if (!confirmed) return;
                                                         try {
                                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                                             toast.success(response.data.message || 'Product name updated');
@@ -852,12 +1012,22 @@ export default function MasterList() {
                                                     columns={[
                                                         { key: 'is_dispute', label: '', nowrap: true, width: 28,
                                                             render: (v, row) => row.is_dispute
-                                                                ? <span title="Not found in latest ledger upload — dispute" style={{ color: 'var(--tb-danger)', fontSize: 14.5 }}><TriangleAlert className="size-4" aria-hidden="true" /></span>
+                                                                ? <span title="Not found in latest ledger upload — dispute" className="text-destructive text-sm"><TriangleAlert className="size-4" aria-hidden="true" /></span>
                                                                 : null },
                                                         { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
-                                                            render: (v, row) => v
-                                                                ? <span style={{ color: row.is_dispute ? 'var(--tb-danger-text)' : 'var(--primary-color)' }}>{v}</span>
-                                                                : '—' },
+                                                            render: (v, row) => v && row.license_id ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openLicenseCopyPdf(row.license_id, v)}
+                                                                    className={cn(row.is_dispute ? 'text-destructive' : 'text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
+                                                                    title="Open License Copy PDF"
+                                                                    aria-label={`Open License Copy PDF for ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ) : (
+                                                                <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v || '—'}</span>
+                                                            ) },
                                                         { key: 'item_description', label: 'Item',      muted: true },
                                                         { key: 'hs_code',          label: 'HS Code',   nowrap: true,
                                                             render: v => v ? <code>{v}</code> : '—' },
@@ -873,21 +1043,21 @@ export default function MasterList() {
                                                 />
                                             )}
                                         >
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-                                                <div style={{ flex: 1, minWidth: 200 }}>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Product</div>
-                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-                                                        {item.product_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No product name</span>}
+                                            <div className="flex flex-wrap items-start gap-6">
+                                                <div className="min-w-[200px] flex-1">
+                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Product</div>
+                                                    <div className="text-[14.5px] font-medium text-foreground">
+                                                        {item.product_name || <span className="italic text-muted-foreground">No product name</span>}
                                                     </div>
                                                 </div>
                                                 {item.licenses && (
-                                                    <div style={{ flex: 1, minWidth: 140 }}>
-                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                        <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.licenses}</div>
+                                                    <div className="min-w-[140px] flex-1">
+                                                        <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Licenses</div>
+                                                        <div className="text-[13.5px] font-medium text-primary">{item.licenses}</div>
                                                     </div>
                                                 )}
                                                 {invoiceChip && (
-                                                    <div style={{ alignSelf: 'center' }}>
+                                                    <div className="self-center">
                                                         {invoiceChip}
                                                     </div>
                                                 )}
@@ -916,393 +1086,45 @@ export default function MasterList() {
                         />
                     )}
 
-                    {/* Licenses Card Layout */}
+                    {/* Licenses — extracted to dedicated component */}
                     {entityName === 'licenses' && (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading Licenses...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <div className="mt-2">No licenses found</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-                                    const parseIndianDate = (s) => { if (!s) return null; const p = s.split('-'); return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null; };
-                                    const isExpired = item.license_expiry_date && parseIndianDate(item.license_expiry_date) < new Date();
-                                    const statusColor = item.purchase_status_code === 'E1' ? { bg: 'var(--tb-brand-100)', text: 'var(--tb-brand-hover)' }
-                                        : item.purchase_status_code === 'E5' ? { bg: 'var(--tb-success-soft)', text: 'var(--tb-success-text)' }
-                                        : { bg: 'var(--tb-gray-100)', text: 'var(--tb-text-secondary)' };
-                                    return (
-                                        <div key={item.id} style={{
-                                            display: 'block',
-                                            background: item.is_manually_planned ? 'rgba(22,163,74,0.05)' : 'var(--tb-card-bg)',
-                                            border: `1px solid ${isExpired ? 'var(--tb-danger-border)' : (item.is_manually_planned ? '#16a34a' : 'var(--tb-border-soft)')}`,
-                                            // Green left rail marks a manually-planned license (expired still shows red).
-                                            borderLeft: `4px solid ${isExpired ? 'var(--tb-danger)' : (item.is_manually_planned ? '#16a34a' : 'var(--tb-brand)')}`,
-                                            borderRadius: 'var(--tb-r-md)',
-                                            marginBottom: '10px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                                        }}>
-                                            {/* Row 1: Identity */}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-sunken)', borderBottom: '1px solid var(--tb-border)', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: '700', fontSize: 16, color: 'var(--tb-brand-active)', marginRight: '4px' }}>
-                                                    {item.license_number || '-'}
-                                                </span>
-                                                {item.is_manually_planned && (
-                                                    <span className="chip" style={{ color: '#166534', background: 'rgba(22,163,74,0.12)', border: '1px solid #16a34a', fontWeight: 700 }}>
-                                                        <Target className="size-3" aria-hidden="true" />Planned
-                                                    </span>
-                                                )}
-                                                {item.license_date && (
-                                                    <span className="chip chip-neutral" style={{}}>
-                                                        <Calendar className="size-3" aria-hidden="true" />{item.license_date}
-                                                    </span>
-                                                )}
-                                                {item.license_expiry_date && (
-                                                    <span className={`chip ${isExpired ? 'chip-danger' : 'chip-neutral'}`} style={{}}>
-                                                        <CalendarX className="size-3" aria-hidden="true" />Exp: {item.license_expiry_date}
-                                                    </span>
-                                                )}
-                                                {item.ledger_date && (
-                                                    <span className="chip chip-success" style={{}}>
-                                                        <BookCheck className="size-3" aria-hidden="true" />Ledger: {item.ledger_date}
-                                                    </span>
-                                                )}
-                                                {item.port_name && (
-                                                    <span className="chip chip-info" style={{}}>
-                                                        <MapPin className="size-3" aria-hidden="true" />{item.port_name}
-                                                    </span>
-                                                )}
-                                                {item.purchase_status_label && (
-                                                    <span style={{ fontSize: 12, color: statusColor.text, background: statusColor.bg, padding: '2px 8px', borderRadius: 'var(--tb-r-sm)', fontWeight: '600' }}>
-                                                        {item.purchase_status_label}
-                                                    </span>
-                                                )}
-                                                {(item.has_tl || item.has_copy) && (
-                                                    <button onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        try {
-                                                            const r = await api.get(`licenses/${item.id}/merged-documents/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.license_number || item.id}-copy.pdf`);
-                                                        } catch (err) {
-                                                            if (err.response?.status === 404) {
-                                                                toast.warning('Document files are not available on this server. The files may not have been uploaded yet.');
-                                                            } else {
-                                                                toast.error(err.response?.data ? String(err.response.data).slice(0, 200) : 'Failed to load documents');
-                                                            }
-                                                        }
-                                                    }} className="chip chip-success cursor-pointer border-0 hover:opacity-80 transition-opacity" style={{}}>
-                                                        Copy
-                                                    </button>
-                                                )}
-                                                {item.has_condition_sheet && (
-                                                    <span title="Condition sheet parsed from license copy" className="chip chip-primary cursor-pointer" style={{}}>
-                                                        <FileText className="size-4" aria-hidden="true" />Cond. Sheet
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Row 2: Norm class (25%) + details fill (75%) */}
-                                            <div style={{ display: 'flex', alignItems: 'stretch', gap: '16px', padding: '10px 14px', background: 'var(--tb-card-bg)', borderBottom: '1px solid var(--tb-border)' }}>
-                                                {/* Left 25% — Norm Class */}
-                                                <div style={{ flex: '0 0 25%', maxWidth: '25%', minWidth: 0, borderRight: '1px solid var(--tb-border)', paddingRight: '16px' }}>
-                                                    <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>Norm Class</div>
-                                                    <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.get_norm_class || '-'}</div>
-                                                </div>
-                                                {/* Right 75% — Exporter / IEC / Transfer status, each clamped to one line */}
-                                                <div style={{ flex: '1 1 75%', minWidth: 0, display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.6fr', gap: '16px' }}>
-                                                    {[
-                                                        { label: 'Exporter', value: item.exporter_name },
-                                                        { label: 'IEC', value: item.exporter_iec },
-                                                        { label: 'Transfer Status', value: item.latest_transfer },
-                                                    ].map((f) => (
-                                                        <div key={f.label} style={{ minWidth: 0 }}>
-                                                            <div style={{ fontSize: 11, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '3px' }}>{f.label}</div>
-                                                            <div title={f.value || ''} style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.value || '-'}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Row 3: Stats + Actions */}
-                                            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 14px', background: 'var(--tb-sunken)', gap: '8px', flexWrap: 'wrap' }}>
-                                                <div style={{ display: 'flex', gap: '20px', flex: 1, flexWrap: 'wrap' }}>
-                                                    <div>
-                                                        <div style={{ fontSize: '0.67rem', color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Balance CIF</div>
-                                                        <div style={{ fontSize: 14, color: 'var(--tb-text)', fontWeight: '700' }}>{fmtInr(item.get_balance_cif)}</div>
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                                    {canWrite && <button onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/licenses/${item.id}/edit`); }} title="Edit" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Pencil className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                    <button onClick={() => { setSelectedLicenseId(item.id); setShowBalanceModal(true); }} title="View Balance" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-info-text)', background: 'var(--tb-info-soft)', border: '1px solid #38bdf8', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Eye className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    {canWrite && <button
-                                                        onClick={() => { setPlanLicense({ id: item.id, number: item.license_number, balance: Number(item.get_balance_cif || 0) }); setShowPlanModal(true); }}
-                                                        title="Plan utilization"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Target className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                    <button
-                                                        onClick={() => { setOwnershipLicense({ id: item.id, number: item.license_number }); setShowOwnershipModal(true); }}
-                                                        title="View ownership & transfers"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-active)', background: 'var(--tb-brand-50)', border: '1px solid #a5b4fc', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Network className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    {canWrite && <button
-                                                        disabled={fetchingOwnershipIds.has(item.id)}
-                                                        onClick={async () => {
-                                                            setFetchingOwnershipIds(prev => { const n = new Set(prev); n.add(item.id); return n; });
-                                                            try {
-                                                                const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
-                                                                const owner = r.data?.current_owner?.name || '—';
-                                                                toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
-                                                                invalidateList();
-                                                            } catch (err) {
-                                                                toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
-                                                            } finally {
-                                                                setFetchingOwnershipIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
-                                                            }
-                                                        }}
-                                                        title="Fetch ownership from DGFT"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--accent-color)', background: 'var(--tb-sunken)', border: '1px solid #c4b5fd', borderRadius: '5px', padding: '4px 9px', cursor: fetchingOwnershipIds.has(item.id) ? 'wait' : 'pointer', opacity: fetchingOwnershipIds.has(item.id) ? 0.6 : 1 }}>
-                                                        <span className={fetchingOwnershipIds.has(item.id) ? 'inline-block animate-spin' : ''}>{fetchingOwnershipIds.has(item.id) ? <RefreshCw className="size-4" /> : <CloudDownload className="size-4" />}</span>
-                                                    </button>}
-                                                    <button onClick={async () => {
-                                                        try {
-                                                            const r = await api.get(`licenses/${item.id}/balance-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.license_number || item.id}-balance.pdf`);
-                                                        } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate PDF'); }
-                                                    }} title="Download PDF" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-warning-text)', background: 'var(--tb-warning-soft)', border: '1px solid var(--tb-warning-border)', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <FileText className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    <button onClick={async () => {
-                                                        try {
-                                                            const r = await api.get(`licenses/${item.id}/balance-excel/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const blob = new Blob([r.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                                                            const url = window.URL.createObjectURL(blob);
-                                                            const a = document.createElement('a'); a.href = url; a.download = `${item.license_number || item.id}-balance.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-                                                        } catch (err) { toast.error(err?.response?.data?.error || 'Failed to generate Excel'); }
-                                                    }} title="Download Excel" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', border: '1px solid #86efac', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <FileSpreadsheet className="size-4" aria-hidden="true" />
-                                                    </button>
-                                                    {canWrite && <button onClick={() => handleDelete(item)} title="Delete" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}>
-                                                        <Trash2 className="size-4" aria-hidden="true" />
-                                                    </button>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <LicensesTable
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            fetchingOwnershipIds={fetchingOwnershipIds}
+                            onFetchOwnership={handleFetchOwnership}
+                            invalidateList={invalidateList}
+                        />
                     )}
 
-                    {/* Trades Card Layout */}
+                    {/* Trades — dedicated presentation component; list lifecycle and mutations remain above. */}
                     {entityName === 'trades' && (
-                        loading ? (
-                            <div className="text-center py-5"><span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" /><div className="mt-2 text-muted-foreground">Loading Trades...</div></div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground"><Inbox className="size-4" aria-hidden="true" /><div className="mt-2">No trades found</div></div>
-                        ) : (() => {
-                            const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '-';
-
-                            const renderTradeCard = (item) => {
-                                const directionTone =
-                                    item.direction === 'SALE'             ? 'success'
-                                  : item.direction === 'PURCHASE'         ? 'info'
-                                  : item.direction === 'COMMISSION_SALE'  ? 'warning'
-                                  :                                          'primary';
-                                const accent =
-                                    item.direction === 'SALE'             ? 'success'
-                                  : item.direction === 'PURCHASE'         ? 'info'
-                                  : item.direction === 'COMMISSION_SALE'  ? 'warning'
-                                  :                                          'primary';
-                                const isLinked = !!(item.linked_trade_id || item.linked_trade_info);
-                                const detailRows = item.lines || [];
-                                return (
-                                    <EntityCard
-                                        key={item.id}
-                                        accent={accent}
-                                        title={item.invoice_number || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
-                                        headerChips={[
-                                            { tone: directionTone, label: item.direction_label || item.direction },
-                                            item.license_type_label && { label: item.license_type_label },
-                                            item.invoice_date       && { icon: 'calendar3', label: item.invoice_date },
-                                        ].filter(Boolean)}
-                                        summary={[
-                                            { label: 'Total',     value: fmtInr(item.total_amount) },
-                                            { label: 'Paid/Rcvd', value: fmtInr(item.paid_or_received), tone: 'success' },
-                                            { label: 'Due',       value: fmtInr(item.due_amount), tone: item.due_amount > 0 ? 'danger' : undefined },
-                                        ]}
-                                        actions={[
-                                            { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
-                                                onClick: () => { setTransferLetterType('trade'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); },
-                                                children: 'TL' },
-                                            ...(item.direction === 'SALE' ? [
-                                                { icon: 'file-pdf', title: 'Invoice (With Sign)', tone: 'success',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: true }, responseType: 'blob' });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_with_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
-                                                            window.URL.revokeObjectURL(url);
-                                                        } catch { toast.error('Failed to generate invoice'); }
-                                                    } },
-                                                { icon: 'file-pdf', title: 'Invoice (Without Sign)', tone: 'warning',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`trades/${item.id}/generate-bill-of-supply/`, { params: { include_signature: false }, responseType: 'blob' });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a'); a.href = url; a.download = `Bill_of_Supply_${item.invoice_number}_without_sign.pdf`; document.body.appendChild(a); a.click(); a.remove();
-                                                            window.URL.revokeObjectURL(url);
-                                                        } catch { toast.error('Failed to generate invoice'); }
-                                                    } },
-                                            ] : []),
-                                            canWrite && item.direction === 'PURCHASE' && !isLinked && {
-                                                icon: 'arrow-left-right', title: 'Copy to Sale', tone: 'info',
-                                                onClick: async () => {
-                                                    if (!window.confirm('Create a SALE trade from this PURCHASE trade?')) return;
-                                                    try {
-                                                        const resp = await api.get(`trades/${item.id}/`);
-                                                        const p = resp.data;
-                                                        const saleData = { direction: 'SALE', license_type: p.license_type || 'DFIA', from_company: p.to_company?.id || p.to_company, to_company: p.from_company?.id || p.from_company, boe: p.boe?.id || p.boe, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], remarks: p.remarks || '', from_pan: p.to_pan, from_gst: p.to_gst, from_addr_line_1: p.to_addr_line_1, from_addr_line_2: p.to_addr_line_2, to_pan: p.from_pan, to_gst: p.from_gst, to_addr_line_1: p.from_addr_line_1, to_addr_line_2: p.from_addr_line_2, lines: (p.lines || []).map(l => ({ sr_number: l.sr_number, description: l.description, hsn_code: l.hsn_code, mode: l.mode, qty_kg: l.qty_kg, rate_inr_per_kg: l.rate_inr_per_kg, cif_fc: l.cif_fc, exc_rate: l.exc_rate, cif_inr: l.cif_inr, fob_inr: l.fob_inr, pct: l.pct, amount_inr: l.amount_inr })), incentive_lines: [], payments: [] };
-                                                        const nr = await api.post('trades/', saleData);
-                                                        toast.success('SALE trade created. Opening in edit mode...');
-                                                        saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                        navigate(`/trades/${nr.data.id}/edit`);
-                                                    } catch (err) { toast.error(err.response?.data?.non_field_errors?.[0] || 'Failed to copy trade'); }
-                                                }
-                                            },
-                                            canWrite && !isLinked && { icon: 'link-45deg', title: 'Link to existing trade', tone: 'primary',
-                                                onClick: () => openLinkModal(item) },
-                                            canWrite && { icon: 'pencil-fill', title: 'Edit', tone: 'primary',
-                                                onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/trades/${item.id}/edit`); } },
-                                            canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
-                                        ].filter(Boolean)}
-                                        viewOpen={expandedTrades.has(item.id)}
-                                        onView={() => toggleTrade(item.id)}
-                                        detailLabel={detailRows.length ? `${detailRows.length} Line${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
-                                        detail={() => (
-                                            <DetailTable
-                                                columns={[
-                                                    { key: 'sr_number_label', label: 'Sr#',        nowrap: true,
-                                                        render: (v, row) => v || (row.sr_number != null ? String(row.sr_number) : '—') },
-                                                    { key: 'description',     label: 'Description', muted: true },
-                                                    { key: 'hsn_code',        label: 'HSN',         nowrap: true,
-                                                        render: v => v ? <code>{v}</code> : '—' },
-                                                    { key: 'qty_kg',          label: 'Qty (KG)',   align: 'right', nowrap: true,
-                                                        render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—' },
-                                                    { key: 'cif_fc',          label: 'CIF FC $',   align: 'right', nowrap: true,
-                                                        render: v => v ? `$${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—' },
-                                                    { key: 'cif_inr',         label: 'CIF INR',    align: 'right', nowrap: true,
-                                                        render: v => v ? fmtInr(v) : '—' },
-                                                    { key: 'amount_inr',      label: 'Amount',     align: 'right', nowrap: true, bold: true,
-                                                        render: v => fmtInr(v) },
-                                                ]}
-                                                rows={detailRows}
-                                                emptyMessage="No trade lines."
-                                            />
-                                        )}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 220 }}>
-                                                <div>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>From</div>
-                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.from_company_label || '—'}</div>
-                                                </div>
-                                                <ArrowRight className="size-4" aria-hidden="true" />
-                                                <div>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>To</div>
-                                                    <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>{item.to_company_label || '—'}</div>
-                                                </div>
-                                            </div>
-                                            {item.boe_label && (
-                                                <div style={{ minWidth: 100 }}>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>BOE</div>
-                                                    <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.boe_label}</div>
-                                                </div>
-                                            )}
-                                            {item.incentive_license && (
-                                                <div style={{ minWidth: 100 }}>
-                                                    <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Incentive Lic</div>
-                                                    <div style={{ fontSize: 13.5, color: 'var(--success-text)', fontWeight: 500 }}>{item.incentive_license}</div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </EntityCard>
-                                );
-                            };
-
-                            // Group linked trades into pairs; keep unpaired as singles
-                            const seen = new Set();
-                            const tradeGroups = [];
-                            data.forEach(trade => {
-                                if (seen.has(trade.id)) return;
-                                seen.add(trade.id);
-                                const linked = trade.linked_trade_info;
-                                if (linked) {
-                                    const partner = data.find(t => t.id === linked.id);
-                                    if (partner && !seen.has(partner.id)) {
-                                        seen.add(partner.id);
-                                        const sale = trade.direction.includes('SALE') ? trade : partner;
-                                        const purchase = trade.direction.includes('PURCHASE') ? trade : partner;
-                                        tradeGroups.push({ type: 'pair', sale, purchase, pairKey: `pair-${Math.min(trade.id, partner.id)}` });
-                                        return;
-                                    }
-                                }
-                                tradeGroups.push({ type: 'single', trade, pairKey: `single-${trade.id}` });
-                            });
-
-                            return (
-                                <div>
-                                    {tradeGroups.map(group => {
-                                        if (group.type === 'single') {
-                                            return renderTradeCard(group.trade);
-                                        }
-                                        // Paired group
-                                        const { sale, purchase, pairKey } = group;
-                                        const isExpanded = expandedPairs.has(pairKey);
-                                        const companies = `${sale.from_company_label || '-'} ↔ ${sale.to_company_label || '-'}`;
-                                        return (
-                                            <div key={pairKey} style={{ border: '1px solid #a5b4fc', borderLeft: '4px solid #6366f1', borderRadius: 'var(--tb-r-md)', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                                                <div
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--tb-brand-50)', cursor: 'pointer', flexWrap: 'wrap' }}
-                                                    {...clickable(() => togglePair(pairKey))}
-                                                >
-                                                    <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-success-text)', background: 'var(--tb-success-soft)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Sale</span>
-                                                    <LinkIcon className="size-4" aria-hidden="true" />
-                                                    <span style={{ fontSize: 12, fontWeight: '700', color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-100)', padding: '2px 8px', borderRadius: 'var(--tb-r-sm)' }}>Purchase</span>
-                                                    <span style={{ fontSize: '0.82rem', color: 'var(--tb-brand)', fontWeight: '600', flex: 1 }}>{companies}</span>
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
-                                                        {sale.invoice_date || ''}
-                                                    </span>
-                                                    <span style={{ fontSize: 12.5, color: 'var(--tb-text-secondary)' }}>
-                                                        Sale: {fmtInr(sale.total_amount)} · Purchase: {fmtInr(purchase.total_amount)}
-                                                    </span>
-                                                    <ChevronDown className="size-4 transition-transform" style={{ color: 'var(--tb-brand)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-                                                </div>
-                                                {isExpanded && (
-                                                    <div style={{ padding: '8px', background: 'var(--tb-sunken)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                        {renderTradeCard(sale)}
-                                                        {renderTradeCard(purchase)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()
+                        <TradesListView
+                            loading={loading}
+                            data={data}
+                            tradeGroups={tradeGroups}
+                            canWrite={canWrite}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            onOpenLink={openLinkModal}
+                            onCopyToCounterpart={handleCopyTradeToCounterpart}
+                            onTransferLetter={handleTradeTransferLetter}
+                            expandedTrades={expandedTrades}
+                            onToggleTrade={toggleTrade}
+                            expandedPairs={expandedPairs}
+                            onTogglePair={togglePair}
+                        />
                     )}
 
                     {/* Incentive Licenses Card Layout */}
@@ -1415,9 +1237,8 @@ export default function MasterList() {
                                     icon: 'ArrowLeftRight',
                                     className: 'btn btn-outline-primary',
                                     onClick: async (item) => {
-                                        if (!window.confirm(`Create a SALE trade from this PURCHASE trade?`)) {
-                                            return;
-                                        }
+                                        const confirmed = await confirmDangerousAction('Copy to Sale', 'Create a SALE trade from this PURCHASE trade?');
+                                        if (!confirmed) { return; }
                                         try {
                                             // Fetch full trade data
                                             const response = await api.get(`trades/${item.id}/`);
@@ -1429,7 +1250,7 @@ export default function MasterList() {
                                                 license_type: purchaseTrade.license_type || 'DFIA',  // Copy license type
                                                 from_company: purchaseTrade.to_company?.id || purchaseTrade.to_company,  // Swap: purchase TO becomes sale FROM
                                                 to_company: purchaseTrade.from_company?.id || purchaseTrade.from_company,  // Swap: purchase FROM becomes sale TO
-                                                boe: purchaseTrade.boe?.id || purchaseTrade.boe,
+                                                boes: (purchaseTrade.boes || []).map(b => b?.id || b),
                                                 invoice_number: '',  // Leave empty for user to fill
                                                 invoice_date: new Date().toISOString().split('T')[0],  // Today's date
                                                 remarks: purchaseTrade.remarks || '',
@@ -1544,9 +1365,8 @@ export default function MasterList() {
                                     icon: 'Copy',
                                     className: 'btn btn-outline-info',
                                     onClick: async (item) => {
-                                        if (!window.confirm(`Create a copy of allotment ${item.invoice_number || 'this allotment'}?`)) {
-                                            return;
-                                        }
+                                        const confirmed = await confirmDangerousAction('Copy Allotment', `Create a copy of allotment ${item.invoice_number || 'this allotment'}?`);
+                                        if (!confirmed) { return; }
                                         try {
                                             const response = await api.post(`allotments/${item.id}/copy/`);
                                             const newAllotmentId = response.data.id;
@@ -1628,12 +1448,11 @@ export default function MasterList() {
                                 },
                                 {
                                     label: 'Update Product Name',
-                                    icon: 'bi bi-arrow-repeat',
+                                    icon: 'RefreshCw',
                                     className: 'btn btn-outline-info',
                                     onClick: async (item) => {
-                                        if (!window.confirm(`Update product name for BOE ${item.bill_of_entry_number}?`)) {
-                                            return;
-                                        }
+                                        const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
+                                        if (!confirmed) { return; }
                                         try {
                                             const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
                                             toast.success(response.data.message || 'Product name updated successfully');
@@ -1650,87 +1469,18 @@ export default function MasterList() {
                             onInlineUpdate={handleInlineUpdate}
                         />
                     ) : (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading {entityTitle}...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="text-center py-5 text-muted-foreground">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <div className="mt-2">No {entityTitle ? entityTitle.toLowerCase() : 'records'} found</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    // list_display is array of strings (field names)
-                                    const cols = metadata.list_display || [];
-                                    const fmtLabel = (col) => col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                                    const getVal = (col) => {
-                                        const fieldKey = col.replace(/__/g, '_');
-                                        const val = item[fieldKey] !== undefined ? item[fieldKey] : item[col];
-                                        if (val === null || val === undefined || val === '') return null;
-                                        if (typeof val === 'boolean') return val ? 'Yes' : 'No';
-                                        if (typeof val === 'object') return JSON.stringify(val);
-                                        return String(val);
-                                    };
-                                    return (
-                                        <div key={item.id} style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            background: 'var(--tb-card-bg)',
-                                            border: '1px solid var(--tb-border)',
-                                            borderLeft: '4px solid #4f46e5',
-                                            borderRadius: 'var(--tb-r-md)',
-                                            marginBottom: '6px',
-                                            padding: '10px 14px',
-                                            gap: '12px',
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                        }}>
-                                            {/* Fields row — equal-width columns so all rows align */}
-                                            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'flex-start', minWidth: 0 }}>
-                                                {cols.map((col, idx) => {
-                                                    const v = getVal(col);
-                                                    return (
-                                                        <div key={col} style={{ flex: '1 1 0', minWidth: 0 }}>
-                                                            <div style={{ fontSize: 10, color: 'var(--tb-text-tertiary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {fmtLabel(col)}
-                                                            </div>
-                                                            <div style={{
-                                                                fontSize: 14,
-                                                                color: idx === 0 ? 'var(--tb-brand-active)' : 'var(--tb-gray-700)',
-                                                                fontWeight: idx === 0 ? '600' : '400',
-                                                                wordBreak: 'break-word',
-                                                            }}>
-                                                                {v ?? <span style={{ color: 'var(--tb-border-strong)' }}>—</span>}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            {/* Actions — always right-pinned */}
-                                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignSelf: 'center' }}>
-                                                <button
-                                                    onClick={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/masters/${entityName}/${item.id}/edit`); }}
-                                                    title="Edit"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-brand-hover)', background: 'var(--tb-brand-50)', border: '1px solid #93c5fd', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer' }}
-                                                >
-                                                    <Pencil className="size-4" aria-hidden="true" /> Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(item)}
-                                                    title="Delete"
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 12, color: 'var(--tb-danger-text)', background: 'var(--tb-danger-soft)', border: '1px solid #fca5a5', borderRadius: '5px', padding: '4px 9px', cursor: 'pointer' }}
-                                                >
-                                                    <Trash2 className="size-4" aria-hidden="true" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <GenericMasterCards
+                            loading={loading}
+                            data={data}
+                            metadata={metadata}
+                            entityName={entityName}
+                            entityTitle={entityTitle}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                        />
                     ))}
 
                     {/* Pagination */}

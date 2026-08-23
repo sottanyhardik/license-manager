@@ -1,17 +1,9 @@
 import os
-import sys
-from distutils.version import LooseVersion
-
-from django_rq import get_worker
-from redis.exceptions import ConnectionError
-from rq import use_connection
-from rq.logutils import setup_loghandlers
+from pathlib import Path
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
-from django.utils.version import get_version
-
 
 
 def reset_db_connections():
@@ -50,16 +42,13 @@ class Command(BaseCommand):
                             help='Default worker timeout to be used')
         parser.add_argument('--sentry-dsn', action='store', default=None, dest='sentry-dsn',
                             help='Report exceptions to this Sentry DSN')
-
-        if LooseVersion(get_version()) >= LooseVersion('1.10'):
-            parser.add_argument('args', nargs='*', type=str,
-                                help='The queues to work on, separated by space')
+        parser.add_argument('args', nargs='*', type=str,
+                            help='The queues to work on, separated by space')
 
     def handle(self, *args, **options):
         pid = options.get('pid')
         if pid:
-            with open(os.path.expanduser(pid), "w") as fp:
-                fp.write(str(os.getpid()))
+            Path(pid).expanduser().write_text(str(os.getpid()), encoding="utf-8")
         sentry_dsn = options.get('sentry-dsn')
         if sentry_dsn is None:
             sentry_dsn = getattr(settings, 'SENTRY_DSN', None)
@@ -72,6 +61,15 @@ class Command(BaseCommand):
             level = 'WARNING'
         else:
             level = 'INFO'
+
+        try:
+            from django_rq import get_worker
+            from redis.exceptions import ConnectionError as RedisConnectionError
+            from rq import use_connection
+            from rq.logutils import setup_loghandlers
+        except ImportError as exc:
+            raise CommandError("RQ worker dependencies are not installed; install django-rq and rq to use this command") from exc
+
         setup_loghandlers(level)
 
         try:
@@ -95,11 +93,9 @@ class Command(BaseCommand):
                 try:
                     from rq.contrib.sentry import register_sentry
                     register_sentry(sentry_dsn)
-                except ImportError:
-                    self.stdout.write(self.style.ERROR("Please install sentry-sdk using `pip install sentry-sdk`"))
-                    sys.exit(1)
+                except ImportError as exc:
+                    raise CommandError("Please install sentry-sdk using `pip install sentry-sdk`") from exc
 
             w.work(burst=options.get('burst', False), with_scheduler=options.get('with_scheduler', False), logging_level=level)
-        except ConnectionError as e:
-            self.stderr.write(str(e))
-            sys.exit(1)
+        except RedisConnectionError as e:
+            raise CommandError(str(e)) from e

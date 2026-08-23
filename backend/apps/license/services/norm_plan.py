@@ -1,6 +1,7 @@
 """
-Norm-based utilization planning (E1 / E5 / E132) reduced to PER-IMPORT-ITEM
-planned values, so the manual plan module can pre-fill from it.
+Norm-based utilization planning (E1 / E5 / E126 / E132) reduced to
+PER-IMPORT-ITEM planned values, so the manual plan module can pre-fill from
+it.
 
 Mirrors the exact waterfall calls used by the Item Pivot report
 (`apps/license/views/item_pivot_report.py`) so the pre-filled figures match
@@ -9,7 +10,9 @@ what the user already sees there:
   * E1 / E5 — classify each import item into a category, run the category
     waterfall, then allocate each item its proportional share of the
     category's planned CIF (unit price = category effective rate).
-  * E132 — sequential debit; only "Success" rows carry planned figures.
+  * E132 / E126 — deterministic per-item classification (Nuts/Yeast/PKO/RBD/
+    Cheese/Aluminium for E132; Nuts/PKO/Olive-Oil for E126), priced at each
+    planning item's fixed unit price.
 
 Returns {import_item_id: {'planned_quantity', 'unit_price', 'planned_cif'}}.
 Items with no norm allocation are simply absent from the map.
@@ -18,7 +21,8 @@ from __future__ import annotations
 
 
 def detect_norm(license_obj) -> str:
-    """Return 'E1' | 'E5' | 'E132' | '' for the license's primary export norm."""
+    """Return 'E1' | 'E5' | 'E126' | 'E132' | 'A3627' | '' for the license's
+    primary export norm."""
     if not license_obj.export_license.exists():
         return ""
     first = license_obj.export_license.first()
@@ -26,57 +30,51 @@ def detect_norm(license_obj) -> str:
     code = code.strip()
     if code == "E132":
         return "E132"
+    if code == "E126":
+        return "E126"
     if code == "E5":
         return "E5"
+    if code == "A3627":
+        return "A3627"
     # E1 family (but not E126 / E132).
     if "E1" in code and "E126" not in code and "E132" not in code:
         return "E1"
     return ""
 
 
-def effective_plan_for_license(license_obj):
+def effective_plan_for_license(license_obj, *, balance_cif=None):
     """
-    Per-import-item effective plan, net of allotments.
+    DEPRECATED: Read-only paths must use LicenseItemPlan directly.
 
-    Composition (per item, not per license):
-      * MANUAL FIRST — if an import item has a manual plan line, that line is used
-        and is FIXED: the automated norm logic never overrides it.
-      * NORM FILLS THE REST — items without a manual line use the norm (E1/E5/E132)
-        plan.
-      * REMAINING = plan − allotted — the planned quantity and CIF are then reduced
-        by what has already been ALLOTTED for that item (floored at 0). Because the
-        item's allotted_quantity / allotted_value are maintained by the allotment
-        signals, this figure shrinks when an allotment is made and grows back when
-        one is removed, with no stored-plan mutation.
+    Legacy function that merged manual and norm-derived plans. This is now
+    DEPRECATED for read paths — reports, exports, and other GET endpoints must
+    read ONLY from persisted LicenseItemPlan, never from on-the-fly planning.
+
+    This function is kept for backward compatibility with legacy code, but
+    SHOULD NOT be called from new read paths. Use plan_map_for_license() to
+    read manual plans from LicenseItemPlan instead.
+
+    WRITE paths (planning operations) should use the canonical planning engine
+    directly, not this function.
 
     Returns (source, {import_item_id: {planned_quantity, unit_price, planned_cif}})
-    where source is 'manual' (any manual line present), 'norm', or '' (neither).
+    where source is 'manual' (manual plan present), or '' (no plan).
     """
     from apps.license.services.plan_reporting import plan_map_for_license
     from apps.license.models import LicenseImportItemsModel
 
     manual = plan_map_for_license(license_obj.id)
-    norm = norm_plan_for_license(license_obj)
 
-    # Per-item merge: manual line wins for its item; norm fills every other item.
+    # Per-item mapping: ONLY manual plans, no norm fallback
     out = {}
-    for iid in set(norm) | set(manual):
-        if iid in manual:
-            d = manual[iid]
-            q = float(d["total_planned_quantity"] or 0)
-            c = float(d["total_planned_cif"] or 0)
-            out[iid] = {
-                "planned_quantity": q,
-                "unit_price": round(c / q, 2) if q else 0.0,
-                "planned_cif": c,
-            }
-        else:
-            n = norm[iid]
-            out[iid] = {
-                "planned_quantity": float(n["planned_quantity"]),
-                "unit_price": float(n["unit_price"]),
-                "planned_cif": float(n["planned_cif"]),
-            }
+    for iid, d in manual.items():
+        q = float(d["total_planned_quantity"] or 0)
+        c = float(d["total_planned_cif"] or 0)
+        out[iid] = {
+            "planned_quantity": q,
+            "unit_price": round(c / q, 2) if q else 0.0,
+            "planned_cif": c,
+        }
 
     # Remaining = plan − allotted (per item), floored at 0.
     if out:
@@ -94,100 +92,7 @@ def effective_plan_for_license(license_obj):
             p["planned_cif"] = rc
             p["unit_price"] = round(rc / rq, 2) if rq else 0.0
 
-    source = "manual" if manual else ("norm" if norm else "")
+    source = "manual" if manual else ""
     return source, out
 
 
-def norm_plan_for_license(license_obj) -> dict:
-    """Per-import-item norm plan: {item_id: {planned_quantity, unit_price, planned_cif}}."""
-    from apps.license.models import LicenseImportItemsModel
-
-    norm = detect_norm(license_obj)
-    if not norm:
-        return {}
-
-    balance_cif = float(license_obj.get_balance_cif or 0)
-    import_items = (
-        LicenseImportItemsModel.objects
-        .filter(license=license_obj)
-        .select_related("hs_code")
-        .prefetch_related("items")
-    )
-    result: dict = {}
-
-    if norm in ("E1", "E5"):
-        if norm == "E1":
-            from apps.license.services.e1_plan import (
-                E1_CATS as CATS, E1_EXCLUDED_CONDITIONS as EXCL,
-                classify_e1_item as classify, compute_e1_plan as compute,
-            )
-        else:
-            from apps.license.services.e5_plan import (
-                E5_CATS as CATS, classify_e5_item as classify, compute_e5_plan as compute,
-            )
-            EXCL = None
-
-        display_qty = {c: 0.0 for c in CATS}
-        util_qty = {c: 0.0 for c in CATS}
-        item_util: dict = {}      # import_item_id -> util qty contributed
-        item_cat: dict = {}       # import_item_id -> category
-
-        for ii in import_items:
-            names = list(ii.items.values_list("name", flat=True))
-            key = ", ".join(sorted(names)) if names else (ii.description or "-")
-            hs = ii.hs_code.hs_code if ii.hs_code else ""
-            cat = classify(key, hs, ii.description)
-            if not cat or cat not in display_qty:
-                continue
-            avail = float(ii.available_quantity or 0)
-            display_qty[cat] += avail
-            cond = (ii.condition_type or "").strip()
-            if EXCL is not None:
-                util_inc = 0.0 if cond in EXCL.get(cat, frozenset()) else avail
-            else:
-                util_inc = avail
-            util_qty[cat] += util_inc
-            item_util[ii.id] = util_inc
-            item_cat[ii.id] = cat
-
-        # Run the waterfall exactly as the pivot does.
-        if norm == "E1":
-            planned, rates = compute(display_qty, util_qty, balance_cif)
-        else:
-            planned, rates = compute(display_qty, None, balance_cif, None)
-
-        for iid, uq in item_util.items():
-            cat = item_cat[iid]
-            cat_uq = util_qty.get(cat, 0.0)
-            cat_plan = planned.get(cat, 0.0)
-            item_plan = (uq / cat_uq) * cat_plan if cat_uq else 0.0
-            result[iid] = {
-                "planned_quantity": round(uq, 3),
-                "unit_price": round(item_plan / uq, 2) if uq else 0.0,
-                "planned_cif": round(item_plan, 2),
-            }
-
-    elif norm == "E132":
-        # E132 planning = deterministic classification (services/e132_plan.py):
-        # each import item is classified into one planning item and priced at that
-        # item's fixed unit price. planned_cif = available_qty × price (0.0 when the
-        # price is To-Be-Defined, e.g. Milk). Unclassified items get no plan line.
-        from apps.license.services.e132_plan import plan_e132_per_item
-
-        records = [
-            {
-                "record_id": ii.id,
-                "quantity": float(ii.available_quantity or 0),
-                "hs_code": ii.hs_code.hs_code if ii.hs_code else "",
-                "description": ii.description or "",
-            }
-            for ii in import_items
-        ]
-        for iid, p in plan_e132_per_item(records, balance_cif).items():
-            result[iid] = {
-                "planned_quantity": round(float(p["planned_quantity"]), 3),
-                "unit_price": round(float(p["unit_price"]), 2) if p["unit_price"] is not None else 0.0,
-                "planned_cif": round(float(p["planned_cif"]), 2) if p["planned_cif"] is not None else 0.0,
-            }
-
-    return result

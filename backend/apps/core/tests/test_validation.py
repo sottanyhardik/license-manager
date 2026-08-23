@@ -2,9 +2,12 @@
 Unit tests for core.utils.validation module
 """
 from unittest import TestCase
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
+
+import pytest
 from django.core.exceptions import ValidationError
+
 from apps.core.utils.validation import (
     validate_positive_decimal,
     validate_non_negative_decimal,
@@ -17,29 +20,6 @@ from apps.core.utils.validation import (
     sanitize_string,
     validate_file_extension,
 )
-
-
-class _RaisesContext:
-    def __init__(self, expected_exception):
-        self.expected_exception = expected_exception
-        self.value = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type is None:
-            raise AssertionError(f"{self.expected_exception.__name__} not raised")
-        if not issubclass(exc_type, self.expected_exception):
-            return False
-        self.value = exc_value
-        return True
-
-
-class pytest:
-    @staticmethod
-    def raises(expected_exception):
-        return _RaisesContext(expected_exception)
 
 
 class TestValidatePositiveDecimal(TestCase):

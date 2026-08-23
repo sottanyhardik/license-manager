@@ -13,18 +13,27 @@ Materialized views are refreshed:
 - Via scheduled Celery tasks
 """
 
-from django.db import connection
-from typing import List, Optional
 import logging
 
+from django.db import connection
+
+from apps.core.constants import CREDIT, DEBIT
+
 logger = logging.getLogger(__name__)
+
+# ``RowDetails.transaction_type`` is a max_length=2 column holding the canonical
+# single-character codes from apps.core.constants ("C"/"D") — never the words
+# "CREDIT"/"DEBIT". The SQL below interpolates the constants rather than
+# hardcoding literals so the views can never silently drift out of sync with the
+# model again: a mismatch here matches zero rows, which makes utilisation read as
+# 0 and inflates every balance the views expose.
 
 
 # ============================================================================
 # Materialized View Definitions
 # ============================================================================
 
-LICENSE_BALANCE_VIEW = """
+LICENSE_BALANCE_VIEW = f"""
 CREATE MATERIALIZED VIEW IF NOT EXISTS license_balance_mv AS
 SELECT
     ld.id as license_id,
@@ -42,7 +51,7 @@ SELECT
 
     -- Calculate utilized CIF from BOE (debits)
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) as utilized_cif,
 
@@ -59,7 +68,7 @@ SELECT
         WHERE lei.license_id = ld.id
     ), 0) -
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) -
     COALESCE(SUM(CASE
@@ -80,7 +89,7 @@ LEFT JOIN license_licenseimportitemsmodel lii
 
 LEFT JOIN bill_of_entry_rowdetails rd
     ON rd.sr_number_id = lii.id
-    AND rd.transaction_type IN ('DEBIT', 'CREDIT')
+    AND rd.transaction_type IN ('{DEBIT}', '{CREDIT}')
 
 LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
@@ -102,7 +111,7 @@ CREATE INDEX IF NOT EXISTS license_balance_mv_is_active_idx
 """
 
 
-ITEM_BALANCE_VIEW = """
+ITEM_BALANCE_VIEW = f"""
 CREATE MATERIALIZED VIEW IF NOT EXISTS item_balance_mv AS
 SELECT
     lii.id as item_id,
@@ -115,12 +124,12 @@ SELECT
 
     -- Utilized via BOE
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.qty
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.qty
         ELSE 0
     END), 0) as utilized_quantity,
 
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) as utilized_cif,
 
@@ -131,14 +140,14 @@ SELECT
     -- Balance (available)
     lii.quantity -
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.qty
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.qty
         ELSE 0
     END), 0) -
     COALESCE(SUM(ai.qty), 0) as available_quantity,
 
     lii.cif_fc -
     COALESCE(SUM(CASE
-        WHEN rd.transaction_type = 'DEBIT' THEN rd.cif_inr
+        WHEN rd.transaction_type = '{DEBIT}' THEN rd.cif_inr
         ELSE 0
     END), 0) -
     COALESCE(SUM(ai.cif_fc), 0) as available_cif,
@@ -156,7 +165,7 @@ INNER JOIN license_licensedetailsmodel ld
 
 LEFT JOIN bill_of_entry_rowdetails rd
     ON rd.sr_number_id = lii.id
-    AND rd.transaction_type IN ('DEBIT', 'CREDIT')
+    AND rd.transaction_type IN ('{DEBIT}', '{CREDIT}')
 
 LEFT JOIN allotment_allotmentitems ai
     ON ai.item_id = lii.id
@@ -230,6 +239,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS dashboard_stats_mv_idx
     ON dashboard_stats_mv(last_refreshed);
 """
 
+MATERIALIZED_VIEW_SQL = {
+    'license_balance_mv': LICENSE_BALANCE_VIEW,
+    'item_balance_mv': ITEM_BALANCE_VIEW,
+    'dashboard_stats_mv': DASHBOARD_STATS_VIEW,
+}
+MATERIALIZED_VIEW_NAMES = tuple(MATERIALIZED_VIEW_SQL)
+RELATED_MATERIALIZED_VIEW_NAMES = (
+    'license_balance_mv',
+    'item_balance_mv',
+    'dashboard_stats_mv',
+)
+
+
+def _validate_materialized_view_name(view_name: str) -> str:
+    if view_name not in MATERIALIZED_VIEW_SQL:
+        raise ValueError(f"Unknown materialized view: {view_name}")
+    return view_name
+
 
 # ============================================================================
 # Materialized View Management Functions
@@ -237,35 +264,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS dashboard_stats_mv_idx
 
 def create_materialized_views():
     """Create all materialized views."""
-    views = [
-        ('license_balance_mv', LICENSE_BALANCE_VIEW),
-        ('item_balance_mv', ITEM_BALANCE_VIEW),
-        ('dashboard_stats_mv', DASHBOARD_STATS_VIEW),
-    ]
-
     with connection.cursor() as cursor:
-        for view_name, sql in views:
+        for view_name, sql in MATERIALIZED_VIEW_SQL.items():
             try:
-                logger.info(f"Creating materialized view: {view_name}")
+                logger.info("Creating materialized view: %s", view_name)
                 cursor.execute(sql)
-                logger.info(f"✓ Created {view_name}")
-            except Exception as e:
-                logger.error(f"✗ Failed to create {view_name}: {e}")
+                logger.info("Created materialized view: %s", view_name)
+            except Exception:
+                logger.exception("Failed to create materialized view: %s", view_name)
                 raise
 
 
 def drop_materialized_views():
     """Drop all materialized views."""
-    views = ['license_balance_mv', 'item_balance_mv', 'dashboard_stats_mv']
-
     with connection.cursor() as cursor:
-        for view_name in views:
+        for view_name in MATERIALIZED_VIEW_NAMES:
             try:
-                logger.info(f"Dropping materialized view: {view_name}")
+                logger.info("Dropping materialized view: %s", view_name)
                 cursor.execute(f"DROP MATERIALIZED VIEW IF EXISTS {view_name} CASCADE")
-                logger.info(f"✓ Dropped {view_name}")
-            except Exception as e:
-                logger.error(f"✗ Failed to drop {view_name}: {e}")
+                logger.info("Dropped materialized view: %s", view_name)
+            except Exception:
+                logger.exception("Failed to drop materialized view: %s", view_name)
 
 
 def refresh_materialized_view(view_name: str, concurrently: bool = False):
@@ -276,15 +295,16 @@ def refresh_materialized_view(view_name: str, concurrently: bool = False):
         view_name: Name of the materialized view
         concurrently: If True, refresh without locking (requires unique index)
     """
+    view_name = _validate_materialized_view_name(view_name)
     concurrent_sql = "CONCURRENTLY " if concurrently else ""
 
     with connection.cursor() as cursor:
         try:
-            logger.info(f"Refreshing materialized view: {view_name}")
+            logger.info("Refreshing materialized view: %s", view_name)
             cursor.execute(f"REFRESH MATERIALIZED VIEW {concurrent_sql}{view_name}")
-            logger.info(f"✓ Refreshed {view_name}")
-        except Exception as e:
-            logger.error(f"✗ Failed to refresh {view_name}: {e}")
+            logger.info("Refreshed materialized view: %s", view_name)
+        except Exception:
+            logger.exception("Failed to refresh materialized view: %s", view_name)
             raise
 
 
@@ -295,19 +315,17 @@ def refresh_all_materialized_views(concurrently: bool = True):
     Args:
         concurrently: If True, refresh without locking (requires unique indexes)
     """
-    views = ['license_balance_mv', 'item_balance_mv', 'dashboard_stats_mv']
-
-    for view_name in views:
+    for view_name in MATERIALIZED_VIEW_NAMES:
         refresh_materialized_view(view_name, concurrently=concurrently)
 
 
-def get_materialized_view_stats() -> List[dict]:
+def get_materialized_view_stats() -> list[dict]:
     """Get statistics about materialized views."""
     sql = """
     SELECT
         schemaname,
-        matviewname as view_name,
-        pg_size_pretty(pg_total_relation_size(schemaname||'.'||matviewname)) as size,
+        relname as view_name,
+        pg_size_pretty(pg_total_relation_size(relid)) as size,
         n_tup_ins as rows_inserted,
         n_tup_upd as rows_updated,
         n_tup_del as rows_deleted,
@@ -324,12 +342,13 @@ def get_materialized_view_stats() -> List[dict]:
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
-def check_materialized_view_freshness(view_name: str) -> Optional[dict]:
+def check_materialized_view_freshness(view_name: str) -> dict | None:
     """
     Check when a materialized view was last refreshed.
 
     Returns dict with last_refreshed timestamp or None if view doesn't exist.
     """
+    view_name = _validate_materialized_view_name(view_name)
     sql = f"SELECT last_refreshed FROM {view_name} LIMIT 1"
 
     try:
@@ -338,8 +357,8 @@ def check_materialized_view_freshness(view_name: str) -> Optional[dict]:
             result = cursor.fetchone()
             if result:
                 return {'view_name': view_name, 'last_refreshed': result[0]}
-    except Exception as e:
-        logger.warning(f"Could not check freshness of {view_name}: {e}")
+    except Exception:
+        logger.warning("Could not check freshness of %s", view_name, exc_info=True)
 
     return None
 
@@ -350,30 +369,29 @@ def check_materialized_view_freshness(view_name: str) -> Optional[dict]:
 
 def refresh_license_related_views():
     """Refresh views related to license changes."""
-    refresh_materialized_view('license_balance_mv', concurrently=True)
-    refresh_materialized_view('item_balance_mv', concurrently=True)
-    refresh_materialized_view('dashboard_stats_mv', concurrently=True)
+    _refresh_related_views()
 
 
 def refresh_boe_related_views():
     """Refresh views related to BOE changes."""
-    refresh_materialized_view('license_balance_mv', concurrently=True)
-    refresh_materialized_view('item_balance_mv', concurrently=True)
-    refresh_materialized_view('dashboard_stats_mv', concurrently=True)
+    _refresh_related_views()
 
 
 def refresh_allotment_related_views():
     """Refresh views related to allotment changes."""
-    refresh_materialized_view('license_balance_mv', concurrently=True)
-    refresh_materialized_view('item_balance_mv', concurrently=True)
-    refresh_materialized_view('dashboard_stats_mv', concurrently=True)
+    _refresh_related_views()
+
+
+def _refresh_related_views() -> None:
+    for view_name in RELATED_MATERIALIZED_VIEW_NAMES:
+        refresh_materialized_view(view_name, concurrently=True)
 
 
 # ============================================================================
 # Query Helpers (Use Materialized Views)
 # ============================================================================
 
-def get_license_balance(license_id: int) -> Optional[dict]:
+def get_license_balance(license_id: int) -> dict | None:
     """Get license balance from materialized view."""
     sql = """
     SELECT
@@ -404,7 +422,7 @@ def get_license_balance(license_id: int) -> Optional[dict]:
     return None
 
 
-def get_item_balance(item_id: int) -> Optional[dict]:
+def get_item_balance(item_id: int) -> dict | None:
     """Get item balance from materialized view."""
     sql = """
     SELECT
@@ -447,7 +465,7 @@ def get_item_balance(item_id: int) -> Optional[dict]:
     return None
 
 
-def get_dashboard_stats() -> Optional[dict]:
+def get_dashboard_stats() -> dict | None:
     """Get dashboard statistics from materialized view."""
     sql = "SELECT * FROM dashboard_stats_mv LIMIT 1"
 

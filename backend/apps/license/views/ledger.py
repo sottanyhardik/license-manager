@@ -1,115 +1,61 @@
 """
 License Ledger Views - Unified view for DFIA and Incentive license balances
 """
-import logging
-from decimal import Decimal
-from datetime import datetime
-
-from django.utils import timezone
-from django.http import HttpResponse
-from rest_framework import viewsets, filters
+from django.http import FileResponse
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.permissions import LicenseLedgerViewPermission
 from apps.license.models import LicenseDetailsModel, IncentiveLicense
 
-# Initialize logger
-logger = logging.getLogger(__name__)
-
-
-def _get_safe_balance(license, balance_field):
-    """Safely get balance value with fallback"""
-    try:
-        value = getattr(license, balance_field, None)
-        if value is None:
-            return 0.0
-        return float(value)
-    except (ValueError, TypeError, AttributeError):
-        logger.warning(f"Invalid balance value for license {license.id}")
-        return 0.0
-
-
-
-class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
+class LicenseLedgerViewSet(viewsets.GenericViewSet):
     """
     Unified ledger view for both DFIA and Incentive licenses.
     Shows available balance for selling licenses.
+
+    Access is role-based.  Ledger users can view the shared ledger regardless
+    of whether their account has a company assignment.
 
     Returns:
     - DFIA licenses: balance_cif (available CIF $ balance)
     - Incentive licenses: balance_value (available INR balance)
     """
     permission_classes = [LicenseLedgerViewPermission]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['license_number', 'exporter__name']
-    ordering_fields = ['license_date', 'balance_value', 'license_expiry_date']
-    ordering = ['-license_date']
 
-    def get_queryset(self):
-        """Return unified filtered list of DFIA + Incentive license dicts."""
-        from apps.license.services.ledger_service import build_license_queryset
-        return build_license_queryset(self.request.query_params)
+    def list(self, request):
+        """Preserve the router's established collection endpoint."""
+        return self.license_wise(request)
 
-    def _prepare_dfia_data(self, queryset):
-        from apps.license.services.ledger_service import prepare_dfia_data
-        return prepare_dfia_data(queryset)
+    def retrieve(self, request, pk=None):
+        """Preserve the router's established per-license endpoint."""
+        return self.ledger_detail(request, pk=pk)
 
-    def _prepare_incentive_data(self, queryset):
-        from apps.license.services.ledger_service import prepare_incentive_data
-        return prepare_incentive_data(queryset)
+    def _authorized_license(self, request, license_ref, license_type='AUTO'):
+        """Resolve a license for an already-authorized ledger user."""
+        from rest_framework.exceptions import APIException, ValidationError
 
-    def _get_sold_status(self, total, balance):
-        from apps.license.services.ledger_service import get_sold_status
-        return get_sold_status(total, balance)
+        requested_type = str(license_type or 'AUTO').strip().upper()
+        allowed_types = {'AUTO', 'DFIA', 'INCENTIVE', 'ALL_INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'}
+        if requested_type not in allowed_types:
+            raise ValidationError({'license_type': f"Invalid license type '{license_type}'."})
 
-    def _get_incentive_breakdown(self, incentive_qs):
-        from apps.license.services.ledger_service import get_incentive_breakdown
-        return get_incentive_breakdown(incentive_qs)
+        if requested_type == 'DFIA':
+            found_type, license_obj = self._find_license_by_id_or_number(license_ref, True, False)
+        elif requested_type in {'INCENTIVE', 'ALL_INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'}:
+            found_type, license_obj = self._find_license_by_id_or_number(license_ref, False, True)
+        else:
+            found_type, license_obj = self._find_license_by_id_or_number(license_ref, True, True)
+        if (license_obj and requested_type in {'RODTEP', 'ROSTL', 'MEIS'}
+                and found_type != requested_type):
+            license_obj = None
+        if not license_obj:
+            class LicenseNotFound(APIException):
+                status_code = 404
+                default_code = 'not_found'
+            raise LicenseNotFound(detail={'error': f'License not found: {license_ref}'})
 
-    def list(self, request, *args, **kwargs):
-        """Override list to handle non-queryset data"""
-        data = self.get_queryset()
-
-        # Apply search filter manually for combined data
-        search = request.query_params.get('search')
-        if search and isinstance(data, list):
-            # Support comma-separated license numbers (e.g. "0311045100,0311045787")
-            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
-            if len(terms) > 1:
-                data = [
-                    item for item in data
-                    if (item.get('license_number') or '').lower() in terms
-                ]
-            else:
-                search_lower = terms[0] if terms else ''
-                data = [
-                    item for item in data
-                    if search_lower in (item.get('license_number') or '').lower()
-                       or search_lower in (item.get('exporter_name') or '').lower()
-                ]
-
-        # Apply ordering
-        ordering = request.query_params.get('ordering', '-license_date')
-        if isinstance(data, list):
-            reverse = ordering.startswith('-')
-            order_field = ordering.lstrip('-')
-            if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
-                # Handle None values in date/numeric fields
-                from datetime import date
-                if order_field in ['license_date', 'license_expiry_date']:
-                    # For date fields, use date.min for None values
-                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
-                else:
-                    # For numeric fields (balance_value), use 0 for None values
-                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
-
-        # Pagination
-        page = self.paginate_queryset(data)
-        if page is not None:
-            return self.get_paginated_response(page)
-
-        return Response(data)
+        return found_type, license_obj
 
     def _find_license_by_id_or_number(self, pk, search_dfia=True, search_incentive=True):
         """
@@ -152,18 +98,18 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
                 if pk.isdigit() and not pk.startswith('0'):
                     try:
                         license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
-                        return ('INCENTIVE', license)
+                        return (license.license_type, license)
                     except IncentiveLicense.DoesNotExist:
                         license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
-                        return ('INCENTIVE', license)
+                        return (license.license_type, license)
                 else:
                     try:
                         license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(license_number=pk)
-                        return ('INCENTIVE', license)
+                        return (license.license_type, license)
                     except IncentiveLicense.DoesNotExist:
                         try:
                             license = IncentiveLicense.objects.select_related('exporter', 'port_code').get(pk=int(pk))
-                            return ('INCENTIVE', license)
+                            return (license.license_type, license)
                         except (ValueError, TypeError, IncentiveLicense.DoesNotExist):
                             pass
             except IncentiveLicense.DoesNotExist:
@@ -171,49 +117,15 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
 
         return (None, None)
 
-    def retrieve(self, request, pk=None, *args, **kwargs):
-        """
-        Retrieve a single license by ID or license_number.
-        Supports both DFIA and Incentive licenses.
-        Auto-searches both tables if not found in the specified type.
-        """
-        license_type = request.query_params.get('license_type', 'AUTO')
-
-        # Determine search strategy based on license_type parameter
-        if license_type == 'DFIA':
-            found_type, license = self._find_license_by_id_or_number(pk, search_dfia=True, search_incentive=False)
-        elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
-            found_type, license = self._find_license_by_id_or_number(pk, search_dfia=False, search_incentive=True)
-        else:  # AUTO or ALL - search both
-            found_type, license = self._find_license_by_id_or_number(pk, search_dfia=True, search_incentive=True)
-
-        # If not found, return 404
-        if not license:
-            return Response({
-                'error': f'License not found: {pk}',
-                'searched_in': 'DFIA only' if license_type == 'DFIA' else 'Incentive only' if license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'] else 'both DFIA and Incentive'
-            }, status=404)
-
-        # Prepare and return data based on found type
-        if found_type == 'DFIA':
-            dfia_data = self._prepare_dfia_data([license])
-            if dfia_data:
-                return Response(dfia_data[0])
-        else:  # INCENTIVE
-            incentive_data = self._prepare_incentive_data([license])
-            if incentive_data:
-                return Response(incentive_data[0])
-
-        return Response({'error': 'License data preparation failed'}, status=500)
-
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """
-        Get summary statistics for license balances.
-        Filters by company, license_type, date range, and other parameters.
+        Get canonical summary statistics for every authorized ledger licence.
         """
-        from apps.license.services.ledger_service import get_ledger_summary
-        return Response(get_ledger_summary(request.query_params))
+        from apps.license.services.license_ledger_export import build_license_ledger_data
+        return Response(build_license_ledger_data(
+            request.query_params,
+        )['summary'])
 
     @action(detail=True, methods=['get'])
     def ledger_detail(self, request, pk=None):
@@ -223,267 +135,115 @@ class LicenseLedgerViewSet(viewsets.ReadOnlyModelViewSet):
         Accepts either ID (integer) or license_number (string) as pk parameter.
         Auto-searches both tables if license_type not specified.
 
-        Optional company parameter: If provided, only shows transactions involving that company.
+        **Phase 4C:** API consumes CanonicalLedgerService as the single source of truth.
+        All financial calculations are performed by CanonicalLedgerService; the API layer
+        is a transparent serialization layer with no business logic.
         """
-        from django.utils import timezone
-        from apps.trade.models import LicenseTrade
-        from django.db.models import Q
-
+        from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+        from apps.license.serializers import CanonicalLedgerSerializer
+        from rest_framework.exceptions import ValidationError
         license_type = request.query_params.get('license_type', 'AUTO')
-        company_id = request.query_params.get('company')  # Optional company filter
-
-        # Determine search strategy
-        if license_type == 'DFIA':
-            found_type, license = self._find_license_by_id_or_number(pk, search_dfia=True, search_incentive=False)
-        elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
-            found_type, license = self._find_license_by_id_or_number(pk, search_dfia=False, search_incentive=True)
-        else:  # AUTO - search both
-            found_type, license = self._find_license_by_id_or_number(pk, search_dfia=True, search_incentive=True)
-
-        # If not found, return 404
-        if not license:
-            return Response({
-                'error': f'License not found: {pk}',
-                'searched_in': 'DFIA only' if license_type == 'DFIA' else 'Incentive only' if license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'] else 'both DFIA and Incentive'
-            }, status=404)
-
-        # Delegate transaction building to the ledger_pdf service — keeps the
-        # view thin and the business logic testable in isolation.
-        from apps.license.services.exporters.ledger_pdf import (
-            build_dfia_ledger_detail,
-            build_incentive_ledger_detail,
-        )
-
-        if found_type == 'DFIA':
-            return Response(build_dfia_ledger_detail(license, company_id=company_id))
-        else:  # INCENTIVE
-            return Response(build_incentive_ledger_detail(license, company_id=company_id))
-
-    @action(detail=False, methods=['get'])
-    def available_for_sale(self, request):
-        """
-        Get licenses with available balance for sale.
-        Filters out expired and fully sold licenses.
-        """
-        from django.utils import timezone
-
-        min_balance = Decimal(request.query_params.get('min_balance', '100'))
-
-        # DFIA with balance
-        dfia_data = self._prepare_dfia_data(
-            LicenseDetailsModel.objects.filter(
-                flags__is_expired=False,
-                balance__balance_cif__gte=min_balance
-            ).select_related('exporter', 'port')
-        )
-
-        # Incentive with balance
-        incentive_data = self._prepare_incentive_data(
-            IncentiveLicense.objects.filter(
-                is_active=True,
-                license_expiry_date__gte=timezone.now().date(),
-                balance_value__gte=min_balance
-            ).select_related('exporter', 'port_code')
-        )
-
-        combined = list(dfia_data) + list(incentive_data)
-        combined.sort(key=lambda x: x.get('balance_value', 0), reverse=True)
-
-        return Response({
-            'count': len(combined),
-            'min_balance_filter': float(min_balance),
-            'licenses': combined
-        })
-
-    @action(detail=False, methods=['get'])
-    def search(self, request):
-        """
-        Search DFIA + Incentive licenses by license number or exporter name.
-        Requires query param ``q``.
-        """
-        from apps.license.services.ledger_service import search_licenses
-        result = search_licenses(request.query_params)
-        if result is None:
-            return Response({'error': 'Search query parameter "q" is required'}, status=400)
-        return Response(result)
-
-    @action(detail=False, methods=['get'], url_path='export/all')
-    def export_all(self, request):
-        """
-        Export all licenses (or filtered licenses) to a single PDF file.
-
-        Query params (same as list):
-        - license_type: Filter by type (DFIA, INCENTIVE, RODTEP, ROSTL, MEIS, or ALL) - default: ALL
-        - active_only: Filter only active licenses (default: true)
-        - min_balance: Minimum balance filter
-        - exporter: Filter by exporter ID
-        - search: Search by license number or exporter name
-        """
-        # Get filtered data using same logic as list()
-        data = self.get_queryset()
-
-        # Apply search filter manually for combined data
-        search = request.query_params.get('search')
-        if search and isinstance(data, list):
-            # Support comma-separated license numbers (e.g. "0311045100,0311045787")
-            terms = [t.strip().lower() for t in search.split(',') if t.strip()]
-            if len(terms) > 1:
-                data = [
-                    item for item in data
-                    if (item.get('license_number') or '').lower() in terms
-                ]
-            else:
-                search_lower = terms[0] if terms else ''
-                data = [
-                    item for item in data
-                    if search_lower in (item.get('license_number') or '').lower()
-                       or search_lower in (item.get('exporter_name') or '').lower()
-                ]
-
-        # Apply ordering
-        ordering = request.query_params.get('ordering', '-license_date')
-        if isinstance(data, list):
-            reverse = ordering.startswith('-')
-            order_field = ordering.lstrip('-')
-            if order_field in ['license_date', 'balance_value', 'license_expiry_date']:
-                from datetime import date
-                if order_field in ['license_date', 'license_expiry_date']:
-                    data.sort(key=lambda x: x.get(order_field) or date.min, reverse=reverse)
-                else:
-                    data.sort(key=lambda x: x.get(order_field) or 0, reverse=reverse)
-
-        # Check if detailed view is requested
-        detailed = request.query_params.get('detailed', 'false').lower() == 'true'
-
-        # Generate PDF (detailed or summary)
-        if detailed:
-            pdf_content = self._generate_detailed_licenses_pdf(data, request.query_params)
-            filename = f"license_ledger_detailed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        else:
-            pdf_content = self._generate_all_licenses_pdf(data, request.query_params)
-            filename = f"license_ledger_all_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-
-        # Create response
-        response = HttpResponse(pdf_content, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        return response
-
-    def _get_license_transactions(self, lic_data, company_id=None):
-        from apps.license.services.exporters.ledger_pdf import get_license_transactions
-        return get_license_transactions(lic_data, company_id=company_id)
-    def _generate_detailed_licenses_pdf(self, licenses_data, query_params):
-        from apps.license.services.exporters.ledger_pdf import generate_detailed_licenses_pdf
-        return generate_detailed_licenses_pdf(licenses_data, query_params)
-    def _generate_all_licenses_pdf(self, licenses_data, query_params):
-        from apps.license.services.exporters.ledger_pdf import generate_all_licenses_pdf
-        return generate_all_licenses_pdf(licenses_data, query_params)
-    @action(detail=False, methods=['get'], url_path='company-ledger')
-    def company_ledger(self, request):
-        """
-        Get ledger view for a specific company showing only licenses
-        where the company appears in trades (either as buyer or seller).
-
-        Query params:
-        - company: Company ID (required)
-        - license_type: Filter by type (DFIA, INCENTIVE, etc.) - default: ALL
-        - active_only: Filter only active licenses (default: true)
-        """
-        company_id = request.query_params.get('company')
-
-        if not company_id:
-            return Response({'error': 'company parameter is required'}, status=400)
-
-        # Use existing get_queryset logic which already filters by company
-        data = self.get_queryset()
-
-        # Add company transaction count for each license
-        from apps.trade.models import LicenseTrade
-        from django.db.models import Q, Count
-
+        company_value = request.query_params.get('company')
         try:
-            company_id_int = int(company_id)
+            company_id = int(company_value) if company_value else None
+        except (TypeError, ValueError):
+            raise ValidationError({'company': 'Company must be a valid numeric ID.'})
+        found_type, license = self._authorized_license(request, pk, license_type)
 
-            for item in data if isinstance(data, list) else []:
-                license_id = item.get('license_id')
-                license_type = item.get('license_type')
+        # Delegate all calculation to CanonicalLedgerService (single source of truth).
+        # The API is a transparent serialization layer with NO business logic.
+        dataset = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=license.id,
+            license_type=found_type,
+            company_id=company_id,
+        )
 
-                if license_type == 'DFIA':
-                    # Count trades for this license involving the company
-                    trade_count = LicenseTrade.objects.filter(
-                        Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
-                        license_type='DFIA',
-                        lines__sr_number__license_id=license_id
-                    ).count()
-                else:
-                    # Incentive license
-                    trade_count = LicenseTrade.objects.filter(
-                        Q(from_company_id=company_id_int) | Q(to_company_id=company_id_int),
-                        license_type='INCENTIVE',
-                        incentive_lines__incentive_license_id=license_id
-                    ).count()
+        from apps.license.services.license_ledger_export import enrich_invoice_documents
+        enrich_invoice_documents(
+            {"licenses": [dataset]}, user=request.user,
+            base_url=request.build_absolute_uri("/"),
+        )
 
-                item['company_transaction_count'] = trade_count
-
-        except (ValueError, TypeError) as e:
-            logger.error(f"Invalid company_id: {company_id} - {e}")
-            return Response({'error': 'Invalid company ID'}, status=400)
-
-        return Response({'results': data})
-
-    @action(detail=False, methods=['get'], url_path='company-ledger/export')
-    def company_ledger_export(self, request):
-        """
-        Export company-specific ledger to PDF.
-
-        Query params:
-        - company: Company ID (required)
-        - license_type: Filter by type (default: ALL)
-        - active_only: Filter only active licenses (default: true)
-        """
-        company_id = request.query_params.get('company')
-
-        if not company_id:
-            return Response({'error': 'company parameter is required'}, status=400)
-
-        # Get company name
-        from apps.core.models import CompanyModel
-        try:
-            company = CompanyModel.objects.get(pk=int(company_id))
-            company_name = company.name
-        except (CompanyModel.DoesNotExist, ValueError):
-            return Response({'error': 'Company not found'}, status=404)
-
-        # Get filtered data
-        data = self.get_queryset()
-
-        # Generate PDF
-        pdf_content = self._generate_company_ledger_pdf(data, company_name, request.query_params)
-
-        # Create response
-        response = HttpResponse(pdf_content, content_type='application/pdf')
-        safe_company_name = "".join(c for c in company_name if c.isalnum() or c in (' ', '_')).strip()
-        filename = f"company_ledger_{safe_company_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        return response
-
-    def _generate_company_ledger_pdf(self, licenses_data, company_name, query_params):
-        from apps.license.services.exporters.ledger_pdf import generate_company_ledger_pdf
-        return generate_company_ledger_pdf(licenses_data, company_name, query_params)
-    @action(detail=False, methods=['get'], url_path='company-wise')
-    def company_wise(self, request):
-        """
-        Returns all trades grouped by company with purchases, sales, and a grand summary.
-        """
-        from apps.license.services.ledger_service import get_company_wise_trades
-        return Response(get_company_wise_trades(request.query_params))
+        # Serialize for response (representation only; no calculations)
+        serializer = CanonicalLedgerSerializer(dataset)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='license-wise')
     def license_wise(self, request):
         """
         Returns trades grouped by license, then by company within each license.
         Structure: license → [company → purchases/sales/totals]
+
+        The collection is role-authorized and accepts the public ledger filters.
         """
-        from apps.license.services.ledger_service import get_license_wise_trades
-        return Response(get_license_wise_trades(request.query_params))
+        from apps.license.services.license_ledger_export import build_license_ledger_data
+        collection = build_license_ledger_data(
+            request.query_params,
+        )
+        datasets = collection['licenses']
+        return Response({'licenses': [{
+            'license_id': data['license_id'],
+            'license_number': data['license_number'],
+            'license_date': data['license_date'],
+            'expiry_date': data.get('expiry_date'),
+            'license_type': data['license_type'],
+            'sion_norms': data.get('sion_norms') or '',
+            # Flat, transaction-level rows for the screen ledger.  Keep the
+            # established company summary alongside it for older consumers.
+            'transactions': data.get('display_transactions') or [],
+            'summary': data.get('summary') or {},
+            'individual_ledger_projection': data.get('individual_ledger_projection') or {},
+            'companies': data['license_wise_companies'],
+        } for data in datasets],
+            # Canonical reporting hierarchy. The UI consumes this verbatim;
+            # the flat license-wise shape remains for detail compatibility.
+            'company_groups': collection['company_groups'],
+            'grand_total': collection['grand_total'],
+        })
+
+    @action(detail=False, methods=['get'], url_path='export')
+    def export(self, request):
+        """Render PDF or Excel from the same canonical datasets used by the UI."""
+        from apps.license.services.license_ledger_export import (
+            build_license_ledger_data,
+            render_license_ledger,
+        )
+
+        file_format = request.query_params.get('file_format', '').lower()
+        if file_format not in {'pdf', 'xlsx'}:
+            return Response({'error': "format must be 'pdf' or 'xlsx'"}, status=400)
+
+        license_ref = None
+        requested_license = request.query_params.get('license_id')
+        if requested_license:
+            found_type, license_obj = self._authorized_license(
+                request,
+                requested_license,
+                request.query_params.get('license_type', 'AUTO'),
+            )
+            license_ref = (license_obj.id, found_type)
+
+        canonical_data = build_license_ledger_data(
+            request.query_params, license_ref=license_ref,
+        )
+        from apps.license.services.license_ledger_export import enrich_invoice_documents
+        enrich_invoice_documents(
+            canonical_data, user=request.user, base_url=request.build_absolute_uri("/"),
+        )
+        datasets = canonical_data['licenses']
+        if not datasets:
+            return Response({'error': 'No License Ledger data available for export.'}, status=404)
+
+        output = render_license_ledger(canonical_data, file_format)
+        if len(datasets) == 1:
+            slug = f"license-ledger-{datasets[0]['license_id']}"
+            item_id = request.query_params.get('item_id')
+            if item_id:
+                slug += f"-{item_id}"
+        else:
+            slug = 'license-ledger'
+        content_type = 'application/pdf' if file_format == 'pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response = FileResponse(output, as_attachment=file_format == 'xlsx', filename=f'{slug}.{file_format}', content_type=content_type)
+        if file_format == 'pdf':
+            response['Content-Disposition'] = f'inline; filename="{slug}.pdf"'
+        return response

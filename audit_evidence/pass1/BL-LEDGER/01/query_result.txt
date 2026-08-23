@@ -1,0 +1,94 @@
+Raw output from the Django shell reproduction (all inside one
+transaction.atomic() block, rolled back at the end -- no permanent change
+to the real "lmanagement" database).
+
+Step 1 -- confirm BOE 27511 is genuinely, deliberately hidden:
+  from apps.bill_of_entry.models import BillOfEntryModel, genuinely_hidden_boe_ids
+  from apps.reconciliation.models import ReconciliationLog
+  boe = BillOfEntryModel.objects.get(id=27511)
+  print('invoice_no', boe.invoice_no)
+  print('genuinely hidden?', 27511 in genuinely_hidden_boe_ids([27511]))
+  for l in ReconciliationLog.objects.filter(bill_of_entry_id=27511).order_by('created_on'):
+      print(l.action, l.created_on, l.before, l.after)
+
+Output:
+  invoice_no OTH
+  genuinely hidden? True
+  HIDE_BOE 2026-07-30 04:08:59.603442+00:00 {'is_hidden': False, 'invoice_no': 'GE'} {'is_hidden': True, 'bill_of_entry_number': '4505467'}
+
+  -> exactly one log entry, a HIDE_BOE with no later RESTORE_BOE -- this
+     BOE was deliberately hidden by a user via the sanctioned hide_boe()
+     workflow and has never been restored.
+
+Step 2 -- reproduce the live "link" reconciliation action
+  (apps.reconciliation.views.ReconciliationViewSet.link, POST
+  /reconciliation/link/) against an UNRELATED sale trade that happens to
+  carry its own invoice number, exactly as a reconciliation-workbench user
+  would when tagging any ordinary BOE to a trade:
+
+  from django.db import transaction
+  from apps.trade.models import LicenseTrade
+  from apps.bill_of_entry.models import BillOfEntryModel
+  from apps.license.models import LicenseDetailsModel, LicenseBalance
+  from apps.license.services.balance_calculator import LicenseBalanceCalculator as C
+  from apps.trade.services.trade_service import stamp_boe_invoice_from_trade
+
+  lic = LicenseDetailsModel.objects.get(license_number='5211016017')
+  trade = LicenseTrade.objects.get(id=542)
+  boe = BillOfEntryModel.objects.get(id=27511)
+  print('trade invoice_number', trade.invoice_number, 'boe invoice_no before', boe.invoice_no)
+
+  try:
+      with transaction.atomic():
+          before_stored = LicenseBalance.objects.get(license=lic).balance_cif
+          before_live = C.calculate_financial_balance(lic)
+          before_debit = C.calculate_debit(lic)
+          print('BEFORE: stored', before_stored, 'live financial_balance', before_live, 'calculate_debit', before_debit)
+
+          trade.boes.add(boe)
+          stamp_boe_invoice_from_trade(trade, boe)
+
+          lic.refresh_from_db()
+          after_stored = LicenseBalance.objects.get(license=lic).balance_cif
+          after_live = C.calculate_financial_balance(lic)
+          after_debit = C.calculate_debit(lic)
+          print('AFTER link: stored', after_stored, 'live financial_balance', after_live, 'calculate_debit', after_debit)
+          raise Exception('rollback - test only, no real change made')
+  except Exception as e:
+      print('rolled back:', e)
+
+Output:
+  trade invoice_number PUR/2026-27/0007 boe invoice_no before OTH
+  BEFORE: stored 3322.35 live financial_balance 3322.35 calculate_debit 0.000
+  AFTER link: stored 3322.35 live financial_balance 271250.35 calculate_debit 0.000
+  rolled back: rollback - test only, no real change made
+
+Interpretation:
+  - `trade.boes.add(boe)` followed by `stamp_boe_invoice_from_trade(trade,
+    boe)` is EXACTLY what
+    `apps.reconciliation.views.ReconciliationViewSet.link()` executes for
+    every POST to /reconciliation/link/.
+  - Because `trade.invoice_number` ('PUR/2026-27/0007') is non-empty,
+    `stamp_boe_invoice_from_trade` unconditionally overwrites
+    `boe.invoice_no` from 'OTH' to 'PUR/2026-27/0007' -- with no check for
+    whether this BOE is currently a genuinely-hidden previous-owner BOE.
+  - The instant `invoice_no != 'OTH'`, `annotate_and_exclude_hidden`'s
+    Subquery check fails on the invoice_no comparison alone (it never even
+    reaches the ReconciliationLog check) -- BOE 27511's $267,928.00 debit
+    row (274336) is now unconditionally counted as ordinary, visible debit
+    everywhere: Financial Ledger, Customs Ledger, item/license balances.
+  - Live `get_balance_cif()` / `calculate_financial_balance(license)` for
+    license 5211016017 jumped from 3322.35 to 271250.35 (+267928.00,
+    exactly the previously-hidden row's cif_fc) the instant this ran.
+  - The cached `license_licensebalance.balance_cif` column stayed at
+    3322.35 -- confirming the same signal gap as BL-LEDGER-02
+    (`BillOfEntryModel` has no `post_save` receiver registered in
+    `apps/license/signals.py` at all; only its child `RowDetails` does).
+  - No `ReconciliationLog` row records the invoice_no change or the
+    resulting un-hide: `ReconciliationViewSet.link()` only writes one
+    `ACTION_LINK` log with `before`/`after` = `{"boe_ids": [...]}` -- it
+    never touches the hidden-state audit trail the way
+    `hide_boe`/`restore_boe` (`_apply_hide`/`_apply_restore`) deliberately
+    do. An auditor reviewing `ReconciliationLog` for this BOE would see a
+    HIDE_BOE entry from 2026-07-30 and nothing since, with no record that
+    it silently became visible again.

@@ -26,11 +26,37 @@ _ALLOTTED_FILTER = Q(
     allotment__type="AT",
 )
 
+# A plan is allocatable only while it is its current lifecycle version.
+# Every consumer of original/used/remaining capacity must share this exact
+# predicate; otherwise historical rows affect enforcement but not the UI.
+_CURRENT_PLAN_FILTER = Q(is_active=True, is_deleted=False, is_cancelled=False)
+
+
+def _item_pk(item):
+    if item is None:
+        return None
+    return getattr(item, "pk", item)
+
+
+def _normalize_item_ids(item_ids) -> list:
+    if item_ids is None:
+        return []
+
+    ids = []
+    for item_id in item_ids:
+        item_id = _item_pk(item_id)
+        if item_id not in (None, ""):
+            ids.append(item_id)
+    return list(dict.fromkeys(ids))
+
 
 def live_allotted_qty(item) -> Decimal:
     """Sum of quantity already allotted (non-BOE, type=AT) for this import item."""
     from apps.allotment.models import AllotmentItems
-    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item=item).aggregate(
+    item_id = _item_pk(item)
+    if item_id is None:
+        return DEC_000
+    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id=item_id).aggregate(
         total=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
     )["total"] or DEC_000
 
@@ -38,7 +64,10 @@ def live_allotted_qty(item) -> Decimal:
 def live_allotted_value(item) -> Decimal:
     """Sum of CIF-FC already allotted (non-BOE, type=AT) for this import item."""
     from apps.allotment.models import AllotmentItems
-    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item=item).aggregate(
+    item_id = _item_pk(item)
+    if item_id is None:
+        return DEC_0
+    return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id=item_id).aggregate(
         total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )["total"] or DEC_0
 
@@ -46,7 +75,7 @@ def live_allotted_value(item) -> Decimal:
 def live_allotted_qty_for(item_ids) -> Decimal:
     """Sum of quantity already allotted across a set of import items (group cap)."""
     from apps.allotment.models import AllotmentItems
-    ids = list(item_ids)
+    ids = _normalize_item_ids(item_ids)
     if not ids:
         return DEC_000
     return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=ids).aggregate(
@@ -57,9 +86,389 @@ def live_allotted_qty_for(item_ids) -> Decimal:
 def live_allotted_value_for(item_ids) -> Decimal:
     """Sum of CIF-FC already allotted across a set of import items (group cap)."""
     from apps.allotment.models import AllotmentItems
-    ids = list(item_ids)
+    ids = _normalize_item_ids(item_ids)
     if not ids:
         return DEC_0
     return AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=ids).aggregate(
         total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )["total"] or DEC_0
+
+
+def plan_line_status_for(plan_line) -> dict | None:
+    """Return the immutable target and live debit balance for one plan line.
+
+    A plan-mode debit names ``AllotmentItems.plan_line``.  That FK is the
+    audit identity which distinguishes sibling split lines for the same import
+    item, so it is the only sound source for a line's residual capacity.
+    Stored ``LicenseItemPlan.remaining_*`` values predate the allocation
+    ledger and are deliberately not read here: create, amend, delete and
+    reopen must all be reflected without a compensating mutation.
+    """
+    if plan_line is None or not getattr(plan_line, "pk", None):
+        return None
+
+    from apps.allotment.models import AllotmentItems
+
+    used = AllotmentItems.objects.filter(
+        _ALLOTTED_FILTER,
+        plan_line_id=plan_line.pk,
+        allocation_basis="PLAN",
+    ).aggregate(
+        q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
+        v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )
+    original_qty = Decimal(str(plan_line.planned_quantity or DEC_000))
+    original_cif = Decimal(str(plan_line.planned_cif_fc or DEC_0))
+    used_qty = used["q"] or DEC_000
+    used_cif = used["v"] or DEC_0
+    return {
+        "original_quantity": original_qty,
+        "used_quantity": used_qty,
+        "remaining_quantity": max(DEC_000, original_qty - used_qty),
+        "original_cif_fc": original_cif,
+        "used_cif_fc": used_cif,
+        "remaining_cif_fc": max(DEC_0, original_cif - used_cif),
+    }
+
+
+def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
+    """Bulk equivalent of :func:`plan_line_status_for` for plan-mode rows."""
+    plan_lines = list(plan_lines)
+    ids = [line.pk for line in plan_lines if getattr(line, "pk", None)]
+    if not ids:
+        return {}
+    from apps.allotment.models import AllotmentItems
+
+    used_by_line = {
+        row["plan_line_id"]: (row["q"] or DEC_000, row["v"] or DEC_0)
+        for row in AllotmentItems.objects.filter(
+            _ALLOTTED_FILTER,
+            allocation_basis="PLAN",
+            plan_line_id__in=ids,
+        ).values("plan_line_id").annotate(
+            q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
+            v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
+        )
+    }
+    statuses = {}
+    for line in plan_lines:
+        if not line.pk:
+            continue
+        original_qty = Decimal(str(line.planned_quantity or DEC_000))
+        original_cif = Decimal(str(line.planned_cif_fc or DEC_0))
+        used_qty, used_cif = used_by_line.get(line.pk, (DEC_000, DEC_0))
+        statuses[line.pk] = {
+            "original_quantity": original_qty,
+            "used_quantity": used_qty,
+            "remaining_quantity": max(DEC_000, original_qty - used_qty),
+            "original_cif_fc": original_cif,
+            "used_cif_fc": used_cif,
+            "remaining_cif_fc": max(DEC_0, original_cif - used_cif),
+        }
+    return statuses
+
+
+def planned_totals_for(item_ids) -> tuple[Decimal, Decimal]:
+    """
+    Sum of LicenseItemPlan.planned_quantity / planned_cif_fc across a group —
+    the "Original Plan" (immutable outside the Plan tab / auto-plan; never
+    touched by allotment create/delete/edit).
+
+    Same aggregate the allocate-time `plan_exceeded` check uses (see
+    `apps/allotment/views_actions.py::allocate_items`), factored out so any
+    read-only display of "what's the plan cap for this item" (e.g. the
+    Allocate screen's Planned Qty/$ display) can never drift from what is
+    actually enforced. Prefer `plan_status_for` below when you also need the
+    Used/Remaining breakdown — it composes this with the live-allotted sums.
+    """
+    from apps.license.models import LicenseItemPlan
+    ids = _normalize_item_ids(item_ids)
+    if not ids:
+        return DEC_000, DEC_0
+    agg = LicenseItemPlan.objects.filter(_CURRENT_PLAN_FILTER, import_item_id__in=ids).aggregate(
+        pq=Coalesce(Sum("planned_quantity"), Value(DEC_000), output_field=DecimalField()),
+        pv=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )
+    return agg["pq"] or DEC_000, agg["pv"] or DEC_0
+
+
+def group_used_snapshot(item) -> tuple[Decimal, Decimal]:
+    """
+    Live-allotted qty/CIF for `item`'s plan-group, RIGHT NOW.
+
+    This is the snapshot `save_plan_lines_for_license` stamps onto every new
+    `LicenseItemPlan` row as `baseline_used_quantity`/`baseline_used_cif_fc`
+    — see that function and `plan_status_for` for why a snapshot, not a
+    timestamp filter, is what makes "used since this plan" correct.
+    """
+    from apps.license.services.plan_grouping import group_ids_of
+    gids = group_ids_of(item)
+    return live_allotted_qty_for(gids), live_allotted_value_for(gids)
+
+
+def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> list:
+    """
+    Full-replace: delete a license's existing `LicenseItemPlan` rows and
+    create new ones from `lines` (dicts with `import_item`, `item_name`,
+    `planned_quantity`, `unit_price`, `planned_cif_fc`, `note`, and
+    optionally `remaining_quantity`/`remaining_cif_fc`) — the shape
+    `bulk_upsert`, `auto_plan`/`e1_auto_plan`/`auto_plan_all`
+    (`views/item_plan.py`) and the `plan_norms` management command all
+    already produce.
+
+    Stamps each new row with `baseline_used_quantity`/`baseline_used_cif_fc`
+    = `group_used_snapshot(item)` at creation time, so `plan_status_for` can
+    later compute "used SINCE this plan was saved" without relying on
+    `AllotmentItems.created_on` — which breaks the moment `allocate_items`
+    "amends" an existing row (`qty += ...`) instead of creating a new one:
+    that row's `created_on` never advances, so a since-filter would silently
+    miss any such amendment made after a re-plan. A snapshot doesn't care
+    how the live total changed, only that it did.
+
+    `remaining_quantity`/`remaining_cif_fc` — the live, independently-
+    draining balance `allocate_items` decrements when an allotment names
+    this specific line via `plan_line_id` (see views_actions.py) — default
+    to the freshly-planned amount for a brand-new line. A caller that wants
+    to PRESERVE an existing line's already-decremented balance across a
+    regenerate-and-replace cycle (e.g. `e132_auto_plan.py` re-emitting an
+    already-generated Vegetable Oil split unchanged) passes them explicitly.
+    """
+    from apps.license.models import LicenseItemPlan
+
+    lines = list(lines)  # Convert to list to be able to iterate multiple times and check length
+
+    items_by_id = {it.id: it for it in license_obj.import_license.all()}
+    baseline_cache: dict[int, tuple[Decimal, Decimal]] = {}
+
+    def _baseline(item_id):
+        if item_id not in baseline_cache:
+            item = items_by_id.get(item_id)
+            baseline_cache[item_id] = group_used_snapshot(item) if item is not None else (DEC_000, DEC_0)
+        return baseline_cache[item_id]
+
+    if delete_existing:
+        LicenseItemPlan.objects.filter(license=license_obj).delete()
+
+    created = []
+    for ln in lines:
+        baseline_qty, baseline_val = _baseline(ln.get("import_item"))
+        planned_quantity = ln.get("planned_quantity", 0) or 0
+        planned_cif_fc = ln.get("planned_cif_fc", 0) or 0
+        remaining_quantity = ln["remaining_quantity"] if ln.get("remaining_quantity") is not None else planned_quantity
+        remaining_cif_fc = ln["remaining_cif_fc"] if ln.get("remaining_cif_fc") is not None else planned_cif_fc
+        created.append(LicenseItemPlan.objects.create(
+            license=license_obj,
+            import_item_id=ln.get("import_item"),
+            item_name_id=ln.get("item_name"),
+            planned_quantity=planned_quantity,
+            unit_price=ln.get("unit_price", 0) or 0,
+            planned_cif_fc=planned_cif_fc,
+            remaining_quantity=remaining_quantity,
+            remaining_cif_fc=remaining_cif_fc,
+            note=ln.get("note", ""),
+            planning_rule_id=ln.get("planning_rule_id"),
+            planning_rule_version=ln.get("planning_rule_version"),
+            planning_rule_priority=ln.get("planning_rule_priority"),
+            allocation_provenance=ln.get("allocation_provenance", {}),
+            baseline_used_quantity=baseline_qty,
+            baseline_used_cif_fc=baseline_val,
+        ))
+    return created
+
+
+def plan_status_for_ids(gids) -> dict | None:
+    """
+    Same computation as `plan_status_for`, factored out to accept an
+    already-computed group-id list instead of an import item.
+
+    For callers that already grouped the license's FULL import-item list in
+    Python using the exact same `plan_grouping.plan_group_key` function (e.g.
+    `plan_utilization.plan_utilization_rows` when it was not handed a
+    caller-filtered `items` subset) — their computed member-id list for a
+    group is guaranteed set-identical to what `group_ids_of(representative)`
+    would return via a fresh DB query, since both iterate the same
+    `license_id`-scoped item set with the same key function. Such callers can
+    pass that list here directly and skip `group_ids_of`'s redundant
+    re-query of the license's full item list.
+
+    `plan_status_for(item)` is now a thin wrapper around this function — see
+    it for the full behavior contract (Original/Used/Remaining semantics).
+    Do not call this with an id list that is not provably equal to
+    `group_ids_of` for some item in that group; the two must stay
+    interchangeable for identical results.
+    """
+    from django.db.models import Min
+
+    from apps.license.models import LicenseItemPlan
+
+    if not gids:
+        return None
+    plans = LicenseItemPlan.objects.filter(_CURRENT_PLAN_FILTER, import_item_id__in=gids)
+    baseline = plans.aggregate(
+        bq=Min("baseline_used_quantity"), bv=Min("baseline_used_cif_fc"),
+    )
+    if baseline["bq"] is None:
+        return None  # no plan rows for this group at all
+
+    original_qty, original_val = planned_totals_for(gids)
+    current_used_qty = live_allotted_qty_for(gids)
+    current_used_val = live_allotted_value_for(gids)
+    used_qty = max(DEC_000, current_used_qty - baseline["bq"])
+    used_val = max(DEC_0, current_used_val - baseline["bv"])
+    return {
+        "original_quantity": original_qty,
+        "allocated_quantity": current_used_qty,
+        "used_quantity": used_qty,
+        "remaining_quantity": original_qty - used_qty,
+        "original_cif_fc": original_val,
+        "allocated_cif_fc": current_used_val,
+        "used_cif_fc": used_val,
+        "remaining_cif_fc": original_val - used_val,
+    }
+
+
+def plan_status_for(item) -> dict | None:
+    """
+    Original / Used / Remaining planned quantity & CIF-FC for an import
+    item's plan-group (see `plan_grouping.group_ids_of`).
+
+    "Remaining" is deliberately NOT a stored, debited/credited field — it's
+    Original (from `LicenseItemPlan`, immutable from allotment code) minus
+    Used. That means creating/deleting/editing an allotment automatically
+    changes what this function returns on the very next call, with no
+    explicit "credit"/"debit" step and no risk of drift between what's
+    displayed and what `allocate_items` enforces — both call this function.
+
+    "Used" = (current all-time live-allotted total for the group) minus
+    (the `baseline_used_quantity`/`baseline_used_cif_fc` snapshot stamped on
+    the group's plan rows when they were saved — see
+    `save_plan_lines_for_license`). Replacing a plan (bulk_upsert / auto-plan)
+    always re-snapshots the baseline to "right now", so Used resets to 0 and
+    Remaining resets to the new Original — even though allotments already
+    exist for the group from before the re-plan. Without this, re-planning a
+    group that already had allotments against an OLDER, larger plan (e.g.
+    shrinking the plan to match what's left after most of it was already
+    used) would show a permanently negative Remaining, even though the
+    person replanning clearly intends the new number to be what's allocable
+    going forward, not a historical ledger.
+
+    Returns None when the group has no `LicenseItemPlan` rows at all (i.e.
+    the item is unconstrained by any plan — falls back to availability-based
+    behavior everywhere else in the app).
+    """
+    from apps.license.services.plan_grouping import group_ids_of
+
+    gids = group_ids_of(item)
+    return plan_status_for_ids(gids)
+
+
+def plan_status_for_items(items) -> dict:
+    """
+    Batched sibling of `plan_status_for` for MANY import items (e.g. a
+    paginated page of the Allotment "available-licenses" screen) in a
+    small, fixed number of queries instead of ~5 queries PER item
+    (`group_ids_of`'s siblings query + the baseline/original/live-allotted
+    aggregates in `plan_status_for_ids`). At page_size=100 this measured
+    ~315 queries / ~290ms for the per-item loop against a small (2.4k-row)
+    dev DB — see `AllotmentActionViewSet.available_licenses`'s own comment
+    acknowledging this as a "batch as a follow-up if ever measured slow"
+    item; this is that follow-up.
+
+    Byte-identical to calling `plan_status_for(item)` once per item:
+    groups every item by `(license_id, plan_group_key)` — the exact same
+    grouping `group_ids_of` computes per-item — using ONE query for all
+    siblings across every license represented in `items` (not one query
+    per item), then resolves baseline/original/live-allotted with grouped
+    aggregate queries instead of per-group aggregates.
+
+    Returns `{item_id: dict|None}` — one entry per input item, `None` when
+    that item's group has no `LicenseItemPlan` rows at all (unconstrained
+    by any plan), exactly matching `plan_status_for`'s own contract.
+    """
+    from apps.license.models import LicenseImportItemsModel, LicenseItemPlan
+    from apps.license.services.plan_grouping import plan_group_key
+
+    items = list(items)
+    if not items:
+        return {}
+
+    license_ids = {getattr(it, "license_id", None) for it in items}
+    license_ids.discard(None)
+    if not license_ids:
+        return {it.id: None for it in items}
+
+    # Every import item across every license represented on this page —
+    # ONE query, mirroring `group_ids_of`'s own per-license siblings query
+    # (same select_related/prefetch_related so `plan_group_key` computes
+    # identically without triggering further queries).
+    siblings = (
+        LicenseImportItemsModel.objects
+        .filter(license_id__in=license_ids)
+        .select_related("hs_code")
+        .prefetch_related("items")
+    )
+    groups: dict[tuple, list] = {}
+    for sib in siblings:
+        key = (sib.license_id, plan_group_key(sib))
+        groups.setdefault(key, []).append(sib.id)
+
+    item_to_gids: dict[int, list] = {}
+    all_gids: set = set()
+    for it in items:
+        key = (it.license_id, plan_group_key(it))
+        # Fallback mirrors `group_ids_of`'s behavior for an item with no
+        # license (returns `[]` there); here an item always belongs to at
+        # least its own group once grouped alongside its real siblings, so
+        # this fallback is only reached for the same no-license edge case.
+        gids = groups.get(key, [])
+        item_to_gids[it.id] = gids
+        all_gids.update(gids)
+
+    if not all_gids:
+        return {it.id: None for it in items}
+
+    plans_by_item: dict[int, list] = {}
+    for p in LicenseItemPlan.objects.filter(_CURRENT_PLAN_FILTER, import_item_id__in=all_gids).values(
+        "import_item_id", "baseline_used_quantity", "baseline_used_cif_fc",
+        "planned_quantity", "planned_cif_fc",
+    ):
+        plans_by_item.setdefault(p["import_item_id"], []).append(p)
+
+    from apps.allotment.models import AllotmentItems
+    allotted_by_item: dict[int, tuple] = {}
+    for r in (
+        AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=all_gids)
+        .values("item_id")
+        .annotate(
+            q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
+            v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
+        )
+    ):
+        allotted_by_item[r["item_id"]] = (r["q"], r["v"])
+
+    result: dict = {}
+    for it in items:
+        gids = item_to_gids.get(it.id) or []
+        group_plans = [p for gid in gids for p in plans_by_item.get(gid, [])]
+        if not group_plans:
+            result[it.id] = None
+            continue
+        baseline_qty = min(p["baseline_used_quantity"] for p in group_plans)
+        baseline_val = min(p["baseline_used_cif_fc"] for p in group_plans)
+        original_qty = sum((p["planned_quantity"] for p in group_plans), DEC_000)
+        original_val = sum((p["planned_cif_fc"] for p in group_plans), DEC_0)
+        current_used_qty = sum((allotted_by_item.get(gid, (DEC_000, DEC_0))[0] for gid in gids), DEC_000)
+        current_used_val = sum((allotted_by_item.get(gid, (DEC_000, DEC_0))[1] for gid in gids), DEC_0)
+        used_qty = max(DEC_000, current_used_qty - baseline_qty)
+        used_val = max(DEC_0, current_used_val - baseline_val)
+        result[it.id] = {
+            "original_quantity": original_qty,
+            "allocated_quantity": current_used_qty,
+            "used_quantity": used_qty,
+            "remaining_quantity": original_qty - used_qty,
+            "original_cif_fc": original_val,
+            "allocated_cif_fc": current_used_val,
+            "used_cif_fc": used_val,
+            "remaining_cif_fc": original_val - used_val,
+        }
+    return result

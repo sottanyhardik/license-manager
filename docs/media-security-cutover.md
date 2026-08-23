@@ -21,31 +21,36 @@ one deploy window, in this order, and test before removing the public path.
 - Frontend helpers `frontend/src/utils/documentDownload.ts`
   (`openDocument`, `openAuthedFile`).
 
-## Still open until this cutover ships
+## Current cutover state
 
 - nginx still serves `location /media/` publicly.
-- The frontend still links documents directly to `/media/...` and uses one
-  `?access_token=` export link.
-- `JWTAuthenticationFromQueryParam` is still a global default auth class.
+- Frontend document/export flows use authenticated blob helpers instead of direct
+  browser-native media links or `?access_token=` URLs.
+- `JWTAuthenticationFromQueryParam` remains configured, but query-string tokens are
+  restricted to `GET`/`HEAD` download/export-style paths only.
 
 ---
 
-## Step 1 — Frontend migration (replace public/token URLs with authed fetches)
+## Step 1 — Frontend migration check (keep public/token URLs out)
 
-Replace every browser-native document/export link with the authed helper.
+Browser-native document/export links must stay on the authed helper path because
+plain anchors, images and `window.open()` cannot attach the Bearer header.
 
-Known sites (grep `?access_token=` and `.file` / `/media/` before shipping):
-- `frontend/src/components/LicenseBalanceModal.tsx:360` — `balance-excel/?access_token=${token}`
-  → `openAuthedFile(\`/licenses/${licenseId}/balance-excel/\`, \`${licenseNumber}-summary.xlsx\`)`
-- `frontend/src/pages/masters/LicenseParsePanel.tsx` (`href={existingLicenseCopy.file}`)
-  and `MasterForm.tsx`, `LedgerUpload.tsx` — replace `href={doc.file}` anchors with a
-  button/onClick calling `openDocument(doc.file, filename)`.
+Known helper sites:
+- `frontend/src/utils/documentDownload.ts` normalizes stored media paths and opens
+  files through the authenticated API client.
+- `frontend/src/pages/masters/LicenseParsePanel.tsx`, `MasterForm.tsx`,
+  `LicenseBalanceModal.tsx`, report pages and export panels call `openDocument()`
+  or `openAuthedFile()` instead of browser-native public media links.
 
-Re-grep to confirm zero remaining `?access_token=` and zero direct `/media/` links:
+Before shipping nginx Step 3, re-grep to confirm zero remaining token links and no
+direct browser-native media anchors in frontend source:
 ```
-grep -rnE "access_token=|[\"'/]media/" frontend/src
+rg -n "access_token=|href=\\{.*\\.file|window\\.open\\([^)]*media|[\"']/?media/" frontend/src
 ```
-Build + smoke-test that documents open and exports download while logged in.
+Expected hits should be limited to the authenticated helper implementation,
+comments, tests, and `AuthedImage`-style authenticated media consumers. Build and
+smoke-test that documents open and exports download while logged in.
 
 ## Step 2 — Backend env (turn on X-Accel-Redirect)
 
@@ -65,18 +70,20 @@ add_header Cache-Control "public"; }` block and **add** the internal block from
 authed `/api/media/<path>` route is already proxied by the existing `location /api/`.
 Then: `nginx -t && systemctl reload nginx`.
 
-## Step 4 — Remove query-param JWT (after Steps 1–3 verified)
+## Step 4 — Remove query-param JWT fallback (after Steps 1–3 verified)
 
-Once no browser flow depends on `?access_token=`, drop the query-param auth from the
-global default in `backend/lmanagement/settings.py`:
+Once no browser flow depends on `?access_token=` and production logs confirm no
+valid clients are sending it, drop the restricted query-param auth fallback from
+the global default in `backend/lmanagement/settings.py`:
 ```python
 "DEFAULT_AUTHENTICATION_CLASSES": (
     "rest_framework.authentication.SessionAuthentication",
     "rest_framework_simplejwt.authentication.JWTAuthentication",  # header-only
 ),
 ```
-(Deleting `apps.core.authentication.JWTAuthenticationFromQueryParam`.) Ensure nginx
-`log_format` does not record query strings in the meantime.
+Then delete `apps.core.authentication.JWTAuthenticationFromQueryParam` and its
+tests. Until that cleanup ships, ensure nginx `log_format` does not record query
+strings.
 
 ## Rollback
 

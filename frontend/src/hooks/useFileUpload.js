@@ -37,12 +37,71 @@ import { useState, useCallback } from 'react';
 import { toast } from "sonner";
 import api from '../api/axios';
 
+const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024;
+const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^(?:[a-z][a-z\d+.-]*:)?\/\//i;
+
+function hasUnsafePathCharacters(path) {
+  return [...path].some((char) => {
+    const code = char.charCodeAt(0);
+    return char === "\\" || code < 32 || code === 127;
+  });
+}
+
+function normalizeUploadEndpoint(endpoint) {
+  const value = String(endpoint ?? "").trim();
+
+  if (!value) {
+    throw new Error("Upload endpoint not configured");
+  }
+  if (ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(value)) {
+    throw new Error("Upload endpoint must be relative to the API origin");
+  }
+  if (hasUnsafePathCharacters(value)) {
+    throw new Error("Upload endpoint contains unsafe characters");
+  }
+
+  return value;
+}
+
+function normalizeMaxFileSize(maxFileSize) {
+  const size = Number(maxFileSize);
+  return Number.isFinite(size) && size > 0 ? size : DEFAULT_MAX_FILE_SIZE;
+}
+
+function getFilesFromEvent(event) {
+  return Array.from(event?.target?.files ?? event?.dataTransfer?.files ?? []);
+}
+
+function getUploadProgress(progressEvent) {
+  const loaded = Number(progressEvent?.loaded);
+  const total = Number(progressEvent?.total);
+
+  if (!Number.isFinite(loaded) || !Number.isFinite(total) || total <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((loaded * 100) / total)));
+}
+
+function getResponseData(response) {
+  return response?.data && typeof response.data === "object" ? response.data : {};
+}
+
+function getUploadErrorMessage(err, fallback) {
+  const responseData = err?.response?.data;
+  const responseError = typeof responseData?.error === "string" ? responseData.error.trim() : "";
+  const responseDetail = typeof responseData?.detail === "string" ? responseData.detail.trim() : "";
+  const errorMessage = typeof err?.message === "string" ? err.message.trim() : "";
+
+  return responseError || responseDetail || errorMessage || fallback;
+}
+
 export const useFileUpload = (options = {}) => {
   const {
     endpoint,
     multiple = true,
     accept = '.csv',
-    maxFileSize = 50 * 1024 * 1024, // 50MB default
+    maxFileSize = DEFAULT_MAX_FILE_SIZE,
     fileFieldName = 'file', // Field name for FormData
     uploadMode = 'sequential', // 'sequential' or 'batch' (all files in one request)
     onSuccess,
@@ -58,14 +117,30 @@ export const useFileUpload = (options = {}) => {
   const [dragActive, setDragActive] = useState(false);
   const [fileProgress, setFileProgress] = useState({});
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const effectiveMaxFileSize = normalizeMaxFileSize(maxFileSize);
 
   /**
    * Validate a single file
    */
   const validateFile = useCallback((file) => {
+    if (!file || typeof file.name !== "string") {
+      return {
+        valid: false,
+        error: "Invalid file selected"
+      };
+    }
+
+    const fileSize = Number(file.size);
+    if (!Number.isFinite(fileSize) || fileSize < 0) {
+      return {
+        valid: false,
+        error: `File "${file.name}" has invalid size`
+      };
+    }
+
     // Check file size
-    if (file.size > maxFileSize) {
-      const sizeInMB = (maxFileSize / (1024 * 1024)).toFixed(0);
+    if (fileSize > effectiveMaxFileSize) {
+      const sizeInMB = (effectiveMaxFileSize / (1024 * 1024)).toFixed(0);
       return {
         valid: false,
         error: `File "${file.name}" exceeds ${sizeInMB}MB size limit`
@@ -74,13 +149,14 @@ export const useFileUpload = (options = {}) => {
 
     // Check file type
     if (accept && accept !== '*') {
-      const acceptedTypes = accept.split(',').map(t => t.trim().toLowerCase());
+      const acceptedTypes = String(accept).split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
       const fileName = file.name.toLowerCase();
+      const fileType = String(file.type ?? '').toLowerCase();
       const isValid = acceptedTypes.some(type => {
         if (type.startsWith('.')) {
           return fileName.endsWith(type);
         }
-        return file.type === type;
+        return fileType === type;
       });
 
       if (!isValid) {
@@ -92,7 +168,7 @@ export const useFileUpload = (options = {}) => {
     }
 
     return { valid: true };
-  }, [maxFileSize, accept]);
+  }, [effectiveMaxFileSize, accept]);
 
   /**
    * Handle drag events
@@ -116,7 +192,7 @@ export const useFileUpload = (options = {}) => {
     e.stopPropagation();
     setDragActive(false);
 
-    const droppedFiles = Array.from(e.dataTransfer.files);
+    const droppedFiles = getFilesFromEvent(e);
     const validFiles = [];
     const errors = [];
 
@@ -151,7 +227,7 @@ export const useFileUpload = (options = {}) => {
    * Handle file input change
    */
   const handleFileChange = useCallback((e) => {
-    const selectedFiles = Array.from(e.target.files);
+    const selectedFiles = getFilesFromEvent(e);
     const validFiles = [];
     const errors = [];
 
@@ -182,7 +258,9 @@ export const useFileUpload = (options = {}) => {
     }
 
     // Reset input value to allow selecting the same file again
-    e.target.value = '';
+    if (e?.target) {
+      e.target.value = '';
+    }
   }, [multiple, validateFile, onFileAdded]);
 
   /**
@@ -196,8 +274,11 @@ export const useFileUpload = (options = {}) => {
       return { success: false, error: errorMsg };
     }
 
-    if (!endpoint) {
-      const errorMsg = 'Upload endpoint not configured';
+    let uploadEndpoint;
+    try {
+      uploadEndpoint = normalizeUploadEndpoint(endpoint);
+    } catch (err) {
+      const errorMsg = err.message;
       setError(errorMsg);
       toast.error(errorMsg);
       return { success: false, error: errorMsg };
@@ -227,13 +308,11 @@ export const useFileUpload = (options = {}) => {
       });
 
       try {
-        const response = await api.post(endpoint, formData, {
+        const response = await api.post(uploadEndpoint, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           timeout,
           onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
+            const percentCompleted = getUploadProgress(progressEvent);
             // Update all files with same progress
             files.forEach((file, i) => {
               setFileProgress(prev => ({
@@ -252,13 +331,16 @@ export const useFileUpload = (options = {}) => {
           }));
         });
 
+        const responseData = getResponseData(response);
         uploadResults.push({
           fileName: files.length > 1 ? `${files.length} files` : files[0].name,
           success: true,
-          message: response.data.message || 'Files processed successfully',
-          licenses: response.data.licenses || [],
-          stats: response.data.stats || {},
-          data: response.data,
+          message: typeof responseData.message === "string" && responseData.message.trim()
+            ? responseData.message
+            : 'Files processed successfully',
+          licenses: Array.isArray(responseData.licenses) ? responseData.licenses : [],
+          stats: responseData.stats && typeof responseData.stats === "object" ? responseData.stats : {},
+          data: responseData,
         });
 
       } catch (err) {
@@ -270,10 +352,7 @@ export const useFileUpload = (options = {}) => {
           }));
         });
 
-        const errorMsg = err.response?.data?.error
-          || err.response?.data?.detail
-          || err.message
-          || 'Failed to process files';
+        const errorMsg = getUploadErrorMessage(err, 'Failed to process files');
 
         uploadResults.push({
           fileName: files.length > 1 ? `${files.length} files` : files[0].name,
@@ -297,13 +376,11 @@ export const useFileUpload = (options = {}) => {
           const formData = new FormData();
           formData.append(fileFieldName, file);
 
-          const response = await api.post(endpoint, formData, {
+          const response = await api.post(uploadEndpoint, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout,
             onUploadProgress: (progressEvent) => {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
+              const percentCompleted = getUploadProgress(progressEvent);
               setFileProgress(prev => ({
                 ...prev,
                 [i]: { ...prev[i], progress: percentCompleted }
@@ -317,13 +394,16 @@ export const useFileUpload = (options = {}) => {
             [i]: { ...prev[i], progress: 100, status: 'completed' }
           }));
 
+          const responseData = getResponseData(response);
           uploadResults.push({
             fileName: file.name,
             success: true,
-            message: response.data.message || 'File processed successfully',
-            licenses: response.data.licenses || [],
-            stats: response.data.stats || {},
-            data: response.data,
+            message: typeof responseData.message === "string" && responseData.message.trim()
+              ? responseData.message
+              : 'File processed successfully',
+            licenses: Array.isArray(responseData.licenses) ? responseData.licenses : [],
+            stats: responseData.stats && typeof responseData.stats === "object" ? responseData.stats : {},
+            data: responseData,
           });
 
         } catch (err) {
@@ -333,10 +413,7 @@ export const useFileUpload = (options = {}) => {
             [i]: { ...prev[i], progress: 0, status: 'failed' }
           }));
 
-          const errorMsg = err.response?.data?.error
-            || err.response?.data?.detail
-            || err.message
-            || 'Failed to process file';
+          const errorMsg = getUploadErrorMessage(err, 'Failed to process file');
 
           uploadResults.push({
             fileName: file.name,
@@ -389,11 +466,12 @@ export const useFileUpload = (options = {}) => {
    * Format file size for display
    */
   const formatFileSize = useCallback((bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    const numericBytes = Number(bytes);
+    if (!Number.isFinite(numericBytes) || numericBytes <= 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    const i = Math.min(sizes.length - 1, Math.floor(Math.log(numericBytes) / Math.log(k)));
+    return Math.round((numericBytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   }, []);
 
   /**
@@ -411,6 +489,7 @@ export const useFileUpload = (options = {}) => {
     setResults([]);
     setError(null);
     setFileProgress({});
+    setCurrentFileIndex(0);
   }, []);
 
   return {

@@ -60,11 +60,11 @@ def num_to_words_indian(amount):
             return ' '.join(result)
 
         return convert_indian(whole_amount)
-    except Exception as e:
+    except Exception:
         return str(int(amount))
 
 
-def generate_bill_of_supply_pdf(trade, include_signature=True):
+def generate_bill_of_supply_pdf(trade, include_signature=True, canonical_total_inr=None):
     """
     Generate Bill of Supply PDF for SALE transactions.
 
@@ -79,17 +79,6 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
 
     # Get company color (default to black)
     from_company = trade.from_company
-    company_color = colors.black
-
-    if from_company and from_company.bill_colour:
-        color_value = from_company.bill_colour.strip()
-        if color_value:
-            if not color_value.startswith('#'):
-                color_value = '#' + color_value
-            try:
-                company_color = colors.HexColor(color_value)
-            except (ValueError, TypeError):
-                company_color = colors.black
 
     doc = SimpleDocTemplate(
         buffer,
@@ -465,7 +454,11 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
             items_data.append(row)
 
     # Calculate roundoff
-    rounded_total = round(subtotal)
+    # Invoice drill-down supplies the already-canonical ledger Sale bill.  The
+    # legacy download path omits it and retains its historical rounding rule.
+    # This parameter changes presentation only; it does not introduce a second
+    # accounting calculation in the invoice renderer.
+    rounded_total = canonical_total_inr if canonical_total_inr is not None else round(subtotal)
     roundoff = rounded_total - subtotal
 
     # Add rounding off row (dynamic based on column count)
@@ -582,16 +575,14 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     # Build footer text with BOE information if available
     footer_text = f'<b>Amount Chargeable (in words)</b><br/>INR {amount_words} Only'
 
-    # Add BOE information if BOE exists
-    if trade.boe:
-        boe_number = trade.boe.bill_of_entry_number if hasattr(trade.boe, 'bill_of_entry_number') else str(trade.boe)
-        boe_date = ''
-        if hasattr(trade.boe, 'boe_date') and trade.boe.boe_date:
-            boe_date = trade.boe.boe_date.strftime('%d-%m-%Y')
-
+    # Add BOE information if any BOEs exist
+    trade_boes = list(trade.boes.all())
+    if trade_boes:
+        boe_number = ', '.join(
+            b.bill_of_entry_number if hasattr(b, 'bill_of_entry_number') else str(b)
+            for b in trade_boes
+        )
         boe_info = f'<br/><b>BOE:</b> {boe_number}'
-        if boe_date:
-            boe_info += f' <b>Date:</b> {boe_date}'
         footer_text += boe_info
 
     # Add trade remarks if available
@@ -659,9 +650,6 @@ def generate_bill_of_supply_pdf(trade, include_signature=True):
     if include_signature and from_company:
         # Add signature/stamp if requested
         sig_rows = []
-
-        # First row: Signature and Stamp side by side (removed "for Company Name" as it's now in Bank Details)
-        sig_stamp_row = []
 
         # Try to add signature image - bigger size using full space
         sig_img = None

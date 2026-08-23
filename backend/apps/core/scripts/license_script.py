@@ -85,7 +85,6 @@ def convert(query, name):
 def fetch():
     from apps.license.models import LicenseDetailModel
     from apps.core.scripts.license_script import convert
-    import datetime
     query = LicenseDetailModel.objects.filter(export_license__norm_class__norm_class='E1', notification_number=1,
                                               approve=True, is_null=False).filter(license_expiry_date__gt=datetime.datetime.now())
     convert(query, 'Confectionery_19_2015.csv')

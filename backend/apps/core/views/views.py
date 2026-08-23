@@ -1,6 +1,7 @@
-from typing import List
-
 from django.db import models as dj_models
+from rest_framework import serializers
+
+from apps.accounts.permissions import CompanyPermission
 
 from .master_view import MasterViewSet
 from ..models import (
@@ -57,42 +58,6 @@ def choose_label_field(related_model):
         if c in model_fields:
             return c
     return "id"
-
-
-def to_kebab(s: str) -> str:
-    """
-    Convert snake_case or underscores to kebab-case.
-    """
-    return s.replace("_", "-").lower()
-
-
-def build_endpoint_candidates(rel_model) -> List[str]:
-    """
-    Return a list of plausible endpoints (strings ending with '/')
-    for a related model, ordered by preference.
-    """
-    raw_name = getattr(rel_model._meta, "model_name", None) or getattr(rel_model._meta, "object_name",
-                                                                       None) or rel_model.__name__
-    raw_name = str(raw_name).lower()
-    plural = raw_name if raw_name.endswith("s") else f"{raw_name}s"
-    kebab = to_kebab(raw_name)
-    kebab_plural = kebab if kebab.endswith("s") else f"{kebab}s"
-
-    candidates = [
-        f"{API_PREFIX}{raw_name}/",
-        f"{API_PREFIX}{plural}/",
-        f"{API_PREFIX}{kebab}/",
-        f"{API_PREFIX}{kebab_plural}/",
-    ]
-
-    # remove duplicates preserving order
-    seen = set()
-    out = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            out.append(c)
-    return out
 
 
 def enhance_config_with_fk(model_cls, config=None):
@@ -223,7 +188,14 @@ def enhance_config_with_fk(model_cls, config=None):
 # ------------------------------
 # ViewSet registrations
 # ------------------------------
-CompanyViewSet = MasterViewSet.create_viewset(
+class CompanyViewSetClass(MasterViewSet):
+    """Company master data — narrower read scope than the other masters
+    because company records carry banking/PAN/GST fields (see
+    CompanyPermission)."""
+    permission_classes = [CompanyPermission]
+
+
+CompanyViewSet = CompanyViewSetClass.create_viewset(
     CompanyModel,
     CompanySerializer,
     config=enhance_config_with_fk(
@@ -354,7 +326,14 @@ SionNormClassViewSet = MasterViewSet.create_viewset(
             "search": ["norm_class", "description", "import_norm__description", "export_norm__description"],
             "filter": {
                 "head_norm": {"type": "fk", "fk_endpoint": "/masters/head-norms/", "label_field": "name"},
-                "is_active": {"type": "boolean", "default": True},
+                # "boolean" is not a recognized filter type in
+                # apply_advanced_filters (only "exact" handles the
+                # string->bool coercion) — using it here silently made
+                # ?is_active=true/false a no-op, so every one of the
+                # ~2,000 SION norm classes (all but a handful inactive)
+                # was returned regardless of the filter. "exact" is the
+                # same type PurchaseStatus's own is_active filter uses.
+                "is_active": {"type": "exact", "default": True},
             },
             "list_display": ["norm_class", "description", "head_norm_name", "is_active"],
             "form_fields": ["norm_class", "description", "head_norm", "is_active"],
@@ -461,27 +440,35 @@ ItemNameViewSet = MasterViewSet.create_viewset(
     config=enhance_config_with_fk(
         ItemNameModel,
         {
-            "search": ["name", "group__name", "sion_norm_class__norm_class"],
+            "search": ["name", "group__name", "norms__norm_class"],
             "filter": {
                 "group": {"type": "fk", "fk_endpoint": "/masters/groups/", "label_field": "name"},
                 "is_active": {"type": "exact"},
-                "sion_norm_class": {
-                    "type": "fk",
+                "norms": {
+                    "type": "m2m",
                     "fk_endpoint": "/masters/sion-classes/?is_active=true",
                     "label_field": "norm_class",
                     "display_field": "label",
                     "async": True
                 },
-                "norm_class": {"type": "related_exact", "lookup": "sion_norm_class__norm_class"},
+                "norm_class": {"type": "related_exact", "lookup": "norms__norm_class"},
             },
-            "list_display": ["group__name", "name", "sion_norm_class_label", 'display_order', "restriction_percentage"],
-            "form_fields": ["group", "name", "is_active", "sion_norm_class", 'display_order', "restriction_percentage"],
+            "list_display": ["group__name", "name", "norm_details", 'display_order', "restriction_percentage"],
+            "form_fields": ["group", "name", "is_active", "norms", 'display_order', "restriction_percentage"],
             "fk_endpoint_overrides": {
                 "group": "/masters/groups/",
-                "sion_norm_class": "/masters/sion-classes/?is_active=true"
+                "norms": "/masters/sion-classes/?is_active=true"
+            },
+            "field_meta": {
+                "norms": {
+                    "type": "fk_multi",
+                    "fk_endpoint": "/masters/sion-classes/?is_active=true",
+                    "label_field": "norm_class",
+                    "label": "Norms",
+                },
             },
             "label_field_overrides": {
-                "sion_norm_class": "norm_class"
+                "norms": "norm_class"
             },
             "ordering": ["group__name", "name"]
         }

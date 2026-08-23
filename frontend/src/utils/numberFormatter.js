@@ -80,3 +80,43 @@ export const formatQuantity = (value) => formatIndianNumber(value, 2);
  * Format FOB value (2 decimals)
  */
 export const formatFOB = (value) => formatIndianNumber(value, 2);
+
+/**
+ * Abbreviate a number to Indian Lakh/Crore notation (e.g. 12690443 ->
+ * "1.27 Cr", 479500 -> "4.80 L"). Small values fall back to the existing
+ * `formatIndianNumber(value, 2)` — no abbreviation needed. No currency
+ * symbol, matching `formatIndianNumber`'s own convention.
+ */
+export const formatIndianCompact = (value) => {
+    try {
+        const num = parseFloat(value);
+
+        if (isNaN(num)) {
+            return value?.toString() || '';
+        }
+
+        // Handle negative numbers the same way formatIndianNumber does:
+        // strip the sign, format the magnitude, then re-prepend it.
+        const isNegative = num < 0;
+        const abs = Math.abs(num);
+
+        let formatted;
+        if (abs >= 10000000) {
+            formatted = `${(abs / 10000000).toFixed(2)} Cr`;
+        } else if (abs >= 100000) {
+            const lakhs = (abs / 100000).toFixed(2);
+            // Rounding can push a value just under 1 crore (e.g.
+            // 99,99,999.99) to "100.00 L" — re-express as Cr instead.
+            formatted = parseFloat(lakhs) >= 100
+                ? `${(abs / 10000000).toFixed(2)} Cr`
+                : `${lakhs} L`;
+        } else {
+            return formatIndianNumber(value, 2);
+        }
+
+        return isNegative ? `-${formatted}` : formatted;
+
+    } catch (error) {
+        return value?.toString() || '';
+    }
+};

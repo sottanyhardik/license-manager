@@ -1,10 +1,13 @@
 # allotment/views_export.py
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 from io import BytesIO
 
 from django.http import HttpResponse
 from rest_framework.decorators import action
+
+from apps.core.models import ExchangeRateModel
 
 try:
     import openpyxl
@@ -16,16 +19,35 @@ except ImportError:
 
 try:
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.platypus import Table, TableStyle, Paragraph
+    from reportlab.lib.enums import TA_CENTER
     from apps.core.utils.pdf_utils import create_pdf_exporter
 
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
+
+EXPORT_FORMAT_PDF = 'pdf'
+EXPORT_FORMAT_XLSX = 'xlsx'
+SUPPORTED_EXPORT_FORMATS = {EXPORT_FORMAT_PDF, EXPORT_FORMAT_XLSX}
+DEFAULT_EXCHANGE_RATE = Decimal('89.5')
+
+
+def _text_response(message, status_code):
+    return HttpResponse(message, status=status_code, content_type='text/plain; charset=utf-8')
+
+
+def _decimal_or_default(value, default=Decimal('0')):
+    if value is None:
+        return default
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (ArithmeticError, TypeError, ValueError):
+        return default
 
 
 def add_grouped_export_action(viewset_class):
@@ -44,8 +66,10 @@ def add_grouped_export_action(viewset_class):
             - item_name: filter by item name
             - is_boe: filter by is_boe status
         """
-        export_type = request.query_params.get('type', 'AT')
-        export_format = request.query_params.get('_export', 'pdf').lower()
+        export_type = (request.query_params.get('type') or 'AT').strip().upper()
+        export_format = (request.query_params.get('_export') or EXPORT_FORMAT_PDF).strip().lower()
+        if export_format not in SUPPORTED_EXPORT_FORMATS:
+            return _text_response("Invalid export format. Use 'pdf' or 'xlsx'.", 400)
 
         # Get filtered queryset
         queryset = self.filter_queryset(self.get_queryset())
@@ -54,26 +78,26 @@ def add_grouped_export_action(viewset_class):
         # Use distinct() without parameters to avoid duplication from prefetch_related
         queryset = queryset.filter(
             allotment_details__isnull=False
+        ).select_related(
+            'company',
+            'port',
+        ).prefetch_related(
+            'allotment_details__item',
+            'allotment_details__item__license',
+            'allotment_details__item__license__exporter',
+            'allotment_details__item__license__port',
         ).distinct().order_by(
             'company__name', 'item_name', 'port__code'
-        ).prefetch_related(
-            'allotment_details__item__license__exporter',
-            'allotment_details__item__hs_code',
-            'company',
-            'port'
         )
 
-        if export_format == 'pdf':
+        if export_format == EXPORT_FORMAT_PDF:
             return self._export_grouped_pdf(queryset, export_type)
-        elif export_format == 'xlsx':
-            return self._export_grouped_xlsx(queryset, export_type)
-        else:
-            return HttpResponse("Invalid export format. Use 'pdf' or 'xlsx'.", status=400)
+        return self._export_grouped_xlsx(queryset, export_type)
 
     def _export_grouped_pdf(self, queryset, export_type):
         """Export grouped allotments to PDF"""
         if not REPORTLAB_AVAILABLE:
-            return HttpResponse("PDF export not available", status=500)
+            return _text_response("PDF export not available", 503)
 
         def shorten_exporter(name, max_words=2):
             if not name or name == '--':
@@ -87,7 +111,6 @@ def add_grouped_export_action(viewset_class):
         grouped_data = self._group_allotments(queryset)
 
         # Get active exchange rate
-        from apps.core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
 
         # Create PDF exporter
@@ -142,7 +165,6 @@ def add_grouped_export_action(viewset_class):
             title_para = Paragraph("Allotment Report", pdf_exporter.title_style)
             subtitle_para = Paragraph(f"Total USD $: {pdf_exporter.format_number(total_usd)}", pdf_exporter.subtitle_style)
             timestamp_text = f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
-            from reportlab.lib.styles import ParagraphStyle
             timestamp_style = ParagraphStyle(
                 'Timestamp',
                 parent=pdf_exporter.styles['Normal'],
@@ -194,7 +216,7 @@ def add_grouped_export_action(viewset_class):
                     pdf_exporter.add_section_header(elements, f"Item: {display_item_name}")
 
                 # Process each port within item
-                for port_code, allotments in ports_dict.items():
+                for _port_code, allotments in ports_dict.items():
                     # 17 columns — full landscape A4 (~11.35" usable).
                     # DFIA CIF removed; Exporter added (shows 2-word truncation).
                     table_data = [[
@@ -214,25 +236,26 @@ def add_grouped_export_action(viewset_class):
                         0.45 * inch,  # Unit Price ($)
                         0.75 * inch,  # Value ($)
                         0.45 * inch,  # Exchange Rate
-                        1.80 * inch,  # Item Name
-                        0.50 * inch,  # Invoice
-                        0.60 * inch,  # ETA
+                        1.60 * inch,  # Item Name
+                        0.45 * inch,  # Invoice
+                        0.55 * inch,  # ETA
                         1.05 * inch,  # DFIA No.
-                        0.90 * inch,  # Exporter  — "PGP GLASS…" fits at 0.90"
+                        0.80 * inch,  # Exporter
                         0.65 * inch,  # DFIA Date
                         0.54 * inch,  # DFIA Port
                         0.32 * inch,  # Item Sr.
-                        0.55 * inch,  # DFIA Qty.
-                        0.68 * inch,  # DFIA $.
+                        0.65 * inch,  # DFIA Qty.
+                        0.98 * inch,  # DFIA $.
                     ]  # total = 11.35"
 
                     sr_no = 1
                     item_total_qty = 0
                     item_total_value = 0
                     item_total_inr = 0
+                    dfia_subtotal_rows = []
 
                     for allot in allotments:
-                        allot_cif_inr = allot['value'] * allot.get('exchange_rate', 89.5)
+                        allot_cif_inr = allot['value'] * allot.get('exchange_rate', DEFAULT_EXCHANGE_RATE)
 
                         for idx, detail in enumerate(allot['details']):
                             item_name_text = allot.get('item_name', display_item_name)
@@ -247,7 +270,7 @@ def add_grouped_export_action(viewset_class):
                                     pdf_exporter.format_number(allot['quantity'], decimals=0),
                                     pdf_exporter.format_number(allot['unit_price']),
                                     pdf_exporter.format_number(allot['value']),
-                                    pdf_exporter.format_number(allot.get('exchange_rate', 89.5)),
+                                    pdf_exporter.format_number(allot.get('exchange_rate', DEFAULT_EXCHANGE_RATE)),
                                     item_name_text,
                                     invoice_text,
                                     allot['eta'],
@@ -274,6 +297,26 @@ def add_grouped_export_action(viewset_class):
                                     pdf_exporter.format_number(detail['dfia_qty'], decimals=0),
                                     pdf_exporter.format_number(detail['dfia_value']),
                                 ])
+
+                        # Keep every DFIA item line, then make the combined
+                        # allocation explicit when this allotment spans more
+                        # than one DFIA item.
+                        if len(allot['details']) > 1:
+                            total_dfia_qty = sum(
+                                (_decimal_or_default(detail['dfia_qty']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            total_dfia_value = sum(
+                                (_decimal_or_default(detail['dfia_value']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            dfia_subtotal_rows.append(len(table_data))
+                            table_data.append([
+                                '', '', '', '', '', '', '', '', '', '',
+                                'Total DFIA allocation', '', '', '', '',
+                                pdf_exporter.format_number(total_dfia_qty, decimals=0),
+                                pdf_exporter.format_number(total_dfia_value),
+                            ])
                         sr_no += 1
 
                     # Add to company totals
@@ -281,14 +324,16 @@ def add_grouped_export_action(viewset_class):
                     company_total_value += item_total_value
                     company_total_inr += item_total_inr
 
-                    # Totals row — Qty in col 3, Value$ in col 5, DFIA $ in col 16
+                    # Totals row — only columns that exist in this PDF table.
+                    # CIF INR has no dedicated column here and must not be
+                    # placed under the DFIA $ heading.
                     table_data.append([
                         '', 'Total', '',
                         pdf_exporter.format_number(item_total_qty, decimals=0),
                         '',
                         pdf_exporter.format_number(item_total_value),
                         '', '', '', '', '', '', '', '', '', '',
-                        pdf_exporter.format_number(item_total_inr)
+                        ''
                     ])
 
                     # col 7 = Item Name, col 10 = DFIA No., col 11 = Exporter — left-align
@@ -301,6 +346,20 @@ def add_grouped_export_action(viewset_class):
                         additional_styles.append(
                             ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                         )
+
+                    # A multi-line allocation gets a dedicated, readable
+                    # subtotal band.  The DFIA detail cells are intentionally
+                    # spanned, while Qty and DFIA $ remain under their headers.
+                    for subtotal_row in dfia_subtotal_rows:
+                        additional_styles.extend([
+                            ('SPAN', (10, subtotal_row), (14, subtotal_row)),
+                            ('BACKGROUND', (10, subtotal_row), (16, subtotal_row), colors.HexColor('#dbeafe')),
+                            ('TEXTCOLOR', (10, subtotal_row), (16, subtotal_row), colors.HexColor('#1e3a8a')),
+                            ('FONTNAME', (10, subtotal_row), (16, subtotal_row), 'Helvetica-Bold'),
+                            ('ALIGN', (10, subtotal_row), (14, subtotal_row), 'LEFT'),
+                            ('TOPPADDING', (10, subtotal_row), (16, subtotal_row), 4),
+                            ('BOTTOMPADDING', (10, subtotal_row), (16, subtotal_row), 4),
+                        ])
 
                     # Approved rows — light green
                     row_idx = 1
@@ -342,13 +401,12 @@ def add_grouped_export_action(viewset_class):
     def _export_grouped_xlsx(self, queryset, export_type):
         """Export grouped allotments to Excel"""
         if not OPENPYXL_AVAILABLE:
-            return HttpResponse("Excel export not available", status=500)
+            return _text_response("Excel export not available", 503)
 
         # Group data
         grouped_data = self._group_allotments(queryset)
 
         # Get active exchange rate
-        from apps.core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
 
         # Create workbook
@@ -426,7 +484,7 @@ def add_grouped_export_action(viewset_class):
                     row += 1
 
                 # Process each port within item
-                for port_code, allotments in ports_dict.items():
+                for _port_code, allotments in ports_dict.items():
                     # Table headers - allotment info + Approved + license subheader
                     main_headers = ['Sr No', 'Allotment Date', 'Port', 'Quantity (KGS)',
                                     'Unit Price ($)', 'Value ($)', 'Total CIF INR', 'Item Name', 'Invoice', 'ETA', 'Approved']
@@ -469,7 +527,7 @@ def add_grouped_export_action(viewset_class):
 
                     for allot in allotments:
                         start_row_for_allot = row
-                        allot_cif_inr = allot['value'] * allot.get('exchange_rate', 89.5)
+                        allot_cif_inr = allot['value'] * allot.get('exchange_rate', DEFAULT_EXCHANGE_RATE)
 
                         # Write allotment data (will be merged vertically if multiple licenses) - added Approved
                         allot_data = [
@@ -548,6 +606,48 @@ def add_grouped_export_action(viewset_class):
                                 ws.merge_cells(start_row=start_row_for_allot, start_column=col_idx,
                                                end_row=row - 1, end_column=col_idx)
 
+                            total_dfia_qty = sum(
+                                (_decimal_or_default(detail['dfia_qty']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            total_dfia_value = sum(
+                                (_decimal_or_default(detail['dfia_value']) for detail in allot['details']),
+                                Decimal('0'),
+                            )
+                            # Merge the blank descriptive cells so the label
+                            # never wraps vertically beside the DFIA totals.
+                            label_start_col = len(main_headers) + 1
+                            label_end_col = len(main_headers) + 4
+                            qty_col = label_end_col + 1
+                            value_col = label_end_col + 2
+                            total_fill = PatternFill(start_color='D9EAF7', end_color='D9EAF7', fill_type='solid')
+                            value_fill = PatternFill(start_color='B8D8F0', end_color='B8D8F0', fill_type='solid')
+                            ws.merge_cells(
+                                start_row=row,
+                                start_column=label_start_col,
+                                end_row=row,
+                                end_column=label_end_col,
+                            )
+
+                            label_cell = ws.cell(row=row, column=label_start_col, value='Total DFIA allocation')
+                            label_cell.border = border
+                            label_cell.fill = total_fill
+                            label_cell.font = Font(bold=True, size=12, color='17365D')
+                            label_cell.alignment = Alignment(horizontal='left', vertical='center')
+
+                            for col_idx, value, number_format in [
+                                (qty_col, total_dfia_qty, '#,##0'),
+                                (value_col, total_dfia_value, '#,##0.00'),
+                            ]:
+                                cell = ws.cell(row=row, column=col_idx, value=value)
+                                cell.border = border
+                                cell.fill = value_fill
+                                cell.font = Font(bold=True, size=12, color='17365D')
+                                cell.alignment = Alignment(horizontal='right', vertical='center')
+                                cell.number_format = number_format
+                            ws.row_dimensions[row].height = 22
+                            row += 1
+
                         sr_no += 1
 
                     # Add to company totals
@@ -596,15 +696,12 @@ def add_grouped_export_action(viewset_class):
             max_length = 0
             column_letter = None
             for cell in column:
-                try:
-                    # Skip merged cells
-                    if hasattr(cell, 'column_letter'):
-                        if column_letter is None:
-                            column_letter = cell.column_letter
-                        if cell.value and len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                except (TypeError, AttributeError):
-                    pass
+                if not hasattr(cell, 'column_letter'):
+                    continue
+                if column_letter is None:
+                    column_letter = cell.column_letter
+                if cell.value and len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
             if column_letter:
                 # Floor 10 (so short headers like "Sr No" stay readable),
                 # cap 22 (so long text wraps onto 2–3 lines).
@@ -636,10 +733,10 @@ def add_grouped_export_action(viewset_class):
                 'date': allotment.created_on.strftime(
                     '%d-%m-%Y') if allotment.created_on else '--',
                 'port': port_code,
-                'quantity': float(allotment.required_quantity or 0),
-                'unit_price': float(allotment.unit_value_per_unit or 0),
-                'value': float(allotment.required_value or 0),
-                'exchange_rate': float(allotment.exchange_rate or 89.5),
+                'quantity': _decimal_or_default(allotment.required_quantity),
+                'unit_price': _decimal_or_default(allotment.unit_value_per_unit),
+                'value': _decimal_or_default(allotment.required_value),
+                'exchange_rate': _decimal_or_default(allotment.exchange_rate, DEFAULT_EXCHANGE_RATE),
                 'invoice': allotment.invoice or '--',
                 'eta': allotment.estimated_arrival_date.strftime(
                     '%d-%m-%Y') if allotment.estimated_arrival_date else '--',
@@ -658,8 +755,8 @@ def add_grouped_export_action(viewset_class):
                         '%d-%m-%Y') if license_obj and license_obj.license_date else '--',
                     'dfia_port': license_obj.port.code if license_obj and license_obj.port else '--',
                     'item_sr_no': str(detail.item.serial_number) if detail.item else '--',
-                    'dfia_qty': float(detail.qty or 0),
-                    'dfia_value': float(detail.cif_fc or 0),
+                    'dfia_qty': _decimal_or_default(detail.qty),
+                    'dfia_value': _decimal_or_default(detail.cif_fc),
                 })
 
             # Store original item_name for display

@@ -5,14 +5,14 @@
 #  Sourced by export-master-data.sh, load-master-data.sh,
 #  migrate-all-servers.sh and onboard-server.sh. Not meant to run standalone.
 #
-#  Conventions inherited from the repo-root sync-masters.sh:
+#  Conventions inherited from the repo-root scripts/maintenance/sync-masters.sh:
 #    - Source of truth host   : .201  (SYNC_SOURCE_IP)
 #    - Followers              : labdhi 139.59.92.226, tractor 165.232.185.220
 #    - Remote user            : django
 #    - Remote backend path    : /home/django/license-manager/backend
 #    - Remote venv activate    : /home/django/license-manager/venv/bin/activate
 #    - Credentials via env only — NEVER hardcode. Prefer SSH keys; sshpass is
-#      a fallback when SYNC_PASSWORD is exported (same as sync-masters.sh).
+#      a fallback when SYNC_PASSWORD is exported (same as scripts/maintenance/sync-masters.sh).
 #
 #  Safety contract (every MDS script):
 #    - DRY-RUN by default. State-changing steps require --confirm.
@@ -54,7 +54,17 @@ err()  { _emit "${_C_RED}[$(_ts)] ✗${_C_NC} $*" >&2; }
 dry()  { _emit "${_C_DIM}[$(_ts)] (dry-run)${_C_NC} $*"; }
 die()  { err "$*"; exit 1; }
 
-# ── host resolution (same defaults as sync-masters.sh) ──────────────────────
+mds_usage() {
+    local script="$1" code="${2:-0}"
+    awk '
+        NR == 1 && /^#!/ { next }
+        /^#/ { sub(/^# ?/, ""); print; next }
+        { exit }
+    ' "$script"
+    exit "$code"
+}
+
+# ── host resolution (same defaults as scripts/maintenance/sync-masters.sh) ──────────────────────
 mds_source_ip()   { echo "${SYNC_SOURCE_IP:-143.110.252.201}"; }
 mds_follower_ip() {
     # $1 = label (labdhi|tractor)
@@ -71,7 +81,7 @@ mds_remote_venv()    { echo "${SYNC_VENV:-/home/django/license-manager/venv/bin/
 
 # ── SSH / SCP command builders ──────────────────────────────────────────────
 # Prefer key auth (no SYNC_PASSWORD). Fall back to sshpass iff SYNC_PASSWORD is
-# set — identical to sync-masters.sh. Emits the command as an array via stdout
+# set — identical to scripts/maintenance/sync-masters.sh. Emits the command as an array via stdout
 # is awkward in bash; instead we export functions that run it.
 _ssh_common_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=15)
 
@@ -129,7 +139,7 @@ mds_print_counts() {
     python3 - "$json" "$label" <<'PY'
 import json, sys
 path, label = sys.argv[1], sys.argv[2]
-with open(path) as fh:
+with open(path, encoding="utf-8") as fh:
     snap = json.load(fh)
 tables = snap.get("tables", {})
 total = 0
@@ -149,7 +159,7 @@ mds_counts_json() {
     mds_require_cmd python3
     python3 - "$json" <<'PY'
 import json, sys
-with open(sys.argv[1]) as fh:
+with open(sys.argv[1], encoding="utf-8") as fh:
     snap = json.load(fh)
 tables = snap.get("tables", {})
 print(json.dumps({k: v.get("count", 0) for k, v in tables.items()}, sort_keys=True))

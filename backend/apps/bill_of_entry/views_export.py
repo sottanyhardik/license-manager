@@ -1,11 +1,15 @@
 # bill_of_entry/views_export.py
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 from io import BytesIO
 
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from rest_framework.decorators import action
 
+from apps.bill_of_entry.models import RowDetails
+from apps.core.models import ExchangeRateModel
 from apps.core.utils.pdf_utils import create_pdf_exporter
 
 try:
@@ -15,6 +19,38 @@ try:
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, Table as RLTable, TableStyle
+
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
+EXPORT_FORMAT_PDF = 'pdf'
+EXPORT_FORMAT_XLSX = 'xlsx'
+EXPORT_FORMAT_PORT_XLSX = 'port_xlsx'
+SUPPORTED_EXPORT_FORMATS = {EXPORT_FORMAT_PDF, EXPORT_FORMAT_XLSX, EXPORT_FORMAT_PORT_XLSX}
+
+
+def _text_response(message, status_code):
+    return HttpResponse(message, status=status_code, content_type='text/plain; charset=utf-8')
+
+
+def _decimal_or_default(value, default=Decimal('0')):
+    if value is None:
+        return default
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (ArithmeticError, TypeError, ValueError):
+        return default
 
 
 def add_grouped_export_action(viewset_class):
@@ -34,39 +70,44 @@ def add_grouped_export_action(viewset_class):
             - bill_of_entry_date_after: filter by date
             - bill_of_entry_date_before: filter by date
         """
-        export_format = request.query_params.get('_export', 'pdf').lower()
+        export_format = (request.query_params.get('_export') or EXPORT_FORMAT_PDF).strip().lower()
+        if export_format not in SUPPORTED_EXPORT_FORMATS:
+            return _text_response("Invalid export format. Use 'pdf', 'xlsx', or 'port_xlsx'.", 400)
 
         # Get filtered queryset
-        queryset = self.filter_queryset(self.get_queryset())
+        queryset = self.filter_queryset(self.get_queryset()).prefetch_related(None)
 
         # Filter only BOEs with item details and order by date first, then company, item, port
         queryset = queryset.filter(
             item_details__isnull=False
+        ).select_related(
+            'company',
+            'port',
+        ).prefetch_related(
+            Prefetch(
+                'item_details',
+                queryset=RowDetails.objects.select_related(
+                    'sr_number',
+                    'sr_number__license',
+                    'sr_number__license__exporter',
+                    'sr_number__license__port',
+                    'sr_number__hs_code',
+                ),
+            ),
         ).distinct().order_by(
             'bill_of_entry_date', 'company__name', 'product_name', 'port__code'
-        ).prefetch_related(
-            'item_details__sr_number__license',
-            'item_details__sr_number__hs_code',
-            'company',
-            'port'
         )
 
-        if export_format == 'pdf':
+        if export_format == EXPORT_FORMAT_PDF:
             return self._export_grouped_pdf(queryset)
-        elif export_format == 'xlsx':
+        elif export_format == EXPORT_FORMAT_XLSX:
             return self._export_grouped_xlsx(queryset)
-        elif export_format == 'port_xlsx':
-            return self._export_port_xlsx(queryset)
-        else:
-            return HttpResponse("Invalid export format. Use 'pdf', 'xlsx', or 'port_xlsx'.", status=400)
+        return self._export_port_xlsx(queryset)
 
     def _export_grouped_pdf(self, queryset):
         """Export grouped bill of entries to PDF grouped by Company → Item → Port"""
-        from reportlab.lib.units import inch
-        from reportlab.platypus import TableStyle, Paragraph
-        from reportlab.lib.styles import ParagraphStyle
-        from reportlab.lib.colors import HexColor
-        from reportlab.lib import colors
+        if not REPORTLAB_AVAILABLE:
+            return _text_response("PDF export not available", 503)
 
         pdf_exporter = create_pdf_exporter(
             title="Bill of Entry Report",
@@ -75,13 +116,12 @@ def add_grouped_export_action(viewset_class):
         )
 
         if not pdf_exporter:
-            return HttpResponse("PDF export not available", status=500)
+            return _text_response("PDF export not available", 503)
 
         # Group data
         grouped_data = self._group_boe(queryset)
 
         # Active exchange rate for the mini-table in the header
-        from apps.core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
 
         # Calculate grand totals
@@ -134,10 +174,6 @@ def add_grouped_export_action(viewset_class):
                          f"Total CIF (INR): {pdf_exporter.format_number(total_inr)}")
 
         if active_rate:
-            from reportlab.platypus import Table as RLTable
-            from reportlab.lib.styles import ParagraphStyle as PSArg
-            from reportlab.lib.enums import TA_CENTER as TA_C
-
             exch_data = [
                 ['Exch. Rate', active_rate.date.strftime('%d-%m-%Y')],
                 ['USD', str(active_rate.usd)],
@@ -160,8 +196,14 @@ def add_grouped_export_action(viewset_class):
 
             title_para = Paragraph("Bill of Entry Report", pdf_exporter.title_style)
             subtitle_para = Paragraph(subtitle_text, pdf_exporter.subtitle_style)
-            ts_style = PSArg('TS', parent=pdf_exporter.styles['Normal'],
-                             fontSize=9, textColor=colors.grey, alignment=TA_C, spaceAfter=10)
+            ts_style = ParagraphStyle(
+                'TS',
+                parent=pdf_exporter.styles['Normal'],
+                fontSize=9,
+                textColor=colors.grey,
+                alignment=TA_CENTER,
+                spaceAfter=10,
+            )
             ts_para = Paragraph(f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", ts_style)
 
             header_layout = RLTable([[title_para, exch_table]], colWidths=[8.85 * inch, 1.5 * inch])
@@ -188,15 +230,15 @@ def add_grouped_export_action(viewset_class):
             0.45 * inch,  # Unit Price ($)
             0.73 * inch,  # Value ($)    (+0.08)
             0.45 * inch,  # Exchange Rate
-            0.93 * inch,  # Item Name
+            0.80 * inch,  # Item Name
             0.50 * inch,  # Invoice
-            0.90 * inch,  # Exporter — 0.90" = 60pt usable, "PGP GLASS…" ≈ 51pt, fits 1 line
+            0.83 * inch,  # Exporter
             0.98 * inch,  # License No.  (+0.20)
             0.65 * inch,  # Lic. Date
             0.54 * inch,  # Lic. Port
             0.28 * inch,  # Item Sr.
             0.50 * inch,  # BOE Qty.
-            0.70 * inch,  # BOE $.       (+0.12)
+            0.90 * inch,  # BOE $.
             0.92 * inch,  # BOE CIF      (+0.10)
         ]  # total = 11.35"
 
@@ -231,6 +273,7 @@ def add_grouped_export_action(viewset_class):
 
                 table_data = [table_header]
                 sr_no = 1
+                dfia_subtotal_rows = []
 
                 for port_code in sorted(ports_dict.keys()):
                     port_total_qty = 0
@@ -281,6 +324,26 @@ def add_grouped_export_action(viewset_class):
                                     pdf_exporter.format_number(detail['cif_inr'])
                                 ])
 
+                            # Preserve every BOE item line and add a clear
+                            # DFIA subtotal only for a multi-line allocation.
+                            if len(boe['license_details']) > 1:
+                                total_dfia_qty = sum(
+                                    (_decimal_or_default(detail['qty']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                total_dfia_value = sum(
+                                    (_decimal_or_default(detail['cif_fc']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                dfia_subtotal_rows.append(len(table_data))
+                                table_data.append([
+                                    '', '', '', '', '', '', '', '', '', '',
+                                    'Total DFIA allocation', '', '', '', '',
+                                    pdf_exporter.format_number(total_dfia_qty, decimals=0),
+                                    pdf_exporter.format_number(total_dfia_value),
+                                    '',
+                                ])
+
                         sr_no += 1
                         port_total_qty += boe['total_quantity']
                         port_total_value += boe['total_fc']
@@ -312,6 +375,17 @@ def add_grouped_export_action(viewset_class):
                     additional_styles.append(
                         ('ALIGN', (col_idx, 1), (col_idx, len(table_data) - 1), 'RIGHT')
                     )
+
+                for subtotal_row in dfia_subtotal_rows:
+                    additional_styles.extend([
+                        ('SPAN', (10, subtotal_row), (14, subtotal_row)),
+                        ('BACKGROUND', (10, subtotal_row), (17, subtotal_row), colors.HexColor('#dbeafe')),
+                        ('TEXTCOLOR', (10, subtotal_row), (17, subtotal_row), colors.HexColor('#1e3a8a')),
+                        ('FONTNAME', (10, subtotal_row), (17, subtotal_row), 'Helvetica-Bold'),
+                        ('ALIGN', (10, subtotal_row), (14, subtotal_row), 'LEFT'),
+                        ('TOPPADDING', (10, subtotal_row), (17, subtotal_row), 4),
+                        ('BOTTOMPADDING', (10, subtotal_row), (17, subtotal_row), 4),
+                    ])
 
                 # Port Total rows — bold + subtle header background
                 for row_idx, row in enumerate(table_data):
@@ -345,7 +419,7 @@ def add_grouped_export_action(viewset_class):
     def _export_grouped_xlsx(self, queryset):
         """Export grouped bill of entries to Excel"""
         if not OPENPYXL_AVAILABLE:
-            return HttpResponse("Excel export not available", status=500)
+            return _text_response("Excel export not available", 503)
 
         # Group data
         grouped_data = self._group_boe(queryset)
@@ -536,6 +610,55 @@ def add_grouped_export_action(viewset_class):
 
                                 row += 1
 
+                            if len(boe['license_details']) > 1:
+                                total_dfia_qty = sum(
+                                    (_decimal_or_default(detail['qty']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                total_dfia_value = sum(
+                                    (_decimal_or_default(detail['cif_fc']) for detail in boe['license_details']),
+                                    Decimal('0'),
+                                )
+                                # A merged label band keeps the subtotal
+                                # readable and leaves Qty / DFIA $ aligned
+                                # precisely beneath their table headers.
+                                label_start_col = 12
+                                label_end_col = 16
+                                qty_col = 17
+                                value_col = 18
+                                total_fill = PatternFill(start_color='D9EAF7', end_color='D9EAF7', fill_type='solid')
+                                value_fill = PatternFill(start_color='B8D8F0', end_color='B8D8F0', fill_type='solid')
+                                ws.merge_cells(
+                                    start_row=row,
+                                    start_column=label_start_col,
+                                    end_row=row,
+                                    end_column=label_end_col,
+                                )
+
+                                label_cell = ws.cell(row=row, column=label_start_col, value='Total DFIA allocation')
+                                label_cell.border = border
+                                label_cell.fill = total_fill
+                                label_cell.font = Font(bold=True, size=12, color='17365D')
+                                label_cell.alignment = Alignment(horizontal='left', vertical='center')
+
+                                for col_idx, value, number_format in [
+                                    (qty_col, total_dfia_qty, '#,##0'),
+                                    (value_col, total_dfia_value, '#,##0.00'),
+                                ]:
+                                    cell = ws.cell(row=row, column=col_idx, value=value)
+                                    cell.border = border
+                                    cell.fill = value_fill
+                                    cell.font = Font(bold=True, size=12, color='17365D')
+                                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                                    cell.number_format = number_format
+                                # BOE CIF is intentionally left empty on the
+                                # DFIA subtotal row, but retains the same band.
+                                trailing_cell = ws.cell(row=row, column=19, value='')
+                                trailing_cell.border = border
+                                trailing_cell.fill = total_fill
+                                ws.row_dimensions[row].height = 22
+                                row += 1
+
                         sr_no += 1
                         product_total_qty += boe['total_quantity']
                         product_total_value += boe['total_fc']
@@ -611,7 +734,7 @@ def add_grouped_export_action(viewset_class):
     def _export_port_xlsx(self, queryset):
         """Export simplified flat BOE list: single sheet, one header, no grouping."""
         if not OPENPYXL_AVAILABLE:
-            return HttpResponse("Excel export not available", status=500)
+            return _text_response("Excel export not available", 503)
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -648,8 +771,8 @@ def add_grouped_export_action(viewset_class):
             boe_date = boe.bill_of_entry_date.strftime('%d-%m-%Y') if boe.bill_of_entry_date else '--'
             port_code = boe.port.code if boe.port else '--'
             company_name = boe.company.name if boe.company else '--'
-            total_quantity = float(boe.get_total_quantity or 0)
-            total_inr = float(boe.get_total_inr or 0)
+            total_quantity = _decimal_or_default(boe.get_total_quantity)
+            total_inr = _decimal_or_default(boe.get_total_inr)
             product_name = (boe.product_name or '').strip().upper() or '--'
 
             data = [boe_number, boe_date, port_code, company_name, int(total_quantity), round(total_inr, 2), product_name]
@@ -703,7 +826,8 @@ def add_grouped_export_action(viewset_class):
             product_name = raw_product_name.strip().upper()
 
             # Get first license serial number from item details
-            first_item = boe.item_details.first()
+            item_details = list(boe.item_details.all())
+            first_item = item_details[0] if item_details else None
             license_serial = "Unknown License"
             if first_item and first_item.sr_number:
                 license_obj = first_item.sr_number.license if first_item.sr_number else None
@@ -712,7 +836,7 @@ def add_grouped_export_action(viewset_class):
 
             # Collect license details for this BOE
             license_details = []
-            for detail in boe.item_details.all():
+            for detail in item_details:
                 license_obj = detail.sr_number.license if detail.sr_number else None
 
                 # Store exporter name and license number separately
@@ -727,23 +851,28 @@ def add_grouped_export_action(viewset_class):
                     'exporter_name': exporter_name,
                     'license_no': license_number,
                     'license_port': license_obj.port.code if (license_obj and license_obj.port) else '--',
-                    'license_date': license_obj.license_date.strftime('%d-%m-%Y') if license_obj else '--',
+                    'license_date': (
+                        license_obj.license_date.strftime('%d-%m-%Y')
+                        if license_obj and license_obj.license_date
+                        else '--'
+                    ),
                     'item_sr_no': str(detail.sr_number.serial_number) if detail.sr_number else '--',
-                    'qty': float(detail.qty or 0),
-                    'cif_fc': float(detail.cif_fc or 0),
-                    'cif_inr': float(detail.cif_inr or 0)
+                    'qty': _decimal_or_default(detail.qty),
+                    'cif_fc': _decimal_or_default(detail.cif_fc),
+                    'cif_inr': _decimal_or_default(detail.cif_inr),
                 })
 
             # Calculate exchange rate: use boe.exchange_rate if exists, otherwise calculate from total_inr / total_fc
-            total_fc = float(boe.get_total_fc or 0)
-            total_inr = float(boe.get_total_inr or 0)
+            total_fc = _decimal_or_default(boe.get_total_fc)
+            total_inr = _decimal_or_default(boe.get_total_inr)
 
-            if boe.exchange_rate and float(boe.exchange_rate) > 0:
-                exchange_rate = float(boe.exchange_rate)
+            boe_exchange_rate = _decimal_or_default(boe.exchange_rate)
+            if boe_exchange_rate > 0:
+                exchange_rate = boe_exchange_rate
             elif total_fc > 0:
                 exchange_rate = total_inr / total_fc
             else:
-                exchange_rate = 0
+                exchange_rate = Decimal('0')
 
             boe_data = {
                 'boe_number': boe.bill_of_entry_number or '--',
@@ -751,7 +880,7 @@ def add_grouped_export_action(viewset_class):
                 'port': port_code,
                 'product_name': product_name,
                 'invoice_no': boe.invoice_no or '--',
-                'total_quantity': float(boe.get_total_quantity or 0),
+                'total_quantity': _decimal_or_default(boe.get_total_quantity),
                 'total_fc': total_fc,
                 'total_inr': total_inr,
                 'exchange_rate': exchange_rate,  # Add exchange rate

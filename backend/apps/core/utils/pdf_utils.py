@@ -2,7 +2,6 @@
 Shared PDF export utilities for creating professional business-level reports.
 """
 from datetime import datetime
-from io import BytesIO
 
 from django.http import HttpResponse
 
@@ -12,10 +11,7 @@ try:
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.pdfgen import canvas
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
     REPORTLAB_AVAILABLE = True
 except ImportError:
@@ -399,27 +395,6 @@ class BusinessPDFExporter:
         except (ValueError, TypeError):
             return str(value)
 
-    @staticmethod
-    def format_date(date_value, format_string='%d-%m-%Y'):
-        """
-        Format date for display in PDF.
-
-        Args:
-            date_value: Date object or string
-            format_string: Desired format string
-
-        Returns:
-            Formatted date string
-        """
-        if not date_value:
-            return '--'
-
-        try:
-            if isinstance(date_value, str):
-                return date_value
-            return date_value.strftime(format_string)
-        except (AttributeError, ValueError):
-            return str(date_value)
 
 
 def create_pdf_exporter(title, filename_prefix, orientation='landscape'):

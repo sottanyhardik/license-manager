@@ -11,12 +11,32 @@ const API_BASE = API_HOST ? `${API_HOST}/api/` : "/api/";
 const api = axios.create({
     baseURL: API_BASE,
     headers: {"Content-Type": "application/json"},
+    // Django's default names differ from Axios' defaults. This keeps
+    // session-authenticated browser requests valid as a fallback while the
+    // application normally authenticates with a bearer token.
+    xsrfCookieName: "csrftoken",
+    xsrfHeaderName: "X-CSRFToken",
 });
+
+const getCookie = (name) => {
+    if (typeof document === "undefined") return null;
+    const prefix = `${name}=`;
+    const cookie = document.cookie.split(";").map(part => part.trim()).find(part => part.startsWith(prefix));
+    return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+};
 
 // Attach access token on every request
 api.interceptors.request.use((config) => {
     const access = localStorage.getItem("access");
     if (access) config.headers.Authorization = `Bearer ${access}`;
+
+    // Axios only injects an XSRF header automatically in certain same-origin
+    // configurations. Set Django's standard header explicitly so a browser
+    // session cookie can never cause a legitimate form submission to fail.
+    const csrfToken = getCookie("csrftoken");
+    if (csrfToken && !config.headers["X-CSRFToken"]) {
+        config.headers["X-CSRFToken"] = csrfToken;
+    }
     return config;
 });
 
@@ -66,15 +86,68 @@ api.get = (url, config = {}) => {
 // Prevents the race condition where multiple concurrent 401s each try to refresh,
 // causing "token already blacklisted" errors and unexpected logouts.
 // Only one refresh fires; all other pending requests wait for it to finish.
-let isRefreshing = false;
-let failedQueue = [];
+let refreshPromise = null;
+let logoutRedirected = false;
 
-const processQueue = (error, token = null) => {
-    failedQueue.forEach(({ resolve, reject }) => {
-        if (error) reject(error);
-        else resolve(token);
-    });
-    failedQueue = [];
+export const AUTH_SESSION_EVENT_KEY = "auth:session-event";
+
+export const clearStoredAuth = () => {
+    localStorage.removeItem("access");
+    localStorage.removeItem("refresh");
+    localStorage.removeItem("user");
+};
+
+export const publishAuthEvent = (type) => {
+    // Storage events synchronise other tabs. The CustomEvent helps code in the
+    // current tab react without waiting for a navigation/reload.
+    const payload = JSON.stringify({ type, at: Date.now() });
+    localStorage.setItem(AUTH_SESSION_EVENT_KEY, payload);
+    window.dispatchEvent(new CustomEvent("auth:session", { detail: { type } }));
+};
+
+const redirectToLoginOnce = (reason = "session_expired") => {
+    if (logoutRedirected) return;
+    logoutRedirected = true;
+    clearStoredAuth();
+    publishAuthEvent("logout");
+    const redirect = encodeURIComponent(window.location.pathname);
+    window.location.assign(`/login?reason=${reason}&redirect=${redirect}`);
+};
+
+/**
+ * The single source of truth for refreshing an access token. Both the response
+ * interceptor and the session lifecycle manager call this function, so a near
+ * expiry timer and a burst of 401 responses cannot rotate a SimpleJWT refresh
+ * token more than once.
+ */
+export const refreshAccessToken = () => {
+    if (refreshPromise) return refreshPromise;
+
+    const refresh = localStorage.getItem("refresh");
+    if (!refresh) {
+        const error = new Error("Missing refresh token");
+        redirectToLoginOnce();
+        return Promise.reject(error);
+    }
+
+    refreshPromise = axios.post(`${API_BASE}auth/refresh/`, { refresh })
+        .then(({ data }) => {
+            localStorage.setItem("access", data.access);
+            // SimpleJWT refresh rotation is optional at the API boundary. Keep
+            // the rotated value when supplied and retain the old one otherwise.
+            if (data.refresh) localStorage.setItem("refresh", data.refresh);
+            logoutRedirected = false;
+            publishAuthEvent("refresh");
+            return data.access;
+        })
+        .catch((error) => {
+            redirectToLoginOnce();
+            throw error;
+        })
+        .finally(() => {
+            refreshPromise = null;
+        });
+    return refreshPromise;
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -97,47 +170,15 @@ api.interceptors.response.use(
         const status = error.response.status;
 
         // 401 - Unauthorized: attempt token refresh once
-        if (status === 401 && !original._retry) {
-
-            // If a refresh is already in flight, queue this request until it completes
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                }).then((token) => {
-                    original.headers.Authorization = `Bearer ${token}`;
-                    return api(original);
-                }).catch((err) => Promise.reject(err));
-            }
-
+        if (status === 401 && !original?._retry && !String(original?.url || "").includes("auth/refresh/")) {
             original._retry = true;
-            isRefreshing = true;
-
-            const refresh = localStorage.getItem("refresh");
-            if (!refresh) {
-                isRefreshing = false;
-                processQueue(error);
-                localStorage.clear();
-                window.location.href = "/login";
-                return Promise.reject(error);
-            }
-
             try {
-                const { data } = await axios.post(`${API_BASE}auth/refresh/`, { refresh });
-
-                localStorage.setItem("access", data.access);
-                if (data.refresh) localStorage.setItem("refresh", data.refresh);
-
-                original.headers.Authorization = `Bearer ${data.access}`;
-                processQueue(null, data.access);
+                const token = await refreshAccessToken();
+                original.headers = original.headers || {};
+                original.headers.Authorization = `Bearer ${token}`;
                 return api(original);
-
             } catch (refreshError) {
-                processQueue(refreshError);
-                localStorage.clear();
-                window.location.href = "/login?reason=session_expired";
                 return Promise.reject(refreshError);
-            } finally {
-                isRefreshing = false;
             }
         }
 

@@ -1,4 +1,5 @@
 import LicenseExportPanel from "../../components/reports/LicenseExportPanel";
+import { buildExportFilename } from "../../utils/exportFilename";
 
 export default function ExpiringLicenses() {
     return (
@@ -9,7 +10,7 @@ export default function ExpiringLicenses() {
             defaultDays={30}
             helpText={(days) => `Licenses expiring between today and ${days} days from now`}
             endpoint={(days) => `license/reports/expiring-licenses/?format=excel&days=${days}`}
-            filename={(days) => `expiring_licenses_${days}_days.xlsx`}
+            filename={() => buildExportFilename("expiring-licenses", "xlsx")}
             features={[
                 "Separate sheets for each SION norm",
                 "Items grouped by FK with merged serial numbers",

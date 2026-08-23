@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Filter, X, Zap } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import DateRangeFilter from "./DateRangeFilter";
+import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
- * choice, exclude_fk, button_group. Auto-applies with 800ms debounce.
+ * choice, exclude_fk, button_group. Text input applies after a 400ms debounce;
+ * select, date and toggle controls apply immediately.
  * All state/logic preserved verbatim — only Bootstrap markup → Tailwind.
  */
 export default function AdvancedFilter({
@@ -19,12 +22,16 @@ export default function AdvancedFilter({
     onFilterChange,
     initialFilters = {} as Record<string, any>,
     defaultFilters = {} as Record<string, any>,
+    resetToDefaults = false,
+    isUpdating = false,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];
     onFilterChange?: (filters: Record<string, any>) => void;
     initialFilters?: Record<string, any>;
     defaultFilters?: Record<string, any>;
+    resetToDefaults?: boolean;
+    isUpdating?: boolean;
 }) {
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
@@ -33,6 +40,18 @@ export default function AdvancedFilter({
     const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
+
+    const toApiParams = useCallback((nextValues = filterValues, nextSearch = searchTerm) => {
+        const params: Record<string, any> = {};
+        if (nextSearch) params.search = nextSearch;
+        Object.entries(nextValues).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === "") return;
+            if (key.endsWith("_from")) params[`${key.replace("_from", "")}__gte`] = value;
+            else if (key.endsWith("_to")) params[`${key.replace("_to", "")}__lte`] = value;
+            else params[key] = value;
+        });
+        return params;
+    }, [filterValues, searchTerm]);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -52,40 +71,47 @@ export default function AdvancedFilter({
     useEffect(() => {
         if (isAutoApplyInitialMount.current) { isAutoApplyInitialMount.current = false; return; }
         if (skipNextAutoApply.current) { skipNextAutoApply.current = false; return; }
-        const timeoutId = setTimeout(() => {
-            const params: Record<string, any> = {};
-            if (searchTerm) params.search = searchTerm;
-            Object.entries(filterValues).forEach(([key, value]) => {
-                if (value !== null && value !== undefined && value !== "") {
-                    if (key.endsWith("_from")) params[`${key.replace("_from", "")}__gte`] = value;
-                    else if (key.endsWith("_to")) params[`${key.replace("_to", "")}__lte`] = value;
-                    else params[key] = value;
-                }
-            });
-            onFilterChange(params);
-        }, 800);
+        const timeoutId = setTimeout(() => onFilterChange(toApiParams()), 400);
         return () => clearTimeout(timeoutId);
-    }, [searchTerm, filterValues, onFilterChange]);
+    }, [searchTerm, filterValues, onFilterChange, toApiParams]);
 
-    const handleFilterChange = (field, value) =>
-        setFilterValues((prev) => ({ ...prev, [field]: value }));
+    const handleFilterChange = (field, value, immediate = false) =>
+        setFilterValues((prev) => {
+            const next = { ...prev, [field]: value };
+            if (immediate) {
+                skipNextAutoApply.current = true;
+                onFilterChange(toApiParams(next));
+            }
+            return next;
+        });
 
     const handleResetFilters = () => {
         setSearchTerm("");
-        setFilterValues(defaultFilters);
+        setFilterValues(resetToDefaults ? defaultFilters : {});
     };
 
+    const humanize = (fieldName: string) => fieldName
+        .replace(/__?(gte|lte|icontains|exact)$/i, "")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/^Balance Balance /, "Balance ");
+    const isLicenseFilter = Object.keys(filterConfig).some((name) => /license|exporter|notification|norm|purchase|expired|balance/i.test(name));
+    const primaryFilterNames = isLicenseFilter
+        ? ["exporter", "license_number", "notification_number", "norm_class", "purchase_status", "license_status", "is_expired"]
+        : Object.keys(filterConfig).slice(0, 6);
+    const primaryEntries = Object.entries(filterConfig).filter(([field]) => primaryFilterNames.includes(field));
+    const secondaryEntries = Object.entries(filterConfig).filter(([field]) => !primaryFilterNames.includes(field));
+    const activeEntries = Object.entries(filterValues).filter(([field, value]) => value !== "" && value !== null && value !== undefined && value !== "all" && String(value) !== String(defaultFilters[field] ?? ""));
+
     // shared style token for react-select border
-    const rsControl = (base) => ({ ...base, minHeight: "38px", borderColor: "var(--tb-border)" });
+    const rsControl = (base) => ({ ...base, minHeight: "44px", borderColor: "var(--tb-border)" });
 
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
-        const label = fieldName.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        const label = humanize(fieldName);
 
         // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
-        const Col = ({ wide = false, children }) => (
-            <div className={wide ? "sm:col-span-2" : ""}>{children}</div>
-        );
+        const Col = ({ wide = false, children }) => <FilterField wide={wide}>{children}</FilterField>;
 
         switch (filterType) {
             case "icontains":
@@ -101,17 +127,13 @@ export default function AdvancedFilter({
                 const toValue = filterValues[`${fieldName}_to`] || "";
                 return (
                     <Col key={fieldName} wide>
-                        <Label className="mb-1.5">{label} Range</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div>
-                                <Input type="date" value={fromValue} onChange={(e) => handleFilterChange(`${fieldName}_from`, e.target.value)} />
-                                <p className="mt-0.5 text-[11px] text-muted-foreground">From</p>
-                            </div>
-                            <div>
-                                <Input type="date" value={toValue} onChange={(e) => handleFilterChange(`${fieldName}_to`, e.target.value)} />
-                                <p className="mt-0.5 text-[11px] text-muted-foreground">To</p>
-                            </div>
-                        </div>
+                        <DateRangeFilter
+                            label={`${label} Range`}
+                            fromValue={fromValue}
+                            toValue={toValue}
+                            onFromChange={(v) => handleFilterChange(`${fieldName}_from`, v, true)}
+                            onToChange={(v) => handleFilterChange(`${fieldName}_to`, v, true)}
+                        />
                     </Col>
                 );
             }
@@ -143,7 +165,7 @@ export default function AdvancedFilter({
                     return (
                         <Col key={fieldName}>
                             <Label className="mb-1.5">{label}</Label>
-                            <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "")} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
+                            <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
                         </Col>
                     );
                 }
@@ -160,7 +182,7 @@ export default function AdvancedFilter({
                                         <button
                                             key={val}
                                             type="button"
-                                            onClick={() => handleFilterChange(fieldName, val)}
+                                            onClick={() => handleFilterChange(fieldName, val, true)}
                                             className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/15 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
                                         >{lbl}</button>
                                     );
@@ -204,7 +226,7 @@ export default function AdvancedFilter({
                                 const active = filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === "");
                                 const colorCls = choice.value === "" ? "" : choice.value === "YES" ? "border-destructive text-destructive" : choice.value === "NO" ? "border-success text-success" : choice.value === "PARTIAL" ? "border-warning text-warning" : "";
                                 return (
-                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value)} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
+                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
                                         {choice.label}
                                     </button>
                                 );
@@ -227,7 +249,7 @@ export default function AdvancedFilter({
                         <Select
                             options={choiceOpts}
                             value={selectedChoices}
-                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "")}
+                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "", true)}
                             isClearable isMulti
                             placeholder={`Select ${label.toLowerCase()}`}
                             classNamePrefix="react-select"
@@ -265,37 +287,14 @@ export default function AdvancedFilter({
                     <DebouncedSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
-                        delay={800}
+                        delay={400}
                         placeholder={`Search by ${searchFields.join(", ")}`}
                     />
                 </div>
             )}
 
-            {/* Filter card */}
-            {Object.keys(filterConfig).length > 0 && (
-                <Card>
-                    <CardContent className="pt-4">
-                        <h6 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                            <Filter className="size-4" />Filters
-                        </h6>
-
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {Object.entries(filterConfig).map(([fieldName, config]) =>
-                                renderFilterField(fieldName, config)
-                            )}
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-between">
-                            <Button variant="outline" size="sm" onClick={handleResetFilters}>
-                                <X className="size-3.5" />Clear Filters
-                            </Button>
-                            <span className="flex items-center gap-1 text-[11.5px] text-muted-foreground">
-                                <Zap className="size-3.5" />Filters apply automatically as you type
-                            </span>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+            {/* Compact primary toolbar with progressive disclosure. */}
+            {Object.keys(filterConfig).length > 0 && <FilterPanel activeCount={activeEntries.length} isUpdating={isUpdating} onClear={handleResetFilters} clearDisabled={activeEntries.length === 0 && !searchTerm}><FilterGrid>{primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid></FilterPanel>}
         </div>
     );
 }

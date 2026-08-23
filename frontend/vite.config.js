@@ -1,16 +1,18 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react-oxc'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, fileURLToPath(new URL('.', import.meta.url)), '')
+  return {
   plugins: [react(), tailwindcss()],
   base: '/',  // Ensures assets are loaded from root, not port 8000
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: env.VITE_API_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -30,6 +32,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    // Hashed chunks are immutable and may still be requested by tabs that were
+    // open while a new version is deployed.  Keep them until an explicit
+    // release cleanup so those tabs can finish loading lazy routes.
+    emptyOutDir: false,
     manifest: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,
@@ -39,60 +45,27 @@ export default defineConfig({
         manualChunks: (id) => {
           // Vendor chunks - separate large dependencies
           if (id.includes('node_modules')) {
-            // Excel (exceljs is ~1.5 MB on its own — must be its own chunk)
-            if (id.includes('exceljs')) {
-              return 'vendor-excel';
-            }
-
-            // PDF generation
-            if (id.includes('jspdf')) {
-              return 'vendor-pdf';
-            }
-
-            // Date pickers / date utilities
-            if (id.includes('react-datepicker') || id.includes('date-fns') || id.includes('moment')) {
-              return 'vendor-date';
-            }
-
             // React core libraries
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
               return 'vendor-react';
             }
-
-            // UI libraries (Bootstrap, react-select, etc.)
-            if (id.includes('react-select') || id.includes('react-bootstrap') || id.includes('bootstrap')) {
-              return 'vendor-ui';
-            }
-
-            // Toast/notification libraries
-            if (id.includes('react-toastify')) {
-              return 'vendor-toast';
-            }
-
-            // All other node_modules
-            return 'vendor-other';
           }
 
-          // Application code chunks
-          // Reports module - heavy pages
-          if (id.includes('/pages/reports/')) {
-            return 'app-reports';
+          // Application shell code used on first paint.
+          if (
+            id.includes('/layout/') ||
+            id.includes('/components/Icon') ||
+            id.includes('/components/TopNav') ||
+            id.includes('/components/LoadingFallback') ||
+            id.includes('/components/ErrorScreen') ||
+            id.includes('/components/GlobalErrorBoundary')
+          ) {
+            return 'app-shell';
           }
 
-          // Ledger module - financial pages
-          if (id.includes('/pages/ledger/')) {
-            return 'app-ledger';
-          }
+          // Avoid broad route-level chunks: they can become entry preloads
+          // when shared symbols are hoisted by the bundler.
 
-          // Master data pages
-          if (id.includes('/pages/masters/')) {
-            return 'app-masters';
-          }
-
-          // Components chunk
-          if (id.includes('/components/')) {
-            return 'app-components';
-          }
         },
 
         // Naming pattern for chunks
@@ -128,6 +101,11 @@ export default defineConfig({
       'react-dom',
       'react-router-dom',
       'axios',
+      // Dashboard is lazy-loaded, but its trend panel imports Recharts.  Keep
+      // the browser bundle pre-optimised so Vite never serves a transient
+      // missing dependency while the lazy route is resolving.
+      'recharts',
     ],
   },
+  }
 })

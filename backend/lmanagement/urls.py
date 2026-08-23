@@ -46,8 +46,10 @@ urlpatterns = [
     path("api/", include("apps.allotment.urls", namespace="allotment")),
     path("api/", include("apps.bill_of_entry.urls", namespace="bill_of_entry")),
     path("api/", include("apps.trade.urls", namespace="trade")),
+    path("api/", include("apps.reconciliation.urls", namespace="reconciliation")),
     path("api/", include("apps.tasks.urls", namespace="tasks")),
     path("api/masters/", include("apps.core.urls", namespace="masters")),
+    path("api/sync/", include("apps.core.sync.urls", namespace="sync")),
 
     # JSON 404 for any unmatched /api/ path (must come after all real api/ patterns,
     # before the SPA catch-all)

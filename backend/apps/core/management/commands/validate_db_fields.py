@@ -18,11 +18,10 @@ Usage:
 """
 
 from collections import defaultdict
-from typing import Dict, List, Tuple, Any
 
+from django.apps import apps
 from django.core.management.base import BaseCommand
 from django.db import connection
-from django.apps import apps
 from django.db import models
 
 
@@ -130,7 +129,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"\n{'='*80}")
 
-    def _get_all_columns(self) -> Dict[str, List[Dict]]:
+    def _get_all_columns(self) -> dict[str, list[dict]]:
         """Get detailed column information for all tables."""
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -170,7 +169,7 @@ class Command(BaseCommand):
         self,
         model,
         table_name: str,
-        db_columns: Dict,
+        db_columns: dict,
         detailed: bool
     ) -> int:
         """Validate all fields for a specific model."""
@@ -245,7 +244,7 @@ class Command(BaseCommand):
     def _validate_field_type(
         self,
         field,
-        db_col: Dict,
+        db_col: dict,
         table_name: str,
         column_name: str,
         detailed: bool
@@ -286,7 +285,7 @@ class Command(BaseCommand):
     def _validate_null_constraint(
         self,
         field,
-        db_col: Dict,
+        db_col: dict,
         table_name: str,
         column_name: str,
         detailed: bool
@@ -313,7 +312,7 @@ class Command(BaseCommand):
     def _validate_char_field(
         self,
         field: models.CharField,
-        db_col: Dict,
+        db_col: dict,
         table_name: str,
         column_name: str
     ):
@@ -331,7 +330,7 @@ class Command(BaseCommand):
     def _validate_decimal_field(
         self,
         field: models.DecimalField,
-        db_col: Dict,
+        db_col: dict,
         table_name: str,
         column_name: str
     ):

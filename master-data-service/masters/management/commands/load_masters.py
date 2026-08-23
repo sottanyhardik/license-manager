@@ -74,7 +74,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         try:
-            with open(opts["infile"]) as fh:
+            with open(opts["infile"], encoding="utf-8") as fh:
                 snapshot = json.load(fh)
         except (OSError, json.JSONDecodeError) as exc:
             raise CommandError(f"Could not read export file: {exc}")

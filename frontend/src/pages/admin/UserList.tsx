@@ -1,61 +1,82 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Search, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, ShieldCheck, Users } from "lucide-react";
 
 import { deleteUser, listUsers } from "../../api/users";
 import { AuthContext } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errorUtils";
-import { ROLE_LABELS, getRoleBadgeProps } from "../../utils/roleConstants";
+import { ROLE_LABELS, ROLE_BADGE_COLOR, ROLE_BADGE_STYLE } from "../../utils/roleConstants";
+import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { useSmoothListFilters } from "@/hooks/useSmoothListFilters";
+
+interface UserRecord {
+    id: number;
+    username: string;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    is_active: boolean;
+    is_superuser?: boolean;
+    is_staff?: boolean;
+    roles?: string[];
+    date_joined?: string;
+}
+
+const BOOTSTRAP_TO_BADGE: Record<string, "default" | "secondary" | "destructive" | "success" | "warning" | "info"> = {
+    primary: "default", success: "success", danger: "destructive",
+    warning: "warning", info: "info", secondary: "secondary", dark: "secondary",
+};
 
 export default function UserList() {
     const navigate = useNavigate();
     const { user: currentUser } = useContext(AuthContext);
 
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-    const [roleFilter, setRoleFilter] = useState("");
-    const [activeFilter, setActiveFilter] = useState("");
-    const [confirmDelete, setConfirmDelete] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState<UserRecord | null>(null);
+    const queryClient = useQueryClient();
+    const {
+        filters, appliedFilters, isDebouncing, setTextFilter, setImmediateFilter,
+    } = useSmoothListFilters({ search: "", role: "", is_active: "" });
 
-    const fetchUsers = useCallback(async () => {
-        setLoading(true);
-        try {
+    const userQuery = useQuery({
+        queryKey: ["admin-users", appliedFilters],
+        queryFn: async ({ signal }) => {
             const params: Record<string, string> = {};
-            if (search) params.search = search;
-            if (roleFilter) params.role = roleFilter;
-            if (activeFilter !== "") params.is_active = activeFilter;
-            const { data } = await listUsers(params);
-            setUsers(Array.isArray(data) ? data : data.results ?? []);
-        } catch (err) {
-            toast.error(getErrorMessage(err));
-        } finally {
-            setLoading(false);
-        }
-    }, [search, roleFilter, activeFilter]);
+            if (appliedFilters.search) params.search = appliedFilters.search;
+            if (appliedFilters.role) params.role = appliedFilters.role;
+            if (appliedFilters.is_active !== "") params.is_active = appliedFilters.is_active;
+            const { data } = await listUsers(params, signal);
+            return (Array.isArray(data) ? data : data.results ?? []) as UserRecord[];
+        },
+        placeholderData: previous => previous,
+    });
+    const users = userQuery.data ?? [];
+    const loading = userQuery.isLoading;
+    const refreshing = userQuery.isFetching && !loading;
+    const activeUsers = users.filter((user) => user.is_active).length;
+    const superusers = users.filter((user) => user.is_superuser).length;
 
-    useEffect(() => { fetchUsers(); }, [fetchUsers]);
-
-    const handleDelete = async (userId) => {
+    const handleDelete = async (userId: number) => {
         try {
             await deleteUser(userId);
             toast.success("User deleted");
             setConfirmDelete(null);
-            fetchUsers();
-        } catch (err) {
-            toast.error(getErrorMessage(err));
+            await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err as Error));
         }
     };
 
@@ -76,20 +97,38 @@ export default function UserList() {
                 }
             />
 
+            <section aria-label="User access summary" className="mb-3 grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-3">
+                <div className="border-b border-r border-border px-3 py-2.5 sm:border-b-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Users</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : users.length}</p>
+                </div>
+                <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active</p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{loading ? "—" : activeUsers}</p>
+                </div>
+                <div className="col-span-2 flex items-center gap-2 px-3 py-2.5 sm:col-span-1">
+                    <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><ShieldCheck className="size-4" aria-hidden="true" /></span>
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Super administrators</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">{loading ? "—" : superusers}</p>
+                    </div>
+                </div>
+            </section>
+
             {/* Filters */}
             <Card className="mb-3">
-                <CardContent className="flex flex-wrap items-center gap-2 py-3">
-                    <div className="relative min-w-[220px] flex-1">
+                <CardContent className="flex flex-wrap items-center gap-2 p-2">
+                    <div className="relative min-w-0 basis-full sm:min-w-[220px] sm:flex-1">
                         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
-                            className="h-9 pl-8"
+                            className="h-8 pl-8"
                             placeholder="Search by username or email…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            value={filters.search}
+                            onChange={(e) => setTextFilter("search", e.target.value)}
                         />
                     </div>
-                    <Select value={roleFilter || ALL} onValueChange={(v) => setRoleFilter(v === ALL ? "" : v)}>
-                        <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
+                    <Select value={filters.role || ALL} onValueChange={(v) => setImmediateFilter("role", v === ALL ? "" : v)}>
+                        <SelectTrigger className="h-8 w-full sm:w-[200px]"><SelectValue placeholder="All Roles" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Roles</SelectItem>
                             {Object.keys(ROLE_LABELS).map((code) => (
@@ -97,8 +136,8 @@ export default function UserList() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Select value={activeFilter || ALL} onValueChange={(v) => setActiveFilter(v === ALL ? "" : v)}>
-                        <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+                    <Select value={filters.is_active || ALL} onValueChange={(v) => setImmediateFilter("is_active", v === ALL ? "" : v)}>
+                        <SelectTrigger className="h-8 w-full sm:w-[140px]"><SelectValue placeholder="All Status" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>All Status</SelectItem>
                             <SelectItem value="true">Active</SelectItem>
@@ -111,23 +150,59 @@ export default function UserList() {
             {/* Table */}
             <Card>
                 <CardContent className="p-0">
-                    {loading ? (
-                        <div className="p-8 text-center text-sm text-muted-foreground">Loading users…</div>
-                    ) : users.length === 0 ? (
-                        <div className="flex flex-col items-center gap-2 p-10 text-center text-muted-foreground">
-                            <Users className="size-8 opacity-50" />
-                            <span className="text-sm">No users found.</span>
+                    {(isDebouncing || refreshing) && (
+                        <div role="status" className="border-b border-border/60 px-4 py-1.5 text-xs text-muted-foreground">
+                            Updating results…
                         </div>
-                    ) : (
-                        <div className="overflow-x-auto">
+                    )}
+                    {userQuery.isError && (
+                        <div role="alert" className="flex items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+                            <span>{getErrorMessage(userQuery.error as Error)}</span>
+                            <Button size="sm" variant="outline" onClick={() => userQuery.refetch()}>Retry</Button>
+                        </div>
+                    )}
+                    {loading ? (
+                        <div className="max-h-[calc(100vh-20rem)] overflow-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-border bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                        <th className="px-4 py-2.5">User</th>
-                                        <th className="px-4 py-2.5">Email</th>
-                                        <th className="px-4 py-2.5">Roles</th>
-                                        <th className="px-4 py-2.5">Status</th>
-                                        <th className="px-4 py-2.5 text-right">Actions</th>
+                                    <tr className="sticky top-0 z-10 border-b border-border bg-muted/95 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm">
+                                        <th scope="col" className="px-4 py-2.5">User</th>
+                                        <th scope="col" className="px-4 py-2.5">Email</th>
+                                        <th scope="col" className="px-4 py-2.5">Roles</th>
+                                        <th scope="col" className="px-4 py-2.5">Status</th>
+                                        <th scope="col" className="px-4 py-2.5 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...Array(5)].map((_, i) => (
+                                        <tr key={i} className="border-b border-border/60">
+                                            <td className="px-4 py-2.5"><Skeleton className="h-4 w-28" /></td>
+                                            <td className="px-4 py-2.5"><Skeleton className="h-3 w-36" /></td>
+                                            <td className="px-4 py-2.5"><Skeleton className="h-4 w-20 rounded-full" /></td>
+                                            <td className="px-4 py-2.5"><Skeleton className="h-4 w-14 rounded-full" /></td>
+                                            <td className="px-4 py-2.5"><div className="flex justify-end gap-1.5"><Skeleton className="h-7 w-16 rounded-md" /><Skeleton className="size-7 rounded-md" /></div></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : users.length === 0 ? (
+                        <EmptyState
+                            icon={Users}
+                            title="No users found"
+                            description="Try adjusting the filters or add a new user"
+                            action={<Button size="sm" onClick={() => navigate("/admin/users/create")}><Plus className="size-4" />Add User</Button>}
+                        />
+                    ) : (
+                        <div className="max-h-[calc(100vh-20rem)] overflow-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 border-b border-border bg-muted/95 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm">
+                                        <th scope="col" className="px-4 py-2.5">User</th>
+                                        <th scope="col" className="px-4 py-2.5">Email</th>
+                                        <th scope="col" className="px-4 py-2.5">Roles</th>
+                                        <th scope="col" className="px-4 py-2.5">Status</th>
+                                        <th scope="col" className="px-4 py-2.5 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -149,12 +224,18 @@ export default function UserList() {
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1">
                                                         {(u.roles ?? []).map((r) => {
-                                                            const bp = getRoleBadgeProps(r);
-                                                            return (
-                                                                <span key={r} className={bp.className} style={{ fontSize: 11, ...bp.style }}>
-                                                                    {ROLE_LABELS[r] ?? r}
-                                                                </span>
-                                                            );
+                                                            const customStyle = ROLE_BADGE_STYLE?.[r as keyof typeof ROLE_BADGE_STYLE];
+                                                            const bootstrapColor = ROLE_BADGE_COLOR?.[r as keyof typeof ROLE_BADGE_COLOR];
+                                                            const label = ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r;
+                                                            if (customStyle) {
+                                                                return (
+                                                                    <span key={r} className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium" style={customStyle}>
+                                                                        {label}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            const variant = BOOTSTRAP_TO_BADGE[bootstrapColor ?? "secondary"] ?? "secondary";
+                                                            return <Badge key={r} variant={variant} className="text-[10px]">{label}</Badge>;
                                                         })}
                                                     </div>
                                                 )}

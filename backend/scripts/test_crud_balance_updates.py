@@ -68,7 +68,6 @@ def test_crud_updates_all_items():
         print(f"License balance_cif: ${license_obj.balance_cif:,.2f}")
 
         # Check all items
-        all_updated = True
         for idx, item in enumerate(import_items, 1):
             item.refresh_from_db()
             print(f"  Item {idx}: ${item.available_value:,.2f}")

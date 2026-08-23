@@ -20,15 +20,15 @@ Complete guide for automated testing with fake database
 
 ### Run All Tests
 ```bash
-./run-tests.sh
+./scripts/testing/run-tests.sh
 ```
 
 ### Run Specific Test Types
 ```bash
-./run-tests.sh --api           # API tests only
-./run-tests.sh --fast          # Skip slow tests
-./run-tests.sh --coverage      # Generate detailed coverage report
-./run-tests.sh --clean         # Clean artifacts first
+./scripts/testing/run-tests.sh --api           # API tests only
+./scripts/testing/run-tests.sh --fast          # Skip slow tests
+./scripts/testing/run-tests.sh --coverage      # Generate detailed coverage report
+./scripts/testing/run-tests.sh --clean         # Clean artifacts first
 ```
 
 ---
@@ -68,25 +68,25 @@ Tests use Django's test database (automatically created/destroyed):
 
 ```bash
 # Run all tests with coverage
-./run-tests.sh
+./scripts/testing/run-tests.sh
 
 # Run only fast tests (skip @pytest.mark.slow)
-./run-tests.sh --fast
+./scripts/testing/run-tests.sh --fast
 
 # Run only API tests
-./run-tests.sh --api
+./scripts/testing/run-tests.sh --api
 
 # Run only unit tests
-./run-tests.sh --unit
+./scripts/testing/run-tests.sh --unit
 
 # Run integration tests
-./run-tests.sh --integration
+./scripts/testing/run-tests.sh --integration
 
 # Clean artifacts before running
-./run-tests.sh --clean
+./scripts/testing/run-tests.sh --clean
 
 # Generate HTML coverage report
-./run-tests.sh --coverage
+./scripts/testing/run-tests.sh --coverage
 ```
 
 ### Direct Pytest Commands
@@ -501,7 +501,7 @@ pytest -n 4     # Use 4 workers
 ### 2. Skip Slow Tests During Development
 
 ```bash
-./run-tests.sh --fast
+./scripts/testing/run-tests.sh --fast
 ```
 
 ### 3. Run Only Failed Tests
@@ -553,7 +553,7 @@ jobs:
         pip install -r requirements-test.txt
     
     - name: Run tests
-      run: ./run-tests.sh --coverage
+      run: ./scripts/testing/run-tests.sh --coverage
     
     - name: Upload coverage
       uses: codecov/codecov-action@v3

@@ -2,9 +2,11 @@
 Excel workbook building utilities.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import List, Optional, Any, Dict
+from typing import Any
 
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.worksheet import Worksheet
@@ -13,11 +15,11 @@ from openpyxl.worksheet.worksheet import Worksheet
 @dataclass
 class WorksheetConfig:
     """Configuration for worksheet formatting."""
-    header_font: Font = None
-    header_fill: PatternFill = None
-    header_alignment: Alignment = None
-    cell_alignment: Alignment = None
-    border: Border = None
+    header_font: Font | None = None
+    header_fill: PatternFill | None = None
+    header_alignment: Alignment | None = None
+    cell_alignment: Alignment | None = None
+    border: Border | None = None
 
     def __post_init__(self):
         """Set default styles if not provided."""
@@ -43,7 +45,7 @@ class ExcelWorkbookBuilder:
     Helper class for building Excel workbooks with common patterns.
     """
 
-    def __init__(self, worksheet: Worksheet, config: Optional[WorksheetConfig] = None):
+    def __init__(self, worksheet: Worksheet, config: WorksheetConfig | None = None):
         """
         Initialize workbook builder.
         
@@ -55,7 +57,7 @@ class ExcelWorkbookBuilder:
         self.config = config or WorksheetConfig()
         self.current_row = 1
 
-    def add_title(self, title: str, row: Optional[int] = None) -> 'ExcelWorkbookBuilder':
+    def add_title(self, title: str, row: int | None = None) -> ExcelWorkbookBuilder:
         """
         Add title row.
         
@@ -77,10 +79,10 @@ class ExcelWorkbookBuilder:
 
     def add_header_row(
             self,
-            headers: List[str],
-            row: Optional[int] = None,
+            headers: list[str],
+            row: int | None = None,
             start_col: int = 1
-    ) -> 'ExcelWorkbookBuilder':
+    ) -> ExcelWorkbookBuilder:
         """
         Add header row with styling.
         
@@ -107,11 +109,11 @@ class ExcelWorkbookBuilder:
 
     def add_data_row(
             self,
-            values: List[Any],
-            row: Optional[int] = None,
+            values: list[Any],
+            row: int | None = None,
             start_col: int = 1,
-            number_columns: Optional[List[int]] = None
-    ) -> 'ExcelWorkbookBuilder':
+            number_columns: list[int] | None = None
+    ) -> ExcelWorkbookBuilder:
         """
         Add data row.
         
@@ -148,11 +150,11 @@ class ExcelWorkbookBuilder:
 
     def add_data_rows(
             self,
-            data: List[List[Any]],
-            start_row: Optional[int] = None,
+            data: list[list[Any]],
+            start_row: int | None = None,
             start_col: int = 1,
-            number_columns: Optional[List[int]] = None
-    ) -> 'ExcelWorkbookBuilder':
+            number_columns: list[int] | None = None
+    ) -> ExcelWorkbookBuilder:
         """
         Add multiple data rows.
         
@@ -174,11 +176,11 @@ class ExcelWorkbookBuilder:
 
     def add_total_row(
             self,
-            values: List[Any],
-            row: Optional[int] = None,
+            values: list[Any],
+            row: int | None = None,
             start_col: int = 1,
-            number_columns: Optional[List[int]] = None
-    ) -> 'ExcelWorkbookBuilder':
+            number_columns: list[int] | None = None
+    ) -> ExcelWorkbookBuilder:
         """
         Add total/summary row with bold styling.
         
@@ -212,7 +214,7 @@ class ExcelWorkbookBuilder:
         self.current_row = row + 1
         return self
 
-    def add_blank_row(self, count: int = 1) -> 'ExcelWorkbookBuilder':
+    def add_blank_row(self, count: int = 1) -> ExcelWorkbookBuilder:
         """
         Add blank row(s).
         
@@ -225,7 +227,7 @@ class ExcelWorkbookBuilder:
         self.current_row += count
         return self
 
-    def merge_cells(self, start_row: int, start_col: int, end_row: int, end_col: int) -> 'ExcelWorkbookBuilder':
+    def merge_cells(self, start_row: int, start_col: int, end_row: int, end_col: int) -> ExcelWorkbookBuilder:
         """
         Merge cells in range.
         
@@ -246,7 +248,7 @@ class ExcelWorkbookBuilder:
         )
         return self
 
-    def set_column_width(self, column: int, width: float) -> 'ExcelWorkbookBuilder':
+    def set_column_width(self, column: int, width: float) -> ExcelWorkbookBuilder:
         """
         Set column width.
         
@@ -261,7 +263,7 @@ class ExcelWorkbookBuilder:
         self.worksheet.column_dimensions[column_letter].width = width
         return self
 
-    def set_column_widths(self, widths: List[float]) -> 'ExcelWorkbookBuilder':
+    def set_column_widths(self, widths: list[float]) -> ExcelWorkbookBuilder:
         """
         Set multiple column widths.
         
@@ -280,10 +282,10 @@ class ExcelWorkbookBuilder:
             start_row: int,
             end_row: int,
             start_col: int = 1,
-            end_col: Optional[int] = None,
+            end_col: int | None = None,
             color1: str = "FFFFFF",
             color2: str = "F8F9FA"
-    ) -> 'ExcelWorkbookBuilder':
+    ) -> ExcelWorkbookBuilder:
         """
         Apply alternating row colors.
         
@@ -313,11 +315,11 @@ class ExcelWorkbookBuilder:
 
     def add_info_section(
             self,
-            info_data: Dict[str, Any],
-            start_row: Optional[int] = None,
+            info_data: dict[str, Any],
+            start_row: int | None = None,
             label_col: int = 1,
             value_col: int = 2
-    ) -> 'ExcelWorkbookBuilder':
+    ) -> ExcelWorkbookBuilder:
         """
         Add information section (key-value pairs).
         
@@ -353,10 +355,10 @@ class ExcelWorkbookBuilder:
 
 def create_simple_table(
         worksheet: Worksheet,
-        headers: List[str],
-        data: List[List[Any]],
+        headers: list[str],
+        data: list[list[Any]],
         start_row: int = 1,
-        number_columns: Optional[List[int]] = None
+        number_columns: list[int] | None = None
 ) -> None:
     """
     Create a simple table with headers and data.

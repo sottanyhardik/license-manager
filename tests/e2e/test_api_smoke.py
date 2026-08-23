@@ -14,11 +14,11 @@ import pytest
 
 
 # ---------- auth ----------
-def test_login_returns_token(backend_url, api_get):
+def test_login_returns_token(backend_url, e2e_credentials):
     import requests
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": "hardik", "password": "admin@123"},
+        json=e2e_credentials,
         timeout=10,
         # Plain HTTP only — fails closed if SECURE_SSL_REDIRECT is left on
         # against DEBUG=False with no HTTPS proxy in front.
@@ -29,12 +29,12 @@ def test_login_returns_token(backend_url, api_get):
     assert "access" in body and "refresh" in body and "user" in body
 
 
-def test_login_no_redirect_in_dev(backend_url):
+def test_login_no_redirect_in_dev(backend_url, e2e_credentials):
     """If DEBUG=True locally, the login endpoint must NOT 301 to HTTPS."""
     import requests
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": "hardik", "password": "admin@123"},
+        json=e2e_credentials,
         timeout=10,
         allow_redirects=False,
     )
@@ -135,7 +135,12 @@ def test_item_pivot_report(api_get, sample_norm):
     )
     assert r.status_code == 200, r.text[:200]
     body = r.json()
-    assert "items" in body and "licenses_by_norm_notification" in body
+    # Item Pivot's canonical v1 contract is the normalized report matrix.
+    # Do not resurrect the retired pre-v1 ``items``/``licenses_by_norm_notification``
+    # response fields merely for this smoke check.
+    assert {"groups", "item_columns", "grand_total", "global_summary"} <= body.keys()
+    assert isinstance(body["groups"], list)
+    assert isinstance(body["item_columns"], list)
 
 
 def test_item_report_available_items(api_get):

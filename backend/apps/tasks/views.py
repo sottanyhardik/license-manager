@@ -26,6 +26,12 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering = ["-created_on"]
 
     def get_queryset(self):
+        # drf-spectacular instantiates the view with an AnonymousUser solely
+        # to discover the model and path parameter type.  Returning an empty
+        # queryset in that schema-only context leaves normal user scoping
+        # untouched.
+        if getattr(self, "swagger_fake_view", False):
+            return Task.objects.none()
         user = self.request.user
         qs = Task.objects.select_related(
             "created_by", "assigned_to", "rejected_by"

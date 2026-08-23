@@ -1,6 +1,26 @@
 // Pure license-PDF parse transforms extracted verbatim from MasterForm.
 // No component state/props — operate only on the passed `data`.
 
+const DIRECT_ENTITY_API_BASES = new Set([
+    "licenses",
+    "allotments",
+    "bill-of-entries",
+    "trades",
+]);
+
+export const getMasterFormApiBase = (entityName: string | null | undefined) => {
+    if (!entityName) return "";
+    if (DIRECT_ENTITY_API_BASES.has(entityName)) return `${entityName}/`;
+    if (entityName === "incentive-licenses") return "incentive-licenses/";
+    return `masters/${entityName}/`;
+};
+
+// Fields rendered as a file input by MasterForm (logo/signature/stamp/*image*).
+// GET returns their value as a URL string; that string must never be sent back
+// on submit (DRF's ImageField/FileField rejects a plain string as "not a file").
+export const isFileLikeFieldName = (fieldName: string) =>
+    fieldName.includes("logo") || fieldName.includes("signature") || fieldName.includes("stamp") || fieldName.includes("image");
+
 export const buildLicensePatch = (data) => {
     const { parsed = {}, prefill = {}, items = [], item_conditions = [] } = data || {};
 

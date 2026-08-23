@@ -107,7 +107,6 @@ def parse_boe_pdf(source) -> dict[str, Any]:
 
     page1 = pages[0]
     page2 = pages[1] if len(pages) > 1 else ""
-    page4 = pages[3] if len(pages) > 3 else ""
 
     result: dict[str, Any] = {
         "be_number": None,
@@ -248,10 +247,10 @@ def _parse_licences_columnar(page_text):
     dates -> codes -> ports -> two decimal blocks (debit_value, qty) -> UQCs.
     Look backwards for the last N consecutive small ints to recover lic_slno.
     """
-    lines = [l.strip() for l in page_text.splitlines() if l.strip()]
+    lines = [line.strip() for line in page_text.splitlines() if line.strip()]
 
     # All license-number indices, then find the longest contiguous run
-    lic_idxs = [i for i, l in enumerate(lines) if _COL_LIC_NO_RX.match(l)]
+    lic_idxs = [i for i, line in enumerate(lines) if _COL_LIC_NO_RX.match(line)]
     if not lic_idxs:
         return []
     runs = []

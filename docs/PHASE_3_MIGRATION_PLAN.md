@@ -74,7 +74,7 @@ Below is the original spec, kept for reference.
   - `DJANGO_ENV=prod python manage.py check --deploy` → fewer warnings than before
   - Test suite uses `DJANGO_ENV=test`; passes
 - **Rollback:** revert. The old `settings.py` is still in git history.
-- **Deploy note:** `auto-deploy.sh` and supervisord configs must export `DJANGO_ENV=prod`. Include in the same PR.
+- **Deploy note:** `scripts/deployment/auto-deploy.sh` and supervisord configs must export `DJANGO_ENV=prod`. Include in the same PR.
 
 ### Phase 3.3 — Strip `print()` and `console.log`
 
@@ -348,7 +348,7 @@ Below is the original spec, kept for reference.
 
 ### Phase 3.20 — Add `/api/health/` endpoint + deploy check
 
-- **What:** Add `GET /api/health/` returning `{status, db, redis, celery}` — IsAdminUser or no auth (low-data). Wire `auto-deploy.sh` to curl it after each server's supervisor restart; fail the deploy if non-200.
+- **What:** Add `GET /api/health/` returning `{status, db, redis, celery}` — IsAdminUser or no auth (low-data). Wire `scripts/deployment/auto-deploy.sh` to curl it after each server's supervisor restart; fail the deploy if non-200.
 - **Risk:** LOW
 - **Effort:** 2h
 - **Depends on:** none
@@ -426,7 +426,7 @@ Treating this as a single implementer's calendar, with realistic context-switchi
 
 The Phase 0 cleanup (already done in this session) and Stage A hotfixes (already done) are prerequisites. Verify in `git status` that:
 
-- Hardcoded password is removed from `auto-deploy.sh`
+- Hardcoded password is removed from `scripts/deployment/auto-deploy.sh`
 - `ThrottleHealthView.permission_classes = [IsAdminUser]`
 - `app_tags.py` imports from `allotment.models`, not `license.models`
 - Stale docs / dead refactor artifacts removed

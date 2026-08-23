@@ -27,6 +27,11 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 
 
+def quote_identifier_path(identifier: str) -> str:
+    """Quote a potentially schema-qualified database identifier."""
+    return ".".join(connection.ops.quote_name(part) for part in identifier.split("."))
+
+
 class Command(BaseCommand):
     help = "Repair FK constraints that still point to auth_user instead of accounts_user."
 
@@ -90,11 +95,13 @@ class Command(BaseCommand):
             )
 
             for conname, table, column in constraints:
+                q_table = quote_identifier_path(table)
+                q_column = connection.ops.quote_name(column)
                 # Count orphan rows (FK value not in accounts_user)
                 cur.execute(
-                    f"SELECT COUNT(*) FROM {table} "
-                    f"WHERE {column} IS NOT NULL "
-                    f"  AND {column} NOT IN (SELECT id FROM accounts_user)"
+                    f"SELECT COUNT(*) FROM {q_table} "
+                    f"WHERE {q_column} IS NOT NULL "
+                    f"  AND {q_column} NOT IN (SELECT id FROM accounts_user)"
                 )
                 orphans = cur.fetchone()[0]
 
@@ -116,13 +123,15 @@ class Command(BaseCommand):
                     # 1. NULL orphan rows
                     if orphans:
                         cur.execute(
-                            f"UPDATE {table} SET {column} = NULL "
-                            f"WHERE {column} IS NOT NULL "
-                            f"  AND {column} NOT IN (SELECT id FROM accounts_user)"
+                            f"UPDATE {q_table} SET {q_column} = NULL "
+                            f"WHERE {q_column} IS NOT NULL "
+                            f"  AND {q_column} NOT IN (SELECT id FROM accounts_user)"
                         )
 
                     # 2. Drop the old constraint
-                    cur.execute(f'ALTER TABLE {table} DROP CONSTRAINT "{conname}"')
+                    cur.execute(
+                        f"ALTER TABLE {q_table} DROP CONSTRAINT {connection.ops.quote_name(conname)}"
+                    )
 
                     # 3. Add the new constraint pointing to accounts_user. Derive
                     # the new name from the OLD name so duplicates on the same
@@ -155,9 +164,9 @@ class Command(BaseCommand):
                             suffix += 1
 
                     cur.execute(
-                        f'ALTER TABLE {table} '
-                        f'ADD CONSTRAINT "{new_name}" '
-                        f'FOREIGN KEY ({column}) REFERENCES accounts_user(id) '
+                        f"ALTER TABLE {q_table} "
+                        f"ADD CONSTRAINT {connection.ops.quote_name(new_name)} "
+                        f"FOREIGN KEY ({q_column}) REFERENCES accounts_user(id) "
                         f'ON DELETE SET NULL '
                         f'DEFERRABLE INITIALLY DEFERRED'
                     )

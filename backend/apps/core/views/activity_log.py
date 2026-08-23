@@ -28,8 +28,6 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = ActivityLog.objects.select_related('user').order_by('-timestamp')
-        user = self.request.user
-
         params = self.request.query_params
 
         username = params.get('username', '').strip()

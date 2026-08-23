@@ -1,5 +1,5 @@
 """
-End-to-end smoke-test fixtures.
+End-to-end fixtures.
 
 Both the Django backend (default http://localhost:8000) and the Vite frontend
 (default http://localhost:5173) must be running. These tests hit live servers —
@@ -12,17 +12,32 @@ Override the URLs / credentials with environment variables:
     LM_FRONTEND_URL=http://localhost:5173
     LM_USERNAME=hardik
     LM_PASSWORD=admin@123
+Managed production gate
+-----------------------
+Set ``LM_E2E_MANAGED=1`` to own the Django, Celery, and production-frontend
+processes. Managed mode fails closed if the isolated database, Redis namespace,
+or repository seed hook is absent; it never falls back to shared credentials
+or a development database.
 """
 from __future__ import annotations
 
 import os
+import json
 import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
 import requests
 
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIRECTORY = REPOSITORY_ROOT / "backend"
+FRONTEND_DIRECTORY = REPOSITORY_ROOT / "frontend"
+MANAGED_MODE = os.environ.get("LM_E2E_MANAGED") == "1"
 BACKEND_URL = os.environ.get("LM_BACKEND_URL", "http://localhost:8000").rstrip("/")
 FRONTEND_URL = os.environ.get("LM_FRONTEND_URL", "http://localhost:5173").rstrip("/")
 USERNAME = os.environ.get("LM_USERNAME", "hardik")
@@ -40,25 +55,138 @@ def _is_listening(url: str) -> bool:
         return False
 
 
+def _free_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+def _wait_for_server(url: str, process: subprocess.Popen, label: str) -> None:
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"{label} exited early with status {process.returncode}")
+        if _is_listening(url):
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"{label} did not listen at {url} within 45 seconds")
+
+
+def _stop_process(process: subprocess.Popen | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
 @pytest.fixture(scope="session")
-def backend_url() -> str:
-    if not _is_listening(BACKEND_URL):
+def e2e_runtime():
+    """Start the isolated real-process stack when LM_E2E_MANAGED=1.
+
+    Required managed inputs deliberately prove that writes target disposable
+    test resources: LM_E2E_DB_NAME starts with ``test_``, Redis uses a
+    non-zero namespace, and LM_E2E_SEED_COMMAND creates the canonical data.
+    """
+    if not MANAGED_MODE:
+        yield {"backend_url": BACKEND_URL, "frontend_url": FRONTEND_URL}
+        return
+
+    db_name = os.environ.get("LM_E2E_DB_NAME", "")
+    redis_url = os.environ.get("LM_E2E_REDIS_URL", "")
+    seed_command = os.environ.get("LM_E2E_SEED_COMMAND", "")
+    if not db_name.startswith("test_") or len(db_name) <= len("test_"):
+        pytest.fail("Managed E2E requires disposable LM_E2E_DB_NAME beginning with 'test_'.")
+    if not redis_url or redis_url.rstrip("/").endswith("/0"):
+        pytest.fail("Managed E2E requires LM_E2E_REDIS_URL on an isolated non-zero Redis DB.")
+    if not seed_command:
+        pytest.fail("Managed E2E requires LM_E2E_SEED_COMMAND for the canonical scenario.")
+    if not (BACKEND_DIRECTORY / "manage.py").is_file() or not (FRONTEND_DIRECTORY / "package.json").is_file():
+        pytest.fail("Managed E2E repository layout is incomplete.")
+
+    backend_port = _free_local_port()
+    frontend_port = _free_local_port()
+    backend_url = f"http://127.0.0.1:{backend_port}"
+    frontend_url = f"http://127.0.0.1:{frontend_port}"
+    backend_env = os.environ.copy()
+    backend_env.update({
+        "DB_NAME": db_name,
+        "REDIS_URL": redis_url,
+        "DEBUG": "true",
+        "CORS_ALLOWED_ORIGINS": frontend_url,
+        "CSRF_TRUSTED_ORIGINS": frontend_url,
+        "PYTHONUNBUFFERED": "1",
+    })
+    python = os.environ.get("LM_E2E_PYTHON", sys.executable)
+    processes: list[subprocess.Popen] = []
+    try:
+        subprocess.run([python, "manage.py", "migrate", "--noinput"], cwd=BACKEND_DIRECTORY, env=backend_env, check=True)
+        backend = subprocess.Popen(
+            [python, "manage.py", "runserver", f"127.0.0.1:{backend_port}", "--noreload"],
+            cwd=BACKEND_DIRECTORY, env=backend_env,
+        )
+        processes.append(backend)
+        _wait_for_server(backend_url, backend, "Django E2E server")
+
+        # The seed command belongs to the repository and must create the
+        # canonical licence/user graph before the real worker starts.
+        import shlex
+        subprocess.run(shlex.split(seed_command), cwd=REPOSITORY_ROOT, env=backend_env, check=True)
+
+        worker = subprocess.Popen(
+            [python, "-m", "celery", "-A", "lmanagement", "worker", "--pool=solo", "--loglevel=WARNING"],
+            cwd=BACKEND_DIRECTORY, env=backend_env,
+        )
+        processes.append(worker)
+
+        frontend_env = os.environ.copy()
+        frontend_env["VITE_API_URL"] = backend_url
+        subprocess.run(["npm", "run", "build"], cwd=FRONTEND_DIRECTORY, env=frontend_env, check=True)
+        frontend = subprocess.Popen(
+            ["npm", "run", "preview", "--", "--host", "127.0.0.1", "--port", str(frontend_port), "--strictPort"],
+            cwd=FRONTEND_DIRECTORY, env=frontend_env,
+        )
+        processes.append(frontend)
+        _wait_for_server(frontend_url, frontend, "production frontend preview")
+        yield {"backend_url": backend_url, "frontend_url": frontend_url}
+    finally:
+        for process in reversed(processes):
+            _stop_process(process)
+
+
+@pytest.fixture(scope="session")
+def backend_url(e2e_runtime) -> str:
+    url = e2e_runtime["backend_url"]
+    if not _is_listening(url):
+        if MANAGED_MODE:
+            pytest.fail(f"Managed Django E2E server is not reachable at {url}.")
         pytest.skip(f"Backend not reachable at {BACKEND_URL} — start `python manage.py runserver`.")
-    return BACKEND_URL
+    return url
 
 
 @pytest.fixture(scope="session")
-def frontend_url() -> str:
-    if not _is_listening(FRONTEND_URL):
+def frontend_url(e2e_runtime) -> str:
+    url = e2e_runtime["frontend_url"]
+    if not _is_listening(url):
+        if MANAGED_MODE:
+            pytest.fail(f"Managed production frontend is not reachable at {url}.")
         pytest.skip(f"Frontend not reachable at {FRONTEND_URL} — start `npm run dev`.")
-    return FRONTEND_URL
+    return url
 
 
 @pytest.fixture(scope="session")
-def jwt_token(backend_url: str) -> str:
+def e2e_credentials() -> dict:
+    return {"username": USERNAME, "password": PASSWORD}
+
+
+@pytest.fixture(scope="session")
+def jwt_token(backend_url: str, e2e_credentials: dict) -> str:
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": USERNAME, "password": PASSWORD},
+        json=e2e_credentials,
         timeout=10,
     )
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text[:300]}"
@@ -88,6 +216,8 @@ def selenium_driver():
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
     except ImportError:
+        if MANAGED_MODE:
+            pytest.fail("Managed E2E requires Selenium; install tests/e2e/requirements.txt.")
         pytest.skip("selenium not installed — `pip install -r tests/e2e/requirements.txt`")
 
     opts = Options()
@@ -108,13 +238,13 @@ def selenium_driver():
 
 
 @pytest.fixture(scope="session")
-def _spa_auth_payload(backend_url: str) -> dict:
+def _spa_auth_payload(backend_url: str, e2e_credentials: dict) -> dict:
     """One login per pytest session. The login endpoint is throttled at
     10/minute; doing it once and reusing the tokens keeps every test under
     the limit even when the full suite runs back-to-back."""
     r = requests.post(
         f"{backend_url}/api/auth/login/",
-        json={"username": USERNAME, "password": PASSWORD},
+        json=e2e_credentials,
         timeout=10,
     )
     assert r.status_code == 200, f"login failed: {r.status_code} {r.text[:200]}"
@@ -142,6 +272,6 @@ def logged_in_driver(selenium_driver, frontend_url: str, _spa_auth_payload: dict
         "localStorage.setItem('user', arguments[2]);",
         _spa_auth_payload["access"],
         _spa_auth_payload["refresh"],
-        __import__("json").dumps(_spa_auth_payload.get("user", {})),
+        json.dumps(_spa_auth_payload.get("user", {})),
     )
     return selenium_driver

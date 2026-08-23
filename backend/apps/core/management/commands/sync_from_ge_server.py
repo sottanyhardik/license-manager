@@ -1,11 +1,13 @@
 """
-Management command to sync database structure and data from GE (Government E-commerce) server.
+Management command to reconcile local database structure and calculated data.
 
 This command performs the following operations:
 1. Ensures all model tables exist in PostgreSQL database
-2. Fetches latest data from GE server (ICEGATE/DGFT)
-3. Updates license ownership, balances, and BOE details
-4. Reconciles local database with remote server state
+2. Recalculates local license balances and import-item availability
+3. Reports where external GE/ICEGATE/DGFT integration would be needed
+
+It does not call external GE/ICEGATE/DGFT APIs. Ownership fetching is handled by
+the dedicated `update_license_ownership` command and license action endpoint.
 
 Usage:
     python manage.py sync_from_ge_server --full  # Full sync (structure + data)
@@ -15,8 +17,6 @@ Usage:
 """
 
 import logging
-from decimal import Decimal
-from typing import List, Dict, Any, Optional
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Sync database structure and data from GE server"
+    help = "Reconcile local database structure and calculated license data"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -75,7 +75,7 @@ class Command(BaseCommand):
             full_sync = True
 
         self.stdout.write(self.style.HTTP_INFO("=" * 70))
-        self.stdout.write(self.style.HTTP_INFO("GE Server Database Sync"))
+        self.stdout.write(self.style.HTTP_INFO("Local Database Reconciliation"))
         self.stdout.write(self.style.HTTP_INFO("=" * 70))
 
         if dry_run:
@@ -89,7 +89,7 @@ class Command(BaseCommand):
 
             # Step 2: Data sync
             if full_sync or data_only:
-                self.stdout.write("\n" + self.style.HTTP_INFO("Step 2: Syncing data from GE server..."))
+                self.stdout.write("\n" + self.style.HTTP_INFO("Step 2: Reconciling local calculated data..."))
                 if license_number:
                     self._sync_specific_license(license_number, dry_run, force)
                 else:
@@ -150,7 +150,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("✓ All model tables exist in database"))
 
     def _sync_all_data(self, dry_run: bool = False, force: bool = False):
-        """Sync all license data from GE server."""
+        """Recalculate all locally stored GE-status license data."""
         from apps.license.models import LicenseDetailsModel
 
         self.stdout.write("Fetching licenses to sync...")
@@ -197,7 +197,7 @@ class Command(BaseCommand):
         ))
 
     def _sync_specific_license(self, license_number: str, dry_run: bool = False, force: bool = False):
-        """Sync a specific license from GE server."""
+        """Recalculate a specific license from local database state."""
         from apps.license.models import LicenseDetailsModel
 
         try:
@@ -220,12 +220,8 @@ class Command(BaseCommand):
             raise CommandError(f"Failed to sync {license_number}: {str(e)}")
 
     def _sync_license_data(self, license, force: bool = False):
-        """
-        Sync individual license data from GE server.
-        This is a placeholder - actual implementation would call GE APIs.
-        """
-        # NOTE: This is where you would implement actual GE server API calls
-        # For now, we'll just update local calculated fields
+        """Recalculate local materialized balance and availability fields."""
+        _ = force  # Retained for CLI compatibility; external sync is not implemented here.
 
         with transaction.atomic():
             # Recalculate balance_cif from current database state
@@ -254,33 +250,3 @@ class Command(BaseCommand):
                 if import_item.available_quantity != new_available_qty:
                     import_item.available_quantity = new_available_qty
                     import_item.save(update_fields=['available_quantity'])
-
-    def _fetch_from_ge_server(self, license_number: str) -> Optional[Dict[str, Any]]:
-        """
-        Fetch license data from GE server APIs.
-
-        This is a placeholder method - actual implementation would:
-        1. Connect to ICEGATE/DGFT APIs
-        2. Authenticate using certificates/credentials
-        3. Fetch license details, BOE data, ownership info
-        4. Return structured data
-
-        Returns:
-            Dict with license data or None if not found
-        """
-        # TODO: Implement actual GE server API calls
-        # Example structure:
-        # return {
-        #     'license_number': license_number,
-        #     'status': 'ACTIVE',
-        #     'balance_cif': Decimal('1000.00'),
-        #     'current_owner': {...},
-        #     'boe_details': [...],
-        #     'transfer_history': [...]
-        # }
-
-        self.stdout.write(self.style.WARNING(
-            "Note: GE server API integration not implemented yet. "
-            "Using local database calculations only."
-        ))
-        return None

@@ -1,107 +1,88 @@
 """
 Norm E132 — deterministic planning classification engine.
 
-Classifies each E132 source record (a licence import item) into EXACTLY ONE
-planning item using an ORDERED priority engine (first match wins), sums quantity
+Classifies each E132 source record (a licence import item) into planning
+item(s) using an ORDERED priority engine (first match wins), sums quantity
 per planning item, and applies a fixed planning unit price. Deterministic,
 auditable (every match carries a Classification Reason), and free of double
-counting (a record contributes to at most one item).
+counting (a record contributes its available quantity to at most one bucket
+— except the Vegetable Oil split, which by design contributes to exactly
+two: PKO and Cheese).
 
 ────────────────────────────────────────────────────────────────────────────
 BUSINESS-RULE DECISIONS (made explicit — not silent assumptions)
 ────────────────────────────────────────────────────────────────────────────
-1. YEAST / HSN 2106 OVERLAP → resolved with the "corrected priority".
-   The spec lists Yeast (needs "yeast" AND HSN 2106) *after* Cheese (matches
-   HSN 2106 alone). Under the literal order Yeast is UNREACHABLE — any 2106
-   record is taken by Cheese first, so the Yeast rule could never fire. A rule
-   that can never match cannot be the intent, and the spec itself recommends the
-   correction, so Yeast is evaluated FIRST as a high-priority special case.
-   ⚠ Requires business confirmation. Flip PRIORITY_YEAST_FIRST to revert.
-
-2. MILK unit price may range 0–22 USD. The ceiling (22, MILK_MAX_PRICE) is used
-   as the planning unit price so Planning Value computes; adjust that one
-   constant to change it. (Previously To-Be-Defined.)
-
-3. "oil" (Item 1 keyword) is BROAD. By priority, descriptions like
-   "palm kernel oil" or "RBD palmolein oil" classify to Cheese (Item 1) before
-   PKO/RBD. This is faithful to the stated priority but materially affects
-   results — confirm it is intended.
-
-4. This engine is a NEW, standalone classifier. It does NOT replace the existing
-   apps.license.services.e132_debit (a different sequential balance-consuming
-   model used by the Download-License Excel, with different items/prices).
-   Whether the debit model should migrate to this classification is an open
-   business question — left untouched here.
+1. PKO-alone / Cheese-alone fallback. The priority table lists Palm Kernel
+   Oil and Cheese as independently priced Priority-3 items, so a record that
+   signals ONLY one of them (1513 without the strict Cheese signal, or the
+   strict Cheese signal without 1513) still has to classify somewhere. Such
+   a record goes 100% to that single item — no split (the split only
+   applies when BOTH signals are present on the same record).
+2. This engine is a NEW, standalone classifier. It does NOT replace the
+   existing apps.license.services.e132_debit (a different sequential
+   balance-consuming model used by the Download-License Excel, with
+   different items/prices).
+3. EVERY E132 planning quantity — including the Vegetable Oil PKO/Cheese
+   split target — is based on the record's CURRENT Available Quantity, never
+   its original/total import quantity. A record's available quantity already
+   self-corrects for real consumption (it shrinks the moment an allotment
+   debits it), so recomputing the 40%/60% split fresh against it every run
+   is automatically correct and idempotent — no separate "already
+   planned/debited" bookkeeping is needed (or should be reintroduced): that
+   would be double-accounting for something `available_quantity` already
+   reflects.
 
 DATA MAPPING (source: LicenseImportItemsModel of an E132 licence)
     Norm        → licence export norm_class == "E132" (caller filters to these)
     HSN Code    → item.hs_code.hs_code   (str, may be null/blank)
     Description → item.description        (str, may be null/blank)
-    Quantity    → item.quantity          (Decimal)
+    Quantity    → item.available_quantity (Decimal) — the currently
+                  allocatable pool for this record; ALSO the basis for the
+                  Vegetable Oil 40/60 split target (never the original/total
+                  import quantity — see decision #3 above).
     Record id   → item.id                (preserved for traceability)
 """
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import Decimal
-from typing import Any, Iterable, Optional
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
 NORM = "E132"
 
 # ── Planning item names ──────────────────────────────────────────────────────
-CHEESE = "CHEESE CREAM BUTTER AND FATS - E132"
+NUT_NUTS = "NUT & NUTS - E132"
+YEAST = "Yeast - E132"
 PKO = "PKO - E132"
 RBD = "RBD - E132"
-YEAST = "Yeast - E132"
+CHEESE = "CHEESE CREAM BUTTER AND FATS - E132"
 ALUMINIUM = "Aluminium Foil - E132"
-NUT_NUTS = "NUT & NUTS - E132"
-RAISIN_ITEM = "RAISIN - E132"
-CEREALS_FLAKES = "CEREALS FLAKES - E132"
-CMC = "CMC - E132"
 
-# ── Milk split ───────────────────────────────────────────────────────────────
-# Milk is detected by classification (see _rule_milk) into a single internal pool
-# (MILK), then the pooled milk quantity is SPLIT across three whey products at
-# fixed prices so that (a) all milk quantity is utilised and (b) the planned value
-# equals the balance available at milk's turn ("0 $ left"). See _split_milk.
-MILK = "Milk - E132"          # internal classification pool only — NOT an output item
-SWP = "SWP - E132"            # Skimmed Whey Powder
-DWP = "DWP - E132"            # Demineralised Whey Powder
-WPC = "WPC - E132"            # Whey Protein Concentrate
-MILK_PRODUCTS = (SWP, DWP, WPC)   # display order of the three split products
+# Internal-only classification marker for a "Vegetable Oil" record that
+# satisfies BOTH the 1513 (PKO) signal and the strict Cheese signal — never
+# an output item name; expanded into PKO (40%) + Cheese (60%) at allocation
+# time by `_split_veg_oil_record` (per-record, NOT license-wide pooled —
+# each Vegetable Oil import item's split target is its OWN CURRENT
+# available quantity, never its original/total import quantity).
+_VEG_OIL_SPLIT = "__VEG_OIL_SPLIT__"
 
 # ── Fixed planning unit prices (USD). ────────────────────────────────────────
-UNIT_PRICE: dict[str, Optional[Decimal]] = {
-    YEAST: Decimal("3.00"),
-    CHEESE: Decimal("5.00"),
-    PKO: Decimal("2.30"),
+UNIT_PRICE: dict[str, Decimal | None] = {
+    NUT_NUTS: Decimal("3.00"),
+    YEAST: Decimal("5.00"),
+    PKO: Decimal("1.80"),
     RBD: Decimal("1.20"),
+    CHEESE: Decimal("5.50"),
     ALUMINIUM: Decimal("4.50"),
-    SWP: Decimal("1.50"),
-    DWP: Decimal("5.00"),
-    WPC: Decimal("22.00"),
-    NUT_NUTS: Decimal("10.00"),
-    RAISIN_ITEM: Decimal("4.00"),
-    CEREALS_FLAKES: Decimal("0.60"),
-    # ⚠ CMC price is set, but _rule_cmc is still a placeholder that matches nothing
-    #   — CMC will not classify any record until a real rule is supplied.
-    CMC: Decimal("5.00"),
 }
 
-# Toggle the Yeast/2106 overlap resolution (decision #1). True = corrected
-# priority (Yeast evaluated first); False = literal spec order (Yeast unreachable
-# for HSN-2106 records). Default True per the spec's own recommendation.
-PRIORITY_YEAST_FIRST = True
+# Planning-item display/priority order for the OUTPUT — immutable per the
+# business spec: Nuts → Yeast → {PKO, RBD, Cheese} → Aluminium (last).
+PLANNING_ORDER = (NUT_NUTS, YEAST, PKO, RBD, CHEESE, ALUMINIUM)
 
-# Planning-item display/priority order for the OUTPUT. The milk pool occupies rank
-# 5 as three products (SWP, DWP, WPC). Records still classify to the MILK pool;
-# _allocate_buckets expands that pool into these three at planning time.
-PLANNING_ORDER = (
-    YEAST, CHEESE, PKO, RBD,
-    SWP, DWP, WPC,
-    NUT_NUTS, RAISIN_ITEM, CEREALS_FLAKES, CMC, ALUMINIUM,
-)
+_VEG_OIL_SPLIT_TARGETS: dict[str, Decimal] = {PKO: Decimal("0.4"), CHEESE: Decimal("0.6")}
 
 
 # ── Normalization ────────────────────────────────────────────────────────────
@@ -130,46 +111,79 @@ def _has_word(desc_norm: str, word: str) -> bool:
     return re.search(rf"\b{re.escape(word)}\b", desc_norm) is not None
 
 
+def _hsn_or_desc(hsn: str, desc: str, code: str) -> bool:
+    """True if `code` appears as the HSN (prefix match) OR as a standalone
+    token in the description — the "HSN or Description contains X" phrasing
+    used throughout the spec."""
+    return _hsn_matches(hsn, code) or _has_word(desc, code)
+
+
 # ── Ordered classification rules ─────────────────────────────────────────────
 # Each rule: (planning_item, predicate(hsn_digits, desc_norm) -> reason|None).
 # First rule whose predicate returns a reason wins. Reasons are the audit trail.
 
-def _rule_yeast(hsn: str, desc: str) -> Optional[str]:
-    if "yeast" in desc and _hsn_matches(hsn, "2106"):
-        return "Description contains 'yeast' AND HSN=2106"
+def _rule_nuts(hsn: str, desc: str) -> str | None:
+    if not (_hsn_matches(hsn, "0802") or _has_word(desc, "0802")):
+        return None
+    if _has_word(desc, "nut") or _has_word(desc, "nuts"):
+        return "HSN/desc=0802 AND description contains 'NUT'/'NUTS'"
     return None
 
 
-def _rule_cheese(hsn: str, desc: str) -> Optional[str]:
-    for code in ("0401", "0405", "0406", "2106"):
-        if _hsn_matches(hsn, code):
-            return f"HSN={code}"
-    if _has_word(desc, "oil"):
-        return "Description contains the word 'oil'"
+def _rule_yeast(hsn: str, desc: str) -> str | None:
+    if _hsn_or_desc(hsn, desc, "2106") and "yeast" in desc:
+        return "HSN/desc=2106 AND description contains 'YEAST'"
     return None
 
 
-def _rule_pko(hsn: str, desc: str) -> Optional[str]:
-    if _hsn_matches(hsn, "1513"):
-        return "HSN=1513"
-    if "pko" in desc:
-        return "Description contains 'PKO'"
-    if "kernel" in desc:
-        return "Description contains 'kernel'"
+def _is_explicit_cheese(desc: str) -> bool:
+    return "cheese" in desc and "vegetable" in desc and "oil" in desc
+
+
+def _is_cheese_strict(hsn: str, desc: str) -> bool:
+    """Strict Cheese detection (Rule 5): one of 0401/0405/0406 (HSN or desc)
+    AND the description contains both 'vegetable' and 'oil'."""
+    has_dairy_code = any(_hsn_or_desc(hsn, desc, c) for c in ("0401", "0405", "0406"))
+    return has_dairy_code and "vegetable" in desc and "oil" in desc
+
+
+def _is_rbd(hsn: str, desc: str) -> bool:
+    return _hsn_or_desc(hsn, desc, "1510")
+
+
+def _is_pko_signal(hsn: str, desc: str) -> bool:
+    return _hsn_or_desc(hsn, desc, "1513")
+
+
+def _rule_priority_3(hsn: str, desc: str) -> tuple[str, str] | None:
+    """Palm Kernel Oil / RBD Palmolein Oil / Cheese group (Rules 3-7).
+
+    Sub-order (first match wins):
+      a. Explicit Cheese (CHEESE + VEGETABLE + OIL in description) — highest
+         precedence; 100% to Cheese, never split, never debit-adjusted.
+      b. RBD — HSN/desc contains 1510 — 100% to RBD.
+      c. Split — 1513 signal AND strict Cheese signal both present on the
+         SAME record — internal `_VEG_OIL_SPLIT` marker, expanded 40/60 at
+         allocation time.
+      d. PKO alone — 1513 signal without the strict Cheese signal.
+      e. Cheese alone — strict Cheese signal without the 1513 signal.
+    """
+    if _is_explicit_cheese(desc):
+        return CHEESE, "Description contains 'CHEESE', 'VEGETABLE' and 'OIL' (explicit override)"
+    if _is_rbd(hsn, desc):
+        return RBD, "HSN/desc=1510"
+    pko_signal = _is_pko_signal(hsn, desc)
+    cheese_signal = _is_cheese_strict(hsn, desc)
+    if pko_signal and cheese_signal:
+        return _VEG_OIL_SPLIT, "HSN/desc=1513 AND strict Cheese signal — 40% PKO / 60% Cheese split"
+    if pko_signal:
+        return PKO, "HSN/desc=1513"
+    if cheese_signal:
+        return CHEESE, "Strict Cheese signal (0401/0405/0406 + 'VEGETABLE' + 'OIL')"
     return None
 
 
-def _rule_rbd(hsn: str, desc: str) -> Optional[str]:
-    if _hsn_matches(hsn, "1511"):
-        return "HSN=1511"
-    if "rbd" in desc:
-        return "Description contains 'RBD'"
-    if "palmolein" in desc:
-        return "Description contains 'palmolein'"
-    return None
-
-
-def _rule_aluminium(hsn: str, desc: str) -> Optional[str]:
+def _rule_aluminium(hsn: str, desc: str) -> str | None:
     if _hsn_matches(hsn, "7607"):
         return "HSN=7607"
     if _has_word(desc, "7607"):
@@ -182,111 +196,37 @@ def _rule_aluminium(hsn: str, desc: str) -> Optional[str]:
     return None
 
 
-def _rule_milk(hsn: str, desc: str) -> Optional[str]:
-    # Explicit guard: a "yeast" + HSN-2106 record is Yeast, never Milk (already
-    # guaranteed by the Yeast-first priority, but kept here as defensive intent).
-    if "yeast" in desc and _hsn_matches(hsn, "2106"):
-        return None
-    if "milk solid" in desc:
-        return "Description contains 'milk solid'"
-    if "milk" in desc:
-        return "Description contains 'milk'"
-    if _hsn_matches(hsn, "3502"):
-        return "HSN=3502"
-    if _has_word(desc, "3502"):
-        return "Description contains '3502'"
-    return None
+def classify_e132_record(hs_code: Any, description: Any) -> tuple[str | None, str | None]:
+    """Classify one E132 record by HSN/description alone (priority order:
+    Nuts → Yeast → {Cheese-explicit, RBD, PKO/Cheese-split, PKO, Cheese} →
+    Aluminium).
 
-
-def _rule_nut(hsn: str, desc: str) -> Optional[str]:
-    # NUT & NUTS: HSN starts with 0802 (or '0802' in the description) — but NOT
-    # when the record is milk or a 0806 (raisin) item, per the stated exclusions.
-    if not (_hsn_matches(hsn, "0802") or _has_word(desc, "0802")):
-        return None
-    if "milk" in desc:                                    # exclusion: no milk
-        return None
-    if _hsn_matches(hsn, "0806") or _has_word(desc, "0806"):  # exclusion: no 0806
-        return None
-    return "HSN=0802 / desc contains '0802' (excl. milk & 0806)"
-
-
-def _rule_raisin(hsn: str, desc: str) -> Optional[str]:
-    # RAISIN: HSN starts with 0806 (or '0806' in the description).
-    if _hsn_matches(hsn, "0806"):
-        return "HSN=0806"
-    if _has_word(desc, "0806"):
-        return "Description contains '0806'"
-    return None
-
-
-def _rule_cereals(hsn: str, desc: str) -> Optional[str]:
-    # ⚠ ASSUMED rule — no classification criteria were given for CEREALS FLAKES.
-    #   Uses HSN 1104 (this codebase's historical cereal-flakes code). CONFIRM /
-    #   replace the code or keyword below with the real rule.
-    if _hsn_matches(hsn, "1104"):
-        return "HSN=1104"
-    if _has_word(desc, "1104"):
-        return "Description contains '1104'"
-    return None
-
-
-def _rule_cmc(hsn: str, desc: str) -> Optional[str]:
-    # CMC: HSN starts with 3912 (or '3912' in the description). CMC is evaluated
-    # LAST in the priority order, so this only catches items not already claimed
-    # by a higher-priority rule ("not classified elsewhere").
-    if _hsn_matches(hsn, "3912"):
-        return "HSN=3912"
-    if _has_word(desc, "3912"):
-        return "Description contains '3912'"
-    return None
-
-
-# Corrected priority (decision #1). Yeast first so it is reachable. Aluminium Foil
-# is evaluated LAST per the confirmed business order.
-_RULES_CORRECTED = (
-    (YEAST, _rule_yeast),
-    (CHEESE, _rule_cheese),
-    (PKO, _rule_pko),
-    (RBD, _rule_rbd),
-    (MILK, _rule_milk),
-    (NUT_NUTS, _rule_nut),
-    (RAISIN_ITEM, _rule_raisin),
-    (CEREALS_FLAKES, _rule_cereals),
-    (CMC, _rule_cmc),
-    (ALUMINIUM, _rule_aluminium),
-)
-# Literal spec order (Yeast after Cheese — provided for completeness/audit).
-_RULES_LITERAL = (
-    (CHEESE, _rule_cheese),
-    (PKO, _rule_pko),
-    (RBD, _rule_rbd),
-    (YEAST, _rule_yeast),
-    (MILK, _rule_milk),
-    (NUT_NUTS, _rule_nut),
-    (RAISIN_ITEM, _rule_raisin),
-    (CEREALS_FLAKES, _rule_cereals),
-    (CMC, _rule_cmc),
-    (ALUMINIUM, _rule_aluminium),
-)
-
-
-def _active_rules():
-    return _RULES_CORRECTED if PRIORITY_YEAST_FIRST else _RULES_LITERAL
-
-
-def classify_e132_record(hs_code: Any, description: Any) -> tuple[Optional[str], Optional[str]]:
-    """Classify one E132 record.
-
-    Returns ``(planning_item_name, classification_reason)``; ``(None, None)`` when
-    no rule matches (the record goes to the exception report). The caller is
-    responsible for ensuring the record's Norm is E132.
+    Returns ``(planning_item_name, classification_reason)``; ``(None, None)``
+    when no rule matches (the record goes to the exception report).
+    ``planning_item_name`` may be the internal `_VEG_OIL_SPLIT` marker, which
+    callers with quantity context (`_classify_records`) expand into PKO/Cheese
+    lines — callers that only care about a single display name should treat
+    it as "Cheese/PKO split", never surface the raw marker to users.
     """
     hsn = _norm_hsn(hs_code)
     desc = _norm_text(description)
-    for item, predicate in _active_rules():
-        reason = predicate(hsn, desc)
-        if reason is not None:
-            return item, reason
+
+    reason = _rule_nuts(hsn, desc)
+    if reason is not None:
+        return NUT_NUTS, reason
+
+    reason = _rule_yeast(hsn, desc)
+    if reason is not None:
+        return YEAST, reason
+
+    p3 = _rule_priority_3(hsn, desc)
+    if p3 is not None:
+        return p3
+
+    reason = _rule_aluminium(hsn, desc)
+    if reason is not None:
+        return ALUMINIUM, reason
+
     return None, None
 
 
@@ -296,7 +236,7 @@ def _d(value: Any) -> Decimal:
         return value
     try:
         return Decimal(str(value)) if value not in (None, "") else Decimal("0")
-    except Exception:
+    except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
 
 
@@ -316,92 +256,38 @@ def _allocate_step(qty: Decimal, max_price: Decimal, balance: Decimal) -> tuple[
     return balance, balance / qty
 
 
-def _split_milk(pool_qty: Decimal, remaining) -> dict:
-    """Split the pooled milk quantity across SWP / DWP / WPC by the target average
-    price (avg = balance available at milk's turn ÷ milk quantity):
+def _split_veg_oil_record(available_qty: Decimal) -> dict[str, Decimal]:
+    """Vegetable Oil 40/60 split, PER RECORD (not license-wide pooled, unlike
+    the old Milk split): target quantities are 40%/60% of THIS record's
+    CURRENT Available Quantity — never its original/total import quantity
+    (critical business rule: available_quantity already self-corrects for
+    real consumption, so there is nothing further to subtract here; re-
+    deriving 40%/60% of it fresh every run is automatically correct AND
+    idempotent, with no separate "already planned" bookkeeping needed).
 
-        avg < 1.5      → all SWP (full qty & value; effective rate = avg)
-        1.5 ≤ avg < 5  → split SWP + DWP
-        5   ≤ avg < 22 → split SWP + WPC
-        avg ≥ 22       → all WPC (value = 22 × qty; any balance beyond flows on)
-
-    In the split bands the two quantities are chosen so ALL milk quantity is used
-    AND the planned value equals the balance available to milk ("0 $ left"). Each
-    product keeps its fixed unit price; only the quantities move.
-
-    Returns ``{SWP|DWP|WPC: (qty, unit_price, planned_value)}``.
+    Returns ``{PKO: qty, CHEESE: qty}``, always summing to exactly
+    ``available_qty`` (never negative, never more than what's available —
+    by construction, not by capping).
     """
-    p_swp, p_dwp, p_wpc = UNIT_PRICE[SWP], UNIT_PRICE[DWP], UNIT_PRICE[WPC]
     z = Decimal("0")
-    empty = {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (z, p_wpc, z)}
-    Q = pool_qty
-    if Q <= 0:
-        return empty
-    if remaining is None:
-        # Classification-only mode (no balance target): show qty × the top rate.
-        return {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (Q, p_wpc, Q * p_wpc)}
-    B = remaining
-    if B <= 0:
-        return empty  # no balance left → milk cannot be planned here
-    avg = B / Q
-    if avg < p_swp:
-        # Below the cheapest product: all SWP at the effective (dropped) rate so the
-        # full quantity and the full available value are shown on the SWP line.
-        return {SWP: (Q, B / Q, B), DWP: (z, p_dwp, z), WPC: (z, p_wpc, z)}
-    if avg < p_dwp:
-        # SWP + DWP: q_dwp units moved up from SWP so the value reaches the balance.
-        q_dwp = (B - p_swp * Q) / (p_dwp - p_swp)
-        q_swp = Q - q_dwp
-        return {SWP: (q_swp, p_swp, q_swp * p_swp),
-                DWP: (q_dwp, p_dwp, q_dwp * p_dwp),
-                WPC: (z, p_wpc, z)}
-    if avg < p_wpc:
-        # SWP + WPC.
-        q_wpc = (B - p_swp * Q) / (p_wpc - p_swp)
-        q_swp = Q - q_wpc
-        return {SWP: (q_swp, p_swp, q_swp * p_swp),
-                DWP: (z, p_dwp, z),
-                WPC: (q_wpc, p_wpc, q_wpc * p_wpc)}
-    # avg ≥ 22 → only WPC; any balance above 22 × qty flows to later items.
-    return {SWP: (z, p_swp, z), DWP: (z, p_dwp, z), WPC: (Q, p_wpc, Q * p_wpc)}
+    if available_qty <= 0:
+        return {PKO: z, CHEESE: z}
+    return {name: available_qty * frac for name, frac in _VEG_OIL_SPLIT_TARGETS.items()}
 
 
 def _allocate_buckets(agg: dict, balance_cif) -> dict:
     """Waterfall-allocate planned value to each OUTPUT planning item in PRIORITY
-    order (Yeast → Cheese → PKO → RBD → [milk: SWP/DWP/WPC] → NUT & NUTS → RAISIN →
-    CEREALS FLAKES → CMC → Aluminium Foil), capping the running total at
-    ``balance_cif`` (max debit per licence = Balance CIF). When ``balance_cif`` is
-    None the value is uncapped (qty × max price) — classification-only mode.
+    order (Nuts → Yeast → PKO → RBD → Cheese → Aluminium Foil), capping the
+    running total at ``balance_cif`` (max debit per licence = Balance CIF).
+    When ``balance_cif`` is None the value is uncapped (qty × max price) —
+    classification-only mode.
 
-    The milk pool (agg[MILK]) is expanded into SWP/DWP/WPC via _split_milk using the
-    balance remaining when milk's turn is reached.
-
-    Returns ``{item: {"qty", "value", "price", "count"}}`` for every output item
-    that carries quantity.
+    Returns ``{item: {"qty", "value", "price", "count"}}`` for every output
+    item that carries quantity.
     """
     remaining = _d(balance_cif) if balance_cif is not None else None
     out: dict = {}
-    milk_done = False
     for name in PLANNING_ORDER:
-        if name in MILK_PRODUCTS:
-            if milk_done:
-                continue
-            milk_done = True
-            pool = agg.get(MILK)
-            pool_qty = pool["qty"] if pool else Decimal("0")
-            pool_count = pool.get("count", 0) if pool else 0
-            if pool_qty <= 0:
-                continue
-            split = _split_milk(pool_qty, remaining)
-            total_val = sum((v for (_q, _p, v) in split.values()), Decimal("0"))
-            if remaining is not None:
-                remaining -= total_val
-            for i, prod in enumerate(MILK_PRODUCTS):
-                q, p, v = split[prod]
-                # Attribute the source-record count to the first product row only,
-                # so the total record count is not triple-counted.
-                out[prod] = {"qty": q, "value": v, "price": p, "count": pool_count if i == 0 else 0}
-            continue
         if name not in agg:
             continue
         qty = agg[name]["qty"]
@@ -419,62 +305,144 @@ def _allocate_buckets(agg: dict, balance_cif) -> dict:
 
 
 def _agg_from(recs: list) -> dict:
-    """Aggregate classified records into ``{item: {qty, count}}``."""
+    """Aggregate classified records into ``{item: {qty, count}}``. Records
+    classified to the internal Vegetable Oil split marker contribute their
+    PKO/Cheese shortfall amounts (``r["split"]``) into BOTH buckets instead
+    of a single one."""
     agg: dict = {}
-    for r in recs:
-        if r["item"] is None:
-            continue
-        b = agg.setdefault(r["item"], {"qty": Decimal("0"), "count": 0})
-        b["qty"] += r["qty"]
+
+    def _add(name: str, qty: Decimal):
+        b = agg.setdefault(name, {"qty": Decimal("0"), "count": 0})
+        b["qty"] += qty
         b["count"] += 1
+
+    for r in recs:
+        if r["item"] == _VEG_OIL_SPLIT:
+            for name, qty in r["split"].items():
+                if qty > 0:
+                    _add(name, qty)
+        elif r["item"] is not None:
+            _add(r["item"], r["qty"])
     return agg
 
 
-def _has_0802(rec: dict) -> bool:
-    """True when a record carries a NUT (0802) signal in its HSN or description."""
-    return _hsn_matches(rec["hsn"], "0802") or _has_word(rec["desc"], "0802")
-
-
-def _promote_raisin_to_nuts(recs: list, balance_cif) -> None:
-    """Wastage-reduction pass (in place): if the plan leaves wastage (Balance CIF
-    not fully used) AND there are RAISIN records that also carry a 0802 (nut)
-    signal, promote them to NUT & NUTS. Nuts is higher-priced ($10 vs $4) and
-    higher-priority, so more balance is utilised and wastage falls. No-op when
-    there is no wastage (the natural RAISIN classification is kept)."""
-    eligible = [r for r in recs if r["item"] == RAISIN_ITEM and _has_0802(r)]
-    if not eligible:
-        return
-    alloc = _allocate_buckets(_agg_from(recs), balance_cif)
-    total = sum((a["value"] for a in alloc.values() if a["value"] is not None), Decimal("0"))
-    if _d(balance_cif) - total <= 0:
-        return  # no wastage → keep RAISIN
-    for r in eligible:
-        r["item"] = NUT_NUTS
-        r["reason"] = "Promoted RAISIN→NUT & NUTS (0802 signal) to reduce wastage"
-
-
 def _classify_records(records: Iterable[dict], balance_cif) -> list:
-    """Classify every record, then apply the wastage-reduction promotion when a
-    Balance CIF is given. Returns a list of dicts with normalized fields:
-    ``{record_id, item, reason, qty, hsn, desc, raw_hs, raw_desc}``."""
+    """Classify every record. Returns a list of dicts with normalized fields:
+    ``{record_id, item, reason, qty, hsn, desc, raw_hs, raw_desc, split}``.
+    ``split`` is only populated (``{PKO: qty, CHEESE: qty}``) for records
+    classified to the internal Vegetable Oil split marker — always 40%/60%
+    of that record's OWN ``qty`` (current Available Quantity)."""
     recs = []
     for rec in records:
         raw_hs = rec.get("hs_code")
         raw_desc = rec.get("description")
         item, reason = classify_e132_record(raw_hs, raw_desc)
+        qty = _d(rec.get("quantity"))
+        split: dict[str, Decimal] = _split_veg_oil_record(qty) if item == _VEG_OIL_SPLIT else {}
         recs.append({
             "record_id": rec.get("record_id"),
             "item": item,
             "reason": reason,
-            "qty": _d(rec.get("quantity")),
+            "qty": qty,
+            "split": split,
             "hsn": _norm_hsn(raw_hs),
             "desc": _norm_text(raw_desc),
             "raw_hs": raw_hs,
             "raw_desc": raw_desc,
         })
-    if balance_cif is not None:
-        _promote_raisin_to_nuts(recs, balance_cif)
     return recs
+
+
+# PKO -> Cheese wastage-reduction rebalance ("Replace Existing Split Logic"
+# refinement). Cheese is priced higher than PKO, so shifting quantity from
+# PKO to Cheese raises total planned value without raising total planned
+# quantity — used ONLY to close out leftover Remaining Balance CIF after the
+# full waterfall has already run.
+_PKO_TO_CHEESE_VALUE_GAIN: Decimal = UNIT_PRICE[CHEESE] - UNIT_PRICE[PKO]  # $3.70/unit
+
+
+def _rebalance_veg_oil_wastage(recs: list, alloc: dict, balance_cif) -> None:
+    """
+    Wastage-reduction pass: the 40%/60% PKO/Cheese split is the DEFAULT
+    allocation, but if the full waterfall still leaves Remaining Balance CIF
+    unused, shift quantity from PKO to Cheese on the Vegetable Oil split
+    records to close that gap — Cheese ($5.50) is priced higher than PKO
+    ($1.80), so moving quantity from one to the other increases total
+    planned value WITHOUT increasing total planned quantity for that record
+    (its PKO + Cheese quantity is unchanged, only the mix shifts).
+
+    Mutates `recs`' `split` dicts and `alloc`'s PKO/CHEESE entries in place;
+    every other bucket (Nuts, Yeast, RBD, Aluminium) is left exactly as the
+    waterfall computed it, per the business rule that higher/other-priority
+    allocations already finalized must never be touched.
+
+    No-op (Case A) when:
+      * `balance_cif` is None — classification-only/report mode has no
+        balance target, so there is no "remaining" to reduce; OR
+      * there is no leftover balance — either the default split already
+        used it all, or the waterfall itself already capped every bucket
+        (both mean nothing here needs adjusting).
+
+    Otherwise (Case B), each Vegetable Oil split record is visited ONCE, in
+    the given `recs` order (the caller's own stable order — e.g. import-item
+    serial_number order from `e132_auto_plan.py`), and its shift is a single
+    CLOSED-FORM calculation (`min(this record's PKO qty, remaining_balance /
+    price_gain)`) rather than an arbitrary-step iterative search — the exact
+    mathematical optimum, computed once. Same inputs always produce the same
+    shifts, satisfying "deterministic and idempotent, producing the same
+    result on every run" without needing a numerical loop at all. Stops the
+    moment `remaining` reaches 0 or every split record's PKO is exhausted —
+    the same two stopping conditions the business spec describes.
+    """
+    if balance_cif is None:
+        return
+    if _PKO_TO_CHEESE_VALUE_GAIN <= 0:
+        return  # defensive — rebalancing only helps when Cheese > PKO price
+
+    total_planned = sum(
+        (a["value"] for a in alloc.values() if a.get("value") is not None), Decimal("0"),
+    )
+    remaining = _d(balance_cif) - total_planned
+    if remaining <= 0:
+        return  # Case A: default split already correct, or waterfall already capped
+
+    pko_bucket = alloc.get(PKO)
+    cheese_bucket = alloc.get(CHEESE)
+    if pko_bucket is None or cheese_bucket is None:
+        return
+
+    for r in recs:
+        if remaining <= 0:
+            break
+        if r["item"] != _VEG_OIL_SPLIT:
+            continue
+        pko_qty = r["split"].get(PKO, Decimal("0"))
+        if pko_qty <= 0:
+            continue
+
+        shift = min(pko_qty, remaining / _PKO_TO_CHEESE_VALUE_GAIN)
+        if shift <= 0:
+            continue
+
+        r["split"][PKO] = pko_qty - shift
+        r["split"][CHEESE] = r["split"].get(CHEESE, Decimal("0")) + shift
+
+        pko_bucket["qty"] -= shift
+        pko_bucket["value"] -= shift * UNIT_PRICE[PKO]
+        cheese_bucket["qty"] += shift
+        cheese_bucket["value"] += shift * UNIT_PRICE[CHEESE]
+        remaining -= shift * _PKO_TO_CHEESE_VALUE_GAIN
+
+
+def _classify_and_allocate(records: Iterable[dict], balance_cif) -> tuple[list, dict]:
+    """Shared pipeline for every public ``plan_e132*`` function: classify →
+    aggregate → waterfall-allocate → wastage-reduction rebalance (see
+    `_rebalance_veg_oil_wastage`). Kept in one place so the rebalance pass
+    can never be forgotten in one of the three call sites."""
+    recs = _classify_records(records, balance_cif)
+    alloc = _allocate_buckets(_agg_from(recs), balance_cif)
+    _rebalance_veg_oil_wastage(recs, alloc, balance_cif)
+    return recs, alloc
 
 
 @dataclass
@@ -483,8 +451,39 @@ class ClassifiedRecord:
     hs_code: str
     description: str
     quantity: Decimal
-    planning_item: Optional[str]
-    reason: Optional[str]
+    planning_item: str | None
+    reason: str | None
+
+
+def _effective_rate(a):
+    """True per-unit rate for a bucket = allocated value ÷ quantity. Correct in all
+    cases: uncapped (= max price), partially balance-capped (dropped rate), and
+    fully exhausted (0 — no balance left), unlike the raw ceiling price which stays
+    at max even when nothing was allocated."""
+    if not a or a.get("value") is None:
+        return None
+    q = a["qty"]
+    return (a["value"] / q) if q and q > 0 else a["price"]
+
+
+def _blended_veg_oil_rate(split: dict, alloc: dict):
+    """Single blended rate for a split record's report line = its own PKO +
+    Cheese shortfall value ÷ its own shortfall quantity. ``None`` if the
+    record didn't actually contribute any quantity this round."""
+    total_qty = Decimal("0")
+    total_val = Decimal("0")
+    any_priced = False
+    for name, qty in split.items():
+        if qty <= 0:
+            continue
+        rate = _effective_rate(alloc.get(name))
+        total_qty += qty
+        if rate is not None:
+            total_val += qty * rate
+            any_priced = True
+    if total_qty <= 0 or not any_priced:
+        return None
+    return total_val / total_qty
 
 
 def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
@@ -502,21 +501,24 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
     planned_cif}}`` for classified records; unclassified records are omitted (they
     belong in the exception report).
 
-    Milk records are priced at the BLENDED effective milk rate (total split value ÷
-    total milk quantity) and reported as one line each — the one-line-per-record
-    shape this function guarantees. Callers that want the SWP/DWP/WPC breakdown per
-    record use ``plan_e132_per_item_split``.
+    Vegetable Oil split records are priced at the BLENDED effective rate
+    (its own PKO + Cheese value ÷ its own quantity) and reported as one line
+    each — the one-line-per-record shape this function guarantees. Callers
+    that want the PKO/Cheese breakdown per record use
+    ``plan_e132_per_item_split``.
     """
-    recs = _classify_records(records, balance_cif)
-    alloc = _allocate_buckets(_agg_from(recs), balance_cif)  # {item: {qty,value,price,count}}
-    _milk_rate = _blended_milk_rate(alloc)
+    recs, alloc = _classify_and_allocate(records, balance_cif)
     out: dict = {}
     for r in recs:
         item = r["item"]
         if item is None:
             continue
-        eff_rate = _milk_rate if item == MILK else _effective_rate(alloc.get(item))
-        qty = r["qty"]
+        if item == _VEG_OIL_SPLIT:
+            eff_rate = _blended_veg_oil_rate(r["split"], alloc)
+            qty = sum(r["split"].values(), Decimal("0"))
+        else:
+            eff_rate = _effective_rate(alloc.get(item))
+            qty = r["qty"]
         out[r["record_id"]] = {
             "planning_item": item,
             "reason": r["reason"],
@@ -527,66 +529,40 @@ def plan_e132_per_item(records: Iterable[dict], balance_cif=None) -> dict:
     return out
 
 
-def _effective_rate(a):
-    """True per-unit rate for a bucket = allocated value ÷ quantity. Correct in all
-    cases: uncapped (= max price), partially balance-capped (dropped rate), and
-    fully exhausted (0 — no balance left), unlike the raw ceiling price which stays
-    at max even when nothing was allocated."""
-    if not a or a.get("value") is None:
-        return None
-    q = a["qty"]
-    return (a["value"] / q) if q and q > 0 else a["price"]
-
-
-def _blended_milk_rate(alloc: dict):
-    """Effective single milk rate = total split value ÷ total milk quantity, or None
-    if there is no milk / no priced milk value."""
-    qty = sum((alloc[p]["qty"] for p in MILK_PRODUCTS if p in alloc), Decimal("0"))
-    val = sum((alloc[p]["value"] for p in MILK_PRODUCTS
-               if p in alloc and alloc[p]["value"] is not None), Decimal("0"))
-    return (val / qty) if qty > 0 else None
-
-
 def plan_e132_per_item_split(records: Iterable[dict], balance_cif=None) -> dict:
     """Like ``plan_e132_per_item`` but returns a LIST of plan lines per record so a
-    single milk import item can be shown as its SWP/DWP/WPC split (decision 3.B).
+    single Vegetable Oil import item can be shown as its PKO/Cheese split.
 
     Returns ``{record_id: [ {planning_item, reason, planned_quantity, unit_price,
-    planned_cif}, ... ]}``. Non-milk records yield a single-element list; milk
-    records yield one entry per split product that carries quantity, apportioning
-    the record's quantity by the pool's product fractions.
+    planned_cif}, ... ]}``. Non-split records yield a single-element list;
+    split records yield one entry per target (PKO/Cheese) that carries
+    quantity (40%/60% of the record's current Available Quantity — see
+    `_split_veg_oil_record`).
     """
-    recs = _classify_records(records, balance_cif)
-    agg = _agg_from(recs)
-    alloc = _allocate_buckets(agg, balance_cif)
-    # Pool fractions for apportioning each milk record across the products.
-    pool_qty = agg.get(MILK, {}).get("qty", Decimal("0"))
-    milk_fracs = []
-    if pool_qty > 0:
-        for prod in MILK_PRODUCTS:
-            a = alloc.get(prod)
-            if a and a["qty"] > 0:
-                milk_fracs.append((prod, a["qty"] / pool_qty, a["price"]))
+    recs, alloc = _classify_and_allocate(records, balance_cif)
 
     out: dict = {}
     for r in recs:
         item = r["item"]
         if item is None:
             continue
-        rid, reason, qty = r["record_id"], r["reason"], r["qty"]
-        if item == MILK:
+        rid, reason = r["record_id"], r["reason"]
+        if item == _VEG_OIL_SPLIT:
             lines = []
-            for prod, frac, price in milk_fracs:
-                pq = qty * frac
+            for name, qty in r["split"].items():
+                if qty <= 0:
+                    continue
+                rate = _effective_rate(alloc.get(name))
                 lines.append({
-                    "planning_item": prod,
+                    "planning_item": name,
                     "reason": reason,
-                    "planned_quantity": pq,
-                    "unit_price": price,
-                    "planned_cif": (pq * price) if price is not None else None,
+                    "planned_quantity": qty,
+                    "unit_price": rate,
+                    "planned_cif": (qty * rate) if rate is not None else None,
                 })
             out[rid] = lines
         else:
+            qty = r["qty"]
             eff_rate = _effective_rate(alloc.get(item))
             out[rid] = [{
                 "planning_item": item,
@@ -603,8 +579,10 @@ def plan_e132(records: Iterable[dict], balance_cif=None) -> dict:
 
     Args:
         records: iterable of dicts with keys ``record_id``, ``hs_code``,
-            ``description``, ``quantity``. Records are assumed already filtered
-            to Norm E132.
+            ``description``, ``quantity`` (the record's current Available
+            Quantity — ALSO the basis for the Vegetable Oil 40/60 split
+            target, never an original/total import quantity). Records are
+            assumed already filtered to Norm E132.
         balance_cif: licence Balance CIF $. When given, planning value is
             waterfall-allocated in priority order and capped so the total never
             exceeds it (max debit per licence = Balance CIF), and ``unit_price`` is
@@ -620,20 +598,18 @@ def plan_e132(records: Iterable[dict], balance_cif=None) -> dict:
                          (matched no rule).
         ``missing_inputs`` – planning items whose unit price is undefined.
     """
-    recs = _classify_records(records, balance_cif)
+    recs, alloc = _classify_and_allocate(records, balance_cif)
     classified: list[ClassifiedRecord] = [
         ClassifiedRecord(
             record_id=r["record_id"],
             hs_code=str(r["raw_hs"]) if r["raw_hs"] is not None else "",
             description=str(r["raw_desc"]) if r["raw_desc"] is not None else "",
             quantity=r["qty"],
-            planning_item=r["item"],
+            planning_item=(r["item"] if r["item"] != _VEG_OIL_SPLIT else PKO + " / " + CHEESE),
             reason=r["reason"],
         )
         for r in recs
     ]
-    agg = _agg_from(recs)
-    alloc = _allocate_buckets(agg, balance_cif)  # priority-order, balance-capped
     items = []
     for name in PLANNING_ORDER:
         a = alloc.get(name)

@@ -6,6 +6,7 @@ from django.db.models import Q
 logger = logging.getLogger(__name__)
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.constants import DEBIT
 from apps.core.models import CompanyModel, PortModel
 from apps.core.scripts.calculate_balance import update_balance_values
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
@@ -90,7 +91,7 @@ def parse_file(data):
                 try:
                     if extract_data(line, phrase) != 'Qty':
                         data_dict[key] = extract_data(line, phrase)
-                except Exception as e:
+                except Exception:
                     logger.exception("Error extracting data for phrase %s in line", phrase)
 
         if 'Debit-' in line or 'Credit-' in line:
@@ -110,7 +111,7 @@ def parse_file(data):
             if row_type == 'D':
                 try:
                     row_dict['be_date'] =datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%Y').strftime('%Y/%m/%d')
-                except Exception as e:
+                except Exception:
                     row_dict['be_date'] = datetime.datetime.strptime(split_line[8].strip(), '%d/%m/%y').strftime(
                         '%Y/%m/%d')
             data_dict['row'].append(row_dict)
@@ -302,7 +303,7 @@ def bulk_get_or_create_boe(boe_row):
         existing_rows = RowDetails.objects.filter(
             Q(bill_of_entry__in=[row.bill_of_entry for row in row_details_list]),
             Q(sr_number__in=[row.sr_number for row in row_details_list]),
-            Q(transaction_type='D'),
+            Q(transaction_type=DEBIT),
         )
         rows_dict = {(row.bill_of_entry, row.sr_number, row.transaction_type): row for
                      row in existing_rows}

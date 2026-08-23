@@ -1,11 +1,12 @@
 # allotment/views_actions.py
+import logging
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
 from io import BytesIO
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from reportlab.lib import colors
@@ -17,6 +18,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.viewsets import ViewSet
 
 from apps.accounts.permissions import AllotmentPermission
@@ -25,6 +27,24 @@ from apps.core.utils.exceptions import api_error, _safe_int
 from apps.allotment.serializers import AllotmentSerializer
 from apps.license.models import LicenseImportItemsModel
 from apps.license.serializers import LicenseImportItemSerializer
+
+logger = logging.getLogger(__name__)
+
+class DebitBasis:
+    PLAN = "PLAN"
+    ACTUAL = "ACTUAL"
+
+
+class SearchMode:
+    PLAN = "PLAN"
+    ACTUAL = "ACTUAL"
+
+
+class AllocationBasis:
+    PLAN = "PLAN"
+    ACTUAL = "ACTUAL"
+
+
 
 
 class AllotmentActionViewSet(ViewSet):
@@ -38,6 +58,173 @@ class AllotmentActionViewSet(ViewSet):
             from apps.accounts.permissions import TransferLetterPermission
             return [TransferLetterPermission()]
         return super().get_permissions()
+
+    @staticmethod
+    def _position_payload(*, actual_qty, actual_cif, required_qty=None, required_cif=None, unit_price=None, plan=None, plan_status=None, item_name=None):
+        """Serialize the authoritative candidate position once.
+
+        The allocation UI deliberately receives both positions and the two
+        basis ceilings.  It may display or select a basis, but it must not
+        recreate eligibility from historical quantities or JavaScript maths.
+        """
+        zero_qty, zero_cif = Decimal('0.000'), Decimal('0.00')
+        actual_qty = max(Decimal(str(actual_qty if actual_qty is not None else zero_qty)), zero_qty)
+        actual_cif = max(Decimal(str(actual_cif if actual_cif is not None else zero_cif)), zero_cif)
+        required_qty = max(Decimal(str(required_qty if required_qty is not None else actual_qty)), zero_qty)
+        # Legacy allotments without a required CIF do not have a value
+        # requirement to cap.  In that case licence/plan CIF remains the
+        # ceiling; a real required CIF of zero is still authoritative.
+        required_cif = max(Decimal(str(required_cif if required_cif is not None else actual_cif)), zero_cif)
+        # Plan residuals are ledger-derived, not mutable counters.  Passing a
+        # bulk status avoids N+1 queries for grids; the direct helper keeps
+        # singleton callers on the exact same contract.
+        if plan and plan_status is None:
+            from apps.license.services.plan_enforcement import plan_line_status_for
+            plan_status = plan_line_status_for(plan)
+        plan_qty = max(Decimal(str((plan_status or {}).get('remaining_quantity', zero_qty))), zero_qty)
+        plan_cif = max(Decimal(str((plan_status or {}).get('remaining_cif_fc', zero_cif))), zero_cif)
+        plan_active = bool(plan and plan.is_active and not plan.is_deleted and not plan.is_cancelled)
+        from apps.allotment.services.allocation_availability import calculate_allocation_availability
+        availability = calculate_allocation_availability(
+            actual_quantity=actual_qty, actual_cif=actual_cif,
+            plan_quantity=plan_qty, plan_cif=plan_cif,
+            allotment_quantity=required_qty, allotment_cif=required_cif,
+            unit_price=unit_price or 0, quantity_step=Decimal('1.000'),
+            settlement_quantity=required_qty, settlement_cif=required_cif,
+        )
+        actual_max_qty, actual_max_cif = availability.actual_effective_quantity, availability.actual_effective_cif
+        plan_max_qty, plan_max_cif = availability.plan_effective_quantity, availability.plan_effective_cif
+        plan_enabled = plan_active and plan_max_qty > zero_qty and plan_max_cif > zero_cif
+        actual_enabled = actual_max_qty > zero_qty and actual_max_cif > zero_cif
+        if not plan_active:
+            plan_reason, plan_message = 'NO_ACTIVE_PLAN', f'No active plan is available for {item_name or "this item"}.'
+        elif plan_qty <= zero_qty or plan_cif <= zero_cif:
+            plan_reason, plan_message = 'NO_PLANNED_BALANCE', f'No planned balance is available for {item_name or "this item"} on this licence.'
+        elif actual_qty <= zero_qty or actual_cif <= zero_cif:
+            plan_reason, plan_message = 'NO_ACTUAL_BALANCE', 'No actual licence balance is available.'
+        else:
+            plan_reason = plan_message = None
+        return {
+            'actual_position': {'available_qty': str(actual_qty), 'balance_cif': str(actual_cif)},
+            'allotment_requirement': {'remaining_qty': str(required_qty), 'remaining_cif': str(required_cif)},
+            'plan_position': {
+                'exists': bool(plan), 'is_active': plan_active,
+                'status': 'ACTIVE' if plan_active and plan_enabled else ('EXHAUSTED' if plan_active else 'NO_ACTIVE_PLAN'),
+                'plan_line_id': plan.id if plan else None,
+                'remaining_qty': str(plan_qty), 'remaining_cif': str(plan_cif),
+            },
+            'basis_options': {
+                # suggested_* remain compatibility aliases for the paired
+                # limit.  They are never independently calculated.
+                'actual': {'enabled': actual_enabled, 'max_qty': str(actual_max_qty), 'max_cif': str(actual_max_cif),
+                           'effective_qty_limit': str(actual_max_qty), 'effective_cif_limit': str(actual_max_cif), 'suggested_qty': str(availability.actual_paired_quantity), 'suggested_cif': str(availability.actual_paired_cif),
+                           'allocation_limit': {'quantity_ceiling': str(actual_max_qty), 'cif_ceiling': str(actual_max_cif), 'unit_price': str(unit_price or 0), 'quantity_step': '1.000', 'paired_max_qty': str(availability.actual_paired_quantity), 'paired_max_cif': str(availability.actual_paired_cif), 'limiting_factor': 'CANONICAL', 'can_allocate': actual_enabled},
+                           'reason_code': None if actual_enabled else 'NO_ACTUAL_BALANCE',
+                           'message': None if actual_enabled else 'No actual licence balance is available.'},
+                'plan': {'enabled': plan_enabled,
+                         'max_qty': str(plan_max_qty), 'max_cif': str(plan_max_cif),
+                         'effective_qty_limit': str(plan_max_qty), 'effective_cif_limit': str(plan_max_cif), 'suggested_qty': str(availability.plan_paired_quantity), 'suggested_cif': str(availability.plan_paired_cif),
+                         'allocation_limit': {'quantity_ceiling': str(plan_max_qty), 'cif_ceiling': str(plan_max_cif), 'unit_price': str(unit_price or 0), 'quantity_step': '1.000', 'paired_max_qty': str(availability.plan_paired_quantity), 'paired_max_cif': str(availability.plan_paired_cif), 'limiting_factor': 'CANONICAL', 'can_allocate': plan_enabled},
+                         'reason_code': plan_reason, 'message': plan_message},
+            },
+        }
+
+    @staticmethod
+    def _active_target_plan_lines(allotment):
+        """Return only current plan lines matching the allotment target/SION.
+
+        A target-item label is metadata, not evidence of an allocatable Plan.
+        When the target SION is ambiguous we deliberately return no rows: a
+        route must start in the safe Actual state instead of guessing a plan.
+        """
+        if not allotment.planning_target_item_id:
+            return 'NO_ACTIVE_PLAN', None, None
+
+        from apps.license.models import LicenseItemPlan
+
+        candidate_plans = list(LicenseItemPlan.objects.filter(
+            item_name_id=allotment.planning_target_item_id,
+            is_active=True, is_deleted=False, is_cancelled=False,
+        ).select_related('license', 'import_item'))
+        from apps.license.services.plan_lifecycle import resolve_plan_sion
+        resolutions = [resolve_plan_sion(plan) for plan in candidate_plans]
+        if any(resolution.status == 'AMBIGUOUS' for resolution in resolutions):
+            return 'AMBIGUOUS_ACTIVE_PLAN', None, None
+        sions = {resolution.sion_code for resolution in resolutions if resolution.status == 'RESOLVED'}
+        if len(sions) != 1:
+            return 'NO_ACTIVE_PLAN', None, None
+        sion = next(iter(sions))
+        plans = LicenseItemPlan.objects.filter(id__in=[p.id for p, r in zip(candidate_plans, resolutions) if r.sion_code == sion])
+        # Multiple active rows for one complete allocation identity are not
+        # "pick latest" candidates.  Route initialization must fail closed so
+        # a repair can establish one current plan deliberately.
+        duplicates = plans.values('license_id', 'import_item_id', 'item_name_id').annotate(
+            active_count=Count('id')
+        ).filter(active_count__gt=1)
+        if duplicates.exists():
+            return 'AMBIGUOUS_ACTIVE_PLAN', sion, None
+        return ('ACTIVE_PLAN' if plans.exists() else 'NO_ACTIVE_PLAN'), sion, plans
+
+    @action(detail=True, methods=['get'], url_path='allocation-initialization')
+    def allocation_initialization(self, request, pk=None):
+        """Backend-owned initial mode/item decision for the allocation route."""
+        allotment = get_object_or_404(AllotmentModel, pk=pk)
+        plan_selection, sion, plan_lines = self._active_target_plan_lines(allotment)
+        has_active_plan = plan_selection == 'ACTIVE_PLAN'
+        target = None
+        if allotment.planning_target_item_id:
+            target = {
+                'id': allotment.planning_target_item_id,
+                'name': allotment.planning_target_item.name,
+            }
+
+        if has_active_plan:
+            from apps.license.services.plan_enforcement import plan_line_status_for_many
+            statuses = plan_line_status_for_many(plan_lines)
+            exhausted = not any(
+                status['remaining_quantity'] > 0 and status['remaining_cif_fc'] > 0
+                for status in statuses.values()
+            )
+            return Response({
+                'default_search_mode': SearchMode.PLAN,
+                'default_allocation_basis': AllocationBasis.PLAN,
+                'default_item': target,
+                'planning_target_item': target,
+                'sion': sion,
+                'has_active_plan': True,
+                'plan_status': 'EXHAUSTED' if exhausted else 'ACTIVE',
+                'reason_code': 'NO_PLANNED_BALANCE' if exhausted else None,
+                'message': f'The active plan for {target["name"]} has no remaining quantity or CIF.' if exhausted else None,
+                'plan_message': f'The active plan for {target["name"]} has no remaining quantity or CIF.' if exhausted else None,
+            })
+
+        if plan_selection == 'AMBIGUOUS_ACTIVE_PLAN':
+            return Response({
+                'default_search_mode': SearchMode.ACTUAL,
+                'default_allocation_basis': AllocationBasis.ACTUAL,
+                'default_item': None,
+                'planning_target_item': target,
+                'sion': sion,
+                'has_active_plan': False,
+                'plan_status': 'AMBIGUOUS_ACTIVE_PLAN',
+                'reason_code': 'AMBIGUOUS_ACTIVE_PLAN',
+                'message': f'Multiple current plans match {target["name"]}. Use Actual mode or correct the plan records.',
+                'plan_message': f'Multiple current plans match {target["name"]}. Use Actual mode or correct the plan records.',
+            })
+
+        item_name = target['name'] if target else 'this allotment'
+        return Response({
+            'default_search_mode': SearchMode.ACTUAL,
+            'default_allocation_basis': AllocationBasis.ACTUAL,
+            'default_item': None,
+            'planning_target_item': target,
+            'sion': sion,
+            'has_active_plan': False,
+            'plan_status': 'NO_ACTIVE_PLAN',
+            'reason_code': 'NO_ACTIVE_PLAN',
+            'message': f'No active plan is available for {item_name}.',
+            'plan_message': f'No active plan is available for {item_name}.',
+        })
 
     @action(detail=True, methods=['get'], url_path='available-licenses')
     def available_licenses(self, request, pk=None):
@@ -62,9 +249,43 @@ class AllotmentActionViewSet(ViewSet):
         - purchase_status: Filter by purchase status (comma-separated)
         - license_status: Filter by license status (active/expired/expiring_soon/all)
         - item_names: Filter by item name IDs (comma-separated)
+        - debit_based_on: 'actual' (default) or 'plan' — 'plan' switches the
+          entire grid to one row per LicenseItemPlan line instead of per
+          import item, so a single import item split across multiple
+          planned items (e.g. E132's Vegetable Oil -> PKO + Cheese) shows as
+          separate rows, each with only its own planned quantity/value.
+        - planned_item_names: (plan mode only) filter by ItemNameModel IDs
+          on the plan line itself (comma-separated)
         """
         allotment = get_object_or_404(
             AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
+        has_quantity_requirement = Decimal(str(allotment.required_quantity or 0)) > 0
+        remaining_qty = allotment.balanced_quantity if has_quantity_requirement else None
+        remaining_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
+        # A completed target has no usable candidate in either debit basis.
+        if (remaining_qty is not None and remaining_qty <= 0) or (remaining_cif is not None and remaining_cif <= 0):
+            return Response({
+                'allotment': AllotmentSerializer(allotment, context={'request': request}).data,
+                'available_items': [], 'count': 0, 'page': 1, 'page_size': 20,
+                'total_pages': 0, 'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
+            })
+
+        # 'plan' mode is a self-contained branch (see _available_licenses_plan_mode)
+        # deliberately NOT sharing filter-application code with the Actual-mode
+        # path below: duplicating the (small, stable) filter set there keeps
+        # this well-tested Actual-mode path completely untouched, which is the
+        # strongest guarantee that "Debit Based On = Actual" behaves exactly as
+        # it always has.
+        # Direct/legacy candidate calls are Actual unless a caller explicitly
+        # asks for Plan.  Route initialization sends its authoritative mode.
+        debit_based_on = (request.query_params.get('debit_based_on') or DebitBasis.ACTUAL).strip().upper()
+        if debit_based_on == DebitBasis.PLAN:
+            # The filter is the user's current planning target.  An
+            # allotment-level target is only the initial suggestion; it must
+            # not prevent switching to another item with an active plan.
+            return self._available_licenses_plan_mode(request, allotment)
+        if debit_based_on != DebitBasis.ACTUAL:
+            raise ValidationError({'code': 'INVALID_DEBIT_BASIS', 'message': 'Invalid debit basis.'})
 
         # Get query parameters for filtering
         search = request.query_params.get('search', '')
@@ -82,7 +303,7 @@ class AllotmentActionViewSet(ViewSet):
         is_restricted = request.query_params.get('is_restricted', '')
         purchase_status = request.query_params.get('purchase_status', '')
         license_status = request.query_params.get('license_status', '')
-        item_names = request.query_params.get('item_names', '')
+        item_names = request.query_params.get('item_id', '') or request.query_params.get('item_names', '')
         expiry_date_from = request.query_params.get('expiry_date_from', '')
         expiry_date_to = request.query_params.get('expiry_date_to', '')
 
@@ -95,11 +316,15 @@ class AllotmentActionViewSet(ViewSet):
             'license',
             'license__exporter',
             'license__port',
+            'license__notification_number',
+            'license__notes',
             'hs_code'
         ).prefetch_related(
             'items',
             'items__sion_norm_class',
-            'license__export_license'
+            'license__export_license',
+            'utilization_plans',
+            'utilization_plans__item_name'
         ).order_by('license__license_expiry_date', 'serial_number')
 
         # Apply search filter if provided
@@ -150,26 +375,13 @@ class AllotmentActionViewSet(ViewSet):
         if available_quantity_gte:
             try:
                 queryset = queryset.filter(available_quantity__gte=Decimal(available_quantity_gte))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, InvalidOperation):
                 pass
 
         if available_quantity_lte:
             try:
                 queryset = queryset.filter(available_quantity__lte=Decimal(available_quantity_lte))
-            except (ValueError, TypeError):
-                pass
-
-        # Apply available value filters
-        if available_value_gte:
-            try:
-                queryset = queryset.filter(available_value__gte=Decimal(available_value_gte))
-            except (ValueError, TypeError):
-                pass
-
-        if available_value_lte:
-            try:
-                queryset = queryset.filter(available_value__lte=Decimal(available_value_lte))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, InvalidOperation):
                 pass
 
         # Apply notification number filter
@@ -239,6 +451,49 @@ class AllotmentActionViewSet(ViewSet):
             if item_name_list:
                 queryset = queryset.filter(items__id__in=item_name_list).distinct()
 
+        # Actual mode's value range filters use the established live
+        # condition-pool value. Plan balances are deliberately absent from
+        # this branch; base eligibility remains the established positive raw
+        # quantity query above.
+        # (available_value_calculated, via the batched available_value_
+        # bulk_map — same source LicenseImportItemSerializer.get_available_
+        # value uses for display), never the stored `available_value`
+        # column. That column is only refreshed on certain saves and can go
+        # stale (e.g. after a licence's Balance CIF formula itself changes),
+        # which silently excluded licenses whose displayed value clearly
+        # satisfied the filter. Not annotatable in SQL (available_value_
+        # calculated is a Python property), so this filters in Python — but
+        # only AFTER every other (cheap, SQL) filter above has narrowed the
+        # candidate set first. This must stay the LAST filter applied: it's
+        # the only one that forces full materialization + a live Balance CIF
+        # computation for every remaining candidate, so running it before a
+        # selective filter (e.g. license_status=active) needlessly recomputes
+        # balances for licences that were always going to be excluded anyway.
+        if available_value_gte or available_value_lte:
+            min_value = None
+            max_value = None
+            if available_value_gte:
+                try:
+                    min_value = Decimal(available_value_gte)
+                except (ValueError, TypeError, InvalidOperation):
+                    min_value = None
+
+            if available_value_lte:
+                try:
+                    max_value = Decimal(available_value_lte)
+                except (ValueError, TypeError, InvalidOperation):
+                    max_value = None
+
+            from apps.license.services.condition_pool import available_value_bulk_map
+            candidates = list(queryset)
+            value_map = available_value_bulk_map(candidates)
+            matching_ids = [
+                item.id for item in candidates
+                if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
+                and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
+            ]
+            queryset = queryset.filter(id__in=matching_ids)
+
         # Pagination
         page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
         page_size = min(_safe_int(request.query_params.get('page_size'), default=20, minimum=1), 100)
@@ -246,13 +501,44 @@ class AllotmentActionViewSet(ViewSet):
         # Apply pagination first, then count (more efficient for large datasets)
         start = (page - 1) * page_size
         end = start + page_size
-        paginated_queryset = queryset[start:end]
+        # Materialize once — it's reused below (serializer + optional plan lookup);
+        # re-slicing the queryset twice would re-run the query and risks the two
+        # reads landing in a different order.
+        paginated_items = list(queryset[start:end])
 
         # Get total count - use a faster approximate count for large result sets
         total_count = queryset.count()
 
+        # Batch this page's live available_value/balance_cif_fc ONCE across
+        # every licence represented on the page (not once per item) — same
+        # technique as `live_balance_map` for Balance CIF list views. Without
+        # this, `LicenseImportItemSerializer.get_available_value` would fall
+        # back to the per-item live property, re-running a licence's full
+        # Balance CIF aggregate once per import item on that licence (a page
+        # of 100 items across 100 different licences would multiply badly).
+        from apps.license.services.condition_pool import available_value_bulk_map
+        available_value_map = available_value_bulk_map(paginated_items)
+
+        # Same batching for the two other per-item SerializerMethodFields
+        # that would otherwise run one query each per row on the page:
+        # `planned_quantity` (LicenseItemPlan) and `billed_no_boe`
+        # (LicenseTradeLine) — mirrors `available_value_map` above.
+        page_item_ids = [item.id for item in paginated_items]
+        from apps.license.services.plan_reporting import plan_map_for_import_items
+        plan_map = plan_map_for_import_items(page_item_ids)
+        from apps.license.services.item_usage import billed_no_boe_bulk_map
+        billed_no_boe_map = billed_no_boe_bulk_map(page_item_ids)
+
         # Serialize the data
-        license_serializer = LicenseImportItemSerializer(paginated_queryset, many=True, context={'request': request})
+        license_serializer = LicenseImportItemSerializer(
+            paginated_items, many=True,
+            context={
+                'request': request,
+                'available_value_map': available_value_map,
+                'plan_map': plan_map,
+                'billed_no_boe_map': billed_no_boe_map,
+            }
+        )
         allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
 
         # Add $20 buffer to required value to handle rounding issues
@@ -260,9 +546,415 @@ class AllotmentActionViewSet(ViewSet):
         allotment_data = allotment_serializer.data
         allotment_data['required_value_with_buffer'] = str(float(allotment_data.get('required_value', 0)) + 20)
 
+        available_items_data = license_serializer.data
+        requirement_qty = allotment.balanced_quantity if Decimal(str(allotment.required_quantity or 0)) > 0 else None
+        requirement_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
+
+        # Attach each item's utilization-plan status — the SAME
+        # Original/Used/Remaining `plan_status_for` computes for the
+        # `plan_exceeded` check in `allocate_items`. Always computed (not an
+        # opt-in toggle): the frontend's Max-allotment cap depends on
+        # `remaining_planned_*`, so it can't be a display-only extra.
+        # Batched once for the whole page via `plan_status_for_items` (fixed
+        # number of queries regardless of page size) rather than calling
+        # `plan_status_for` per item — that used to cost one extra group-
+        # lookup + four aggregates PER item (~315 queries / ~290ms measured
+        # for a 100-item page against a small dev DB).
+        from apps.license.services.plan_enforcement import plan_status_for_items
+        plan_status_map = plan_status_for_items(paginated_items)
+        for row, item in zip(available_items_data, paginated_items):
+            status = plan_status_map.get(item.id)
+            row['has_plan'] = status is not None
+            row['raw_available_qty'] = str(item.available_quantity or Decimal('0.000'))
+            row['raw_available_cif'] = str(available_value_map.get(item.id) or Decimal('0.00'))
+            if status is not None:
+                row['original_planned_quantity'] = str(status['original_quantity'])
+                row['used_planned_quantity'] = str(status['used_quantity'])
+                row['remaining_planned_quantity'] = str(status['remaining_quantity'])
+                row['original_planned_cif_fc'] = str(status['original_cif_fc'])
+                row['used_planned_cif_fc'] = str(status['used_cif_fc'])
+                row['remaining_planned_cif_fc'] = str(status['remaining_cif_fc'])
+                row['original_planned_qty'] = row['original_planned_quantity']
+                row['original_planned_cif'] = row['original_planned_cif_fc']
+                row['remaining_planned_qty'] = row['remaining_planned_quantity']
+                row['remaining_planned_cif'] = row['remaining_planned_cif_fc']
+                row['display_plan_qty'] = row['remaining_planned_quantity']
+                row['display_plan_cif'] = row['remaining_planned_cif_fc']
+                row['max_allotment_qty'] = row['remaining_planned_quantity']
+                row['max_allotment_cif'] = row['remaining_planned_cif_fc']
+                row['row_max_allotment_qty'] = str(min(Decimal(row['raw_available_qty']), status['remaining_quantity']))
+                row['row_max_allotment_cif'] = str(min(Decimal(row['raw_available_cif']), status['remaining_cif_fc']))
+                row['can_create_allotment'] = status['remaining_quantity'] > 0 and status['remaining_cif_fc'] > 0
+                row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
+                row['message'] = None if row['can_create_allotment'] else 'No planned quantity or value is available for the selected item.'
+            else:
+                row.update({
+                    'remaining_planned_qty': '0.000', 'remaining_planned_cif': '0.00',
+                    'display_plan_qty': '0.000', 'display_plan_cif': '0.00',
+                    'max_allotment_qty': '0.000', 'max_allotment_cif': '0.00',
+                    'row_max_allotment_qty': '0.000', 'row_max_allotment_cif': '0.00',
+                    'can_create_allotment': False, 'reason_code': 'NO_PLANNED_BALANCE',
+                    'message': 'No active plan is available for the selected item.',
+                })
+            # The candidate contract is authoritative for both modes.  A
+            # generic group status has no single plan line, so it is exposed
+            # as context only; selecting Follow Plan requires a concrete line
+            # supplied by the row's planning options.
+            active_target_plan = next(
+                (
+                    plan for plan in item.utilization_plans.all()
+                    if plan.item_name_id == allotment.planning_target_item_id
+                    and plan.is_active and not plan.is_deleted and not plan.is_cancelled
+                ),
+                None,
+            )
+            row.update(self._position_payload(
+                actual_qty=item.available_quantity,
+                actual_cif=available_value_map.get(item.id),
+                required_qty=requirement_qty,
+                required_cif=requirement_cif,
+                unit_price=allotment.unit_value_per_unit,
+                plan=active_target_plan,
+                item_name=row.get('description'),
+            ))
+
+        # A candidate is useful only when both independent ACTUAL caps can
+        # still debit.  This deliberately happens server-side after the live
+        # Balance CIF calculation, rather than relying on the stored value or
+        # asking the browser to hide a stale row.
+        available_items_data = [
+            row for row in available_items_data
+            if Decimal(row['basis_options']['actual']['effective_qty_limit']) > Decimal('0')
+            and Decimal(row['basis_options']['actual']['effective_cif_limit']) > Decimal('0')
+        ]
+        # The SQL quantity predicate above is only a cheap first pass.  Keep
+        # the response count honest for the page actually returned after the
+        # authoritative live-CIF exclusion.
+        total_count = len(available_items_data) if total_count == len(paginated_items) else total_count
+
         return Response({
             'allotment': allotment_data,
-            'available_items': license_serializer.data,
+            'available_items': available_items_data,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size
+        })
+
+    def _available_licenses_plan_mode(self, request, allotment):
+        """
+        Plan-mode variant of `available_licenses`: one row per
+        `LicenseItemPlan` line instead of per `LicenseImportItemsModel` row.
+
+        Mirrors the same filter set as the Actual-mode branch above, just
+        reached through `import_item__` (one extra join hop, since most of
+        these fields live on the underlying import item / its licence, not
+        on `LicenseItemPlan` itself). Quantity/value range filters target
+        A plan line's displayed residual is calculated from its immutable
+        target and its linked allocation ledger entries.  The legacy stored
+        ``remaining_*`` columns are deliberately not used as a filter or
+        allocation cap.
+
+        The plan-line ledger residual is the authoritative "how much of this
+        planning item is left" once Auto-Plan has generated it; it is never
+        recalculated from the shared import item's `available_quantity`.
+        `planned_quantity`/`planned_cif_fc` stay the FIXED original target.
+        """
+        from apps.license.models import LicenseItemPlan
+
+        search = request.query_params.get('search', '')
+        license_number = request.query_params.get('license_number', '')
+        exporter = request.query_params.get('exporter', '')
+        exclude_exporter = request.query_params.get('exclude_exporter', '')
+        description = request.query_params.get('description', '')
+        planned_quantity_gte = request.query_params.get('available_quantity_gte', '')
+        planned_quantity_lte = request.query_params.get('available_quantity_lte', '')
+        planned_cif_gte = request.query_params.get('available_value_gte', '')
+        planned_cif_lte = request.query_params.get('available_value_lte', '')
+        notification_number = request.query_params.get('notification_number', '')
+        norm_class = request.query_params.get('norm_class', '')
+        hs_code = request.query_params.get('hs_code', '')
+        is_restricted = request.query_params.get('is_restricted', '')
+        purchase_status = request.query_params.get('purchase_status', '')
+        license_status = request.query_params.get('license_status', '')
+        item_names = request.query_params.get('planning_target_item_id', '') or request.query_params.get('item_id', '') or request.query_params.get('item_names', '')
+        # Deprecated alias: normalize external callers into the sole item filter.
+        planned_item_names = request.query_params.get('planned_item_names', '')
+        if not item_names and planned_item_names:
+            item_names = planned_item_names
+        requested_sion = request.query_params.get('sion', '')
+        expiry_date_from = request.query_params.get('expiry_date_from', '')
+        expiry_date_to = request.query_params.get('expiry_date_to', '')
+
+        queryset = LicenseItemPlan.objects.filter(
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        ).select_related(
+            'import_item',
+            'import_item__license',
+            'import_item__license__exporter',
+            'import_item__license__port',
+            'import_item__license__notification_number',
+            'import_item__license__notes',
+            'import_item__hs_code',
+            'item_name',
+        ).prefetch_related(
+            'import_item__items',
+            'import_item__items__sion_norm_class',
+            'import_item__license__export_license',
+            # LicenseImportItemSerializer always exposes planning_options.
+            # PLAN rows serialise the underlying import item too, so load the
+            # related lines and their labels in the original candidate query
+            # rather than issuing one plan query and one item-name query per
+            # response row.
+            'import_item__utilization_plans__item_name',
+        ).order_by('import_item__license__license_expiry_date', 'import_item__serial_number')
+
+        if search:
+            queryset = queryset.filter(
+                Q(import_item__license__license_number__icontains=search) |
+                Q(import_item__description__icontains=search) |
+                Q(import_item__license__exporter__name__icontains=search)
+            )
+
+        if license_number:
+            queryset = queryset.filter(import_item__license__license_number__icontains=license_number)
+
+        if description:
+            exact_queryset = queryset.filter(
+                Q(import_item__items__name__iexact=description) |
+                Q(import_item__description__iexact=description) |
+                Q(import_item__hs_code__product_description__iexact=description)
+            ).distinct()
+            if exact_queryset.exists():
+                queryset = exact_queryset
+            else:
+                queryset = queryset.filter(
+                    Q(import_item__items__name__icontains=description) |
+                    Q(import_item__description__icontains=description) |
+                    Q(import_item__hs_code__hs_code__icontains=description) |
+                    Q(import_item__hs_code__product_description__icontains=description)
+                ).distinct()
+
+        if exporter:
+            queryset = queryset.filter(import_item__license__exporter_id=exporter)
+
+        if notification_number:
+            queryset = queryset.filter(import_item__license__notification_number__code=notification_number)
+
+        if norm_class:
+            queryset = queryset.filter(import_item__license__export_license__norm_class_id=norm_class)
+
+        if hs_code:
+            queryset = queryset.filter(import_item__hs_code__hs_code__startswith=hs_code)
+
+        if exclude_exporter:
+            queryset = queryset.exclude(import_item__license__exporter_id=exclude_exporter)
+
+        if is_restricted and is_restricted.lower() != 'all':
+            if is_restricted.lower() in ['true', '1', 'yes']:
+                queryset = queryset.filter(import_item__is_restricted=True)
+            elif is_restricted.lower() in ['false', '0', 'no']:
+                queryset = queryset.filter(import_item__is_restricted=False)
+
+        if purchase_status:
+            status_list = [s.strip() for s in purchase_status.split(',') if s.strip()]
+            if status_list:
+                queryset = queryset.filter(import_item__license__purchase_status__code__in=status_list)
+
+        if license_status and license_status.lower() != 'all':
+            from django.utils import timezone
+            from datetime import timedelta
+            today = timezone.now().date()
+            if license_status.lower() == 'active':
+                queryset = queryset.filter(import_item__license__license_expiry_date__gte=today)
+            elif license_status.lower() == 'expired':
+                queryset = queryset.filter(import_item__license__license_expiry_date__lt=today)
+            elif license_status.lower() == 'expiring_soon':
+                expiring_date = today + timedelta(days=30)
+                queryset = queryset.filter(
+                    import_item__license__license_expiry_date__gte=today,
+                    import_item__license__license_expiry_date__lte=expiring_date,
+                )
+
+        if expiry_date_from:
+            try:
+                from datetime import datetime as _dt
+                queryset = queryset.filter(
+                    import_item__license__license_expiry_date__gte=_dt.strptime(expiry_date_from, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
+
+        if expiry_date_to:
+            try:
+                from datetime import datetime as _dt
+                queryset = queryset.filter(
+                    import_item__license__license_expiry_date__lte=_dt.strptime(expiry_date_to, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
+
+        if item_names:
+            item_name_list = [int(i.strip()) for i in item_names.split(',') if i.strip().isdigit()]
+            if item_name_list:
+                queryset = queryset.filter(item_name_id__in=item_name_list)
+
+        if requested_sion:
+            queryset = queryset.filter(
+                import_item__license__export_license__norm_class__norm_class=requested_sion
+            )
+
+        # Planned Item Name filter — the new filter this Plan-mode branch
+        # exists for: narrows to plan lines tagged with one of the selected
+        # planning items (e.g. only the Palm Kernel Oil split rows).
+
+        # A line's live balance is immutable planned capacity minus ledger
+        # debits recorded against its ``plan_line`` FK.  It cannot be safely
+        # filtered on the old mutable remaining_* columns.
+        from apps.license.services.plan_enforcement import plan_line_status_for_many
+        # PLAN eligibility is ledger-derived and therefore cannot safely be
+        # expressed as a stored-column SQL predicate.  The status helper has
+        # to inspect every filtered plan line, so materialise that ordered
+        # scope once and reuse it for status calculation, pagination and the
+        # response total.  Previously the helper materialised ``queryset``
+        # and the view then issued a second filtered slice query plus a count
+        # query.  Reusing the same immutable read removes those redundant
+        # round trips without changing the candidate set or its order.
+        filtered_plans = list(queryset)
+        plan_statuses = plan_line_status_for_many(filtered_plans)
+        def _decimal_filter(value):
+            try:
+                return Decimal(value) if value else None
+            except (ValueError, TypeError, InvalidOperation):
+                return None
+
+        min_qty, max_qty = _decimal_filter(planned_quantity_gte), _decimal_filter(planned_quantity_lte)
+        min_cif, max_cif = _decimal_filter(planned_cif_gte), _decimal_filter(planned_cif_lte)
+        active_plan_ids = []
+        for plan_id, plan_status in plan_statuses.items():
+            remaining_qty = plan_status['remaining_quantity']
+            remaining_cif = plan_status['remaining_cif_fc']
+            if remaining_qty <= 0 or remaining_cif <= 0:
+                continue
+            active_plan_ids.append(plan_id)
+        active_plan_id_set = set(active_plan_ids)
+
+        # Pagination — same slice-then-count pattern as Actual mode.
+        page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
+        page_size = min(_safe_int(request.query_params.get('page_size'), default=20, minimum=1), 100)
+        start = (page - 1) * page_size
+        end = start + page_size
+        eligible_plans = [plan for plan in filtered_plans if plan.id in active_plan_id_set]
+        paginated_plans = eligible_plans[start:end]
+        total_count = len(eligible_plans)
+
+        # Serialize each row's underlying import item through the EXISTING
+        # serializer — license/HS/description/exporter/condition/items_detail
+        # all come for free, zero duplicated serialization logic — then
+        # overlay the plan-specific fields. `available_quantity`/
+        # `balance_cif_fc` are ALIASED to the plan line's own quantity/value
+        # so the existing stat-bar / Max-allocation frontend code keeps
+        # working unchanged in Plan mode too; the new, honest
+        # `planned_quantity`/`planned_cif_fc`/`planned_item_name` fields are
+        # ALSO included for the new column and mode-aware labels.
+        import_items = [plan.import_item for plan in paginated_plans]
+        from apps.license.services.condition_pool import available_value_bulk_map
+        available_value_map = available_value_bulk_map(import_items)
+        from apps.license.services.item_usage import billed_no_boe_bulk_map
+        billed_no_boe_map = billed_no_boe_bulk_map([ii.id for ii in import_items])
+
+        license_serializer = LicenseImportItemSerializer(
+            import_items, many=True,
+            context={
+                'request': request,
+                'available_value_map': available_value_map,
+                'plan_map': {},  # Row 2.5's aggregate plan-status banner doesn't
+                                 # apply to an already-per-plan-line row — see
+                                 # the frontend, which only renders it in Actual mode.
+                'billed_no_boe_map': billed_no_boe_map,
+            }
+        )
+        allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
+        allotment_data = allotment_serializer.data
+        allotment_data['required_value_with_buffer'] = str(float(allotment_data.get('required_value', 0)) + 20)
+
+        available_items_data = license_serializer.data
+        requirement_qty = allotment.balanced_quantity if Decimal(str(allotment.required_quantity or 0)) > 0 else None
+        requirement_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
+        for row, plan in zip(available_items_data, paginated_plans):
+            # `id` must be unique PER ROW (two split rows share the same
+            # underlying import item) — the frontend keys React lists and its
+            # allocation-draft state off `id`, so this has to be the plan
+            # line's own id, not the import item's. `import_item_id` carries
+            # the real underlying item for the Confirm-allot submission,
+            # which must always target the actual import item regardless of
+            # which split row triggered it (allocation logic itself is
+            # unchanged — see AllotmentAction.tsx's allocateMutation).
+            # A missing live remaining balance is not permission to fall back
+            # to an historical plan target or raw source availability.
+            plan_status = plan_statuses[plan.id]
+            remaining_qty = plan_status['remaining_quantity']
+            remaining_cif = plan_status['remaining_cif_fc']
+            row['id'] = plan.id
+            row['import_item_id'] = plan.import_item_id
+            row['planned_item_name'] = plan.item_name.name if plan.item_name_id else None
+            row['planned_quantity'] = str(plan.planned_quantity)     # fixed original target
+            row['planned_cif_fc'] = str(plan.planned_cif_fc)
+            row['remaining_quantity'] = str(remaining_qty)           # live, independently-draining balance
+            row['remaining_cif_fc'] = str(remaining_cif)
+            row['available_quantity'] = str(remaining_qty)           # aliased for the existing stat-bar/Max-allocation UI
+            row['balance_cif_fc'] = str(remaining_cif)
+            row['has_active_plan'] = True
+            row['remaining_planned_qty'] = str(remaining_qty)
+            row['remaining_planned_cif'] = str(remaining_cif)
+            row['original_planned_qty'] = str(plan.planned_quantity)
+            row['original_planned_cif'] = str(plan.planned_cif_fc)
+            row['display_plan_qty'] = str(remaining_qty)
+            row['display_plan_cif'] = str(remaining_cif)
+            row['max_allotment_qty'] = str(max(remaining_qty, Decimal('0.000')))
+            row['max_allotment_cif'] = str(max(remaining_cif, Decimal('0.00')))
+            row['row_max_allotment_qty'] = str(min(max(remaining_qty, Decimal('0.000')), Decimal(str(plan.import_item.available_quantity or 0))))
+            row['row_max_allotment_cif'] = str(min(max(remaining_cif, Decimal('0.00')), Decimal(str(available_value_map.get(plan.import_item_id) or 0))))
+            row['can_create_allotment'] = remaining_qty > 0 and remaining_cif > 0
+            row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
+            row['message'] = None if row['can_create_allotment'] else f'No planned quantity or value is available for {row["planned_item_name"] or row["description"]}.'
+            row.update(self._position_payload(
+                actual_qty=plan.import_item.available_quantity,
+                actual_cif=available_value_map.get(plan.import_item_id),
+                required_qty=requirement_qty,
+                required_cif=requirement_cif,
+                unit_price=allotment.unit_value_per_unit,
+                plan=plan,
+                plan_status=plan_status,
+                item_name=row['planned_item_name'] or row['description'],
+            ))
+
+        # PLAN range filters and eligibility use the canonical PLAN ceiling,
+        # not the historical plan target or a residual that can exceed live
+        # licence/allotment availability.  This also removes rows immediately
+        # once any mandatory PLAN cap is exhausted.
+        def _plan_candidate_is_usable(row):
+            option = row['basis_options']['plan']
+            qty = Decimal(option['effective_qty_limit'])
+            cif = Decimal(option['effective_cif_limit'])
+            if not option['enabled'] or qty <= 0 or cif <= 0:
+                return False
+            if min_qty is not None and qty < min_qty:
+                return False
+            if max_qty is not None and qty > max_qty:
+                return False
+            if min_cif is not None and cif < min_cif:
+                return False
+            if max_cif is not None and cif > max_cif:
+                return False
+            return True
+
+        available_items_data = [row for row in available_items_data if _plan_candidate_is_usable(row)]
+        total_count = len(available_items_data) if total_count == len(paginated_plans) else total_count
+
+        return Response({
+            'allotment': allotment_data,
+            'available_items': available_items_data,
             'count': total_count,
             'page': page,
             'page_size': page_size,
@@ -270,8 +962,28 @@ class AllotmentActionViewSet(ViewSet):
         })
 
     @action(detail=True, methods=['post'], url_path='allocate-items')
-    @transaction.atomic
     def allocate_items(self, request, pk=None):
+        """Public allocation boundary: never leak internal database failures."""
+        first = request.data.get('allocations', [None]) if isinstance(request.data, dict) else [None]
+        first = first[0] if isinstance(first, list) and first and isinstance(first[0], dict) else {}
+        try:
+            return self._allocate_items_atomic(request, pk=pk)
+        except Exception:
+            logger.exception(
+                "Allocation failed",
+                extra={
+                    "allotment_id": pk,
+                    "licence_item_id": first.get("item_id"),
+                    "plan_line_id": first.get("plan_line_id"),
+                },
+            )
+            return Response(
+                {"error": "Failed to allocate licence item."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @transaction.atomic
+    def _allocate_items_atomic(self, request, pk=None):
         """
         Allocate selected license import items to this allotment.
 
@@ -282,36 +994,253 @@ class AllotmentActionViewSet(ViewSet):
                     "item_id": 123,
                     "qty": 100.00,
                     "cif_fc": 1000.00,
-                    "cif_inr": 83000.00
+                    "cif_inr": 83000.00,
+                    "plan_line_id": 456   # optional — LicenseItemPlan row id
+                                          # this allocation was made against
+                                          # (sent by the Plan-mode grid);
+                                          # decrements that line's own
+                                          # immutable plan target minus the
+                                          # linked allocation ledger entries.
                 },
                 ...
             ]
         }
         """
-        allotment = get_object_or_404(AllotmentModel, pk=pk)
+        # The allotment owns the aggregate quantity/CIF caps.  Lock it before
+        # reading balances so allocations against distinct licence items
+        # serialize instead of both spending the same remaining budget.
+        allotment = get_object_or_404(AllotmentModel.objects.select_for_update(), pk=pk)
+        # Never rely on a candidate response or cached model property from a
+        # prior request.  This locked read is the replay/concurrency gate.
+        committed = AllotmentItems.objects.filter(allotment_id=allotment.id).aggregate(
+            qty=Sum('qty'),
+            cif=Sum('cif_fc'),
+        )
+        committed_qty = Decimal(str(committed['qty'] or 0))
+        committed_cif = Decimal(str(committed['cif'] or 0))
+        remaining_requirement_qty = max(Decimal(str(allotment.required_quantity or 0)) - committed_qty, Decimal('0.000'))
+        remaining_requirement_cif = max(Decimal(str(allotment.required_value or 0)) - committed_cif, Decimal('0.00'))
+        if remaining_requirement_qty <= 0 or (allotment.required_value > 0 and remaining_requirement_cif <= 0):
+            return Response({
+                'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
+                'detail': 'This allotment is already fully allocated.',
+                'error': 'This allotment is already fully allocated.',
+            }, status=status.HTTP_400_BAD_REQUEST)
         allocations = request.data.get('allocations', [])
-
-        if not allocations:
+        if not isinstance(allocations, list) or not allocations:
             return Response(
-                {'error': 'No allocations provided'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'code': 'INVALID_ALLOCATIONS', 'error': 'allocations must be a non-empty list.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
+        # Accept the legacy per-line debit field emitted by the mounted UI as
+        # well as the explicit top-level dual-mode contract.  Normalize once
+        # before validation; never infer a basis from item IDs or balances.
+        first_allocation = allocations[0] if isinstance(allocations[0], dict) else {}
+        explicit_search_mode = (
+            request.data.get('search_mode')
+            or request.data.get('debit_based_on')
+            or first_allocation.get('search_mode')
+            or first_allocation.get('debit_based_on')
+        )
+        # Preserve the pre-dual-mode endpoint contract for integrations that
+        # have not yet sent identity/mode fields: a legacy plan_line_id is a
+        # Plan debit; every other legacy allocation is an Actual debit.  New
+        # clients must send explicit SearchMode and AllocationBasis.
+        legacy_basis = DebitBasis.PLAN if first_allocation.get('plan_line_id') else DebitBasis.ACTUAL
+        search_mode = str(explicit_search_mode or legacy_basis).strip().upper()
+        allocation_basis = str(
+            request.data.get('allocation_basis')
+            or first_allocation.get('allocation_basis')
+            or (search_mode if explicit_search_mode else legacy_basis)
+        ).strip().upper()
+        # The available-items License Status filter is part of the allocation
+        # intent as well: an explicit "all" permits the user to debit an
+        # expired licence surfaced by that filter.  Legacy callers retain the
+        # historical safety default and are still rejected for expiry.
+        requested_license_status = str(
+            request.data.get('license_status')
+            or first_allocation.get('license_status')
+            or 'active'
+        ).strip().lower()
+        if search_mode not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
+            return Response({'code': 'INVALID_DEBIT_BASIS', 'error': 'Invalid debit basis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if allocation_basis not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
+            return Response({'code': 'INVALID_ALLOCATION_BASIS', 'error': 'Invalid allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if search_mode == DebitBasis.PLAN and allocation_basis != DebitBasis.PLAN:
+            return Response({'code': 'PLAN_MODE_REQUIRES_PLAN_BASIS', 'error': 'Plan mode requires the Plan allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
         created_items = []
         errors = []
 
         for allocation in allocations:
+            if not isinstance(allocation, dict):
+                errors.append({'code': 'INVALID_ALLOCATION', 'error': 'Each allocation must be an object.'})
+                continue
             item_id = allocation.get('item_id')
-            qty = Decimal(str(allocation.get('qty', 0)))
-            cif_fc = Decimal(str(allocation.get('cif_fc', 0)))
-            cif_inr = Decimal(str(allocation.get('cif_inr', 0)))
+            try:
+                qty = Decimal(str(allocation.get('qty', 0)))
+                cif_fc = Decimal(str(allocation.get('cif_fc', 0)))
+                cif_inr = Decimal(str(allocation.get('cif_inr', 0)))
+            except (InvalidOperation, TypeError, ValueError):
+                errors.append({
+                    'item_id': item_id,
+                    'code': 'INVALID_ALLOCATION_AMOUNT',
+                    'error': 'Quantity and CIF values must be valid numbers.',
+                })
+                continue
+
+            final_settlement_request = (
+                qty == remaining_requirement_qty
+                and cif_fc <= remaining_requirement_cif + Decimal('20.00')
+            )
+            if qty > remaining_requirement_qty or (
+                allotment.required_value > 0
+                and cif_fc > remaining_requirement_cif
+                and not final_settlement_request
+            ):
+                errors.append({
+                    'item_id': item_id,
+                    'code': 'ALLOTMENT_REQUIREMENT_EXHAUSTED',
+                    'error': 'Allocation exceeds the remaining allotment requirement.',
+                })
+                continue
 
             try:
+                unit_price = Decimal(str(allotment.unit_value_per_unit or 0))
+                canonical_cif = (qty * unit_price).quantize(Decimal('0.01'), rounding=ROUND_UP)
                 # Get the license import item. select_for_update locks the row for
                 # the read-check-create sequence (the whole action runs in one
                 # transaction via @transaction.atomic), so two concurrent
                 # allocations cannot both pass the plan/availability cap.
                 license_item = LicenseImportItemsModel.objects.select_for_update().get(id=item_id)
+
+                if search_mode == DebitBasis.ACTUAL and explicit_search_mode:
+                    actual_item_id = allocation.get('actual_item_id') or request.data.get('actual_item_id')
+                    if not actual_item_id or not license_item.items.filter(id=actual_item_id).exists():
+                        errors.append({
+                            'item_id': item_id,
+                            'code': 'ACTUAL_ITEM_MISMATCH',
+                            'error': 'The selected item does not match this actual licence item.',
+                        })
+                        continue
+
+                # Plan-mode allocations name an exact canonical plan child.
+                # Lock and validate it before consulting raw licence capacity:
+                # raw availability is informational and can never revive a
+                # fully consumed (or absent) planned balance.
+                plan_line_id = allocation.get('plan_line_id')
+                locked_plan_line = None
+                if allocation_basis == DebitBasis.ACTUAL and plan_line_id:
+                    errors.append({
+                        'item_id': item_id,
+                        'code': 'ACTUAL_ITEM_MISMATCH',
+                        'error': 'Actual allocations must not include a Planning Target Item plan line.',
+                    })
+                    continue
+                if allocation_basis == DebitBasis.PLAN and not plan_line_id:
+                    errors.append({
+                        'item_id': item_id,
+                        'code': 'PLANNING_TARGET_MISMATCH',
+                        'error': 'A Planning Target Item plan line is required for this allotment.',
+                    })
+                    continue
+                if allocation_basis == DebitBasis.PLAN and plan_line_id:
+                    from apps.license.models import LicenseItemPlan
+                    try:
+                        locked_plan_line = LicenseItemPlan.objects.select_for_update().get(
+                            id=plan_line_id, import_item_id=item_id,
+                        )
+                    except LicenseItemPlan.DoesNotExist:
+                        errors.append({'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
+                                       'error': 'No active plan is available for the selected item.',
+                                       'max_qty': '0.000', 'max_cif': '0.00'})
+                        continue
+                    selected_target_id = allocation.get('planning_target_item_id') or request.data.get('planning_target_item_id')
+                    if selected_target_id and str(locked_plan_line.item_name_id) != str(selected_target_id):
+                        errors.append({
+                            'item_id': item_id,
+                            'code': 'PLANNING_TARGET_MISMATCH',
+                            'error': 'The selected item does not match the selected Planning Target Item.',
+                        })
+                        continue
+                    from apps.license.services.plan_enforcement import plan_line_status_for
+                    selected_plan_status = plan_line_status_for(locked_plan_line)
+                    remaining_plan_qty = selected_plan_status['remaining_quantity']
+                    remaining_plan_cif = selected_plan_status['remaining_cif_fc']
+                    if remaining_plan_qty <= 0 or remaining_plan_cif <= 0:
+                        item_name = locked_plan_line.item_name.name if locked_plan_line.item_name_id else 'The selected item'
+                        if remaining_plan_qty <= 0 and remaining_plan_cif <= 0:
+                            code = 'NO_PLANNED_BALANCE'
+                            message = f'{item_name} has no remaining planned quantity or value.'
+                        elif remaining_plan_qty <= 0:
+                            code = 'NO_PLANNED_QTY_BALANCE'
+                            message = f'{item_name} has no remaining planned quantity.'
+                        else:
+                            code = 'NO_PLANNED_CIF_BALANCE'
+                            message = f'{item_name} has no remaining planned value.'
+                        errors.append({'item_id': item_id, 'code': code,
+                                       'message': message, 'error': message,
+                                       'item_name': item_name, 'allocation_basis': 'PLAN',
+                                       'max_qty': str(max(remaining_plan_qty, Decimal('0.000'))),
+                                       'max_cif': str(max(remaining_plan_cif, Decimal('0.00')))})
+                        continue
+                    if qty <= 0 or cif_fc <= 0:
+                        errors.append({'item_id': item_id, 'code': 'INVALID_ALLOTMENT_AMOUNT',
+                                       'error': 'Quantity and value must be greater than zero.'})
+                        continue
+                    if qty > remaining_plan_qty or cif_fc > remaining_plan_cif:
+                        errors.append({'item_id': item_id,
+                                       'code': 'ALLOTMENT_QTY_EXCEEDS_PLAN' if qty > remaining_plan_qty else 'ALLOTMENT_CIF_EXCEEDS_PLAN',
+                                       'error': 'Requested allotment exceeds the remaining planned balance.',
+                                       'max_qty': str(remaining_plan_qty), 'max_cif': str(remaining_plan_cif)})
+                        continue
+
+                # Reject allocations against an already-expired license. Computed
+                # directly off license_expiry_date (the same comparison the
+                # license_status=active/expired filters above use) rather than
+                # the cached LicenseFlags.is_expired column, so this can't be
+                # fooled by a stale flag between nightly recalculation runs.
+                from django.utils import timezone
+                license_expiry_date = license_item.license.license_expiry_date
+                if (requested_license_status != 'all'
+                        and license_expiry_date and license_expiry_date < timezone.now().date()):
+                    errors.append({
+                        'item_id': item_id,
+                        'error': f'License has expired on {license_expiry_date}. Cannot allocate against an expired license.'
+                    })
+                    continue
+
+                # Legacy allocations without a unit price have independent
+                # CIF accounting.  Where a canonical price exists, Qty and
+                # CIF are an inseparable pair and the submitted value must
+                # match it exactly.  Run this after expiry/identity checks so
+                # a prohibited licence never reports a misleading amount
+                # validation first.
+                remaining_required_qty = max(
+                    Decimal(str(allotment.required_quantity)) - Decimal(str(allotment.alloted_quantity)), Decimal('0.000')
+                )
+                remaining_required_cif = max(
+                    Decimal(str(allotment.required_value)) - Decimal(str(allotment.allotted_value)), Decimal('0.00')
+                )
+                final_settlement = (
+                    qty == remaining_required_qty
+                    and (
+                        # Preserve the existing one-cent closing settlement.
+                        (cif_fc == remaining_required_cif
+                         and abs(canonical_cif - remaining_required_cif) <= Decimal('0.01'))
+                        # A whole-unit close may instead use the canonical
+                        # CIF pair up to the commercial $20 buffer.
+                        or (cif_fc == canonical_cif
+                            and canonical_cif <= remaining_required_cif + Decimal('20.00'))
+                    )
+                )
+                if qty <= 0 or cif_fc <= 0 or (unit_price > 0 and cif_fc != canonical_cif and not final_settlement):
+                    errors.append({
+                        'item_id': item_id,
+                        'code': 'ALLOCATION_PAIR_MISMATCH',
+                        'error': 'CIF must equal the canonical unit price multiplied by the allocated quantity.',
+                        'expected_cif_fc': str(canonical_cif),
+                    })
+                    continue
 
                 # Use the stored available_quantity field — this is the value the
                 # user sees in the Available License Items list (AVAIL QTY column)
@@ -326,64 +1255,35 @@ class AllotmentActionViewSet(ViewSet):
                 if actual_available_qty < qty:
                     errors.append({
                         'item_id': item_id,
+                        'code': 'ALLOTMENT_QTY_EXCEEDS_ACTUAL' if allocation_basis == DebitBasis.ACTUAL else 'INSUFFICIENT_AVAILABLE_QTY',
                         'error': f'Insufficient available quantity. Available: {actual_available_qty}, Requested: {qty}'
                     })
                     continue
 
-                # Check if available CIF FC is sufficient
-                # PRIORITY 1: Check is_restricted flag
-                # If is_restricted=False (not restricted), always use license-level balance (balance_cif_fc)
-                # If is_restricted=True AND has restriction percentage, use restricted balance logic
-
-                # Get calculated balance
-                balance_cif_fc = Decimal(str(license_item.balance_cif_fc or 0))
-
-                # PRIORITY 1: Check is_restricted flag
-                if not license_item.is_restricted:
-                    # Non-restricted item: always use balance_cif_fc from property
-                    available_cif = balance_cif_fc
-                else:
-                    # is_restricted=True: check if item has restriction percentage
-                    # Check if license is exception (098/2009 or Conversion)
-                    notif_code = (
-                        license_item.license.notification_number.code
-                        if license_item.license and license_item.license.notification_number_id
-                        else None
-                    )
-                    is_exception = (
-                        license_item.license and (
-                            notif_code == "098/2009" or
-                            (license_item.license.purchase_status and license_item.license.purchase_status.code == "CO")
-                        )
-                    )
-
-                    # Check if item has restrictions
-                    has_restriction = license_item.items.filter(
-                        sion_norm_class__isnull=False,
-                        restriction_percentage__gt=0
-                    ).exists()
-
-                    # Determine which value to use
-                    if has_restriction and not is_exception:
-                        # Restricted item, non-exception license: use stored available_value
-                        stored_available = Decimal(str(license_item.available_value or 0))
-                        # If available_value is not set (0 or NULL), fall back to balance_cif_fc
-                        if stored_available > 0:
-                            available_cif = stored_available
-                        else:
-                            # Not yet processed by update_restriction_balances, use calculated
-                            available_cif = balance_cif_fc
-                    else:
-                        # Exception license or no restriction percentage: use calculated balance_cif_fc
-                        available_cif = balance_cif_fc
-
-                # CRITICAL: available_cif can NEVER exceed balance_cif_fc
-                if available_cif > balance_cif_fc:
-                    available_cif = balance_cif_fc
+                # Check if available CIF FC is sufficient — always against the
+                # LIVE, centralized value (`available_value_calculated`, aka
+                # `balance_cif_fc`), the same one the Available Value column
+                # and the Allotment "available-licenses" filter use. That
+                # property already branches on `condition_type` (%/AU/open)
+                # via `condition_pool` to apply restriction pooling — it does
+                # NOT need a separate is_restricted / ItemNameModel.
+                # restriction_percentage / "exception license" check here.
+                # That older signal set predates the condition_type model and
+                # is stale by design elsewhere (see the "is_restricted is no
+                # longer set from ItemNameModel.restriction_percentage"
+                # comments in license/signals.py, license/tasks.py, and
+                # license/utils/item_matcher.py) — it was simply never
+                # migrated in this one call site. Worse, it trusted the
+                # stored `available_value` column outright whenever it was
+                # merely non-zero (treating "non-zero" as "freshly
+                # processed"), which let genuinely stale values through
+                # un-checked and wrongly rejected valid allocations.
+                available_cif = Decimal(str(license_item.available_value_calculated or 0))
 
                 if available_cif < cif_fc:
                     errors.append({
                         'item_id': item_id,
+                        'code': 'ALLOTMENT_CIF_EXCEEDS_ACTUAL' if allocation_basis == DebitBasis.ACTUAL else 'INSUFFICIENT_AVAILABLE_CIF',
                         'error': f'Insufficient available CIF FC. Available: {available_cif:.2f}, Requested: {cif_fc}'
                     })
                     continue
@@ -401,71 +1301,71 @@ class AllotmentActionViewSet(ViewSet):
                     })
                     continue
 
-                # --- Utilization-plan cap (per description-group) -----------
-                # A product is planned by its description group (summed across
-                # serial numbers). The cumulative allotment across the WHOLE
-                # group (already allotted + this request) may not exceed the
-                # group's total planned qty / CIF-FC. Exceeding it returns a
-                # `plan_exceeded` error so the frontend can open the planner.
-                # Groups WITHOUT any plan line fall through to existing behavior.
-                from django.db.models import Sum as _Sum, DecimalField as _DecimalField, Value as _Value
-                from django.db.models.functions import Coalesce as _Coalesce
-                from apps.license.models import LicenseItemPlan as _LIP
-                from apps.license.services.plan_grouping import group_ids_of as _group_ids_of
-                _gids = _group_ids_of(license_item)
-                _group_plans = _LIP.objects.filter(import_item_id__in=_gids)
-                plan_agg = _group_plans.aggregate(
-                    pq=_Coalesce(_Sum('planned_quantity'), _Value(Decimal('0')), output_field=_DecimalField()),
-                    pv=_Coalesce(_Sum('planned_cif_fc'), _Value(Decimal('0')), output_field=_DecimalField()),
+                # The allotment's remaining CIF is an independent legal
+                # ceiling.  Qty and CIF must both be inside the intersection
+                # of licence, plan (when selected), and allotment balances.
+                remaining_value = max(
+                    Decimal(str(allotment.required_value)) - Decimal(str(allotment.allotted_value)),
+                    Decimal('0.00'),
                 )
-                if _group_plans.exists():
-                    from apps.license.services.plan_enforcement import (
-                        live_allotted_qty_for, live_allotted_value_for,
-                    )
-                    already_qty = live_allotted_qty_for(_gids)
-                    already_val = live_allotted_value_for(_gids)
-                    planned_qty = Decimal(str(plan_agg['pq'] or 0))
-                    planned_val = Decimal(str(plan_agg['pv'] or 0))
-                    if (already_qty + qty) > planned_qty or (already_val + cif_fc) > planned_val:
-                        errors.append({
-                            'item_id': item_id,
-                            'plan_exceeded': True,
-                            'error': 'Allocation exceeds the utilization plan for this item.',
-                            'planned_quantity': str(planned_qty),
-                            'planned_cif_fc': str(planned_val),
-                            'already_allotted_quantity': str(already_qty),
-                            'already_allotted_cif_fc': str(already_val),
-                            'requested_quantity': str(qty),
-                            'requested_cif_fc': str(cif_fc),
-                            'remaining_planned_quantity': str(planned_qty - already_qty),
-                            'remaining_planned_cif_fc': str(planned_val - already_val),
-                        })
-                        continue
-                # ------------------------------------------------------------
+                if (
+                    allotment.required_value > 0
+                    and cif_fc > remaining_value
+                    and not final_settlement
+                ):
+                    errors.append({
+                        'item_id': item_id,
+                        'code': 'ALLOTMENT_REQUIREMENT_EXCEEDED',
+                        'error': f'Allocation exceeds remaining allotment CIF. Balance: {remaining_value}, Requested: {cif_fc}',
+                        'max_cif': str(remaining_value),
+                    })
+                    continue
 
                 # Check if this item is already allocated to this allotment
-                existing = AllotmentItems.objects.filter(
+                existing_query = AllotmentItems.objects.filter(
                     allotment=allotment,
-                    item=license_item
-                ).first()
+                    item=license_item,
+                )
+                # Split plan lines are distinct ledger identities.  Merging
+                # a Cheese debit into an existing PKO row would overwrite the
+                # FK and silently reassign historical usage.
+                if allocation_basis == DebitBasis.PLAN:
+                    existing_query = existing_query.filter(plan_line=locked_plan_line)
+                else:
+                    existing_query = existing_query.filter(plan_line__isnull=True)
+                existing = existing_query.first()
 
                 if existing:
                     # Item already exists - amend by adding to existing quantities
                     existing.qty += qty
                     existing.cif_fc += cif_fc
                     existing.cif_inr += cif_inr
-                    existing.save()
+                    existing.allocation_basis = allocation_basis
+                    existing.search_mode = search_mode
+                    existing.planning_target_item_id = locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None
+                    existing.plan_line = locked_plan_line if allocation_basis == DebitBasis.PLAN else None
+                    # A signal/database failure must roll back only this
+                    # candidate write.  Without the savepoint the outer action
+                    # transaction becomes broken and later serialisation turns
+                    # the useful validation error into an HTTP 500.
+                    with transaction.atomic():
+                        existing.save()
                     allotment_item = existing
                 else:
                     # Create new allotment item
-                    allotment_item = AllotmentItems.objects.create(
-                        allotment=allotment,
-                        item=license_item,
-                        qty=qty,
-                        cif_fc=cif_fc,
-                        cif_inr=cif_inr,
-                        is_boe=False
-                    )
+                    with transaction.atomic():
+                        allotment_item = AllotmentItems.objects.create(
+                            allotment=allotment,
+                            item=license_item,
+                            qty=qty,
+                            cif_fc=cif_fc,
+                            cif_inr=cif_inr,
+                            is_boe=False,
+                            allocation_basis=allocation_basis,
+                            search_mode=search_mode,
+                            planning_target_item_id=locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None,
+                            plan_line=locked_plan_line if allocation_basis == DebitBasis.PLAN else None,
+                        )
 
                 created_items.append({
                     'id': allotment_item.id,
@@ -475,16 +1375,31 @@ class AllotmentActionViewSet(ViewSet):
                     'cif_fc': str(cif_fc),
                     'cif_inr': str(cif_inr)
                 })
+                remaining_requirement_qty = max(remaining_requirement_qty - qty, Decimal('0.000'))
+                remaining_requirement_cif = max(remaining_requirement_cif - cif_fc, Decimal('0.00'))
+
+                # No plan counter is mutated here.  The exact plan-line FK on
+                # this new ledger debit is the sole residual authority, so a
+                # delete/reopen automatically restores capacity.
 
             except LicenseImportItemsModel.DoesNotExist:
                 errors.append({
                     'item_id': item_id,
                     'error': 'License import item not found'
                 })
-            except Exception as e:
-                import logging as _log
-                _log.getLogger(__name__).exception("allocate_items: failed for item_id %s", item_id)
-                errors.append({'item_id': item_id, 'error': 'Allocation failed; check server logs'})
+            except Exception:
+                # Unexpected persistence, signal, or programming errors are
+                # not client validation errors.  Propagate to the public
+                # boundary after the outer transaction rolls back.
+                logger.exception(
+                    "Allocation failed",
+                    extra={
+                        "allotment_id": allotment.id,
+                        "licence_item_id": item_id,
+                        "plan_line_id": allocation.get("plan_line_id"),
+                    },
+                )
+                raise
 
         # Refresh allotment to get updated balanced_quantity
         allotment.refresh_from_db()
@@ -492,6 +1407,20 @@ class AllotmentActionViewSet(ViewSet):
         # Serialize allotment data to return updated balance
         from apps.allotment.serializers import AllotmentSerializer
         allotment_data = AllotmentSerializer(allotment).data
+
+        # A request is an atomic command, not a best-effort import.  Returning
+        # an error after persisting only some rows makes retries double-debit
+        # stock and plan capacity.  Mark the enclosing transaction for rollback
+        # so no allocation, signal-driven balance refresh, or on-commit work
+        # survives a rejected row.
+        if errors:
+            transaction.set_rollback(True)
+            return Response({
+                'success': 0,
+                'created_items': [],
+                'errors': errors,
+                'allotment': allotment_data,
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             'success': len(created_items),
@@ -501,10 +1430,21 @@ class AllotmentActionViewSet(ViewSet):
         }, status=status.HTTP_201_CREATED if created_items else status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['delete'], url_path='delete-item/(?P<item_id>[^/.]+)')
+    @transaction.atomic
     def delete_allotment_item(self, request, pk=None, item_id=None):
         """
         Delete an allotment item (deallocate a license from this allotment).
         This will restore the available quantity to the license.
+
+        This is the "credit" side of the utilization-plan cap: since
+        `Remaining Planned Qty/$` is computed live as Original minus a live
+        SUM of `AllotmentItems` (see `plan_status_for` /
+        `live_allotted_qty_for`), deleting this row automatically restores
+        the remaining plan on the very next read — no explicit credit step
+        needed. `@transaction.atomic` + `select_for_update()` here (matching
+        `allocate_items`) close the same race window: without it, a
+        concurrent `allocate-items` call on the same import item could read
+        stale "already allotted" totals mid-delete.
         """
         try:
             allotment_item = get_object_or_404(
@@ -515,6 +1455,12 @@ class AllotmentActionViewSet(ViewSet):
 
             license_number = allotment_item.item.license.license_number if allotment_item.item else "Unknown"
             qty = allotment_item.qty
+
+            # Lock the parent import item for the duration of the delete so
+            # this can't interleave with a concurrent allocate-items call
+            # that's mid-way through its own plan-cap check on the same item.
+            if allotment_item.item_id:
+                LicenseImportItemsModel.objects.select_for_update().get(id=allotment_item.item_id)
 
             # Delete the allotment item (signals will handle updating available quantity)
             allotment_item.delete()

@@ -1,5 +1,6 @@
 import AsyncSelectField from "../../components/AsyncSelectField";
 import ConditionBadge from "../../components/ConditionBadge";
+import { cn } from "@/lib/utils";
 import Select from "react-select";
 import AsyncCreatableSelect from "react-select/async-creatable";
 import DatePicker from "react-datepicker";
@@ -7,6 +8,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import api from "../../api/axios";
 import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
 import { AlertCircle, Calculator, Hash, Inbox, Lock, Plus, Table, Trash2, Wand2 } from "lucide-react";
+import { formatInr } from "./masterDisplayFormatters";
 
 /**
  * NestedFieldArray Component
@@ -50,6 +52,12 @@ export default function NestedFieldArray({
     itemConditionsBySerial?: Record<string, any>;
 }) {
 
+    // Some nested collections represent existing ledger/allocation rows.  In
+    // those screens their source rows must not be added or deleted; individual
+    // non-read-only fields (such as planning_target_item) can still be edited.
+    const allowAdd = !fields.some((field) => field.allow_add === false);
+    const allowRemove = !fields.some((field) => field.allow_remove === false);
+
     // Use centralized date parser from utility
     const parseDate = (dateString) => {
         return parseDateUtil(dateString);
@@ -85,36 +93,27 @@ export default function NestedFieldArray({
         onChange(newArray);
     };
 
+    const getFieldId = (index, fieldName) =>
+        `nested-${fieldKey || "field"}-${index}-${fieldName}`.replace(/[^A-Za-z0-9_-]/g, "-");
+
     const handleChange = (index, fieldName, fieldValue) => {
         const newArray = [...value];
         const updates: Record<string, any> = {[fieldName]: fieldValue};
 
-        // Enforce max 3 decimal places for BOE numeric fields
-        if (fieldKey === 'item_details' && ['cif_inr', 'cif_fc', 'qty'].includes(fieldName) && fieldValue !== '' && fieldValue !== null) {
-            const strVal = String(fieldValue);
-            const dotIdx = strVal.indexOf('.');
-            if (dotIdx !== -1 && strVal.length - dotIdx - 1 > 3) {
-                updates[fieldName] = parseFloat(fieldValue).toFixed(3);
-            }
-        }
+        // Keep the active BOE input exactly as typed. Formatting it on every
+        // keystroke (for example, changing "1" into "1.00") prevents normal
+        // multi-digit keyboard entry in this controlled input.
 
-        // Bill of Entry calculations for item_details
+        // Calculate only the opposite CIF field. The active field is never
+        // reformatted or replaced while the user is typing.
         if (entityName === "bill-of-entries" && fieldKey === "item_details") {
-            // Calculate cif_fc from cif_inr when cif_inr changes
-            if (fieldName === "cif_inr" && fieldValue && formData.exchange_rate) {
-                const cifInr = parseFloat(fieldValue);
-                const exchangeRate = parseFloat(formData.exchange_rate);
-                if (!isNaN(cifInr) && !isNaN(exchangeRate) && exchangeRate > 0) {
-                    updates.cif_fc = (cifInr / exchangeRate).toFixed(2);
-                }
-            }
-
-            // Calculate cif_inr from cif_fc when cif_fc changes
-            if (fieldName === "cif_fc" && fieldValue && formData.exchange_rate) {
-                const cifFc = parseFloat(fieldValue);
-                const exchangeRate = parseFloat(formData.exchange_rate);
-                if (!isNaN(cifFc) && !isNaN(exchangeRate) && exchangeRate > 0) {
-                    updates.cif_inr = (cifFc * exchangeRate).toFixed(2);
+            const enteredValue = parseFloat(fieldValue);
+            const exchangeRate = parseFloat(formData.exchange_rate);
+            if (!isNaN(enteredValue) && !isNaN(exchangeRate) && exchangeRate > 0) {
+                if (fieldName === "cif_inr") {
+                    updates.cif_fc = (enteredValue / exchangeRate).toFixed(2);
+                } else if (fieldName === "cif_fc") {
+                    updates.cif_inr = (enteredValue * exchangeRate).toFixed(2);
                 }
             }
         }
@@ -157,13 +156,13 @@ export default function NestedFieldArray({
     const renderNestedField = (field, item, index, isFrozen = false) => {
         // Use nullish coalescing to preserve 0 values
         const fieldValue = item[field.name] ?? "";
+        const fieldId = getFieldId(index, field.name);
 
         // Frozen number fields (cif_inr, cif_fc, qty) render as read-only display
         if (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name)) {
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
-                <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
-                    style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand-hover)', fontWeight: '600', borderColor: 'var(--tb-brand-200)', cursor: 'default' }}>
+                <div className="flex h-8 items-center justify-between rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-sm font-semibold text-primary cursor-default">
                     <span>{displayVal}</span>
                     <Lock className="size-4" aria-hidden="true" />
                 </div>
@@ -244,6 +243,8 @@ export default function NestedFieldArray({
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <AsyncCreatableSelect
+                        inputId={fieldId}
+                        name={fieldId}
                         cacheOptions={false}
                         defaultOptions={false}
                         value={currentOption}
@@ -302,8 +303,7 @@ export default function NestedFieldArray({
         if (field.readonly || field.read_only) {
             const displayVal = fieldValue !== "" && fieldValue !== null && fieldValue !== undefined ? fieldValue : "—";
             return (
-                <div className="flex h-8 items-center justify-between rounded-md border border-input bg-card px-2 py-1 text-sm"
-                    style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)', fontWeight: '600', borderColor: 'var(--tb-success-border)', cursor: 'default' }}>
+                <div className="flex h-8 items-center justify-between rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300 cursor-default">
                     <span>{displayVal}</span>
                     <Calculator className="size-4" aria-hidden="true" />
                 </div>
@@ -314,13 +314,14 @@ export default function NestedFieldArray({
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
                 <div className="w-full">
-                    {/* @ts-expect-error DatePicker onChange type mismatch */}
                     <DatePicker
+                        id={fieldId}
+                        name={fieldId}
                         selected={parseDate(fieldValue)}
-                        onChange={(date) => handleChange(index, field.name, formatDateForAPI(date))}
+                        onChange={(date: Date | null) => handleChange(index, field.name, formatDateForAPI(date))}
                         dateFormat="dd-MM-yyyy"
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
-                        wrapperClassName="w-100 d-block"
+                        wrapperClassName="w-full block"
                         placeholderText="Select date"
                         isClearable
                         showYearDropdown
@@ -358,17 +359,29 @@ export default function NestedFieldArray({
                 return opt[labelField] || opt.name || opt.id;
             };
 
+            // Item Name rows get a muted subtitle line (group, else SION norm
+            // class) in the dropdown to help disambiguate similarly-named
+            // items — every other FK here (hs-code, ports, license-items,
+            // ...) keeps its exact single-line rendering.
+            const getOptionSubtitle = endpoint.includes("item-names")
+                ? (opt) => opt.group_name || opt.sion_norm_class_label || undefined
+                : undefined;
+
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <AsyncSelectField
+                        inputId={fieldId}
+                        name={fieldId}
                         endpoint={endpoint}
                         labelField={labelField}
                         value={fieldValue}
                         onChange={(val) => handleChange(index, field.name, val)}
                         formatLabel={formatLabel}
+                        getOptionSubtitle={getOptionSubtitle}
                         placeholder={`Select ${field.label || field.name}`}
                         className="react-select-sm"
                         isMulti={isMulti}
+                        isClearable={field.is_clearable !== false}
                     />
                 </div>
             );
@@ -391,6 +404,8 @@ export default function NestedFieldArray({
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <Select
+                        inputId={fieldId}
+                        name={fieldId}
                         options={options}
                         value={selectedOption}
                         onChange={(selected) => handleChange(index, field.name, selected ? selected.value : null)}
@@ -425,6 +440,7 @@ export default function NestedFieldArray({
                         className="form-check-input"
                         role="switch"
                         id={`switch-${field.name}-${index}`}
+                        name={`switch-${field.name}-${index}`}
                         checked={boolValue}
                         onChange={(e) => handleChange(index, field.name, e.target.checked)}
                     />
@@ -441,6 +457,8 @@ export default function NestedFieldArray({
                 <div>
                     <input
                         type="file"
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         onChange={(e) => {
                             const file = e.target.files[0];
@@ -469,20 +487,32 @@ export default function NestedFieldArray({
 
         // Handle different field types
         switch (field.type) {
-            case "number":
+            case "number": {
+                // BOE amounts are deliberately text inputs with a decimal
+                // keyboard. Native number inputs normalise partial values in
+                // some browsers, which makes controlled values such as `1.`
+                // and `1.00` difficult to continue editing.
+                const isBoeItemNumber = fieldKey === "item_details"
+                    && ["cif_inr", "cif_fc", "qty"].includes(field.name);
                 return (
                     <input
-                        type="number"
+                        type={isBoeItemNumber ? "text" : "number"}
+                        id={fieldId}
+                        name={fieldId}
+                        inputMode={isBoeItemNumber ? "decimal" : undefined}
                         step={['cif_inr', 'cif_fc', 'qty'].includes(field.name) ? "0.001" : "0.01"}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
                     />
                 );
+            }
             case "integer":
                 return (
                     <input
                         type="number"
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
@@ -491,6 +521,8 @@ export default function NestedFieldArray({
             case "textarea":
                 return (
                     <textarea
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         rows={field.name === "description" ? 3 : 2}
                         value={fieldValue}
@@ -501,6 +533,8 @@ export default function NestedFieldArray({
                 return (
                     <input
                         type="text"
+                        id={fieldId}
+                        name={fieldId}
                         className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
                         value={fieldValue}
                         onChange={(e) => handleChange(index, field.name, e.target.value)}
@@ -612,9 +646,11 @@ export default function NestedFieldArray({
                         <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{value.length}</span>
                     )}
                 </h6>
-                <button type="button" onClick={handleAdd} className="flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20 cursor-pointer">
-                    <Plus className="size-4" aria-hidden="true" />Add Item
-                </button>
+                {allowAdd && (
+                    <button type="button" onClick={handleAdd} className="flex items-center gap-1.5 rounded-md border border-success/40 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success transition-colors hover:bg-success/20 cursor-pointer">
+                        <Plus className="size-4" aria-hidden="true" />Add Item
+                    </button>
+                )}
             </div>
 
             {value.length === 0 ? (
@@ -627,8 +663,8 @@ export default function NestedFieldArray({
                     {value.map((item, index) => {
                         const isFrozen = fieldKey === 'item_details' && item.is_frozen;
                         return (
-                        <div key={index} className="card" style={{ opacity: isFrozen ? 0.92 : 1 }}>
-                            <div className="flex items-center justify-between border-b border-border px-3 py-2" style={{ background: isFrozen ? 'var(--tb-brand-50)' : 'var(--tb-card-bg)' }}>
+                        <div key={index} className={cn("card", isFrozen ? "opacity-[0.92]" : "")}>
+                            <div className={cn("flex items-center justify-between border-b border-border px-3 py-2", isFrozen ? "bg-primary/5" : "bg-card")}>
                                 <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-primary">
                                     <Hash className="size-4" aria-hidden="true" />
                                     <span className="shrink-0">Item {index + 1}</span>
@@ -641,7 +677,7 @@ export default function NestedFieldArray({
                                         <ConditionBadge type={item.condition_type || itemConditionsBySerial?.[item.serial_number]} />
                                     )}
                                     {getItemTitle(item) && (
-                                        <span className="truncate text-xs font-normal text-muted-foreground" style={{ maxWidth: 300 }}>
+                                        <span className="max-w-[300px] truncate text-xs font-normal text-muted-foreground">
                                             — {getItemTitle(item)}
                                         </span>
                                     )}
@@ -661,7 +697,7 @@ export default function NestedFieldArray({
                                             </button>
                                         );
                                     })()}
-                                    <button
+                                    {allowRemove && <button
                                         type="button"
                                         onClick={() => handleRemove(index)}
                                         disabled={isFrozen}
@@ -669,7 +705,7 @@ export default function NestedFieldArray({
                                         className="flex size-7 cursor-pointer items-center justify-center rounded border border-destructive/30 text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         {isFrozen ? <Lock className="size-3" aria-hidden="true" /> : <Trash2 className="size-3" aria-hidden="true" />}
-                                    </button>
+                                    </button>}
                                 </div>
                             </div>
                             <div className="p-3">
@@ -695,9 +731,16 @@ export default function NestedFieldArray({
                                             const bsCol = FIELD_WIDTHS[fieldKey]?.[field.name]
                                                 || (isTextarea ? "col-12" : "col-md-4");
                                             const colClass = colToSpan(bsCol);
+                                            const fieldId = getFieldId(index, field.name);
+                                            const isReadOnlyDisplay = (isFrozen && ['cif_inr', 'cif_fc', 'qty'].includes(field.name))
+                                                || field.readonly || field.read_only;
+                                            const hasOwnLabel = field.type === "boolean"
+                                                || typeof item[field.name] === "boolean"
+                                                || field.name.startsWith("is_")
+                                                || field.name.startsWith("has_");
                                             return (
-                                                <div key={field.name} className={colClass} style={{ pointerEvents: isFrozen ? 'none' : undefined, opacity: isFrozen ? 0.7 : undefined }}>
-                                                    <label className="mb-1 block text-[12px] font-semibold text-muted-foreground">
+                                                <div key={field.name} className={cn(colClass, isFrozen ? "pointer-events-none opacity-70" : "")}>
+                                                    <label htmlFor={isReadOnlyDisplay || hasOwnLabel ? undefined : fieldId} className="mb-1 block text-[12px] font-semibold text-muted-foreground">
                                                         {field.label || field.name.replace(/_/g, ' ')}
                                                         {field.required && <span className="ml-0.5 text-destructive">*</span>}
                                                     </label>
@@ -730,8 +773,8 @@ export default function NestedFieldArray({
                     <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-border bg-muted/40 px-2 py-2 text-[13px]">
                         <span className="text-muted-foreground">Totals:</span>
                         <span><span className="text-muted-foreground mr-1">Qty</span><strong>{totQty.toFixed(3)} kg</strong></span>
-                        <span><span className="text-muted-foreground mr-1">CIF INR</span><strong>₹{totCif.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
-                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span><span className="text-muted-foreground mr-1">CIF INR</span><strong>{formatInr(totCif)}</strong></span>
+                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>{formatInr(totAmt)}</strong></span>
                     </div>
                 );
             })()}
@@ -740,7 +783,7 @@ export default function NestedFieldArray({
                 return (
                     <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-border bg-muted/40 px-2 py-2 text-[13px]">
                         <span className="text-muted-foreground">Total:</span>
-                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+                        <span className="text-success"><span className="text-muted-foreground mr-1">Amount</span><strong>{formatInr(totAmt)}</strong></span>
                     </div>
                 );
             })()}
@@ -749,7 +792,7 @@ export default function NestedFieldArray({
                 return (
                     <div className="mt-2 flex items-center justify-end gap-4 rounded-md border-t-2 border-success/40 bg-success/10 px-2 py-2 text-[13px]">
                         <span className="text-muted-foreground">Total Paid:</span>
-                        <strong className="text-success">₹{totPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                        <strong className="text-success">{formatInr(totPaid)}</strong>
                     </div>
                 );
             })()}

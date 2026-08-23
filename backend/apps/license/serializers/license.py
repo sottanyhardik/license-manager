@@ -24,6 +24,20 @@ from apps.license.models import (
 )
 
 
+def _nested_item_id(item: Dict[str, Any]) -> Any:
+    """Best-effort int `id` from a nested `export_license`/`import_license`
+    row dict, or `None` if absent/blank/non-numeric. Used to tell an
+    existing child row (already validated when it was first created) apart
+    from a genuinely new one in `LicenseDetailsSerializer.validate()`."""
+    raw = item.get('id')
+    if raw in (None, ''):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _safe_iso(val: Any) -> Any:
     if isinstance(val, datetime):
         try:
@@ -54,6 +68,27 @@ class SafeDateTimeField(serializers.DateTimeField):
                 # fallback: use string representation to avoid crashing
                 return str(value)
         return super().to_representation(value)
+
+
+class PlanningOptionSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for planning options returned in import item details.
+    Used by LicenseImportItemSerializer.planning_options to display all plan lines
+    for a given import item without fetching the full LicenseItemPlanSerializer.
+    """
+    plan_line_id = serializers.IntegerField(source='id', read_only=True)
+    item_name = serializers.CharField(source='item_name.name', read_only=True, allow_null=True)
+    planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
+    remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
+    planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = LicenseItemPlan
+        fields = [
+            'plan_line_id', 'item_name', 'planned_quantity', 'remaining_quantity',
+            'planned_cif_fc', 'remaining_cif_fc'
+        ]
 
 
 class LicenseExportItemSerializer(serializers.ModelSerializer):
@@ -142,16 +177,31 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     allotted_quantity = serializers.SerializerMethodField(read_only=True)
     allotted_value = serializers.SerializerMethodField(read_only=True)
 
+    # Informational only — reuses the Planning module's own calculation
+    # (`plan_reporting.plan_map_for_import_items`); never feeds into
+    # Available Quantity (see that field's docstring in
+    # `apps.core.scripts.calculate_balance.calculate_available_quantity`).
+    planned_quantity = serializers.SerializerMethodField(read_only=True)
+
     balance_cif_fc = serializers.SerializerMethodField(read_only=True)
+
+    # Sum of SALE trade lines for this import item where the parent trade has
+    # NO BOE attached.  These amounts debit the licence balance without a
+    # corresponding BOE, making the double-count visible in the UI.
+    billed_no_boe = serializers.SerializerMethodField(read_only=True)
+
+    # Planning options for this import item — all LicenseItemPlan rows split across
+    # this item, each with its own remaining availability after allocations.
+    planning_options = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
-                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value',
+                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value', 'planned_quantity',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
-                  'is_restricted', 'condition_type']
+                  'is_restricted', 'condition_type', 'billed_no_boe', 'planning_options']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -204,14 +254,27 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def get_available_value(self, obj):
         """
-        Return calculated available value based on restriction logic.
+        Return the LIVE available value (same formula as
+        `LicenseImportItemsModel.available_value_calculated` — see that
+        property's docstring), not the stored `available_value` column.
 
-        Reads the stored `available_value` field rather than re-computing the
-        pool model on every read — the pool is recalculated on every save by
-        `_update_all_import_items_available_value`, so the stored field is
-        authoritative. Avoids O(N) compute_condition_pools calls per list view.
+        The stored column is only refreshed by `_update_all_import_items_
+        available_value` on a save of this licence/BOE/allotment/item, so it
+        can go stale between saves (e.g. after a licence's Balance CIF
+        formula itself changes) — this is exactly the "Balance CIF is
+        wrong on the Allotment License Selection screen" bug class this
+        fixes. List callers should batch a `{item_id: Decimal}` map once via
+        `condition_pool.available_value_bulk_map` and pass it in as
+        `self.context['available_value_map']` — mirrors the `plan_map`
+        pattern in `get_planned_quantity` above. Falls back to the live
+        per-item property when no batch map is supplied (standalone usage),
+        never to the stale stored column.
         """
-        return float(obj.available_value or 0)
+        value_map = self.context.get('available_value_map')
+        if value_map is not None:
+            value = value_map.get(obj.id)
+            return float(value) if value is not None else 0.0
+        return float(obj.available_value_calculated or 0)
 
     # All balance read-outs use the stored fields (kept in sync by
     # update_balance_values + the bulk serializer flow). Reading from the
@@ -230,13 +293,89 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     def get_allotted_value(self, obj):
         return float(obj.allotted_value or 0)
 
+    def get_planned_quantity(self, obj):
+        """
+        Reuses `plan_reporting.plan_map_for_import_items` — never a second
+        planning calculation. `LicenseDetailsSerializer.to_representation`
+        batches this ONCE for every import item on the licence (see
+        `self.context['plan_map']`); a bare `LicenseImportItemSerializer`
+        used standalone falls back to a single-item call so behaviour is
+        unchanged outside the licence-detail response.
+        """
+        plan_map = self.context.get('plan_map')
+        if plan_map is None:
+            from apps.license.services.plan_reporting import plan_map_for_import_items
+            plan_map = plan_map_for_import_items([obj.id])
+        entry = plan_map.get(obj.id)
+        return float(entry['total_planned_quantity']) if entry else 0.0
+
+    def get_billed_no_boe(self, obj):
+        """
+        Total CIF from SALE trade lines for this import item where the parent
+        trade has no BOE attached (trade.boes is empty).
+
+        These amounts are counted in the licence balance calculation as trade
+        debits but have no linked BOE, which can cause apparent double-counting
+        when a separate BOE also debits the same item.  Surfacing this value in
+        the UI lets operators spot and fix the missing BOE link.
+
+        List callers should batch a `{item_id: Decimal}` map once via
+        `item_usage.billed_no_boe_bulk_map` and pass it in as
+        `self.context['billed_no_boe_map']` — same pattern as
+        `get_available_value`'s `available_value_map` / `get_planned_
+        quantity`'s `plan_map` — so a page of N items on M different
+        licences issues one query instead of N. Falls back to the live
+        per-item aggregate when no batch map is supplied (standalone usage).
+        """
+        billed_no_boe_map = self.context.get('billed_no_boe_map')
+        if billed_no_boe_map is not None:
+            return float(billed_no_boe_map.get(obj.id) or 0)
+        try:
+            from apps.trade.models import LicenseTradeLine
+            from django.db.models import Sum, DecimalField
+            from django.db.models.functions import Coalesce
+            from django.db.models import Value
+            from decimal import Decimal
+
+            total = LicenseTradeLine.objects.filter(
+                sr_number=obj,
+                trade__direction='SALE',
+                trade__boes__isnull=True,       # no BOE attached to this trade
+            ).aggregate(
+                t=Coalesce(Sum('cif_fc'), Value(Decimal('0')), output_field=DecimalField())
+            )['t']
+            return float(total or 0)
+        except Exception:
+            return 0.0
+
     def get_balance_cif_fc(self, obj):
         """
         ITEM-LEVEL available CIF FC. Under the new condition_type model the
-        per-item balance is the same value we store in `available_value` —
-        return the stored field to keep this O(1).
+        per-item balance is the same value as `available_value` — see
+        `get_available_value`'s docstring for why this reads the LIVE value
+        (via the same batched `available_value_map` context key) rather than
+        the stale-prone stored `available_value` column.
         """
-        return float(obj.available_value or 0)
+        value_map = self.context.get('available_value_map')
+        if value_map is not None:
+            value = value_map.get(obj.id)
+            return float(value) if value is not None else 0.0
+        return float(obj.available_value_calculated or 0)
+
+    def get_planning_options(self, obj):
+        """
+        Return all LicenseItemPlan rows for this import item, formatted with the
+        essential planning fields needed by the frontend to display planning options
+        and enforce per-plan-line allocation caps.
+
+        The related LicenseItemPlan objects are loaded via prefetch_related in the view
+        (same pattern as `items`, `items_detail`, etc.), so this is O(1) per item.
+        Falls back to a fresh query if no prefetch is present (e.g., standalone usage).
+        """
+        # utilization_plans is the related_name on LicenseItemPlan.import_item
+        plans = obj.utilization_plans.all()
+        serializer = PlanningOptionSerializer(plans, many=True)
+        return serializer.data
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -338,6 +477,8 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
     has_copy = serializers.SerializerMethodField()
     has_condition_sheet = serializers.SerializerMethodField()
     is_manually_planned = serializers.SerializerMethodField()
+    planning_state = serializers.SerializerMethodField()
+    planning_revision = serializers.SerializerMethodField()
 
     # Nested serializers - separate for read/write to avoid validation issues
     export_license_read = LicenseExportItemSerializer(source='export_license', many=True, read_only=True)
@@ -492,25 +633,44 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             if data['license_expiry_date'] <= data['license_date']:
                 errors['license_expiry_date'] = ['License expiry date must be after license date']
 
-        # Validate export items
+        # Validate export items.
+        #
+        # Required-field checks below only apply to a row that is either
+        # brand new (no `id`, or an `id` not among the license's current
+        # export items) OR that is itself supplying the field being
+        # checked. A row that already exists and is being patched for an
+        # unrelated reason (e.g. the License Overview page's inline SION
+        # Norm editor, which sends existing rows as bare `{id}` plus one
+        # `{id, norm_class}` — see `LicenseWriteMixin.update()`, which
+        # already only `setattr`s keys actually present in each dict) must
+        # not be forced to re-supply every field just to change one of
+        # them. Same "only validate what's actually new/changing" idea
+        # already used for `license_documents` below.
+        existing_export_ids = set()
+        if self.instance is not None and 'export_license' in data:
+            existing_export_ids = set(self.instance.export_license.values_list('id', flat=True))
+
         if 'export_license' in data and data['export_license']:
             export_errors = []
             for index, item in enumerate(data['export_license']):
                 item_errors = {}
+                is_existing = _nested_item_id(item) in existing_export_ids
 
                 # HS Code is not required for export items (can be blank)
                 # Removed: if not item.get('hs_code'):
                 #     item_errors['hs_code'] = ['HS Code is required for export item']
 
-                if not item.get('description') or not item.get('description').strip():
-                    item_errors['description'] = ['Description is required for export item']
+                if 'description' in item or not is_existing:
+                    if not item.get('description') or not item.get('description').strip():
+                        item_errors['description'] = ['Description is required for export item']
 
                 # Net quantity can be 0 or greater (including 0)
-                net_qty = item.get('net_quantity')
-                if net_qty is None or net_qty == '':
-                    item_errors['net_quantity'] = ['Net quantity is required']
-                elif isinstance(net_qty, (int, float)) and net_qty < 0:
-                    item_errors['net_quantity'] = ['Net quantity cannot be negative']
+                if 'net_quantity' in item or not is_existing:
+                    net_qty = item.get('net_quantity')
+                    if net_qty is None or net_qty == '':
+                        item_errors['net_quantity'] = ['Net quantity is required']
+                    elif isinstance(net_qty, (int, float)) and net_qty < 0:
+                        item_errors['net_quantity'] = ['Net quantity cannot be negative']
 
                 # Unit is not required for export items (has default value 'kg' in model)
 
@@ -523,24 +683,33 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             if any(e for e in export_errors):
                 errors['export_license'] = export_errors
 
-        # Validate import items
+        # Validate import items — same existing-row exemption as export items above.
+        existing_import_ids = set()
+        if self.instance is not None and 'import_license' in data:
+            existing_import_ids = set(self.instance.import_license.values_list('id', flat=True))
+
         if 'import_license' in data and data['import_license']:
             import_errors = []
             for index, item in enumerate(data['import_license']):
                 item_errors = {}
+                is_existing = _nested_item_id(item) in existing_import_ids
 
-                if not item.get('hs_code'):
-                    item_errors['hs_code'] = ['HS Code is required for import item']
+                if 'hs_code' in item or not is_existing:
+                    if not item.get('hs_code'):
+                        item_errors['hs_code'] = ['HS Code is required for import item']
 
-                if not item.get('description') or not item.get('description').strip():
-                    item_errors['description'] = ['Description is required for import item']
+                if 'description' in item or not is_existing:
+                    if not item.get('description') or not item.get('description').strip():
+                        item_errors['description'] = ['Description is required for import item']
 
-                serial_number = item.get('serial_number')
-                if serial_number is None or serial_number == '':
-                    item_errors['serial_number'] = ['Serial number is required for import item']
+                if 'serial_number' in item or not is_existing:
+                    serial_number = item.get('serial_number')
+                    if serial_number is None or serial_number == '':
+                        item_errors['serial_number'] = ['Serial number is required for import item']
 
-                if not item.get('unit'):
-                    item_errors['unit'] = ['Unit is required for import item']
+                if 'unit' in item or not is_existing:
+                    if not item.get('unit'):
+                        item_errors['unit'] = ['Unit is required for import item']
 
                 if item_errors:
                     import_errors.append(item_errors)
@@ -582,13 +751,25 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         return data
 
     def get_get_balance_cif(self, obj):
-        """Return the stored balance_cif column directly (O(1)) instead of the
-        expensive live property, which runs 4 aggregate queries per row and kills
-        list-view performance. Clamp negatives to zero so this matches the live
-        calculator's semantics exactly (it returns max(balance, 0)); the stored
-        column can hold a negative-zero that would otherwise serialize as '-0.00'."""
+        """Return the LIVE balance for this license — same
+        `LicenseBalanceCalculator` formula the License Overview page and the
+        detail view use, so all three always agree. For list views, the
+        viewset batch-computes this for the whole page in one shot
+        (`LicenseBalanceCalculator.calculate_balance_for_licenses`, a fixed
+        4 queries total, not 4×N — see `LicenseDetailsViewSet.
+        get_serializer_context`) and passes it via `self.context
+        ['live_balance_map']`; fall back to the stored column only if no
+        batch map was supplied (e.g. this serializer used outside that
+        viewset's `list`/`retrieve` flow). Clamp negatives to zero so this
+        matches the live calculator's semantics exactly (it returns
+        max(balance, 0)); the stored column can hold a negative-zero that
+        would otherwise serialize as '-0.00'."""
         from decimal import Decimal
-        bal = obj.balance_cif
+        live_map = self.context.get('live_balance_map')
+        if live_map is not None:
+            bal = live_map.get(obj.id)
+        else:
+            bal = obj.balance_cif
         if bal is None:
             return bal
         return bal if bal > 0 else Decimal('0.00')
@@ -628,13 +809,32 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
                                                       required=required)
 
     def to_representation(self, instance) -> Dict[str, Any]:
-        rep = super().to_representation(instance)
-
         # Check if this is a list view
         request = self.context.get('request')
         is_list_view = request and hasattr(request, 'parser_context') and \
                        request.parser_context.get('view') and \
                        request.parser_context['view'].action == 'list'
+
+        # Batch this licence's Planned Quantity map ONCE (not once per
+        # import item) BEFORE nested serialization runs — same technique as
+        # `live_balance_map` for Balance CIF list views, just injected here
+        # since a single detail-view retrieve has no page_ids hook. List
+        # views never reach `LicenseImportItemSerializer` at all (`import_
+        # license_read` is popped in `__init__`), so this is skipped there.
+        if not is_list_view and 'plan_map' not in self.context:
+            from apps.license.services.plan_reporting import plan_map_for_import_items
+            item_ids = [item.id for item in instance.import_license.all()]
+            self.context['plan_map'] = plan_map_for_import_items(item_ids) if item_ids else {}
+
+        # Same batching for the nested import items' live available_value /
+        # balance_cif_fc (see `LicenseImportItemSerializer.get_available_value`)
+        # — one shot for this licence's items instead of one live property
+        # call per item.
+        if not is_list_view and 'available_value_map' not in self.context:
+            from apps.license.services.condition_pool import available_value_bulk_map
+            self.context['available_value_map'] = available_value_bulk_map(instance.import_license.all())
+
+        rep = super().to_representation(instance)
 
         if is_list_view:
             # For list view, add empty arrays for nested items (fields were removed in __init__)
@@ -655,17 +855,37 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             if 'license_documents_read' in rep:
                 rep['license_documents'] = rep.pop('license_documents_read')
 
-        # balance_cif: the DETAIL view recomputes the live value (single object, cheap,
-        # and keeps the "fresh" guarantee); the LIST view keeps the stored column, which
-        # signals keep in sync and which avoids N balance-aggregate queries per row.
-        # (The stored column is what get_get_balance_cif() returns.)
-        if not is_list_view:
-            from decimal import Decimal
-            fresh = instance.get_balance_cif
-            # Clamp to match the list path (stored column) so both views agree; the
-            # live calculator can yield a negative-zero that serializes as '-0.00'.
-            if fresh is not None and fresh <= 0:
-                fresh = Decimal('0.00')
+        # balance_cif: both DETAIL and LIST views now show the LIVE value —
+        # same `LicenseBalanceCalculator` formula either way, so this field
+        # always agrees with `get_balance_cif`/get_get_balance_cif() and with
+        # the License Overview page. Detail view recomputes it directly
+        # (single object, cheap); list view reads the viewset's batch-
+        # computed `live_balance_map` (see `get_get_balance_cif`'s
+        # docstring) to stay a fixed number of queries for the whole page.
+        from decimal import Decimal
+
+        def _clamp(value):
+            # The live calculator can yield a negative-zero that serializes
+            # as '-0.00' — clamp to a plain zero.
+            if value is not None and value <= 0:
+                return Decimal('0.00')
+            return value
+
+        if is_list_view:
+            # `get_balance_cif` is already correct here — `get_get_balance_cif()`
+            # (a SerializerMethodField, evaluated during `super().to_representation()`
+            # above) reads the same `live_balance_map` itself. Only the plain
+            # `balance_cif` field needs an explicit override, since it has no
+            # custom getter and `super().to_representation()` populated it
+            # from the model's stored-column property.
+            live_map = self.context.get('live_balance_map')
+            if live_map is not None:
+                rep['balance_cif'] = _clamp(live_map.get(instance.id))
+            # else: no batch map available (serializer used outside the
+            # viewset's paginated `list` flow) — leave the stored-column
+            # value `super().to_representation()` already produced.
+        else:
+            fresh = _clamp(instance.get_balance_cif)
             rep['balance_cif'] = fresh
             if 'get_balance_cif' in rep:
                 rep['get_balance_cif'] = fresh
@@ -685,8 +905,33 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         v = getattr(obj, '_has_manual_plan', None)
         if v is not None:
             return bool(v)
-        from apps.license.models import LicenseItemPlan
         return LicenseItemPlan.objects.filter(license=obj).exists()
+
+    def get_planning_state(self, obj):
+        """Expose freshness without making clients infer it from task rows.
+
+        A matching source/applied revision is the only condition for CURRENT.
+        For a stale plan, surface the active durable request state; a completed
+        failure remains visibly non-current rather than being misreported as a
+        usable plan.
+        """
+        if obj.planning_source_revision == obj.planning_applied_revision:
+            return "CURRENT"
+        request = obj.replan_requests.order_by("-requested_at", "-pk").first()
+        if request is None:
+            return "REPLAN_PENDING"
+        if request.status == "running":
+            return "REPLAN_RUNNING"
+        if request.status in {"pending", "queued", "retry_pending"}:
+            return "REPLAN_PENDING"
+        return "REPLAN_FAILED"
+
+    def get_planning_revision(self, obj):
+        return {
+            "source_revision": obj.planning_source_revision,
+            "planned_revision": obj.planning_applied_revision,
+            "is_current": obj.planning_source_revision == obj.planning_applied_revision,
+        }
 
     def get_has_tl(self, obj):
         """Check if license has Transfer Letter documents.
@@ -716,3 +961,96 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         return obj.purchase_status.label if obj.purchase_status else None
 
     # helper for M2M items in import rows
+
+
+# ============================================================================
+# License Plan Presentation Serializers (read-only)
+# ============================================================================
+
+class PlanLinePresentationSerializer(serializers.Serializer):
+    """
+    Serializer for a single split plan line within a PlanRow.
+    Represents one LicenseItemPlan instance in the split breakdown.
+    """
+    plan_line_id = serializers.IntegerField()
+    item_name = serializers.CharField(allow_null=True)
+    planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+
+class PlanRowSerializer(serializers.Serializer):
+    """
+    Serializer for one grouped plan row.
+    Represents a set of import items with the same HSN + description + unit,
+    presented as a single row with aggregated quantities and optional split breakdown.
+    """
+    group_id = serializers.IntegerField()
+    import_item_ids = serializers.ListField(child=serializers.IntegerField())
+    serials = serializers.ListField(child=serializers.IntegerField())
+    description = serializers.CharField()
+    hs_code = serializers.CharField(allow_null=True)
+
+    # Aggregated quantities
+    total_available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_available_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    # Plan aggregates
+    has_plan = serializers.BooleanField()
+    planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    # Usage aggregates
+    used_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    used_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    # Derived
+    remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    uncommitted_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+
+    # Split breakdown
+    split_lines = PlanLinePresentationSerializer(many=True, read_only=True)
+
+    # Status flags
+    is_feasible = serializers.BooleanField()
+    is_short = serializers.BooleanField()
+
+
+class LicensePlanPresentationSerializer(serializers.Serializer):
+    """
+    Complete plan presentation for one license.
+    Single source of truth for aggregated license plan data.
+
+    Semantics:
+    - total_available_quantity: sum of import item quantities (from import)
+    - total_planned_quantity: sum of plan line quantities (user-authored plans)
+    - total_used_quantity: sum of allotment quantities (live consumption)
+    - total_remaining_quantity: planned - used (planning headroom)
+    - total_uncommitted_quantity: available - planned (unplanned headroom)
+    """
+    license_id = serializers.IntegerField()
+    license_number = serializers.CharField()
+    exporter_id = serializers.IntegerField(allow_null=True)
+    exporter_name = serializers.CharField()
+
+    # Rollup aggregates
+    total_available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_available_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_planned_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_used_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_used_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+    total_remaining_cif_fc = serializers.DecimalField(max_digits=15, decimal_places=2)
+    total_uncommitted_quantity = serializers.DecimalField(max_digits=15, decimal_places=3)
+
+    # License-level semantics
+    num_groups = serializers.IntegerField()
+    num_items = serializers.IntegerField()
+    has_any_plan = serializers.BooleanField()
+    is_over_planned = serializers.BooleanField()
+
+    # All rows (grouped, in serial order)
+    rows = PlanRowSerializer(many=True, read_only=True)

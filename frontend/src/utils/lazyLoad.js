@@ -17,14 +17,35 @@ import { lazy } from 'react';
 export function lazyLoadWithRetry(importFunc, retries = 3, interval = 1000) {
     return lazy(() => {
         return new Promise((resolve, reject) => {
+            const reloadKey = 'license-manager:chunk-reload';
             const attemptImport = (attemptsLeft) => {
-                importFunc()
-                    .then(resolve)
+            importFunc()
+                    .then((module) => {
+                        // A successful import after a reload makes future
+                        // deployment recovery eligible again.
+                        if (typeof window !== 'undefined') {
+                            sessionStorage.removeItem(reloadKey);
+                        }
+                        resolve(module);
+                    })
                     .catch((error) => {
-                        // Check if this is a chunk load error
-                        const isChunkError = /Loading chunk [\d]+ failed/.test(error.message);
+                        // Vite reports a stale hashed asset as "Failed to fetch
+                        // dynamically imported module"; older Webpack bundles
+                        // use "Loading chunk ... failed".  Both mean the tab is
+                        // running a release whose chunks have been replaced.
+                        const message = error instanceof Error ? error.message : String(error);
+                        const isChunkError = /Loading chunk [\d]+ failed|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message);
 
                         if (attemptsLeft === 0) {
+                            // Retrying a removed hashed URL cannot succeed.  A
+                            // single reload obtains the current index.html.  The
+                            // session flag prevents an accidental reload loop if
+                            // the failure is unrelated to a deployment.
+                            if (typeof window !== 'undefined' && isChunkError && !sessionStorage.getItem(reloadKey)) {
+                                sessionStorage.setItem(reloadKey, '1');
+                                window.location.reload();
+                                return;
+                            }
                             reject(error);
                             return;
                         }

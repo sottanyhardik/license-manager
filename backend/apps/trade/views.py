@@ -3,10 +3,11 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Prefetch
 
 from apps.accounts.permissions import TradePermission
 from apps.core.views import MasterViewSet
-from .models import LicenseTrade, LicenseTradeLine, LicenseTradePayment
+from .models import IncentiveTradeLine, LicenseTrade, LicenseTradeLine, LicenseTradePayment
 from .serializers import (
     LicenseTradeSerializer,
     TradeLineSimpleSerializer,
@@ -18,6 +19,9 @@ from .services.trade_service import (
     build_trade_summary,
     link_trades,
     PartnerTradeNotFound,
+    copy_sale_to_purchase,
+    copy_purchase_to_sale,
+    CounterpartValidationError,
 )
 
 
@@ -54,10 +58,10 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                 "fk_endpoint": "/masters/companies/",
                 "label_field": "name"
             },
-            "boe": {
+            "boes": {
                 "type": "fk",
                 "fk_endpoint": "/bill-of-entries/",
-                "label_field": "boe_number"
+                "label_field": "bill_of_entry_number"
             },
             "incentive_license": {
                 "type": "fk",
@@ -84,7 +88,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
             "direction",
             "license_type",
             "incentive_license",
-            "boe",
+            "boes",
             "from_company",
             "to_company",
             "invoice_number",
@@ -95,7 +99,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
         "fk_endpoint_overrides": {
             "from_company": "/masters/companies/",
             "to_company": "/masters/companies/",
-            "boe": "/bill-of-entries/",
+            "boes": "/bill-of-entries/",
             "incentive_license": "/incentive-licenses/"
         },
         "nested_list_display": {
@@ -273,17 +277,24 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         qs = qs.select_related(
-            'from_company', 'to_company', 'boe', 'incentive_license', 'linked_trade',
+            'from_company', 'to_company', 'incentive_license', 'linked_trade', 'counterpart',
             'created_by', 'modified_by',
         )
+
+        # Every nested relation below is represented by LicenseTradeSerializer.
+        # Keep these prefetches narrow and relation-aware: the previous
+        # ``lines__sr_number__items`` loaded every item-name relation even though
+        # the serializer only needs the SR's licence for its label.  More
+        # importantly, ``paired_trades`` and payment rows are prefetched so
+        # serializer helpers never issue one aggregate/lookup per trade.
+        paired_trade_queryset = LicenseTrade.objects.prefetch_related('payments')
         qs = qs.prefetch_related(
-            'lines',
-            'lines__sr_number',
-            'lines__sr_number__license',
-            'lines__sr_number__items',
-            'incentive_lines',
-            'incentive_lines__incentive_license',
+            'boes',
+            Prefetch('lines', queryset=LicenseTradeLine.objects.select_related('sr_number__license')),
+            Prefetch('incentive_lines', queryset=IncentiveTradeLine.objects.select_related('incentive_license')),
             'payments',
+            Prefetch('paired_trades', queryset=paired_trade_queryset),
+            'linked_trade__payments',
         )
         return qs
 
@@ -478,6 +489,47 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
 
         return Response(LicenseTradeSerializer(updated_trade, context={'request': request}).data)
 
+    def _counterpart_payload(self, source, counterpart, created):
+        return {
+            'created': created,
+            'source': {'id': source.id, 'type': source.direction.lower(), 'number': source.invoice_number},
+            'counterpart': {
+                'id': counterpart.id, 'type': counterpart.direction.lower(),
+                'number': counterpart.invoice_number,
+                'url': f'/api/trade/trades/{counterpart.id}/',
+            },
+            'pair_uuid': str(source.transaction_pair_uuid or counterpart.transaction_pair_uuid),
+            'totals_match': source.total_amount == counterpart.total_amount,
+            'lines_match': source.lines.count() == counterpart.lines.count() and source.incentive_lines.count() == counterpart.incentive_lines.count(),
+        }
+
+    @action(detail=True, methods=['post'], url_path='copy-to-purchase')
+    def copy_to_purchase(self, request, pk=None):
+        try:
+            source, counterpart, created = copy_sale_to_purchase(int(pk), request.user)
+        except LicenseTrade.DoesNotExist:
+            return Response({'error': 'Sale not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except CounterpartValidationError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._counterpart_payload(source, counterpart, created), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='copy-to-sale')
+    def copy_to_sale(self, request, pk=None):
+        try:
+            source, counterpart, created = copy_purchase_to_sale(int(pk), request.user)
+        except LicenseTrade.DoesNotExist:
+            return Response({'error': 'Purchase not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except CounterpartValidationError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self._counterpart_payload(source, counterpart, created), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def counterpart(self, request, pk=None):
+        trade = self.get_object()
+        if not trade.counterpart_id:
+            return Response({'error': 'No counterpart has been created.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self._counterpart_payload(trade, trade.counterpart, False))
+
     @action(detail=True, methods=['post'], url_path='generate-transfer-letter')
     def generate_transfer_letter(self, request, pk=None):
         """
@@ -529,6 +581,7 @@ TradeLineViewSet = MasterViewSet.create_viewset(
         "ordering": ["trade", "id"]
     }
 )
+TradeLineViewSet.permission_classes = [TradePermission]
 
 
 TradePaymentViewSet = MasterViewSet.create_viewset(
@@ -556,3 +609,4 @@ TradePaymentViewSet = MasterViewSet.create_viewset(
         "ordering": ["-date", "-id"]
     }
 )
+TradePaymentViewSet.permission_classes = [TradePermission]

@@ -190,6 +190,56 @@ graph LR
 
 ---
 
+## Report & Export Architecture
+
+### Display Dataset Rule
+
+**Every report has exactly one authoritative Display Dataset. The UI, API,
+PDF, Excel, Print, CSV, and any future export format must consume that
+dataset directly. Exporters may format data — write cells, set fonts, pick
+page sizes — but must never calculate business values.**
+
+This rule exists because it was violated repeatedly before being made
+explicit: three reports independently computed "Balance CIF" via three
+different formulas, a report view's own JSON, Excel, and PDF paths
+diverged on a hidden-rows filter, and a client-side summary calculation in
+Item Pivot Report had no server-side equivalent at all. An export-
+consistency audit found these (plus a since-fixed bug where three reports'
+Excel exports 404'd outright), and an ongoing phased initiative
+(tracked as "Phase 2A" et seq. in commit history, not the unrelated
+`PHASE_1_REVIEW.md`/`PHASE_2_DESIGN.md`/`PHASE_3_MIGRATION_PLAN.md` docs in
+this directory, which cover a separate modularization effort) is bringing
+each report into line with it, one report at a time, starting with the
+ones already closest to compliant.
+
+In practice, a report's Display Dataset is a plain dict returned by one
+builder function (or classmethod), consumed identically by:
+- the JSON view action,
+- the Excel exporter (formats the dict's rows/summary into cells, never
+  recomputes a total or a balance),
+- the PDF exporter (same, into ReportLab flowables), and
+- the React page (renders server-supplied values; any client-side math
+  beyond display formatting — sorting, `toFixed`, locale formatting — is a
+  violation to flag and fix).
+
+Reference implementations, in order of how closely they follow the rule:
+`apps.license.services.license_balance_ledger_builder.LicenseBalanceLedgerBuilder`
+(the original, most complete example — one `build()` composing independently
+callable section builders) and `apps.license.services.purchase_profit_report.
+build_purchase_profit_report` (simpler, single flat envelope). New reports
+should follow one of these, not the older per-report ad hoc pattern still
+present in some views, and not the unused `apps.core.exporters.*` class
+hierarchy (an earlier, abandoned attempt at a shared framework — do not
+revive it; see `apps/core/reports/` for the current lightweight convention
+instead: `envelope.py`, `export_naming.py`, `renderers.py`).
+
+A number that differs between the screen, PDF, Excel, print preview, or API
+response for the same report and the same filters is a defect, not a
+cosmetic inconsistency — treat it with the same severity as an incorrect
+calculation, because in this system it usually *is* one.
+
+---
+
 ## Database Architecture
 
 ### PostgreSQL Schema

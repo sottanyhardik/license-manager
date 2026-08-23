@@ -32,7 +32,6 @@ These are the deliverables from the May 2026 platform modernization effort. Read
 - [guides/SCRIPTS_README.md](./guides/SCRIPTS_README.md) — `backend/scripts/` tools.
 - [guides/TESTING_GUIDE.md](./guides/TESTING_GUIDE.md) + [extra notes](./guides/README_TESTING.md)
 - [guides/UI_UPGRADE_GUIDE.md](./guides/UI_UPGRADE_GUIDE.md)
-- [guides/UX_UI_AUDIT_REPORT.md](./guides/UX_UI_AUDIT_REPORT.md)
 - [guides/VALIDATION_IMPLEMENTATION.md](./guides/VALIDATION_IMPLEMENTATION.md)
 
 ## Operations

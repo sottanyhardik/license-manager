@@ -81,11 +81,18 @@ class WriteRecorder:
 
 @pytest.fixture
 def enable_mds(settings):
-    """Turn the cutover on for this test, wiring the 17-master map."""
-    from mds_client.model_map import DEFAULT_MDS_MODELS
+    """Turn the write branch on without requiring an external MDS package.
+
+    The client transport is replaced by ``WriteRecorder`` below; these tests
+    only need the labels that exercise Company and UnitPrice write routing.
+    This keeps the branch executable in the normal repository test install.
+    """
 
     settings.MDS_ENABLED = True
-    settings.MDS_MODELS = DEFAULT_MDS_MODELS
+    settings.MDS_MODELS = {
+        "core.CompanyModel": {},
+        "core.UnitPriceModel": {},
+    }
     settings.MDS_BASE_URL = "https://masters.test.local/api/v1/"
     settings.MDS_TOKEN = "test-token"
     return settings
@@ -114,7 +121,7 @@ def patch_client(monkeypatch):
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(username="u1", password="x")
+    return User.objects.create_superuser(username="u1", password="x")
 
 
 # --- MDS OFF (default) ------------------------------------------------------
@@ -170,7 +177,7 @@ class TestMdsOnCreate:
         assert CompanyModel.objects.filter(iec="IEC1000001").exists()
 
     def test_create_503_and_no_partial_write_when_mds_down(self, user, enable_mds, patch_client):
-        rec = patch_client(WriteRecorder(down=True))
+        patch_client(WriteRecorder(down=True))
         request = FACTORY.post("/companies/", {"iec": "IEC2000002", "name": "GhostCo"})
         force_authenticate(request, user=user)
         view = CompanyViewSet.as_view({"post": "create"})
@@ -214,7 +221,7 @@ class TestMdsOnDelete:
         assert rec.deletes == [("core.CompanyModel", "IEC4000004")]
 
     def test_delete_503_leaves_local_row_intact_when_mds_down(self, user, enable_mds, patch_client):
-        rec = patch_client(WriteRecorder(down=True))
+        patch_client(WriteRecorder(down=True))
         c = CompanyModel.objects.create(iec="IEC5000005", name="Stay")
         request = FACTORY.delete("/companies/")
         force_authenticate(request, user=user)

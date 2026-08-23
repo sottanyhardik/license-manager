@@ -7,6 +7,7 @@ Provides endpoints to monitor and manage API rate limiting status.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from drf_spectacular.utils import extend_schema
 from django.core.cache import cache
 
 from apps.core.throttling import (
@@ -54,6 +55,7 @@ class ThrottleStatusView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(operation_id="masters_throttle_status_list")
     def get(self, request):
         """Get throttle status for all scopes"""
         status = get_all_throttle_status(request)
@@ -78,6 +80,7 @@ class ThrottleScopeStatusView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(operation_id="masters_throttle_scope_status_retrieve")
     def get(self, request, scope):
         """Get throttle status for specific scope"""
         throttle_map = {
@@ -236,7 +239,7 @@ class ThrottleHealthView(APIView):
                 cache_backend = 'memcached'
             else:
                 cache_backend = 'locmem'
-        except Exception as e:
+        except Exception:
             cache_available = False
 
         # Get configured throttle rates

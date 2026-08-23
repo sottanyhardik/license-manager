@@ -1,5 +1,5 @@
 import csv
-import os
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
@@ -18,14 +18,14 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        csv_path = options['csv']
+        csv_path = Path(options['csv'])
 
-        if not os.path.exists(csv_path):
+        if not csv_path.exists():
             self.stderr.write(self.style.ERROR(f"CSV file not found: {csv_path}"))
             return
 
         rows = []
-        with open(csv_path, newline='', encoding='utf-8-sig') as csvfile:
+        with csv_path.open(newline='', encoding='utf-8-sig') as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
                 # Skip rows where all fields are empty

@@ -31,6 +31,28 @@ class Migration(migrations.Migration):
         # Depends on the normalization migration that introduced LicenseFlags etc.
         # The view SQL references license_licenseflags.
         ("license", "0005_licensebalance_licenseflags_licensenotes_and_more"),
+        # The view SQL joins on bill_of_entry_rowdetails.sr_number_id, which
+        # only exists from this migration on. This was a MISSING dependency
+        # edge (latent bug: with no explicit ordering constraint, Django's
+        # migration-graph topological sort was free to schedule this
+        # migration before bill_of_entry's own chain finished — it happened
+        # to land after by luck until an unrelated bill_of_entry migration
+        # addition shifted the sort order and surfaced it as
+        # `column rd.sr_number_id does not exist` on a fresh/test database).
+        ("bill_of_entry", "0002_initial"),
+        # Same missing-dependency shape as above: the view SQL also joins on
+        # allotment_allotmentitems.item_id, which only exists from
+        # allotment/0002_initial on. There was no explicit edge to that
+        # migration either, so a fresh/test database's topological sort could
+        # (and eventually did, once other apps grew enough leaf migrations to
+        # shift the tie-break order) schedule this migration before
+        # allotment's chain finished, surfacing
+        # `column ai.item_id does not exist` on migrate/test-db creation.
+        # This dependency is metadata-only (no operations changed) and both
+        # sides are already applied together on every database that has run
+        # this migration, so it is a no-op there and only affects the
+        # ordering used when building a database from scratch.
+        ("allotment", "0002_initial"),
     ]
 
     operations = [

@@ -1,0 +1,213 @@
+BL-PLAN-01 — SKEPTIC independent re-verification output
+=========================================================
+Run 2026-08-07, against the real local "lmanagement" Postgres DB
+(connection confirmed: NAME=lmanagement, ENGINE=django.db.backends.postgresql)
+and the real, unmodified production code in
+backend/apps/license/services/e126_plan.py and e126_auto_plan.py.
+
+No DB writes were performed at any point (plan_e126_per_item_split takes
+plain dicts; the compute_e126_auto_plan persisted-row construction was
+simulated in-process using the exact _floor_qty/_r2 helpers, verified
+against the real source, WITHOUT calling save_plan_lines_for_license or
+touching any table).
+
+-----------------------------------------------------------------------
+PART 1 — Source verification (direct Read of production files, this
+session, independent of the claimant's characterization)
+-----------------------------------------------------------------------
+
+backend/apps/license/services/e126_auto_plan.py lines 104-116:
+    def _r2(x) -> float:
+        try:
+            return round(float(x), 2)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _floor_qty(x) -> float:
+        try:
+            return float(math.floor(float(x)))
+        except (TypeError, ValueError):
+            return 0.0
+
+backend/apps/license/services/e126_auto_plan.py lines 242-266
+(non-preserved branch of compute_e126_auto_plan) confirmed VERBATIM:
+    for sp in item_splits:
+        planning_item = sp.get('planning_item')
+        planned_qty   = sp.get('planned_quantity')
+        unit_price    = sp.get('unit_price')
+        planned_cif   = sp.get('planned_cif')
+        if not planned_qty or float(planned_qty) <= 0:
+            continue
+        if planned_cif is None:
+            continue
+        fqty = _floor_qty(planned_qty)
+        cif  = _r2(planned_cif)
+        ...
+        item_lines.append({
+            'planned_quantity': fqty,
+            'unit_price':       _r2(unit_price) if unit_price is not None else 0.0,
+            'planned_cif_fc':   cif,
+            ...
+        })
+=> Confirms: planned_cif_fc ("cif") is computed from the UN-FLOORED
+   planned_qty ("planned_cif" from the engine), never recomputed as
+   fqty * unit_price. Matches the claim's root-cause description exactly.
+
+backend/apps/license/services/e132_auto_plan.py lines 100-115: same
+_r2/_floor_qty helper pair present verbatim (confirmed by direct Read) --
+claim's assertion that E132 has the identical pattern is correct.
+
+backend/apps/license/services/e5_plan.py lines 217-230 (_fixed_rate_line,
+the sibling engine the claim cites as doing this CORRECTLY):
+    raw_cif = qty * rate
+    capped_cif = raw_cif if raw_cif <= remaining else remaining
+    planned_qty = (capped_cif / rate).to_integral_value(rounding=ROUND_FLOOR)
+    planned_cif = planned_qty * rate   # <-- recomputed AFTER flooring
+=> Confirms: E5 recomputes planned_cif from the FLOORED planned_qty. The
+   claim's "established, correct pattern that E126/E132 deviate from" is
+   independently verified true.
+
+backend/apps/license/services/plan_enforcement.py line 177
+(save_plan_lines_for_license):
+    remaining_cif_fc = ln["remaining_cif_fc"] if ln.get("remaining_cif_fc") is not None else planned_cif_fc
+=> Confirms: when the auto-plan line dict doesn't set remaining_cif_fc
+   explicitly (the non-preserved E126/E132 branch never does), it defaults
+   to planned_cif_fc verbatim -- so the inconsistent value propagates into
+   remaining_cif_fc on save, exactly as the claim's root_cause describes.
+
+backend/apps/license/services/plan_grouping.py lines 330-390
+(validate_group_plan_lines, the mandatory gate every Auto-Plan engine runs
+before saving): checks ONLY (a) unit_price <= ceiling price + tolerance,
+and (b) total planned_quantity <= avail_qty + tolerance. It NEVER checks
+planned_cif_fc == planned_quantity * unit_price.
+=> Confirms: nothing in the existing validation stack would catch or block
+   this inconsistency before it's saved.
+
+-----------------------------------------------------------------------
+PART 2 — Independent functional reproduction (DIFFERENT synthetic inputs
+than the claimant's: available_quantity=77, not 101; different
+HS/description string; script authored fresh in this verification pass,
+not copied from repro.py)
+-----------------------------------------------------------------------
+
+$ cd backend && PYTHONPATH=. ../.venv/bin/python ../audit_evidence/pass1/BL-PLAN/01/skeptic_check.py
+
+=== Independent re-run: available_quantity=77 (claimant used 101) ===
+balance_cif = 261.800
+
+Raw engine output (plan_e126_per_item_split, unmodified production code):
+  {'planning_item': 'PALM KERNEL OIL - E126', 'reason': 'HSN/desc=1513 AND Olive Oil signal (1509/1500/1510) — 50% PKO / 50% Olive Oil split', 'planned_quantity': Decimal('38.5'), 'unit_price': Decimal('1.80'), 'planned_cif': Decimal('69.300')}
+  {'planning_item': 'OLIVE OIL - E126', 'reason': 'HSN/desc=1513 AND Olive Oil signal (1509/1500/1510) — 50% PKO / 50% Olive Oil split', 'planned_quantity': Decimal('38.5'), 'unit_price': Decimal('5.00'), 'planned_cif': Decimal('192.500')}
+
+Simulated persisted LicenseItemPlan row construction (non-preserved branch):
+  [qty=77] PALM KERNEL OIL - E126: raw_planned_quantity=38.5 raw_planned_cif=69.300 -> SAVED planned_quantity=38.0 unit_price=1.8 planned_cif_fc=69.3  qty*price=68.4  MISMATCH=0.9
+  [qty=77] OLIVE OIL - E126: raw_planned_quantity=38.5 raw_planned_cif=192.500 -> SAVED planned_quantity=38.0 unit_price=5.0 planned_cif_fc=192.5  qty*price=190.0  MISMATCH=2.5
+
+total recorded planned_cif_fc = 261.8  vs balance_cif = 261.8
+ANY_MISMATCH: True
+
+=== Control: available_quantity=100 (EVEN -> 50/50 split is whole) ===
+  [qty=100 (control)] PALM KERNEL OIL - E126: raw_planned_quantity=50.0 raw_planned_cif=90.000 -> SAVED planned_quantity=50.0 unit_price=1.8 planned_cif_fc=90.0  qty*price=90.0  MISMATCH=0.0
+  [qty=100 (control)] OLIVE OIL - E126: raw_planned_quantity=50.0 raw_planned_cif=250.000 -> SAVED planned_quantity=50.0 unit_price=5.0 planned_cif_fc=250.0  qty*price=250.0  MISMATCH=0.0
+ANY_MISMATCH (control, should be False): False
+
+=== FINAL VERDICT ===
+Fractional-split case reproduces the mismatch: True
+Whole-number control case does NOT mismatch: True
+
+=> Independently reproduces the claimant's finding with different numbers:
+   fractional group quantity -> mismatch; whole-number group quantity ->
+   no mismatch (control), consistent with the claim's precise scope
+   ("whenever the classified/split quantity is fractional").
+
+Additionally verified (separate ad hoc run, not shown in the script above)
+that the wastage-rebalance pass (_rebalance_pko_olive_wastage) is a
+distinct, correctly-behaving mechanism -- confirmed it can shift quantity
+between PKO/Olive-Oil buckets when balance_cif is large relative to the
+record, and that the claimant's choice of balance_cif == exact base-split
+value (and this script's identical technique) correctly isolates the
+floor/cif defect from that unrelated, working code path.
+
+-----------------------------------------------------------------------
+PART 3 — Independent DB re-verification (real local "lmanagement" DB,
+fresh queries written in this pass, not copied from db_context.py)
+-----------------------------------------------------------------------
+
+(a) Fractional available_quantity prevalence -- raw SQL
+    (see skeptic_check.sql for the exact query executed):
+
+    fractional_count row: (22,)
+    total import items:   (2401,)
+
+    => Independently confirms the claimant's "22 of 2401 import items
+       have a fractional available_quantity" figure exactly.
+
+    Top rows by available_quantity (import_item_id, license_id, qty):
+      (39600, 2664, 63796.08)
+      (39591, 2664, 61321.80)
+      (39628, 2674, 35211.71)
+      (37678, 2500, 22754.85)
+      (39601, 2664, 21265.36)
+      (39592, 2664, 20440.60)
+      (39602, 2664, 10632.68)
+      (39610, 2664, 10220.30)
+      (39609, 2664, 9637.11)
+      (39599, 2664, 7945.35)
+      (39608, 2664, 5316.34)
+      (39598, 2664, 5110.15)
+      (39603, 2664, 3189.80)
+      (39593, 2664, 3066.09)
+      (39604, 2664, 531.63)
+
+(b) Norm distribution -- via the REAL apps.license.services.norm_plan
+    .detect_norm() function (not raw SQL, since norm is not a stored
+    column -- it's computed):
+
+    $ PYTHONPATH=. ../.venv/bin/python -c "... detect_norm(lic) for lic in LicenseDetailsModel.objects.all() ..."
+
+    total licenses scanned: 228
+    norm distribution: {'E5': 76, '': 124, 'E1': 25, 'A3627': 1, 'E132': 2}
+    E126/E132 licenses: [(2462, '0311041993', 'E132'), (2435, '0311046523', 'E132')]
+
+    => Independently confirms: 0 real E126 licenses, exactly 2 real E132
+       licenses (ids 2462 and 2435) in the current DB snapshot -- matching
+       the claimant's evidence and their "unverifiable_assumptions" note
+       that there is no live corrupted LicenseItemPlan row visible in this
+       DB today, only a proven latent defect in the code path itself.
+
+-----------------------------------------------------------------------
+CONCLUSION
+-----------------------------------------------------------------------
+Independently reproduced, using different synthetic inputs than the
+claimant and freshly-written verification code/queries (not their
+repro.py/db_context.py):
+
+  1. The exact code defect exists as described, at the cited file/lines.
+  2. Running the real, unmodified plan_e126_per_item_split() with a
+     fractional split quantity and then applying e126_auto_plan.py's own
+     _floor_qty/_r2 logic verbatim produces a LicenseItemPlan row where
+     planned_cif_fc != planned_quantity * unit_price -- reproduced with
+     available_quantity=77 (mismatches of 0.9 and 2.5, matching the same
+     mechanism as the claimant's 101-based example).
+  3. A control run with a whole-number available_quantity (100) produces
+     NO mismatch, confirming the defect is conditional on fractional
+     split quantity, exactly as characterized.
+  4. e132_auto_plan.py has the identical _floor_qty/_r2 helper pair
+     (confirmed by direct Read), supporting the claim that E132 shares the
+     root cause.
+  5. e5_plan.py's _fixed_rate_line independently confirmed to recompute
+     planned_cif from the FLOORED quantity -- the "sibling engine already
+     does this correctly" comparison holds.
+  6. save_plan_lines_for_license's remaining_cif_fc default-to-
+     planned_cif_fc behavior confirmed at the cited line, supporting the
+     persistence-path claim.
+  7. validate_group_plan_lines confirmed to never check the
+     qty*price==planned_cif_fc invariant, so nothing blocks the bad line
+     from being saved.
+  8. DB-side context (22/2401 fractional import items; 0 E126 / 2 E132
+     real licenses; norm distribution) independently re-queried against
+     the real DB and matches the claimant's figures exactly.
+
+VERDICT: CONFIRMED (independently reproduced from first principles, with
+different inputs, against the real unmodified production code and the
+real DB).

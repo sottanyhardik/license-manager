@@ -11,7 +11,6 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from apps.accounts.permissions import ReportPermission
-from django.http import HttpResponse
 
 from apps.core.models import SionNormClassModel
 from apps.license.views.inventory_balance_report import InventoryBalanceReportView
@@ -41,8 +40,7 @@ class InventoryBalanceViewSet(viewsets.ViewSet):
             - head_norm
             - item_count (number of items in licenses with this norm)
         """
-        from django.db.models import Count
-        from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
+        from apps.license.models import LicenseImportItemsModel
 
         # Get all SION norms with active licenses
         norms = SionNormClassModel.objects.filter(
@@ -141,7 +139,7 @@ class InventoryBalanceViewSet(viewsets.ViewSet):
         Returns:
             Summary statistics for all norms
         """
-        from django.db.models import Sum, Count
+        from django.db.models import Sum
         from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 
         # Get all active licenses with SION norms

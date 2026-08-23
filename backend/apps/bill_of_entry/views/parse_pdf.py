@@ -15,8 +15,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import AllotmentPermission
+from apps.accounts.permissions import BillOfEntryPermission
 from apps.allotment.models import AllotmentModel
+from apps.bill_of_entry.models import BillOfEntryModel
 from apps.bill_of_entry.parsers.boe_pdf import parse_boe_pdf
 from apps.core.models import CompanyModel, ExchangeRateModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
@@ -195,7 +196,7 @@ class BOEPdfParseView(APIView):
 
     Returns a JSON object suitable for prefilling AllotmentFormModal.
     """
-    permission_classes = [IsAuthenticated, AllotmentPermission]
+    permission_classes = [IsAuthenticated, BillOfEntryPermission]
     parser_classes = [MultiPartParser, FormParser]
 
     @transaction.atomic
@@ -229,6 +230,13 @@ class BOEPdfParseView(APIView):
         company, company_created = _match_or_create_company(parsed, create_company)
         port = _match_port(parsed.get("port_code"))
         allotment = _match_allotment_by_invoice(parsed.get("invoice_no"))
+        # A BOE is unique by number and date.  Tell the create form about an
+        # existing record before it submits, so it can open that record with
+        # the parsed values still ready to review and save.
+        existing_boe = BillOfEntryModel.objects.filter(
+            bill_of_entry_number=parsed["be_number"],
+            bill_of_entry_date=parsed.get("be_date"),
+        ).order_by("id").first()
 
         usd_rate = _convert_to_usd_rate(parsed)
         licences = _match_license_rows(parsed, usd_rate)
@@ -265,6 +273,7 @@ class BOEPdfParseView(APIView):
             "parsed": parsed,
             "prefill": prefill,
             "matched_allotment_id": allotment.id if allotment else None,
+            "existing_boe_id": existing_boe.id if existing_boe else None,
             "matched_company_id": company.id if company else None,
             "company_created": company_created,
             "matched_port_id": port.id if port else None,

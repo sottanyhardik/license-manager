@@ -31,7 +31,6 @@ from dataclasses import dataclass
 
 from django.apps import apps as django_apps
 from django.db import transaction
-from django.utils import timezone
 
 from . import settings as mds_settings
 from .client import MDSClient, MDSUnavailable

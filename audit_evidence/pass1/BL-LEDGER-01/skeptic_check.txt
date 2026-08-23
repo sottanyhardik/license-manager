@@ -1,0 +1,32 @@
+=== Step A: independently re-derive genuinely-hidden BOE ids (not trusting claim's pick) ===
+count genuinely hidden BOEs (system-wide): 322
+is 27511 in independently-derived hidden set? True
+boe 27511 invoice_no: OTH  bill_of_entry_number: 4505467
+ReconciliationLog rows for boe 27511:
+  {'action': 'HIDE_BOE', 'created_on': datetime.datetime(2026, 7, 30, 4, 8, 59, 603442, tzinfo=datetime.timezone.utc), 'before': {'is_hidden': False, 'invoice_no': 'GE'}, 'after': {'is_hidden': True, 'bill_of_entry_number': '4505467'}}
+
+=== Step B: find license + row for this BOE's debit, independent query ===
+row 274336 cif_fc: 267928.000 transaction_type: D
+license_number: 5211016017
+stored LicenseBalance.balance_cif BEFORE: 3322.35
+live calculate_financial_balance BEFORE: 3322.35
+
+=== Step C: confirm trade 542 is unrelated (not currently linked to boe 27511) and has its own invoice_number ===
+trade.invoice_number: PUR/2026-27/0007
+trade currently linked boe ids: [27821]
+is boe 27511 already linked to trade 542? False
+
+=== Step D: reproduce link action's effect inside atomic() rolled back ===
+boe.invoice_no AFTER stamp: PUR/2026-27/0007
+stored LicenseBalance.balance_cif AFTER (still not refreshed by any signal?): 3322.35
+live calculate_financial_balance AFTER: 271250.35
+delta: 267928.00
+27511 still in genuinely_hidden_boe_ids([27511]) AFTER stamp? False
+ReconciliationLog row count for boe 27511 AFTER stamp (should be unchanged if no audit trail): 1
+rolled back: SKEPTIC ROLLBACK - no permanent change
+
+=== Step E: post-rollback sanity - confirm nothing persisted ===
+boe.invoice_no POST-ROLLBACK (should be back to OTH): OTH
+boe 27511 still linked to trade 542 POST-ROLLBACK? False
+stored LicenseBalance.balance_cif POST-ROLLBACK: 3322.35
+live calculate_financial_balance POST-ROLLBACK: 3322.35

@@ -126,11 +126,11 @@ export default function OwnershipDetailsModal({ show, onHide, licenseId, license
                                         <table className="w-full text-[13.5px]">
                                             <thead>
                                                 <tr className="bg-destructive/10 text-left">
-                                                    <th className="px-3 py-2.5 font-semibold">Initiation Date</th>
-                                                    <th className="px-3 py-2.5 font-semibold">Acceptance Date</th>
-                                                    <th className="px-3 py-2.5 font-semibold">From IEC</th>
-                                                    <th className="px-3 py-2.5 font-semibold">To IEC</th>
-                                                    <th className="px-3 py-2.5 font-semibold">Status</th>
+                                                    <th scope="col" className="px-3 py-2.5 font-semibold">Initiation Date</th>
+                                                    <th scope="col" className="px-3 py-2.5 font-semibold">Acceptance Date</th>
+                                                    <th scope="col" className="px-3 py-2.5 font-semibold">From IEC</th>
+                                                    <th scope="col" className="px-3 py-2.5 font-semibold">To IEC</th>
+                                                    <th scope="col" className="px-3 py-2.5 font-semibold">Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody>

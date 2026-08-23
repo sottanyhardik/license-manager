@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/license-manager.iml" filepath="$PROJECT_DIR$/.idea/license-manager.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/mds-client.iml" filepath="$PROJECT_DIR$/.idea/mds-client.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/mds-client@1.iml" filepath="$PROJECT_DIR$/.idea/mds-client@1.iml" />
     </modules>
   </component>
 </project>

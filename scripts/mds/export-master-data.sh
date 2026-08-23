@@ -36,8 +36,7 @@ OUT=""
 CONFIRM=0   # accepted for interface uniformity; export is read-only regardless
 
 usage() {
-    grep '^#' "$0" | sed 's/^# \{0,1\}//' | sed '/^!/d'
-    exit "${1:-0}"
+    mds_usage "$0" "${1:-0}"
 }
 
 while [ $# -gt 0 ]; do

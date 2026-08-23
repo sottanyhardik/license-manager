@@ -1,0 +1,88 @@
+SEC-01 — Skeptic independent re-verification (PASS: defect reproduced)
+=======================================================================
+
+Method: end-to-end Django test-client reproduction against the actual
+application code (no mocking of ProtectedMediaView, LicensePermission,
+has_any_role, or URL routing), run against pytest-django's throwaway test
+database. The real local "lmanagement" DB was never touched, queried, or
+migrated in this check.
+
+Command run (from backend/):
+
+    cd backend && python -m pytest -c pytest.ini --no-cov -p no:cacheprovider \
+        -q -s ../audit_evidence/pass1/SEC-01/skeptic_check_test.py
+
+Full captured output:
+
+    ============================= test session starts ==============================
+    platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0
+    django: version: 6.0.4, settings: lmanagement.settings (from ini)
+    rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+    configfile: pytest.ini
+    plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+    collected 1 item
+
+    MEDIA_ROOT (test) = /private/var/folders/.../pytest-of-.../test_low_privilege_user_blocke0
+    file exists on disk = True
+    user roles = ['INCENTIVE_LICENSE_VIEWER']
+    GET /api/licenses/  -> status 403
+    GET /api/media/licenses/0510099999/0510099999%20Copy.pdf -> status 200
+    media response body (first 40 bytes) = b'%PDF-1.4 fake licence copy contents\n'
+
+    1 passed in 3.63s
+
+Interpretation:
+
+- A user belonging to ONLY the "INCENTIVE_LICENSE_VIEWER" Django group
+  (no LICENSE_VIEWER / LICENSE_MANAGER / TRADE_VIEWER / TRADE_MANAGER /
+  BOE_* role) is correctly rejected with 403 by LicensePermission when
+  calling the normal license list endpoint (GET /api/licenses/).
+- The SAME authenticated user, in the SAME test, retrieves the file
+  planted at the license's predictable document path
+  (licenses/<license_number>/<license_number> Copy.pdf, matching
+  apps/license/models/core.py's license_path() naming convention exactly)
+  via GET /api/media/<path> with a 200 and the actual file bytes streamed
+  back — i.e. ProtectedMediaView applied no equivalent role check.
+- This independently confirms, by direct execution rather than by
+  re-reading the claim's evidence text, that ProtectedMediaView's
+  permission_classes = [IsAuthenticated] (backend/apps/core/views/media.py:33)
+  is the only authorization gate on that endpoint, and that it is
+  insufficient to prevent a low-privilege authenticated user from reading
+  another module's protected document once the (business-identifier-keyed,
+  non-random) storage path is known.
+
+Corroborating static checks performed alongside the dynamic reproduction
+(all re-read directly from current source, not taken from the original
+finding's evidence text):
+
+- backend/apps/core/views/media.py:24-59 — ProtectedMediaView.get() confirmed
+  to perform only a MEDIA_ROOT path-traversal confinement check and an
+  os.path.isfile() check; no call to any permission/role helper appears
+  anywhere in the method body.
+- backend/lmanagement/urls.py:41-42 — confirms the route is
+  re_path(r"^api/media/(?P<path>.+)$", ProtectedMediaView.as_view(), ...),
+  i.e. reachable by any authenticated request, matching the claim.
+- backend/apps/accounts/permissions.py — LicensePermission.required_roles_for_read
+  = ['LICENSE_MANAGER', 'LICENSE_VIEWER', 'TRADE_VIEWER', 'TRADE_MANAGER'];
+  BaseRolePermission.has_permission returns False for SAFE_METHODS when the
+  user holds none of those roles — matches the 403 observed above.
+- backend/apps/license/urls.py:22-23 — confirms GET /api/licenses/ (the
+  DefaultRouter "licenses" list route) is served by LicenseDetailsViewSet,
+  which sets permission_classes = [LicensePermission]
+  (backend/apps/license/views/license.py:203).
+- backend/apps/license/models/core.py:47-73 — license_path() confirmed to
+  build exactly the "licenses/<license_number>/<license_number> Copy.<ext>"
+  path used in the reproduction, i.e. the path is derived deterministically
+  from the license_number business identifier, not a random/opaque token.
+
+Verdict: CONFIRMED. Independently reproduced, not merely re-read from the
+original finding's evidence. No discrepancy found with the claimed
+severity, mechanism, or affected code path. The claim's "confidence: high"
+is justified — the defect is deterministic and requires no special
+preconditions beyond an authenticated session with at least one role and
+knowledge of a target license_number/BOE filename/trade invoice filename.
+
+No new unverifiable assumptions were introduced by this check beyond the
+one already recorded in the original finding (production nginx config vs.
+repo's checked-in nginx-*.conf state, which is outside the scope of a
+source/DB-only re-verification).

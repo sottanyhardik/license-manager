@@ -7,6 +7,7 @@ import api from "../api/axios";
 import TransferLetterForm from "../components/TransferLetterForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import PageHeader from "@/components/PageHeader";
 
 function Detail({ label, value }) {
     return (
@@ -40,22 +41,19 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
         fetchTrade();
     }, [id]);
 
-    if (loading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
+    if (loading) return <div role="status" className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">Loading…</div>;
 
     return (
-        <div className={isModal ? "" : "py-1"}>
+        <div className={isModal ? "" : "space-y-3 py-1"}>
             {!isModal && (
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                        Generate Transfer Letter
-                        {(trade?.invoice_number || trade?.id) && (
-                            <span className="ml-2 text-base font-medium text-muted-foreground">· Trade {trade.invoice_number || trade.id}</span>
-                        )}
-                    </h1>
-                    <Button variant="outline" onClick={() => navigate("/trades")}>
+                <PageHeader
+                    pretitle="Documents"
+                    title="Generate Transfer Letter"
+                    description={(trade?.invoice_number || trade?.id) ? `Trade ${trade.invoice_number || trade.id}` : undefined}
+                    actions={<Button variant="outline" size="sm" onClick={() => navigate("/trades")}>
                         <ArrowLeft className="size-4" />Back to Trade List
-                    </Button>
-                </div>
+                    </Button>}
+                />
             )}
 
             {error && (
@@ -66,15 +64,15 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
 
             {trade && (
                 <>
-                    <Card className="mb-4">
-                        <CardContent className="pt-5">
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    <Card>
+                        <CardContent className="p-3">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-4">
                                 <Detail label="Direction" value={trade.direction} />
                                 <Detail label="Invoice Number" value={trade.invoice_number || "-"} />
                                 <Detail label="Invoice Date" value={trade.invoice_date} />
                                 <Detail label="Total Items" value={trade.lines?.length || 0} />
                             </div>
-                            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                                 <Detail label="From Company" value={trade.from_company_name || "-"} />
                                 <Detail label="To Company" value={trade.to_company_name || "-"} />
                             </div>

@@ -1,7 +1,7 @@
 # Navigation Role-Based Access Control
 
 ## Overview
-The sidebar navigation now shows/hides menu items based on the user's assigned roles. Superusers see all menu items automatically.
+The primary `TopNav` and protected routes show or hide menu items based on the user's assigned roles. Superusers pass every frontend role check automatically. UI visibility is not the security boundary; backend DRF permission classes remain the source of truth for API access.
 
 ## Menu Item Visibility Rules
 
@@ -12,23 +12,29 @@ The sidebar navigation now shows/hides menu items based on the user's assigned r
 | **Dashboard** | All authenticated users | Always visible for any logged-in user |
 | **Licenses** | `LICENSE_MANAGER`, `LICENSE_VIEWER` | View/manage DFIA licenses |
 | **Allotments** | `ALLOTMENT_MANAGER`, `ALLOTMENT_VIEWER` | View/manage license allotments |
-| **Bill of Entry** | `BOE_MANAGER`, `BOE_VIEWER` | View/manage bill of entries |
+| **Bill of Entry** | `BOE_MANAGER`, `BOE_VIEWER`, `TL_GENERATE`, `ACCOUNT_ACCESS` | View/manage bill of entries and role-specific BOE actions |
 | **Trade In & Out** | `TRADE_MANAGER`, `TRADE_VIEWER` | View/manage trades |
 | **Incentive Licenses** | `INCENTIVE_LICENSE_MANAGER`, `INCENTIVE_LICENSE_VIEWER` | View/manage RODTEP/ROSTL/MEIS licenses |
-| **License Ledger** | `TRADE_VIEWER`, `TRADE_MANAGER`, `LICENSE_MANAGER` | View license ledger |
-| **Settings** | `USER_MANAGER` | User management and role assignment |
+| **License Ledger** | `LICENSE_MANAGER`, `TRADE_MANAGER`, `TRADE_VIEWER`, `LEDGER_MANAGER` | View license ledger |
+| **Ledger Upload** | `LICENSE_MANAGER`, `LEDGER_MANAGER` | Upload ledger files |
+| **Settings** | Superuser only | User and role settings |
+| **User Management** | `USER_MANAGER` | User CRUD and activity log |
 
 ### Dropdown Sections
 
 #### Reports Dropdown
-**Visible to:** `REPORT_VIEWER`, `LICENSE_MANAGER`, `TRADE_MANAGER`, `ALLOTMENT_MANAGER`, `BOE_MANAGER`, `INCENTIVE_LICENSE_MANAGER`
+**Visible to:** `REPORT_VIEWER`, `LICENSE_MANAGER`, `LICENSE_VIEWER`, `TRADE_MANAGER`, `TRADE_VIEWER`, `ALLOTMENT_MANAGER`, `BOE_MANAGER`, `INCENTIVE_LICENSE_MANAGER`
 
 Contains:
-- Item Pivot Report
-- Item Report
+- SION reports
+- Expiring and active license reports
+- Download license report
+- Item pivot and item reports
 
 #### Masters Dropdown
-**Visible to:** `USER_MANAGER`, `LICENSE_MANAGER`, `TRADE_MANAGER`, `ALLOTMENT_MANAGER`, `BOE_MANAGER`, `INCENTIVE_LICENSE_MANAGER`
+**Visible to:** all authenticated users for read-only access.
+
+Create, update, and delete routes are superuser-only in the frontend and are enforced by `MasterDataPermission` on the backend.
 
 Contains:
 - Companies
@@ -44,20 +50,20 @@ Contains:
 
 ### Frontend Implementation
 
-1. **AuthContext** provides `hasRole(roleCodes)` function
-   - Checks if user has any of the specified role codes
+1. **AuthContext** provides `hasRole(roleCode)` and `hasAnyRole(roleCodes)` functions
+   - Checks the user's `roles` array
    - Superusers automatically return `true` for any role check
-   - Uses `user.role_codes` array from API
+   - Uses the `roles` array from `/api/auth/me/`
 
-2. **Sidebar Component** filters menu items
-   - Each route has a `roles` array defining required roles
-   - `hasRole()` is called to check if user can see the menu item
-   - Menu items are dynamically shown/hidden based on user roles
+2. **TopNav Component** filters menu items
+   - Domain navigation groups define allowed roles per item
+   - Reports reuse `REPORT_ROLES` from `frontend/src/routes/authorizationRoles.ts`
+   - Menu items are dynamically shown/hidden based on `hasAnyRole()`
 
-3. **Route Protection** (RoleRoute component)
+3. **Route Protection** (`ProtectedRoute`)
    - Redirects to `/login` if not authenticated
-   - Redirects to `/401` if user lacks required roles
-   - Uses the same `hasRole()` logic as navigation
+   - Redirects to `/403` if user lacks required roles
+   - Supports `requiredRole`, `requiredAnyRole`, and `requireSuperuser`
 
 ### Example User Scenarios
 
@@ -67,10 +73,11 @@ Contains:
 **Can See:**
 - Dashboard
 - Licenses (view only - backend enforces read-only)
+- Reports that include license data
 
 **Cannot See:**
 - Allotments, BOE, Trades, Incentive Licenses
-- Reports, Masters, Settings
+- Settings and user management
 
 #### Scenario 2: Trade Manager
 **Assigned Roles:** `TRADE_MANAGER`, `TRADE_VIEWER`
@@ -115,8 +122,14 @@ Result: Full access to licenses, allotments, BOE, trades, and reports
 
 ### Accounts User (License Ledger Only)
 ```
-Roles: TRADE_VIEWER, LICENSE_MANAGER (or LICENSE_VIEWER with special permission)
-Result: Can view license ledger and related trade data
+Roles: ACCOUNT_ACCESS
+Result: Can view BOE records and update BOE invoice numbers through the dedicated account-access API path
+```
+
+### Ledger User
+```
+Roles: LEDGER_MANAGER
+Result: Can upload ledgers and view license ledger data
 ```
 
 ### System Administrator
@@ -128,24 +141,25 @@ Result: Full system access including user management
 ## Testing Navigation Visibility
 
 1. **Log in as user**
-2. **Check sidebar** - only relevant menu items should be visible
-3. **Try accessing restricted routes** - should redirect to 401
+2. **Check TopNav** - only relevant menu items should be visible
+3. **Try accessing restricted routes** - should redirect to 403
 4. **Log in as superuser** - all menu items visible
 
 ## Updating Role Access
 
 To change which roles can see a menu item:
 
-1. **Edit `/frontend/src/routes/config.js`**
-2. **Update the `roles` array** for the route
-3. **Frontend automatically updates** based on user's role_codes
+1. Update route guards in `/frontend/src/routes/AppRoutes.tsx`.
+2. Update matching navigation roles in `/frontend/src/components/TopNav.tsx`.
+3. If the route is a report route, update `/frontend/src/routes/authorizationRoles.ts`.
+4. Verify the backend permission class allows the same or stricter access.
 
 Example:
 ```javascript
 {
     path: "/licenses",
     label: "Licenses",
-    roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"], // ← Edit this array
+    roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"],
     icon: "file-earmark-text",
 }
 ```
@@ -158,15 +172,16 @@ Example:
 - READ operations: Check viewer OR manager roles
 - WRITE operations: Check only manager roles
 - Superusers bypass all checks
+- Generic master-data APIs use `MasterDataPermission`: authenticated users may read, only superusers may write
 
 See `RBAC_DOCUMENTATION.md` for complete permission matrix.
 
 ## Troubleshooting
 
 ### Menu item not showing up
-1. Check user has required role: `/api/accounts/me/` → `role_codes`
+1. Check user has required role: `/api/auth/me/` → `roles`
 2. Check role is active in database
-3. Check `routes/config.js` for correct role codes
+3. Check `AppRoutes.tsx`, `TopNav.tsx`, and `authorizationRoles.ts` for correct role codes
 4. Clear browser cache and re-login
 
 ### Menu item showing but getting 401/403
@@ -181,5 +196,5 @@ See `RBAC_DOCUMENTATION.md` for complete permission matrix.
 
 ---
 
-**Last Updated:** December 26, 2025
+**Last Updated:** July 16, 2026
 **Related Docs:** `RBAC_DOCUMENTATION.md`, `RBAC_SETUP_INSTRUCTIONS.md`

@@ -9,7 +9,6 @@ Run with:
 """
 import pytest
 from decimal import Decimal
-from datetime import date, timedelta
 from unittest.mock import patch, Mock
 
 from django.urls import reverse
@@ -34,6 +33,41 @@ def _auth_client(user):
     token = RefreshToken.for_user(user).access_token
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(token)}")
     return client
+
+
+def _self_looping_queryset():
+    """
+    A Mock queryset whose `.filter()`/`.exclude()`/`.annotate()` all loop
+    back to itself, so a real multi-step annotate/exclude chain (e.g.
+    `LicenseBalanceCalculator.get_debit_rows` /
+    `_annotate_allotment_contribution`, both of which chain several
+    `.annotate(...)` calls — and internally `exclude_hidden()`'s own
+    `.annotate()`/`.filter()` — before the final `.aggregate()`) still
+    resolves back to this same object, so its `.aggregate()`/`.values()`
+    return value can be configured directly regardless of exactly how many
+    intermediate calls production code makes.
+    """
+    qs = Mock()
+    qs.filter.return_value = qs
+    qs.exclude.return_value = qs
+    qs.annotate.return_value = qs
+    return qs
+
+
+def _short_circuit_boe_invoice_representation(mock_invoice_allocation, mock_license_trade):
+    """
+    Make `LicenseBalanceCalculator.resolve_boes_represented_by_invoice[_for_licenses]`
+    (reached from `get_debit_rows()`'s linked-BOE exclusion, which every
+    `calculate_debit()`/`calculate_boe_debit_total()` call goes through)
+    report "nothing represented" without ever touching the real ORM on a
+    `Mock()` license object — `mock_invoice_allocation`/`mock_license_trade`
+    must be patches of `apps.reconciliation.models.InvoiceBOEAllocation` /
+    `apps.trade.models.LicenseTrade` (the modules they're lazily imported
+    from inside balance_calculator.py, not this module).
+    """
+    mock_license_trade.objects.filter.return_value.distinct.return_value.filter.return_value \
+        .prefetch_related.return_value = []
+    mock_invoice_allocation.objects.filter.return_value.values_list.return_value.distinct.return_value = []
 
 
 # ===========================================================================
@@ -359,17 +393,29 @@ class TestLicenseBalanceCalculator:
 
     def test_debit_returns_boe_total(self):
         mock_license = Mock()
-        with patch("apps.license.services.balance_calculator.RowDetails") as m:
-            m.objects.filter.return_value.aggregate.return_value = {
-                "total": Decimal("300.00")
-            }
+        with (
+            patch("apps.reconciliation.models.InvoiceBOEAllocation") as mock_ia,
+            patch("apps.trade.models.LicenseTrade") as mock_lt,
+            patch("apps.license.services.balance_calculator.RowDetails") as m,
+        ):
+            _short_circuit_boe_invoice_representation(mock_ia, mock_lt)
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"total": Decimal("300.00")}
+            m.objects.filter.return_value = qs
             result = LicenseBalanceCalculator.calculate_debit(mock_license)
         assert result == Decimal("300.00")
 
     def test_debit_returns_zero_when_no_boe(self):
         mock_license = Mock()
-        with patch("apps.license.services.balance_calculator.RowDetails") as m:
-            m.objects.filter.return_value.aggregate.return_value = {"total": DEC_0}
+        with (
+            patch("apps.reconciliation.models.InvoiceBOEAllocation") as mock_ia,
+            patch("apps.trade.models.LicenseTrade") as mock_lt,
+            patch("apps.license.services.balance_calculator.RowDetails") as m,
+        ):
+            _short_circuit_boe_invoice_representation(mock_ia, mock_lt)
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"total": DEC_0}
+            m.objects.filter.return_value = qs
             result = LicenseBalanceCalculator.calculate_debit(mock_license)
         assert result == DEC_0
 
@@ -378,9 +424,9 @@ class TestLicenseBalanceCalculator:
     def test_allotment_returns_total(self):
         mock_license = Mock()
         with patch("apps.license.services.balance_calculator.AllotmentItems") as m:
-            m.objects.filter.return_value.aggregate.return_value = {
-                "total": Decimal("200.00")
-            }
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"total": Decimal("200.00")}
+            m.objects.filter.return_value = qs
             result = LicenseBalanceCalculator.calculate_allotment(mock_license)
         assert result == Decimal("200.00")
 
@@ -397,9 +443,8 @@ class TestLicenseBalanceCalculator:
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("1000.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == Decimal("500.00")  # 1000 - (300 + 200)
@@ -408,9 +453,8 @@ class TestLicenseBalanceCalculator:
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("100.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == DEC_0
@@ -419,9 +463,8 @@ class TestLicenseBalanceCalculator:
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("500.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == DEC_0
@@ -431,9 +474,8 @@ class TestLicenseBalanceCalculator:
         large = Decimal("999999999999.99")
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=large),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=DEC_0),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=DEC_0),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=DEC_0),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == large
@@ -442,9 +484,8 @@ class TestLicenseBalanceCalculator:
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("0.01")),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=DEC_0),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=DEC_0),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=DEC_0),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == Decimal("0.01")
@@ -455,9 +496,8 @@ class TestLicenseBalanceCalculator:
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("1000.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
         assert result["credit"] == Decimal("1000.00")
@@ -469,9 +509,8 @@ class TestLicenseBalanceCalculator:
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("100.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_debit", return_value=Decimal("300.00")),
+            patch.object(LicenseBalanceCalculator, "calculate_boe_debit_total", return_value=Decimal("300.00")),
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
-            patch.object(LicenseBalanceCalculator, "calculate_trade", return_value=DEC_0),
         ):
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
         assert result["balance"] == DEC_0
@@ -490,13 +529,19 @@ class TestItemBalanceCalculator:
         mock_item = Mock()
         mock_item.cif_fc = Decimal("500.00")
         mock_item.license = Mock()
-        with (
-            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
-        ):
-            mock_rd.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("100.00")}
-            mock_ai.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("50.00")}
-            credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
+        with patch("apps.license.services.balance_calculator.RowDetails") as mock_rd:
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"cif_fc__sum": Decimal("100.00")}
+            mock_rd.objects.filter.return_value = qs
+            # Outstanding (BOE-unlinked) allotment total now delegates to
+            # the shared Balance Engine helper (LicenseBalanceCalculator.
+            # get_outstanding_allotment_totals) rather than querying
+            # AllotmentItems directly — see that method's docstring.
+            with patch.object(
+                LicenseBalanceCalculator, "get_outstanding_allotment_totals",
+                return_value=(DEC_0, Decimal("50.00")),
+            ):
+                credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
         assert credit == Decimal("500.00")
         assert total_debit == Decimal("150.00")
 
@@ -507,12 +552,16 @@ class TestItemBalanceCalculator:
         with (
             patch("apps.license.services.balance_calculator.LicenseExportItemModel") as mock_exp,
             patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
         ):
             mock_exp.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("1000.00")}
-            mock_rd.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("300.00")}
-            mock_ai.objects.filter.return_value.aggregate.return_value = {"cif_fc__sum": Decimal("100.00")}
-            credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"cif_fc__sum": Decimal("300.00")}
+            mock_rd.objects.filter.return_value = qs
+            with patch.object(
+                LicenseBalanceCalculator, "get_outstanding_allotment_totals",
+                return_value=(DEC_0, Decimal("100.00")),
+            ):
+                credit, total_debit = ItemBalanceCalculator.calculate_item_credit_debit(mock_item)
         assert credit == Decimal("1000.00")
         assert total_debit == Decimal("400.00")
 
@@ -551,25 +600,45 @@ class TestItemBalanceCalculator:
     def test_available_quantity_partial_usage(self):
         mock_item = Mock()
         mock_item.quantity = Decimal("1000")
-        with (
-            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
-        ):
-            mock_rd.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("300")}
-            mock_ai.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("200")}
-            result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
+        with patch("apps.license.services.balance_calculator.RowDetails") as mock_rd:
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"qty__sum": Decimal("300")}
+            mock_rd.objects.filter.return_value = qs
+            # Outstanding (BOE-unlinked) allotted quantity now delegates to
+            # the shared Balance Engine helper (LicenseBalanceCalculator.
+            # get_outstanding_allotment_totals) rather than querying
+            # AllotmentItems directly — see that method's docstring.
+            with (
+                patch.object(
+                    LicenseBalanceCalculator, "get_outstanding_allotment_totals",
+                    return_value=(Decimal("200"), DEC_0),
+                ),
+                patch.object(
+                    ItemBalanceCalculator, "calculate_direct_sale_quantity",
+                    return_value=DEC_0,
+                ),
+            ):
+                result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
         assert result == Decimal("500")
 
     def test_available_quantity_returns_zero_when_fully_allocated(self):
         mock_item = Mock()
         mock_item.quantity = Decimal("1000")
-        with (
-            patch("apps.license.services.balance_calculator.RowDetails") as mock_rd,
-            patch("apps.license.services.balance_calculator.AllotmentItems") as mock_ai,
-        ):
-            mock_rd.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("600")}
-            mock_ai.objects.filter.return_value.aggregate.return_value = {"qty__sum": Decimal("500")}
-            result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
+        with patch("apps.license.services.balance_calculator.RowDetails") as mock_rd:
+            qs = _self_looping_queryset()
+            qs.aggregate.return_value = {"qty__sum": Decimal("600")}
+            mock_rd.objects.filter.return_value = qs
+            with (
+                patch.object(
+                    LicenseBalanceCalculator, "get_outstanding_allotment_totals",
+                    return_value=(Decimal("500"), DEC_0),
+                ),
+                patch.object(
+                    ItemBalanceCalculator, "calculate_direct_sale_quantity",
+                    return_value=DEC_0,
+                ),
+            ):
+                result = ItemBalanceCalculator.calculate_available_quantity(mock_item)
         assert result == DEC_0
 
     # --- calculate_available_value_for_allocation ---

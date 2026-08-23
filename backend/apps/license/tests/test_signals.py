@@ -7,16 +7,25 @@ expected update/archive logic when those models change.
 
 Patch target: ``apps.license.signals.update_license_flags``
 """
-import pytest
+from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
 from django.test import TestCase
+from django.utils import timezone
 
-from apps.core.models import CompanyModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.bill_of_entry.models import RowDetails, BillOfEntryModel
+from apps.core.models import CompanyModel
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.signals import (
+    _flags_suspended,
+    _update_all_import_items_available_value,
+    suspend_license_flag_recalc,
+    update_license_flags,
+    update_license_on_import_item_change,
+)
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 # ---------------------------------------------------------------------------
@@ -218,3 +227,110 @@ class TestSnapshotExporterNameSignal(TestCase):
         license_obj.refresh_from_db()
         # Signal does: archived_exporter_name = instance.name or ""
         assert license_obj.archived_exporter_name == ""
+
+
+# ---------------------------------------------------------------------------
+# 5. License signal helper hardening
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+class TestLicenseSignalHelpers(TestCase):
+    """Direct regression tests for skip paths and materialized balance helpers."""
+
+    def test_suspend_license_flag_recalc_restores_previous_state_after_exception(self):
+        assert _flags_suspended() is False
+
+        with pytest.raises(RuntimeError, match="boom"):
+            with suspend_license_flag_recalc():
+                assert _flags_suspended() is True
+                raise RuntimeError("boom")
+
+        assert _flags_suspended() is False
+
+    def test_update_license_flags_ignores_none_and_unsaved_instances(self):
+        update_license_flags(None)
+        update_license_flags(LicenseDetailsModel(license_number="UNSAVED-SIG"))
+
+    def test_import_item_signal_skips_balance_only_update_fields(self):
+        license_obj = _make_license("BAL01")
+        import_item = _make_import_item(license_obj)
+
+        with patch("apps.license.signals.update_license_flags") as mock_update:
+            update_license_on_import_item_change(
+                sender=LicenseImportItemsModel,
+                instance=import_item,
+                created=False,
+                update_fields={"available_value", "debited_value"},
+            )
+
+        mock_update.assert_not_called()
+
+    def test_import_item_signal_skips_when_suspended(self):
+        license_obj = _make_license("SUS01")
+        import_item = _make_import_item(license_obj)
+
+        with patch("apps.license.signals.update_license_flags") as mock_update:
+            with suspend_license_flag_recalc():
+                update_license_on_import_item_change(
+                    sender=LicenseImportItemsModel,
+                    instance=import_item,
+                    created=False,
+                )
+
+        mock_update.assert_not_called()
+
+    def test_update_license_flags_updates_expired_and_null_subrows(self):
+        license_obj = LicenseDetailsModel.objects.create(
+            license_number="FLAG-SIG01",
+            license_expiry_date=timezone.now().date() - timedelta(days=1),
+        )
+
+        update_license_flags(license_obj)
+
+        license_obj.flags.refresh_from_db()
+        license_obj.balance.refresh_from_db()
+        assert license_obj.flags.is_expired is True
+        assert license_obj.flags.is_null is True
+        assert license_obj.balance.balance_cif == Decimal("0.00")
+
+    def test_update_all_import_items_available_value_updates_open_percent_and_marker_items(self):
+        license_obj = _make_license("AVL01")
+
+        with suspend_license_flag_recalc():
+            open_item = LicenseImportItemsModel.objects.create(
+                license=license_obj,
+                serial_number=1,
+                available_value=Decimal("0.00"),
+            )
+            percent_item = LicenseImportItemsModel.objects.create(
+                license=license_obj,
+                serial_number=2,
+                condition_type="5%",
+                available_value=Decimal("0.00"),
+            )
+            marker_item = LicenseImportItemsModel.objects.create(
+                license=license_obj,
+                serial_number=3,
+                cif_fc=Decimal("0.01"),
+                available_value=Decimal("0.00"),
+            )
+
+        license_obj.balance.balance_cif = Decimal("250.00")
+        license_obj.balance.save(update_fields=["balance_cif"])
+
+        with patch(
+            "apps.license.services.condition_pool.compute_condition_pools",
+            return_value={"5%": Decimal("100.00")},
+        ):
+            _update_all_import_items_available_value(license_obj)
+
+        open_item.refresh_from_db()
+        percent_item.refresh_from_db()
+        marker_item.refresh_from_db()
+        assert open_item.available_value == Decimal("250.00")
+        assert percent_item.available_value == Decimal("100.00")
+        assert marker_item.available_value == Decimal("0.01")
+
+    def test_update_all_import_items_available_value_ignores_missing_license(self):
+        _update_all_import_items_available_value(None)
+        _update_all_import_items_available_value(LicenseDetailsModel(license_number="UNSAVED-AVL"))

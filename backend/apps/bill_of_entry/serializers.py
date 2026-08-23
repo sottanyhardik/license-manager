@@ -1,14 +1,39 @@
 # bill_of_entry/serializers.py
+from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+from apps.core.constants import DEBIT
 
 
 class RowDetailsSerializer(serializers.ModelSerializer):
-    """Serializer for BOE row details (nested items)"""
+    """Serializer for BOE row details (nested items) with decimal precision enforcement."""
     # Make id writable so it can be passed during updates
     id = serializers.IntegerField(required=False)
+
+    # Enforce CIF INR to 2 decimal places
+    cif_inr = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        coerce_to_string=False,
+    )
+
+    # Enforce CIF FC to 2 decimal places
+    cif_fc = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        coerce_to_string=False,
+    )
+
+    # Enforce Quantity to 3 decimal places
+    qty = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        coerce_to_string=False,
+    )
+
     license_number = serializers.CharField(source='sr_number.license.license_number', read_only=True)
+    license_id = serializers.IntegerField(source='sr_number.license.id', read_only=True)
     item_description = serializers.CharField(source='sr_number.description', read_only=True)
     hs_code = serializers.CharField(source='sr_number.hs_code.hs_code', read_only=True)
     item_serial_number = serializers.IntegerField(source='sr_number.serial_number', read_only=True)
@@ -21,6 +46,30 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             return obj.sr_number.license.purchase_status.code
         return None
 
+    def validate_cif_inr(self, value):
+        """Ensure CIF INR is rounded to 2 decimal places using ROUND_HALF_UP."""
+        if value is not None:
+            return value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return value
+
+    def validate_cif_fc(self, value):
+        """Ensure CIF FC is rounded to 2 decimal places using ROUND_HALF_UP."""
+        if value is not None:
+            return value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return value
+
+    def validate_qty(self, value):
+        """Ensure Quantity is rounded to 3 decimal places using ROUND_HALF_UP."""
+        if value is not None:
+            return value.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+        return value
+
+    def validate(self, attrs):
+        # Planning target metadata belongs to the BOE header.  RowDetails
+        # stopped storing these fields in migration 0009; adding them to this
+        # nested payload makes Django reject a PDF-imported BOE at save time.
+        return attrs
+
     class Meta:
         model = RowDetails
         fields = [
@@ -32,6 +81,7 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'is_frozen',
             'is_dispute',
             'license_number',
+            'license_id',
             'item_description',
             'hs_code',
             'item_serial_number',
@@ -68,9 +118,10 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
     unit_price = serializers.DecimalField(
         source='get_unit_price',
         max_digits=15,
-        decimal_places=3,
+        decimal_places=2,
         read_only=True
     )
+    planning_target_item_name = serializers.CharField(source="planning_target_item.name", read_only=True)
 
     # Display fields for foreign keys
     port_name = serializers.CharField(source='port.name', read_only=True)
@@ -98,6 +149,8 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             'ooc_date',
             'cha',
             'comments',
+            'planning_target_item',
+            'planning_target_item_name',
             'item_details',
             'total_inr',
             'total_fc',
@@ -120,6 +173,21 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             total_inr = float(data.get('total_inr') or 0)
             if total_fc > 0:
                 data['exchange_rate'] = round(total_inr / total_fc, 4)
+
+        # Add allotment information if available
+        allotments = instance.allotment.all()
+        if allotments:
+            data['allotments'] = [
+                {
+                    'id': allot.id,
+                    'item_name': allot.item_name,
+                    'invoice': allot.invoice,
+                    'required_quantity': str(allot.required_quantity),
+                    'estimated_arrival_date': allot.estimated_arrival_date,
+                    'company': allot.company.name if allot.company else None,
+                }
+                for allot in allotments
+            ]
         return data
 
     def to_internal_value(self, data):
@@ -188,6 +256,7 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Update BOE with nested item details"""
+        planning_target_item = validated_data.pop("planning_target_item", serializers.empty)
         item_details_data = validated_data.pop('item_details', None)
         allotment_data = validated_data.pop('allotment', None)
 
@@ -195,6 +264,11 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        if planning_target_item is not serializers.empty:
+            instance.planning_mapping_status = "MAPPED_EXPLICIT" if planning_target_item else "UNMAPPED_AMBIGUOUS"
+            instance.planning_mapping_source = "USER_SELECTED" if planning_target_item else ""
+            instance.save(update_fields=["planning_mapping_status", "planning_mapping_source", "modified_on"])
 
         # Update many-to-many allotment field only if explicitly provided with values
         if allotment_data is not None and len(allotment_data) > 0:
@@ -243,14 +317,23 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                     continue
 
                 # Get transaction_type (default to 'D' for DFIA)
-                transaction_type = item_data.get('transaction_type', 'D')
+                transaction_type = item_data.get('transaction_type', DEBIT)
 
                 # Check if item has an id - if yes, update it; if no, use update_or_create
                 item_id = item_data.get('id')
 
                 # Prepare clean data
+                # Nested payloads can include BOE-level planning metadata from
+                # an annotated/read representation.  It belongs to the header,
+                # not RowDetails; passing it to update_or_create raises a
+                # FieldError when a row is created by `sr_number`.
                 item_data_clean = {k: v for k, v in item_data.items()
-                                  if k not in ['id', 'sr_number', 'license_number', 'item_description', 'hs_code']}
+                                  if k not in [
+                                      'id', 'sr_number', 'license_number',
+                                      'item_description', 'hs_code',
+                                      'planning_mapping_status',
+                                      'planning_mapping_source',
+                                  ]}
 
                 if item_id:
                     # Update existing item
@@ -311,24 +394,3 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                 delattr(instance, 'get_licenses')
 
         return instance
-
-    def to_representation(self, instance):
-        """Add computed fields to representation"""
-        representation = super().to_representation(instance)
-
-        # Add allotment information if available
-        allotments = instance.allotment.all()
-        if allotments:
-            representation['allotments'] = [
-                {
-                    'id': allot.id,
-                    'item_name': allot.item_name,
-                    'invoice': allot.invoice,
-                    'required_quantity': str(allot.required_quantity),
-                    'estimated_arrival_date': allot.estimated_arrival_date,
-                    'company': allot.company.name if allot.company else None,
-                }
-                for allot in allotments
-            ]
-
-        return representation

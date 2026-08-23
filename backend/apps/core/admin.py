@@ -1,7 +1,5 @@
 from django.contrib import admin
 
-# Register your models here.
-from django.contrib import admin
 from django.apps import apps
 from django.conf import settings
 
@@ -140,6 +138,5 @@ class ExchangeRateAdmin(_MDSReadOnlyAdminMixin, admin.ModelAdmin):
 
     is_active.boolean = True
     is_active.short_description = 'Active Rate'
-
 
 

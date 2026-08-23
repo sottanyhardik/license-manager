@@ -13,15 +13,13 @@ Usage:
 """
 
 import logging
-from typing import Optional
 
 from django.core.cache import cache
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from rest_framework import viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from apps.core.cache_utils import generate_view_cache_key, CACHE_TIMEOUT_MEDIUM
+from apps.core.cache_utils import CACHE_TIMEOUT_MEDIUM, generate_view_cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -48,17 +46,17 @@ class CachedListModelMixin:
         # Try cache first
         cached_data = cache.get(cache_key)
         if cached_data is not None:
-            logger.debug(f"Cache HIT for {view_name}.list()")
+            logger.debug("Cache HIT for %s.list()", view_name)
             return Response(cached_data)
 
         # Cache miss - execute query
-        logger.debug(f"Cache MISS for {view_name}.list()")
+        logger.debug("Cache MISS for %s.list()", view_name)
         response = super().list(request, *args, **kwargs)
 
         # Cache successful responses
         if 200 <= response.status_code < 300:
             cache.set(cache_key, response.data, self.cache_timeout)
-            logger.debug(f"Cached {view_name}.list() for {self.cache_timeout}s")
+            logger.debug("Cached %s.list() for %ss", view_name, self.cache_timeout)
 
         return response
 
@@ -81,22 +79,27 @@ class CachedRetrieveModelMixin:
         # Generate cache key including object ID
         view_name = self.__class__.__name__
         obj_id = kwargs.get('pk') or kwargs.get(self.lookup_field)
-        cache_key = f"{view_name}:retrieve:{obj_id}"
+        cache_key = generate_view_cache_key(request, f"{view_name}:retrieve:{obj_id}")
 
         # Try cache first
         cached_data = cache.get(cache_key)
         if cached_data is not None:
-            logger.debug(f"Cache HIT for {view_name}.retrieve({obj_id})")
+            logger.debug("Cache HIT for %s.retrieve(%s)", view_name, obj_id)
             return Response(cached_data)
 
         # Cache miss
-        logger.debug(f"Cache MISS for {view_name}.retrieve({obj_id})")
+        logger.debug("Cache MISS for %s.retrieve(%s)", view_name, obj_id)
         response = super().retrieve(request, *args, **kwargs)
 
         # Cache successful responses
         if 200 <= response.status_code < 300:
             cache.set(cache_key, response.data, self.cache_timeout)
-            logger.debug(f"Cached {view_name}.retrieve({obj_id}) for {self.cache_timeout}s")
+            logger.debug(
+                "Cached %s.retrieve(%s) for %ss",
+                view_name,
+                obj_id,
+                self.cache_timeout,
+            )
 
         return response
 
@@ -126,13 +129,6 @@ class CachedReadOnlyModelViewSet(CachedListModelMixin, CachedRetrieveModelMixin,
             queryset = Company.objects.all()
     """
     pass
-
-
-# ============================================================================
-# Cache-aware Pagination
-# ============================================================================
-
-from rest_framework.pagination import PageNumberPagination
 
 
 class CachedPageNumberPagination(PageNumberPagination):

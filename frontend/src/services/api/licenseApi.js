@@ -203,15 +203,6 @@ export const deleteItemPlan = async (planId) => {
     return response.data;
 };
 
-/**
- * Compute the norm-based (E1/E5/E132) plan to pre-fill the manual plan.
- * Returns { norm, plan: { <item_id>: {planned_quantity, unit_price, planned_cif} } }.
- */
-export const fetchNormPrefill = async (licenseId) => {
-    const response = await api.get('license-item-plans/norm-prefill/', {params: {license: licenseId}});
-    return response.data;
-};
-
 export default {
     fetchLicenseList,
     fetchLicense,
@@ -235,5 +226,4 @@ export default {
     createItemPlan,
     updateItemPlan,
     deleteItemPlan,
-    fetchNormPrefill,
 };

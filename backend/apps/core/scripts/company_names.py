@@ -6,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_cookies():
-    import requests
     cookies = {
         'style': 'blue',
     }
@@ -35,7 +34,6 @@ def fetch_cookies():
 
 
 def fetch_captcha(cookies):
-    import requests
     headers = {
         'Connection': 'keep-alive',
         'Cache-Control': 'max-age=0',
@@ -54,7 +52,6 @@ def fetch_captcha(cookies):
 
 
 def request_company(cookies, iec, captcha):
-    import requests
     cookies = {
         'JSESSIONID': cookies,
     }
@@ -96,7 +93,7 @@ def request_company(cookies, iec, captcha):
                     elif tds[0].text.strip() == 'PAN' or tds[1].text.strip() == '':
                         dict_data['pan'] = tds[1].text.strip()
             return dict_data
-        except Exception as e:
+        except Exception:
             logger.exception("Error parsing company response for IEC %s", iec)
             return None
     else:

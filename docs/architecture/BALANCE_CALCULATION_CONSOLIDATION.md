@@ -1,231 +1,133 @@
-# Balance Calculation Consolidation - Complete Guide
+# Balance Calculation Architecture
 
-## Summary
+This document records the current inventory and license-balance calculation contract.
+It replaces the older deployment checklist that referenced obsolete paths, removed
+debug scripts, and historical commit IDs.
 
-All balance_cif calculations have been consolidated to use a **single source of truth**: `LicenseBalanceCalculator` service.
+## Source Of Truth
 
-## Expected Result for License 0311045597
+License-level balance calculations are centralized in:
 
+```text
+backend/apps/license/services/balance_calculator.py
 ```
-Opening Balance (Export CIF):  $1,11,302.61
-Total Sales (DFIA Credits):   -$77,934.12
-─────────────────────────────────────────
-Final Balance:                  $33,368.49 ✅
-```
 
-## Single Source of Truth
+The authoritative service is `LicenseBalanceCalculator`. Parent model properties
+delegate to that service instead of maintaining separate formulas in model,
+serializer, report, or script code.
 
-All balance calculations now go through:
-```python
-from license.services.balance_calculator import LicenseBalanceCalculator
+Current license-level formula:
 
-# License-level balance
-balance = LicenseBalanceCalculator.calculate_balance(license_obj)
-
-# Components
-credit = LicenseBalanceCalculator.calculate_credit(license_obj)      # Export CIF
-debit = LicenseBalanceCalculator.calculate_debit(license_obj)        # BOE debits
-allotment = LicenseBalanceCalculator.calculate_allotment(license_obj) # Allotments (no BOE)
-trade = LicenseBalanceCalculator.calculate_trade(license_obj)        # Trade (no invoice)
-
-# Formula
+```text
 balance = credit - (debit + allotment + trade)
+balance = max(quantize_2dp(balance), 0)
 ```
 
-## Changes Made (Commit: 66b1dff)
+Component definitions:
 
-### 1. Consolidated Model Methods
+| Component | Source | Meaning |
+|---|---|---|
+| `credit` | `LicenseExportItemModel.cif_fc` | Total export CIF for the license. |
+| `debit` | `RowDetails.cif_fc` | BOE debit rows for the license, excluding BOEs linked to trades. |
+| `allotment` | `AllotmentItems.cif_fc` | Allotments whose parent allotment is not linked to a BOE. |
+| `trade` | `LicenseTradeLine.cif_fc` | SALE trade lines for the license. |
 
-**File**: `backend/license/models.py`
+Balances are converted through `apps.core.utils.decimal_utils.to_decimal`,
+quantized to two decimal places with `ROUND_HALF_UP`, and floored at zero.
 
-| Method | OLD | NEW |
-|--------|-----|-----|
-| `opening_balance` | Direct aggregation on export_license | ✅ `_calculate_license_credit()` |
-| `get_total_debit` | Direct aggregation on import_license.debited_value | ✅ `_calculate_license_debit()` |
-| `get_total_allotment` | Direct aggregation on import_license.allotted_value | ✅ `_calculate_license_allotment()` |
-| (NEW) `_calculate_license_trade()` | N/A | ✅ Added for completeness |
-| `get_balance_cif` | Already using service ✅ | No change needed |
+## Model Contract
 
-### 2. Wrapper Methods (Already Exist)
+`backend/apps/license/models/core.py` exposes compatibility properties on
+`LicenseDetailsModel`:
 
-```python
-class LicenseDetailsModel:
-    def _calculate_license_credit(self) -> Decimal:
-        """Total export CIF"""
-        return LicenseBalanceCalculator.calculate_credit(self)
+| Property or method | Contract |
+|---|---|
+| `opening_balance` | Delegates to `LicenseBalanceCalculator.calculate_credit`. |
+| `get_total_debit` | Delegates to `LicenseBalanceCalculator.calculate_debit`. |
+| `get_total_allotment` | Delegates to `LicenseBalanceCalculator.calculate_allotment`. |
+| `get_balance_cif` | Delegates to `LicenseBalanceCalculator.calculate_balance`. |
 
-    def _calculate_license_debit(self) -> Decimal:
-        """Total BOE debits"""
-        return LicenseBalanceCalculator.calculate_debit(self)
+Stored balance state lives in the `LicenseBalance` one-to-one subrow:
 
-    def _calculate_license_allotment(self) -> Decimal:
-        """Total allotments without BOE"""
-        return LicenseBalanceCalculator.calculate_allotment(self)
-
-    def _calculate_license_trade(self) -> Decimal:
-        """Total trade without invoice"""
-        return LicenseBalanceCalculator.calculate_trade(self)
-
-    @property
-    def get_balance_cif(self) -> Decimal:
-        """Final calculated balance"""
-        return LicenseBalanceCalculator.calculate_balance(self)
+```text
+LicenseDetailsModel --one-to-one--> LicenseBalance(balance_cif, ledger_date)
 ```
 
-## Key Fixes Applied
+`LicenseBalance.balance_cif` is denormalized state. It exists for filtering,
+reporting, and list performance. It must be refreshed from
+`LicenseBalanceCalculator`; it must not become a second formula source.
 
-### 1. Correct Allotment Filter (Commit: c4b0056)
+## Refresh Paths
 
-**BEFORE (Wrong)**:
-```python
-allotment__bill_of_entry__bill_of_entry_number__isnull=True
-```
-- Checks if a specific field is null
-- Incorrect logic
+Use the management command when stored balances need to be repaired or refreshed:
 
-**AFTER (Correct)**:
-```python
-allotment__bill_of_entry__isnull=True
-```
-- Checks if ManyToMany relationship is empty
-- Correctly identifies allotments WITHOUT BOE linked
-
-Applied to all files:
-- ✅ `license/services/balance_calculator.py` (3 places)
-- ✅ `license/services/restriction_calculator.py`
-- ✅ `license/models.py`
-- ✅ `core/scripts/calculate_balance.py`
-- ✅ `license/management/commands/sync_licenses.py`
-
-### 2. Automatic Updates via Signals
-
-**File**: `license/signals.py`
-
-Signals automatically update `balance_cif` when:
-- ✅ Export items change (add/modify/delete)
-- ✅ Import items change (add/modify/delete)
-- ✅ Allotment items change (add/modify/delete)
-- ✅ BOE items change (add/modify/delete)
-- ✅ Trade items change (add/modify/delete)
-
-All signals call: `update_license_flags(license_instance)` which:
-1. Calls `license.get_balance_cif` (uses centralized service)
-2. Updates stored `balance_cif` field
-3. Updates `is_null` flag (balance < $500)
-4. Updates `is_expired` flag
-
-## Deployment Steps
-
-### Step 1: Pull Latest Code
 ```bash
-ssh django@139.59.92.226
-cd ~/license-manager/backend
-git pull origin version-4.1
-```
-
-### Step 2: Recalculate All Balance Values
-```bash
-# Recalculate all licenses with NEW logic
 python manage.py update_balance_cif
-
-# Or just one license to test
-python manage.py update_balance_cif --license-number 0311045597
+python manage.py update_balance_cif --batch-size 100
+python manage.py update_balance_cif --license-number 0310837441
+python manage.py update_balance_cif --dry-run
 ```
 
-### Step 3: Restart Application
+The command validates:
+
+| Input | Validation |
+|---|---|
+| `--batch-size` | Must be greater than zero. |
+| `--license-number` | Trimmed and rejected if blank. |
+
+Updates run through `LicenseBalanceCalculator.calculate_balance` and write only
+the `LicenseBalance` subrow. The command uses ordered iteration for batch runs
+and wraps each write in an atomic transaction.
+
+## Validation And Edge Cases
+
+The current balance contract handles:
+
+| Case | Expected behavior |
+|---|---|
+| Missing aggregate rows | Treated as `Decimal("0")` through `Coalesce` and `to_decimal`. |
+| `None` aggregate values | Coerced to `Decimal("0")`. |
+| Negative calculated balance | Stored and reported as `Decimal("0")`. |
+| Exact zero balance | Preserved as `Decimal("0")`. |
+| Fractional cents | Rounded to two decimals with `ROUND_HALF_UP`. |
+| Trade-linked BOE rows | Excluded from BOE debit to avoid double counting with SALE trade lines. |
+| Allotments already linked to BOE | Excluded from non-BOE allotment consumption. |
+
+Any new inventory or balance path must add focused tests before changing one of
+these rules.
+
+## Maintained Tests
+
+Primary regression coverage lives in:
+
+```text
+backend/apps/license/tests/test_balance_calculator.py
+backend/apps/license/tests/test_update_balance_cif_command.py
+backend/tests/test_api_license.py
+```
+
+The old standalone scripts under `backend/scripts/` were removed because they
+depended on mutable development data and printed observations instead of
+asserting deterministic behavior.
+
+Recommended focused verification for balance changes:
+
 ```bash
-sudo systemctl restart gunicorn
+.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q
+.venv/bin/python -m pytest backend/apps/license/tests/test_update_balance_cif_command.py -q
+.venv/bin/python backend/manage.py check
+.venv/bin/python backend/manage.py makemigrations license --check --dry-run
 ```
 
-### Step 4: Verify
-Visit: https://labdh.duckdns.org/licenses/0311045597/ledger-detail
+## Implementation Rules
 
-**Expected Result**:
-- Available Balance: $33,368.49 ✅
-- Balance CIF (ledger): $33,368.49 ✅
+When adding or changing inventory and balance behavior:
 
-## Why This Works
-
-### Before Consolidation
-```
-❌ Multiple calculation methods
-❌ Inconsistent logic
-❌ Hard to maintain
-❌ Different results possible
-```
-
-### After Consolidation
-```
-✅ Single source of truth (LicenseBalanceCalculator)
-✅ Consistent calculation everywhere
-✅ Easy to maintain and debug
-✅ Guaranteed same result
-✅ Automatic updates via signals
-```
-
-## Formula Breakdown for 0311045597
-
-```python
-# Credit (Export CIF)
-credit = $1,11,302.61
-
-# Debit (BOE transactions)
-debit = $0.00  # No BOE debits
-
-# Allotment (without BOE)
-allotment = $77,934.12  # 3 DFIA sales
-
-# Trade (without invoice)
-trade = $0.00  # No trade lines
-
-# Final Balance
-balance = $1,11,302.61 - ($0 + $77,934.12 + $0)
-balance = $33,368.49 ✅
-```
-
-## Testing
-
-### Debug Script
-Use the included debug script to verify calculations:
-```bash
-cd ~/license-manager/backend
-python debug_balance.py
-```
-
-This will show:
-- Credit, Debit, Allotment, Trade components
-- Manual calculation vs service calculation
-- Stored balance_cif vs calculated balance
-- Allotment details (with/without BOE)
-
-## Files Modified
-
-### Commit c4b0056: Fix M2M Relationship Checks
-1. `license/services/balance_calculator.py`
-2. `license/services/restriction_calculator.py`
-3. `license/models.py`
-4. `core/scripts/calculate_balance.py`
-5. `license/management/commands/sync_licenses.py`
-
-### Commit 66b1dff: Consolidate Balance Calculations
-1. `license/models.py`
-   - Updated `opening_balance`
-   - Updated `get_total_debit`
-   - Updated `get_total_allotment`
-   - Added `_calculate_license_trade`
-
-## Benefits
-
-1. **Consistency**: All calculations use same logic
-2. **Maintainability**: Single place to fix bugs
-3. **Automatic**: Signals keep stored values updated
-4. **Testable**: Centralized service easy to test
-5. **Reliable**: Expected output: $33,368.49 for license 0311045597
-
-## Support
-
-If balance still shows $0.00 after deployment:
-1. Verify code pulled: `git log -1 --oneline` should show commit `66b1dff`
-2. Verify command ran: `python manage.py update_balance_cif --license-number 0311045597`
-3. Check logs: `tail -f /var/log/gunicorn/error.log`
-4. Use debug script: `python debug_balance.py`
+1. Reuse `LicenseBalanceCalculator` for license-level formulas.
+2. Reuse `ItemBalanceCalculator` for import/export item balance helpers.
+3. Do not add serializer, view, report, or script-specific balance formulas.
+4. Keep stored `LicenseBalance.balance_cif` as a cache of the service result.
+5. Add regression tests for zero, negative, missing aggregate, trade-linked BOE,
+   and BOE-linked allotment cases when those paths are touched.
+6. Prefer database aggregates with `Coalesce` for totals and use `to_decimal` at
+   service boundaries.

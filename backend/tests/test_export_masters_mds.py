@@ -63,7 +63,7 @@ def small_graph(db):
 def export(tmp_path, small_graph):
     out = tmp_path / "export.json"
     call_command("export_masters_mds", "--out", str(out))
-    return json.loads(out.read_text())
+    return json.loads(out.read_text(encoding="utf-8"))
 
 
 def test_all_17_masters_present(export):

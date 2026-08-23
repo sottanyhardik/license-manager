@@ -1,15 +1,17 @@
-import { lazy, Suspense, useEffect, type ReactElement } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, type ReactElement } from "react";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layout/AdminLayout";
 import { PageLoader } from "../components/LoadingFallback";
-import { lazyLoadWithRetry, preloadCriticalRoutes } from "../utils/lazyLoad";
+import { lazyLoadWithRetry } from "../utils/lazyLoad";
 
 import Login from "../pages/Login";
+import PasswordReset from "../pages/auth/PasswordReset";
 import Unauthorized from "../pages/errors/Unauthorized";
 import NotFound from "../pages/errors/NotFound";
 import Forbidden from "../pages/Forbidden";
+import { REPORT_ROLES } from "./authorizationRoles";
 
 const UserList = lazyLoadWithRetry(() => import("../pages/admin/UserList"));
 const UserForm = lazyLoadWithRetry(() => import("../pages/admin/UserForm"));
@@ -32,23 +34,24 @@ const ActiveLicenses = lazy(() => import("../pages/reports/ActiveLicenses"));
 const DownloadLicense = lazy(() => import("../pages/reports/DownloadLicense"));
 const ItemPivotReport = lazyLoadWithRetry(() => import("../pages/reports/ItemPivotReport"));
 const ItemReport = lazyLoadWithRetry(() => import("../pages/reports/ItemReport"));
+const PlannedReport = lazyLoadWithRetry(() => import("../pages/reports/PlannedReport"));
+const LicensePurchaseProfitReport = lazyLoadWithRetry(() => import("../pages/reports/LicensePurchaseProfitReport"));
 
 const TradeForm = lazy(() => import("../pages/TradeForm"));
+const ReconciliationPanel = lazyLoadWithRetry(() => import("../pages/ReconciliationPanel"));
+const ReconciliationIssues = lazyLoadWithRetry(() => import("../pages/ReconciliationIssues"));
 const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
+const LicenseOverviewPage = lazy(() => import("../pages/license-overview/LicenseOverviewPage"));
+const LicensePlanningWorkspace = lazy(() => import("../pages/planning/LicensePlanningWorkspace"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 
-const REPORT_ROLES = [
-    "REPORT_VIEWER",
-    "LICENSE_MANAGER",
-    "LICENSE_VIEWER",
-    "TRADE_MANAGER",
-    "TRADE_VIEWER",
-    "ALLOTMENT_MANAGER",
-    "BOE_MANAGER",
-    "INCENTIVE_LICENSE_MANAGER",
-];
+/** Old `/licenses/:id/balance` bookmarks/links redirect to the new Overview page — explicit absolute target (built from the route's own `:id` param) rather than a relative `Navigate` path, so the destination is unambiguous. */
+function RedirectToLicenseOverview() {
+    const { id } = useParams<{ id: string }>();
+    return <Navigate to={`/licenses/${id}/overview`} replace />;
+}
 
 const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/parle/sion-e1", <SionE1 />],
@@ -60,25 +63,17 @@ const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/download-license", <DownloadLicense />],
     ["/reports/item-pivot", <ItemPivotReport />],
     ["/reports/item-report", <ItemReport />],
+    ["/reports/planned-report", <PlannedReport />],
+    ["/reports/license-purchase-profit", <LicensePurchaseProfitReport />],
 ];
 
 export default function AppRoutes() {
-    useEffect(() => {
-        preloadCriticalRoutes(
-            {
-                masterList: () => import("../pages/masters/MasterList"),
-                itemReport: () => import("../pages/reports/ItemReport"),
-                itemPivotReport: () => import("../pages/reports/ItemPivotReport"),
-            },
-            3000,
-        );
-    }, []);
-
     return (
         <Suspense fallback={<PageLoader />}>
             <Routes>
                 {/* Public */}
                 <Route path="/login" element={<Login />} />
+                <Route path="/forgot-password" element={<PasswordReset />} />
                 <Route path="/401" element={<Unauthorized />} />
                 <Route path="/403" element={<Forbidden />} />
 
@@ -118,6 +113,11 @@ export default function AppRoutes() {
                 <Route path="/licenses/:id/edit" element={
                     <ProtectedRoute requiredRole="LICENSE_MANAGER">
                         <AdminLayout><MasterForm /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/planning" element={
+                    <ProtectedRoute requiredRole="LICENSE_MANAGER">
+                        <AdminLayout><LicensePlanningWorkspace /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
@@ -191,6 +191,21 @@ export default function AppRoutes() {
                     </ProtectedRoute>
                 } />
 
+                {/* Reconciliation */}
+                <Route path="/reconciliation" element={
+                    <ProtectedRoute requiredAnyRole={["BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"]}>
+                        <AdminLayout><ReconciliationPanel /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                {/* Reconciliation Issues — read-only portfolio-wide discovery companion to
+                    /reconciliation above. Gated on ReconciliationPermission.read_roles
+                    (backend/apps/accounts/permissions.py) since it only reads. */}
+                <Route path="/reconciliation-issues" element={
+                    <ProtectedRoute requiredAnyRole={["TRADE_MANAGER", "TRADE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "ACCOUNT_ACCESS", "TL_GENERATE"]}>
+                        <AdminLayout><ReconciliationIssues /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+
                 {/* Incentive License CRUD */}
                 <Route path="/incentive-licenses" element={
                     <ProtectedRoute requiredAnyRole={["INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"]}>
@@ -219,11 +234,25 @@ export default function AppRoutes() {
                         <AdminLayout><LicenseLedger /></AdminLayout>
                     </ProtectedRoute>
                 } />
-                <Route path="/license-ledger/:id/:companyId?" element={
+                <Route path="/license-ledger/:licenseId/:itemId" element={
                     <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
                         <AdminLayout><LicenseLedgerDetail /></AdminLayout>
                     </ProtectedRoute>
                 } />
+                <Route path="/license-ledger/:licenseId" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                        <AdminLayout><LicenseLedgerDetail /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+
+                {/* License Overview dashboard — replaces the old Balance Workspace */}
+                <Route path="/licenses/:id/overview" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER"]}>
+                        <AdminLayout><LicenseOverviewPage /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                {/* Old bookmarks/links to the retired Balance Workspace redirect here. */}
+                <Route path="/licenses/:id/balance" element={<RedirectToLicenseOverview />} />
 
                 {/* PDF Viewer */}
                 <Route path="/pdf-viewer" element={

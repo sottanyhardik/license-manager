@@ -19,7 +19,7 @@ All endpoints are prefixed with `/api/`. Authentication: `Authorization: Bearer 
 | PUT/PATCH | `/api/auth/users/:id/` | Update user |
 | DELETE | `/api/auth/users/:id/` | Delete user |
 | POST | `/api/auth/users/:id/reset-password/` | Reset user password |
-| GET | `/api/auth/users/available_roles/` | List 15 available role codes |
+| GET | `/api/auth/users/available-roles/` | List 15 available role codes |
 
 ---
 

@@ -8,16 +8,19 @@ This module provides utilities for:
 - Expiry checking
 """
 
+from calendar import monthrange
 from datetime import date, datetime, timedelta
-from typing import Optional, Union, Tuple
 
 from django.utils import timezone
 
+DateInput = str | date | datetime | None
+DateRangeValue = date | datetime | None
+
 
 def parse_date_safe(
-        value: Union[str, date, datetime, None],
-        default: Optional[date] = None
-) -> Optional[date]:
+        value: DateInput,
+        default: date | None = None
+) -> date | None:
     """
     Safely parse a date from various input formats.
     
@@ -63,9 +66,9 @@ def parse_date_safe(
 
 
 def parse_datetime_safe(
-        value: Union[str, date, datetime, None],
-        default: Optional[datetime] = None
-) -> Optional[datetime]:
+        value: DateInput,
+        default: datetime | None = None
+) -> datetime | None:
     if value is None:
         return default
     if isinstance(value, datetime):
@@ -83,7 +86,7 @@ def parse_datetime_safe(
 
 
 def format_date(
-        value: Union[date, datetime, None],
+        value: DateRangeValue,
         format_str: str = '%d-%m-%Y'
 ) -> str:
     """
@@ -111,13 +114,13 @@ def format_date(
     return value.strftime(format_str)
 
 
-def format_date_display(value: Union[date, datetime, None], format_str: str = "%d/%m/%Y") -> str:
+def format_date_display(value: DateRangeValue, format_str: str = "%d/%m/%Y") -> str:
     if not isinstance(value, (date, datetime)):
         return ""
     return format_date(value, format_str)
 
 
-def format_date_iso(value: Union[date, datetime, None]) -> Optional[str]:
+def format_date_iso(value: DateRangeValue) -> str | None:
     if not isinstance(value, (date, datetime)):
         return None
     if isinstance(value, datetime):
@@ -126,8 +129,8 @@ def format_date_iso(value: Union[date, datetime, None]) -> Optional[str]:
 
 
 def is_date_expired(
-        expiry_date: Union[date, datetime, None],
-        reference_date: Optional[date] = None
+        expiry_date: DateRangeValue,
+        reference_date: date | None = None
 ) -> bool:
     """
     Check if a date has expired.
@@ -158,9 +161,9 @@ def is_date_expired(
 
 
 def is_date_in_range(
-        check_date: Union[date, datetime, None],
-        start_date: Union[date, datetime, None] = None,
-        end_date: Union[date, datetime, None] = None
+        check_date: DateRangeValue,
+        start_date: DateRangeValue = None,
+        end_date: DateRangeValue = None
 ) -> bool:
     check_date = parse_date_safe(check_date)
     start_date = parse_date_safe(start_date)
@@ -175,9 +178,9 @@ def is_date_in_range(
 
 
 def is_date_within_days(
-        check_date: Union[date, datetime, None],
+        check_date: DateRangeValue,
         days: int,
-        reference_date: Optional[date] = None
+        reference_date: date | None = None
 ) -> bool:
     """
     Check if a date is within a specified number of days from reference date.
@@ -204,21 +207,21 @@ def is_date_within_days(
     if reference_date is None:
         reference_date = timezone.now().date()
 
-    threshold_date = reference_date - timedelta(days=abs(days))
-
     if days < 0:
         # Check if date is after threshold (within last N days)
+        threshold_date = reference_date - timedelta(days=abs(days))
         return check_date >= threshold_date
-    else:
-        # Check if date is before threshold (within next N days)
-        return check_date <= threshold_date
+
+    # Check if date is before threshold (within next N days)
+    threshold_date = reference_date + timedelta(days=days)
+    return check_date <= threshold_date
 
 
 def date_range_overlaps(
-        start1: Union[date, datetime, None],
-        end1: Union[date, datetime, None],
-        start2: Union[date, datetime, None],
-        end2: Union[date, datetime, None]
+        start1: DateRangeValue,
+        end1: DateRangeValue,
+        start2: DateRangeValue,
+        end2: DateRangeValue
 ) -> bool:
     """
     Check if two date ranges overlap.
@@ -257,9 +260,9 @@ def date_range_overlaps(
 
 
 def days_until(
-        target_date: Union[date, datetime, None],
-        reference_date: Optional[date] = None
-) -> Optional[int]:
+        target_date: DateRangeValue,
+        reference_date: date | None = None
+) -> int | None:
     """
     Calculate number of days until target date.
     
@@ -287,7 +290,7 @@ def days_until(
     return delta.days
 
 
-def days_between(start_date: Union[date, datetime], end_date: Union[date, datetime], absolute: bool = False) -> int:
+def days_between(start_date: date | datetime, end_date: date | datetime, absolute: bool = False) -> int:
     start = parse_date_safe(start_date)
     end = parse_date_safe(end_date)
     if start is None or end is None:
@@ -296,7 +299,7 @@ def days_between(start_date: Union[date, datetime], end_date: Union[date, dateti
     return abs(days) if absolute else days
 
 
-def is_weekend(value: Union[date, datetime]) -> bool:
+def is_weekend(value: date | datetime) -> bool:
     parsed = parse_date_safe(value)
     return bool(parsed and parsed.weekday() >= 5)
 
@@ -314,7 +317,7 @@ def add_business_days(start_date: date, days: int) -> date:
     return current
 
 
-def get_financial_year(value: Union[date, datetime]) -> str:
+def get_financial_year(value: date | datetime) -> str:
     parsed = parse_date_safe(value)
     if parsed is None:
         return ""
@@ -322,7 +325,7 @@ def get_financial_year(value: Union[date, datetime]) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
 
 
-def get_quarter(value: Union[date, datetime]) -> int:
+def get_quarter(value: date | datetime) -> int:
     parsed = parse_date_safe(value)
     if parsed is None:
         return 0
@@ -356,18 +359,16 @@ def add_months(start_date: date, months: int) -> date:
     month = month % 12 + 1
 
     # Handle day overflow (e.g., Jan 31 + 1 month = Feb 28/29)
-    day = min(start_date.day,
-              [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28, 31, 30, 31, 30, 31, 31, 30, 31,
-               30, 31][month - 1])
+    day = min(start_date.day, monthrange(year, month)[1])
 
     return date(year, month, day)
 
 
 def get_date_range_from_filter(
         filter_type: str,
-        custom_start: Optional[date] = None,
-        custom_end: Optional[date] = None
-) -> Tuple[Optional[date], Optional[date]]:
+        custom_start: date | None = None,
+        custom_end: date | None = None
+) -> tuple[date | None, date | None]:
     """
     Get date range based on filter type.
     
@@ -415,8 +416,8 @@ def get_date_range_from_filter(
 
 
 def format_date_range(
-        start_date: Union[date, datetime, None],
-        end_date: Union[date, datetime, None],
+        start_date: DateRangeValue,
+        end_date: DateRangeValue,
         format_str: str = '%d-%m-%Y',
         separator: str = ' to '
 ) -> str:

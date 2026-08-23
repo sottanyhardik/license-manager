@@ -180,6 +180,33 @@ describe('useFileUpload', () => {
     expect(result.current.error).toContain('report.xlsx')
   })
 
+  it('accepts MIME types case-insensitively', () => {
+    const { result } = renderHook(() =>
+      useFileUpload({ endpoint: '/api/upload/', accept: 'text/csv' })
+    )
+
+    const file = { name: 'ledger', size: 1024, type: 'TEXT/CSV' } as unknown as File
+    act(() => {
+      result.current.handleFileChange(makeChangeEvent([file]))
+    })
+
+    expect(result.current.files).toHaveLength(1)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('rejects malformed file-like objects without throwing', () => {
+    const { result } = renderHook(() =>
+      useFileUpload({ endpoint: '/api/upload/', accept: '.csv' })
+    )
+
+    act(() => {
+      result.current.handleFileChange(makeChangeEvent([{} as File]))
+    })
+
+    expect(result.current.files).toHaveLength(0)
+    expect(result.current.error).toBe('Invalid file selected')
+  })
+
   // ── File selection via handleDrop ───────────────────────────────────────────
 
   it('handleDrop adds valid files and sets dragActive=false', () => {
@@ -260,6 +287,25 @@ describe('useFileUpload', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 
+  it('handleUpload rejects unsafe absolute endpoints before posting', async () => {
+    const { result } = renderHook(() =>
+      useFileUpload({ endpoint: 'https://example.test/upload/', accept: '.csv' })
+    )
+
+    act(() => {
+      result.current.handleFileChange(makeChangeEvent([makeFile('valid.csv', 512)]))
+    })
+
+    let uploadResult: Awaited<ReturnType<typeof result.current.handleUpload>>
+    await act(async () => {
+      uploadResult = await result.current.handleUpload()
+    })
+
+    expect(uploadResult!.success).toBe(false)
+    expect(uploadResult!.error).toMatch(/relative to the API origin/i)
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   // ── handleUpload — successful sequential upload ─────────────────────────────
 
   it('handleUpload calls api.post and returns success when server responds OK', async () => {
@@ -287,6 +333,44 @@ describe('useFileUpload', () => {
     // On success the hook clears the files list
     expect(result.current.files).toHaveLength(0)
     expect(result.current.uploading).toBe(false)
+  })
+
+  it('handleUpload tolerates malformed success responses and missing progress totals', async () => {
+    ;(api.post as ReturnType<typeof vi.fn>).mockImplementationOnce(async (_path, _formData, config) => {
+      config.onUploadProgress?.({ loaded: 10, total: 0 })
+      return { data: null }
+    })
+
+    const { result } = renderHook(() =>
+      useFileUpload({ endpoint: '/api/upload/', accept: '.csv' })
+    )
+
+    act(() => {
+      result.current.handleFileChange(makeChangeEvent([makeFile('valid.csv', 512)]))
+    })
+
+    let uploadResult: Awaited<ReturnType<typeof result.current.handleUpload>>
+    await act(async () => {
+      uploadResult = await result.current.handleUpload()
+    })
+
+    expect(uploadResult!.success).toBe(true)
+    expect(uploadResult!.results[0]).toMatchObject({
+      message: 'File processed successfully',
+      licenses: [],
+      stats: {},
+      data: {},
+    })
+  })
+
+  it('formatFileSize handles invalid and very large values safely', () => {
+    const { result } = renderHook(() =>
+      useFileUpload({ endpoint: '/api/upload/', accept: '.csv' })
+    )
+
+    expect(result.current.formatFileSize(Number.POSITIVE_INFINITY)).toBe('0 Bytes')
+    expect(result.current.formatFileSize(-1)).toBe('0 Bytes')
+    expect(result.current.formatFileSize(1024 ** 5)).toBe('1048576 GB')
   })
 
   // ── handleUpload — server error ─────────────────────────────────────────────

@@ -6,6 +6,8 @@ reusable service methods with clear, consistent interfaces.
 """
 from typing import List, Dict, Optional, Any
 
+from django.db.models import QuerySet
+
 from apps.core.constants import GE, MI
 from apps.license.models import LicenseDetailsModel
 from apps.license.utils.query_builder import LicenseQueryBuilder

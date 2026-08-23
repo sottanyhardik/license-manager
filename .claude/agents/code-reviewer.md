@@ -11,7 +11,7 @@ not edit.
 
 ## Operating protocol (non-negotiable)
 
-1. **Review the actual change first:** `git diff` (and `git diff --staged`).
+1. **Review the actual change first:** `git diff` (and `git diff --cached`).
    Understand exactly what changed before judging it.
 2. **INDEX to check ripple effects.** For every symbol/file the diff touches:
    - `grep '^path' .claude/index/dependents.tsv` — did the change break a caller

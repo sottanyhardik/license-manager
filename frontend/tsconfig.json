@@ -11,6 +11,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleDetection": "force",
+    "types": ["vitest/globals"],
     "noEmit": true,
     "jsx": "react-jsx",
 

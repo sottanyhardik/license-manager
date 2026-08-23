@@ -8,7 +8,6 @@ from django.conf import settings
 from django.db import models
 from django.db.models import F
 from django.http import HttpResponse
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -24,7 +23,7 @@ except ImportError:
     OPENPYXL_AVAILABLE = False
 
 try:
-    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -39,6 +38,18 @@ class StandardPagination(PageNumberPagination):
     page_size = 25
     page_size_query_param = "page_size"
     max_page_size = 200
+
+
+class MasterDataPermission(permissions.BasePermission):
+    """Authenticated users may read master data; only superusers may write it."""
+
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return user.is_superuser
 
 
 class CaseInsensitiveSearchFilter(filters.SearchFilter):
@@ -83,7 +94,7 @@ class MasterViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     # Default: authenticated users can read master data (companies, ports, etc.)
     # Individual viewsets override this with role-specific permission classes.
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [MasterDataPermission]
     pagination_class = StandardPagination
     filter_backends = [CaseInsensitiveSearchFilter, filters.OrderingFilter]  # Use custom search with icontains
     ordering_fields = "__all__"
@@ -164,8 +175,27 @@ class MasterViewSet(viewsets.ModelViewSet):
             delete_through_mds(instance)
             return
 
-        # Local-only (default): unchanged DRF behavior.
-        instance.delete()
+        # Local-only (default): unchanged DRF behavior, except that master-data
+        # rows still referenced elsewhere (e.g. a Port/Company used by licenses,
+        # bills of entry, or allotments) are protected at the model level and
+        # raise ProtectedError instead of being deleted. Surface that as a
+        # normal DRF validation error rather than an unhandled 500.
+        from django.db.models import ProtectedError
+        from rest_framework.exceptions import ValidationError
+
+        try:
+            instance.delete()
+        except ProtectedError as exc:
+            referencing = sorted({obj._meta.label for obj in exc.protected_objects})
+            raise ValidationError(
+                {
+                    "detail": (
+                        f"Cannot delete this {instance._meta.verbose_name}: it is still "
+                        f"referenced by existing records ({', '.join(referencing)}). "
+                        "Reassign or remove those records first."
+                    )
+                }
+            ) from exc
 
     # --- Factory Method ---
     @classmethod
@@ -216,7 +246,10 @@ class MasterViewSet(viewsets.ModelViewSet):
 
         # Attributes for the generated class
         attrs = {
-            "queryset": model.objects.all(),
+            # Pagination must have a deterministic ordering even when a caller
+            # does not pass ``?ordering=``.  Without this, DRF warns and rows
+            # can move between pages as PostgreSQL chooses a different plan.
+            "queryset": model.objects.order_by("pk"),
             "serializer_class": serializer,
             "search_fields": config.get("search", ["id"]),
             "filterset_fields": filter_fields,
@@ -643,7 +676,11 @@ class MasterViewSet(viewsets.ModelViewSet):
                     - export: 'xlsx' or 'pdf' (default: 'xlsx')
                     - All filter params from the list view
                 """
-                export_format = request.query_params.get('export', 'xlsx').lower()
+                # Frontend sends `_export` (with underscore); support both forms.
+                export_format = (
+                    request.query_params.get('_export')
+                    or request.query_params.get('export', 'xlsx')
+                ).lower()
 
                 # Get filtered queryset (applies all filters, search, ordering)
                 queryset = self.filter_queryset(self.get_queryset())
@@ -658,6 +695,55 @@ class MasterViewSet(viewsets.ModelViewSet):
                     return self._export_pdf(queryset, columns, model_name)
                 else:
                     return HttpResponse("Invalid export format. Use 'xlsx' or 'pdf'.", status=400)
+
+            def _resolve_export_column(self, obj, col, serialized_holder):
+                """
+                Resolve one `list_display` column's export value for `obj`.
+
+                Prefers the viewset's own `serializer_class` when `col` is a
+                field the developer EXPLICITLY declared on that serializer
+                (e.g. `LicenseTradeSerializer.from_company_label =
+                CharField(source='from_company.name')`, or
+                `incentive_license = SerializerMethodField()`) — these have
+                no corresponding raw model attribute at all (`from_company_
+                label`), or worse, the raw attribute means something
+                completely different from what the serializer computes
+                (`incentive_license`: the model's own FK vs. the
+                serializer's comma-joined "every DFIA/Incentive licence
+                this trade touches" string). Naively resolving these via
+                `getattr(obj, col)` — which is all this export ever did
+                before — silently exported blanks or the wrong value.
+
+                `serialized_holder` is a single-element list used as an
+                in/out cache so the (potentially query-heavy)
+                `to_representation()` call only happens once per row, on
+                first need, not once per declared-field column.
+
+                Falls through to the original raw attribute/relation-path
+                walk for every other column — every plain model field/FK
+                across the rest of the app that already exports correctly
+                today keeps doing exactly that; this only changes
+                behaviour for columns that were never resolvable that way
+                in the first place.
+                """
+                declared_fields = getattr(self.get_serializer_class(), "_declared_fields", {})
+                if col in declared_fields:
+                    if serialized_holder[0] is None:
+                        serialized_holder[0] = self.get_serializer(obj).data
+                    return serialized_holder[0].get(col)
+
+                if "__" in col:
+                    alias = col.replace("__", "_")
+                    value = getattr(obj, alias, None)
+                    if value is None:
+                        parts = col.split("__")
+                        value = obj
+                        for part in parts:
+                            if value is None:
+                                break
+                            value = getattr(value, part, None)
+                    return value
+                return getattr(obj, col, None)
 
             def _export_xlsx(self, queryset, columns, model_name):
                 """Export to Excel format"""
@@ -684,22 +770,9 @@ class MasterViewSet(viewsets.ModelViewSet):
                 # Data rows
                 for obj in queryset:
                     row = []
+                    serialized_holder = [None]
                     for col in columns:
-                        if "__" in col:
-                            # Try annotated field first
-                            alias = col.replace("__", "_")
-                            value = getattr(obj, alias, None)
-
-                            # If annotated field doesn't exist, traverse the relation
-                            if value is None:
-                                parts = col.split("__")
-                                value = obj
-                                for part in parts:
-                                    if value is None:
-                                        break
-                                    value = getattr(value, part, None)
-                        else:
-                            value = getattr(obj, col, None)
+                        value = self._resolve_export_column(obj, col, serialized_holder)
 
                         # Format value
                         if value is None:
@@ -763,12 +836,9 @@ class MasterViewSet(viewsets.ModelViewSet):
 
                 for obj in queryset:
                     row = []
+                    serialized_holder = [None]
                     for col in columns:
-                        if "__" in col:
-                            alias = col.replace("__", "_")
-                            value = getattr(obj, alias, None)
-                        else:
-                            value = getattr(obj, col, None)
+                        value = self._resolve_export_column(obj, col, serialized_holder)
 
                         # Format value
                         if value is None:

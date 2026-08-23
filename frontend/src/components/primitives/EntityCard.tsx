@@ -202,10 +202,7 @@ export default function EntityCard({
             </header>
 
             {children && (
-                <div
-                    className="entity-card-body"
-                    style={{ borderBottom: "1px solid var(--tb-border-soft)" }}
-                >
+                <div className="entity-card-body border-b border-border/50">
                     {children}
                 </div>
             )}

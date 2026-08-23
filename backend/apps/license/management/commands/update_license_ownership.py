@@ -42,14 +42,25 @@ SERVER_IP_FALLBACKS = {
     'license-tractor.duckdns.org': 'http://165.232.185.220',
 }
 
-# DGFT API Config — session and CSRF tokens expire and must be refreshed from
-# a live browser session. Override via env vars DGFT_SESSION_ID and DGFT_CSRF_TOKEN
-# (no code edit needed). The fallback values below are for backwards compatibility
-# and will fail once expired.
-APP_ID = os.getenv("DGFT_APP_ID", "204000000")
-SESSION_ID = os.getenv("DGFT_SESSION_ID", "ECDCCFE06566EB25ECD234D0B7159888")
-CSRF_TOKEN = os.getenv("DGFT_CSRF_TOKEN", "fc86ccf3-4638-4828-b271-150b04a3f6cd")
-AWS_ALB = os.getenv("DGFT_AWSALB")  # Optional; required when DGFT sits behind an AWS ALB
+# DGFT credentials are intentionally environment-only.  Session and CSRF values
+# are browser-session credentials and must never be committed as fallbacks.
+def get_dgft_ownership_credentials():
+    """Read the current DGFT ownership credentials without retaining defaults.
+
+    ``fetch_scrip_ownership`` validates these values and returns its established
+    safe failure result when one is missing. Reading them at call time keeps
+    configuration in one explicit, environment-backed boundary.
+    """
+    def optional_env(name):
+        value = os.getenv(name)
+        return value.strip() if value and value.strip() else None
+
+    return (
+        optional_env("DGFT_APP_ID"),
+        optional_env("DGFT_SESSION_ID"),
+        optional_env("DGFT_CSRF_TOKEN"),
+        optional_env("DGFT_AWSALB"),
+    )
 
 # Proxy configuration - set via DGFT_PROXY environment variable
 # Examples:
@@ -110,7 +121,6 @@ def fetch_eligible_licenses(order=None, expired_only=False):
 
 def _parse_transfer_dt(t):
     """Parse the initiation datetime of a transfer record. Returns datetime.min on failure."""
-    from datetime import datetime
     for key in ("transferInitiationDate", "transferDate", "transferacceptanceDate"):
         raw = (t.get(key) or "").split("+")[0].strip()
         raw_norm = raw.split(".")[0].strip()
@@ -272,7 +282,7 @@ def authenticate(server_url=None):
         except requests.exceptions.SSLError as e:
             logger.warning("SSL Error on %s: %s", attempt_url, e)
             continue
-        except Exception as e:
+        except Exception:
             logger.exception("Authentication error on %s", attempt_url)
             return False, attempt_url
 
@@ -456,7 +466,7 @@ def save_ownership_locally(dfia, data, fetched_iec=None):
         ownership_row.save(update_fields=['last_ownership_fetch'])
 
         return True
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to save ownership locally for %s", dfia)
         return False
 
@@ -481,6 +491,15 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
         # If no IEC is available at all, skip but don't fail
         return (False, None, "No IEC available (no exporter, no default IEC)")
 
+    app_id, session_id, csrf_token, aws_alb = get_dgft_ownership_credentials()
+    if not all((app_id, session_id, csrf_token)):
+        return (
+            False,
+            None,
+            "DGFT ownership credentials are not configured. Set DGFT_APP_ID, "
+            "DGFT_SESSION_ID, and DGFT_CSRF_TOKEN.",
+        )
+
     for attempt in range(max_retries):
         try:
             # Step 1: Fetch from PRC
@@ -490,11 +509,11 @@ def fetch_and_update_ownership(dfia, max_retries=3, proxy=None, iec_number=None,
                 scrip_number=dfia.license_number,
                 scrip_issue_date=dfia.license_date.strftime('%d/%m/%Y'),
                 iec_number=iec,
-                app_id=APP_ID,
-                session_id=SESSION_ID,
-                csrf_token=CSRF_TOKEN,
+                app_id=app_id,
+                session_id=session_id,
+                csrf_token=csrf_token,
                 proxy=proxy,
-                aws_alb=AWS_ALB,
+                aws_alb=aws_alb,
             )
 
             if response is None:
@@ -694,7 +713,6 @@ class Command(BaseCommand):
         expired_only = options['expired']
         server_url = options['server']
         default_iec = options['iec']  # Default IEC for licenses without exporter
-        fetch_all = options['fetch_all']  # Fetch all licenses including expired
 
         # If not local-only and no server specified, ask for server
         if not local_only and not server_url:

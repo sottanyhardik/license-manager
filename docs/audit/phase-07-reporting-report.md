@@ -1,0 +1,1215 @@
+# Phase 7 Reporting & Exports Audit Report
+
+## backend/apps/allotment/scripts/pdf_coordinate_finder.py
+
+- File Path: `backend/apps/allotment/scripts/pdf_coordinate_finder.py`
+- Module: Reporting & Exports / Allotment PDF helper script
+- LOC: 120
+- Lines Reviewed: 120
+- Functions Reviewed: 4 (`_positive_int`, `create_coordinate_grid`, `parse_args`, `main`)
+- Classes Reviewed: 0
+- Arguments Reviewed: positional `output`, `--grid-spacing`, `--overwrite`
+- Validation Improvements:
+  - Added positive-integer validation for grid spacing through `argparse` and the direct helper API.
+  - Added output-path validation for existing files, directory targets, and missing parent directories.
+  - Added explicit overwrite opt-in to prevent accidental replacement of generated PDFs.
+- Package Replacements:
+  - Removed unused `pypdf.PdfReader`; retained existing ReportLab dependency because the script's purpose is PDF generation.
+  - Replaced ad hoc `sys.argv` behavior with Python standard-library `argparse` and `pathlib`.
+- Performance Improvements:
+  - No runtime database or API path exists; generation remains bounded to one A4 page with configurable spacing.
+  - Avoided unnecessary PDF reads by removing the unused reader import.
+- Security Improvements:
+  - Prevented unintended file overwrite by default.
+  - Explicitly rejects directory targets and missing parent directories before ReportLab writes.
+- Dead Code Removed:
+  - Removed unused `pypdf.PdfReader` import and stale usage text that advertised an ignored PDF-template input.
+- Duplicate Logic Removed:
+  - None found; repository-wide search found no duplicate coordinate-grid helper.
+- Tests Added:
+  - Added `backend/tests/test_pdf_coordinate_finder.py` covering valid PDF generation, existing-output protection, explicit overwrite, directory-output rejection, invalid grid spacing, `argparse` error exit, and `main()` success path.
+- Verification Results:
+  - Dependency/reference analysis: `rg -n "pdf_coordinate_finder|find_coordinates|fitz|PyMuPDF|coordinate" . -S` found no live runtime references outside this script and audit metadata.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_pdf_coordinate_finder.py -q` -> 7 passed.
+  - Ruff: `.venv/bin/ruff check backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - CLI help: `.venv/bin/python backend/apps/allotment/scripts/pdf_coordinate_finder.py --help` -> passed.
+  - Import verification: imported `DEFAULT_GRID_SPACING`, `create_coordinate_grid`, and `parse_args`; parsed `--grid-spacing 25 --overwrite` successfully.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
+## docs/guides/PDF_VIEWER_IMPLEMENTATION.md
+
+- File Path: `docs/guides/PDF_VIEWER_IMPLEMENTATION.md`
+- Module: Reporting & Exports / Frontend PDF preview documentation
+- LOC: 165
+- Lines Reviewed: 165
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Replaced stale JSX/App documentation with current TypeScript paths and current route/helper behavior.
+  - Documented the accepted relative API path contract for `/pdf-viewer`.
+- Package Replacements:
+  - None. Existing React Router, Axios, browser Blob URL APIs, and `openPdfPreview()` helper remain appropriate.
+- Performance Improvements:
+  - Documented blob URL cleanup behavior and current preview flows.
+- Security Improvements:
+  - Hardened `frontend/src/pages/PDFViewer.tsx` so unsafe `url` query values are rejected before authenticated Axios requests.
+  - Added `normalizePdfApiPath()` coverage for empty, absolute, protocol-relative, `javascript:`, backslash-containing, and valid relative paths.
+- Dead Code Removed:
+  - Removed obsolete documentation references to `PDFViewer.jsx`, `App.jsx`, `LicenseLedger.jsx`, old commit IDs, and outdated "next steps".
+- Duplicate Logic Removed:
+  - Consolidated the guide around the two actual preview mechanisms: `/pdf-viewer` and `openPdfPreview()`.
+- Tests Added:
+  - Added `frontend/src/pages/PDFViewer.test.tsx` covering URL normalization, blocked unsafe URLs, and successful safe relative PDF rendering.
+- Verification Results:
+  - Dependency search: `PDFViewer.tsx`, `AppRoutes.tsx`, `pdfPreview.js`, and active callers reviewed.
+  - Focused Vitest: `npm test -- PDFViewer.test.tsx` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/PDFViewer.tsx src/pages/PDFViewer.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this guide or the directly hardened viewer URL validation path.
+- Status: COMPLETED
+
+## docs/guides/UX_UI_AUDIT_REPORT.md
+
+- File Path: `docs/guides/UX_UI_AUDIT_REPORT.md`
+- Module: Reporting & Exports / Stale documentation matched by report filename
+- LOC: 796
+- Lines Reviewed: 796
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed stale documentation rather than preserving obsolete JSX-era validation/accessibility recommendations as active guidance.
+- Package Replacements:
+  - None.
+- Performance Improvements:
+  - None; documentation-only file with no runtime path.
+- Security Improvements:
+  - Removed outdated guidance that no longer matched the current TypeScript frontend, reducing risk of engineers following stale remediation steps.
+- Dead Code Removed:
+  - Deleted `docs/guides/UX_UI_AUDIT_REPORT.md` after repository-wide reference analysis found no live runtime references and only one documentation-index reference.
+  - Removed the stale `docs/README.md` link to the deleted guide.
+- Duplicate Logic Removed:
+  - Removed duplicate historical UX planning content now superseded by the active audit database, dashboard, and phase reports.
+- Tests Added:
+  - None required; no executable behavior changed.
+- Verification Results:
+  - Dependency search: `rg -n "UX_UI_AUDIT_REPORT|UX/UI|audit report|reports/|PDF|export|download|license-ledger|MasterList|TradeForm|Login" docs/guides/UX_UI_AUDIT_REPORT.md frontend/src docs -S` confirmed the file had no import, route, runtime, or generated-report dependency; the only non-audit reference was the removed `docs/README.md` index link.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED - REMOVED
+
+## frontend/src/components/reports/LicenseExportPanel.tsx
+
+- File Path: `frontend/src/components/reports/LicenseExportPanel.tsx`
+- Module: Reporting & Exports / Frontend license Excel export panel
+- LOC: 116
+- Lines Reviewed: 116
+- Functions Reviewed: 3 (`normalizeExportDays`, `LicenseExportPanel`, `handleExport`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added typed props for report title, description, day label, helper, endpoint, filename, features, and default days.
+  - Added `normalizeExportDays()` to coerce invalid input and clamp days to the supported `1..365` range before endpoint generation.
+  - Added stable `aria-describedby` wiring between the numeric input and helper text.
+- Package Replacements:
+  - Reused existing `openAuthedFile()` from `frontend/src/utils/documentDownload.ts` instead of custom per-component blob URL and anchor logic.
+- Performance Improvements:
+  - Removed immediate object URL creation/revocation from this component and delegated download lifetime handling to the shared helper.
+- Security Improvements:
+  - Export downloads continue to use the shared authenticated Axios path through `openAuthedFile()`.
+  - Invalid day values cannot produce unbounded report-window query parameters.
+- Dead Code Removed:
+  - Removed custom blob-download implementation from the component.
+- Duplicate Logic Removed:
+  - Consolidated authenticated blob download behavior with existing shared utility.
+- Tests Added:
+  - Added `frontend/src/components/reports/LicenseExportPanel.test.tsx` covering day normalization, default download path, and clamped out-of-range input.
+- Verification Results:
+  - Focused Vitest: `npm test -- LicenseExportPanel.test.tsx` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/components/reports/LicenseExportPanel.tsx src/components/reports/LicenseExportPanel.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED
+
+### Final State Verification
+
+- Audit Database: `backend/apps/allotment/scripts/pdf_coordinate_finder.py`, `backend/tests/test_pdf_coordinate_finder.py`, and `docs/audit/phase-07-reporting-report.md` marked `COMPLETED`.
+- Repository Knowledge Graph / Dashboard / Work Queue: regenerated with `python3 docs/audit/build_audit_state.py`; Phase 7 queue item is active.
+- Final scoped Ruff: `.venv/bin/ruff check backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py` -> clean.
+- Final scoped py_compile: `.venv/bin/python -m py_compile backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py` -> passed.
+- Final scoped diff check: `git diff --check -- backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py docs/audit/phase-07-reporting-report.md docs/audit/audit-database.json docs/audit/repository-knowledge-graph.json docs/audit/dashboard.md docs/audit/work-queue.md` -> clean.
+
+## backend/apps/allotment/templates/allotment/download.html
+
+- File Path: `backend/apps/allotment/templates/allotment/download.html`
+- Module: Reporting & Exports / Legacy Allotment Django template
+- LOC: 209
+- Lines Reviewed: 209
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed verified-dead legacy template rather than preserving unvalidated server-rendered output.
+- Package Replacements:
+  - None. Active exports already use direct ReportLab/openpyxl paths in `backend/apps/allotment/views_export.py`.
+- Performance Improvements:
+  - Removed a dead nested-template rendering path that contained repeated related-manager lookups and template aggregation tags.
+- Security Improvements:
+  - Removed `{{ df|safe }}` from a dead template, eliminating a stale XSS-prone rendering surface if the template were accidentally reintroduced into a view path.
+- Dead Code Removed:
+  - Deleted the legacy template after repository-wide dependency analysis found no render, `template_name`, include/extends, email/PDF/report/export generation, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path.
+- Duplicate Logic Removed:
+  - Removed legacy table-rendered allotment export output. The active export logic is the DRF `allotments/download/` action.
+- Tests Added:
+  - None required for deletion; no live runtime path referenced the template.
+- Verification Results:
+  - Dependency search: `rg -n "allotment/download\\.html|download\\.html|template_name\\s*=\\s*['\\\"]allotment/download|render\\([^\\n]*allotment/download|TemplateResponse\\([^\\n]*allotment/download|extends ['\\\"]allotment/download|include ['\\\"]allotment/download|download_allotment|allotment.*download|download.*allotment" . -S` -> no live template render path.
+  - URL/view review: `backend/apps/allotment/urls.py` exposes only DRF router routes; active export action is `AllotmentViewSet.download_grouped_export` in `backend/apps/allotment/views_export.py`.
+  - Audit Database: deleted template no longer appears in tracked source files after `python3 docs/audit/build_audit_state.py`.
+  - Remaining exact-reference scan: only audit documentation references remain.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py -q` -> 7 passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Ruff: `.venv/bin/ruff check docs/audit/build_audit_state.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - `backend/apps/allotment/templates/allotment/card.html` still contains a stale `{% url 'allotment-download' object.id %}` link and should be evaluated when that template becomes the selected audit file.
+- Status: COMPLETED - REMOVED
+
+## backend/apps/allotment/templates/allotment/pdf_base.html
+
+- File Path: `backend/apps/allotment/templates/allotment/pdf_base.html`
+- Module: Reporting & Exports / Legacy Allotment PDF template base
+- LOC: 36
+- Lines Reviewed: 36
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed verified-dead legacy base template rather than retaining a server-rendered PDF surface with no live caller.
+- Package Replacements:
+  - None. Active allotment PDF exports use ReportLab builders directly.
+- Performance Improvements:
+  - Removed obsolete external Bootstrap/jQuery/Popper script/style loading from the legacy PDF base path.
+- Security Improvements:
+  - Removed stale third-party CDN references and malformed script URLs from a dead server-rendered template.
+- Dead Code Removed:
+  - Deleted `backend/apps/allotment/templates/allotment/pdf_base.html`.
+  - Recursively deleted `backend/apps/allotment/templates/allotment/send.html`, the only child template extending this base.
+- Duplicate Logic Removed:
+  - Removed legacy transfer-letter/allotment PDF HTML rendering in favor of active ReportLab-based generation paths.
+- Tests Added:
+  - None required for deletion; no live runtime path referenced either template.
+- Verification Results:
+  - Dependency search for `pdf_base.html` found only `backend/apps/allotment/templates/allotment/send.html` as an allotment child template.
+  - Dependency search for `send.html` found no live render, `template_name`, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path.
+  - Audit Database: both deleted templates no longer appear in tracked source files after `python3 docs/audit/build_audit_state.py`.
+  - Remaining exact-reference scan: only audit documentation references remain.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py -q` -> 7 passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Ruff: `.venv/bin/ruff check docs/audit/build_audit_state.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED - REMOVED
+
+## frontend/src/pages/reports/ItemReport.tsx
+
+- File Path: `frontend/src/pages/reports/ItemReport.tsx`
+- Module: Reporting & Exports / Frontend item report page
+- LOC: 1,231 (`ItemReport.tsx`) + 61 (`ItemReport.test.ts`)
+- Lines Reviewed: 1,231
+- Functions Reviewed: 18 (`normalizeReportNumber`, `normalizeFilterValues`, `buildItemReportPath`, `ItemReport`, option loaders, report load/export handlers, filter handlers, inline edit handlers, and item-name refresh handler)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added defensive numeric filter normalization so malformed, empty, `NaN`, and infinite values fall back before reaching report query parameters.
+  - Normalized array filters by trimming and dropping blank/null values before encoding.
+  - Trimmed optional text/date filters and omitted empty values from API requests.
+  - Preserved active filter behavior across report load, Excel export, and item-name inline edit refresh.
+- Package Replacements:
+  - Replaced custom Excel blob/anchor download logic with existing `openAuthedFile()`.
+  - Replaced manual string query concatenation with browser-standard `URLSearchParams`.
+- Performance Improvements:
+  - Removed duplicated report URL assembly across JSON load, Excel export, and post-edit refresh paths.
+  - Deduplicated repeated purchase-status and norm option literals into shared constants.
+- Security Improvements:
+  - Excel export now uses the shared authenticated download helper instead of bespoke blob handling.
+  - URL encoding is centralized through `URLSearchParams`, avoiding malformed or partially encoded query strings.
+  - Removed option-load `console.error` calls that could expose request failure details in production consoles.
+- Dead Code Removed:
+  - Removed duplicate URL-building branches and manual blob download code.
+- Duplicate Logic Removed:
+  - Consolidated report path generation into `buildItemReportPath()`.
+  - Consolidated numeric/filter normalization helpers for frontend report requests.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ItemReport.test.ts` covering encoded active-filter URLs, blank optional filters, malformed numeric fallbacks, value normalization, and non-finite number handling.
+- Verification Results:
+  - Focused Vitest: `npm test -- ItemReport.test.ts` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ItemReport.tsx src/pages/reports/ItemReport.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/ItemReport.tsx frontend/src/pages/reports/ItemReport.test.ts` -> clean.
+  - py_compile: not applicable to TSX/TS frontend source; compileall returned clean for the scoped frontend paths.
+- Commit SHA: `1248ff802868a5d899b7944d11453456a86c6212`
+- Commit Timestamp: `2026-07-16T15:24:02+05:30`
+- Commit Summary: `fix(reports): harden item report`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The page is still large; further component extraction should wait for the queued report component audits to avoid mixing unrelated files.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/NormCardGrid.tsx
+
+- File Path: `frontend/src/pages/reports/NormCardGrid.tsx`
+- Module: Reporting & Exports / Frontend item-pivot norm selector
+- LOC: 152 (`NormCardGrid.tsx`) + 77 (`NormCardGrid.test.tsx`)
+- Lines Reviewed: 152
+- Functions Reviewed: 2 (`normalizeNormCards`, `NormCardGrid`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added defensive normalization for non-array, `null`, empty, whitespace, duplicate, and object-without-`norm_class` entries.
+  - Trimmed norm classes and descriptions before rendering.
+  - Prevented duplicate norm buttons and duplicate React keys.
+- Package Replacements:
+  - Used JavaScript `Set` for conversion norm membership and duplicate tracking.
+- Performance Improvements:
+  - Normalizes the available norm list once per render instead of branching repeatedly inside JSX.
+  - Deduplicates duplicate norm classes before rendering buttons.
+- Security Improvements:
+  - Malformed object input no longer renders `[object Object]` into the UI.
+  - Decorative icons are hidden from assistive tech and loading state has an explicit accessible label.
+- Dead Code Removed:
+  - Removed inline malformed-card guard that still allowed duplicate keys and object coercion edge cases.
+- Duplicate Logic Removed:
+  - Replaced repeated conversion-norm array checks with `CONVERSION_NORMS`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/NormCardGrid.test.tsx` covering malformed/blank/duplicate normalization, active button accessibility, changed-norm report reset, and active-norm reselection behavior.
+- Verification Results:
+  - Focused Vitest: `npm test -- NormCardGrid.test.tsx` -> 3 passed after fixing the object-without-`norm_class` regression found by the new test.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/NormCardGrid.tsx src/pages/reports/NormCardGrid.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> exit 0 with existing/staticfiles warning `staticfiles.W004` for `frontend/dist/assets`.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/NormCardGrid.tsx frontend/src/pages/reports/NormCardGrid.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/NormCardGrid.tsx frontend/src/pages/reports/NormCardGrid.test.tsx` -> clean.
+- Commit SHA: `4b20a546b0b8c76e110237c1e155482ccc72a0ca`
+- Commit Timestamp: `2026-07-16T15:27:02+05:30`
+- Commit Summary: `fix(reports): harden norm card grid`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/SionE1.tsx
+
+- File Path: `frontend/src/pages/reports/SionE1.tsx`
+- Module: Reporting & Exports / Frontend SION E1 route wrapper
+- LOC: 10 (`SionE1.tsx`) + 21 (`SionE1.test.tsx`)
+- Lines Reviewed: 10
+- Functions Reviewed: 1 (`SionE1`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Verified the wrapper has no local user input, query construction, export path, or mutable validation state.
+  - Locked the fixed `sionNorm="E1"` and title contract with a focused regression test.
+- Package Replacements:
+  - None. The wrapper correctly delegates to existing `SionNormReport`.
+- Performance Improvements:
+  - None required; this file renders one shared report component.
+- Security Improvements:
+  - No direct security surface in this wrapper; shared API/data handling remains in `SionNormReport`.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None. This wrapper exists for route-level code splitting and route clarity.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionE1.test.tsx` mocking `SionNormReport` and asserting the E1 norm/title props.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionE1.test.tsx` -> 1 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionE1.tsx src/pages/reports/SionE1.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionE1.tsx frontend/src/pages/reports/SionE1.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionE1.tsx frontend/src/pages/reports/SionE1.test.tsx` -> clean.
+- Commit SHA: `ede878cce8184292ee2b142c5990af29b34e881e`
+- Commit Timestamp: `2026-07-16T15:29:16+05:30`
+- Commit Summary: `test(reports): cover sion e1 wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared SION report table and API handling remain queued under `SionNormReport.tsx`.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/SionE126.tsx
+
+- File Path: `frontend/src/pages/reports/SionE126.tsx`
+- Module: Reporting & Exports / Frontend SION E126 route wrapper
+- LOC: 10 (`SionE126.tsx`) + 21 (`SionE126.test.tsx`)
+- Lines Reviewed: 10
+- Functions Reviewed: 1 (`SionE126`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Verified the wrapper has no local user input, query construction, export path, or mutable validation state.
+  - Locked the fixed `sionNorm="E126"` and title contract with a focused regression test.
+- Package Replacements:
+  - None. The wrapper correctly delegates to existing `SionNormReport`.
+- Performance Improvements:
+  - None required; this file renders one shared report component.
+- Security Improvements:
+  - No direct security surface in this wrapper; shared API/data handling remains in `SionNormReport`.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None. This wrapper exists for route-level code splitting and route clarity.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionE126.test.tsx` mocking `SionNormReport` and asserting the E126 norm/title props.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionE126.test.tsx` -> 1 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionE126.tsx src/pages/reports/SionE126.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionE126.tsx frontend/src/pages/reports/SionE126.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionE126.tsx frontend/src/pages/reports/SionE126.test.tsx` -> clean.
+- Commit SHA: `28f1638598923076d478d8e9349ce78a1c43b7c1`
+- Commit Timestamp: `2026-07-16T15:31:14+05:30`
+- Commit Summary: `test(reports): cover sion e126 wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared SION report table and API handling remain queued under `SionNormReport.tsx`.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/SionE132.tsx
+
+- File Path: `frontend/src/pages/reports/SionE132.tsx`
+- Module: Reporting & Exports / Frontend SION E132 route wrapper
+- LOC: 10 (`SionE132.tsx`) + 21 (`SionE132.test.tsx`)
+- Lines Reviewed: 10
+- Functions Reviewed: 1 (`SionE132`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Verified the wrapper has no local user input, query construction, export path, or mutable validation state.
+  - Locked the fixed `sionNorm="E132"` and title contract with a focused regression test.
+- Package Replacements:
+  - None. The wrapper correctly delegates to existing `SionNormReport`.
+- Performance Improvements:
+  - None required; this file renders one shared report component.
+- Security Improvements:
+  - No direct security surface in this wrapper; shared API/data handling remains in `SionNormReport`.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None. This wrapper exists for route-level code splitting and route clarity.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionE132.test.tsx` mocking `SionNormReport` and asserting the E132 norm/title props.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionE132.test.tsx` -> 1 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionE132.tsx src/pages/reports/SionE132.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionE132.tsx frontend/src/pages/reports/SionE132.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionE132.tsx frontend/src/pages/reports/SionE132.test.tsx` -> clean.
+- Commit SHA: `bb40f71130e8c5090ae682859dbea5da2f2f62bc`
+- Commit Timestamp: `2026-07-16T15:33:00+05:30`
+- Commit Summary: `test(reports): cover sion e132 wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared SION report table and API handling remain queued under `SionNormReport.tsx`.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/SionE5.tsx
+
+- File Path: `frontend/src/pages/reports/SionE5.tsx`
+- Module: Reporting & Exports / Frontend SION E5 route wrapper
+- LOC: 10 (`SionE5.tsx`) + 21 (`SionE5.test.tsx`)
+- Lines Reviewed: 10
+- Functions Reviewed: 1 (`SionE5`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Verified the wrapper has no local user input, query construction, export path, or mutable validation state.
+  - Locked the fixed `sionNorm="E5"` and title contract with a focused regression test.
+- Package Replacements:
+  - None. The wrapper correctly delegates to existing `SionNormReport`.
+- Performance Improvements:
+  - None required; this file renders one shared report component.
+- Security Improvements:
+  - No direct security surface in this wrapper; shared API/data handling remains in `SionNormReport`.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None. This wrapper exists for route-level code splitting and route clarity.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionE5.test.tsx` mocking `SionNormReport` and asserting the E5 norm/title props.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionE5.test.tsx` -> 1 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionE5.tsx src/pages/reports/SionE5.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionE5.tsx frontend/src/pages/reports/SionE5.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionE5.tsx frontend/src/pages/reports/SionE5.test.tsx` -> clean.
+- Commit SHA: `4574c8d35370e8547f6dd1386ce62e4457e34b58`
+- Commit Timestamp: `2026-07-16T15:34:56+05:30`
+- Commit Summary: `test(reports): cover sion e5 wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared SION report table and API handling remain queued under `SionNormReport.tsx`.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/SionNormReport.tsx
+
+- File Path: `frontend/src/pages/reports/SionNormReport.tsx`
+- Module: Reporting & Exports / Shared frontend SION report implementation
+- LOC: 408 (`SionNormReport.tsx`) + 89 (`SionNormReport.test.tsx`)
+- Lines Reviewed: 408
+- Functions Reviewed: 9 (`normalizeBooleanFilter`, `formatReportNumber`, `buildSionReportPath`, `getSionReportGroups`, `SionNormReport`, `handleFilterChange`, `renderTableHeaders`, `renderLicenseRow`, `renderTotalsRow`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added defensive boolean filter normalization for active/expired and balance-CIF radio values.
+  - Centralized and encoded API query construction in `buildSionReportPath()`.
+  - Rejected malformed, blank, `NaN`, and infinite numeric values before formatting.
+  - Guarded malformed API payloads where `groups`, `notifications`, `licenses`, or `totals` are missing or non-arrays.
+  - Synced filter state when the `sionNorm` prop changes.
+- Package Replacements:
+  - Reused `URLSearchParams` for API report query construction.
+  - Used `Number.isFinite()` for robust numeric validation.
+- Performance Improvements:
+  - Avoided rendering crashes/retries caused by malformed API shapes.
+  - Prevented post-unmount state updates during slow or cancelled report fetches.
+- Security Improvements:
+  - Encoded license IDs in generated license detail links.
+  - Avoided rendering `NaN`/`Infinity` as report values.
+  - Removed unused catch binding and limited error handling to the mounted component lifecycle.
+- Dead Code Removed:
+  - Removed ad hoc inline query-string construction from the fetch effect.
+- Duplicate Logic Removed:
+  - Consolidated filter normalization and number formatting into exported helpers.
+- Tests Added:
+  - Added `frontend/src/pages/reports/SionNormReport.test.tsx` covering helper normalization, malformed API groups, finite number formatting, default fetch path, and radio-triggered reload path.
+- Verification Results:
+  - Focused Vitest: `npm test -- SionNormReport.test.tsx` -> 5 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/SionNormReport.tsx src/pages/reports/SionNormReport.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/reports/SionNormReport.tsx frontend/src/pages/reports/SionNormReport.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/reports/SionNormReport.tsx frontend/src/pages/reports/SionNormReport.test.tsx` -> clean.
+- Commit SHA: `78e9c91eebad9007552cd95e7519dca062021b08`
+- Commit Timestamp: `2026-07-16T15:38:09+05:30`
+- Commit Summary: `fix(reports): harden sion norm report`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Dense SION table layout remains intentionally monolithic to avoid changing report column semantics during this audit pass.
+- Status: COMPLETED
+
+## frontend/src/utils/documentDownload.ts
+
+- File Path: `frontend/src/utils/documentDownload.ts`
+- Module: Reporting & Exports / Shared authenticated document and export download helper
+- LOC: 91 (`documentDownload.ts`) + 62 (`documentDownload.test.ts`)
+- Lines Reviewed: 91
+- Functions Reviewed: 4 (`hasUnsafePathCharacters`, `normalizeAuthedFilePath`, `toProtectedMediaPath`, `openAuthedFile`, plus `openDocument` wrapper)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added `normalizeAuthedFilePath()` to reject blank, absolute, protocol-relative, backslash-containing, and control-character paths before authenticated Axios requests.
+  - Trimmed input paths before media/API normalization.
+  - Rejected empty and unsafe media paths.
+- Package Replacements:
+  - None. Existing Axios/browser Blob URL APIs remain appropriate.
+- Performance Improvements:
+  - Unsafe paths fail before network work begins.
+- Security Improvements:
+  - Prevents accidental auth-bearing export/document requests to absolute or protocol-relative external URLs.
+  - Keeps full media URL support by stripping the origin before routing through the authenticated `/media/` API path.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - Centralized authenticated-path validation for all report/document download callers.
+- Tests Added:
+  - Expanded `frontend/src/utils/documentDownload.test.ts` to cover unsafe media paths, safe relative report paths, absolute/protocol-relative rejection, backslash rejection, and pre-request failure for unsafe `openAuthedFile()` paths.
+- Verification Results:
+  - Focused Vitest: `npm test -- documentDownload.test.ts` -> 8 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/utils/documentDownload.ts src/utils/documentDownload.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/utils/documentDownload.ts frontend/src/utils/documentDownload.test.ts` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/utils/documentDownload.ts frontend/src/utils/documentDownload.test.ts` -> clean.
+- Commit SHA: `bf5ad0010a89381311d2542d3eb4c613dbed68fa`
+- Commit Timestamp: `2026-07-16T15:41:27+05:30`
+- Commit Summary: `fix(reports): validate authenticated download paths`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this helper.
+- Status: COMPLETED
+
+## Phase 7 Freeze
+
+- File Path(s): `docs/audit/phase-07-reporting-report.md`, `docs/audit/audit-database.json`, `docs/audit/repository-knowledge-graph.json`, `docs/audit/dashboard.md`, `docs/audit/work-queue.md`
+- Total LOC: metadata-only phase freeze
+- Lines Reviewed: Existing Phase 7 report, audit database pending-work entry, dashboard completion history, work queue, and repository knowledge graph status were reviewed without reopening completed Phase 7 source files.
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Confirmed the existing audit database reports zero remaining Phase 7 reporting/export candidates before freezing the phase.
+- Package Replacements: None
+- Performance Improvements: None
+- Security Improvements: Preserved the existing Phase 7 security-tool blocker rather than rerunning unavailable scanners.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None for metadata-only freeze.
+- Verification Results:
+  - Existing audit database query: `phase7_remaining 0`.
+  - Work queue updated to mark `P7-REPORTING-EXPORTS-AUDIT` as `DONE`.
+  - Phase 8 Bills of Entry queue item added from the existing module pipeline and audit database state.
+  - Freeze timestamp: `2026-07-16T16:19:33+05:30`.
+- Remaining Technical Debt:
+  - Security tooling remains unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked Items:
+  - None for the phase freeze.
+- Status: COMPLETED - FROZEN
+
+## frontend/src/pages/LedgerUpload.tsx
+
+- File Path: `frontend/src/pages/LedgerUpload.tsx`
+- Module: Reporting & Exports / Frontend ledger upload and async processing page
+- LOC: 614 (`LedgerUpload.tsx`) + 164 (`LedgerUpload.test.tsx`)
+- Lines Reviewed: 614
+- Functions Reviewed: 8 (`isRecord`, `normalizeText`, `normalizeLedgerFileTasks`, `normalizeLedgerUploadErrors`, `buildAsyncUploadErrorMessage`, `getLedgerUploadErrorMessage`, `normalizeProgressValue`, `LedgerUpload`) plus `TaskStatusModal`
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added explicit normalization for malformed async `file_tasks` and `errors` response payloads.
+  - Filtered blank and duplicate task IDs before polling status endpoints.
+  - Added fallback display names for missing files, licenses, and upload errors.
+  - Added progress clamping so malformed values cannot render invalid percentages or ARIA values.
+- Package Replacements:
+  - None. Existing React, browser FormData, Axios API client, shared upload hook, and UI components remain appropriate.
+- Performance Improvements:
+  - Preserved upload batching and bounded polling concurrency.
+  - Capped rendered async error details to avoid unbounded UI strings for large failed batches.
+  - Kept polling completion tracking in a `Set` to avoid repeated status calls for terminal tasks.
+- Security Improvements:
+  - Removed console error logging of upload and polling failures.
+  - React escaping is preserved for file, license, and error display values.
+  - Invalid/malformed task IDs are rejected before authenticated status requests are made.
+- Dead Code Removed:
+  - Removed repeated `document.getElementById("file-input")` reset logic in favor of a typed input ref.
+- Duplicate Logic Removed:
+  - Centralized async task/error/progress normalization into test-covered helpers.
+- Tests Added:
+  - Added `frontend/src/pages/LedgerUpload.test.tsx` covering async response normalization, capped error messages, API/native error extraction, progress clamping, accessible remove action, and async upload FormData/task rendering.
+- Verification Results:
+  - Focused Vitest: `npm test -- LedgerUpload.test.tsx` -> 6 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/LedgerUpload.tsx src/pages/LedgerUpload.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/LedgerUpload.tsx frontend/src/pages/LedgerUpload.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/LedgerUpload.tsx frontend/src/pages/LedgerUpload.test.tsx` -> clean.
+- Commit SHA: `1739ad2ae3213cc09310a9619de38e57b49685f5`
+- Commit Timestamp: `2026-07-16T15:49:41+05:30`
+- Commit Summary: `fix(reports): harden ledger upload`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The component is still large and could be split into a task-status modal module and upload-results renderer in a later component-extraction audit.
+- Status: COMPLETED
+
+## frontend/src/pages/LicenseLedger.tsx
+
+- File Path: `frontend/src/pages/LicenseLedger.tsx`
+- Module: Reporting & Exports / Frontend license ledger and bulk export page
+- LOC: 753 (`LicenseLedger.tsx`) + 171 (`LicenseLedger.test.tsx`)
+- Lines Reviewed: 753
+- Functions Reviewed: 16 (`isRecord`, `normalizeText`, `toFiniteNumber`, `normalizeId`, `getFinancialYearRange`, `normalizeMinBalance`, `getCompanyFilterValue`, `buildLedgerFilterParams`, `normalizeTransactions`, `normalizeLicenseWiseData`, `normalizeLedgerExportDetails`, `getTodayStamp`, `getApiErrorMessage`, `LicenseWiseLedger`, `fetchFullLedgerDetails`, `LicenseLedger`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Sanitized filter query parameters for invalid license type, negative/non-finite minimum balance, whitespace search/company values, invalid ordering, and boolean flags.
+  - Normalized malformed license-wise API rows before rendering and before bulk export.
+  - Rejected malformed ledger detail responses before passing data to PDF/Excel builders.
+  - Added deterministic financial-year and export filename date helpers.
+- Package Replacements:
+  - None. Existing React, URLSearchParams, Axios API client, and existing ledger export utilities remain appropriate.
+- Performance Improvements:
+  - Preserved sequential detail fetching to avoid burst-loading the ledger-detail API.
+  - Added failure counts for skipped/malformed detail rows instead of silently swallowing failures.
+  - Avoided rendering/exporting malformed license entries with missing IDs.
+- Security Improvements:
+  - React escaping is preserved for API-provided file, company, license, and error values.
+  - Invalid filter values are normalized before authenticated API requests.
+  - Malformed export detail rows are rejected before reaching client-side PDF/Excel generation.
+- Dead Code Removed:
+  - Removed duplicate in-component financial-year helpers and replaced them with a single test-covered helper.
+- Duplicate Logic Removed:
+  - Centralized filter query construction, financial-year range calculation, API row normalization, and export date stamping.
+- Tests Added:
+  - Added `frontend/src/pages/LicenseLedger.test.tsx` covering financial-year ranges, filter query normalization, company/min-balance edge cases, malformed license-wise data normalization, deterministic date stamps, and bulk PDF export detail fetching.
+- Verification Results:
+  - Focused Vitest: `npm test -- LicenseLedger.test.tsx` -> 6 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/LicenseLedger.tsx src/pages/LicenseLedger.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/LicenseLedger.tsx frontend/src/pages/LicenseLedger.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/LicenseLedger.tsx frontend/src/pages/LicenseLedger.test.tsx` -> clean.
+- Commit SHA: `08d50b2aa5fbd2a23ebcc3657be8c8425a268460`
+- Commit Timestamp: `2026-07-16T15:54:00+05:30`
+- Commit Summary: `fix(reports): harden license ledger`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The page remains large and should eventually be split into filter, summary, and license-wise table components during a dedicated component extraction audit.
+- Status: COMPLETED
+
+## frontend/src/pages/LicenseLedgerDetail.tsx
+
+- File Path: `frontend/src/pages/LicenseLedgerDetail.tsx`
+- Module: Reporting & Exports / Frontend license ledger detail and single-license export page
+- LOC: 509 (`LicenseLedgerDetail.tsx`) + 114 (`LicenseLedgerDetail.test.tsx`)
+- Lines Reviewed: 509
+- Functions Reviewed: 12 (`isRecord`, `normalizeText`, `toFiniteNumber`, `encodeLedgerPathSegment`, `buildLedgerDetailPath`, `normalizeLedgerDetail`, `sanitizeLedgerFilenamePart`, `getTodayStamp`, `getApiErrorMessage`, `groupTransactionsByCompany`, `LicenseLedgerDetail`, plus local format/export handlers)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Encoded route IDs before building ledger-detail API paths and rejected missing IDs.
+  - Normalized malformed ledger-detail responses before rendering and export.
+  - Sanitized PDF/XLSX filename segments for unsafe filename/control characters.
+  - Normalized balances and currency values before formatting.
+- Package Replacements:
+  - None. Existing React, URLSearchParams, Axios API client, and ledger export utilities remain appropriate.
+- Performance Improvements:
+  - Centralized transaction grouping without changing table ordering semantics.
+  - Avoided rendering non-object transaction entries.
+- Security Improvements:
+  - Removed console logging of API failures.
+  - Prevented unsafe route-param strings from being interpolated directly into authenticated API paths.
+  - Prevented unsafe license numbers from reaching generated export filenames.
+- Dead Code Removed:
+  - Removed inline API path and company grouping duplication.
+- Duplicate Logic Removed:
+  - Centralized API path building, ledger normalization, filename sanitization, date stamping, and company grouping.
+- Tests Added:
+  - Added `frontend/src/pages/LicenseLedgerDetail.test.tsx` covering safe path encoding, malformed response normalization, filename sanitization, date stamps, unknown-company grouping, and PDF export filename generation.
+- Verification Results:
+  - Focused Vitest: `npm test -- LicenseLedgerDetail.test.tsx` -> 5 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/LicenseLedgerDetail.tsx src/pages/LicenseLedgerDetail.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/pages/LicenseLedgerDetail.tsx frontend/src/pages/LicenseLedgerDetail.test.tsx` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/pages/LicenseLedgerDetail.tsx frontend/src/pages/LicenseLedgerDetail.test.tsx` -> clean.
+- Commit SHA: `ee071fcbf3a2a6930585b58faaae9c793446dd9f`
+- Commit Timestamp: `2026-07-16T15:56:54+05:30`
+- Commit Summary: `fix(reports): harden license ledger detail`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The table renderer remains large and should be split into a grouped transaction table component during a dedicated extraction pass.
+- Status: COMPLETED
+
+## frontend/src/utils/ledgerExport.js
+
+- File Path: `frontend/src/utils/ledgerExport.js`
+- Module: Reporting & Exports / Shared frontend PDF and Excel ledger export utility
+- LOC: 780 (`ledgerExport.js`) + 83 (`ledgerExport.test.ts`)
+- Lines Reviewed: 780
+- Functions Reviewed: 17 (`isRecord`, `normalizeText`, `toFiniteNumber`, `normalizeTransaction`, `normalizeLedgerLicensesData`, `sanitizeExportFilename`, `sanitizeWorksheetName`, `buildLicenseLedgerUrl`, `getTodayStamp`, `groupByCompany`, `sortTxns`, `fmtDate`, `fmtNum`, `fmtCur`, `generatePDF`, `buildSummarySheet`, `generateExcel`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added export-boundary normalization for malformed license and transaction rows.
+  - Coerced non-finite numeric values before report calculations and formatting.
+  - Sanitized generated PDF/XLSX filenames and Excel worksheet names.
+  - Encoded license IDs before embedding ledger hyperlinks.
+- Package Replacements:
+  - None. Existing `jspdf`, `jspdf-autotable`, and `exceljs` remain the approved export libraries for this utility.
+- Performance Improvements:
+  - Preserved existing in-memory PDF/XLSX generation semantics.
+  - Avoided processing non-object rows and empty export batches.
+  - Delayed object URL revocation until after the browser can consume the generated workbook download.
+- Security Improvements:
+  - Prevented unsafe filename characters and control characters from reaching generated downloads.
+  - Prevented raw license IDs from being interpolated into hyperlink URLs.
+  - Normalized malformed text/numeric API data before inserting it into PDF/XLSX outputs.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - Centralized license/transaction normalization, filename sanitization, worksheet-name sanitization, and ledger-link construction.
+- Tests Added:
+  - Added `frontend/src/utils/ledgerExport.test.ts` covering malformed export data normalization, filename and worksheet sanitization, unknown-company grouping, and encoded ledger links.
+- Verification Results:
+  - Focused Vitest: `npm test -- ledgerExport.test.ts` -> 4 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/utils/ledgerExport.js src/utils/ledgerExport.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues after build completion.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/utils/ledgerExport.js frontend/src/utils/ledgerExport.test.ts` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/utils/ledgerExport.js frontend/src/utils/ledgerExport.test.ts` -> clean.
+- Commit SHA: `10bcbcdf14ab7a5892f1a970fda56d9bba252fad`
+- Commit Timestamp: `2026-07-16T16:00:46+05:30`
+- Commit Summary: `fix(reports): harden ledger export utility`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The utility remains large and would benefit from a future split into shared data normalization, PDF writer, and Excel writer modules.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/ActiveLicenses.tsx
+
+- File Path: `frontend/src/pages/reports/ActiveLicenses.tsx`
+- Module: Reporting & Exports / Frontend active-license Excel report page
+- LOC: 24
+- Lines Reviewed: 24
+- Functions Reviewed: 1 (`ActiveLicenses`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Rechecked all page-level props passed into the shared `LicenseExportPanel`.
+  - Confirmed day input validation, clamping, ARIA wiring, loading state, toast failure path, and authenticated download handling are delegated to the already hardened shared report component.
+  - Removed stale hard-coded `2026/2027` helper text so the report copy remains valid across years.
+- Package Replacements:
+  - None. Existing React composition and the shared `LicenseExportPanel` remain the correct abstraction.
+- Performance Improvements:
+  - No extra rendering loop, duplicate query, or client-side export work exists in this wrapper.
+  - Kept endpoint and filename generation as pure callbacks evaluated only by the shared export action.
+- Security Improvements:
+  - Confirmed this page performs no direct DOM injection, HTML rendering, localStorage/session access, or unauthenticated download logic.
+  - Regression coverage confirms generated active-license export URLs remain relative API paths.
+- Dead Code Removed:
+  - Removed stale year-specific copy.
+- Duplicate Logic Removed:
+  - None needed; report validation/download behavior remains centralized in `LicenseExportPanel`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ActiveLicenses.test.tsx` covering visible copy, default lookback days, stale-year absence, and active-license export URL/filename generation.
+- Verification Results:
+  - Dependency search: `rg -n "ActiveLicenses|active-licenses|Active Licenses|LicenseExportPanel" frontend backend docs/audit docs -g '!node_modules'` reviewed route, backend endpoint, docs, and shared component references.
+  - Focused Vitest: `npm test -- ActiveLicenses.test.tsx` -> 2 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ActiveLicenses.tsx src/pages/reports/ActiveLicenses.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/DownloadLicense.tsx
+
+- File Path: `frontend/src/pages/reports/DownloadLicense.tsx`
+- Module: Reporting & Exports / Frontend bulk license balance Excel export page
+- LOC: 283
+- Lines Reviewed: 283
+- Functions Reviewed: 7 (`normalizeDownloadDays`, `parseLicenseNumbers`, `extractLicenseNumbers`, `downloadBlob`, `DownloadLicense`, `handleDownload`, `handleBulkDownload`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added day normalization for status-based reports to clamp invalid, empty, negative, zero, and overflow values to the existing `1..3650` UI range.
+  - Added manual license-number trimming and deduplication before POSTing to `licenses/bulk-balance-excel/`.
+  - Added defensive extraction for status report responses so missing, null, empty, or non-string `license_number` values do not reach the bulk export payload.
+  - Preserved the existing disabled state for empty manual input and added regression coverage for it.
+- Package Replacements:
+  - None. Existing React state, Axios API client, Sonner toasts, and project UI primitives remain appropriate.
+- Performance Improvements:
+  - Avoids duplicate bulk-export work by deduplicating manual license numbers client-side before the POST request.
+  - Avoids unnecessary bulk POSTs when status-report responses contain no valid license numbers.
+- Security Improvements:
+  - Kept all API paths relative to the authenticated Axios base URL.
+  - Added delayed object URL revocation in `downloadBlob()` so generated Blob URLs are cleaned up without racing the browser download.
+  - Added stable label/help wiring for the textarea and day input plus `aria-pressed` on status toggle buttons.
+- Dead Code Removed:
+  - Removed duplicated inline anchor/object-URL download blocks from both export handlers.
+- Duplicate Logic Removed:
+  - Consolidated blob download behavior into local `downloadBlob()`.
+  - Consolidated license parsing and day normalization into direct helper functions with unit coverage.
+- Tests Added:
+  - Added `frontend/src/pages/reports/DownloadLicense.test.tsx` covering helper boundaries, license-number dedupe, disabled empty input, malformed status report rows, active status export, and expiring status export.
+- Verification Results:
+  - Dependency search: `rg -n "DownloadLicense|download-license|reports/download|License Downloads|active.*days|expiring.*days" frontend backend docs docs/audit -g '!node_modules'` reviewed route, docs, backend bulk-export endpoint, and report endpoint references.
+  - Focused Vitest: `npm test -- DownloadLicense.test.tsx` -> 6 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/DownloadLicense.tsx src/pages/reports/DownloadLicense.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/ExpiringLicenses.tsx
+
+- File Path: `frontend/src/pages/reports/ExpiringLicenses.tsx`
+- Module: Reporting & Exports / Frontend expiring-license Excel report page
+- LOC: 23
+- Lines Reviewed: 23
+- Functions Reviewed: 1 (`ExpiringLicenses`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Rechecked all page-level props passed into the shared `LicenseExportPanel`.
+  - Confirmed day input validation, clamping, ARIA wiring, loading state, toast failure path, and authenticated download handling are delegated to the already hardened shared report component.
+  - Confirmed endpoint generation uses `format=excel` and normalized day values from the shared component.
+- Package Replacements:
+  - None. Existing React composition and the shared `LicenseExportPanel` remain appropriate.
+- Performance Improvements:
+  - No extra rendering loop, duplicate query, or client-side export work exists in this wrapper.
+- Security Improvements:
+  - Confirmed this page performs no direct DOM injection, HTML rendering, localStorage/session access, or unauthenticated download logic.
+  - Regression coverage confirms generated expiring-license export URLs remain relative API paths.
+- Dead Code Removed:
+  - None.
+- Duplicate Logic Removed:
+  - None needed; report validation/download behavior remains centralized in `LicenseExportPanel`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ExpiringLicenses.test.tsx` covering rendered copy, default lookahead days, feature copy, and expiring-license export URL/filename generation.
+- Verification Results:
+  - Dependency search: `rg -n "ExpiringLicenses|expiring-licenses|Expiring Licenses|LicenseExportPanel" frontend backend docs docs/audit -g '!node_modules'` reviewed route, backend endpoint, docs, and shared component references.
+  - Focused Vitest: `npm test -- ExpiringLicenses.test.tsx` -> 2 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ExpiringLicenses.tsx src/pages/reports/ExpiringLicenses.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/ItemPivotFilters.tsx
+
+- File Path: `frontend/src/pages/reports/ItemPivotFilters.tsx`
+- Module: Reporting & Exports / Frontend item pivot report filters
+- LOC: 241
+- Lines Reviewed: 241
+- Functions Reviewed: 2 (`normalizeMinBalance`, `ItemPivotFilters`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added `normalizeMinBalance()` so malformed balance values fall back instead of propagating `NaN`.
+  - Tightened purchase-status option typing and preserved code-array callbacks for the parent report API builder.
+  - Coerced `hasActiveFilters` at render boundaries because the parent expression can be a date string as well as a boolean.
+  - Added labels for all native controls and an `inputId` for the `react-select` purchase-status control.
+- Package Replacements:
+  - None. Existing React, `react-select`, project `AsyncSelectField`, and Lucide icon usage remain appropriate.
+- Performance Improvements:
+  - Hoisted static balance options out of render.
+  - Kept company selector loading lazy through the existing `loadOnMount={false}` behavior.
+- Security Improvements:
+  - Made `react-select` menu portal selection SSR/test safe by guarding `document.body`.
+  - No direct HTML injection, dynamic URL creation, export download, or local storage access exists in this filter component.
+- Dead Code Removed:
+  - Removed stale "extracted verbatim" assumptions by tightening formatting and validation.
+- Duplicate Logic Removed:
+  - Consolidated minimum-balance parsing into `normalizeMinBalance()`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ItemPivotFilters.test.tsx` covering balance normalization, active-filter chip rendering, clear action, native filter callbacks, and purchase-status selection mapping.
+- Verification Results:
+  - Dependency search: `rg -n "ItemPivotFilters|NormCardGrid|ItemPivotReport|purchase_status|expiring_soon|balance_status|handleFilterChange|filters\\." frontend/src/pages/reports frontend/src -g '!node_modules'` reviewed parent and related report filter dependencies.
+  - Focused Vitest: `npm test -- ItemPivotFilters.test.tsx` -> 4 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ItemPivotFilters.tsx src/pages/reports/ItemPivotFilters.test.tsx` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Shared `AsyncSelectField` does not currently expose `inputId`/ARIA hooks, so include/exclude company selectors still rely on placeholder text rather than true label association; complete that when the shared selector component is selected for audit.
+- Status: COMPLETED
+
+## frontend/src/pages/reports/ItemPivotReport.tsx
+
+- File Path: `frontend/src/pages/reports/ItemPivotReport.tsx`
+- Module: Reporting & Exports / Frontend item pivot report page
+- Total LOC: 1478
+- Lines Reviewed: 1478
+- Functions Reviewed: 13 (`itemBgColor`, `toFiniteNumber`, `normalizeFilterValues`, `buildItemPivotReportPath`, `PurchaseStatusBadge`, `ItemPivotReport`, `loadFilterOptions`, `loadAvailableNorms`, `loadReport`, `handleUpdateBalance`, `pollUpdateStatus`, `handleExport`, `calculateNotificationSummary`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added `buildItemPivotReportPath()` so JSON and Excel report URLs are built through `URLSearchParams` instead of manual string concatenation.
+  - Added `toFiniteNumber()` to prevent malformed numeric report data from propagating `NaN` through summary calculations or task completion toasts.
+  - Guarded balance-update responses that do not return a `task_id`.
+  - Normalized blank optional filters out of API request paths.
+- Package Replacements:
+  - Reused existing `openAuthedFile()` from `frontend/src/utils/documentDownload.ts` for report Excel downloads and merged DFIA documents.
+- Performance Improvements:
+  - Removed duplicate URL-building logic between JSON load and Excel export paths.
+  - Avoided unnecessary object URL creation/revocation code in this component by delegating blob lifetime handling to the shared helper.
+- Security Improvements:
+  - Removed direct `localStorage.getItem('access')` use and manual Authorization header construction from the merged-document path.
+  - Kept all report/export/document paths relative to the authenticated Axios base URL.
+  - Preserved React escaping for modal text, notes, conditions, and report values; no `dangerouslySetInnerHTML` path exists in this file.
+- Dead Code Removed:
+  - Removed unused `react-select`, `AsyncSelectField`, and filter-icon imports left behind after `ItemPivotFilters` extraction.
+- Duplicate Logic Removed:
+  - Consolidated item-pivot report URL generation into `buildItemPivotReportPath()`.
+  - Consolidated numeric coercion into `toFiniteNumber()`.
+- Tests Added:
+  - Added `frontend/src/pages/reports/ItemPivotReport.test.ts` covering encoded URL construction, blank optional filters, malformed numeric fallbacks, and non-finite numeric protection.
+- Verification Results:
+  - Dependency search: `rg -n "item-pivot|ItemPivotReport|ItemPivot|update-balance|norm_class|downloadUrl|createObjectURL|purchase_status" frontend/src/pages/reports frontend/src backend docs -g '!node_modules'` reviewed route, backend endpoint, docs, export/download, and related report dependencies.
+  - Focused Vitest: `npm test -- ItemPivotReport.test.ts` -> 3 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/pages/reports/ItemPivotReport.tsx src/pages/reports/ItemPivotReport.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Scoped diff check before code commit: `git diff --cached --check` -> clean.
+- Commit SHA:
+  - `91fadfcad93f027592594783c6387dca8d88e9ab`
+- Commit Timestamp:
+  - `2026-07-16T15:19:38+05:30`
+- Commit Summary:
+  - `fix(reports): harden item pivot report`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - The table renderer remains oversized and should be split only when the selected audit unit is a rendering-component extraction; this pass avoided a large visual refactor.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/views_export.py
+
+- File Path: `backend/apps/bill_of_entry/views_export.py`
+- Module: Reporting & Exports / Bill of Entry export API
+- LOC: 820
+- Lines Reviewed: 820
+- Functions Reviewed: 9 (`_text_response`, `_decimal_or_default`, `add_grouped_export_action`, `export_bill_of_entries`, `_export_grouped_pdf`, `_export_grouped_xlsx`, `_export_port_xlsx`, `_group_boe`, `shorten_exporter`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Normalized `_export` with trim/lowercase and rejected unsupported values before queryset evaluation or export generation.
+  - Added explicit text responses for invalid format and unavailable optional export libraries.
+  - Guarded nullable license dates when grouping row details.
+- Package Replacements:
+  - No new dependency added. Retained existing `openpyxl`, ReportLab, Django ORM, and shared `create_pdf_exporter` utilities.
+- Performance Improvements:
+  - Replaced FK prefetching of `company`/`port` with `select_related`.
+  - Added export-specific `Prefetch` for `item_details` with `select_related` across `sr_number`, `license`, `exporter`, `port`, and `hs_code`.
+  - Cleared inherited viewset prefetches before applying the export-specific prefetch plan, fixing a runtime duplicate-prefetch failure.
+  - Avoided prefetched-manager `.first()` by using the already materialized `item_details` list in grouping.
+- Security Improvements:
+  - Invalid export formats now return 400 before database/export work.
+  - Missing PDF/XLSX libraries now return 503 instead of surfacing as generic server errors.
+  - Export remains permission-protected through `BillOfEntryViewSet.permission_classes`.
+- Dead Code Removed:
+  - Removed repeated hot-path imports from the PDF builder by moving optional dependency imports to module scope behind availability flags.
+- Duplicate Logic Removed:
+  - Introduced shared local constants for supported export formats and a local text response helper.
+- Tests Added:
+  - Expanded `backend/tests/test_api_boe.py` with export regressions for invalid `_export`, whitespace/case normalization, grouped XLSX workbook shape, port XLSX workbook shape, PDF response shape, and missing `openpyxl` dependency handling.
+- Verification Results:
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 12 passed.
+  - Ruff: `.venv/bin/ruff check backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Import verification: `BillOfEntryViewSet` imports with `export_bill_of_entries` and `_group_boe` attached; export route reverses to `/api/bill-of-entries/export/`.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - PDF and XLSX layout code remains separate because the output primitives and layout constraints differ; deeper consolidation would risk report formatting regressions.
+- Status: COMPLETED
+
+## backend/shared/pdf/__init__.py
+
+- File Path: `backend/shared/pdf/__init__.py`
+- Module: Reporting & Exports / Shared PDF package marker
+- LOC: 0
+- Lines Reviewed: 0
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - None; file intentionally contains no executable validation path.
+- Package Replacements:
+  - None. Empty `__init__.py` retained so `shared.pdf.builders` imports remain stable.
+- Performance Improvements:
+  - None; no runtime code.
+- Security Improvements:
+  - None; no runtime code or input surface.
+- Dead Code Removed:
+  - None. Removing this package marker would risk import compatibility for `shared.pdf.builders`.
+- Duplicate Logic Removed:
+  - None.
+- Tests Added:
+  - None required; no behavior changed.
+- Verification Results:
+  - Dependency search: `shared.pdf.builders` is imported by `backend/apps/license/services/exporters/ledger_pdf.py`; package marker retained.
+  - Import verification: `import shared.pdf` and `import shared.pdf.builders` -> passed.
+  - Ruff: `.venv/bin/ruff check backend/shared/pdf/__init__.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/shared/pdf/__init__.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/shared/pdf/__init__.py` -> passed.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this file.
+- Status: COMPLETED
+
+## backend/apps/allotment/views_export.py
+
+- File Path: `backend/apps/allotment/views_export.py`
+- Module: Reporting & Exports / Allotment grouped export API
+- LOC: 695
+- Lines Reviewed: 695
+- Functions Reviewed: 8 (`_text_response`, `_decimal_or_default`, `add_grouped_export_action`, `download_grouped_export`, `_export_grouped_pdf`, `_export_grouped_xlsx`, `_group_allotments`, `shorten_exporter`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Normalized `_export` with trim/lowercase and rejected unsupported values before querying/export generation.
+  - Normalized `type` defensively while preserving the existing internal helper signature.
+  - Added plain-text error responses with explicit content type.
+  - Returned 503 for missing optional PDF/XLSX dependencies instead of generic 500 responses.
+- Package Replacements:
+  - Removed unused ReportLab imports (`A4`, `landscape`, `getSampleStyleSheet`, `SimpleDocTemplate`, `Spacer`, `PageBreak`, `TA_LEFT`, `TA_RIGHT`).
+  - Moved `ExchangeRateModel` and `ParagraphStyle` to module imports instead of repeated hot-path imports.
+- Performance Improvements:
+  - Replaced FK `prefetch_related('company', 'port')` with `select_related('company', 'port')`.
+  - Added explicit nested prefetches for allocation item/license/exporter/port paths used by export grouping.
+  - Removed no-op exception handling from worksheet column sizing.
+- Security Improvements:
+  - Tightened invalid format handling before export work begins.
+  - Kept export responses generated in memory without disk writes.
+  - Preserved permission coverage through `AllotmentViewSet.permission_classes`.
+- Dead Code Removed:
+  - Removed unused imports and unused loop variables.
+- Duplicate Logic Removed:
+  - None extracted; the remaining PDF/XLSX builders still have parallel layout logic that is format-specific.
+- Tests Added:
+  - Expanded `backend/tests/test_api_allotment.py` with grouped export coverage for invalid `_export`, whitespace/case normalization, XLSX response shape, PDF response shape, and missing openpyxl dependency handling.
+- Verification Results:
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py -q` -> 11 passed.
+  - Ruff selected validation: `.venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py --select F401,F821,F811,E741,F841,B007,B904,UP035,UP006,UP045` -> clean.
+  - Ruff full: `.venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Import verification: Django setup imported `AllotmentViewSet` with `download_grouped_export` and `_group_allotments` attached.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - PDF and XLSX layout generation remain intentionally separate because their output primitives diverge; deeper consolidation would risk visual/export regressions.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/templates/bill_of_entry/download.html
+
+- File Path: `backend/apps/bill_of_entry/templates/bill_of_entry/download.html`
+- Module: Reporting & Exports / Legacy Bill of Entry pending-bill PDF template
+- LOC: 146
+- Lines Reviewed: 146
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Removed verified-dead legacy template instead of hardening an unreachable server-rendered report path.
+  - Removed the companion unreachable `DownloadPendingBillView` context path that re-filtered GET parameters without any live URL entry point.
+- Package Replacements:
+  - None. No replacement dependency was needed because the component had no live caller.
+- Performance Improvements:
+  - Removed an unreachable nested template-rendering path with repeated related-manager lookups, repeated per-row computed properties, and template-level aggregation tags.
+- Security Improvements:
+  - Removed stale PDF HTML rendering surface that loaded legacy template tags and traversed related objects without a live permission-protected route.
+- Dead Code Removed:
+  - Deleted `backend/apps/bill_of_entry/templates/bill_of_entry/download.html`.
+  - Recursively deleted `backend/apps/bill_of_entry/templates/bill_of_entry/download_port.html`, the companion unused pending-bill port report template.
+  - Deleted `backend/apps/bill_of_entry/views/download_views.py`, which only defined unreachable `DownloadPendingBillView` and `DownloadPortView`.
+  - Removed stale commented re-export references from `backend/apps/bill_of_entry/views/__init__.py`.
+- Duplicate Logic Removed:
+  - Removed duplicated pending-bill table/PDF layout between `download.html` and `download_port.html`.
+- Tests Added:
+  - None required for deletion; repository-wide dependency analysis found no live runtime path.
+- Verification Results:
+  - Dependency search: `rg -n "DownloadPendingBillView|DownloadPortView|download_views|bill_of_entry/download\\.html|bill_of_entry/download_port\\.html|templates/bill_of_entry/download|download_port" . -S` found executable references only in `backend/apps/bill_of_entry/views/download_views.py` before deletion.
+  - URL review: `backend/apps/bill_of_entry/urls.py` exposes only DRF bill-of-entry routes and `bill-of-entries/parse-pdf/`; no legacy download view is routed.
+  - Template dependency review: no `render()`, `TemplateResponse`, include, extends, email/PDF/report/export generator, command, middleware, signal, test, frontend, or documentation runtime reference was found.
+  - Post-removal exact-reference scan found only audit metadata before state regeneration.
+  - Audit Database: deleted templates and view no longer appear in tracked source files after `python3 docs/audit/build_audit_state.py`; `backend/apps/bill_of_entry/views/__init__.py` is marked `COMPLETED`.
+  - Focused pytest: `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 7 passed.
+  - Ruff: `.venv/bin/ruff check backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py` -> clean.
+  - py_compile: `.venv/bin/python -m py_compile backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py` -> passed.
+  - compileall: `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/views docs/audit/build_audit_state.py` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Import/template verification: active BOE API routes reverse successfully and removed legacy templates no longer resolve.
+  - Diff check: scoped `git diff --check` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this component.
+- Status: COMPLETED - REMOVED
+
+## frontend/src/utils/pdfPreview.js
+
+- File Path: `frontend/src/utils/pdfPreview.js`
+- Module: Reporting & Exports / Shared PDF blob preview wrapper
+- LOC: 90 (`pdfPreview.js`) + 55 (`pdfPreview.test.ts`)
+- Lines Reviewed: 90
+- Functions Reviewed: 3 (`openPdfPreview`, `sanitizePdfFilename`, `escapeHtmlAttribute`)
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Hardened filename normalization for `null`/`undefined`, blank strings, whitespace, control characters, reserved filename characters, missing extensions, and overlong names.
+  - Added explicit regression coverage for unsafe filenames and popup-blocked behavior.
+- Package Replacements:
+  - None. Native Blob, object URL, DOM, and string APIs remain appropriate for this small browser helper.
+- Performance Improvements:
+  - Kept blob URL creation single-pass and preserved immediate revocation when popup creation is blocked.
+  - Added deterministic length capping for generated download names.
+- Security Improvements:
+  - Escapes HTML-sensitive title and download attribute values before writing wrapper HTML.
+  - Sanitizes unsafe filename characters and control characters before using names in the generated preview document.
+  - Replaced the non-ASCII icon label in generated HTML with plain `Download` text.
+- Dead Code Removed:
+  - Replaced private untested helpers with exported, directly tested helpers.
+- Duplicate Logic Removed:
+  - Centralized filename and HTML attribute handling inside reusable helper functions for all PDF preview callers.
+- Tests Added:
+  - Added `frontend/src/utils/pdfPreview.test.ts` covering blank/unsafe filenames, HTML-sensitive escaping, popup-blocked URL cleanup, sanitized wrapper HTML, and unload cleanup registration.
+- Verification Results:
+  - Focused Vitest: `npm test -- pdfPreview.test.ts` -> 4 passed.
+  - TypeScript: `npm run typecheck` -> passed.
+  - ESLint: `npm run lint -- --quiet src/utils/pdfPreview.js src/utils/pdfPreview.test.ts` -> passed.
+  - React build: `npm run build` -> passed.
+  - Django check: `.venv/bin/python backend/manage.py check` -> exit 0 with existing `staticfiles.W004` warning for `frontend/dist/assets`.
+  - makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - compileall: `.venv/bin/python -m compileall -q frontend/src/utils/pdfPreview.js frontend/src/utils/pdfPreview.test.ts` -> passed.
+  - Scoped diff check: `git diff --check -- frontend/src/utils/pdfPreview.js frontend/src/utils/pdfPreview.test.ts` -> clean.
+- Commit SHA: `3ad2061986783d8f0a3cc98fcd7771f586af65a5`
+- Commit Timestamp: `2026-07-16T15:44:54+05:30`
+- Commit Summary: `fix(reports): harden pdf preview wrapper`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this helper.
+- Status: COMPLETED

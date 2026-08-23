@@ -12,23 +12,24 @@ For each item, it displays:
 """
 
 from decimal import Decimal
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
-from django.db.models import Sum, Q, F, DecimalField, Value
-from django.db.models.functions import Coalesce
+from django.conf import settings
 from django.http import JsonResponse, HttpResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from rest_framework.renderers import JSONRenderer
+from rest_framework.views import APIView
 
 from apps.core.constants import DEC_0, DEC_000
-from apps.core.models import SionNormClassModel, ItemNameModel
-from apps.license.models import LicenseExportItemModel, LicenseImportItemsModel, LicenseDetailsModel
+from apps.accounts.permissions import ReportPermission
+from apps.core.models import SionNormClassModel
+from apps.core.reports.envelope import validate_envelope
+from apps.core.reports.export_naming import build_export_filename
+from apps.core.reports.renderers import ExcelPassthroughRenderer
+from apps.license.models import LicenseImportItemsModel, LicenseDetailsModel
 # Excel export handled inline with openpyxl
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class InventoryBalanceReportView(View):
+class InventoryBalanceReportView(APIView):
     """
     API endpoint for Inventory Balance Report by SION Norm.
 
@@ -37,6 +38,11 @@ class InventoryBalanceReportView(View):
         - format: 'json' or 'excel' (default: json)
         - include_zero: Include items with zero balance (default: false)
     """
+    permission_classes = [ReportPermission]
+    # Register the excel "format" so DRF content negotiation accepts
+    # ?format=excel without raising Http404 before get() ever runs — see
+    # apps/core/reports/renderers.py.
+    renderer_classes = [JSONRenderer, ExcelPassthroughRenderer]
 
     def get(self, request, *args, **kwargs):
         sion_norm = request.GET.get('sion_norm')
@@ -110,7 +116,7 @@ class InventoryBalanceReportView(View):
             'available_cif_value': sum(item['available_cif_value'] for item in items_data),
         }
 
-        return {
+        report_data = {
             'sion_norm': {
                 'code': norm.norm_class,
                 'description': norm.description or '',
@@ -128,6 +134,14 @@ class InventoryBalanceReportView(View):
             },
             'items': items_data,
         }
+        if settings.DEBUG:
+            # Debug/test-only shape guard — never raises for a real
+            # production request. See apps/core/reports/envelope.py.
+            validate_envelope(
+                report_data, 'items',
+                required_summary_keys={'total_licenses', 'total_items'},
+            )
+        return report_data
 
     def _aggregate_by_items(self, import_items_query) -> List[Dict[str, Any]]:
         """
@@ -317,7 +331,8 @@ class InventoryBalanceReportView(View):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="inventory_balance_{sion_norm}.xlsx"'
+        filename = build_export_filename(f'inventory-balance-{sion_norm}', 'xlsx')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         workbook.save(response)
         return response

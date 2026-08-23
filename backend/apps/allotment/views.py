@@ -26,10 +26,11 @@ def _get_active_usd_rate():
     return None
 
 
-# Nested field definitions for AllotmentDetails (for list display only, not form)
+# Nested field definitions for AllotmentDetails.  Allocation/source economics
+# stay read-only here; only the canonical planning target can be selected.
 allotment_nested_field_defs = {
     "allotment_details": [
-        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False},
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False, "allow_add": False, "allow_remove": False},
         {"name": "license_number", "type": "text", "label": "License Number", "read_only": True},
         {"name": "serial_number", "type": "text", "label": "Serial Number", "read_only": True},
         {"name": "product_description", "type": "text", "label": "Description", "read_only": True},
@@ -49,22 +50,14 @@ AllotmentViewSet = MasterViewSet.create_viewset(
         "search": ["item_name", "company__name", "invoice", "bl_detail",
                    "allotment_details__item__license__license_number"],
         "filter": {
-            "license_number": {"type": "text", "label": "License Number"},
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
-            "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
-                                "filter_field": "company"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
-                             "filter_field": "port"},
-            "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
-            "estimated_arrival_date": {"type": "date_range"},
-            "modified_on": {"type": "date_range"},
-            "is_boe": {"type": "exact"},
             "is_allotted": {"type": "exact"},
         },
         "list_display": [
             "modified_on",
             "item_name",
+            "planning_target_item",
             "company__name",
             "port__name",
             "required_quantity",
@@ -80,6 +73,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "type",
             "port",
             "item_name",
+            "planning_target_item",
             "required_quantity",
             "cif_inr",
             "exchange_rate",
@@ -104,6 +98,8 @@ AllotmentViewSet = MasterViewSet.create_viewset(
                 "cif_inr",
                 "license_date",
                 "license_expiry",
+                "planning_target_item_name",
+                "planning_mapping_status",
             ]
         },
         "field_meta": {
@@ -118,6 +114,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
                 "required": True,
                 "label": "Item Name"
             },
+            "planning_target_item": {"type": "fk", "fk_endpoint": "/masters/item-names/?is_active=true", "label_field": "name"},
             "port": {
                 "type": "fk",
                 "fk_endpoint": "/masters/ports/",
@@ -177,6 +174,8 @@ def custom_get_queryset_with_defaults(self):
         'allotment_details__item__license',
         'allotment_details__item__license__purchase_status',
         'allotment_details__item__license__ownership__current_owner',
+        'allotment_details__item__utilization_plans',
+        'allotment_details__item__utilization_plans__item_name',
     )
 
     params = self.request.query_params

@@ -73,7 +73,7 @@ def test_consumer_uid_equals_exporter_key(graph, tmp_path):
     """The whole point: model.save() uid == exporter's emitted key for that row."""
     out = tmp_path / "export.json"
     call_command("export_masters_mds", "--out", str(out))
-    tables = json.loads(out.read_text())["tables"]
+    tables = json.loads(out.read_text(encoding="utf-8"))["tables"]
 
     def key(table):
         return tables[table]["records"][0]["key"]

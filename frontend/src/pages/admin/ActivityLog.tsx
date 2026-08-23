@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
     RefreshCw, LogIn, LogOut, Eye, PlusCircle, Pencil, Trash2,
-    Download, Upload, FileDown, Search, ScrollText, FileX, SlidersHorizontal,
+    Download, Upload, FileDown, Search, ScrollText, FileX,
 } from "lucide-react";
 
 import api from "../../api/axios";
@@ -82,7 +82,6 @@ export default function ActivityLog() {
     const { user } = useContext(AuthContext);
     const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
-    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const initialFilters: FilterState = {
         username: "", action: "", module: "", date_from: "", date_to: "", search: "", limit: "200",
     };
@@ -127,7 +126,6 @@ export default function ActivityLog() {
     const clearFilters = () =>
         replaceFilters({ ...filters, action: "", username: "", module: "", search: "", date_from: "", date_to: "" });
 
-    const secondaryFilterCount = [filters.module, filters.date_from, filters.date_to].filter(Boolean).length;
 
     return (
         <>
@@ -180,13 +178,8 @@ export default function ActivityLog() {
                             onChange={e => handleFilter("search", e.target.value)}
                         />
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setMoreFiltersOpen((open) => !open)} aria-expanded={moreFiltersOpen}>
-                        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-                        More filters{secondaryFilterCount ? ` (${secondaryFilterCount})` : ""}
-                    </Button>
                     <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>Clear</Button>
                 </CardContent>
-                {moreFiltersOpen && (
                     <CardContent className="grid grid-cols-1 gap-3 border-t border-border bg-muted/20 p-3 sm:grid-cols-2">
                         <div>
                             <Label className="mb-1 text-[11px]" htmlFor="f-module">Module</Label>
@@ -209,7 +202,6 @@ export default function ActivityLog() {
                             ]}
                         />
                     </CardContent>
-                )}
             </Card>
 
             {/* ── Action summary chips ──────────────────────────────── */}

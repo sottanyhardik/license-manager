@@ -330,7 +330,10 @@ fi
 echo_info "Pulling latest code from ${BRANCH}..."
 cd "$SERVER_PATH"
 git stash push --include-untracked
-git clean -fd
+# Keep prior hashed frontend bundles.  Open browser tabs can still reference a
+# lazy chunk from the preceding release; Vite's `emptyOutDir: false` can retain
+# those chunks only if git clean does not delete the build directory first.
+git clean -fd -e frontend/dist/
 git fetch --all --prune
 git checkout "$BRANCH" || git checkout -b "$BRANCH" "origin/$BRANCH"
 git pull --ff-only origin "$BRANCH"

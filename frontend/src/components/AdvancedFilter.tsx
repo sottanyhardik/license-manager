@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Filter, SlidersHorizontal, X, Zap } from "lucide-react";
+import { X } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import DateRangeFilter from "./DateRangeFilter";
+import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -22,6 +23,7 @@ export default function AdvancedFilter({
     initialFilters = {} as Record<string, any>,
     defaultFilters = {} as Record<string, any>,
     resetToDefaults = false,
+    isUpdating = false,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];
@@ -29,11 +31,11 @@ export default function AdvancedFilter({
     initialFilters?: Record<string, any>;
     defaultFilters?: Record<string, any>;
     resetToDefaults?: boolean;
+    isUpdating?: boolean;
 }) {
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
     const [filterValues, setFilterValues] = useState({ ...defaultFilters, ...initialFiltersWithoutSearch });
-    const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
     const isInitialMount = useRef(true);
     const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
@@ -102,16 +104,14 @@ export default function AdvancedFilter({
     const activeEntries = Object.entries(filterValues).filter(([field, value]) => value !== "" && value !== null && value !== undefined && value !== "all" && String(value) !== String(defaultFilters[field] ?? ""));
 
     // shared style token for react-select border
-    const rsControl = (base) => ({ ...base, minHeight: "38px", borderColor: "var(--tb-border)" });
+    const rsControl = (base) => ({ ...base, minHeight: "44px", borderColor: "var(--tb-border)" });
 
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
         const label = humanize(fieldName);
 
         // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
-        const Col = ({ wide = false, children }) => (
-            <div className={wide ? "sm:col-span-2" : ""}>{children}</div>
-        );
+        const Col = ({ wide = false, children }) => <FilterField wide={wide}>{children}</FilterField>;
 
         switch (filterType) {
             case "icontains":
@@ -294,25 +294,7 @@ export default function AdvancedFilter({
             )}
 
             {/* Compact primary toolbar with progressive disclosure. */}
-            {Object.keys(filterConfig).length > 0 && (
-                <Card>
-                    <CardContent className="p-3">
-                        <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
-                            <span className="flex items-center gap-1.5"><Filter className="size-3.5 text-muted-foreground" aria-hidden="true" /> Filters</span>
-                            <span className="ml-auto flex items-center gap-1 text-[11.5px] font-normal text-muted-foreground"><Zap className="size-3.5" />400ms text debounce</span>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                            {primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {secondaryEntries.length > 0 && <Button variant="outline" size="sm" onClick={() => setMoreFiltersOpen((open) => !open)} aria-expanded={moreFiltersOpen}><SlidersHorizontal className="size-3.5" />More Filters{activeEntries.filter(([field]) => !primaryFilterNames.includes(field)).length > 0 ? ` (${activeEntries.filter(([field]) => !primaryFilterNames.includes(field)).length})` : ""}<ChevronDown className={moreFiltersOpen ? "size-3.5 rotate-180" : "size-3.5"} /></Button>}
-                            <Button variant="ghost" size="sm" onClick={handleResetFilters}><X className="size-3.5" />Clear</Button>
-                        </div>
-                        {activeEntries.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/60 pt-2" aria-label="Active filters">{activeEntries.map(([field, value]) => <span key={field} className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px]"><span className="text-muted-foreground">{humanize(field)}:</span>{String(value)}<button type="button" onClick={() => handleFilterChange(field, "", true)} aria-label={`Remove ${humanize(field)} filter`} className="rounded-full p-0.5 hover:bg-primary/10"><X className="size-3" /></button></span>)}</div>}
-                        {moreFiltersOpen && <div className="mt-3 grid grid-cols-1 gap-3 border-t border-border/60 pt-3 sm:grid-cols-2 lg:grid-cols-3">{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</div>}
-                    </CardContent>
-                </Card>
-            )}
+            {Object.keys(filterConfig).length > 0 && <FilterPanel activeCount={activeEntries.length} isUpdating={isUpdating} onClear={handleResetFilters} clearDisabled={activeEntries.length === 0 && !searchTerm}><FilterGrid>{primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid></FilterPanel>}
         </div>
     );
 }

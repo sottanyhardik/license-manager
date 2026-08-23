@@ -106,14 +106,43 @@ class ItemPivotService:
                 if target_id:
                     mapped_usage[(source_id, target_id)]["unlinked_allotment_quantity"] += _decimal(row.qty)
                     mapped_usage[(source_id, target_id)]["unlinked_allotment_cif"] += _decimal(row.cif_fc)
+
+        # The same per-import-item row lists are used repeatedly below: once
+        # for the licence roll-up and again for every plan that falls back to
+        # its source item usage.  Aggregate them once here rather than
+        # traversing the BOE/allotment rows for every plan cell.  Decimal
+        # addition is exact, so this is a projection-only performance change.
+        usage_totals = {
+            item_id: {
+                "boe_qty": sum((_decimal(row.qty) for row in values["boes"]), ZERO_QTY),
+                "boe_cif": sum((_decimal(row.cif_fc) for row in values["boes"]), ZERO_CIF),
+                "allot_qty": sum((_decimal(row.qty) for row in values["allotments"]), ZERO_QTY),
+                "allot_cif": sum((_decimal(row.cif_fc) for row in values["allotments"]), ZERO_CIF),
+            }
+            for item_id, values in usage.items()
+        }
         output_groups = defaultdict(lambda: {"licenses": [], "item_groups": {}})
+
+        # Imported once for the complete projection rather than once per
+        # pivot cell.  Import caching makes the old code correct, but this
+        # keeps large result sets from repeatedly resolving the module.
+        from apps.license.services.item_pivot_item_summary import (
+            PLANNING_QTY_TOLERANCE,
+            determine_planning_status,
+            project_item_summary,
+        )
 
         for license_obj in licenses:
             import_items = list(license_obj.import_license.all())
             item_by_id = {item.id: item for item in import_items}
-            total_cif = sum((_decimal(item.cif_fc) for item in license_obj.export_license.all()), ZERO_CIF)
-            debited_cif = sum((sum((_decimal(row.cif_fc) for row in usage[item.id]["boes"]), ZERO_CIF) for item in import_items), ZERO_CIF)
-            allotted_cif = sum((sum((_decimal(row.cif_fc) for row in usage[item.id]["allotments"]), ZERO_CIF) for item in import_items), ZERO_CIF)
+            export_items = list(license_obj.export_license.all())
+            default_sion = next(
+                (getattr(item.norm_class, "norm_class", "") for item in export_items if item.norm_class_id),
+                "",
+            )
+            total_cif = sum((_decimal(item.cif_fc) for item in export_items), ZERO_CIF)
+            debited_cif = sum((usage_totals[item.id]["boe_cif"] for item in import_items), ZERO_CIF)
+            allotted_cif = sum((usage_totals[item.id]["allot_cif"] for item in import_items), ZERO_CIF)
             cells = {}
             planned_cif = ZERO_CIF
 
@@ -127,7 +156,7 @@ class ItemPivotService:
                 if priority_item_order is None:
                     priority_item_order = provenance.get("member_sequence", plan.id)
                 item_name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
-                sion = provenance.get("sion") or next((getattr(x.norm_class, "norm_class", "") for x in license_obj.export_license.all() if x.norm_class_id), "")
+                sion = provenance.get("sion") or default_sion
                 # The matrix key is identity based.  Names are presentation
                 # only: a canonical item with two SIONs must remain two cells.
                 key = f"{plan.item_name_id or 'unmapped'}:{sion}"
@@ -153,10 +182,10 @@ class ItemPivotService:
                 if not total_qty:
                     total_qty = sum((_decimal(item.quantity) for item in source_items), ZERO_QTY)
                 if not boe_qty and not allot_qty and not is_percentage:
-                    boe_qty = sum((sum((_decimal(row.qty) for row in usage[item.id]["boes"]), ZERO_QTY) for item in source_items), ZERO_QTY)
-                    boe_cif = sum((sum((_decimal(row.cif_fc) for row in usage[item.id]["boes"]), ZERO_CIF) for item in source_items), ZERO_CIF)
-                    allot_qty = sum((sum((_decimal(row.qty) for row in usage[item.id]["allotments"]), ZERO_QTY) for item in source_items), ZERO_QTY)
-                    allot_cif = sum((sum((_decimal(row.cif_fc) for row in usage[item.id]["allotments"]), ZERO_CIF) for item in source_items), ZERO_CIF)
+                    boe_qty = sum((usage_totals[item.id]["boe_qty"] for item in source_items), ZERO_QTY)
+                    boe_cif = sum((usage_totals[item.id]["boe_cif"] for item in source_items), ZERO_CIF)
+                    allot_qty = sum((usage_totals[item.id]["allot_qty"] for item in source_items), ZERO_QTY)
+                    allot_cif = sum((usage_totals[item.id]["allot_cif"] for item in source_items), ZERO_CIF)
                 percentage_target_qty = total_qty
                 own_actual_qty = boe_qty + allot_qty
                 own_excess_qty = max(own_actual_qty - percentage_target_qty, ZERO_QTY) if is_percentage else ZERO_QTY
@@ -252,7 +281,7 @@ class ItemPivotService:
             for plan in plans_by_license[license_obj.id]:
                 provenance = plan.allocation_provenance or {}
                 name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
-                sion = provenance.get("sion") or next((getattr(x.norm_class, "norm_class", "") for x in license_obj.export_license.all() if x.norm_class_id), "")
+                sion = provenance.get("sion") or default_sion
                 key = f"{plan.item_name_id or 'unmapped'}:{sion}"
                 group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
             issues = []
@@ -275,7 +304,6 @@ class ItemPivotService:
                 cell["available_qty"] = _text(available_qty)
                 cell["balance_qty_after_plan"] = _text(balance_after_plan)
                 cell.update({"actual_used_qty": _text(actual_used_qty), "actual_used_cif": _text(actual_used_cif), "item_available_cif_before_plan": _text(available_cif) if has_item_cif_cap else None, "item_balance_cif_after_plan": _text(max(available_cif - _decimal(cell["effective_planned_cif"]), ZERO_CIF)) if has_item_cif_cap else None, "over_utilized_qty": _text(over_utilized_qty), "over_utilized_cif": _text(over_utilized_cif), "over_planned_qty": _text(over_planned_qty), "over_planned_cif": _text(over_planned_cif)})
-                from apps.license.services.item_pivot_item_summary import determine_planning_status, PLANNING_QTY_TOLERANCE
                 cell.update({"remaining_qty": _text(max(available_qty - planned_qty, ZERO_QTY)), "planning_qty_tolerance": _text(PLANNING_QTY_TOLERANCE), "is_within_planning_tolerance": planned_qty > ZERO_QTY and max(available_qty - planned_qty, ZERO_QTY) <= PLANNING_QTY_TOLERANCE, "is_over_utilized": over_utilized_qty > ZERO_QTY or over_utilized_cif > ZERO_CIF, "is_over_planned": over_planned_qty > ZERO_QTY or over_planned_cif > ZERO_CIF, "status": determine_planning_status(planned_qty=planned_qty, available_qty=available_qty, over_utilized_qty=over_utilized_qty, over_utilized_cif=over_utilized_cif, over_planned_qty=over_planned_qty, over_planned_cif=over_planned_cif)})
                 if over_utilized_qty > ZERO_QTY or over_utilized_cif > ZERO_CIF:
                     issues.append({"item_key": item_key, "canonical_item_id": cell["canonical_item_id"], "sion": cell["sion"], "type": "item_qty_over_utilized" if over_utilized_qty > ZERO_QTY else "item_cif_over_utilized", "severity": "critical", "total_qty": _text(adjusted_qty), "total_utilized_qty": _text(actual_used_qty), "actual_excess_qty": _text(over_utilized_qty), "actual_excess_cif": _text(over_utilized_cif), "planned_excess_qty": _text(ZERO_QTY), "planned_excess_cif": _text(ZERO_CIF), "item_cif_cap": cell["item_cif_cap"], "boe_used_cif": cell["boe_used_cif"], "allotted_cif": cell["allotted_cif"], "actual_used_cif": _text(actual_used_cif), "available_cif": cell["item_available_cif_before_plan"], "effective_planned_cif": cell["effective_planned_cif"], "balance_cif_after_plan": cell["item_balance_cif_after_plan"], "available_qty": _text(available_qty), "planned_qty": _text(planned_qty), "balance_qty": _text(balance_after_plan)})
@@ -333,7 +361,6 @@ class ItemPivotService:
         groups = sorted(groups, key=lambda row: (row["notification_number"], row["purchase_status"]["name"]))
         # One pure projection is shared by per-notification and complete
         # report summaries.  It consumes the matrix cells above verbatim.
-        from apps.license.services.item_pivot_item_summary import project_item_summary
         for group in groups:
             group.update(project_item_summary(group["licenses"]))
         all_licenses = [license_row for group in groups for license_row in group["licenses"]]

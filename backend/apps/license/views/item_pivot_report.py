@@ -5,12 +5,14 @@ Shows licenses with items as column headers, displaying quantities and values pe
 Similar to the GE DFIA report format.
 """
 
+import hashlib
 import logging
 from collections import defaultdict
 from decimal import Decimal
 from typing import Dict, List, Any
 
 from django.db.models import Prefetch
+from django.core.cache import cache
 from django.http import JsonResponse, HttpResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -407,6 +409,17 @@ class ItemPivotReportView(APIView):
                     'error': str(e)
                 }, status=500)
 
+        # The pivot is a large, read-only DTO and may take several seconds to
+        # calculate.  Cache by the complete normalized request so repeated tab
+        # selections return the exact same payload without repeating the ORM
+        # and balance-calculation work.  Existing `view:item_pivot*` signal
+        # invalidation removes these entries whenever source data changes.
+        cache_parts = tuple(sorted((key, tuple(request.GET.getlist(key))) for key in request.GET))
+        cache_key = f"view:item_pivot:{hashlib.sha256(repr(cache_parts).encode()).hexdigest()}"
+        cached_report = cache.get(cache_key)
+        if cached_report is not None:
+            return JsonResponse(cached_report, safe=False)
+
         # For JSON, generate full report
         try:
             report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance,
@@ -416,6 +429,7 @@ class ItemPivotReportView(APIView):
                 'error': str(e)
             }, status=500)
 
+        cache.set(cache_key, report_data, timeout=300)
         return JsonResponse(report_data, safe=False)
 
     def generate_report(self, days: int = 30, sion_norm: str = None,

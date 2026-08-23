@@ -372,11 +372,21 @@ export default function MasterList() {
     // Main list query — re-runs whenever entity, page, size, or filters change.
     // TanStack handles request de-duplication and cancellation.
     // ---------------------------------------------------------------------------
-    const queryParams = useMemo(() => ({
-        page: currentPage,
-        page_size: pageSize,
-        ...filterParams,
-    }), [currentPage, pageSize, filterParams]);
+    const queryParams = useMemo(() => {
+        const params: Record<string, string | number> = { page: currentPage, page_size: pageSize, ...filterParams };
+        // A numeric (or comma-separated numeric) search on Allotments is a
+        // licence-number lookup.  Send it through the exact backend filter so
+        // multiple supplied licences use OR semantics; normal text remains the
+        // existing general `search` behaviour.
+        if (entityName === 'allotments' && typeof params.search === 'string') {
+            const licences = [...new Set(params.search.split(',').map(value => value.trim()).filter(Boolean))];
+            if (licences.length > 0 && licences.every(value => /^\d+$/.test(value))) {
+                params.license_number = licences.join(',');
+                delete params.search;
+            }
+        }
+        return params;
+    }, [currentPage, pageSize, filterParams, entityName]);
 
     /** Convert API-format filterParams (license_date__gte) to UI format (license_date_from)
      *  for correct display in AdvancedFilter inputs. */
@@ -511,6 +521,17 @@ export default function MasterList() {
         setFilterParams(filters as Record<string, string>);
         setCurrentPage(1);
     }, []);
+
+    useEffect(() => {
+        if (entityName !== 'allotments') return;
+        const params = new URLSearchParams();
+        Object.entries(filterParams).forEach(([key, value]) => {
+            if (value !== '' && value != null) params.set(key, String(value));
+        });
+        params.set('page', String(currentPage));
+        const nextSearch = params.toString();
+        if (nextSearch !== location.search.slice(1)) navigate({ search: nextSearch }, { replace: true });
+    }, [entityName, filterParams, currentPage, location.search, navigate]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
@@ -845,7 +866,8 @@ export default function MasterList() {
                 searchFields={metadata.search_fields || []}
                 onFilterChange={handleFilterChange}
                 initialFilters={uiFilterParams}
-                defaultFilters={metadata.default_filters || {}}
+                defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
+                resetToDefaults={entityName === 'allotments'}
             />
 
             {/* Table */}

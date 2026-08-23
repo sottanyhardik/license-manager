@@ -50,17 +50,8 @@ AllotmentViewSet = MasterViewSet.create_viewset(
         "search": ["item_name", "company__name", "invoice", "bl_detail",
                    "allotment_details__item__license__license_number"],
         "filter": {
-            "license_number": {"type": "text", "label": "License Number"},
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
-            "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
-                                "filter_field": "company"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
-                             "filter_field": "port"},
-            "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
-            "estimated_arrival_date": {"type": "date_range"},
-            "modified_on": {"type": "date_range"},
-            "is_boe": {"type": "exact"},
             "is_allotted": {"type": "exact"},
         },
         "list_display": [

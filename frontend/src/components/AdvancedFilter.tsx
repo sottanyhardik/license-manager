@@ -21,12 +21,14 @@ export default function AdvancedFilter({
     onFilterChange,
     initialFilters = {} as Record<string, any>,
     defaultFilters = {} as Record<string, any>,
+    resetToDefaults = false,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];
     onFilterChange?: (filters: Record<string, any>) => void;
     initialFilters?: Record<string, any>;
     defaultFilters?: Record<string, any>;
+    resetToDefaults?: boolean;
 }) {
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
@@ -83,10 +85,7 @@ export default function AdvancedFilter({
 
     const handleResetFilters = () => {
         setSearchTerm("");
-        // “Clear” must mean no restrictions. Default filters are appropriate
-        // for an initial view, but restoring them here can leave a list empty
-        // even after the user explicitly clears the form.
-        setFilterValues({});
+        setFilterValues(resetToDefaults ? defaultFilters : {});
     };
 
     const humanize = (fieldName: string) => fieldName

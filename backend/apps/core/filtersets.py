@@ -240,6 +240,7 @@ class BOEFilterSet(BaseFilterSet):
 
     # Company filter
     company = filters.NumberFilter(field_name='company_id')
+    port = filters.NumberFilter(field_name='port_id')
     company_ids = filters.CharFilter(method='filter_company_ids')
 
     # BOE number
@@ -296,9 +297,10 @@ class AllotmentFilterSet(BaseFilterSet):
 
     def filter_license_number(self, queryset, name, value):
         """Filter allotments by license number (searches in nested allotment_details)."""
-        if value:
+        values = list(dict.fromkeys(part.strip() for part in (value or '').split(',') if part.strip()))
+        if values:
             return queryset.filter(
-                allotment_details__item__license__license_number__iexact=value
+                allotment_details__item__license__license_number__in=values
             ).distinct()
         return queryset
 

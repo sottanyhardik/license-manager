@@ -115,10 +115,6 @@ class Command(BaseCommand):
         if single:
             docs_qs = docs_qs.filter(license__license_number=single)
 
-        # Licences WITHOUT a copy
-        all_lic_ids = set(
-            LicenseDetailsModel.objects.values_list("id", flat=True)
-        ) if not single else set()
         lic_with_copy = set()
 
         BLANK = "—"
@@ -128,7 +124,7 @@ class Command(BaseCommand):
                    f"{'Condition Sheet':<22} {'Import Items'}")
         self._info("-" * 105)
 
-        count_with = count_without = 0
+        count_with = 0
 
         for doc in docs_qs.iterator(chunk_size=200):
             lic = doc.license

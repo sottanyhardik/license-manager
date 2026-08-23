@@ -1,5 +1,3 @@
-# license/views_incentive.py
-from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Case, When, Value, CharField
 from django_filters import rest_framework as filters
 
 from apps.accounts.permissions import IncentiveLicensePermission
@@ -7,7 +5,6 @@ from apps.core.views.master_view import MasterViewSet
 from apps.core.views.views import enhance_config_with_fk
 from apps.license.models import IncentiveLicense
 from apps.license.serializers import IncentiveLicenseSerializer
-from decimal import Decimal
 
 
 class IncentiveLicenseFilter(filters.FilterSet):

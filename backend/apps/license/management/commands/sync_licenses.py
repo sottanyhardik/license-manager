@@ -16,17 +16,44 @@ This ensures all licenses have accurate:
 """
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
-from datetime import date, timedelta
 
-from django.core.management.base import BaseCommand
-from django.db.models import Sum
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import Sum
 
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails
 from apps.core.constants import DEBIT
+from apps.license.models import (
+    LicenseBalance,
+    LicenseDetailsModel,
+    LicenseFlags,
+    LicenseImportItemsModel,
+)
+
+MONEY_PLACES = Decimal("0.01")
+NULL_BALANCE_THRESHOLD = Decimal("500")
+
+
+def _quantize_money(value):
+    return Decimal(str(value or 0)).quantize(MONEY_PLACES)
+
+
+def _validate_batch_size(value):
+    if value < 1:
+        raise CommandError("--batch-size must be greater than zero.")
+
+
+def _normalize_license_number(value):
+    if value is None:
+        return None
+
+    license_number = value.strip()
+    if not license_number:
+        raise CommandError("--license must not be blank.")
+    return license_number
 
 
 class Command(BaseCommand):
@@ -59,10 +86,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        license_number = opts.get("license_number")
+        license_number = _normalize_license_number(opts.get("license_number"))
         skip_items = bool(opts.get("no_items"))
         dry_run = bool(opts.get("dry_run"))
         batch_size = opts.get("batch_size")
+        _validate_batch_size(batch_size)
 
         self.stdout.write(self.style.WARNING("=" * 80))
         self.stdout.write(self.style.WARNING("LICENSE SYNC COMMAND"))
@@ -75,8 +103,9 @@ class Command(BaseCommand):
             qs = qs.filter(license_number=license_number)
             self.stdout.write(f"Processing single license: {license_number}")
         else:
-            self.stdout.write(f"Processing ALL licenses in database")
+            self.stdout.write("Processing ALL licenses in database")
 
+        qs = qs.select_related("balance", "flags").order_by("id")
         total_count = qs.count()
         self.stdout.write(f"Total licenses to process: {total_count}")
         self.stdout.write(f"Batch size: {batch_size}")
@@ -90,23 +119,25 @@ class Command(BaseCommand):
             'is_null_updated': 0,
             'is_expired_updated': 0,
             'import_items_updated': 0,
+            'errors': 0,
         }
 
         # Process in batches
         batch_num = 0
         for i in range(0, total_count, batch_size):
             batch_num += 1
-            batch_qs = qs[i:i + batch_size]
+            batch_qs = qs[i : i + batch_size]
 
             self.stdout.write(
                 self.style.HTTP_INFO(
                     f"\n[Batch {batch_num}/{(total_count + batch_size - 1) // batch_size}] "
-                    f"Processing licenses {i+1} to {min(i+batch_size, total_count)}..."
+                    f"Processing licenses {i + 1} to {min(i + batch_size, total_count)}..."
                 )
             )
 
             for lic in batch_qs:
-                self._process_license(lic, stats, skip_items, dry_run)
+                with transaction.atomic():
+                    self._process_license(lic, stats, skip_items, dry_run)
 
         # Final summary
         self.stdout.write("")
@@ -118,7 +149,10 @@ class Command(BaseCommand):
         self.stdout.write(f"  - is_null updated: {stats['is_null_updated']}")
         self.stdout.write(f"  - is_expired updated: {stats['is_expired_updated']}")
         self.stdout.write(f"  - import items updated: {stats['import_items_updated']}")
+        self.stdout.write(f"  - errors: {stats['errors']}")
         self.stdout.write("")
+        if stats["errors"]:
+            raise CommandError(f"License sync completed with {stats['errors']} error(s).")
         if dry_run:
             self.stdout.write(self.style.WARNING("⚠️  DRY RUN - No changes were saved"))
         else:
@@ -128,16 +162,16 @@ class Command(BaseCommand):
         """Process a single license: update flags, balance, and items"""
         stats['licenses_processed'] += 1
 
-        fields_to_update = []
-
         # 1. Update balance_cif from authoritative property
         try:
             actual_balance = lic.get_balance_cif
-            current_balance = lic.balance_cif or Decimal('0')
+            balance_row, _ = LicenseBalance.objects.get_or_create(license=lic)
+            flags_row, _ = LicenseFlags.objects.get_or_create(license=lic)
+            current_balance = balance_row.balance_cif or Decimal("0")
 
             # Compare at 2 decimals to avoid micro-diffs
-            want = Decimal(str(round(float(actual_balance), 2)))
-            have = Decimal(str(round(float(current_balance), 2)))
+            want = _quantize_money(actual_balance)
+            have = _quantize_money(current_balance)
 
             if want != have:
                 if stats['balance_updated'] < 10:  # Only log first 10
@@ -145,46 +179,42 @@ class Command(BaseCommand):
                         f"  {lic.license_number}: balance_cif {have} → {want}"
                     )
                 if not dry_run:
-                    lic.balance_cif = float(want)
-                    fields_to_update.append("balance_cif")
+                    balance_row.balance_cif = want
+                    balance_row.save(update_fields=["balance_cif"])
                 stats['balance_updated'] += 1
         except Exception as e:
+            stats['errors'] += 1
             self.stdout.write(
                 self.style.ERROR(f"  ERROR calculating balance for {lic.license_number}: {e}")
             )
-            actual_balance = Decimal('0')
-            want = Decimal('0')
+            return
 
         # 2. Update is_null flag (balance < $500 threshold)
         # BUSINESS RULE: Null DFIA = balance < $500
-        should_be_null = want < Decimal("500")
-        if should_be_null != lic.is_null:
+        should_be_null = want < NULL_BALANCE_THRESHOLD
+        if should_be_null != flags_row.is_null:
             if stats['is_null_updated'] < 10:  # Only log first 10
                 self.stdout.write(
-                    f"  {lic.license_number}: is_null {lic.is_null} → {should_be_null}"
+                    f"  {lic.license_number}: is_null {flags_row.is_null} → {should_be_null}"
                 )
             if not dry_run:
-                lic.is_null = should_be_null
-                fields_to_update.append("is_null")
+                flags_row.is_null = should_be_null
+                flags_row.save(update_fields=["is_null"])
             stats['is_null_updated'] += 1
 
         # 3. Update is_expired flag (expiry date < today)
         if lic.license_expiry_date:
             today = date.today()
             should_be_expired = lic.license_expiry_date < today
-            if should_be_expired != lic.is_expired:
+            if should_be_expired != flags_row.is_expired:
                 if stats['is_expired_updated'] < 10:  # Only log first 10
                     self.stdout.write(
-                        f"  {lic.license_number}: is_expired {lic.is_expired} → {should_be_expired}"
+                        f"  {lic.license_number}: is_expired {flags_row.is_expired} → {should_be_expired}"
                     )
                 if not dry_run:
-                    lic.is_expired = should_be_expired
-                    fields_to_update.append("is_expired")
+                    flags_row.is_expired = should_be_expired
+                    flags_row.save(update_fields=["is_expired"])
                 stats['is_expired_updated'] += 1
-
-        # Save license updates
-        if fields_to_update and not dry_run:
-            lic.save(update_fields=fields_to_update)
 
         # 4. Update import item balances (if not skipped)
         if not skip_items:

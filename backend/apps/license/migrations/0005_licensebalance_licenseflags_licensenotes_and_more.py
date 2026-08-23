@@ -28,9 +28,10 @@ Note: this migration uses atomic=False because Django's per-step transaction
 boundary breaks the FK constraint deferral checks; the verification step
 guarantees no data is lost even without a single mega-transaction.
 """
+from decimal import Decimal
+
 import django.core.validators
 import django.db.models.deletion
-from decimal import Decimal
 from django.db import migrations, models
 
 
@@ -45,8 +46,8 @@ def copy_and_verify(apps, schema_editor):
     if total == 0:
         return  # nothing to copy on a fresh DB
 
-    # Use raw SQL via the connection for atomic bulk inserts on each table.
-    from django.db import connection
+    # Use raw SQL via the migration connection for atomic bulk inserts on each table.
+    connection = schema_editor.connection
 
     with connection.cursor() as cursor:
         # LicenseNotes

@@ -9,19 +9,21 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Dict, List, Any
 
-from django.db.models import Sum, Q, F, DecimalField, Value
+from django.conf import settings
+from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework.renderers import JSONRenderer
+from rest_framework.views import APIView
 from apps.accounts.permissions import ReportPermission
 
 from apps.core.constants import DEC_0, DEC_000, GE, MI, IP, SM
-from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+from apps.core.reports.envelope import validate_envelope
+from apps.core.reports.export_naming import build_export_filename
+from apps.core.reports.renderers import ExcelPassthroughRenderer
+from apps.license.models import LicenseDetailsModel
 
 def _safe_int(value, default):
     try:
@@ -32,7 +34,7 @@ def _safe_int(value, default):
 
 
 
-class ActiveLicensesReportView(View):
+class ActiveLicensesReportView(APIView):
     """
     Report showing active licenses with expiry >= (today - N days).
 
@@ -41,6 +43,11 @@ class ActiveLicensesReportView(View):
         - format: 'json' or 'excel' (default: json)
         - sion_norm: Filter by SION norm (optional)
     """
+    permission_classes = [ReportPermission]
+    # Register the excel "format" so DRF content negotiation accepts
+    # ?format=excel without raising Http404 before get() ever runs — see
+    # apps/core/reports/renderers.py.
+    renderer_classes = [JSONRenderer, ExcelPassthroughRenderer]
 
     def get(self, request, *args, **kwargs):
         days = _safe_int(request.GET.get('days'), 30)
@@ -113,7 +120,7 @@ class ActiveLicensesReportView(View):
             total_balance_cif += Decimal(str(license_data['balance_cif']))
             total_items += len(license_data['items'])
 
-        return {
+        report_data = {
             'report_period': {
                 'from_date': start_date.isoformat(),
                 'to_date': today.isoformat(),
@@ -126,6 +133,14 @@ class ActiveLicensesReportView(View):
             },
             'licenses': licenses_data,
         }
+        if settings.DEBUG:
+            # Debug/test-only shape guard — never raises for a real
+            # production request. See apps/core/reports/envelope.py.
+            validate_envelope(
+                report_data, 'licenses',
+                required_summary_keys={'total_licenses', 'total_items', 'total_balance_cif'},
+            )
+        return report_data
 
     def _build_license_data(self, license_obj: LicenseDetailsModel) -> Dict[str, Any]:
         """
@@ -294,7 +309,7 @@ class ActiveLicensesReportView(View):
             HttpResponse with Excel file
         """
         import openpyxl
-        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.styles import Font, Alignment, PatternFill
 
         workbook = openpyxl.Workbook()
         workbook.remove(workbook.active)  # Remove default sheet
@@ -324,7 +339,12 @@ class ActiveLicensesReportView(View):
             response = HttpResponse(
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            response['Content-Disposition'] = f'attachment; filename="active_licenses_{days}_days.xlsx"'
+            filename = build_export_filename(
+                'active-licenses', 'xlsx',
+                from_date=report_data['report_period']['from_date'],
+                to_date=report_data['report_period']['to_date'],
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
             workbook.save(response)
             return response
 
@@ -597,7 +617,12 @@ class ActiveLicensesReportView(View):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="active_licenses_{days}_days.xlsx"'
+        filename = build_export_filename(
+            'active-licenses', 'xlsx',
+            from_date=report_data['report_period']['from_date'],
+            to_date=report_data['report_period']['to_date'],
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         workbook.save(response)
         return response
@@ -607,7 +632,7 @@ class ActiveLicensesViewSet(viewsets.ViewSet):
     """
     ViewSet for Active Licenses Report.
 
-    Permissions: AllowAny - accessible to all users
+    Permissions: ReportPermission.
     """
     permission_classes = [ReportPermission]
 

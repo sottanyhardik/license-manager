@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -169,7 +169,7 @@ class Command(BaseCommand):
         tables = sorted(connection.introspection.table_names())
         snapshot = {
             "database_vendor": connection.vendor,
-            "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
             "with_checksums": with_checksums,
             "tables": {},
         }
@@ -186,7 +186,7 @@ class Command(BaseCommand):
     def _write_snapshot(self, path, snapshot):
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+        target.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         self.stdout.write(self.style.SUCCESS(f"Snapshot written: {target}"))
 
     def _compare_snapshot(self, path, current, ignored_tables):
@@ -194,7 +194,7 @@ class Command(BaseCommand):
         if not source.exists():
             raise CommandError(f"Snapshot file does not exist: {source}")
 
-        previous = json.loads(source.read_text())
+        previous = json.loads(source.read_text(encoding="utf-8"))
         previous_tables = {
             table: data
             for table, data in previous.get("tables", {}).items()

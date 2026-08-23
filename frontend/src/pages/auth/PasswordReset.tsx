@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
@@ -16,7 +16,7 @@ export default function PasswordReset() {
     const [submitting, setSubmitting] = useState(false);
     const [sent, setSent] = useState(false);
 
-    const submit = async (e) => {
+    const submit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setSubmitting(true);
         try {
@@ -31,34 +31,32 @@ export default function PasswordReset() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <main className="flex min-h-screen items-center justify-center bg-muted/35 px-5 py-8 sm:px-8">
             <motion.div
-                className="w-full max-w-sm"
+                className="w-full max-w-[430px]"
                 initial={reduce ? false : { opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
-                <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-                    {/* Header */}
-                    <div
-                        className="px-8 py-9 text-center text-white"
-                        style={{ background: "linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))" }}
-                    >
-                        <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl border border-white/20 bg-white/15 backdrop-blur-sm">
-                            <KeyRound className="size-7" />
+                <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <div className="border-b border-border bg-primary px-7 py-7 text-primary-foreground sm:px-8">
+                        <div className="mb-4 flex items-center gap-3">
+                            <div className="flex size-10 items-center justify-center rounded-lg border border-primary-foreground/20 bg-primary-foreground/10">
+                                <KeyRound className="size-5" />
+                            </div>
+                            <span className="text-sm font-semibold">License Manager</span>
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight text-white">Forgot Password</h1>
-                        <p className="mt-1.5 text-sm text-white/80">Enter your email to receive reset instructions</p>
+                        <h1 className="text-xl font-bold tracking-tight text-primary-foreground">Reset your password</h1>
+                        <p className="mt-1.5 text-[13px] text-primary-foreground/75">We will send reset instructions to your registered email.</p>
                     </div>
 
-                    {/* Body */}
-                    <div className="p-8">
+                    <div className="p-6 sm:p-8">
                         {sent ? (
                             <div className="text-center">
                                 <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-success/10">
                                     <CheckCircle2 className="size-8 text-success" />
                                 </div>
-                                <h2 className="mb-1.5 font-semibold text-foreground">Check Your Email</h2>
+                                <h2 className="mb-1.5 font-semibold text-foreground">Check your email</h2>
                                 <p className="mb-6 text-[13px] text-muted-foreground">
                                     Reset instructions have been sent to <strong className="text-foreground">{email}</strong>.
                                 </p>
@@ -96,10 +94,10 @@ export default function PasswordReset() {
                     </div>
 
                     <div className="border-t border-border/70 bg-muted/40 px-8 py-3.5 text-center">
-                        <span className="text-[11.5px] text-muted-foreground">License Manager System</span>
+                        <span className="text-[11.5px] text-muted-foreground">Secure account recovery</span>
                     </div>
                 </div>
             </motion.div>
-        </div>
+        </main>
     );
 }

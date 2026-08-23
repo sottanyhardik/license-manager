@@ -7,14 +7,16 @@ import HybridSelect from "../components/HybridSelect";
 import ConditionBadge from "../components/ConditionBadge";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import {formatDateForInput, parseDate} from "../utils/dateFormatter";
+import {parseDate} from "../utils/dateFormatter";
 import * as validateFormUtil from "../utils/formValidation";
 import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
 import {useBackButton} from "../hooks/useBackButton";
 import TradeConfigCard from "./TradeConfigCard";
+import { buildTradeJsonPayload, cleanIncentiveLine, cleanTradeLine, cleanTradePayment, formatTradeDateForApi, getEntityId } from "./tradeFormHelpers";
 import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, IndianRupee, Link, List, Package, Percent, Plus, ShoppingCart, SlidersHorizontal, Store, Trash2, TrendingUp, Wand2, Weight, X, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function TradeForm() {
     const { id } = useParams();
@@ -27,7 +29,7 @@ export default function TradeForm() {
         incentive_license: null,
         from_company: null,
         to_company: null,
-        boe: null,
+        boes: [],
         invoice_number: "",
         invoice_date: new Date(),
         remarks: "",
@@ -40,12 +42,37 @@ export default function TradeForm() {
     const [billingMode, setBillingMode] = useState("CIF_INR");
     const [autoCreatePaired, setAutoCreatePaired] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [copyingCounterpart, setCopyingCounterpart] = useState(false);
     const [error, setError] = useState("");
     const [fieldErrors, setFieldErrors] = useState<Record<string, any>>({});
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
     const isInitialLoadRef = useRef(true);
+    // Tracks whether a BOE-triggered line prefill has fired at least once in this
+    // session, so subsequent BOE adds keep appending lines even though `lines` is
+    // no longer empty (accumulate), while still never prefilling if the user had
+    // already populated lines manually before adding any BOE.
+    const hasAutoPrefilledRef = useRef(false);
     const [initialFormData, setInitialFormData] = useState(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    const handleCopyToCounterpart = async () => {
+        const target = formData.direction === 'SALE' ? 'Purchase' : 'Sale';
+        const sourceParty = formData.from_company?.name || 'the source company';
+        const destinationParty = formData.to_company?.name || 'the destination company';
+        if (!window.confirm(`Create linked ${target}?\n${sourceParty} → ${destinationParty}\nAll licence lines and commercial amounts will be copied.`)) return;
+        setCopyingCounterpart(true);
+        try {
+            const action = formData.direction === 'SALE' ? 'copy-to-purchase' : 'copy-to-sale';
+            const { data } = await api.post(`trades/${id}/${action}/`);
+            toast.success(data.created ? `Linked ${target} created` : `Existing linked ${target} opened`);
+            setFormData((current) => ({ ...current, counterpart_info: data.counterpart }));
+            navigate(`/trades/${data.counterpart.id}/edit`);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || `Unable to create linked ${target}`);
+        } finally {
+            setCopyingCounterpart(false);
+        }
+    };
 
     // Enable browser back button support with filter preservation
     useBackButton('trades');
@@ -70,22 +97,11 @@ export default function TradeForm() {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [hasUnsavedChanges]);
 
-    // Helper function to format Date object to YYYY-MM-DD for API
-    const formatDateForAPI = (date) => {
-        if (!date) return null;
-        if (!(date instanceof Date)) return date;
-        return formatDateForInput(date);
-    };
-
-    // Define handlePrefillFromBOE before useEffect
-    const handlePrefillFromBOE = useCallback(async () => {
-        if (!formData.boe) {
-            return;
-        }
-
-        // Only prefill if lines are empty (for create mode or when explicitly requested)
-        // Don't auto-prefill in edit mode if lines already exist
-        if (formData.lines && formData.lines.length > 0) {
+    // Fetches a single BOE's details and appends its lines to formData.lines
+    // (rather than replacing them), so multiple BOEs can each contribute lines
+    // without wiping out ones already pulled from a previously-added BOE.
+    const handlePrefillFromBOE = useCallback(async (boeId: number | string) => {
+        if (!boeId) {
             return;
         }
 
@@ -93,8 +109,6 @@ export default function TradeForm() {
         const loadingToastId = toast.loading("Loading BOE details...");
 
         try {
-            // boe can be either ID or object with id
-            const boeId = typeof formData.boe === 'object' ? formData.boe.id : formData.boe;
             const { data } = await api.get(`bill-of-entries/${boeId}/`);
 
             // Create lines from BOE item_details
@@ -115,7 +129,7 @@ export default function TradeForm() {
 
             setFormData(prev => ({
                 ...prev,
-                lines: lines
+                lines: [...prev.lines, ...lines]
             }));
 
             toast.success("BOE details loaded successfully", {
@@ -128,7 +142,7 @@ export default function TradeForm() {
                 duration: 3000,
             });
         }
-    }, [formData.boe, formData.lines, billingMode]);
+    }, [billingMode]);
 
     const formDataRef = useRef(formData);
     formDataRef.current = formData;
@@ -220,13 +234,40 @@ export default function TradeForm() {
         }
     }, [isEdit]);
 
-    // Auto-prefill from BOE when BOE is selected (only if lines are empty)
-    useEffect(() => {
-        if (formData.boe) {
-            handlePrefillFromBOE();
+    const handleAddBoe = () => {
+        setFormData(prev => ({
+            ...prev,
+            boes: [...(prev.boes || []), null]
+        }));
+    };
+
+    const handleRemoveBoe = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            boes: (prev.boes || []).filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleBoeChange = (index: number, val: unknown) => {
+        setFormData(prev => {
+            const boes = [...(prev.boes || [])];
+            boes[index] = val;
+            return { ...prev, boes };
+        });
+
+        // Auto-prefill lines from the newly-selected BOE, but only while we
+        // haven't yet diverged from the "auto" flow: either lines are still
+        // empty (first BOE ever added in this session), or a previous BOE add
+        // already prefilled successfully (accumulate across multiple adds).
+        const boeId = getEntityId(val);
+        if (boeId) {
+            const linesEmpty = !formDataRef.current.lines || formDataRef.current.lines.length === 0;
+            if (linesEmpty || hasAutoPrefilledRef.current) {
+                hasAutoPrefilledRef.current = true;
+                handlePrefillFromBOE(boeId);
+            }
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.boe]);
+    };
 
     const handleFromCompanyChange = async (val) => {
         setFormData(prev => ({ ...prev, from_company: val }));
@@ -295,7 +336,7 @@ export default function TradeForm() {
                 params: {
                     direction: formData.direction,
                     company_id: companyId,
-                    invoice_date: formatDateForAPI(formData.invoice_date)
+                    invoice_date: formatTradeDateForApi(formData.invoice_date)
                 }
             });
             setFormData(prev => ({
@@ -608,17 +649,16 @@ export default function TradeForm() {
                 const formDataObj = new FormData();
 
                 // Add regular fields - extract IDs from FK objects
-                const fromCompanyId = typeof formData.from_company === 'object' ? formData.from_company?.id : formData.from_company;
-                const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
-                const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
+                const fromCompanyId = getEntityId(formData.from_company);
+                const toCompanyId = getEntityId(formData.to_company);
 
                 formDataObj.append('direction', formData.direction);
                 formDataObj.append('license_type', formData.license_type);
                 if (fromCompanyId) formDataObj.append('from_company', fromCompanyId);
                 if (toCompanyId) formDataObj.append('to_company', toCompanyId);
-                if (boeId) formDataObj.append('boe', boeId);
+                formDataObj.append('boes', JSON.stringify((formData.boes || []).filter(Boolean).map(getEntityId)));
                 formDataObj.append('invoice_number', formData.invoice_number?.trim() || '');
-                formDataObj.append('invoice_date', formatDateForAPI(formData.invoice_date));
+                formDataObj.append('invoice_date', formatTradeDateForApi(formData.invoice_date));
                 formDataObj.append('remarks', formData.remarks || '');
 
                 // Add company snapshot fields
@@ -635,115 +675,21 @@ export default function TradeForm() {
                 formDataObj.append('purchase_invoice_copy', formData.purchase_invoice_copy);
 
                 // Add lines as JSON string (clean up empty id fields and extract sr_number ID)
-                const cleanedLines = formData.lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract sr_number ID if it's an object
-                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
-                        cleanedLine.sr_number = cleanedLine.sr_number.id;
-                    }
-                    // Always set HSN code to 49070000
-                    cleanedLine.hsn_code = '49070000';
-                    return cleanedLine;
-                });
+                const cleanedLines = formData.lines.map(cleanTradeLine);
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
 
                 // Add incentive_lines as JSON string (clean up empty id fields)
-                const cleanedIncentiveLines = formData.incentive_lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract incentive_license ID if it's an object
-                    if (cleanedLine.incentive_license && typeof cleanedLine.incentive_license === 'object') {
-                        cleanedLine.incentive_license = cleanedLine.incentive_license.id;
-                    }
-                    return cleanedLine;
-                });
+                const cleanedIncentiveLines = formData.incentive_lines.map(cleanIncentiveLine);
                 formDataObj.append('incentive_lines', JSON.stringify(cleanedIncentiveLines));
 
                 // Add payments as JSON string (clean up empty id fields)
-                const paymentsData = formData.payments.map(payment => {
-                    const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
-                    if (cleanedPayment.id === '' || cleanedPayment.id === null || cleanedPayment.id === undefined) {
-                        delete cleanedPayment.id;
-                    }
-                    return cleanedPayment;
-                });
+                const paymentsData = formData.payments.map(cleanTradePayment);
                 formDataObj.append('payments', JSON.stringify(paymentsData));
 
                 payload = formDataObj;
                 headers = { 'Content-Type': 'multipart/form-data' };
             } else {
-                // Use regular JSON - extract IDs from FK objects
-                const fromCompanyId = typeof formData.from_company === 'object' ? formData.from_company?.id : formData.from_company;
-                const toCompanyId = typeof formData.to_company === 'object' ? formData.to_company?.id : formData.to_company;
-                const boeId = typeof formData.boe === 'object' ? formData.boe?.id : formData.boe;
-
-                // Clean up lines: remove empty id fields and extract sr_number ID
-                const cleanedLines = formData.lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract sr_number ID if it's an object
-                    if (cleanedLine.sr_number && typeof cleanedLine.sr_number === 'object') {
-                        cleanedLine.sr_number = cleanedLine.sr_number.id;
-                    }
-                    // Always set HSN code to 49070000
-                    cleanedLine.hsn_code = '49070000';
-                    return cleanedLine;
-                });
-
-                // Clean up incentive_lines: remove empty id fields and extract IDs
-                const cleanedIncentiveLines = formData.incentive_lines.map(line => {
-                    const cleanedLine = {...line};
-                    if (cleanedLine.id === '' || cleanedLine.id === null || cleanedLine.id === undefined) {
-                        delete cleanedLine.id;
-                    }
-                    // Extract incentive_license ID if it's an object
-                    if (cleanedLine.incentive_license && typeof cleanedLine.incentive_license === 'object') {
-                        cleanedLine.incentive_license = cleanedLine.incentive_license.id;
-                    }
-                    return cleanedLine;
-                });
-
-                // Clean up payments: remove empty id fields
-                const cleanedPayments = formData.payments.map(payment => {
-                    const cleanedPayment = {...payment, date: formatDateForAPI(payment.date)};
-                    if (cleanedPayment.id === '' || cleanedPayment.id === null || cleanedPayment.id === undefined) {
-                        delete cleanedPayment.id;
-                    }
-                    return cleanedPayment;
-                });
-
-                payload = {
-                    // Only include writable fields, not read-only display fields
-                    direction: formData.direction,
-                    license_type: formData.license_type,
-                    from_company: fromCompanyId,
-                    to_company: toCompanyId,
-                    boe: boeId || null,
-                    invoice_number: formData.invoice_number?.trim() || '',
-                    invoice_date: formatDateForAPI(formData.invoice_date),
-                    remarks: formData.remarks || '',
-                    // Company snapshot fields
-                    from_pan: formData.from_pan || '',
-                    from_gst: formData.from_gst || '',
-                    from_addr_line_1: formData.from_addr_line_1 || '',
-                    from_addr_line_2: formData.from_addr_line_2 || '',
-                    to_pan: formData.to_pan || '',
-                    to_gst: formData.to_gst || '',
-                    to_addr_line_1: formData.to_addr_line_1 || '',
-                    to_addr_line_2: formData.to_addr_line_2 || '',
-                    // Nested data
-                    lines: cleanedLines,
-                    incentive_lines: cleanedIncentiveLines,
-                    payments: cleanedPayments,
-                    auto_create_paired: autoCreatePaired,
-                };
+                payload = buildTradeJsonPayload(formData, autoCreatePaired);
             }
 
             if (isEdit) {
@@ -882,21 +828,21 @@ export default function TradeForm() {
     };
 
     return (
-        <div className="container-fluid" style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <main className="trade-form-page min-h-screen bg-background" aria-labelledby="trade-form-title">
             {/* Compact Header */}
-            <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm backdrop-blur-sm">
                 <div>
-                    <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                    <h1 id="trade-form-title" className="mb-0 flex items-center gap-1.5 text-base font-bold text-foreground">
                         <ArrowLeftRight className="size-4" aria-hidden="true" />
                         {isEdit ? 'Edit Trade' : 'New Trade'}
-                    </h4>
-                    <small className="text-muted">
+                    </h1>
+                    <small className="text-muted-foreground flex items-center gap-1.5">
                         {isEdit ? 'Update trade details' : 'Create a new trade transaction'}
                         {formData.direction && (() => {
                             const m = directionMeta[formData.direction];
                             const Icon = m?.icon;
                             return (
-                                <span className="ms-2 badge inline-flex items-center gap-1" style={{ background: m?.soft, color: m?.color, fontSize: 12 }}>
+                                <span className="ml-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px]" style={{ background: m?.soft, color: m?.color }}>
                                     {Icon && <Icon className="size-3.5" aria-hidden="true" />}
                                     {m?.label}
                                 </span>
@@ -919,13 +865,17 @@ export default function TradeForm() {
             </div>
 
             {error && (
-                <div className="alert alert-danger alert-dismissible fade show">
-                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 mb-3">
+                    <AlertCircle className="size-4 mt-0.5 shrink-0 text-destructive" aria-hidden="true" />
+                    <pre className="flex-1 whitespace-pre-wrap m-0 text-sm text-destructive">{error}</pre>
                     <button
                         type="button"
-                        className="btn-close"
+                        className="shrink-0 rounded p-0.5 text-destructive hover:bg-destructive/20"
                         onClick={() => setError("")}
-                    ></button>
+                        aria-label="Dismiss error"
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                    </button>
                 </div>
             )}
 
@@ -941,20 +891,20 @@ export default function TradeForm() {
                 />
 
                 {/* Company Snapshots */}
-                <div className="row mb-4">
+                <div className="mb-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
                     {/* From Company */}
                     <div>
-                        <div className="card h-full" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <section className="h-full overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                            <div className="flex min-h-10 items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                                <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-foreground">
                                     <Building2 className="size-4" aria-hidden="true" />
                                     From Company
-                                </h6>
+                                </h2>
                             </div>
-                            <div className="card-body" style={{ padding: '20px' }}>
+                            <div className="p-3">
 
                                 <div className="mb-3">
-                                    <label className="form-label">From Company <span className="text-danger">*</span></label>
+                                    <label className="mb-1.5 block text-sm font-medium">From Company <span className="text-destructive">*</span></label>
                                     <HybridSelect
                                         fieldMeta={{
                                             endpoint: "/masters/companies/",
@@ -966,67 +916,67 @@ export default function TradeForm() {
                                         placeholder="Search and select company..."
                                     />
                                     {fieldErrors.from_company && (
-                                        <div className="text-danger small">{fieldErrors.from_company}</div>
+                                        <div className="text-destructive text-sm mt-1">{fieldErrors.from_company}</div>
                                     )}
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div>
-                                        <label className="form-label small">PAN</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">PAN</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_pan || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_pan: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">GST</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">GST</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_gst || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_gst: e.target.value }))}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="form-label small">Address Line 1</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 1</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_addr_line_1 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_addr_line_1: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">Address Line 2</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 2</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.from_addr_line_2 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, from_addr_line_2: e.target.value }))}
                                         />
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
                     </div>
 
                     {/* To Company */}
                     <div>
-                        <div className="card h-full" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <section className="h-full overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                            <div className="flex min-h-10 items-center gap-2 border-b border-border bg-muted/20 px-3 py-2">
+                                <h2 className="m-0 flex items-center gap-2 text-sm font-semibold text-foreground">
                                     <Building2 className="size-4" aria-hidden="true" />
                                     To Company
-                                </h6>
+                                </h2>
                             </div>
-                            <div className="card-body" style={{ padding: '20px' }}>
+                            <div className="p-3">
                                 <div className="mb-3">
-                                    <label className="form-label">To Company <span className="text-danger">*</span></label>
+                                    <label className="mb-1.5 block text-sm font-medium">To Company <span className="text-destructive">*</span></label>
                                     <HybridSelect
                                         fieldMeta={{
                                             endpoint: "/masters/companies/",
@@ -1038,69 +988,69 @@ export default function TradeForm() {
                                         placeholder="Search and select company..."
                                     />
                                     {fieldErrors.to_company && (
-                                        <div className="text-danger small">{fieldErrors.to_company}</div>
+                                        <div className="text-destructive text-sm mt-1">{fieldErrors.to_company}</div>
                                     )}
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3 mb-3">
                                     <div>
-                                        <label className="form-label small">PAN</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">PAN</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_pan || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_pan: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">GST</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">GST</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_gst || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_gst: e.target.value }))}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="row">
+                                <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="form-label small">Address Line 1</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 1</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_addr_line_1 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_addr_line_1: e.target.value }))}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label small">Address Line 2</label>
+                                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Address Line 2</label>
                                         <input
                                             type="text"
-                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                                            className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring"
                                             value={formData.to_addr_line_2 || ""}
                                             onChange={(e) => setFormData(prev => ({ ...prev, to_addr_line_2: e.target.value }))}
                                         />
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
                     </div>
                 </div>
 
                 {/* Invoice Details + BOE/Remarks card */}
-                <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                        <h6 className="mb-0 font-semibold">
+                <div className="rounded-xl border border-border bg-card mb-3">
+                    <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                        <h6 className="font-semibold m-0">
                             <FileText className="size-4" aria-hidden="true" />
                             Invoice & Reference Details
                         </h6>
                     </div>
-                    <div className="card-body">
-                <div className="row mb-3">
+                    <div className="p-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-3">
                     <div>
                         <div className="flex justify-between items-center mb-2">
-                            <label className="form-label mb-0" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Invoice Number (optional)</label>
+                            <label className="text-xs font-semibold text-muted-foreground">Invoice Number (optional)</label>
                             <button
                                 type="button"
                                 className="flex items-center gap-1.5 rounded border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/10"
@@ -1138,11 +1088,10 @@ export default function TradeForm() {
                         />
                     </div>
                     <div>
-                        <label className="form-label">Invoice Date</label>
-                        {/* @ts-expect-error DatePicker onChange type mismatch */}
+                        <label className="mb-1.5 block text-sm font-medium">Invoice Date</label>
                     <DatePicker
                             selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
-                            onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date }))}
+                            onChange={(date: Date | null) => setFormData(prev => ({ ...prev, invoice_date: date }))}
                             dateFormat="dd-MM-yyyy"
                             className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                         />
@@ -1153,7 +1102,7 @@ export default function TradeForm() {
                 {formData.direction === "PURCHASE" && (
                     <div className="row mb-3">
                         <div>
-                            <label className="form-label">Purchase Invoice Copy (optional)</label>
+                            <label className="mb-1.5 block text-sm font-medium">Purchase Invoice Copy (optional)</label>
                             <input
                                 type="file"
                                 className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
@@ -1163,7 +1112,7 @@ export default function TradeForm() {
                                     setFormData(prev => ({ ...prev, purchase_invoice_copy: file || null }));
                                 }}
                             />
-                            <small className="text-muted">Accepted formats: PDF, JPG, PNG (Max 10MB)</small>
+                            <span className="text-xs text-muted-foreground mt-1 block">Accepted formats: PDF, JPG, PNG (Max 10MB)</span>
 
                             {/* Show existing file if editing and file exists */}
                             {isEdit && formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
@@ -1191,7 +1140,7 @@ export default function TradeForm() {
                             {/* Show selected file name if new file selected */}
                             {formData.purchase_invoice_copy instanceof File && (
                                 <div className="mt-2">
-                                    <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium" style={{ background: 'var(--tb-success-soft)', color: 'var(--tb-success-text)' }}>
+                                    <span className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium bg-success/10 text-success">
                                         <CheckCircle className="size-4" aria-hidden="true" />
                                         {formData.purchase_invoice_copy.name}
                                     </span>
@@ -1203,41 +1152,53 @@ export default function TradeForm() {
 
 
                 {/* BOE and Remarks */}
-                <div className="row mb-0">
+                <div className={cn("grid gap-4", formData.direction !== 'PURCHASE' ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
                     {formData.direction !== 'PURCHASE' && (
                         <div>
-                            <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>BOE (optional)</label>
-                            <HybridSelect
-                                fieldMeta={{
-                                    endpoint: (() => {
-                                        // In create mode: only show BOEs without invoice
-                                        if (!isEdit) {
-                                            return "/bill-of-entries/?invoice_no__isnull=true";
-                                        }
-                                        // In edit mode: show BOEs without invoice OR current BOE OR BOEs with current invoice
-                                        const currentBoeId = formData.boe ? (typeof formData.boe === 'object' ? formData.boe.id : formData.boe) : null;
-                                        const currentInvoice = formData.invoice_number ? encodeURIComponent(formData.invoice_number) : null;
+                            <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">BOE (optional)</label>
+                            <div className="space-y-2">
+                                {(formData.boes || []).map((boe, index) => {
+                                    // A single physical BOE can legitimately be linked to
+                                    // many invoices (many trades, e.g. one customs
+                                    // document debiting several licences/items) — see the
+                                    // Financial Ledger's BOE Invoice Status Consistency
+                                    // rule, so the picker is never restricted to BOEs
+                                    // without an invoice, in create or edit mode.
+                                    const endpoint = "/bill-of-entries/?available_for_trade=true";
 
-                                        let endpoint = "/bill-of-entries/?available_for_trade=true";
-                                        if (currentBoeId) {
-                                            endpoint += `&current_boe=${currentBoeId}`;
-                                        }
-                                        if (currentInvoice) {
-                                            endpoint += `&current_invoice=${currentInvoice}`;
-                                        }
-                                        return endpoint;
-                                    })(),
-                                    label_field: "bill_of_entry_number"
-                                }}
-                                value={formData.boe}
-                                onChange={(val) => setFormData(prev => ({ ...prev, boe: val }))}
-                                isClearable={true}
-                                placeholder="Search and select BOE (without invoice)..."
-                            />
+                                    return (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <div className="flex-1">
+                                                <HybridSelect
+                                                    fieldMeta={{
+                                                        endpoint,
+                                                        label_field: "bill_of_entry_number"
+                                                    }}
+                                                    value={boe}
+                                                    onChange={(val) => handleBoeChange(index, val)}
+                                                    isClearable={true}
+                                                    placeholder="Search and select BOE..."
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="flex items-center gap-1.5 rounded bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground cursor-pointer hover:bg-destructive/90"
+                                                onClick={() => handleRemoveBoe(index)}
+                                            >
+                                                <Trash2 className="size-4" aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <button type="button" className="mt-2 flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                onClick={handleAddBoe}>
+                                <Plus className="size-4" aria-hidden="true" />Add BOE
+                            </button>
                         </div>
                     )}
-                    <div className={formData.direction === 'PURCHASE' ? 'col-md-12' : 'col-md-6'}>
-                        <label className="form-label" style={{ fontSize: 12, fontWeight: '600', color: 'var(--text-secondary)' }}>Remarks</label>
+                    <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">Remarks</label>
                         <textarea
                             className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
                             rows={2}
@@ -1254,14 +1215,14 @@ export default function TradeForm() {
                 {formData.license_type === "DFIA" && (
                     <>
                         {/* Billing Mode card */}
-                        <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-xl border border-border bg-card mb-3">
+                            <div className="flex items-center gap-2 border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <Calculator className="size-4" aria-hidden="true" />
                                     Billing Mode
                                 </h6>
                             </div>
-                            <div className="card-body">
+                            <div className="p-4">
                                 <div className="flex gap-2 flex-wrap">
                                     {[{ val:'QTY', label:'By Quantity (KG × Rate)', icon: Weight },
                                       { val:'CIF_INR', label:'By CIF INR (%)', icon: IndianRupee },
@@ -1292,49 +1253,48 @@ export default function TradeForm() {
                         </div>
 
                         {/* Trade Lines */}
-                        <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-xl border border-border bg-card mb-3">
+                            <div className="flex justify-between items-center border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <List className="size-4" aria-hidden="true" />
                                     Trade Lines
                                     {formData.lines.length > 0 && (
-                                        <span className="badge ml-2 rounded-pill" style={{ backgroundColor: 'var(--tb-brand-100)', color: 'var(--tb-brand)', fontSize: 11 }}>
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                                             {formData.lines.length}
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
-                                    onClick={handleAddLine} style={{ borderRadius: 'var(--tb-r-md)' }}>
+                                <button type="button" className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                    onClick={handleAddLine}>
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
-                            <div className="card-body" style={{padding:0}}>
-                        <div className="table-responsive">
-                    <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
-                        <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                            <div className="p-0 overflow-x-auto">
+                    <table className="w-full text-[0.83rem]" style={{ borderCollapse: 'collapse' }}>
+                        <thead className="bg-muted/40 border-b-2 border-border">
                             <tr>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "3%" }}>#</th>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "22%" }}>License (SR)</th>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>HSN</th>
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>CIF $</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "3%" }}>#</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "22%" }}>License (SR)</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>HSN</th>
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "9%" }}>CIF $</th>
                                 {billingMode === "CIF_INR" && (
                                     <>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Exch Rate</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>CIF INR</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Exch Rate</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>CIF INR</th>
                                     </>
                                 )}
                                 {billingMode === "FOB_INR" && (
-                                    <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>FOB INR</th>
+                                    <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>FOB INR</th>
                                 )}
                                 {billingMode === "QTY" && (
                                     <>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Qty (KG)</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Rate (INR/KG)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Qty (KG)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "10%" }}>Rate (INR/KG)</th>
                                     </>
                                 )}
-                                {billingMode !== "QTY" && <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Billing %</th>}
-                                <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "12%" }}>Amount</th>
-                                <th style={{ width: "3%" }}></th>
+                                {billingMode !== "QTY" && <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "8%" }}>Billing %</th>}
+                                <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "12%" }}>Amount</th>
+                                <th scope="col" style={{ width: "3%" }}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1459,17 +1419,17 @@ export default function TradeForm() {
                                         />
                                     </td>
                                     <td className="text-center px-2">
-                                        <button type="button" className="flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
-                                            onClick={() => handleRemoveLine(index)} style={{ borderRadius: 'var(--tb-r-sm)', padding: '2px 8px' }}>
+                                        <button type="button" className="inline-flex items-center justify-center rounded border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
+                                            onClick={() => handleRemoveLine(index)}>
                                             <Trash2 className="size-4" aria-hidden="true" />
                                         </button>
                                     </td>
                                 </tr>
                             ))}
                             {formData.lines.length > 0 && (
-                                <tr style={{ background: 'var(--tb-success-soft)', borderTop: '2px solid #a7f3d0' }}>
-                                    <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-end font-semibold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>Total Amount</td>
-                                    <td className="text-end font-bold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>₹{calculateTotal().toFixed(2)}</td>
+                                <tr className="bg-success/10 border-t-2 border-success/30">
+                                    <td colSpan={billingMode === "QTY" ? 6 : (billingMode === "CIF_INR" ? 6 : 5)} className="text-right font-semibold px-3 py-2 text-success">Total Amount</td>
+                                    <td className="text-right font-bold px-3 py-2 text-success">₹{calculateTotal().toFixed(2)}</td>
                                     <td></td>
                                 </tr>
                             )}
@@ -1477,10 +1437,9 @@ export default function TradeForm() {
                     </table>
                 </div>
                 </div>
-                </div>
                 {fieldErrors.lines && formData.lines.length === 0 && (
-                    <div className="alert alert-danger py-2 px-3 mt-2 small">
-                        <AlertCircle className="size-4" aria-hidden="true" />
+                    <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 mt-2 text-sm text-destructive">
+                        <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                         {Array.isArray(fieldErrors.lines) ? fieldErrors.lines[0] : fieldErrors.lines}
                     </div>
                 )}
@@ -1490,33 +1449,33 @@ export default function TradeForm() {
                 {/* Incentive License Lines */}
                 {formData.license_type === "INCENTIVE" && (
                     <>
-                        <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                            <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                                <h6 className="mb-0 font-semibold">
+                        <div className="rounded-xl border border-border bg-card mb-3">
+                            <div className="flex justify-between items-center border-b border-border px-4 py-3 rounded-t-[12px]">
+                                <h6 className="font-semibold m-0">
                                     <Award className="size-4" aria-hidden="true" />
                                     Incentive Lines
                                     {formData.incentive_lines.length > 0 && (
-                                        <span className="badge ml-2 rounded-pill" style={{ backgroundColor: 'var(--tb-warning-soft)', color: 'var(--tb-warning-text)', fontSize: 11 }}>
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
                                             {formData.incentive_lines.length}
                                         </span>
                                     )}
                                 </h6>
-                                <button type="button" className="flex items-center gap-1.5 rounded border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
-                                    onClick={handleAddIncentiveLine} style={{ borderRadius: 'var(--tb-r-md)' }}>
+                                <button type="button" className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-2.5 py-1.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20"
+                                    onClick={handleAddIncentiveLine}>
                                     <Plus className="size-4" aria-hidden="true" />Add Row
                                 </button>
                             </div>
-                            <div className="card-body" style={{padding:0}}>
-                        <div className="table-responsive">
-                            <table className="table table-sm mb-0" style={{ fontSize: '0.83rem' }}>
-                                <thead style={{ background: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                            <div className="p-0 overflow-x-auto">
+                        <div>
+                            <table className="w-full text-[0.83rem]" style={{ borderCollapse: 'collapse' }}>
+                                <thead className="bg-muted/40 border-b-2 border-border">
                                     <tr>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "5%" }}>#</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "40%" }}>Incentive License</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "20%" }}>License Value (INR)</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Rate (%)</th>
-                                        <th className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Amount</th>
-                                        <th style={{ width: "5%" }}></th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "5%" }}>#</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "40%" }}>Incentive License</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "20%" }}>License Value (INR)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Rate (%)</th>
+                                        <th scope="col" className="px-3 py-2 text-muted-foreground font-semibold" style={{ width: "15%" }}>Amount</th>
+                                        <th scope="col" style={{ width: "5%" }}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1580,9 +1539,9 @@ export default function TradeForm() {
                                         </tr>
                                     ))}
                                     {formData.incentive_lines.length > 0 && (
-                                        <tr style={{ background: 'var(--tb-success-soft)', borderTop: '2px solid #a7f3d0' }}>
-                                            <td colSpan={4} className="text-end font-semibold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>Total Amount</td>
-                                            <td className="text-end font-bold px-3 py-2" style={{ color: 'var(--tb-success-text)' }}>₹{calculateTotal().toFixed(2)}</td>
+                                        <tr className="bg-success/10 border-t-2 border-success/30">
+                                            <td colSpan={4} className="text-right font-semibold px-3 py-2 text-success">Total Amount</td>
+                                            <td className="text-right font-bold px-3 py-2 text-success">₹{calculateTotal().toFixed(2)}</td>
                                             <td></td>
                                         </tr>
                                     )}
@@ -1592,8 +1551,8 @@ export default function TradeForm() {
                         </div>
                         </div>
                         {fieldErrors.incentive_lines && formData.incentive_lines.length === 0 && (
-                            <div className="alert alert-danger py-2 px-3 mt-2 small">
-                                <AlertCircle className="size-4" aria-hidden="true" />
+                            <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 mt-2 text-sm text-destructive">
+                                <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                                 {Array.isArray(fieldErrors.incentive_lines) ? fieldErrors.incentive_lines[0] : fieldErrors.incentive_lines}
                             </div>
                         )}
@@ -1601,43 +1560,45 @@ export default function TradeForm() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2 mt-4 pt-3 mb-4" style={{ borderTop: '1px solid var(--tb-border-soft)' }}>
-                    <button type="submit" className="flex items-center gap-1.5 rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-pointer hover:bg-primary/90 disabled:opacity-50" disabled={saving}
-                        style={{ padding: '10px 28px', fontWeight: '600', background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))', border: 'none', borderRadius: 'var(--tb-r-md)' }}>
+                <div className="flex items-center gap-2 mt-4 pt-3 mb-4 border-t border-border/50">
+                    <button type="submit" className="flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-primary to-primary/70 px-7 py-2.5 text-sm font-semibold text-primary-foreground cursor-pointer hover:opacity-90 disabled:opacity-50" disabled={saving}>
                         {saving ? <><span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" aria-hidden="true" />Saving…</> : <><CheckCircle className="size-4" aria-hidden="true" />Save Trade</>}
                     </button>
-                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}
-                        style={{ padding: '10px 20px', fontWeight: '500', borderRadius: 'var(--tb-r-md)' }}>
+                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => navigateToList(navigate, 'trades', { preserveFilters: true })}>
                         <X className="size-4" aria-hidden="true" />Cancel
                     </button>
                     {isEdit && (
                         <>
-                            <button type="button" className="flex items-center gap-1.5 rounded border border-info/30 bg-info/10 px-2.5 py-1.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}
-                                style={{ padding: '10px 18px', fontWeight: '500', borderRadius: 'var(--tb-r-md)' }}>
+                            <button type="button" className="flex items-center gap-1.5 rounded-xl border border-info/30 bg-info/10 px-4 py-2.5 text-xs font-medium text-info cursor-pointer hover:bg-info/20" onClick={() => setShowTransferLetterModal(true)}>
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
                             </button>
+                            {formData.counterpart_info ? (
+                                <button type="button" className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-4 py-2.5 text-xs font-medium text-success cursor-pointer hover:bg-success/20" onClick={() => navigate(`/trades/${formData.counterpart_info.id}/edit`)}>
+                                    <Link className="size-4" aria-hidden="true" />Linked · View {formData.counterpart_info.type === 'purchase' ? 'Purchase' : 'Sale'}
+                                </button>
+                            ) : (formData.direction === 'SALE' || formData.direction === 'PURCHASE') && (
+                                <button type="button" disabled={copyingCounterpart || saving} className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-xs font-medium text-primary cursor-pointer hover:bg-primary/20 disabled:opacity-50" onClick={handleCopyToCounterpart}>
+                                    <ArrowLeftRight className="size-4" aria-hidden="true" />{copyingCounterpart ? 'Creating linked record…' : `Copy to ${formData.direction === 'SALE' ? 'Purchase' : 'Sale'}`}
+                                </button>
+                            )}
                             {formData.direction === 'SALE' && (
                                 <div className="flex items-center gap-1">
-                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)}
-                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download Bill of Supply with signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(true)} title="Download Bill of Supply with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Bill of Supply
                                     </button>
-                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)}
-                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download without signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPDF(false)} title="Download without signature & stamp">
                                         <XCircle className="size-4" aria-hidden="true" />Unsigned
                                     </button>
                                 </div>
                             )}
                             {formData.direction === 'PURCHASE' && (
                                 <div className="flex items-center gap-1">
-                                    <button type="button" className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)}
-                                        style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Download Purchase Invoice with signature & stamp">
+                                    <button type="button" className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" onClick={() => handleDownloadPurchaseInvoice(true)} title="Download Purchase Invoice with signature & stamp">
                                         <FileText className="size-4" aria-hidden="true" />Purchase Invoice
                                     </button>
                                     {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
-                                        <a className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
-                                            href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer"
-                                            style={{ fontWeight: '500', borderRadius: 'var(--tb-r-md)' }} title="Open the original uploaded invoice copy">
+                                        <a className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
+                                            href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer" title="Open the original uploaded invoice copy">
                                             <FileText className="size-4" aria-hidden="true" />Original Copy
                                         </a>
                                     )}
@@ -1657,6 +1618,6 @@ export default function TradeForm() {
                     entityId={id}
                 />
             )}
-        </div>
+        </main>
     );
 }

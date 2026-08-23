@@ -1,0 +1,1580 @@
+# Stateful Audit Dashboard
+
+Generated: `2026-07-16T10:31:21+00:00`
+
+## Repository Statistics
+
+- Files audited: `526`
+- Files changed directly: `64`
+- Files requiring dependency recheck: `328`
+- Files not started: `12`
+- Files ignored/excluded: `595`
+- Files remaining: `328`
+- Total source files tracked: `903`
+- Total source LOC tracked: `240720`
+- Audited LOC: `119482`
+- Remaining LOC: `121232`
+- Modules completed: `0`
+- Pending modules: `46`
+- Duplicate logic removed: `tracked per work item`
+- Dead code removed: `tracked per work item`
+- Imports cleaned: `duplicate admin imports removed; F821 sweep completed`
+- Performance improvements: `frontend startup preloads reduced; Excel/PDF generation chunks remain route-loaded`
+- Security improvements: `query-token JWT scope restricted; session-auth API CSRF enforcement restored; MDS service-token comparison hardened`
+- Tests added: `focused authentication regressions, backend regression coverage for ledger uploads, JWT query tokens, license group data, license balance Excel exports, MasterForm/MasterList/TradeForm smoke coverage, and form helper tests`
+- Technical debt remaining: `Ruff full baseline 547 findings; F811/E741 baseline 0 findings; F841 baseline 0 findings`
+- TODO count: `22`
+- FIXME count: `2`
+- ESLint findings: `0 in latest run`
+- TypeScript findings: `0 in latest run`
+
+## Largest Module Rollups
+
+| Module | Files | LOC | Completed | Changed | Recheck | Not Started |
+|---|---:|---:|---:|---:|---:|---:|
+| `backend` | 130 | 76444 | 27 | 8 | 95 | 2 |
+| `backend/apps/license` | 114 | 34692 | 98 | 16 | 0 | 0 |
+| `backend/apps/core` | 127 | 24549 | 127 | 0 | 0 | 0 |
+| `docs` | 53 | 24375 | 21 | 3 | 29 | 0 |
+| `frontend/src/pages` | 77 | 19217 | 66 | 0 | 11 | 0 |
+| `frontend` | 20 | 12948 | 3 | 2 | 15 | 0 |
+| `frontend/src/components` | 70 | 9120 | 10 | 0 | 60 | 0 |
+| `scripts` | 33 | 5914 | 11 | 0 | 22 | 0 |
+| `backend/apps/allotment` | 26 | 4105 | 21 | 17 | 11 | 1 |
+| `backend/apps/bill_of_entry` | 20 | 3439 | 15 | 5 | 0 | 0 |
+| `backend/apps/trade` | 19 | 3945 | 3 | 6 | 8 | 2 |
+| `master-data-service` | 34 | 2670 | 34 | 0 | 0 | 0 |
+
+## Completed Work
+
+- Authentication Phase pass: backend login/logout view cleaned, MDS service-token lookup hardened, and AuthContext localStorage boot made resilient.
+- TradeForm create/edit smoke coverage added and payload cleanup extracted into pure helpers with direct tests.
+- MasterForm API-base resolution extracted into a pure helper with direct tests.
+- Generic master-card rendering extracted from MasterList into a dedicated table slice with row smoke coverage.
+- MasterForm create/edit smoke coverage added for generic master records before frontend form decomposition.
+- Ledger upload regression added for `ledgers/L1.csv`, `ledgers/L2.csv`, and `ledgers/l3.csv`.
+- License balance Excel workbook-shape regression coverage added for single and bulk exports.
+- Large-module decomposition plan created with coverage gates and follow-up queue items.
+- Frontend startup bundle split refined: route-wide app component preloads replaced with shell/vendor startup chunks; Excel/PDF chunks remain route-loaded.
+- API CSRF bypass narrowed to token-authenticated requests; session-auth ledger uploads now require CSRF.
+- Query-parameter JWT authentication restricted to GET/HEAD download/export style URLs and covered by focused regression tests.
+- `LicenseDetailsModel.get_item_group_data()` fixed and covered by regression test.
+- Ruff F821 undefined-name findings cleared across backend, mds-client, and master-data-service.
+- Duplicate admin imports removed in allotment, bill_of_entry, and core admin modules.
+- Ambiguous loop variables and unused locals cleaned in selected BOE/license exporter paths.
+- Authorization Phase direct report endpoints now enforce `ReportPermission` on both router and direct `/api/reports/*` paths.
+- Authorization Phase constrained Trade pass aligned trade lines and payments with `TradePermission`.
+- Authorization Phase command palette and dashboard actions now hide role-protected destinations when the user lacks the matching role.
+- Authorization Phase frozen after 46 backend/frontend authorization surfaces were verified as `COMPLETED`.
+- Production-stub ambiguity removed from GE/DGFT sync paths; remote ledger fetch remains an explicit 501 contract.
+- Ruff F811/E741 findings reduced from 23 to 0 across the targeted Python source set.
+- Ruff F841 unused-local findings reduced to 0 across the targeted Python source set.
+- Phase 7 Reporting & Exports started with the allotment PDF coordinate-grid helper hardened and covered by direct CLI tests.
+- Phase 7 Reporting & Exports frozen after the existing audit database reported `phase7_remaining 0`; completed Phase 7 files must not be reopened unless dependency analysis marks them `REQUIRES_RECHECK`.
+- Phase 8 Bills of Entry queued from the existing module pipeline and audit database; first selection must come from `backend/apps/bill_of_entry` entries marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 8 Bills of Entry package marker completed for `backend/apps/bill_of_entry/__init__.py`; no source changes were required for the empty package marker.
+- Phase 8 Bills of Entry initial migration completed for `backend/apps/bill_of_entry/migrations/0001_initial.py`; historical migration source was verified unchanged.
+- Phase 8 Bills of Entry secondary initial migration completed for `backend/apps/bill_of_entry/migrations/0002_initial.py`; historical FK/index/constraint migration source was verified unchanged.
+- Phase 8 Bills of Entry unique constraint migration completed for `backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py`; historical constraint migration source was verified unchanged.
+- Phase 8 Bills of Entry migrations package marker completed for `backend/apps/bill_of_entry/migrations/__init__.py`; no source changes were required for the empty package marker.
+- Phase 8 Bills of Entry parsers package marker completed for `backend/apps/bill_of_entry/parsers/__init__.py`; no source changes were required for the empty package marker.
+- Phase 8 Bills of Entry scripts package marker completed for `backend/apps/bill_of_entry/scripts/__init__.py`; no source changes were required for the empty package marker.
+- Phase 8 Bills of Entry ICEGATE helper completed for `backend/apps/bill_of_entry/scripts/boe.py`; removed missing `bs4` dependency usage, added bounded HTTP handling, and covered helper parsing/validation with focused regressions in `backend/tests/test_boe_script_helpers.py`.
+- Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/scripts/generate_tl.py`; active transfer-letter generation remains in BOE transfer views and core transfer-letter utilities.
+- Phase 8 Bills of Entry port dictionary completed for `backend/apps/bill_of_entry/scripts/utils.py`; live `fetch_views.py` dependency retained source unchanged.
+- Phase 8 Bills of Entry removed obsolete unreferenced `backend/apps/bill_of_entry/tasks.py`; current BOE models use synchronous balance updates instead of the stale Celery task.
+- Phase 8 Bills of Entry removed verified-dead legacy Django template-view stack for BOE: six templates, four legacy views, and the orphaned `scripts/utils.py` port dictionary were deleted after repository-wide dependency analysis found no live runtime path.
+- Phase 8 Bills of Entry removed empty generated `backend/apps/bill_of_entry/tests.py` stub; active BOE regression coverage remains in `backend/tests/test_api_boe.py` and `backend/tests/test_boe_script_helpers.py`.
+- Phase 8 Bills of Entry reached 100% for queued `NOT_STARTED` and `REQUIRES_RECHECK` BOE files in the active audit database.
+- Phase 9 Inventory started and removed stale `backend/scripts/char_license_list_balance.py`; active license balance regression coverage remains in maintained test modules.
+- Phase 9 Inventory removed stale `backend/scripts/test_balance_calc.py`; deterministic balance assertions remain in `backend/apps/license/tests/test_balance_calculator.py`.
+- Phase 9 Inventory completed `docs/architecture/BALANCE_CALCULATION_CONSOLIDATION.md`; stale deployment-era balance guidance now reflects current service, materialized balance, command, and regression-test contracts.
+- Phase 9 Inventory completed `frontend/src/components/LicenseBalanceModal.tsx`; license balance modal validation, finite numeric rendering, authenticated PDF/export requests, and malformed API response handling are covered by focused helper regressions.
+- Phase 9 Inventory frozen after the active audit database query returned zero Inventory or Balance files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 9 Inventory reopened only for dependency-marked `REQUIRES_RECHECK` allocation helpers; verified-dead `frontend/src/components/AllotmentAllocationModal.tsx` and `frontend/src/services/calculators/allocationCalculator.js` were removed, and the calculator barrel no longer exports the orphaned helper.
+- Phase 10 Reports frozen without reopening Phase 7; active report/export/PDF/Excel/CSV/ledger query returned zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 10 Reports recovery confirmation kept the phase frozen after the latest Phase 9 recheck; the active report/export/PDF/Excel/CSV/ledger queue still has zero files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Phase 11 Documents removed verified-dead legacy Django template `backend/templates/profile.html`; dependency analysis found no live Django render/template-loader/runtime path, and React entry HTML remains preserved.
+- Phase 11 Documents completed `docs/media-security-cutover.md`; retained live runbook and updated stale frontend media/token and restricted query-token guidance to match current code.
+- Phase 11 Documents completed `frontend/src/hooks/useFileUpload.js` with its focused test; upload endpoint, file input, MIME, progress, malformed response, and size formatting paths are hardened.
+- Phase 11 Documents completed `frontend/src/pages/Profile.tsx`; profile form hydration, PATCH payload normalization, field-level errors, role rendering, and AuthContext user refresh are hardened without rewriting tokens.
+- Phase 11 Documents completed `nginx-protected-media.conf`; protected media X-Accel snippet now documents trailing-slash MEDIA_ROOT aliasing and private no-store cache headers.
+- Phase 11 Documents completed `scripts/diagnostics/sync-media.sh`; media sync now targets `backend/media`, validates options/paths, and hardens SSH/rsync execution paths.
+- Phase 11 Documents completed `nginx-http-only-tractor.conf`; the live tractor HTTP-only certbot bootstrap config now has explicit client/proxy timeouts, disabled proxy redirects, and baseline browser security headers.
+- Phase 11 Documents removed the verified-dead legacy allotment Django template/tag stack; 10 templates plus the private `app_tags` package had no live render/template-loader/runtime path after DRF/React routing.
+- Phase 11 Documents completed `backend/templates/404.html`; the conventional Django production 404 template is now self-contained, noindex, and covered by a render regression.
+- Phase 11 Documents completed `backend/templates/500.html`; the conventional Django production 500 template is now self-contained, noindex, and covered by a render regression.
+- Phase 11 Documents removed the verified-dead legacy base/DFIA DAdmin template stack; `base/main.html`, `blank.html`, `dfia/box.html`, and `dfia/list.html` had no live render/template-loader/runtime path.
+- Phase 11 Documents removed verified-dead `backend/templates/buttons.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/calendar.html`; only stale links from other queued legacy DAdmin templates and theme demo HTML remained.
+- Phase 11 Documents removed verified-dead `backend/templates/chat.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/coming-soon.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/contacts.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/dropzone.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/ecommerce.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/footer-dark.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/footer-light.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/footer-transparent.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/form-elements.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/form-wizard.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/index.html`; Django loader analysis proved the live SPA catch-all resolves `frontend/dist/index.html` first.
+- Phase 11 Documents removed verified-dead `backend/templates/invoice.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/lock-screen.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/mailbox_compose.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/mailbox_inbox.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/maintenance.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/modals.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents removed verified-dead `backend/templates/notes.html`; only stale links from other queued legacy DAdmin templates remained.
+- Phase 11 Documents completed `.claude/agents/README.md`; retained live specialist-agent guidance referenced by `CLAUDE.md` and corrected backend verification guidance to use targeted `pytest` or `scripts/testing/run-tests.sh`.
+- Phase 11 Documents completed `.claude/agents/backend-engineer.md`; retained live backend specialist-agent guidance and corrected backend verification guidance to use targeted Django/pytest paths or `scripts/testing/run-tests.sh`.
+- Phase 11 Documents completed `.claude/agents/code-reviewer.md`; retained live read-only code-review guidance and standardized staged-diff review on `git diff --cached`.
+- Phase 11 Documents completed `.claude/agents/data-engineer.md`; retained live data-engineer guidance and updated script references to current repository paths.
+
+## Verification History
+
+- Phase 1 remaining backend authentication recheck: .venv/bin/python -m pytest backend/apps/accounts/tests.py backend/tests/test_authentication_query_param.py backend/tests/test_all_conditions.py::TestAuthentication backend/tests/test_ledger_parser.py -q -> 28 passed
+- Phase 1 remaining backend authentication Ruff: .venv/bin/ruff check backend/apps/accounts backend/apps/core/throttling.py backend/lmanagement/settings.py backend/apps/core/middleware.py backend/apps/core/authentication.py backend/tests/test_all_conditions.py backend/tests/test_authentication_query_param.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 1 final frontend authentication tests: npm test -- --run src/pages/Login.test.tsx src/test/useAuth.test.tsx -> 13 passed
+- Phase 1 final frontend authentication typecheck: npm run typecheck -> passed
+- Phase 1 final frontend authentication lint: npm run lint -> passed
+- Phase 2 focused authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_authentication_query_param.py backend/tests/test_api_license.py -q -> 15 passed
+- Phase 2 targeted backend authorization Ruff: .venv/bin/ruff check backend/apps/accounts/permissions.py backend/apps/license/views_actions.py backend/tests/test_authorization_permissions.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 2 frontend authorization typecheck: npm run typecheck -> passed
+- Phase 2 frontend authorization lint: npm run lint -> passed
+- Phase 2 master-data authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/apps/core/tests/test_mds_write_cutover.py backend/tests/test_api_core.py -q -> 23 passed
+- Phase 2 master-data authorization Ruff: .venv/bin/ruff check backend/apps/core/views/master_view.py backend/tests/test_authorization_permissions.py backend/apps/core/tests/test_mds_write_cutover.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 2 frontend navigation authorization regression: npm test -- --run src/components/TopNav.test.tsx -> 1 passed
+- Phase 2 frontend authorization typecheck after route-role consolidation: npm run typecheck -> passed
+- Phase 2 frontend authorization lint after route-role consolidation: npm run lint -> passed
+- Phase 2 frontend dependency security audit: npm audit --audit-level=high -> 0 vulnerabilities
+- Phase 2 Python dependency security audit: pip-audit not installed in the local environment
+- Phase 2 domain authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_allotment.py backend/tests/test_api_boe.py backend/tests/test_api_core.py -q -> 26 passed
+- Phase 2 domain authorization Ruff: .venv/bin/ruff check backend/apps/allotment/views.py backend/apps/bill_of_entry/views/boe.py backend/apps/core/urls.py backend/apps/tasks/views.py backend/apps/core/views/mds_status.py backend/apps/core/views/media.py backend/apps/license/views/dashboard.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 2 BOE parser authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_boe.py -q -> 12 passed
+- Phase 2 BOE parser authorization Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views/parse_pdf.py backend/tests/test_authorization_permissions.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 11 profile template route regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 profile template py_compile: .venv/bin/python -m py_compile backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py -> passed
+- Phase 11 profile template compileall: .venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py -> passed
+- Phase 11 profile template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 profile template makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 profile template scoped Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 profile template security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 media cutover dependency scan: retained because `scripts/deployment/auto-deploy.sh` and `frontend/src/utils/documentDownload.ts` reference the runbook
+- Phase 11 media cutover frontend token/media scan: direct public media/token grep returned only authenticated helper implementation, comments, tests, and `AuthedImage`-style authenticated consumers
+- Phase 11 media cutover regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py backend/tests/test_authentication_query_param.py -q -> 17 passed
+- Phase 11 media cutover py_compile: .venv/bin/python -m py_compile scoped media/auth/url/settings/test files -> passed
+- Phase 11 media cutover compileall: .venv/bin/python -m compileall -q scoped media/auth/url/settings/test files -> passed
+- Phase 11 media cutover Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 media cutover makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 media cutover Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 media cutover security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 useFileUpload regression: npm test -- useFileUpload.test.ts -> 18 passed
+- Phase 11 useFileUpload TypeScript: npm run typecheck -> passed
+- Phase 11 useFileUpload ESLint: npm run lint -- --quiet src/hooks/useFileUpload.js src/test/useFileUpload.test.ts -> clean
+- Phase 11 useFileUpload React build: npm run build -> passed
+- Phase 11 useFileUpload Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 useFileUpload makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 useFileUpload py_compile/compileall: not applicable to JS/TS source; frontend typecheck/build executed instead
+- Phase 11 useFileUpload security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 Profile dependency scan: live `/profile` route in `frontend/src/routes/AppRoutes.tsx`; backend dependency `/auth/me/` served by `MeView`/`UserSerializer`.
+- Phase 11 Profile focused regression: npm test -- Profile.test.tsx useAuth.test.tsx UserForm.test.tsx UserList.test.tsx -> 22 passed
+- Phase 11 Profile full frontend regression: npm test -> 38 files passed, 161 tests passed
+- Phase 11 Profile TypeScript: npm run typecheck -> passed
+- Phase 11 Profile ESLint scoped and full quiet runs -> clean
+- Phase 11 Profile React build: npm run build -> passed
+- Phase 11 Profile backend route regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 Profile py_compile/compileall: scoped backend URL/settings files -> passed
+- Phase 11 Profile Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 Profile makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 Profile Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 Profile security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 nginx protected-media dependency scan: live references in media cutover docs, auto-deploy guidance, and ProtectedMediaView docs
+- Phase 11 nginx protected-media nginx validation: nginx -v -> command not found; local nginx syntax validation unavailable
+- Phase 11 nginx protected-media regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 nginx protected-media py_compile/compileall: scoped media/url/settings files -> passed
+- Phase 11 nginx protected-media Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 nginx protected-media makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 nginx protected-media Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 nginx protected-media security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 media sync syntax: bash -n scripts/diagnostics/sync-media.sh -> passed
+- Phase 11 media sync usage/validation: usage command passed; invalid option, sync --delete, and relative remote path guards rejected before SSH/rsync
+- Phase 11 media sync shfmt/shellcheck: commands not found; unavailable locally
+- Phase 11 media sync backend regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py -q -> 14 passed
+- Phase 11 media sync py_compile/compileall: scoped backend URL/settings files -> passed
+- Phase 11 media sync Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 11 media sync makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 11 media sync Ruff: blocked by pre-existing unused imports in backend/tests/test_url_routing.py (`pytest`, `django.test.TestCase`)
+- Phase 11 media sync security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 11 tractor HTTP nginx dependency scan: live via `scripts/deployment/auto-deploy.sh` for `165.232.185.220` cert bootstrap.
+- Phase 11 tractor HTTP nginx validation: `nginx -v` -> command not found; local nginx syntax validation unavailable.
+- Phase 11 tractor HTTP nginx regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+- Phase 11 tractor HTTP nginx py_compile/compileall: scoped backend URL/settings files -> passed.
+- Phase 11 tractor HTTP nginx Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 tractor HTTP nginx makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 tractor HTTP nginx Ruff: blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+- Phase 11 tractor HTTP nginx security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 allotment template dependency scan: no live render(), TemplateResponse, template_name, include/extends, custom tag, URLConf, middleware, signal, command, test, email/PDF/report/export, dynamic loader, cached path, or third-party runtime path remained.
+- Phase 11 allotment template regression: `.venv/bin/python -m pytest backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -q` -> 25 passed.
+- Phase 11 allotment template py_compile/compileall: scoped allotment views, URLConf, and route/API tests -> passed.
+- Phase 11 allotment template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 allotment template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 allotment template Ruff: blocked by pre-existing unused imports in unchanged allotment modules and `backend/tests/test_url_routing.py`.
+- Phase 11 allotment template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 404 template dependency scan: retained as Django conventional production 404 template because `backend/templates` is in `TEMPLATES["DIRS"]`; remaining `404.html` hrefs are queued legacy DAdmin links.
+- Phase 11 404 template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 15 passed.
+- Phase 11 404 template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 404 template py_compile/compileall: scoped route/settings/test files -> passed.
+- Phase 11 404 template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 404 template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 404 template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 500 template dependency scan: retained as Django conventional production 500 template because `backend/templates` is in `TEMPLATES["DIRS"]`; remaining `500.html` hrefs are queued legacy DAdmin links.
+- Phase 11 500 template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 500 template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 500 template py_compile/compileall: scoped route/settings/test files -> passed.
+- Phase 11 500 template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 500 template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 500 template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 calendar template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `calendar.html` hits are stale queued template/demo links.
+- Phase 11 calendar template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 calendar template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 calendar template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 calendar template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 calendar template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 calendar template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 calendar template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 chat template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `chat.html` hits are stale queued template links.
+- Phase 11 chat template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 chat template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 chat template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 chat template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 chat template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 chat template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 chat template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 coming-soon template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `coming-soon.html` hits are stale queued template links.
+- Phase 11 coming-soon template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 coming-soon template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 coming-soon template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 coming-soon template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 coming-soon template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 coming-soon template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 coming-soon template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 contacts template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `contacts.html` hits are stale queued template links.
+- Phase 11 contacts template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 contacts template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 contacts template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 contacts template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 contacts template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 contacts template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 contacts template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 dropzone template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `dropzone.html` hits are stale queued template links.
+- Phase 11 dropzone template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 dropzone template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 dropzone template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 dropzone template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 dropzone template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 dropzone template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 dropzone template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 ecommerce template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `ecommerce.html` hits are stale queued template links.
+- Phase 11 ecommerce template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 ecommerce template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 ecommerce template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 ecommerce template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 ecommerce template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 ecommerce template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 ecommerce template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 footer-dark template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `footer-dark.html` hits are stale queued template links.
+- Phase 11 footer-dark template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 footer-dark template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 footer-dark template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 footer-dark template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 footer-dark template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 footer-dark template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 footer-dark template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 footer-light template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `footer-light.html` hits are stale queued template links.
+- Phase 11 footer-light template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 footer-light template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 footer-light template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 footer-light template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 footer-light template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 footer-light template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 footer-light template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 footer-transparent template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `footer-transparent.html` hits are stale queued template links.
+- Phase 11 footer-transparent template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 footer-transparent template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 footer-transparent template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 footer-transparent template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 footer-transparent template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 footer-transparent template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 footer-transparent template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 form-elements template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `form-elements.html` hits are stale queued template links.
+- Phase 11 form-elements template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 form-elements template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 form-elements template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 form-elements template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 form-elements template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 form-elements template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 form-elements template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 form-wizard template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `form-wizard.html` hits are stale queued template links.
+- Phase 11 form-wizard template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 form-wizard template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 form-wizard template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 form-wizard template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 form-wizard template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 form-wizard template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 form-wizard template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 backend index template dependency scan: catch-all `TemplateView(template_name="index.html")` is live, but `get_template("index.html")` resolves `frontend/dist/index.html`; backend DAdmin `index.html` was shadowed.
+- Phase 11 backend index template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 backend index template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 backend index template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 backend index template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 backend index template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 backend index template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 backend index template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 invoice template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `invoice.html` hits are stale queued template links.
+- Phase 11 invoice template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 invoice template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 invoice template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 invoice template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 invoice template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 invoice template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 invoice template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 lock-screen template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `lock-screen.html` hits are stale queued template links.
+- Phase 11 lock-screen template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 lock-screen template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 lock-screen template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 lock-screen template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 lock-screen template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 lock-screen template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 lock-screen template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 mailbox compose template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `mailbox_compose.html` hits are stale queued template links.
+- Phase 11 mailbox compose template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 mailbox compose template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 mailbox compose template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 mailbox compose template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 mailbox compose template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 mailbox compose template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 mailbox compose template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 mailbox inbox template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `mailbox_inbox.html` hits are stale queued template links.
+- Phase 11 mailbox inbox template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 mailbox inbox template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 mailbox inbox template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 mailbox inbox template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 mailbox inbox template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 mailbox inbox template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 mailbox inbox template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 maintenance template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `maintenance.html` hits are stale queued template links.
+- Phase 11 maintenance template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 maintenance template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 maintenance template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 maintenance template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 maintenance template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 maintenance template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 maintenance template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 modals template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `modals.html` hits are stale queued template links.
+- Phase 11 modals template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 modals template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 modals template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 modals template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 modals template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 modals template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 modals template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 notes template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `notes.html` hits are stale queued template links.
+- Phase 11 notes template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 notes template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 notes template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 notes template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 notes template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 notes template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 notes template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 base/DFIA template dependency scan: no live render, TemplateResponse, template_name, template-loader, include, URLConf, command, test, frontend runtime, or third-party runtime path remained; only stale `blank.html` links in queued DAdmin templates remain.
+- Phase 11 base/DFIA template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 base/DFIA template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 base/DFIA template py_compile/compileall: scoped route/settings/test files -> passed.
+- Phase 11 base/DFIA template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 base/DFIA template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 base/DFIA template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 buttons template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; only stale `buttons.html` links in queued DAdmin templates remain.
+- Phase 11 buttons template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+- Phase 11 buttons template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 buttons template py_compile/compileall: scoped route/settings/test files -> passed.
+- Phase 11 buttons template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 buttons template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Phase 11 buttons template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 8 BOE ICEGATE helper regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q -> 6 passed
+- Phase 8 BOE ICEGATE helper Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> clean
+- Phase 8 BOE ICEGATE helper py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed
+- Phase 8 BOE ICEGATE helper compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py -> passed
+- Phase 8 BOE ICEGATE helper Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE ICEGATE helper makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE generate_tl dependency scan: runtime reference scan excluding docs/audit -> no results
+- Phase 8 BOE generate_tl regression: .venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py backend/tests/test_api_boe.py -q -> 18 passed
+- Phase 8 BOE generate_tl Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts docs/operations/PURCHASE_STATUS_FK_MIGRATION.md -> clean
+- Phase 8 BOE generate_tl py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/__init__.py backend/apps/bill_of_entry/scripts/boe.py backend/apps/bill_of_entry/scripts/utils.py -> passed
+- Phase 8 BOE generate_tl compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts -> passed
+- Phase 8 BOE generate_tl Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE generate_tl makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE port dictionary dependency scan: port_dict is imported only by backend/apps/bill_of_entry/views/fetch_views.py and passed to fetch_data_to_model
+- Phase 8 BOE port dictionary Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/scripts/utils.py -> clean
+- Phase 8 BOE port dictionary py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/utils.py backend/apps/bill_of_entry/views/fetch_views.py -> passed
+- Phase 8 BOE port dictionary compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/utils.py backend/apps/bill_of_entry/views/fetch_views.py -> passed
+- Phase 8 BOE port dictionary regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
+- Phase 8 BOE port dictionary Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE port dictionary makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE tasks dependency scan: no runtime task callers; only historical removed-import comment remains
+- Phase 8 BOE tasks scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/scripts backend/tests/test_api_boe.py -> clean
+- Phase 8 BOE tasks py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/models.py backend/apps/bill_of_entry/views/fetch_views.py backend/apps/bill_of_entry/scripts/utils.py -> passed
+- Phase 8 BOE tasks compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed
+- Phase 8 BOE tasks regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
+- Phase 8 BOE tasks Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE tasks makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE legacy template dependency scan: no active render(), render_to_response(), TemplateResponse, generic/class-based view, include, extends, custom/inclusion tag, email/PDF/report/export, command, test, URL, middleware, signal, dynamic import, cached path, third-party, or runtime loader references found for deleted templates/views; remaining hits are stale legacy nav URL tags and audit/docs history only.
+- Phase 8 BOE legacy template deletion scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/views/__init__.py backend/apps/bill_of_entry/views/boe.py backend/apps/bill_of_entry/views/parse_pdf.py backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md -> clean
+- Phase 8 BOE legacy template deletion py_compile: remaining BOE views passed py_compile
+- Phase 8 BOE legacy template deletion compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed
+- Phase 8 BOE legacy template deletion regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q -> 18 passed
+- Phase 8 BOE legacy template deletion Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE legacy template deletion makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE legacy template deletion commit: 0d42a515b6349520b665ad388f49fe92a78d45bc at 2026-07-16T17:17:06+05:30, cleanup(bill_of_entry): remove dead legacy template views
+- Phase 8 BOE tests.py dependency scan: no runtime imports or active references; remaining references before metadata update were audit docs/database only
+- Phase 8 BOE tests.py scoped Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py backend/tests/test_api_boe.py -> clean
+- Phase 8 BOE tests.py py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py -> passed
+- Phase 8 BOE tests.py compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry -> passed
+- Phase 8 BOE tests.py regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q -> 18 passed
+- Phase 8 BOE tests.py Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 8 BOE tests.py makemigrations check: .venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 8 BOE tests.py commit: 07cc55e742f061e66643eb02034f7c9078531b4c at 2026-07-16T17:27:18+05:30, cleanup(bill_of_entry): remove empty test stub
+- Phase 9 inventory char_license_list_balance dependency scan: excluding audit and legacy indexes, only self-references existed before deletion; no imports, CI hooks, commands, docs guide workflow, tests, or runtime callers found
+- Phase 9 inventory char_license_list_balance broad Ruff blocker: ruff check backend/scripts backend/apps/license/tests/test_balance_calculator.py is blocked by pre-existing findings in queued scripts test_balance_calc.py, test_crud_balance_updates.py, and verify_e5_plan.py
+- Phase 9 inventory char_license_list_balance scoped Ruff: .venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py backend/scripts/golden_master_balance_exporters.py -> clean
+- Phase 9 inventory char_license_list_balance py_compile: .venv/bin/python -m py_compile backend/scripts/golden_master_balance_exporters.py backend/scripts/test_balance_calc.py backend/apps/license/tests/test_balance_calculator.py -> passed
+- Phase 9 inventory char_license_list_balance compileall: .venv/bin/python -m compileall -q backend/scripts -> passed
+- Phase 9 inventory char_license_list_balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q -> 30 passed
+- Phase 9 inventory char_license_list_balance Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 inventory char_license_list_balance makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 inventory char_license_list_balance commit: 1d7fb0713b09b25b7375f749c076a43b4734a9f0 at 2026-07-16T17:40:25+05:30, cleanup(inventory): remove stale balance probe
+- Phase 9 inventory test_balance_calc dependency scan: no live imports or runtime callers; remaining references are historical planning docs only
+- Phase 9 inventory test_balance_calc scoped Ruff: .venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py -> clean
+- Phase 9 inventory test_balance_calc py_compile: .venv/bin/python -m py_compile backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py -> passed
+- Phase 9 inventory test_balance_calc compileall: .venv/bin/python -m compileall -q backend/scripts backend/apps/license/tests/test_balance_calculator.py backend/apps/license/services/balance_calculator.py -> passed
+- Phase 9 inventory test_balance_calc regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q -> 30 passed
+- Phase 9 inventory test_balance_calc Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 inventory test_balance_calc makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 inventory test_balance_calc commit: 8058036a1a16d037cdd27c99ba2a26e81d7ba395 at 2026-07-16T17:42:58+05:30, cleanup(inventory): remove stale balance test script
+- Phase 9 balance architecture dependency scan: document remains live through docs/README.md and historical planning references; retained and updated rather than deleted
+- Phase 9 balance architecture stale-marker scan: removed obsolete host, duckdns, debug_balance, old commit IDs, old version branch, and obsolete backend/license path references
+- Phase 9 balance architecture Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py -> clean
+- Phase 9 balance architecture py_compile: .venv/bin/python -m py_compile backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py backend/tests/test_api_license.py -> passed
+- Phase 9 balance architecture compileall: .venv/bin/python -m compileall -q scoped balance service/command/test files -> passed
+- Phase 9 balance architecture regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed
+- Phase 9 balance architecture Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 balance architecture makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 balance architecture commit: a6246911dab2fcf96053f3e5b87dc6f92a93e74d at 2026-07-16T17:50:32+05:30, docs(inventory): update balance architecture guide
+- Phase 9 LicenseBalanceModal dependency scan: live imports found in frontend/src/pages/masters/MasterList.tsx and frontend/src/pages/masters/MasterForm.tsx; retained and hardened rather than deleted
+- Phase 9 LicenseBalanceModal regression: npm test -- LicenseBalanceModal.test.tsx -> 6 passed
+- Phase 9 LicenseBalanceModal TypeScript: npm run typecheck -> passed
+- Phase 9 LicenseBalanceModal ESLint: npm run lint -- --quiet src/components/LicenseBalanceModal.tsx src/components/LicenseBalanceModal.test.tsx -> clean
+- Phase 9 LicenseBalanceModal React build: npm run build -> passed
+- Phase 9 LicenseBalanceModal backend balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed
+- Phase 9 LicenseBalanceModal Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean
+- Phase 9 LicenseBalanceModal py_compile and compileall scoped balance service/command/test files -> passed
+- Phase 9 LicenseBalanceModal Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 LicenseBalanceModal makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 LicenseBalanceModal security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 9 LicenseBalanceModal commit: e9a690e24c02dd80960299e2e213b3b879e77c38 at 2026-07-16T17:55:39+05:30, fix(inventory): harden license balance modal
+- Phase 9 completion query: jq inventory|balance NOT_STARTED/REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
+- Phase 9 freeze recovery point: 3c18e899a67b024418137ed7f8232694751715b3 at 2026-07-17T10:47:20+05:30, docs(audit): record license balance modal audit
+- Phase 9 allocation helper dependency scan: no live `AllotmentAllocationModal`, `allocationCalculator`, `allocationCalculatorDefault`, `validateAllocation`, or `formatAllocationSummary` references remained outside the removed files
+- Phase 9 allocation helper dependency scan: remaining `calculateMaxAllocation` references are the active local helper inside `frontend/src/pages/AllotmentAction.tsx`
+- Phase 9 allocation helper TypeScript: npm run typecheck -> passed
+- Phase 9 allocation helper ESLint: npm run lint -- --quiet src/services/calculators/index.js src/pages/AllotmentAction.tsx src/components/TransferLetterModal.tsx -> clean
+- Phase 9 allocation helper React build: npm run build -> passed
+- Phase 9 allocation helper backend balance regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -q -> 36 passed
+- Phase 9 allocation helper Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean
+- Phase 9 allocation helper py_compile and compileall scoped balance service/command/test files -> passed
+- Phase 9 allocation helper Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 9 allocation helper makemigrations check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 9 allocation helper security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 9 allocation helper commit: b36a90c3aaf436ca025ebe3f4c5f4c0fbe00db6e at 2026-07-17T12:08:27+05:30, cleanup(inventory): remove dead allocation helpers
+- Phase 10 report/export completion query: jq report|export|pdf|excel|csv|ledger NOT_STARTED/REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
+- Phase 10 freeze recovery point: 919f53d1f8273eaf59e8e5d70b98593c4b86b6f3 at 2026-07-17T10:49:18+05:30, docs(audit): freeze inventory phase
+- Phase 10 recovery query: report/export/PDF/Excel/CSV/ledger NOT_STARTED or REQUIRES_RECHECK over docs/audit/audit-database.json -> zero rows
+- Phase 10 recovery Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 10 recovery makemigrations check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 10 recovery py_compile/compileall: scoped representative report/export backend files and directories -> passed
+- Phase 10 recovery Ruff: broad mixed-language report/export verification blocked by pre-existing frozen-module F401 findings and frontend TS/JS paths being parsed as Python
+- Phase 10 recovery security tooling check: .venv/bin contains no bandit, semgrep, pip-audit, or safety executable -> blocked
+- Phase 10 recovery point before metadata confirmation: 0d2e7faa16aa49362351de4e7917c14af8e93dff at 2026-07-17T12:10:25+05:30, docs(audit): record allocation helper recheck
+- Phase 2 non-Trade permission cleanup tests: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 12 passed
+- Phase 2 non-Trade permission cleanup Ruff: .venv/bin/ruff check backend/apps/license/views/parse_pdf.py backend/apps/license/views/item_plan.py backend/apps/license/views_incentive.py backend/apps/license/views/inventory_balance_viewset.py backend/apps/core/views/health.py --select F821,F811,E741,F841,F401 -> clean
+- Phase 2 direct report authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 20 passed
+- Phase 2 direct report authorization Ruff: .venv/bin/ruff check backend/apps/license/views/active_licenses_report.py backend/apps/license/views/expiring_licenses_report.py backend/apps/license/views/inventory_balance_report.py backend/apps/license/views/item_pivot_report.py backend/apps/license/views/item_report.py backend/tests/test_authorization_permissions.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 2 constrained Trade authorization regression: .venv/bin/python -m pytest backend/tests/test_authorization_permissions.py backend/tests/test_api_trade.py -q -> 19 passed
+- Phase 2 constrained Trade authorization Ruff: .venv/bin/ruff check backend/apps/trade/views.py backend/tests/test_authorization_permissions.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 2 frontend command/dashboard authorization tests: npm test -- --run src/components/CommandPalette.test.tsx src/components/TopNav.test.tsx -> 4 passed
+- Phase 2 frontend command/dashboard typecheck: npm run typecheck -> passed
+- Phase 2 frontend command/dashboard lint: npm run lint -> passed
+- Phase 2 frontend command/dashboard dependency security audit: npm audit --audit-level=high -> 0 vulnerabilities
+- Focused backend account tests after admin password validation and migrate_auth fixes: .venv/bin/python -m pytest backend/apps/accounts/tests.py -q -> 7 passed
+- Targeted backend auth management Ruff: .venv/bin/ruff check backend/apps/accounts/tests.py backend/apps/accounts/management/commands/migrate_auth.py backend/apps/accounts/management/commands/check_user_roles.py backend/apps/accounts/serializers.py backend/apps/accounts/views/user_management.py --select F821,F811,E741,F841,F401 -> clean
+- Focused frontend login auth tests: npm test -- --run src/pages/Login.test.tsx -> 2 passed
+- Frontend typecheck after login/reset routing: npm run typecheck -> passed
+- Frontend lint after login/reset routing: npm run lint -> passed
+- Focused MDS auth/config tests: ../.venv/bin/python -m pytest masters/tests/test_api.py::TestAuth masters/tests/test_fk_serialization.py -q -> 9 passed
+- Focused mds-client auth/config tests: ../.venv/bin/python -m pytest tests/test_client.py -q -> 15 passed
+- Targeted MDS auth/config Ruff: ../.venv/bin/ruff check masters/auth.py masters/tests/test_api.py masters/tests/test_fk_serialization.py mds/settings.py --select F821,F811,E741,F841,F401 -> clean
+- Targeted mds-client auth/config Ruff: ../.venv/bin/ruff check mds_client/client.py mds_client/settings.py tests/test_client.py tests/support.py --select F821,F811,E741,F841,F401 -> clean
+- E2E API auth smoke tests: .venv/bin/python -m pytest tests/e2e/test_api_smoke.py::test_login_returns_token tests/e2e/test_api_smoke.py::test_login_no_redirect_in_dev -q -> 2 passed
+- E2E Selenium auth smoke module: .venv/bin/python -m pytest tests/e2e/test_pages_selenium.py -q -> skipped because selenium is not installed in this environment
+- Targeted e2e auth Ruff: .venv/bin/ruff check tests/e2e/conftest.py tests/e2e/test_api_smoke.py tests/e2e/test_pages_selenium.py --select F821,F811,E741,F841,F401 -> clean
+- Focused backend authentication API tests: .venv/bin/python -m pytest backend/apps/accounts/tests.py backend/tests/test_authentication_query_param.py backend/tests/test_all_conditions.py::TestAuthentication -q -> 16 passed
+- Targeted backend authentication Ruff: .venv/bin/ruff check backend/apps/accounts/views/auth.py backend/apps/accounts/tests.py backend/apps/core/authentication.py backend/tests/test_authentication_query_param.py --select F821,F811,E741,F841,F401 -> clean
+- Focused MDS authentication tests: ../.venv/bin/python -m pytest masters/tests/test_api.py::TestAuth -q -> 5 passed
+- Targeted MDS authentication Ruff: ../.venv/bin/ruff check masters/auth.py masters/tests/test_api.py --select F821,F811,E741,F841,F401 -> clean
+- Focused frontend AuthContext tests: npm test -- --run src/test/useAuth.test.tsx -> 11 passed
+- Frontend typecheck after AuthContext hardening: npm run typecheck -> passed
+- Frontend lint after AuthContext hardening: npm run lint -> passed
+- Frontend TradeForm smoke coverage: npm test -- --run src/pages/TradeForm.smoke.test.tsx -> 2 passed
+- Frontend unit tests after TradeForm smoke coverage: npm test -- --run -> 56 passed
+- Frontend typecheck after TradeForm smoke coverage: npm run typecheck -> passed
+- Frontend lint after TradeForm smoke coverage: npm run lint -> passed
+- Frontend TradeForm helper focused tests: npm test -- --run src/pages/tradeFormHelpers.test.ts src/pages/TradeForm.smoke.test.tsx -> 7 passed
+- Frontend unit tests after TradeForm payload helper extraction: npm test -- --run -> 61 passed
+- Frontend typecheck after TradeForm payload helper extraction: npm run typecheck -> passed
+- Frontend lint after TradeForm payload helper extraction: npm run lint -> passed
+- Frontend MasterForm API helper focused tests: npm test -- --run src/pages/masters/masterFormHelpers.test.ts src/pages/masters/MasterForm.smoke.test.tsx -> 10 passed
+- Frontend unit tests after MasterForm API helper extraction: npm test -- --run -> 54 passed
+- Frontend typecheck after MasterForm API helper extraction: npm run typecheck -> passed
+- Frontend lint after MasterForm API helper extraction: npm run lint -> passed
+- Frontend MasterList generic card extraction smoke coverage: npm test -- --run src/pages/masters/MasterList.smoke.test.tsx -> 5 passed
+- Frontend unit tests after GenericMasterCards extraction: npm test -- --run -> 46 passed
+- Frontend typecheck after GenericMasterCards extraction: npm run typecheck -> passed
+- Frontend lint after GenericMasterCards extraction: npm run lint -> passed
+- Frontend MasterForm smoke coverage: npm test -- --run src/pages/masters/MasterForm.smoke.test.tsx -> 2 passed
+- Frontend unit tests after MasterForm smoke coverage: npm test -- --run -> 45 passed
+- Frontend typecheck after MasterForm smoke coverage: npm run typecheck -> passed
+- Frontend lint after MasterForm smoke coverage: npm run lint -> passed
+- Backend fast suite after Excel coverage: ./scripts/testing/run-tests.sh --fast -> 171 passed
+- Focused license Excel coverage: .venv/bin/python -m pytest backend/tests/test_api_license.py -q -> 11 passed
+- Targeted license API Ruff: .venv/bin/ruff check backend/tests/test_api_license.py --select F821,F811,E741,F841 -> clean
+- Frontend unit tests after bundle split: npm test -- --run -> 43 passed
+- Frontend typecheck after bundle split: npm run typecheck -> passed
+- Frontend lint after bundle split: npm run lint -> passed
+- Frontend build after bundle split: npm run build -> startup preloads reduced from route-wide app-components to shell/vendor chunks; Excel/PDF chunks no longer preloaded by index.html
+- Backend fast suite after CSRF/upload hardening: ./scripts/testing/run-tests.sh --fast -> 169 passed
+- Focused upload/auth regressions: .venv/bin/python -m pytest backend/tests/test_ledger_parser.py backend/tests/test_authentication_query_param.py -q -> 9 passed
+- Targeted upload CSRF Ruff: .venv/bin/ruff check backend/apps/core/middleware.py backend/apps/license/views/ledger_upload.py backend/tests/test_ledger_parser.py --select F821,F811,E741,F841 -> clean
+- Focused auth regressions: .venv/bin/python -m pytest backend/tests/test_authentication_query_param.py backend/tests/test_all_conditions.py::TestAuthentication -q -> 13 passed
+- Targeted auth Ruff: .venv/bin/ruff check backend/apps/core/authentication.py backend/tests/test_authentication_query_param.py --select F821,F811,E741,F841 -> clean
+- Targeted Ruff: .venv/bin/ruff check backend mds-client master-data-service scripts tests --select F841 -> clean
+- Backend fast suite after F841 pass: ./scripts/testing/run-tests.sh --fast -> 164 passed
+- Targeted Ruff: .venv/bin/ruff check backend mds-client master-data-service scripts tests --select F811,E741 -> clean
+- Focused backend regressions: .venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_api_license.py backend/apps/license/tests/test_license_group_data.py -q -> 17 passed
+- Syntax check: python3 -m py_compile on F811/E741-touched modules -> passed
+- Focused license API regression: .venv/bin/python -m pytest backend/tests/test_api_license.py -q -> 9 passed
+- Syntax check: python3 -m py_compile backend/apps/core/management/commands/sync_from_ge_server.py backend/apps/license/views_actions.py docs/audit/build_audit_state.py -> passed
+- Backend fast suite: ./scripts/testing/run-tests.sh --fast -> 163 passed
+- Frontend lint: npm run lint -> passed
+- Frontend typecheck: npm run typecheck -> passed
+- Frontend unit tests: npm test -- --run -> 43 passed
+- Frontend dependency audit: npm audit --audit-level=high -> 0 vulnerabilities
+- Frontend build: npm run build -> passed
+- MDS client tests: ../.venv/bin/python -m pytest tests -q -> 30 passed
+- Master data service tests: ../.venv/bin/python -m pytest masters/tests -q -> 22 passed
+- Phase 3 frontend Users regression: npm test -- --run src/pages/admin/UserForm.test.tsx src/pages/admin/UserList.test.tsx -> 3 passed
+- Phase 3 frontend Users typecheck: npm run typecheck -> passed
+- Phase 3 frontend Users lint: npm run lint -> passed
+- Phase 3 backend Users/accounts regression: .venv/bin/python -m pytest backend/apps/accounts/tests.py -q -> 9 passed
+- Phase 3 targeted Users Ruff: .venv/bin/ruff check backend/apps/accounts/tests.py backend/apps/accounts/serializers.py backend/apps/accounts/views/user_management.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 3 frontend Users dependency security audit: npm audit --audit-level=high -> 0 vulnerabilities
+- Phase 4 RBAC documentation stale-reference scan: rg api/accounts, role_ids, reset_password, available_roles, custom Role references in RBAC/API/security docs -> clean except intentional get_role_codes helper references
+- Phase 5 MDS package tests: ../.venv/bin/python -m pytest masters/tests -q -> 25 passed
+- Phase 5 MDS targeted Ruff: ../.venv/bin/ruff check masters/views.py masters/signals.py masters/management/commands/load_masters.py masters/tests --select F401,F821,F811,E741,F841,S324 -> clean
+- Phase 5 MDS deploy script syntax: bash -n deploy/deploy-mds.sh -> passed
+- Phase 5 MDS Python compile: ../.venv/bin/python -m py_compile manage.py mds/asgi.py mds/wsgi.py mds/urls.py mds/settings.py masters/admin.py masters/apps.py masters/models.py masters/pagination.py masters/serializers.py masters/signals.py masters/urls.py masters/views.py masters/management/commands/load_masters.py -> passed
+- Phase 5 mds-client tests: ../.venv/bin/python -m pytest tests -q -> 32 passed
+- Phase 5 mds-client targeted Ruff: ../.venv/bin/ruff check mds_client tests runtests.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 5 mds-client Python compile: ../.venv/bin/python -m py_compile runtests.py mds_client/__init__.py mds_client/admin.py mds_client/apps.py mds_client/client.py mds_client/keys.py mds_client/management/commands/mds_sync.py mds_client/model_map.py mds_client/models.py mds_client/settings.py mds_client/sync.py mds_client/tasks.py tests/conftest.py tests/settings.py tests/mirror_app/apps.py tests/mirror_app/models.py tests/test_sync.py -> passed
+- Phase 5 backend core scaffolding Ruff: .venv/bin/ruff check backend/apps/core/__init__.py backend/apps/core/apps.py backend/apps/core/constants.py backend/apps/core/serializers/__init__.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 5 backend core scaffolding compile: .venv/bin/python -m py_compile backend/apps/core/__init__.py backend/apps/core/apps.py backend/apps/core/constants.py backend/apps/core/serializers/__init__.py -> passed
+- Phase 5 backend core models Ruff: .venv/bin/ruff check backend/apps/core/models.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 5 backend core models compile: .venv/bin/python -m py_compile backend/apps/core/models.py -> passed
+- Phase 5 backend core models migrations check: ../.venv/bin/python manage.py makemigrations core --check --dry-run -> no changes detected; DB connection warning only
+- Phase 5 backend core models regression: .venv/bin/python -m pytest backend/apps/core/tests/test_keyless_uid.py backend/apps/core/tests/test_mds_write_cutover.py backend/tests/test_export_masters_mds.py -q -> 25 passed
+- Phase 5 backend core models dependency audit: .venv/bin/python -m pip_audit -r backend/requirements.txt -> blocked; pip_audit is not installed
+- Phase 5 backend core Managers/QuerySets search: rg Manager/QuerySet/objects/as_manager in backend/apps/core -> no custom managers or querysets found
+- Phase 5 backend core serializers Ruff: .venv/bin/ruff check backend/apps/core/serializers/models.py backend/apps/core/serializers/mixins.py --select F401,F821,F811,E741,F841,UP035,UP006 -> clean
+- Phase 5 backend core serializers compile: .venv/bin/python -m py_compile backend/apps/core/serializers/models.py backend/apps/core/serializers/mixins.py -> passed
+- Phase 5 backend core serializers regression: .venv/bin/python -m pytest backend/tests/test_api_core.py backend/apps/core/tests/test_mds_write_cutover.py -q -> 20 passed
+- Phase 5 backend core services Ruff: .venv/bin/ruff check backend/apps/core/mds_payload.py backend/apps/core/mds_write.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045 -> clean
+- Phase 5 backend core services compile: .venv/bin/python -m py_compile backend/apps/core/mds_payload.py backend/apps/core/mds_write.py -> passed
+- Phase 5 backend core services regression: .venv/bin/python -m pytest backend/apps/core/tests/test_mds_write_cutover.py backend/tests/test_export_masters_mds.py -q -> 20 passed
+- Phase 5 backend core ViewSets Ruff: .venv/bin/ruff check backend/apps/core/views/views.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045 -> clean
+- Phase 5 backend core ViewSets compile: .venv/bin/python -m py_compile backend/apps/core/views/views.py -> passed
+- Phase 5 backend core ViewSets regression: .venv/bin/python -m pytest backend/tests/test_api_core.py backend/apps/core/tests/test_mds_write_cutover.py backend/tests/test_url_routing.py -q -> 34 passed
+- Phase 5 backend core Views Ruff: .venv/bin/ruff check backend/apps/core/views/__init__.py backend/apps/core/views/views.py --select F401,F821,F811,E741,F841 -> clean
+- Phase 5 backend core Views compile: .venv/bin/python -m py_compile backend/apps/core/views/__init__.py backend/apps/core/views/views.py -> passed
+- Phase 5 backend core Views regression: .venv/bin/python -m pytest backend/tests/test_url_routing.py backend/tests/test_api_core.py -q -> 23 passed
+- Phase 5 backend core Signals Ruff: .venv/bin/ruff check backend/apps/core/signals_materialized_views.py backend/apps/core/cache_signals.py backend/apps/core/tests/test_cache_signals.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core Signals compile: .venv/bin/python -m py_compile backend/apps/core/signals_materialized_views.py backend/apps/core/cache_signals.py backend/apps/core/tests/test_cache_signals.py -> passed
+- Phase 5 backend core Signals regression: ../.venv/bin/python -m pytest apps/core/tests/test_cache_signals.py apps/core/tests/test_mds_write_cutover.py -q -> 12 passed
+- Phase 5 backend core Cache Ruff: .venv/bin/ruff check backend/apps/core/cache_utils.py backend/apps/core/cached_views.py backend/apps/core/tests/test_cache_utils.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,S324,B904,B007 -> clean
+- Phase 5 backend core Cache compile: .venv/bin/python -m py_compile backend/apps/core/cache_utils.py backend/apps/core/cached_views.py backend/apps/core/tests/test_cache_utils.py -> passed
+- Phase 5 backend core Cache regression: ../.venv/bin/python -m pytest apps/core/tests/test_cache_utils.py apps/core/tests/test_cache_signals.py -q -> 5 passed
+- Phase 5 backend core Middleware Ruff: .venv/bin/ruff check backend/apps/core/middleware.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core Middleware compile: .venv/bin/python -m py_compile backend/apps/core/middleware.py -> passed
+- Phase 5 backend core Middleware regression: ../.venv/bin/python -m pytest tests/test_authentication_query_param.py -q -> 3 passed
+- Phase 5 backend core Utilities date/decimal Ruff: .venv/bin/ruff check backend/apps/core/utils/date_utils.py backend/apps/core/utils/decimal_utils.py backend/apps/core/utils/exceptions.py backend/apps/core/utils/__init__.py backend/apps/core/tests/test_date_utils.py backend/apps/core/tests/test_decimal_utils.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core Utilities date/decimal compile: .venv/bin/python -m py_compile backend/apps/core/utils/date_utils.py backend/apps/core/utils/decimal_utils.py backend/apps/core/utils/exceptions.py backend/apps/core/utils/__init__.py backend/apps/core/tests/test_date_utils.py backend/apps/core/tests/test_decimal_utils.py -> passed
+- Phase 5 backend core Utilities date/decimal regression: ../.venv/bin/python -m pytest apps/core/tests/test_date_utils.py apps/core/tests/test_decimal_utils.py -q -> 110 passed
+- Phase 5 backend core Utilities filter/pagination/throttling Ruff: .venv/bin/ruff check backend/apps/core/filters.py backend/apps/core/filtersets.py backend/apps/core/pagination.py backend/apps/core/throttling.py backend/apps/core/helpers.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core Utilities filter/pagination/throttling compile: .venv/bin/python -m py_compile backend/apps/core/filters.py backend/apps/core/filtersets.py backend/apps/core/pagination.py backend/apps/core/throttling.py backend/apps/core/helpers.py -> passed
+- Phase 5 backend core Utilities filter/pagination/throttling regression: ../.venv/bin/python -m pytest tests/test_api_core.py tests/test_api_license.py tests/test_api_boe.py apps/core/tests/test_mds_write_cutover.py -q -> 38 passed
+- Phase 5 backend core Utilities PDF Ruff: .venv/bin/ruff check backend/apps/core/utils/pdf_helpers.py backend/apps/core/utils/pdf_utils.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core Utilities PDF compile: .venv/bin/python -m py_compile backend/apps/core/utils/pdf_helpers.py backend/apps/core/utils/pdf_utils.py -> passed
+- Phase 5 backend core Utilities PDF regression: ../.venv/bin/python -m pytest tests/test_api_boe.py tests/test_api_license.py tests/test_api_allotment.py -q -> 25 passed
+- Phase 5 backend core Exporters Ruff: .venv/bin/ruff check backend/apps/core/exporters --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core Exporters compile: .venv/bin/python -m py_compile backend/apps/core/exporters/__init__.py backend/apps/core/exporters/base.py backend/apps/core/exporters/excel/__init__.py backend/apps/core/exporters/excel/base_excel.py backend/apps/core/exporters/excel/workbook_builder.py backend/apps/core/exporters/pdf/__init__.py backend/apps/core/exporters/pdf/base_pdf.py backend/apps/core/exporters/pdf/styles.py backend/apps/core/exporters/pdf/table_builder.py -> passed
+- Phase 5 backend core Exporters smoke: ../.venv/bin/python import/build smoke for Excel/PDF exporter helpers -> passed
+- Phase 5 backend core Exporters regression: ../.venv/bin/python -m pytest tests/test_api_core.py tests/test_api_license.py tests/test_api_boe.py apps/core/tests/test_mds_write_cutover.py -q -> 38 passed
+- Phase 5 backend core materialized-view utilities Ruff: .venv/bin/ruff check backend/apps/core/materialized_views.py backend/apps/core/tasks.py backend/apps/core/tasks_materialized_views.py backend/apps/core/templatetags/core_tag.py backend/apps/core/tests/test_materialized_views.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core materialized-view utilities compile: .venv/bin/python -m py_compile backend/apps/core/materialized_views.py backend/apps/core/tasks.py backend/apps/core/tasks_materialized_views.py backend/apps/core/templatetags/core_tag.py backend/apps/core/tests/test_materialized_views.py -> passed
+- Phase 5 backend core materialized-view utilities focused tests: ../.venv/bin/python -m pytest apps/core/tests/test_materialized_views.py -q -> 3 passed
+- Phase 5 backend core materialized-view utilities regression: ../.venv/bin/python -m pytest apps/core/tests/test_materialized_views.py apps/core/tests/test_cache_signals.py apps/core/tests/test_mds_write_cutover.py tests/test_api_core.py -q -> 24 passed
+- Phase 5 backend core templates Django check: ../.venv/bin/python manage.py check -> no issues
+- Phase 5 backend core templates regression: ../.venv/bin/python -m pytest tests/test_url_routing.py tests/test_api_core.py -q -> 23 passed
+- Phase 5 backend core templates duplicate script check: rg js/django_select2.js backend/apps/core/templates/core/list.html -> one include remains
+- Phase 5 backend core management commands batch 1 Ruff: .venv/bin/ruff check audit_database_integrity.py audit_masters.py auto_import_masters.py cache_stats.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core management commands batch 1 compile: .venv/bin/python -m py_compile audit_database_integrity.py audit_masters.py auto_import_masters.py cache_stats.py -> passed
+- Phase 5 backend core management commands batch 1 help checks: manage.py audit_database_integrity/audit_masters/auto_import_masters/cache_stats --help -> passed
+- Phase 5 backend core management commands batch 1 regression: ../.venv/bin/python -m pytest apps/core/tests/test_materialized_views.py tests/test_api_core.py -q -> 12 passed
+- Phase 5 backend core management commands batch 2 Ruff: .venv/bin/ruff check check_db_structure.py check_master_quality.py clean_duplicate_rowdetails.py clean_item_names.py clearcache.py convert_docx_to_pdf.py convert_license_table.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core management commands batch 2 compile: .venv/bin/python -m py_compile check_db_structure.py check_master_quality.py clean_duplicate_rowdetails.py clean_item_names.py clearcache.py convert_docx_to_pdf.py convert_license_table.py -> passed
+- Phase 5 backend core management commands batch 2 help checks: manage.py check_db_structure/convert_docx_to_pdf/check_master_quality/clean_item_names/clearcache/clean_duplicate_rowdetails --help -> passed
+- Phase 5 backend core management commands batch 2 regression: ../.venv/bin/python -m pytest apps/core/tests/test_check_master_quality.py -q -> 4 passed, 1 skipped
+- Phase 5 backend core management commands batch 3 Ruff: .venv/bin/ruff check diff_masters.py export_masters_mds.py fetch_detail_conf.py fetch_exchange_rates.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core management commands batch 3 compile: .venv/bin/python -m py_compile diff_masters.py export_masters_mds.py fetch_detail_conf.py fetch_exchange_rates.py -> passed
+- Phase 5 backend core management commands batch 3 help checks: manage.py diff_masters/export_masters_mds/fetch_detail_conf/fetch_exchange_rates --help -> passed
+- Phase 5 backend core management commands batch 3 regression: ../.venv/bin/python -m pytest tests/test_export_masters_mds.py apps/core/tests/test_mds_write_cutover.py -q -> 20 passed
+- Phase 5 backend core management commands batch 4 Ruff: .venv/bin/ruff check merge_masters.py rebuild_migrations.py reconcile_masters.py refresh_materialized_views.py reset_migration_history.py rqworker.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core management commands batch 4 compile: .venv/bin/python -m py_compile merge_masters.py rebuild_migrations.py reconcile_masters.py refresh_materialized_views.py reset_migration_history.py rqworker.py -> passed
+- Phase 5 backend core management commands batch 4 help checks: manage.py merge_masters/rebuild_migrations/reconcile_masters/refresh_materialized_views/reset_migration_history/rqworker --help -> passed
+- Phase 5 backend core management commands batch 4 regression: ../.venv/bin/python -m pytest apps/core/tests/test_reconcile_masters.py apps/core/tests/test_materialized_views.py -q -> 19 passed
+- Phase 5 backend core management commands batch 5 Ruff: .venv/bin/ruff check seed_e132_plan_items.py sync_database_schema.py update_aluminium_foil_items.py update_dgft_descriptions.py update_sugar_items.py validate_db_fields.py _item_linking.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core management commands batch 5 compile: .venv/bin/python -m py_compile seed_e132_plan_items.py sync_database_schema.py update_aluminium_foil_items.py update_dgft_descriptions.py update_sugar_items.py validate_db_fields.py _item_linking.py -> passed
+- Phase 5 backend core management commands batch 5 help checks: manage.py seed_e132_plan_items/sync_database_schema/update_aluminium_foil_items/update_dgft_descriptions/update_sugar_items/validate_db_fields --help -> passed
+- Phase 5 backend core management commands batch 5 regression: ../.venv/bin/python -m pytest apps/license/tests/test_e132_plan.py tests/test_api_core.py apps/core/tests/test_mds_write_cutover.py -q -> 78 passed
+- Phase 5 backend core scripts obsolete-reference scan: rg aro_letters/core.scripts.script/scripts.script/core.scripts.sion/request_sion_heads/render_to_pdf in backend docs tests -> no live references outside generated audit state
+- Phase 5 backend core remaining scripts compile: python3 -m py_compile backend/apps/core/scripts/__init__.py calculate_balance.py calculation.py company_names.py ledger.py license_script.py -> passed
+- Phase 5 backend core scripts regression: ../.venv/bin/python -m pytest tests/test_api_core.py apps/core/tests/test_mds_write_cutover.py -q -> 20 passed
+- Phase 5 backend core migrations Ruff: .venv/bin/ruff check backend/apps/core/migrations --select F401,F821,F811,E741,F841,B904,B007 -> clean
+- Phase 5 backend core migrations compile: .venv/bin/python -m py_compile backend/apps/core/migrations/*.py -> passed
+- Phase 5 backend core migrations check: ../.venv/bin/python manage.py makemigrations core --check --dry-run -> no changes detected; DB connection warning only
+- Phase 5 backend core migrations regression: ../.venv/bin/python -m pytest apps/core/tests/test_keyless_uid.py apps/license/tests/test_e132_plan.py -q -> 63 passed
+- Phase 5 backend core tests Ruff: .venv/bin/ruff check backend/apps/core/tests/__init__.py test_check_master_quality.py test_keyless_uid.py test_reconcile_masters.py test_validation.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend core tests compile: .venv/bin/python -m py_compile backend/apps/core/tests/__init__.py test_check_master_quality.py test_keyless_uid.py test_reconcile_masters.py test_validation.py -> passed
+- Phase 5 backend core tests regression: ../.venv/bin/python -m pytest apps/core/tests/test_check_master_quality.py apps/core/tests/test_keyless_uid.py apps/core/tests/test_reconcile_masters.py apps/core/tests/test_validation.py -q -> 109 passed, 1 skipped
+- Phase 5 frontend master display focused tests: npm test -- --run src/pages/masters/masterDisplayFormatters.test.ts src/pages/masters/masterListConfig.test.ts -> 8 passed
+- Phase 5 frontend master display lint: npm run lint -- src/pages/masters/masterDisplayFormatters.ts src/pages/masters/masterDisplayFormatters.test.ts src/pages/masters/BoeMergeModal.tsx src/pages/masters/LinkTradeModal.tsx src/pages/masters/tables/AllotmentsTable.tsx src/pages/masters/tables/IncentiveLicensesTable.tsx src/pages/masters/NestedFieldArray.tsx -> passed
+- Phase 5 frontend master display typecheck: npm run typecheck -> passed
+- Phase 5 frontend master display dependency audit: npm audit --audit-level=high -> 0 vulnerabilities
+- Phase 5 backend golden-master scripts Ruff: .venv/bin/ruff check backend/scripts/golden_master_balance_exporters.py backend/scripts/golden_master_ledger_pdf.py backend/tests/test_export_masters_mds.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 5 backend golden-master scripts compile: .venv/bin/python -m py_compile backend/scripts/golden_master_balance_exporters.py backend/scripts/golden_master_ledger_pdf.py backend/tests/test_export_masters_mds.py -> passed
+- Phase 5 backend golden-master ledger usage path: .venv/bin/python backend/scripts/golden_master_ledger_pdf.py -> usage printed without DB access, exit 2
+- Phase 5 backend MDS export focused regression: .venv/bin/python -m pytest backend/tests/test_export_masters_mds.py -q -> 9 passed
+- Phase 5 master-data shell scripts syntax: bash -n scripts/maintenance/_master_sync_lib.sh scripts/maintenance/apply-master-merge.sh scripts/maintenance/audit-and-diff-masters.sh scripts/maintenance/audit-and-merge-masters.sh scripts/maintenance/sync-masters.sh scripts/mds/_lib.sh scripts/mds/export-master-data.sh scripts/mds/load-master-data.sh scripts/mds/migrate-all-servers.sh scripts/mds/onboard-server.sh -> passed
+- Phase 5 MDS shell help paths: scripts/mds/export-master-data.sh --help and scripts/mds/onboard-server.sh --help -> clean header-only usage output
+- Phase 5 documentation stale path scan: rg old backend/core/frontend common/.jsx references in MDS/modularization docs -> only intentional stale-history note remains
+- Phase 6 invoice model Ruff: .venv/bin/ruff check backend/apps/license/models/invoice.py backend/apps/license/tests/test_invoice_models.py backend/apps/license/migrations/0011_harden_invoice_validation.py backend/apps/license/migrations/0012_enforce_invoice_non_negative_constraints.py -> clean
+- Phase 6 invoice model compile: .venv/bin/python -m py_compile backend/apps/license/models/invoice.py backend/apps/license/tests/test_invoice_models.py backend/apps/license/migrations/0011_harden_invoice_validation.py backend/apps/license/migrations/0012_enforce_invoice_non_negative_constraints.py -> passed
+- Phase 6 invoice model regression: .venv/bin/python -m pytest backend/apps/license/tests/test_invoice_models.py -q -> 19 passed
+- Phase 6 invoice model migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 invoice model Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 invoice model security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license balance Excel Ruff: .venv/bin/ruff check backend/apps/license/services/exporters/license_balance_excel.py backend/tests/test_api_license.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license balance Excel compile: .venv/bin/python -m py_compile backend/apps/license/services/exporters/license_balance_excel.py backend/tests/test_api_license.py -> passed
+- Phase 6 license balance Excel regression: .venv/bin/python -m pytest backend/tests/test_api_license.py -q -> 13 passed
+- Phase 6 license balance Excel Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license balance Excel migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license balance Excel security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 License tables Ruff: .venv/bin/ruff check backend/apps/license/tables.py backend/apps/license/tests/test_tables.py -> clean
+- Phase 6 License tables selected Ruff: .venv/bin/ruff check backend/apps/license/tables.py backend/apps/license/tests/test_tables.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 License tables compile: .venv/bin/python -m py_compile backend/apps/license/tables.py backend/apps/license/tests/test_tables.py -> passed
+- Phase 6 License tables regression: .venv/bin/python -m pytest backend/apps/license/tests/test_tables.py -q -> blocked/skipped; django_tables2 is not installed in .venv and is absent from backend/requirements*.txt, so pytest collected 0 runnable tests and returned exit code 5
+- Phase 6 License tables Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 License tables migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 License tables dependency check: importlib.util.find_spec('django_tables2') -> None; rg backend/requirements*.txt -> no declaration
+- Phase 6 License tables security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 balance calculator tests regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q -> 27 passed
+- Phase 6 balance calculator tests Ruff: .venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py -> clean
+- Phase 6 balance calculator tests selected Ruff: .venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 balance calculator tests compile: .venv/bin/python -m py_compile backend/apps/license/tests/test_balance_calculator.py -> passed
+- Phase 6 balance calculator tests Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 balance calculator tests migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 balance calculator tests security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 E132 planning tests regression: .venv/bin/python -m pytest backend/apps/license/tests/test_e132_plan.py -q -> 59 passed
+- Phase 6 E132 planning tests Ruff: .venv/bin/ruff check backend/apps/license/tests/test_e132_plan.py -> clean
+- Phase 6 E132 planning tests selected Ruff: .venv/bin/ruff check backend/apps/license/tests/test_e132_plan.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 E132 planning tests compile: .venv/bin/python -m py_compile backend/apps/license/tests/test_e132_plan.py -> passed
+- Phase 6 E132 planning tests Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 E132 planning tests migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 E132 planning tests security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 E5 planning tests regression: .venv/bin/python -m pytest backend/apps/license/tests/test_e5_plan.py -q -> 43 passed
+- Phase 6 E5 planning tests Ruff: .venv/bin/ruff check backend/apps/license/tests/test_e5_plan.py -> clean
+- Phase 6 E5 planning tests compile: .venv/bin/python -m py_compile backend/apps/license/tests/test_e5_plan.py -> passed
+- Phase 6 E5 planning tests Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 E5 planning tests migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 E5 planning tests security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 E1 planning tests regression: .venv/bin/python -m pytest backend/apps/license/tests/test_e1_plan.py -q -> 34 passed
+- Phase 6 E1 planning tests Ruff: .venv/bin/ruff check backend/apps/license/tests/test_e1_plan.py -> clean
+- Phase 6 E1 planning tests compile: .venv/bin/python -m py_compile backend/apps/license/tests/test_e1_plan.py -> passed
+- Phase 6 E1 planning tests Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 E1 planning tests migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 E1 planning tests security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 License query builder regression: .venv/bin/python -m pytest backend/apps/license/tests/test_query_builder.py -q -> 13 passed
+- Phase 6 License query builder Ruff: .venv/bin/ruff check backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py -> clean
+- Phase 6 License query builder selected Ruff: .venv/bin/ruff check backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 License query builder compile: .venv/bin/python -m py_compile backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py -> passed
+- Phase 6 License query builder Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 License query builder migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 License query builder diff check: git diff --check -- backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py -> clean
+- Phase 6 License query builder security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 License helper dead-code reference scan: rg item_wise_debiting/item_wise_allotment/fetch_item_details/apps.license.helper/license.helper -> no references outside the deleted file
+- Phase 6 License helper regression: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_query_builder.py -q -> 26 passed
+- Phase 6 License helper compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 License helper Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 License helper migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 License helper diff check: git diff --check -- backend/apps/license/helper.py -> clean
+- Phase 6 License helper broad Ruff: .venv/bin/ruff check backend/apps/license --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> blocked by 224 pre-existing findings in other pending License files, none from deleted helper.py
+- Phase 6 License helper security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 License management package marker Ruff: .venv/bin/ruff check backend/apps/license/management/__init__.py -> clean
+- Phase 6 License management package marker compile: .venv/bin/python -m py_compile backend/apps/license/management/__init__.py -> passed
+- Phase 6 License management package marker Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 License management package marker migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 License management package marker diff check: git diff --check -- backend/apps/license/management/__init__.py -> clean
+- Phase 6 License management package marker security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 License management commands package marker Ruff: .venv/bin/ruff check backend/apps/license/management/commands/__init__.py -> clean
+- Phase 6 License management commands package marker compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/__init__.py -> passed
+- Phase 6 License management commands package marker Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 License management commands package marker migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 License management commands package marker diff check: git diff --check -- backend/apps/license/management/commands/__init__.py -> clean
+- Phase 6 License management commands package marker security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 delete_licenses_by_exporter regression: .venv/bin/python -m pytest backend/apps/license/tests/test_delete_licenses_by_exporter_command.py -q -> 4 passed
+- Phase 6 delete_licenses_by_exporter selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 delete_licenses_by_exporter Ruff: .venv/bin/ruff check backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py -> clean
+- Phase 6 delete_licenses_by_exporter compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py -> passed
+- Phase 6 delete_licenses_by_exporter help: .venv/bin/python backend/manage.py delete_licenses_by_exporter --help -> passed
+- Phase 6 delete_licenses_by_exporter Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 delete_licenses_by_exporter migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 delete_licenses_by_exporter diff check: git diff --check -- backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py -> clean
+- Phase 6 delete_licenses_by_exporter security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 migrate_purchase_status_np_to_mi regression: .venv/bin/python -m pytest backend/apps/license/tests/test_migrate_purchase_status_command.py -q -> 4 passed
+- Phase 6 migrate_purchase_status_np_to_mi selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 migrate_purchase_status_np_to_mi Ruff: .venv/bin/ruff check backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py -> clean
+- Phase 6 migrate_purchase_status_np_to_mi compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py -> passed
+- Phase 6 migrate_purchase_status_np_to_mi help: .venv/bin/python backend/manage.py migrate_purchase_status_np_to_mi --help -> passed
+- Phase 6 migrate_purchase_status_np_to_mi Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 migrate_purchase_status_np_to_mi migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 migrate_purchase_status_np_to_mi diff check: git diff --check -- backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py -> clean
+- Phase 6 migrate_purchase_status_np_to_mi security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 populate_license_items regression: .venv/bin/python -m pytest backend/apps/license/tests/test_populate_license_items_command.py -q -> 7 passed
+- Phase 6 populate_license_items selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 populate_license_items Ruff: .venv/bin/ruff check backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py -> clean
+- Phase 6 populate_license_items compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py -> passed
+- Phase 6 populate_license_items compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py -> passed
+- Phase 6 populate_license_items help: .venv/bin/python backend/manage.py populate_license_items --help -> passed
+- Phase 6 populate_license_items import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 populate_license_items Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 populate_license_items migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 populate_license_items diff check: git diff --check -- backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py -> clean
+- Phase 6 populate_license_items security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 repair_license_subtables regression: .venv/bin/python -m pytest backend/apps/license/tests/test_repair_license_subtables_command.py -q -> 5 passed
+- Phase 6 repair_license_subtables selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 repair_license_subtables Ruff: .venv/bin/ruff check backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py -> clean
+- Phase 6 repair_license_subtables compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py -> passed
+- Phase 6 repair_license_subtables compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py -> passed
+- Phase 6 repair_license_subtables help: .venv/bin/python backend/manage.py repair_license_subtables --help -> passed
+- Phase 6 repair_license_subtables import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 repair_license_subtables Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 repair_license_subtables migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 repair_license_subtables diff check: git diff --check -- backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py -> clean
+- Phase 6 repair_license_subtables security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 resync_local_to_server regression: .venv/bin/python -m pytest backend/apps/license/tests/test_resync_local_to_server_command.py -q -> 9 passed
+- Phase 6 resync_local_to_server selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 resync_local_to_server Ruff: .venv/bin/ruff check backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py -> clean
+- Phase 6 resync_local_to_server compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py -> passed
+- Phase 6 resync_local_to_server compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py -> passed
+- Phase 6 resync_local_to_server help: .venv/bin/python backend/manage.py resync_local_to_server --help -> passed
+- Phase 6 resync_local_to_server import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 resync_local_to_server Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 resync_local_to_server migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 resync_local_to_server diff check: git diff --check -- backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py -> clean
+- Phase 6 resync_local_to_server security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 sync_licenses regression: .venv/bin/python -m pytest backend/apps/license/tests/test_sync_licenses_command.py -q -> 4 passed
+- Phase 6 sync_licenses selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 sync_licenses Ruff: .venv/bin/ruff check backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py -> clean
+- Phase 6 sync_licenses compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py -> passed
+- Phase 6 sync_licenses compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py -> passed
+- Phase 6 sync_licenses help: .venv/bin/python backend/manage.py sync_licenses --help -> passed
+- Phase 6 sync_licenses import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 sync_licenses Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 sync_licenses migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 sync_licenses diff check: git diff --check -- backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py -> clean
+- Phase 6 sync_licenses security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 update_balance_cif regression: .venv/bin/python -m pytest backend/apps/license/tests/test_update_balance_cif_command.py -q -> 6 passed
+- Phase 6 update_balance_cif selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 update_balance_cif Ruff: .venv/bin/ruff check backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean
+- Phase 6 update_balance_cif compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py -> passed
+- Phase 6 update_balance_cif compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py -> passed
+- Phase 6 update_balance_cif help: .venv/bin/python backend/manage.py update_balance_cif --help -> passed
+- Phase 6 update_balance_cif import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 update_balance_cif Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 update_balance_cif migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 update_balance_cif diff check: git diff --check -- backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py -> clean
+- Phase 6 update_balance_cif security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 update_license_expiry regression: .venv/bin/python -m pytest backend/apps/license/tests/test_update_license_expiry_command.py -q -> 13 passed
+- Phase 6 update_license_expiry selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 update_license_expiry Ruff: .venv/bin/ruff check backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py -> clean
+- Phase 6 update_license_expiry compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py -> passed
+- Phase 6 update_license_expiry compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py -> passed
+- Phase 6 update_license_expiry help: .venv/bin/python backend/manage.py update_license_expiry --help -> passed
+- Phase 6 update_license_expiry import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 update_license_expiry Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 update_license_expiry migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 update_license_expiry diff check: git diff --check -- backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py -> clean
+- Phase 6 update_license_expiry security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 upload_dfia_copies regression: .venv/bin/python -m pytest backend/apps/license/tests/test_upload_dfia_copies_command.py -q -> 12 passed
+- Phase 6 upload_dfia_copies selected Ruff: .venv/bin/ruff check backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 upload_dfia_copies Ruff: .venv/bin/ruff check backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py -> clean
+- Phase 6 upload_dfia_copies compile: .venv/bin/python -m py_compile backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py -> passed
+- Phase 6 upload_dfia_copies compileall: .venv/bin/python -m compileall -q backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py -> passed
+- Phase 6 upload_dfia_copies help: .venv/bin/python backend/manage.py upload_dfia_copies --help -> passed
+- Phase 6 upload_dfia_copies import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported Command -> passed
+- Phase 6 upload_dfia_copies Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 upload_dfia_copies migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 upload_dfia_copies diff check: git diff --check -- backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py -> clean
+- Phase 6 upload_dfia_copies security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0001 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0001_initial.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0001 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0001_initial.py -> clean
+- Phase 6 license migration 0001 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0001_initial.py -> passed
+- Phase 6 license migration 0001 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0001_initial.py -> passed
+- Phase 6 license migration 0001 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, Migration.initial=True, 30 operations -> passed
+- Phase 6 license migration 0001 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0001 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0001 showmigrations plan: .venv/bin/python backend/manage.py showmigrations license --plan -> blocked by sandboxed PostgreSQL connection Operation not permitted
+- Phase 6 license migration 0001 diff check: git diff --check -- backend/apps/license/migrations/0001_initial.py -> clean
+- Phase 6 license migration 0001 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0002 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0002 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py -> clean
+- Phase 6 license migration 0002 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py -> passed
+- Phase 6 license migration 0002 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py -> passed
+- Phase 6 license migration 0002 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, Migration.atomic=False, 9 operations -> passed
+- Phase 6 license migration 0002 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0002 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0002 diff check: git diff --check -- backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py -> clean
+- Phase 6 license migration 0002 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0003 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0003 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py -> clean
+- Phase 6 license migration 0003 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py -> passed
+- Phase 6 license migration 0003 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py -> passed
+- Phase 6 license migration 0003 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, 2 operations -> passed
+- Phase 6 license migration 0003 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0003 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0003 diff check: git diff --check -- backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py -> clean
+- Phase 6 license migration 0003 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0004 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0004 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py -> clean
+- Phase 6 license migration 0004 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py -> passed
+- Phase 6 license migration 0004 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py -> passed
+- Phase 6 license migration 0004 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, 2 operations -> passed
+- Phase 6 license migration 0004 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0004 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0004 diff check: git diff --check -- backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py -> clean
+- Phase 6 license migration 0004 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0005 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0005 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py -> clean
+- Phase 6 license migration 0005 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py -> passed
+- Phase 6 license migration 0005 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py -> passed
+- Phase 6 license migration 0005 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, Migration.atomic=False, 30 operations -> passed
+- Phase 6 license migration 0005 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0005 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0005 diff check: git diff --check -- backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py -> clean
+- Phase 6 license migration 0005 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0006 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0006 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py -> clean
+- Phase 6 license migration 0006 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py -> passed
+- Phase 6 license migration 0006 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py -> passed
+- Phase 6 license migration 0006 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, 1 operation -> passed
+- Phase 6 license migration 0006 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0006 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0006 diff check: git diff --check -- backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py -> clean
+- Phase 6 license migration 0006 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0007 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0007 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py -> clean
+- Phase 6 license migration 0007 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py -> passed
+- Phase 6 license migration 0007 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py -> passed
+- Phase 6 license migration 0007 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, 1 operation, 18 orphan columns -> passed
+- Phase 6 license migration 0007 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0007 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0007 diff check: git diff --check -- backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py -> clean
+- Phase 6 license migration 0007 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0009 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0009_licenseitemplan.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0009 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0009_licenseitemplan.py -> clean
+- Phase 6 license migration 0009 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0009_licenseitemplan.py -> passed
+- Phase 6 license migration 0009 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0009_licenseitemplan.py -> passed
+- Phase 6 license migration 0009 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, 1 operation -> passed
+- Phase 6 license migration 0009 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0009 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0009 diff check: git diff --check -- backend/apps/license/migrations/0009_licenseitemplan.py -> clean
+- Phase 6 license migration 0009 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migration 0010 selected Ruff: .venv/bin/ruff check backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license migration 0010 Ruff: .venv/bin/ruff check backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py -> clean
+- Phase 6 license migration 0010 compile: .venv/bin/python -m py_compile backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py -> passed
+- Phase 6 license migration 0010 compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py -> passed
+- Phase 6 license migration 0010 import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported migration, 4 operations -> passed
+- Phase 6 license migration 0010 Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migration 0010 migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migration 0010 diff check: git diff --check -- backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py -> clean
+- Phase 6 license migration 0010 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license migrations package marker Ruff: .venv/bin/ruff check backend/apps/license/migrations/__init__.py -> clean
+- Phase 6 license migrations package marker compile: .venv/bin/python -m py_compile backend/apps/license/migrations/__init__.py -> passed
+- Phase 6 license migrations package marker compileall: .venv/bin/python -m compileall -q backend/apps/license/migrations/__init__.py -> passed
+- Phase 6 license migrations package marker import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported apps.license.migrations -> passed
+- Phase 6 license migrations package marker Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license migrations package marker migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license migrations package marker diff check: git diff --check -- backend/apps/license/migrations/__init__.py -> clean
+- Phase 6 license migrations package marker security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 models_integration dead-code reference scan: rg models_integration/LicenseBalanceMixin/LicenseItemBalanceMixin backend docs tests excluding generated audit JSON -> no references
+- Phase 6 models_integration compileall after deletion: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 models_integration regression after deletion: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_query_builder.py -q -> 40 passed
+- Phase 6 models_integration broad License Ruff: .venv/bin/ruff check backend/apps/license --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> blocked by 209 pre-existing findings in other pending License files, none related to deleted models_integration.py
+- Phase 6 models_integration Django check after deletion: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 models_integration migration check after deletion: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 models_integration diff check: git diff --check -- backend/apps/license/models_integration.py -> clean
+- Phase 6 models_integration security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 parsers package marker Ruff: .venv/bin/ruff check backend/apps/license/parsers/__init__.py -> clean
+- Phase 6 parsers package marker compile: .venv/bin/python -m py_compile backend/apps/license/parsers/__init__.py -> passed
+- Phase 6 parsers package marker compileall: .venv/bin/python -m compileall -q backend/apps/license/parsers/__init__.py -> passed
+- Phase 6 parsers package marker import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported apps.license.parsers -> passed
+- Phase 6 parsers package marker Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 parsers package marker migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 parsers package marker diff check: git diff --check -- backend/apps/license/parsers/__init__.py -> clean
+- Phase 6 parsers package marker security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license write serializer regression: .venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_query_builder.py -q -> 26 passed
+- Phase 6 license write serializer Ruff: .venv/bin/ruff check backend/apps/license/serializers/_license_write.py -> clean
+- Phase 6 license write serializer compile: .venv/bin/python -m py_compile backend/apps/license/serializers/_license_write.py -> passed
+- Phase 6 license write serializer compileall: .venv/bin/python -m compileall -q backend/apps/license/serializers/_license_write.py -> passed
+- Phase 6 license write serializer import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported LicenseWriteMixin -> passed
+- Phase 6 license write serializer Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license write serializer migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license write serializer diff check: git diff --check -- backend/apps/license/serializers/_license_write.py -> clean
+- Phase 6 license write serializer security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 incentive serializers regression: .venv/bin/python -m pytest backend/apps/license/tests/test_incentive_serializers.py -q -> 3 passed
+- Phase 6 incentive serializers Ruff: .venv/bin/ruff check backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py -> clean
+- Phase 6 incentive serializers compile: .venv/bin/python -m py_compile backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py -> passed
+- Phase 6 incentive serializers compileall: .venv/bin/python -m compileall -q backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py -> passed
+- Phase 6 incentive serializers import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported IncentiveLicenseSerializer and LicenseItemPlanSerializer; expiry field read_only=False -> passed
+- Phase 6 incentive serializers Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 incentive serializers migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 incentive serializers diff check: git diff --check -- backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py -> clean
+- Phase 6 incentive serializers security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 balance calculator regression: .venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q -> 30 passed
+- Phase 6 balance calculator all-conditions slice: .venv/bin/python -m pytest backend/tests/test_all_conditions.py::TestLicenseBalanceCalculator backend/tests/test_all_conditions.py::TestItemBalanceCalculator -q -> 26 passed
+- Phase 6 balance calculator Ruff: .venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py -> clean
+- Phase 6 balance calculator compile: .venv/bin/python -m py_compile backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py -> passed
+- Phase 6 balance calculator compileall: .venv/bin/python -m compileall -q backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py -> passed
+- Phase 6 balance calculator import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported calculators and quantize_2dp('1.235') -> 1.24
+- Phase 6 balance calculator Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 balance calculator migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 balance calculator diff check: git diff --check -- backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py -> clean
+- Phase 6 balance calculator security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 DGFT ownership helper regression: .venv/bin/python -m pytest backend/apps/license/tests/test_dgft_ownership.py -q -> 5 passed
+- Phase 6 DGFT ownership helper Ruff: .venv/bin/ruff check backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py -> clean
+- Phase 6 DGFT ownership helper compile: .venv/bin/python -m py_compile backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py -> passed
+- Phase 6 DGFT ownership helper compileall: .venv/bin/python -m compileall -q backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py -> passed
+- Phase 6 DGFT ownership helper import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported fetch_scrip_ownership and DGFT_URL -> passed
+- Phase 6 DGFT ownership command help: .venv/bin/python backend/manage.py update_license_ownership --help -> passed
+- Phase 6 DGFT ownership helper Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 DGFT ownership helper migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 DGFT ownership helper diff check: git diff --check -- backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py -> clean
+- Phase 6 DGFT ownership helper security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 E132 planning engine regression: .venv/bin/python -m pytest backend/apps/license/tests/test_e132_plan.py -q -> 59 passed
+- Phase 6 E132 planning engine Ruff: .venv/bin/ruff check backend/apps/license/services/e132_plan.py backend/apps/license/tests/test_e132_plan.py -> clean
+- Phase 6 E132 planning engine compile: .venv/bin/python -m py_compile backend/apps/license/services/e132_plan.py backend/apps/license/tests/test_e132_plan.py -> passed
+- Phase 6 E132 planning engine compileall: .venv/bin/python -m compileall -q backend/apps/license/services/e132_plan.py backend/apps/license/tests/test_e132_plan.py -> passed
+- Phase 6 E132 planning engine import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported plan_e132 and classify_e132_record('2106','yeast') -> Yeast - E132
+- Phase 6 E132 planning engine Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 E132 planning engine migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 E132 planning engine diff check: git diff --check -- backend/apps/license/services/e132_plan.py backend/apps/license/tests/test_e132_plan.py -> clean
+- Phase 6 E132 planning engine security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 ledger service focused regression: .venv/bin/python -m pytest backend/apps/license/tests/test_ledger_service.py -q -> 5 passed
+- Phase 6 ledger service API regression: .venv/bin/python -m pytest backend/apps/license/tests/test_ledger_service.py backend/tests/test_api_trade.py::TestLicenseLedgerAPI -q -> 7 passed
+- Phase 6 ledger service Ruff: .venv/bin/ruff check backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py -> clean
+- Phase 6 ledger service selected Ruff: .venv/bin/ruff check backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 ledger service compile: .venv/bin/python -m py_compile backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py -> passed
+- Phase 6 ledger service compileall: .venv/bin/python -m compileall -q backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py -> passed
+- Phase 6 ledger service import verification: .venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings imported prepare_incentive_data, build_license_queryset, and get_ledger_summary -> passed
+- Phase 6 ledger service Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 ledger service migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 ledger service diff check: git diff --check -- backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 ledger service security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 plan enforcement regression: .venv/bin/python -m pytest backend/apps/license/tests/test_plan_enforcement.py -q -> 2 passed
+- Phase 6 plan enforcement Ruff: .venv/bin/ruff check backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py -> clean
+- Phase 6 plan enforcement selected Ruff: .venv/bin/ruff check backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 plan enforcement compile: .venv/bin/python -m py_compile backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py -> passed
+- Phase 6 plan enforcement compileall: .venv/bin/python -m compileall -q backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py -> passed
+- Phase 6 plan enforcement import verification: .venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings imported helpers; live_allotted_qty(None) -> 0.000 and live_allotted_value_for(None) -> 0.00
+- Phase 6 plan enforcement Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 plan enforcement migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 plan enforcement diff check: git diff --check -- backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 plan enforcement security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 plan grouping regression: .venv/bin/python -m pytest backend/apps/license/tests/test_plan_grouping.py -q -> 3 passed
+- Phase 6 plan grouping Ruff: .venv/bin/ruff check backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py -> clean
+- Phase 6 plan grouping selected Ruff: .venv/bin/ruff check backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 plan grouping compile: .venv/bin/python -m py_compile backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py -> passed
+- Phase 6 plan grouping compileall: .venv/bin/python -m compileall -q backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py -> passed
+- Phase 6 plan grouping import verification: .venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings imported helpers; plan_group_key(None) -> ID:None and group_ids_of(unsaved) -> []
+- Phase 6 plan grouping Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 plan grouping migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 plan grouping diff check: git diff --check -- backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 plan grouping security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 validation service regression: .venv/bin/python -m pytest backend/apps/license/tests/test_validation_service.py -q -> 4 passed
+- Phase 6 validation service Ruff: .venv/bin/ruff check backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py -> clean
+- Phase 6 validation service selected Ruff: .venv/bin/ruff check backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 validation service compile: .venv/bin/python -m py_compile backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py -> passed
+- Phase 6 validation service compileall: .venv/bin/python -m compileall -q backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py -> passed
+- Phase 6 validation service import verification: .venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings imported LicenseValidationService; validate_license_active(None) -> License is required
+- Phase 6 validation service Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 validation service migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 validation service diff check: git diff --check -- backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 validation service security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license signals regression: .venv/bin/python -m pytest backend/apps/license/tests/test_signals.py -q -> 15 passed
+- Phase 6 license signals Ruff: .venv/bin/ruff check backend/apps/license/signals.py backend/apps/license/tests/test_signals.py -> clean
+- Phase 6 license signals selected Ruff: .venv/bin/ruff check backend/apps/license/signals.py backend/apps/license/tests/test_signals.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 license signals compile: .venv/bin/python -m py_compile backend/apps/license/signals.py backend/apps/license/tests/test_signals.py -> passed
+- Phase 6 license signals compileall: .venv/bin/python -m compileall -q backend/apps/license/signals.py backend/apps/license/tests/test_signals.py -> passed
+- Phase 6 license signals import verification: .venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings imported suspend_license_flag_recalc, update_license_flags, and update_license_on_import_item_change -> passed
+- Phase 6 license signals Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license signals migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license signals diff check: git diff --check -- backend/apps/license/signals.py backend/apps/license/tests/test_signals.py -> clean
+- Phase 6 license signals security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 table columns focused regression: .venv/bin/python -m pytest backend/apps/license/tests/test_table_columns.py -q -> skipped/blocked because django_tables2 is not installed in the local venv
+- Phase 6 table columns Ruff: .venv/bin/ruff check backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py -> clean
+- Phase 6 table columns selected Ruff: .venv/bin/ruff check backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007 -> clean
+- Phase 6 table columns compile: .venv/bin/python -m py_compile backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py -> passed
+- Phase 6 table columns compileall: .venv/bin/python -m compileall -q backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py -> passed
+- Phase 6 table columns import verification: .venv/bin/python -c 'import django_tables2' -> blocked, ModuleNotFoundError: No module named django_tables2
+- Phase 6 table columns Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 table columns migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 table columns diff check: git diff --check -- backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py -> clean
+- Phase 6 table columns security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license add template load verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings loaded license/add.html -> passed
+- Phase 6 license add template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license add template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license add template diff check: git diff --check -- backend/apps/license/templates/license/add.html -> clean
+- Phase 6 license add template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license ajax-list template load verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings loaded license/ajax-list.html -> passed
+- Phase 6 license ajax-list template render verification: blocked by NoReverseMatch for legacy URL name license-list, shared by pending legacy templates
+- Phase 6 license ajax-list template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license ajax-list template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license ajax-list template diff check: git diff --check -- backend/apps/license/templates/license/ajax-list.html -> clean
+- Phase 6 license ajax-list template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license card template load verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings loaded license/card.html -> passed
+- Phase 6 license card template full render verification: blocked by legacy URL names used by this server-rendered template
+- Phase 6 license card template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license card template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license card template diff check: git diff --check -- backend/apps/license/templates/license/card.html -> clean
+- Phase 6 license card template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license consolidated template render verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings rendered license/consolidated.html with empty license_list -> passed
+- Phase 6 license consolidated template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license consolidated template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license consolidated template diff check: git diff --check -- backend/apps/license/templates/license/consolidated.html -> clean
+- Phase 6 license consolidated template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license detail template render verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings rendered license/detail.html with empty export/import managers -> passed
+- Phase 6 license detail template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license detail template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license detail template diff check: git diff --check -- backend/apps/license/templates/license/detail.html -> clean
+- Phase 6 license detail template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license formset template dependency analysis: repository-wide search found live include from backend/apps/license/templates/license/item_list_edit.html, so template was retained and audited
+- Phase 6 license formset template render verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings rendered license/formset.html with a real Django formset -> passed
+- Phase 6 license formset template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license formset template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license formset template diff check: git diff --check -- backend/apps/license/templates/license/formset.html -> clean
+- Phase 6 license formset template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license item_list_edit template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, or dynamic template-loading path for backend/apps/license/templates/license/item_list_edit.html; only stale license-item-update links remain
+- Phase 6 license item_list_edit template removal: deleted verified-dead legacy Django template; no replacement dependency or migration required
+- Phase 6 license item_list_edit post-removal dependency analysis: rg item_list_edit/license-item-update confirms no item_list_edit references; stale license-item-update links remain in blocked legacy card/DFIA templates
+- Phase 6 license item_list_edit dependency graph update: backend/apps/license/templates/license/formset.html marked REQUIRES_RECHECK because its only known live include was removed
+- Phase 6 license item_list_edit pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license item_list_edit Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license item_list_edit py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license item_list_edit Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license item_list_edit migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license item_list_edit compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license item_list_edit diff check: git diff --check -- backend/apps/license/templates/license/item_list_edit.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license item_list_edit security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license formset template recheck dependency analysis: after deleting backend/apps/license/templates/license/item_list_edit.html, repository-wide source search found no remaining live include, render path, template_name, email/PDF/report/export usage, command usage, or dynamic template loader for backend/apps/license/templates/license/formset.html
+- Phase 6 license formset template removal: deleted verified-dead legacy Django partial; no replacement dependency or migration required
+- Phase 6 license formset template pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license formset template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license formset template py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license formset template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license formset template migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license formset template compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license formset template diff check: git diff --check -- backend/apps/license/templates/license/formset.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license formset template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license item_pdf template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/item_pdf.html
+- Phase 6 license item_pdf template removal: deleted verified-dead legacy Django PDF template; no replacement dependency or migration required
+- Phase 6 license item_pdf pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license item_pdf Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license item_pdf py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license item_pdf Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license item_pdf migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license item_pdf compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license item_pdf diff check: git diff --check -- backend/apps/license/templates/license/item_pdf.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license item_pdf security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license item_report template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/item_report.html; active item report code uses license/report_pdf_ITEM.html, license/report_pdf.html, API serializers, and React pages instead
+- Phase 6 license item_report template removal: deleted verified-dead legacy Django PDF table template; no replacement dependency or migration required
+- Phase 6 license item_report pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license item_report Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license item_report py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license item_report Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license item_report migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license item_report compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license item_report diff check: git diff --check -- backend/apps/license/templates/license/item_report.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license item_report security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license license_details template dependency analysis: repository-wide specific-template search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/license_details.html
+- Phase 6 license license_details template removal: deleted verified-dead legacy Django detail template; no replacement dependency or migration required
+- Phase 6 license license_details pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license license_details Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license license_details py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license license_details Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license license_details migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license license_details compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license license_details diff check: git diff --check -- backend/apps/license/templates/license/license_details.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license license_details security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license legacy list component dependency analysis: repository-wide search found no live render, template_name, include, command, URLConf, middleware, signal, test, or dynamic template-loading path for backend/apps/license/templates/license/list.html beyond its dead include chain to ajax-list.html and card.html
+- Phase 6 license legacy list component removal: deleted verified-dead list.html, ajax-list.html, and card.html; cleared prior BLOCKED overrides because the templates no longer exist
+- Phase 6 license legacy list component pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license legacy list component Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license legacy list component py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license legacy list component Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license legacy list component migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license legacy list component compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license legacy list component diff check: git diff --check -- backend/apps/license/templates/license/list.html backend/apps/license/templates/license/ajax-list.html backend/apps/license/templates/license/card.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license legacy list component security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license pdf template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/pdf.html; active report_service uses license/report_pdf.html instead
+- Phase 6 license pdf template removal: deleted verified-dead legacy Django PDF summary template; no replacement dependency or migration required
+- Phase 6 license pdf pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license pdf Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license pdf py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license pdf Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license pdf migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license pdf compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license pdf diff check: git diff --check -- backend/apps/license/templates/license/pdf.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license pdf security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license pdf_amend template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/pdf_amend.html
+- Phase 6 license pdf_amend template removal: deleted verified-dead legacy amendment PDF template; no replacement dependency or migration required
+- Phase 6 license pdf_amend pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license pdf_amend Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license pdf_amend py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license pdf_amend Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license pdf_amend migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license pdf_amend compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license pdf_amend diff check: git diff --check -- backend/apps/license/templates/license/pdf_amend.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license pdf_amend security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license pdf_consolidate template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/pdf_consolidate.html
+- Phase 6 license pdf_consolidate template removal: deleted verified-dead legacy consolidated PDF template; no replacement dependency or migration required
+- Phase 6 license pdf_consolidate pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license pdf_consolidate Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license pdf_consolidate py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license pdf_consolidate Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license pdf_consolidate migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license pdf_consolidate compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license pdf_consolidate diff check: git diff --check -- backend/apps/license/templates/license/pdf_consolidate.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license pdf_consolidate security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license pdf_ledger template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/pdf_ledger.html; active ledger PDF route uses apps.license.ledger_pdf.generate_license_ledger_pdf
+- Phase 6 license pdf_ledger template removal: deleted verified-dead legacy ledger PDF template; no replacement dependency or migration required
+- Phase 6 license pdf_ledger pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license pdf_ledger Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license pdf_ledger py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license pdf_ledger Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license pdf_ledger migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license pdf_ledger compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license pdf_ledger diff check: git diff --check -- backend/apps/license/templates/license/pdf_ledger.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license pdf_ledger security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license pdf_ledger_new template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/pdf_ledger_new.html; active ledger PDF route uses apps.license.ledger_pdf.generate_license_ledger_pdf
+- Phase 6 license pdf_ledger_new template removal: deleted verified-dead legacy alternate ledger PDF template; no replacement dependency or migration required
+- Phase 6 license pdf_ledger_new pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license pdf_ledger_new Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license pdf_ledger_new py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license pdf_ledger_new Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license pdf_ledger_new migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license pdf_ledger_new compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license pdf_ledger_new diff check: git diff --check -- backend/apps/license/templates/license/pdf_ledger_new.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license pdf_ledger_new security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license preimum_calc template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/preimum_calc.html; fuzzy search also found no premium_calc/preimum runtime path
+- Phase 6 license preimum_calc template removal: deleted verified-dead legacy premium-calculation PDF template; no replacement dependency or migration required
+- Phase 6 license preimum_calc pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license preimum_calc Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license preimum_calc py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license preimum_calc Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license preimum_calc migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license preimum_calc compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license preimum_calc diff check: git diff --check -- backend/apps/license/templates/license/preimum_calc.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license preimum_calc security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license report template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/report.html; stale item_report_list link existed only inside the deleted template
+- Phase 6 license report template removal: deleted verified-dead legacy item-wise report index template; no replacement dependency or migration required
+- Phase 6 license report pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license report Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license report py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license report Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license report migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license report compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license report diff check: git diff --check -- backend/apps/license/templates/license/report.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license report security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license report_form template dependency analysis: repository-wide search found no render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/license/templates/license/report_form.html; submit names item_report/item_generate are not used by live report API views
+- Phase 6 license report_form template removal: deleted verified-dead legacy date-range report form template; no replacement dependency or migration required
+- Phase 6 license report_form pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license report_form Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license report_form py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license report_form Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license report_form migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license report_form compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license report_form diff check: git diff --check -- backend/apps/license/templates/license/report_form.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license report_form security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license tests.py dependency analysis: repository-wide search found no imports or runtime references to backend/apps/license/tests.py; real License tests live under backend/apps/license/tests/
+- Phase 6 license tests.py removal: deleted default empty Django test stub with unused TestCase import; no replacement dependency or migration required
+- Phase 6 license tests.py pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license tests.py Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 6 license tests.py py_compile: .venv/bin/python -m py_compile docs/audit/build_audit_state.py -> passed
+- Phase 6 license tests.py Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license tests.py migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license tests.py compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license tests.py diff check: git diff --check -- backend/apps/license/tests.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license tests.py security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license tests package init line audit: backend/apps/license/tests/__init__.py kept as package marker; removed non-functional module docstring
+- Phase 6 license tests package init pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 300 passed, 2 skipped
+- Phase 6 license tests package init Ruff: .venv/bin/ruff check backend/apps/license/tests/__init__.py docs/audit/build_audit_state.py -> clean
+- Phase 6 license tests package init py_compile: .venv/bin/python -m py_compile backend/apps/license/tests/__init__.py docs/audit/build_audit_state.py -> passed
+- Phase 6 license tests package init Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license tests package init migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license tests package init compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license tests package init diff check: git diff --check -- backend/apps/license/tests/__init__.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license tests package init security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license item_matcher line audit: reviewed all 877 lines, imports, item filter definitions, batch auto-linking, single-item matching, call sites in signals/serializers/management command, and edge paths for no norms/no matches/missing ItemNameModel
+- Phase 6 license item_matcher improvement: match_import_item_to_items now resolves ItemNameModel names from the applicable norm instead of always using license_norm_classes[0], fixing multi-norm licenses where a later norm's filter matched
+- Phase 6 license item_matcher performance cleanup: moved LicenseImportItemsModel import and base import-item queryset outside the inner loop; collect matched ids via values_list into a set instead of materializing model objects before re-querying
+- Phase 6 license item_matcher regression tests: added backend/apps/license/tests/test_item_matcher.py covering multi-norm applicable norm matching and empty norm class behavior
+- Phase 6 license item_matcher focused pytest: .venv/bin/python -m pytest backend/apps/license/tests/test_item_matcher.py -q -> 2 passed
+- Phase 6 license item_matcher full pytest: .venv/bin/python -m pytest backend/apps/license/tests -q -> 302 passed, 2 skipped
+- Phase 6 license item_matcher Ruff: .venv/bin/ruff check backend/apps/license/utils/item_matcher.py backend/apps/license/tests/test_item_matcher.py docs/audit/build_audit_state.py -> clean
+- Phase 6 license item_matcher py_compile: .venv/bin/python -m py_compile backend/apps/license/utils/item_matcher.py backend/apps/license/tests/test_item_matcher.py docs/audit/build_audit_state.py -> passed
+- Phase 6 license item_matcher Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license item_matcher migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license item_matcher compileall: .venv/bin/python -m compileall -q backend/apps/license -> passed
+- Phase 6 license item_matcher diff check: git diff --check -- backend/apps/license/utils/item_matcher.py backend/apps/license/tests/test_item_matcher.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license item_matcher security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license_items line audit: reviewed all 61 lines, imports, serializer fields, queryset joins, filter/search/ordering settings, update serializer selection, router registration, React call sites, and existing API smoke tests
+- Phase 6 license_items security hardening: added LicensePermission role gating, explicitly limited methods to GET/PUT/PATCH/HEAD/OPTIONS, and removed create/delete/TRACE from the advertised endpoint surface
+- Phase 6 license_items validation hardening: made the simple serializer hs_code representation allow null and made dropdown label generation tolerate missing in-memory license references without breaking persisted FK behavior
+- Phase 6 license_items performance review: retained select_related('license', 'hs_code') and prefetch_related('items') for list/update serializers to avoid N+1 reads on dropdown and PATCH responses
+- Phase 6 license_items regression tests: added backend/apps/license/tests/test_license_items_view.py covering unauthenticated access, missing role, LICENSE_VIEWER list access with null hs_code, LICENSE_MANAGER patch, and create/delete 405 behavior
+- Phase 6 license_items focused pytest: .venv/bin/python -m pytest backend/apps/license/tests/test_license_items_view.py -q -> 5 passed
+- Phase 6 license_items impact pytest: .venv/bin/python -m pytest backend/apps/license/tests backend/tests/test_api_license.py backend/tests/test_all_conditions.py -q -> 385 passed, 2 skipped
+- Phase 6 license_items Ruff: .venv/bin/ruff check backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py docs/audit/build_audit_state.py -> clean
+- Phase 6 license_items py_compile: .venv/bin/python -m py_compile backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py -> passed
+- Phase 6 license_items compileall: .venv/bin/python -m compileall -q backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py -> passed
+- Phase 6 license_items import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported LicenseItemViewSet with LicensePermission and explicit method list -> passed
+- Phase 6 license_items Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license_items migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license_items diff check: git diff --check -- backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license_items security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 6 license_report line audit: reviewed all 179 lines, imports, query serializer, report action decorator, queryset filters, grouping loops, totals, response payload, and LicenseDetailsViewSet attachment
+- Phase 6 license_report validation hardening: added ParleLicenseReportQuerySerializer with typed exporter, optional query booleans, trimmed notification input, and 400 responses for malformed query params
+- Phase 6 license_report bug fix: OptionalQueryBooleanField prevents omitted query booleans from being interpreted as False, preserving prior optional filter semantics while validating provided values
+- Phase 6 license_report serialization fix: purchase_status now returns primitive code and purchase_status_label instead of a model instance that JSONRenderer cannot serialize
+- Phase 6 license_report performance fix: removed per-license export_license aggregate query, computes total CIF from prefetched export rows, and prefetches parent/child relations without excluding rows through unsafe split-table select_related joins
+- Phase 6 license_report regression tests: added backend/apps/license/tests/test_license_report_view.py covering grouped JSON output, default Parle filtering, primitive purchase status fields, invalid query params, and boolean filter behavior
+- Phase 6 license_report focused pytest: .venv/bin/python -m pytest backend/apps/license/tests/test_license_report_view.py -q -> 3 passed
+- Phase 6 license_report impact pytest: .venv/bin/python -m pytest backend/apps/license/tests backend/tests/test_api_license.py backend/tests/test_all_conditions.py -q -> 388 passed, 2 skipped
+- Phase 6 license_report Ruff: .venv/bin/ruff check backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py -> clean
+- Phase 6 license_report py_compile: .venv/bin/python -m py_compile backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py -> passed
+- Phase 6 license_report compileall: .venv/bin/python -m compileall -q backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py -> passed
+- Phase 6 license_report import verification: cd backend; ../.venv/bin/python with DJANGO_SETTINGS_MODULE=lmanagement.settings and django.setup() imported report serializer/action; empty query params validate to {} -> passed
+- Phase 6 license_report Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 6 license_report migration check: .venv/bin/python backend/manage.py makemigrations license --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 6 license_report diff check: git diff --check -- backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md -> clean
+- Phase 6 license_report security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 pdf coordinate finder dependency analysis: repository-wide search found no live runtime references outside backend/apps/allotment/scripts/pdf_coordinate_finder.py and audit metadata; retained as standalone ReportLab helper
+- Phase 7 pdf coordinate finder hardening: added argparse/pathlib CLI, validated positive grid spacing, protected existing output files by default, rejected directory targets, and removed unused pypdf import
+- Phase 7 pdf coordinate finder regression: .venv/bin/python -m pytest backend/tests/test_pdf_coordinate_finder.py -q -> 7 passed
+- Phase 7 pdf coordinate finder Ruff: .venv/bin/ruff check backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py -> clean
+- Phase 7 pdf coordinate finder py_compile: .venv/bin/python -m py_compile backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py -> passed
+- Phase 7 pdf coordinate finder compileall: .venv/bin/python -m compileall -q backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py -> passed
+- Phase 7 pdf coordinate finder Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 pdf coordinate finder migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed Postgres connection warning only
+- Phase 7 pdf coordinate finder CLI help: .venv/bin/python backend/apps/allotment/scripts/pdf_coordinate_finder.py --help -> passed
+- Phase 7 pdf coordinate finder import verification: imported DEFAULT_GRID_SPACING, create_coordinate_grid, and parse_args; --grid-spacing 25 --overwrite parsed successfully
+- Phase 7 pdf coordinate finder audit-state verification: audit database marks script, test, and phase report COMPLETED after regenerating state
+- Phase 7 pdf coordinate finder final Ruff: .venv/bin/ruff check backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py -> clean
+- Phase 7 pdf coordinate finder final py_compile: .venv/bin/python -m py_compile backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py -> passed
+- Phase 7 pdf coordinate finder diff check: git diff --check -- backend/apps/allotment/scripts/pdf_coordinate_finder.py backend/tests/test_pdf_coordinate_finder.py docs/audit/build_audit_state.py docs/audit/phase-07-reporting-report.md docs/audit/audit-database.json docs/audit/repository-knowledge-graph.json docs/audit/dashboard.md docs/audit/work-queue.md -> clean
+- Phase 7 pdf coordinate finder security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 allotment download template dependency analysis: repository-wide search found no live render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path for backend/apps/allotment/templates/allotment/download.html
+- Phase 7 allotment download template removal: deleted verified-dead legacy server-rendered export template; active allotment export uses DRF allotments/download action in backend/apps/allotment/views_export.py
+- Phase 7 allotment download template security review: removed stale {{ df|safe }} rendering surface from dead template; stale allotment-download link in card.html remains for that file's own audit pass
+- Phase 7 allotment download template audit-state verification: deleted template no longer appears in tracked source files after regenerating audit state
+- Phase 7 allotment download template focused pytest: .venv/bin/python -m pytest backend/tests/test_api_allotment.py -q -> 7 passed
+- Phase 7 allotment download template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 allotment download template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 allotment download template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 7 allotment pdf_base template dependency analysis: repository-wide search found no live direct render path; only backend/apps/allotment/templates/allotment/send.html extended it
+- Phase 7 allotment send template dependency analysis: repository-wide search found no live render, template_name, include, email/PDF/report/export, command, URLConf, middleware, signal, test, documentation runtime, or dynamic template-loading path
+- Phase 7 allotment pdf_base template removal: deleted verified-dead legacy PDF base and recursively removed its orphaned send.html child template
+- Phase 7 allotment pdf_base template audit-state verification: deleted pdf_base.html and send.html no longer appear in tracked source files after regenerating audit state
+- Phase 7 allotment pdf_base template focused pytest: .venv/bin/python -m pytest backend/tests/test_api_allotment.py -q -> 7 passed
+- Phase 7 allotment pdf_base template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 allotment pdf_base template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 allotment pdf_base template Ruff: .venv/bin/ruff check docs/audit/build_audit_state.py -> clean
+- Phase 7 allotment grouped export API line audit: reviewed all 695 lines, imports, endpoint args, queryset shaping, PDF builder, XLSX builder, grouping logic, dependency fallbacks, response headers, and null/default handling
+- Phase 7 allotment grouped export API hardening: normalized _export/type inputs, returned 400 before export work for unsupported formats, returned 503 for missing openpyxl/reportlab, preserved Decimal values in grouping, and removed unused ReportLab imports
+- Phase 7 allotment grouped export API performance: changed company/port relationship loading to select_related and added nested allocation/license/exporter/port prefetches used by grouping
+- Phase 7 allotment grouped export API regression: .venv/bin/python -m pytest backend/tests/test_api_allotment.py -q -> 11 passed
+- Phase 7 allotment grouped export API selected Ruff: .venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py --select F401,F821,F811,E741,F841,B007,B904,UP035,UP006,UP045 -> clean
+- Phase 7 allotment grouped export API Ruff: .venv/bin/ruff check backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py -> clean
+- Phase 7 allotment grouped export API py_compile: .venv/bin/python -m py_compile backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py -> passed
+- Phase 7 allotment grouped export API compileall: .venv/bin/python -m compileall -q backend/apps/allotment/views_export.py backend/tests/test_api_allotment.py -> passed
+- Phase 7 allotment grouped export API Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 allotment grouped export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 allotment grouped export API import verification: Django setup imported AllotmentViewSet with download_grouped_export and _group_allotments attached
+- Phase 7 allotment grouped export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 BOE pending-bill template dependency analysis: repository-wide search found download.html and download_port.html referenced only by unused backend/apps/bill_of_entry/views/download_views.py and audit metadata; bill_of_entry URLConf exposes only DRF routes and parse-pdf
+- Phase 7 BOE pending-bill template removal: deleted verified-dead legacy PDF templates and their unreachable DownloadPendingBillView/DownloadPortView module; cleaned stale commented re-export references from views package
+- Phase 7 BOE pending-bill template verification: remaining exact-reference scan after deletion found only generated audit metadata before state regeneration
+- Phase 7 BOE pending-bill template focused pytest: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 7 passed
+- Phase 7 BOE pending-bill template Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py -> clean
+- Phase 7 BOE pending-bill template py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/views/__init__.py docs/audit/build_audit_state.py -> passed
+- Phase 7 BOE pending-bill template compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/views docs/audit/build_audit_state.py -> passed
+- Phase 7 BOE pending-bill template Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 BOE pending-bill template migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 BOE pending-bill template import/template verification: reversed active BOE API routes and confirmed removed legacy templates no longer resolve
+- Phase 7 BOE pending-bill template diff check: git diff --check for scoped BOE removal and audit artifacts -> clean
+- Phase 7 BOE pending-bill template security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 BOE export API line audit: reviewed all 820 lines, endpoint parameter handling, queryset shaping, PDF builder, grouped XLSX builder, port XLSX builder, grouping helper, optional dependency paths, response headers, and null/default handling
+- Phase 7 BOE export API hardening: normalized _export input, rejected unsupported formats before query/export work, returned 503 for missing openpyxl/reportlab, guarded nullable license_date, and preserved Decimal values in grouping
+- Phase 7 BOE export API performance: cleared inherited prefetches before applying export-specific select_related/Prefetch plan for RowDetails -> license/exporter/port/hs_code, avoiding duplicate-prefetch runtime failure and N+1 related lookups
+- Phase 7 BOE export API regression: .venv/bin/python -m pytest backend/tests/test_api_boe.py -q -> 12 passed
+- Phase 7 BOE export API Ruff: .venv/bin/ruff check backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py -> clean
+- Phase 7 BOE export API py_compile: .venv/bin/python -m py_compile backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py -> passed
+- Phase 7 BOE export API compileall: .venv/bin/python -m compileall -q backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py -> passed
+- Phase 7 BOE export API Django check: .venv/bin/python backend/manage.py check -> no issues
+- Phase 7 BOE export API migration check: .venv/bin/python backend/manage.py makemigrations --check --dry-run -> no changes detected; sandboxed PostgreSQL connection warning only
+- Phase 7 BOE export API import verification: Django setup imported BillOfEntryViewSet with export_bill_of_entries and _group_boe attached; export route reverses to /api/bill-of-entries/export/
+- Phase 7 BOE export API security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 shared.pdf package marker audit: reviewed 0-line backend/shared/pdf/__init__.py; retained empty package marker because shared.pdf.builders is imported by license PDF exporter code
+- Phase 7 shared.pdf package marker verification: import shared.pdf and shared.pdf.builders passed; Ruff, py_compile, and compileall passed
+- Phase 7 PDF viewer guide audit: rewrote stale PDF viewer implementation guide to match current TypeScript route/component/helper paths and active blob preview behavior
+- Phase 7 PDF viewer security hardening: PDFViewer now rejects empty, absolute, protocol-relative, backslash-containing, and control-character url query values before Axios requests
+- Phase 7 PDF viewer regression: npm test -- PDFViewer.test.tsx -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/PDFViewer.tsx src/pages/PDFViewer.test.tsx -> passed; npm run build -> passed
+- Phase 7 UX/UI audit report dependency analysis: repository-wide search found docs/guides/UX_UI_AUDIT_REPORT.md referenced only by docs/README.md and audit metadata; content was stale JSX-era planning documentation and not a live reporting/export path
+- Phase 7 UX/UI audit report removal: deleted verified-dead stale guide and removed its docs/README.md index entry instead of carrying obsolete unresolved future-action content in the active audit knowledge base
+- Phase 7 LicenseExportPanel audit: reviewed shared active/expiring license Excel export component, props, days input, endpoint/filename callbacks, blob download path, loading state, toast error path, and feature rendering
+- Phase 7 LicenseExportPanel hardening: added typed props, normalized/clamped days to 1-365, stable input/help IDs, shared authenticated download helper usage, and focused regression tests
+- Phase 7 LicenseExportPanel verification: npm test -- LicenseExportPanel.test.tsx -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/components/reports/LicenseExportPanel.tsx src/components/reports/LicenseExportPanel.test.tsx -> passed; npm run build -> passed
+- Phase 7 ActiveLicenses page audit: reviewed React report wrapper, shared LicenseExportPanel integration, endpoint and filename callbacks, feature copy, route references, and active-license export semantics
+- Phase 7 ActiveLicenses hardening: removed stale hard-coded 2026/2027 copy and replaced symbolic date phrasing with accessible plain-language lookback text
+- Phase 7 ActiveLicenses regression: added frontend/src/pages/reports/ActiveLicenses.test.tsx covering visible copy, default days, stale-year absence, and active-license export URL/filename generation
+- Phase 7 ActiveLicenses verification: npm test -- ActiveLicenses.test.tsx -> 2 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ActiveLicenses.tsx src/pages/reports/ActiveLicenses.test.tsx -> passed; npm run build -> passed
+- Phase 7 DownloadLicense audit: reviewed React report page, status report GET path, bulk balance Excel POST path, blob download cleanup, manual license parsing, date-range input, route references, and accessibility wiring
+- Phase 7 DownloadLicense hardening: added day normalization to 1-3650, manual license-number trim/dedupe, malformed report-row filtering, delayed object URL revocation, textarea labels/help text, and aria-pressed status controls
+- Phase 7 DownloadLicense regression: added frontend/src/pages/reports/DownloadLicense.test.tsx covering helper boundaries, dedupe, empty input, malformed report rows, active endpoint export, and expiring endpoint export
+- Phase 7 DownloadLicense verification: npm test -- DownloadLicense.test.tsx -> 6 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/DownloadLicense.tsx src/pages/reports/DownloadLicense.test.tsx -> passed; npm run build -> passed
+- Phase 7 ExpiringLicenses page audit: reviewed React report wrapper, shared LicenseExportPanel integration, endpoint and filename callbacks, feature copy, route references, and expiring-license export semantics
+- Phase 7 ExpiringLicenses regression: added frontend/src/pages/reports/ExpiringLicenses.test.tsx covering rendered copy, default lookahead days, feature copy, and expiring-license export URL/filename generation
+- Phase 7 ExpiringLicenses verification: npm test -- ExpiringLicenses.test.tsx -> 2 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ExpiringLicenses.tsx src/pages/reports/ExpiringLicenses.test.tsx -> passed; npm run build -> passed
+- Phase 7 ItemPivotFilters audit: reviewed filter props, min-balance parsing, license status select, purchase-status multi-select, expiry date inputs, company include/exclude selectors, active-filter chips, clear action, and parent ItemPivotReport contract
+- Phase 7 ItemPivotFilters hardening: added typed select options, defensive min-balance normalization, stable labels for native controls, SSR-safe react-select portal target, boolean coercion for string-backed active-filter expressions, and focused tests
+- Phase 7 ItemPivotFilters verification: npm test -- ItemPivotFilters.test.tsx -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemPivotFilters.tsx src/pages/reports/ItemPivotFilters.test.tsx -> passed; npm run build -> passed
+- Phase 7 ItemPivotReport audit: reviewed 1478-line React report page, report URL construction, JSON/excel export paths, balance update polling, modal document opening, numeric summary aggregation, table rendering dependencies, and parent/child filter contract
+- Phase 7 ItemPivotReport hardening: replaced string-concatenated query URLs with URLSearchParams helper, normalized malformed numeric values before aggregation, reused authenticated document download helper, removed direct localStorage auth header access, guarded missing task ids, and delegated excel download blob handling to shared openAuthedFile
+- Phase 7 ItemPivotReport regression: added frontend/src/pages/reports/ItemPivotReport.test.ts covering encoded URL construction, blank optional filters, malformed numeric fallbacks, and non-finite numeric protection
+- Phase 7 ItemPivotReport verification: npm test -- ItemPivotReport.test.ts -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemPivotReport.tsx src/pages/reports/ItemPivotReport.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning
+- Phase 7 ItemPivotReport commit: 91fadfcad93f027592594783c6387dca8d88e9ab at 2026-07-16T15:19:38+05:30, fix(reports): harden item pivot report
+- Phase 7 ItemReport audit: reviewed 1231-line React item report page, report URL construction, JSON/excel export paths, item-name inline edit refresh, filter controls, authenticated document opening, option loading fallbacks, and report table rendering
+- Phase 7 ItemReport hardening: replaced duplicated string-concatenated report URLs with URLSearchParams helper, normalized malformed numeric filters, reused shared openAuthedFile for Excel export, removed console logging from option-load fallback paths, deduplicated purchase/norm options, and added stable labels/input IDs for filter controls
+- Phase 7 ItemReport regression: added frontend/src/pages/reports/ItemReport.test.ts covering encoded URL construction, blank optional filters, malformed numeric fallbacks, value normalization, Unicode-safe query encoding, and non-finite numeric protection
+- Phase 7 ItemReport verification: npm test -- ItemReport.test.ts -> 3 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/ItemReport.tsx src/pages/reports/ItemReport.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; git diff --check scoped to ItemReport files -> clean; py_compile not applicable to TSX/TS frontend source
+- Phase 7 ItemReport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 ItemReport commit: 1248ff802868a5d899b7944d11453456a86c6212 at 2026-07-16T15:24:02+05:30, fix(reports): harden item report
+- Phase 7 NormCardGrid audit: reviewed 152-line React norm selector grid, props, malformed norm handling, duplicate key risk, active selection behavior, loading indicator, icon accessibility, empty-state rendering, and parent ItemPivotReport contract
+- Phase 7 NormCardGrid hardening: added typed norm input/normalized card model, filtered null/blank objects missing norm_class, deduplicated duplicate norm classes, removed negative letter spacing, added aria-pressed to norm buttons, and hid decorative icons from assistive tech
+- Phase 7 NormCardGrid regression: added frontend/src/pages/reports/NormCardGrid.test.tsx covering malformed/blank/duplicate normalization, active button accessibility, changed-norm report reset, and reselecting the active norm without clearing data
+- Phase 7 NormCardGrid verification: npm test -- NormCardGrid.test.tsx -> 3 passed after fixing object-without-norm_class normalization; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/NormCardGrid.tsx src/pages/reports/NormCardGrid.test.tsx -> passed; npm run build -> passed; Django check -> exit 0 with staticfiles.W004 frontend/dist/assets warning; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 NormCardGrid security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 NormCardGrid commit: 4b20a546b0b8c76e110237c1e155482ccc72a0ca at 2026-07-16T15:27:02+05:30, fix(reports): harden norm card grid
+- Phase 7 SionE1 audit: reviewed 10-line React wrapper, SionNormReport dependency, route registration, fixed sionNorm prop, title prop, render path, and absence of local validation/query/export state
+- Phase 7 SionE1 hardening: no runtime code change required; wrapper is intentionally a thin typed route adapter to shared SionNormReport
+- Phase 7 SionE1 regression: added frontend/src/pages/reports/SionE1.test.tsx mocking SionNormReport and asserting the E1 norm/title contract
+- Phase 7 SionE1 verification: npm test -- SionE1.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE1.tsx src/pages/reports/SionE1.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionE1 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionE1 commit: ede878cce8184292ee2b142c5990af29b34e881e at 2026-07-16T15:29:16+05:30, test(reports): cover sion e1 wrapper
+- Phase 7 SionE126 audit: reviewed 10-line React wrapper, SionNormReport dependency, route registration, fixed sionNorm prop, title prop, render path, and absence of local validation/query/export state
+- Phase 7 SionE126 hardening: no runtime code change required; wrapper is intentionally a thin route adapter to shared SionNormReport
+- Phase 7 SionE126 regression: added frontend/src/pages/reports/SionE126.test.tsx mocking SionNormReport and asserting the E126 norm/title contract
+- Phase 7 SionE126 verification: npm test -- SionE126.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE126.tsx src/pages/reports/SionE126.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionE126 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionE126 commit: 28f1638598923076d478d8e9349ce78a1c43b7c1 at 2026-07-16T15:31:14+05:30, test(reports): cover sion e126 wrapper
+- Phase 7 SionE132 audit: reviewed 10-line React wrapper, SionNormReport dependency, route registration, fixed sionNorm prop, title prop, render path, and absence of local validation/query/export state
+- Phase 7 SionE132 hardening: no runtime code change required; wrapper is intentionally a thin route adapter to shared SionNormReport
+- Phase 7 SionE132 regression: added frontend/src/pages/reports/SionE132.test.tsx mocking SionNormReport and asserting the E132 norm/title contract
+- Phase 7 SionE132 verification: npm test -- SionE132.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE132.tsx src/pages/reports/SionE132.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionE132 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionE132 commit: bb40f71130e8c5090ae682859dbea5da2f2f62bc at 2026-07-16T15:33:00+05:30, test(reports): cover sion e132 wrapper
+- Phase 7 SionE5 audit: reviewed 10-line React wrapper, SionNormReport dependency, route registration, fixed sionNorm prop, title prop, render path, and absence of local validation/query/export state
+- Phase 7 SionE5 hardening: no runtime code change required; wrapper is intentionally a thin route adapter to shared SionNormReport
+- Phase 7 SionE5 regression: added frontend/src/pages/reports/SionE5.test.tsx mocking SionNormReport and asserting the E5 norm/title contract
+- Phase 7 SionE5 verification: npm test -- SionE5.test.tsx -> 1 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionE5.tsx src/pages/reports/SionE5.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionE5 security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionE5 commit: 4574c8d35370e8547f6dd1386ce62e4457e34b58 at 2026-07-16T15:34:56+05:30, test(reports): cover sion e5 wrapper
+- Phase 7 SionNormReport audit: reviewed 408-line shared React report implementation, API query construction, filter state, effect cleanup, malformed response handling, numeric/date formatting, dense table rendering, notification grouping, totals rows, loading/empty states, and wrapper contracts
+- Phase 7 SionNormReport hardening: added typed props/filters, centralized buildSionReportPath, normalized boolean filters, rejected NaN/infinite number output, guarded malformed groups/notifications/licenses/totals, prevented post-unmount state updates, encoded license IDs in links, added fieldset/legend radio groups, and replaced index-only notification keys
+- Phase 7 SionNormReport regression: added frontend/src/pages/reports/SionNormReport.test.tsx covering helper normalization, malformed API groups, finite number formatting, default fetch path, and radio-triggered reload paths
+- Phase 7 SionNormReport verification: npm test -- SionNormReport.test.tsx -> 5 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/reports/SionNormReport.tsx src/pages/reports/SionNormReport.test.tsx -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 SionNormReport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 SionNormReport commit: 78e9c91eebad9007552cd95e7519dca062021b08 at 2026-07-16T15:38:09+05:30, fix(reports): harden sion norm report
+- Phase 7 documentDownload audit: reviewed shared authenticated blob download helper, protected media path normalization, report/export download callers, object URL lifecycle, new-tab/download branches, and unsafe external URL risk
+- Phase 7 documentDownload hardening: added normalizeAuthedFilePath, rejected blank absolute protocol-relative backslash and control-character paths before Axios requests, trimmed media paths, supported protocol-relative media URLs by stripping origin, and rejected empty/unsafe media paths
+- Phase 7 documentDownload regression: expanded frontend/src/utils/documentDownload.test.ts to cover unsafe media paths, safe relative report paths, absolute/protocol-relative rejection, backslash rejection, and pre-request failure for unsafe openAuthedFile paths
+- Phase 7 documentDownload verification: npm test -- documentDownload.test.ts -> 8 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/documentDownload.ts src/utils/documentDownload.test.ts -> passed; npm run build -> passed; Django check -> no issues; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 documentDownload security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 documentDownload commit: bf5ad0010a89381311d2542d3eb4c613dbed68fa at 2026-07-16T15:41:27+05:30, fix(reports): validate authenticated download paths
+- Phase 7 pdfPreview audit: reviewed shared PDF blob preview wrapper, popup-blocked path, object URL lifecycle, wrapper HTML construction, title/download filename handling, and report/export callers
+- Phase 7 pdfPreview hardening: exported and tested filename/HTML helpers, normalized blank unsafe control-character and overlong PDF names, escaped title/download attributes, removed non-ASCII download label, and kept blocked-popup URL cleanup
+- Phase 7 pdfPreview regression: added frontend/src/utils/pdfPreview.test.ts covering blank/unsafe filenames, HTML-sensitive escaping, popup-blocked cleanup, and escaped wrapper HTML
+- Phase 7 pdfPreview verification: npm test -- pdfPreview.test.ts -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/pdfPreview.js src/utils/pdfPreview.test.ts -> passed; npm run build -> passed; Django check -> exit 0 with staticfiles.W004 frontend/dist/assets warning; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 pdfPreview security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 pdfPreview commit: 3ad2061986783d8f0a3cc98fcd7771f586af65a5 at 2026-07-16T15:44:54+05:30, fix(reports): harden pdf preview wrapper
+- Phase 7 LedgerUpload audit: reviewed 444-line React ledger upload page, async multipart upload batching, task status polling, malformed response handling, progress rendering, file input cleanup, route references, and upload API dependencies
+- Phase 7 LedgerUpload hardening: added typed async task/error models, normalized malformed file_tasks/errors before rendering, deduplicated task IDs, capped large error summaries, removed console error leakage, converted DOM lookup resets to an input ref, added progressbar ARIA, clamped malformed progress values, added accessible remove labels, and added a dialog description
+- Phase 7 LedgerUpload regression: added frontend/src/pages/LedgerUpload.test.tsx covering async response normalization, capped error messages, API/native error extraction, progress clamping, accessible file removal, and async upload FormData/task rendering
+- Phase 7 LedgerUpload verification: npm test -- LedgerUpload.test.tsx -> 6 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/LedgerUpload.tsx src/pages/LedgerUpload.test.tsx -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 LedgerUpload security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 LedgerUpload commit: 1739ad2ae3213cc09310a9619de38e57b49685f5 at 2026-07-16T15:49:41+05:30, fix(reports): harden ledger upload
+- Phase 7 LicenseLedger audit: reviewed 582-line React ledger page, filter query construction, financial-year defaults, license-wise API rendering, bulk PDF/Excel export detail fetching, report route references, summary cards, and export utility dependencies
+- Phase 7 LicenseLedger hardening: added typed filter/license-wise data models, sanitized min-balance/search/company/order query params, normalized malformed license-wise API rows before rendering/export, centralized financial-year/date-stamp helpers, preserved bounded sequential export detail fetching with failure counts, rejected malformed detail export rows, improved export/failure toast feedback, and added pressed/label attributes to filter/export controls
+- Phase 7 LicenseLedger regression: added frontend/src/pages/LicenseLedger.test.tsx covering financial-year ranges, filter query normalization, company/min-balance edge cases, malformed license-wise response normalization, deterministic date stamps, and bulk PDF export detail fetching
+- Phase 7 LicenseLedger verification: npm test -- LicenseLedger.test.tsx -> 6 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/LicenseLedger.tsx src/pages/LicenseLedger.test.tsx -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 LicenseLedger security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 LicenseLedger commit: 08d50b2aa5fbd2a23ebcc3657be8c8425a268460 at 2026-07-16T15:54:00+05:30, fix(reports): harden license ledger
+- Phase 7 LicenseLedgerDetail audit: reviewed 392-line React ledger detail/export page, route-param API path construction, query company filter, ledger-detail response rendering, grouped transaction table, warning states, PDF/Excel export filename generation, and export utility dependencies
+- Phase 7 LicenseLedgerDetail hardening: added safe route segment encoding, normalized malformed ledger-detail responses, rejected blank IDs and malformed responses, removed console error leakage, sanitized export filename segments, centralized date stamping, grouped transactions through a reusable helper, and normalized currency balances
+- Phase 7 LicenseLedgerDetail regression: added frontend/src/pages/LicenseLedgerDetail.test.tsx covering path encoding, malformed response normalization, filename sanitization, date stamps, unknown-company grouping, and PDF export filename generation
+- Phase 7 LicenseLedgerDetail verification: npm test -- LicenseLedgerDetail.test.tsx -> 5 passed; npm run typecheck -> passed; npm run lint -- --quiet src/pages/LicenseLedgerDetail.tsx src/pages/LicenseLedgerDetail.test.tsx -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 LicenseLedgerDetail security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 LicenseLedgerDetail commit: ee071fcbf3a2a6930585b58faaae9c793446dd9f at 2026-07-16T15:56:54+05:30, fix(reports): harden license ledger detail
+- Phase 7 ledgerExport audit: reviewed 681-line shared PDF/XLSX ledger export utility, ReportLab/jsPDF table body generation, Excel workbook generation, summary sheets, company grouping, running-balance calculations, hyperlink generation, filename defaults, object URL cleanup, and callers
+- Phase 7 ledgerExport hardening: added export-boundary license/transaction normalization, finite numeric coercion, safe filename and worksheet-name sanitization, encoded ledger hyperlinks, explicit unknown-company grouping, sanitized default filenames, and delayed workbook object URL revocation
+- Phase 7 ledgerExport regression: added frontend/src/utils/ledgerExport.test.ts covering malformed export data normalization, filename and worksheet sanitization, unknown-company grouping, and encoded ledger links
+- Phase 7 ledgerExport verification: npm test -- ledgerExport.test.ts -> 4 passed; npm run typecheck -> passed; npm run lint -- --quiet src/utils/ledgerExport.js src/utils/ledgerExport.test.ts -> passed; npm run build -> passed; Django check -> no issues after build completion; makemigrations --check --dry-run -> no changes detected with sandboxed PostgreSQL warning; compileall and scoped git diff --check -> clean
+- Phase 7 ledgerExport security tooling check: .venv/bin contains no bandit, pip-audit, safety, or semgrep executable -> blocked
+- Phase 7 ledgerExport commit: 10bcbcdf14ab7a5892f1a970fda56d9bba252fad at 2026-07-16T16:00:46+05:30, fix(reports): harden ledger export utility
+- Ruff F821 undefined-name sweep: clean
+- Previous Ruff selected F811/E741 baseline: 23 findings, now resolved
+- Ruff full baseline: 547 findings remain
+- Phase 11 order-view template dependency scan: no live render, TemplateResponse, template_name, template-loader, include, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `order-view.html` hits are stale queued template links.
+- Phase 11 order-view template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 order-view template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 order-view template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 order-view template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 order-view template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 order-view template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 order-view template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 orders template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `orders.html` hits are stale queued template links.
+- Phase 11 orders template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 orders template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 orders template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 orders template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 orders template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 orders template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 orders template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 page-light template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `page-light.html` hits are stale queued template links.
+- Phase 11 page-light template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 page-light template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 page-light template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 page-light template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 page-light template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 page-light template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 page-light template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 pagination template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `pagination.html` hits are stale queued template links.
+- Phase 11 pagination template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 pagination template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 pagination template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 pagination template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 pagination template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 pagination template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 pagination template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 pricing-tables template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `pricing-tables.html` hits are stale queued template links.
+- Phase 11 pricing-tables template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 pricing-tables template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 pricing-tables template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 pricing-tables template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 pricing-tables template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 pricing-tables template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 pricing-tables template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 products-edit template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `products-edit.html` hits are stale queued template links.
+- Phase 11 products-edit template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 products-edit template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 products-edit template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 products-edit template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 products-edit template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 products-edit template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 products-edit template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 products template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `products.html` hits are stale queued template links.
+- Phase 11 products template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 products template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 products template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 products template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 products template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 products template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 products template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 progress-bars template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path remained; remaining `progress-bars.html` hits are stale queued template links.
+- Phase 11 progress-bars template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 progress-bars template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 progress-bars template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 progress-bars template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 progress-bars template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 progress-bars template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 progress-bars template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+- Phase 11 register template dependency scan: no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, auth-runtime, or third-party runtime path remained; remaining `register.html` hits are stale queued template/theme links.
+- Phase 11 register template convention check: top-level `backend/templates/register.html` is not a Django auth convention template for this project; active auth uses API/frontend routes and convention auth templates live under `registration/`.
+- Phase 11 register template regression: `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+- Phase 11 register template Ruff: `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+- Phase 11 register template py_compile: `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+- Phase 11 register template compileall: `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+- Phase 11 register template Django check: `.venv/bin/python backend/manage.py check` -> no issues.
+- Phase 11 register template makemigrations check: `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+- Phase 11 register template security tooling check: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable -> blocked.
+
+- Phase 11 agents README dependency scan: `CLAUDE.md` references `.claude/agents/README.md`; retained as live repository guidance.
+- Phase 11 agents README verification: script path check passed; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
+
+- Phase 11 backend-engineer agent dependency scan: `CLAUDE.md` and `.claude/agents/README.md` reference `.claude/agents/backend-engineer.md`; retained as live repository guidance.
+- Phase 11 backend-engineer agent verification: script path check passed; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
+
+- Phase 11 code-reviewer agent dependency scan: `CLAUDE.md` and `.claude/agents/README.md` reference `.claude/agents/code-reviewer.md`; retained as live repository guidance.
+- Phase 11 code-reviewer agent verification: staged-diff command now uses `git diff --cached`; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
+
+- Phase 11 data-engineer agent dependency scan: `CLAUDE.md` and `.claude/agents/README.md` reference `.claude/agents/data-engineer.md`; retained as live repository guidance.
+- Phase 11 data-engineer agent verification: referenced script paths exist; `git diff --check` and `git diff --cached --check` clean; runtime backend/frontend gates not applicable to markdown-only source change.
+
+## Blocked Work
+
+- None currently blocked.
+
+## Skipped Work
+
+- Generated/cache/vendor/binary outputs are recorded as `IGNORED` in `audit-database.json` under `excluded_files`.
+
+## High Risk Changes
+
+- Any changes to `backend/apps/license/models/__init__.py`, `backend/apps/core/models/__init__.py`, `frontend/src/shared/api/client.ts`, or shared UI primitives require blast-radius checks from `.claude/index/dependents.tsv`.

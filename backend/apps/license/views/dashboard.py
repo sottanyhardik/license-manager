@@ -7,17 +7,18 @@ from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Count, Prefetch, Q
+from django.db.models.functions import TruncMonth
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import ReportPermission
 from apps.allotment.models import AllotmentModel
 from apps.bill_of_entry.models import BillOfEntryModel
 from apps.core.cache_utils import CACHE_TIMEOUT_MEDIUM
 from apps.core.utils.exceptions import api_error
-from apps.license.models import LicenseDetailsModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel
+from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
 
 class DashboardDataView(APIView):
@@ -60,8 +61,13 @@ class DashboardDataView(APIView):
             data = {}
 
             if has(['LICENSE_MANAGER', 'LICENSE_VIEWER', 'REPORT_VIEWER']):
-                data['license_stats'] = self._get_license_stats()
-                data['expiring_licenses'] = self._get_expiring_licenses()
+                # Both widgets use the exact same live-balance eligibility
+                # set. Resolve it once per uncached response so the summary
+                # and queue cannot disagree and so the expensive balance
+                # service is not evaluated twice.
+                expiring_context = self._get_expiring_license_context()
+                data['license_stats'] = self._get_license_stats(expiring_context)
+                data['expiring_licenses'] = self._get_expiring_licenses(expiring_context)
 
             if has(['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER', 'REPORT_VIEWER']):
                 data['allotment_stats'] = self._get_allotment_stats()
@@ -78,37 +84,47 @@ class DashboardDataView(APIView):
                 status=500,
             )
 
-    def _get_license_stats(self):
+    def _get_license_stats(self, expiring_context=None):
         """Get license statistics"""
-        # Active licenses: not expired and not null (balance >= 500)
-        active_count = LicenseDetailsModel.objects.filter(
-            flags__is_expired=False,
-            flags__is_null=False
-        ).count()
-
-        # Expired licenses: expired and not null
-        expired_count = LicenseDetailsModel.objects.filter(
-            flags__is_expired=True,
-            flags__is_null=False
-        ).count()
-
-        # Null DFIA: balance < 500
-        null_count = LicenseDetailsModel.objects.filter(
-            flags__is_null=True
-        ).count()
+        # These categories are intentionally counted independently. The
+        # response's `total` has always been their sum, rather than a raw
+        # table count, so retain that contract while issuing one aggregate
+        # query instead of three separate counts.
+        category_counts = LicenseDetailsModel.objects.aggregate(
+            active=Count('id', filter=Q(flags__is_expired=False, flags__is_null=False)),
+            expired=Count('id', filter=Q(flags__is_expired=True, flags__is_null=False)),
+            null_dfia=Count('id', filter=Q(flags__is_null=True)),
+        )
+        active_count = category_counts['active']
+        expired_count = category_counts['expired']
+        null_count = category_counts['null_dfia']
 
         # Total licenses
         total_count = active_count + expired_count + null_count
 
-        # Expiring soon: licenses expiring in next 30 days
+        # Expiring soon: licenses expiring in next 30 days. BL-LEDGER-02:
+        # the cached `balance__balance_cif` column can be stale, so resolve
+        # the $100 threshold against the LIVE, batched-computed balance
+        # instead of filtering the DB column directly.
         today = date.today()
         expiry_date = today + timedelta(days=30)
-        expiring_count = LicenseDetailsModel.objects.filter(
-            license_expiry_date__gte=today,
-            license_expiry_date__lte=expiry_date,
-            flags__is_active=True,
-            balance__balance_cif__gte=Decimal('100.00')  # Only count licenses with balance >= $100
-        ).count()
+        if expiring_context is None:
+            expiring_candidate_ids = list(
+                LicenseDetailsModel.objects.filter(
+                    license_expiry_date__gte=today,
+                    license_expiry_date__lte=expiry_date,
+                    flags__is_active=True,
+                ).values_list('id', flat=True)
+            )
+            expiring_live_balance = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+                expiring_candidate_ids
+            )
+        else:
+            expiring_candidate_ids, expiring_live_balance = expiring_context
+        expiring_count = sum(
+            1 for lid in expiring_candidate_ids
+            if expiring_live_balance.get(lid, Decimal('0')) >= Decimal('100.00')
+        )
 
         return {
             'total': total_count,
@@ -145,6 +161,12 @@ class DashboardDataView(APIView):
 
     def _get_boe_stats(self):
         """Get BOE statistics"""
+        # NOTE (Hidden BOEs / previous-owner utilisation, see
+        # `apps.bill_of_entry.models.OTH_INVOICE_MARKER`): deliberately NOT
+        # filtered here. This dashboard counts BOE records system-wide — a
+        # raw activity/record count, not a licence balance or financial
+        # figure, which is the one thing hidden BOEs are defined to affect.
+        # Out of scope by design; left unfiltered.
         # Total BOE (all records - both with and without invoices)
         total_count = BillOfEntryModel.objects.count()
 
@@ -173,39 +195,75 @@ class DashboardDataView(APIView):
             'recent': recent_data,
         }
 
-    def _get_expiring_licenses(self):
-        """Get top 5 expiring licenses in next 30 days"""
+    def _get_expiring_license_context(self):
+        """Return the shared candidate rows and live balances for expiry widgets.
+
+        This deliberately remains request-local. The surrounding endpoint
+        cache controls cross-request freshness; sharing it here only removes
+        duplicate work while preserving the live-balance contract.
+        """
         today = date.today()
         expiry_date = today + timedelta(days=30)
 
-        # Get licenses expiring in next 30 days with balance >= $100
-        licenses = LicenseDetailsModel.objects.filter(
+        # BL-LEDGER-02: the cached `balance__balance_cif` column can be
+        # stale, so the $100 threshold can no longer be a DB filter. Fetch
+        # every active license in the expiry window (unsliced), compute
+        # live balance for all of them, THEN filter by balance and take the
+        # top 5 soonest-expiring -- same "top 5 among balance >= $100"
+        # semantics as before, just resolved against the live figure.
+        candidates = LicenseDetailsModel.objects.filter(
             license_expiry_date__gte=today,
             license_expiry_date__lte=expiry_date,
             flags__is_active=True,
-            balance__balance_cif__gte=Decimal('100.00')
         ).select_related(
             'exporter', 'port', 'balance', 'flags',
         ).prefetch_related(
-            'export_license__norm_class'
-        ).order_by('license_expiry_date')[:5]
+            Prefetch(
+                'export_license',
+                queryset=LicenseExportItemModel.objects.filter(
+                    norm_class__isnull=False,
+                ).select_related('norm_class'),
+            )
+        ).order_by('license_expiry_date')
+
+        candidates = list(candidates)
+
+        # Financial Ledger formula -- see `LicenseDetailsModel.
+        # get_balance_cif`'s docstring; every "Balance CIF" the dashboard
+        # shows must match the rest of the app.
+        live_balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+            [license_obj.id for license_obj in candidates]
+        )
+        return candidates, live_balance_map
+
+    def _get_expiring_licenses(self, expiring_context=None):
+        """Get top 5 expiring licenses in next 30 days."""
+        today = date.today()
+        candidates, live_balance_map = expiring_context or self._get_expiring_license_context()
+
+        licenses = [
+            license_obj for license_obj in candidates
+            if live_balance_map.get(license_obj.id, Decimal('0')) >= Decimal('100.00')
+        ][:5]
 
         licenses_data = []
         for license_obj in licenses:
             # Calculate days to expiry
             days_to_expiry = (license_obj.license_expiry_date - today).days
 
-            # Get SION norms
-            sion_norms = list(
-                license_obj.export_license.filter(
-                    norm_class__isnull=False
-                ).values_list('norm_class__norm_class', flat=True).distinct()
-            )
+            # `export_license__norm_class` is preloaded in the context.
+            # Filtering the related manager here would clone its queryset and
+            # silently reintroduce one SQL request per dashboard row.
+            sion_norms = list(dict.fromkeys(
+                export_item.norm_class.norm_class
+                for export_item in license_obj.export_license.all()
+                if export_item.norm_class is not None
+            ))
 
             licenses_data.append({
                 'license_number': license_obj.license_number,
                 'license_expiry_date': license_obj.license_expiry_date,
-                'balance_cif': float(license_obj.balance_cif or 0),
+                'balance_cif': float(live_balance_map.get(license_obj.id) or 0),
                 'sion_norms': sion_norms,
                 'days_to_expiry': days_to_expiry,
             })
@@ -214,15 +272,21 @@ class DashboardDataView(APIView):
 
     def _get_boe_monthly_trend(self):
         """Get BOE count by month for last 6 months"""
+        # NOTE: same deliberate choice as `_get_boe_stats` above — hidden
+        # BOEs are a per-(BOE, licence) concept and this trend is a
+        # system-wide, licence-agnostic activity count, not a balance
+        # figure. Left unfiltered.
         # Calculate date 6 months ago
         today = date.today()
         six_months_ago = today - relativedelta(months=6)
 
         # Get all BOE records from last 6 months with valid bill_of_entry_date
-        boe_records = BillOfEntryModel.objects.filter(
+        monthly_counts = BillOfEntryModel.objects.filter(
             bill_of_entry_date__gte=six_months_ago,
             bill_of_entry_date__isnull=False
-        ).values('bill_of_entry_date')
+        ).annotate(month_start=TruncMonth('bill_of_entry_date')).values('month_start').annotate(
+            count=Count('id')
+        ).order_by('month_start')
 
         # Initialize months dictionary
         months_data = {}
@@ -236,12 +300,13 @@ class DashboardDataView(APIView):
                 'month_num': month_date.month,
             }
 
-        # Count BOE records per month
-        for boe in boe_records:
-            boe_date = boe['bill_of_entry_date']
-            month_key = boe_date.strftime('%b %Y')
+        # The old implementation fetched every BOE date and counted in
+        # Python. Group in SQL instead; output still includes all six month
+        # buckets, including zero-count months, in the same order.
+        for row in monthly_counts:
+            month_key = row['month_start'].strftime('%b %Y')
             if month_key in months_data:
-                months_data[month_key]['count'] += 1
+                months_data[month_key]['count'] = row['count']
 
         # Convert to list and sort by date
         monthly_trend = sorted(

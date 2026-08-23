@@ -1,12 +1,14 @@
 import { useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, X, KeyRound } from "lucide-react";
+import { ArrowLeft, Check, X, KeyRound, ShieldCheck, UserRound } from "lucide-react";
 
 import { createUser, getAvailableRoles, getUser, resetPassword, updateUser } from "../../api/users";
 import { AuthContext } from "../../context/AuthContext";
 import { getErrorMessage } from "../../utils/errorUtils";
+import { extractFormErrors, getFieldError } from "../../utils/formErrors";
 import { ROLE_LABELS } from "../../utils/roleConstants";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +16,19 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const emptyForm = {
+type UserFormData = {
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    password: string;
+    is_active: boolean;
+    is_staff: boolean;
+    is_superuser: boolean;
+    roles: string[];
+};
+
+const emptyForm: UserFormData = {
     username: "", email: "", first_name: "", last_name: "", password: "",
     is_active: true, is_staff: false, is_superuser: false, roles: [],
 };
@@ -25,14 +39,15 @@ export default function UserForm() {
     const { user: currentUser } = useContext(AuthContext);
     const isEdit = Boolean(id);
 
-    const [form, setForm] = useState(emptyForm);
-    const [availableRoles, setAvailableRoles] = useState([]);
+    const [form, setForm] = useState<UserFormData>(emptyForm);
+    const [availableRoles, setAvailableRoles] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [resettingPw, setResettingPw] = useState(false);
     const [newPassword, setNewPassword] = useState("");
     const [showPwReset, setShowPwReset] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
+    const [passwordResetErrors, setPasswordResetErrors] = useState<Record<string, string | undefined>>({});
 
     useEffect(() => {
         const init = async () => {
@@ -54,8 +69,8 @@ export default function UserForm() {
                         roles: user.roles ?? [],
                     });
                 }
-            } catch (err) {
-                toast.error(getErrorMessage(err));
+            } catch (err: unknown) {
+                toast.error(getErrorMessage(err as Error));
             } finally {
                 setLoading(false);
             }
@@ -63,22 +78,22 @@ export default function UserForm() {
         init();
     }, [id, isEdit]);
 
-    const handleChange = (e) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
         setFieldErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
-    const setFlag = (name, checked) => setForm(prev => ({ ...prev, [name]: checked }));
+    const setFlag = (name: keyof UserFormData, checked: boolean) => setForm(prev => ({ ...prev, [name]: checked }));
 
-    const toggleRole = (code) => {
+    const toggleRole = (code: string) => {
         setForm(prev => ({
             ...prev,
             roles: prev.roles.includes(code) ? prev.roles.filter(r => r !== code) : [...prev.roles, code],
         }));
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
         setFieldErrors({});
@@ -93,11 +108,10 @@ export default function UserForm() {
                 toast.success("User created");
             }
             navigate("/admin/users");
-        } catch (err) {
-            if (err?.response?.data && typeof err.response.data === "object") {
-                setFieldErrors(err.response.data);
-            }
-            toast.error(getErrorMessage(err));
+        } catch (err: unknown) {
+            const { fieldErrors: errors } = extractFormErrors(err);
+            setFieldErrors(errors);
+            toast.error(getErrorMessage(err as Error));
         } finally {
             setSaving(false);
         }
@@ -106,13 +120,16 @@ export default function UserForm() {
     const handleResetPassword = async () => {
         if (!newPassword) return;
         setResettingPw(true);
+        setPasswordResetErrors({});
         try {
             await resetPassword(id, newPassword);
             toast.success("Password reset successfully");
             setShowPwReset(false);
             setNewPassword("");
-        } catch (err) {
-            toast.error(getErrorMessage(err));
+        } catch (err: unknown) {
+            const { fieldErrors: errors } = extractFormErrors(err);
+            setPasswordResetErrors(errors);
+            toast.error(getErrorMessage(err as Error));
         } finally {
             setResettingPw(false);
         }
@@ -120,26 +137,34 @@ export default function UserForm() {
 
     if (loading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
 
-    const FieldError = ({ name }) =>
-        fieldErrors[name] ? <p className="mt-1 text-[11.5px] text-destructive">{fieldErrors[name]}</p> : null;
+    const FieldError = ({ name }: { name: string }) => {
+        const error = getFieldError(fieldErrors, name);
+        return error ? <p className="mt-1 text-[11.5px] text-destructive">{error}</p> : null;
+    };
 
     return (
-        <div className="mx-auto max-w-3xl">
-            <div className="mb-5 flex items-center gap-3">
-                <Button variant="outline" size="sm" onClick={() => navigate("/admin/users")}>
+        <div className="mx-auto max-w-4xl pb-20">
+            <div className="mb-5 border-b border-border pb-4">
+                <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={() => navigate("/admin/users")}>
                     <ArrowLeft className="size-4" />
-                    Back
+                    Back to users
                 </Button>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                    {isEdit ? "Edit User" : "Create User"}
-                </h1>
+                <div className="flex items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
+                        <UserRound className="size-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-semibold tracking-tight text-foreground">{isEdit ? "Edit user access" : "Create user"}</h1>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">Manage account details, operational roles, and access flags.</p>
+                    </div>
+                </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 {/* Account details */}
                 <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Account Details</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-2">
+                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Account details</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2">
                         <div>
                             <Label className="mb-1.5 required" htmlFor="username">Username</Label>
                             <Input id="username" name="username" value={form.username} onChange={handleChange}
@@ -173,8 +198,8 @@ export default function UserForm() {
 
                 {/* Access flags */}
                 <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Access Flags</CardTitle></CardHeader>
-                    <CardContent className="flex flex-wrap gap-x-8 gap-y-3 pt-5">
+                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Access flags</CardTitle></CardHeader>
+                    <CardContent className="flex flex-wrap gap-x-8 gap-y-3 pt-4">
                         <label className="flex cursor-pointer items-center gap-2.5 text-sm">
                             <Switch checked={form.is_active} onCheckedChange={(c) => setFlag("is_active", c)} />
                             Active
@@ -194,16 +219,17 @@ export default function UserForm() {
 
                 {/* Roles */}
                 <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Roles</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-2 pt-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Roles</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 lg:grid-cols-3">
                         {availableRoles.map((code) => {
                             const checked = form.roles.includes(code);
                             return (
                                 <label
                                     key={code}
-                                    className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors ${
-                                        checked ? "border-primary/40 bg-primary/5 text-foreground" : "border-border text-muted-foreground hover:bg-accent/50"
-                                    }`}
+                                    className={cn(
+                                        "flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors",
+                                        checked ? "border-primary/50 bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-accent/50"
+                                    )}
                                 >
                                     <Checkbox checked={checked} onCheckedChange={() => toggleRole(code)} />
                                     {ROLE_LABELS[code] ?? code}
@@ -213,8 +239,8 @@ export default function UserForm() {
                     </CardContent>
                 </Card>
 
-                {/* Actions */}
-                <div className="flex gap-2">
+                <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 shadow-sm backdrop-blur sm:left-[var(--sidebar-width,0px)] sm:px-6">
+                  <div className="mx-auto flex max-w-4xl flex-wrap gap-2">
                     <Button type="submit" disabled={saving}>
                         <Check className="size-4" />
                         {saving ? "Saving…" : isEdit ? "Save Changes" : "Create User"}
@@ -229,6 +255,7 @@ export default function UserForm() {
                             Reset Password
                         </Button>
                     )}
+                  </div>
                 </div>
             </form>
 
@@ -242,9 +269,18 @@ export default function UserForm() {
                             className="flex-1"
                             placeholder="New password"
                             value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
+                            onChange={(e) => {
+                                setNewPassword(e.target.value);
+                                setPasswordResetErrors(prev => ({ ...prev, password: undefined }));
+                            }}
                             autoComplete="new-password"
+                            aria-invalid={!!getFieldError(passwordResetErrors, "password")}
                         />
+                        {getFieldError(passwordResetErrors, "password") && (
+                            <p className="basis-full text-[11.5px] text-destructive">
+                                {getFieldError(passwordResetErrors, "password")}
+                            </p>
+                        )}
                         <Button onClick={handleResetPassword} disabled={resettingPw || !newPassword}>
                             <Check className="size-4" />
                             {resettingPw ? "Saving…" : "Set Password"}

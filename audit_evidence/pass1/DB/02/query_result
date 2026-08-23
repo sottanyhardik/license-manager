@@ -1,0 +1,15 @@
+=== 1) live allocation rows ===
+1 | 274426 | 27571 | 37689 | D
+2 | 274427 | 27572 | 37689 | D
+
+=== 2) the two BOE headers ===
+27571 | 7650222 | 2026-02-20 | 489 | 
+27572 | 7650224 | 2026-02-20 | 489 | 
+
+=== 3) matching RowDetails combo on both BOEs ===
+274426 | 27571 | 37689 | D
+274427 | 27572 | 37689 | D
+
+=== 4) on_delete wiring (CASCADE vs PROTECT) ===
+bill_of_entry_rowdetails | bill_of_entry_rowdet_bill_of_entry_id_b00cd11e_fk_bill_of_e | FOREIGN KEY (bill_of_entry_id) REFERENCES bill_of_entry_billofentrymodel(id) DEFERRABLE INITIALLY DEFERRED
+reconciliation_invoiceboeallocation | reconciliation_invoi_row_details_id_2874301e_fk_bill_of_e | FOREIGN KEY (row_details_id) REFERENCES bill_of_entry_rowdetails(id) DEFERRABLE INITIALLY DEFERRED

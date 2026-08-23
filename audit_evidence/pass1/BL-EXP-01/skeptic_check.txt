@@ -1,0 +1,107 @@
+BL-EXP-01 SKEPTIC RE-VERIFICATION (Pass 1)
+Role: skeptic verifying a claimed high-confidence finding, independently.
+Date of check: 2026-08-07 (matches DB server current_date, confirmed below).
+Method: re-derived every fact from scratch — re-read the source myself
+(not just the claimant's grep excerpts) and re-ran the DB query myself
+against the real local "lmanagement" DB (read-only SELECTs only).
+
+--------------------------------------------------------------------------
+1) CODE PATH — independently read, not just grepped
+
+Read backend/apps/allotment/views_actions.py lines 600-862 in full (the
+entire AllotmentActionViewSet.allocate_items method body, decorator to
+final return). Confirmed independently:
+
+  - The method performs exactly four gating checks per allocation, in this
+    order: (a) actual_available_qty >= qty [line ~683], (b)
+    available_value_calculated >= cif_fc [line ~710], (c) allocation vs.
+    remaining_balance on the allotment [line ~723], (d) utilization-plan
+    cap via plan_status_for() [line ~748-770].
+  - Zero references anywhere in the method (or its imports) to
+    `is_expired`, `license_expiry_date`, `LicenseValidationService`, or
+    `AllocationService`.
+  - The write itself is a direct `AllotmentItems.objects.create(...)` at
+    line 788 (or an `existing.save()` amend at line 784) — no service
+    layer, no validator, in between the checks above and the DB write.
+  - Confirmed AllotmentItems.objects.create/AllotmentItems( is only called
+    in two places repo-wide (excluding tests): views_actions.py:788 (the
+    live path) and services/allocation_service.py:194 (a separate,
+    parallel service).
+
+Read backend/apps/license/services/validation_service.py in full.
+Confirmed independently that `validate_license_active` (line 22-58) does
+check `license_obj.is_expired` and that `validate_allocation` (line
+227-281) calls `validate_license_active`. This IS a real, correctly
+implemented expiry gate — it is just not wired into the write path above.
+
+Ran my own greps (not trusting the claimant's grep output as given,
+re-ran them fresh):
+
+  $ grep -rn "AllocationService(" --include="*.py" apps/ | grep -v tests
+  -> zero results (AllocationService is never instantiated in production
+     code; only referenced by class definition + services/__init__.py
+     re-export, matching the claim).
+
+  $ grep -rn "validate_license_active|validate_allocation\b" --include="*.py" apps/ \
+      | grep -v "services/validation_service.py|services/allocation_service.py"
+  -> only hits are in apps/license/tests/test_validation_service.py
+     (unit tests of the validator itself). No view, serializer, or
+     action in the whole repo calls it.
+
+  $ grep -rn "AllocationService|allocate_item\b" apps/allotment/views*.py apps/allotment/urls.py
+  -> zero results. Confirms AllocationService is not wired into any URL
+     route or view either directly or indirectly.
+
+CONCLUSION (code path): independently confirmed. The only real write path
+for POST /api/allotments/<id>/allocate-items/ has no expiry gate at any
+point from request parsing to DB commit.
+
+--------------------------------------------------------------------------
+2) LIVE DATA — independently re-run against the real "lmanagement" DB
+
+Connected directly with psql (read-only), re-ran a self-authored query
+(see skeptic_check.sql in this directory) rather than the claimant's
+exact SQL text-for-text copy-pasted blind; independently reconstructed
+the join from `\d` output on all three tables first (license_licensedetailsmodel,
+license_licenseflags, license_licenseimportitemsmodel) to make sure the
+column names/types actually mean what the claim says.
+
+Results (full output in this directory's psql run, captured above):
+
+  - current_date on the DB server = 2026-08-07, matching the claim's
+    "today".
+  - Top-15 sample join reproduces IDENTICALLY to the claimant's evidence:
+    license 2434 (0311046335, expired 2026-08-06) has 13 import items
+    with available_quantity 2..9625 and available_value 6.20; license
+    2433 (0311046297, expired 2026-08-05) has 2 such items. Exact row
+    values match theirs precisely.
+  - Headline count query (count of distinct expired licenses with at
+    least one import item having available_quantity>0 AND
+    available_value>0): independently returns 41 — matches the claim
+    exactly.
+  - Extra check I added beyond the original evidence: verified none of
+    the 41 licenses have a stale/disagreeing `is_expired` flag (i.e.
+    license_expiry_date < current_date but flags.is_expired = false).
+    Result: 0 rows — the stored flag agrees with the raw date in every
+    case, so there's no alternate reading where these licenses aren't
+    "really" expired.
+  - Spot-checked import_item_id 37528 (one of the 13 on license 2434)
+    directly by primary key: confirmed it exists, license_id=2434,
+    available_quantity=320.00, available_value=6.20 — a real, currently
+    resolvable row that `LicenseImportItemsModel.objects.get(id=item_id)`
+    in allocate_items would successfully fetch and that would pass both
+    of the view's checks for any qty<=320 / cif_fc<=6.20 request.
+
+CONCLUSION (data): independently reproduced. 41 real expired licenses
+in the current dataset would sail through every check `allocate_items`
+actually performs.
+
+--------------------------------------------------------------------------
+VERDICT
+
+Both pillars of the claim — (1) the production write path has no expiry
+check anywhere in it, and (2) real data exists today that would exploit
+that gap — are independently reproduced from scratch using my own reads
+and my own queries, not by trusting the claimant's evidence text.
+
+confirmed = true

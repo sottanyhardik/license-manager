@@ -4,17 +4,18 @@ import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 
 import api from "../api/axios";
 import { Button } from "@/components/ui/button";
+import { normalizePdfApiPath } from "./pdfApiPath";
 
 /**
  * PDF Viewer — opens PDFs in a dedicated route that regenerates on refresh.
- * URL format: /pdf-viewer?url=/license-ledger/export/all/?params...
+ * URL format: /pdf-viewer?url=/reports/example.pdf
  */
 export default function PDFViewer() {
     const [searchParams] = useSearchParams();
-    const [pdfUrl, setPdfUrl] = useState(null);
+    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const apiUrl = searchParams.get("url");
+    const [error, setError] = useState<string | null>(null);
+    const apiUrl = normalizePdfApiPath(searchParams.get("url"));
 
     useEffect(() => {
         let isMounted = true;
@@ -22,7 +23,7 @@ export default function PDFViewer() {
 
         const fetchPDF = async () => {
             if (!apiUrl) {
-                if (isMounted) { setError("No PDF URL provided"); setLoading(false); }
+                if (isMounted) { setError("Invalid or missing PDF URL"); setLoading(false); }
                 return;
             }
             try {
@@ -34,19 +35,20 @@ export default function PDFViewer() {
                 currentBlobUrl = url;
                 setPdfUrl(url);
                 setLoading(false);
-            } catch (err) {
+            } catch (err: unknown) {
                 if (!isMounted) return;
                 console.error("Error loading PDF:", err);
                 let errorMessage = "Failed to load PDF";
-                if (err.response) {
-                    if (err.response.status === 404) errorMessage = "PDF endpoint not found";
-                    else if (err.response.status === 401) errorMessage = "Authentication required. Please log in again.";
-                    else if (err.response.status === 500) errorMessage = "Server error while generating PDF";
-                    else errorMessage = err.response.data?.detail || err.response.data?.error || errorMessage;
-                } else if (err.request) {
+                const axiosErr = err as { response?: { status?: number; data?: { detail?: string; error?: string } }; request?: unknown; message?: string };
+                if (axiosErr.response) {
+                    if (axiosErr.response.status === 404) errorMessage = "PDF endpoint not found";
+                    else if (axiosErr.response.status === 401) errorMessage = "Authentication required. Please log in again.";
+                    else if (axiosErr.response.status === 500) errorMessage = "Server error while generating PDF";
+                    else errorMessage = axiosErr.response.data?.detail || axiosErr.response.data?.error || errorMessage;
+                } else if (axiosErr.request) {
                     errorMessage = "Network error. Please check your connection and try again.";
-                } else {
-                    errorMessage = err.message || errorMessage;
+                } else if (axiosErr.message) {
+                    errorMessage = axiosErr.message;
                 }
                 setError(errorMessage);
                 setLoading(false);
@@ -62,17 +64,20 @@ export default function PDFViewer() {
 
     if (loading) {
         return (
-            <div className="flex h-screen flex-col items-center justify-center gap-3 bg-background">
-                <Loader2 className="size-9 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Generating PDF…</p>
+            <div className="flex h-screen flex-col items-center justify-center gap-3 bg-muted/30 px-4">
+                <div className="flex min-w-[18rem] flex-col items-center gap-3 rounded-lg border bg-card px-6 py-5 shadow-sm">
+                    <Loader2 className="size-7 animate-spin text-primary" />
+                    <p className="text-sm font-medium text-foreground">Generating PDF…</p>
+                    <p className="text-xs text-muted-foreground">This may take a moment for larger reports.</p>
+                </div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-6">
-                <div className="w-full max-w-lg rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-destructive">
+            <div className="flex h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4">
+                <div role="alert" className="w-full max-w-lg rounded-lg border border-destructive/30 bg-card p-5 text-destructive shadow-sm">
                     <div className="mb-2 flex items-center gap-2 text-base font-semibold">
                         <TriangleAlert className="size-5" />Error Loading PDF
                     </div>
@@ -86,16 +91,17 @@ export default function PDFViewer() {
     }
 
     return (
-        <div className="m-0 h-screen w-screen p-0">
+        <div className="m-0 h-screen w-screen bg-muted/30 p-0">
             {pdfUrl && <iframe src={pdfUrl} className="size-full border-none" title="PDF Viewer" />}
-            <button
+            <Button
+                type="button"
                 onClick={() => window.location.reload()}
                 title="Refresh PDF"
                 aria-label="Refresh PDF"
-                className="fixed bottom-5 right-5 z-[1000] flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+                className="fixed bottom-4 right-4 z-[1000] size-11 rounded-full shadow-md transition-transform hover:scale-105 active:scale-95"
             >
-                <RefreshCw className="size-6" />
-            </button>
+                <RefreshCw className="size-4" />
+            </Button>
         </div>
     );
 }

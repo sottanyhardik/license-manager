@@ -154,7 +154,7 @@ No email integration configured in the codebase. Password resets (`PasswordReset
 
 ---
 
-## Multi-Server Sync (`sync-masters.sh`)
+## Multi-Server Sync (`scripts/maintenance/sync-masters.sh`)
 
 **Purpose**: Replicate master data from the canonical license-manager server to follower servers (labdhi, tractor).
 
@@ -166,7 +166,7 @@ No email integration configured in the codebase. Password resets (`PasswordReset
 
 **Schedule**: Recommended via cron every 15 minutes:
 ```cron
-*/15 * * * * cd /path/to/license-manager && bash sync-masters.sh --quiet >> /tmp/master-sync.log 2>&1
+*/15 * * * * cd /path/to/license-manager && bash scripts/maintenance/sync-masters.sh --quiet >> /tmp/master-sync.log 2>&1
 ```
 
 ---

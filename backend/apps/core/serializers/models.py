@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.accounts.permissions import CompanyPermission
 from apps.core.helpers import _sync_nested
 from apps.core.models import (
     CompanyModel, PortModel, HSCodeModel,
@@ -21,9 +22,44 @@ class AuditSerializerMixin(serializers.ModelSerializer):
 
 # ---- Company ----
 class CompanySerializer(AuditSerializerMixin):
+    """
+    SEC-02: CompanyModel carries counterparty banking/PAN/GST fields
+    alongside plain master-data (name/address/etc). `CompanyPermission`
+    grants *read* access to a wide set of roles that legitimately need the
+    non-sensitive fields for dropdowns/filters/master-data listing, but only
+    `CompanyPermission.full_access_roles_for_sensitive_fields` (and
+    superusers) have a real business need to see banking/PAN/GST data.
+    `to_representation` trims `SENSITIVE_FIELDS` out of the payload for
+    every other role, without changing the response for the roles that do
+    need them. Write access is superuser-only already (see
+    `CompanyPermission.required_roles_for_write`), so this only affects
+    reads.
+    """
+
+    SENSITIVE_FIELDS = (
+        "pan", "gst_number",
+        "bank_account_number", "bank_name", "ifsc_code", "account_type",
+    )
+
     class Meta(AuditSerializerMixin.Meta):
         model = CompanyModel
         fields = "__all__"
+
+    def _user_has_sensitive_field_access(self, request):
+        user = getattr(request, "user", None) if request is not None else None
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+        if user.is_superuser:
+            return True
+        return user.has_any_role(CompanyPermission.full_access_roles_for_sensitive_fields)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if not self._user_has_sensitive_field_access(request):
+            for field in self.SENSITIVE_FIELDS:
+                data.pop(field, None)
+        return data
 
 
 # ---- Port ----
@@ -254,6 +290,8 @@ class ItemHeadSerializer(AuditSerializerMixin):
 class ItemNameSerializer(AuditSerializerMixin):
     group_name = serializers.CharField(source='group.name', read_only=True, required=False)
     sion_norm_class_label = serializers.SerializerMethodField()
+    norms = serializers.PrimaryKeyRelatedField(many=True, queryset=SionNormClassModel.objects.all(), required=False)
+    norm_details = serializers.SerializerMethodField()
 
     class Meta(AuditSerializerMixin.Meta):
         model = ItemNameModel
@@ -266,6 +304,13 @@ class ItemNameSerializer(AuditSerializerMixin):
                 return f"{obj.sion_norm_class.norm_class} - {obj.sion_norm_class.description}"
             return obj.sion_norm_class.norm_class
         return None
+
+    def get_norm_details(self, obj):
+        # This field is the Master List display value, not its editable M2M
+        # payload.  Keep it human-readable so the table shows ``E1, E5``
+        # rather than JSON objects/descriptions.  ``norms`` remains the
+        # structured writable list of IDs for the API and editor.
+        return ", ".join(obj.norms.order_by("norm_class").values_list("norm_class", flat=True))
 
 
 # ---- Transfer Letter ----
@@ -285,7 +330,6 @@ class ExchangeRateSerializer(AuditSerializerMixin):
 
     def get_is_active(self, obj):
         """Check if this is the active (latest) exchange rate"""
-        from apps.core.models import ExchangeRateModel
         active_rate = ExchangeRateModel.get_active_rate()
         return obj.id == active_rate.id if active_rate else False
 

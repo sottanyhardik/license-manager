@@ -5,8 +5,6 @@ import csv
 import io
 import logging
 
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
@@ -19,7 +17,6 @@ from scripts.parse_ledger_htm import parse_license_data_htm
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LedgerUploadView(APIView):
     """
     API endpoint to upload and process ledger CSV files.
@@ -238,7 +235,6 @@ class LedgerUploadView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LedgerTaskStatusView(APIView):
     """
     GET /api/licenses/ledger-task-status/<task_id>/

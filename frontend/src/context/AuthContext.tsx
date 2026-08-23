@@ -1,6 +1,5 @@
-import axios from "axios";
 import React, {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import api from "../api/axios";
+import api, { AUTH_SESSION_EVENT_KEY, clearStoredAuth, publishAuthEvent, refreshAccessToken } from "../api/axios";
 import type { AuthContextValue, AuthUser, LoginResponse } from "../types";
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -8,6 +7,7 @@ export const AuthContext = createContext<AuthContextValue>({
     user: null,
     loading: true,
     loginSuccess: () => {},
+    updateUser: () => {},
     logout: async () => {},
     hasRole: () => false,
     hasAnyRole: () => false,
@@ -16,43 +16,58 @@ export const AuthContext = createContext<AuthContextValue>({
 });
 
 // ─── Session config ───────────────────────────────────────────────────────────
-// How long with no mouse/keyboard/scroll activity before auto-logout (30 minutes)
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-// How often to check for idle state
-const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
-// Refresh the access token this many ms before it actually expires
-const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+// A session expires only after five continuous minutes without meaningful use.
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const ACTIVITY_THROTTLE_MS = 1000;
+const REFRESH_EARLY_MS = 5 * 60 * 1000;
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getTokenExpiryMs(token: string): number | null {
+function getStoredUser(): AuthUser | null {
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) return null;
     try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.exp * 1000; // JWT exp is in seconds, convert to ms
+        return JSON.parse(storedUser);
+    } catch {
+        localStorage.removeItem("user");
+        return null;
+    }
+}
+
+type JwtPayload = { exp?: number };
+
+function accessTokenExpiry(access: string | null): number | null {
+    if (!access) return null;
+    try {
+        const payload = access.split(".")[1];
+        if (!payload) return null;
+        const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = JSON.parse(window.atob(normalized)) as JwtPayload;
+        return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
     } catch {
         return null;
     }
 }
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-    const [user, setUser] = useState<AuthUser | null>(
-        localStorage.getItem("user")
-            ? JSON.parse(localStorage.getItem("user")!)
-            : null
-    );
+    const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
     const [loading, setLoading] = useState(true);
     const loadUserCalled = useRef(false);
     const lastActivityRef = useRef(Date.now());
-    const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const lastActivityWriteRef = useRef(0);
+    const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const logoutInProgressRef = useRef(false);
 
     const clearTimers = () => {
-        if (idleTimerRef.current) clearInterval(idleTimerRef.current);
-        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
     };
 
     const logout = useCallback(async (reason?: string) => {
+        if (logoutInProgressRef.current) return;
+        logoutInProgressRef.current = true;
         clearTimers();
         try {
             await api.post("auth/logout/", {
@@ -62,7 +77,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             // Ignore logout API errors — clear locally regardless
         }
         const currentPath = window.location.pathname;
-        localStorage.clear();
+        clearStoredAuth();
+        publishAuthEvent("logout");
         setUser(null);
         const redirectParam = encodeURIComponent(currentPath);
         if (reason === 'idle') {
@@ -74,62 +90,91 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
-    // Proactively refresh the access token before it expires so the user
-    // never sees a 401 mid-request while actively working.
-    const scheduleProactiveRefresh = useCallback(() => {
-        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-
-        const access = localStorage.getItem("access");
-        if (!access) return;
-
-        const expiry = getTokenExpiryMs(access);
-        if (!expiry) return;
-
-        const delay = Math.max(expiry - Date.now() - TOKEN_REFRESH_BUFFER_MS, 10_000);
-
-        refreshTimerRef.current = setTimeout(async () => {
-            const refresh = localStorage.getItem("refresh");
-            if (!refresh) return;
-            try {
-                const {data} = await axios.post("/api/auth/refresh/", {refresh});
-                localStorage.setItem("access", data.access);
-                if (data.refresh) localStorage.setItem("refresh", data.refresh);
-                scheduleProactiveRefresh(); // schedule next refresh for the new token
-            } catch {
-                logout('session_expired');
-            }
-        }, delay);
-    }, [logout]);
-
     // Reset the idle clock whenever the user interacts with the page
     const resetActivity = useCallback(() => {
-        lastActivityRef.current = Date.now();
-    }, []);
+        const now = Date.now();
+        if (now - lastActivityWriteRef.current < ACTIVITY_THROTTLE_MS) return;
+        lastActivityWriteRef.current = now;
+        lastActivityRef.current = now;
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = setTimeout(() => logout('idle'), IDLE_TIMEOUT_MS);
+    }, [logout]);
 
     const startIdleTimer = useCallback(() => {
-        if (idleTimerRef.current) clearInterval(idleTimerRef.current);
-        idleTimerRef.current = setInterval(() => {
-            if (Date.now() - lastActivityRef.current >= IDLE_TIMEOUT_MS) {
-                logout('idle');
-            }
-        }, IDLE_CHECK_INTERVAL_MS);
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        const remaining = Math.max(IDLE_TIMEOUT_MS - (Date.now() - lastActivityRef.current), 0);
+        idleTimerRef.current = setTimeout(() => logout('idle'), remaining);
     }, [logout]);
+
+    const scheduleRefresh = useCallback(() => {
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        const expiry = accessTokenExpiry(localStorage.getItem("access"));
+        if (!expiry) return;
+        const delay = Math.max(expiry - Date.now() - REFRESH_EARLY_MS, 0);
+        refreshTimerRef.current = setTimeout(async () => {
+            try {
+                const previousAccess = localStorage.getItem("access");
+                await refreshAccessToken();
+                // A successful SimpleJWT refresh always writes a new access
+                // token. Avoid a zero-delay refresh loop if an adapter returns
+                // success without updating storage (for example, a malformed
+                // test stub or a proxy stripping the response body).
+                if (localStorage.getItem("access") !== previousAccess) scheduleRefresh();
+            } catch {
+                // refreshAccessToken emits one cross-tab logout and redirect.
+                setUser(null);
+            }
+        }, delay);
+    }, []);
 
     // Wire up activity listeners and timers when user is logged in
     useEffect(() => {
         if (!user) return;
 
-        const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-        events.forEach(e => window.addEventListener(e, resetActivity, {passive: true}));
+        // `scroll` does not bubble from nested scroll containers. Capture it
+        // on document so activity in page panels, tables and dialogs counts as
+        // activity just like clicks and keyboard input.
+        const windowEvents = ['pointerdown', 'mousemove', 'keydown', 'touchstart', 'focus'];
+        const documentEvents = ['scroll', 'wheel'];
+        windowEvents.forEach(e => window.addEventListener(e, resetActivity, {passive: true}));
+        documentEvents.forEach(e => document.addEventListener(e, resetActivity, {capture: true, passive: true}));
+        const onStorage = (event: StorageEvent) => {
+            if (event.key === AUTH_SESSION_EVENT_KEY && event.newValue) {
+                try {
+                    const message = JSON.parse(event.newValue) as { type?: string };
+                    if (message.type === "refresh") scheduleRefresh();
+                    if (message.type !== "logout") return;
+                } catch {
+                    return;
+                }
+                clearTimers();
+                setUser(null);
+                window.location.href = "/login";
+            }
+        };
+        const onAuthEvent = (event: Event) => {
+            const type = (event as CustomEvent<{ type?: string }>).detail?.type;
+            if (type === "refresh") scheduleRefresh();
+        };
+        const onVisibilityChange = () => {
+            if (!document.hidden) resetActivity();
+        };
+        window.addEventListener("storage", onStorage);
+        window.addEventListener("auth:session", onAuthEvent);
+        document.addEventListener("visibilitychange", onVisibilityChange);
         lastActivityRef.current = Date.now();
         startIdleTimer();
-        scheduleProactiveRefresh();
+        scheduleRefresh();
 
         return () => {
-            events.forEach(e => window.removeEventListener(e, resetActivity));
+            windowEvents.forEach(e => window.removeEventListener(e, resetActivity));
+            documentEvents.forEach(e => document.removeEventListener(e, resetActivity, true));
+            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("auth:session", onAuthEvent);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
             clearTimers();
         };
-    }, [user, resetActivity, startIdleTimer, scheduleProactiveRefresh]);
+    }, [user, resetActivity, scheduleRefresh, startIdleTimer]);
 
     const loadUser = async () => {
         if (loadUserCalled.current) return;
@@ -146,7 +191,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(data);
             localStorage.setItem("user", JSON.stringify(data));
         } catch {
-            localStorage.clear();
+            clearStoredAuth();
             setUser(null);
         }
         setLoading(false);
@@ -160,8 +205,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
         localStorage.setItem("user", JSON.stringify(data.user));
+        logoutInProgressRef.current = false;
+        lastActivityRef.current = Date.now();
         setUser(data.user);
         setLoading(false);
+    }, []);
+
+    const updateUser = useCallback((nextUser: AuthUser) => {
+        localStorage.setItem("user", JSON.stringify(nextUser));
+        setUser(nextUser);
     }, []);
 
     // ── Role helpers ──────────────────────────────────────────────────────────
@@ -195,12 +247,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         loading,
         loginSuccess,
+        updateUser,
         logout,
         hasRole,
         hasAnyRole,
         isSuperAdmin,
         canManageUsers,
-    }), [user, loading, loginSuccess, logout, hasRole, hasAnyRole, isSuperAdmin, canManageUsers]);
+    }), [user, loading, loginSuccess, updateUser, logout, hasRole, hasAnyRole, isSuperAdmin, canManageUsers]);
 
     return (
         <AuthContext.Provider value={contextValue}>

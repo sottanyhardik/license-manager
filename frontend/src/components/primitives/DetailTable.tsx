@@ -49,6 +49,7 @@ export default function DetailTable({
                         {columns.map(c => (
                             <th
                                 key={c.key}
+                                scope="col"
                                 style={{
                                     textAlign: c.align || "left",
                                     width: c.width,

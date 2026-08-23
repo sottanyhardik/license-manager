@@ -1,0 +1,14 @@
+SionNormClassModel row for code 'PP': PP is_active= True
+
+Export-item norm_class distribution across all 228 real licenses:
+  'E5': 76
+  'PP': 73
+  None: 51
+  'E1': 25
+  'E132': 2
+  'A3627': 1
+
+detect_norm() distribution (blank = no norm recognised at all): {'E5': 76, '': 124, 'E1': 25, 'A3627': 1, 'E132': 2}
+
+PlannerFactory.supported_norms(): ['A3627', 'E1', 'E126', 'E132', 'E5']
+PlannerFactory.is_supported('PP'): False

@@ -4,10 +4,47 @@ Django-Filter FilterSets for License Manager
 Pre-configured FilterSets for common filtering patterns.
 """
 
-import django_filters
-from django.db import models
-from django_filters import rest_framework as filters
+from datetime import date, timedelta
+
 from django.db.models import Q
+from django_filters import rest_framework as filters
+
+
+def _csv_values(value):
+    return [part.strip() for part in str(value).split(',') if part.strip()] if value else []
+
+
+def _csv_ints(value):
+    return [int(part) for part in _csv_values(value) if part.isdigit()]
+
+
+def _filter_csv_ids(queryset, field_name, value):
+    ids = _csv_ints(value)
+    if ids:
+        return queryset.filter(**{f'{field_name}__in': ids})
+    return queryset
+
+
+def _filter_recent_days(queryset, field_name, value):
+    if value:
+        cutoff_date = date.today() - timedelta(days=value)
+        return queryset.filter(**{f'{field_name}__gte': cutoff_date})
+    return queryset
+
+
+def _filter_company_ids(queryset, field_name, value):
+    """
+    Filter queryset by comma-separated company IDs.
+
+    Args:
+        queryset: Django queryset to filter
+        field_name: Field name to filter on (e.g., 'company_id' or 'license__company_id')
+        value: Comma-separated company IDs as string
+
+    Returns:
+        Filtered queryset
+    """
+    return _filter_csv_ids(queryset, field_name, value)
 
 
 # ============================================================================
@@ -120,15 +157,10 @@ class LicenseFilterSet(BaseFilterSet):
 
     def filter_exporter_ids(self, queryset, name, value):
         """Filter by comma-separated exporter IDs."""
-        if value:
-            ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
-            return queryset.filter(exporter_id__in=ids)
-        return queryset
+        return _filter_csv_ids(queryset, 'exporter_id', value)
 
     def filter_by_status(self, queryset, name, value):
         """Filter by license status."""
-        from datetime import date, timedelta
-
         if value == 'active':
             return queryset.filter(flags__is_active=True, flags__is_expired=False)
         elif value == 'expired':
@@ -155,8 +187,8 @@ class LicenseFilterSet(BaseFilterSet):
 
     def filter_purchase_status(self, queryset, name, value):
         """Filter by single or comma-separated purchase status IDs or codes."""
-        if value:
-            values = [x.strip() for x in value.split(',') if x.strip()]
+        values = _csv_values(value)
+        if values:
             # Check if values are numeric IDs or string codes
             if all(v.isdigit() for v in values):
                 # Numeric IDs - filter by ID
@@ -170,8 +202,8 @@ class LicenseFilterSet(BaseFilterSet):
 
     def filter_purchase_status_ids(self, queryset, name, value):
         """Filter by comma-separated purchase status IDs or codes."""
-        if value:
-            values = [x.strip() for x in value.split(',') if x.strip()]
+        values = _csv_values(value)
+        if values:
             # Check if values are numeric IDs or string codes
             if all(v.isdigit() for v in values):
                 # Numeric IDs - filter by ID
@@ -208,6 +240,7 @@ class BOEFilterSet(BaseFilterSet):
 
     # Company filter
     company = filters.NumberFilter(field_name='company_id')
+    port = filters.NumberFilter(field_name='port_id')
     company_ids = filters.CharFilter(method='filter_company_ids')
 
     # BOE number
@@ -221,18 +254,11 @@ class BOEFilterSet(BaseFilterSet):
 
     def filter_company_ids(self, queryset, name, value):
         """Filter by comma-separated company IDs."""
-        if value:
-            ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
-            return queryset.filter(company_id__in=ids)
-        return queryset
+        return _filter_company_ids(queryset, 'company_id', value)
 
     def filter_recent_days(self, queryset, name, value):
         """Filter BOEs from last N days."""
-        from datetime import date, timedelta
-        if value:
-            cutoff_date = date.today() - timedelta(days=value)
-            return queryset.filter(boe_date__gte=cutoff_date)
-        return queryset
+        return _filter_recent_days(queryset, 'boe_date', value)
 
 
 # ============================================================================
@@ -267,26 +293,20 @@ class AllotmentFilterSet(BaseFilterSet):
 
     def filter_company_ids(self, queryset, name, value):
         """Filter by comma-separated company IDs."""
-        if value:
-            ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
-            return queryset.filter(company_id__in=ids)
-        return queryset
+        return _filter_company_ids(queryset, 'company_id', value)
 
     def filter_license_number(self, queryset, name, value):
         """Filter allotments by license number (searches in nested allotment_details)."""
-        if value:
+        values = list(dict.fromkeys(part.strip() for part in (value or '').split(',') if part.strip()))
+        if values:
             return queryset.filter(
-                allotment_details__item__license__license_number__iexact=value
+                allotment_details__item__license__license_number__in=values
             ).distinct()
         return queryset
 
     def filter_recent_days(self, queryset, name, value):
         """Filter allotments from last N days."""
-        from datetime import date, timedelta
-        if value:
-            cutoff_date = date.today() - timedelta(days=value)
-            return queryset.filter(allotment_date__gte=cutoff_date)
-        return queryset
+        return _filter_recent_days(queryset, 'allotment_date', value)
 
 
 # ============================================================================
@@ -356,29 +376,24 @@ class ItemReportFilterSet(filters.FilterSet):
 
     def filter_item_names(self, queryset, name, value):
         """Filter by comma-separated item name IDs."""
-        if value:
-            ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
+        ids = _csv_ints(value)
+        if ids:
             return queryset.filter(items__id__in=ids).distinct()
         return queryset
 
     def filter_company_ids(self, queryset, name, value):
         """Include only these companies."""
-        if value:
-            ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
-            return queryset.filter(license__company_id__in=ids)
-        return queryset
+        return _filter_company_ids(queryset, 'license__company_id', value)
 
     def filter_exclude_company_ids(self, queryset, name, value):
         """Exclude these companies."""
-        if value:
-            ids = [int(x.strip()) for x in value.split(',') if x.strip().isdigit()]
+        ids = _csv_ints(value)
+        if ids:
             return queryset.exclude(license__company_id__in=ids)
         return queryset
 
     def filter_license_status(self, queryset, name, value):
         """Filter by license status."""
-        from datetime import date, timedelta
-
         if value == 'active':
             return queryset.filter(license__flags__is_active=True, license__flags__is_expired=False)
         elif value == 'expired':
@@ -399,7 +414,8 @@ class ItemReportFilterSet(filters.FilterSet):
 
     def filter_purchase_status(self, queryset, name, value):
         """Filter by purchase status codes (comma-separated)."""
-        if value:
-            codes = [x.strip().upper() for x in value.split(',') if x.strip()]
+        values = _csv_values(value)
+        if values:
+            codes = [value.upper() for value in values]
             return queryset.filter(license__purchase_status__code__in=codes)
         return queryset

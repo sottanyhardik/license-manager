@@ -12,7 +12,7 @@ from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import ScopedRateThrottle
 from django.conf import settings
 from django.db.models import Q
@@ -109,3 +109,44 @@ class PasswordResetConfirmView(APIView):
         user.save()
 
         return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
+
+
+# ------------------------------------------
+# Authenticated User Change Password
+# ------------------------------------------
+class ChangePasswordView(APIView):
+    """
+    Allow an authenticated user to change their own password.
+    Requires knowledge of the current password to prevent account takeover.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        current_password = request.data.get("current_password")
+        new_password = request.data.get("new_password")
+
+        if not current_password or not new_password:
+            return Response(
+                {"detail": "current_password and new_password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify current password for the authenticated user
+        user = request.user
+        if not user.check_password(current_password):
+            return Response(
+                {"detail": "Current password is incorrect."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        # Validate new password against password policy
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as exc:
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Set and save new password
+        user.set_password(new_password)
+        user.save()
+
+        return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)

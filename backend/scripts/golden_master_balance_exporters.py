@@ -31,10 +31,12 @@ import io
 import json
 import hashlib
 import traceback
+from pathlib import Path
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "lmanagement.settings")
 # Ensure backend/ (parent of scripts/) is importable when run directly.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_ROOT))
 
 import django  # noqa: E402
 django.setup()  # noqa: E402
@@ -55,8 +57,8 @@ from pypdf import PdfReader  # noqa: E402
 from apps.license.views.license import LicenseDetailsViewSet  # noqa: E402
 from apps.license.models import LicenseDetailsModel  # noqa: E402
 
-BASELINE_DIR = os.path.join(os.path.dirname(__file__), ".golden_master")
-BASELINE_PATH = os.path.join(BASELINE_DIR, "baseline.json")
+BASELINE_DIR = Path(__file__).resolve().parent / ".golden_master"
+BASELINE_PATH = BASELINE_DIR / "baseline.json"
 
 XLSX_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -279,9 +281,8 @@ def main():
 
     if explicit_ids:
         license_ids = explicit_ids
-    elif mode == "check" and os.path.exists(BASELINE_PATH):
-        with open(BASELINE_PATH) as f:
-            license_ids = json.load(f)["license_ids"]
+    elif mode == "check" and BASELINE_PATH.exists():
+        license_ids = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))["license_ids"]
     else:
         license_ids = select_license_ids()
 
@@ -289,9 +290,11 @@ def main():
     snapshot = build_snapshot(license_ids)
 
     if mode == "record":
-        os.makedirs(BASELINE_DIR, exist_ok=True)
-        with open(BASELINE_PATH, "w") as f:
-            json.dump(snapshot, f, indent=2, sort_keys=True)
+        BASELINE_DIR.mkdir(exist_ok=True)
+        BASELINE_PATH.write_text(
+            json.dumps(snapshot, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
         # quick human summary
         for action, data in snapshot["endpoints"].items():
             if action == "bulk_balance_excel":
@@ -304,10 +307,9 @@ def main():
         return
 
     # check
-    if not os.path.exists(BASELINE_PATH):
+    if not BASELINE_PATH.exists():
         raise SystemExit(f"No baseline at {BASELINE_PATH}; run `record` first.")
-    with open(BASELINE_PATH) as f:
-        baseline = json.load(f)
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
 
     diffs = list(diff(baseline["endpoints"], snapshot["endpoints"], ""))
     if not diffs:

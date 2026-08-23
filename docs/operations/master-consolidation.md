@@ -14,7 +14,7 @@
 
 The three servers (license-manager @ `143.110.252.201`, labdhi @
 `139.59.92.226`, tractor @ `165.232.185.220`) diverged under the additive,
-one-way `sync-masters.sh`. The same real-world entity now has **different
+one-way `scripts/maintenance/sync-masters.sh`. The same real-world entity now has **different
 integer PKs** on each server, and followers hold rows the source never pulled
 back. Before any central Master-Data Service can be loaded, we must decide, per
 master row, **which version is canonical**.
@@ -30,6 +30,20 @@ Two read-only Django management commands in `backend/apps/core/management/comman
 
 Neither command mutates any database. `reconcile_masters` never opens a DB
 connection at all.
+
+Operational wrappers:
+
+| Script | Role | Writes? |
+|---|---|---|
+| `scripts/maintenance/audit-and-diff-masters.sh` | Runs remote audits and creates a local `merge-plan.csv` | No database writes |
+| `scripts/maintenance/apply-master-merge.sh` | Applies a reviewed merge plan after a dry-run and confirmation | Yes, only after operator confirmation |
+| `scripts/maintenance/audit-and-merge-masters.sh` | Runs remote audits and dry-runs/optionally applies `auto_import_masters` | Yes, only after operator confirmation |
+| `scripts/maintenance/sync-masters.sh` | Existing one-way additive source-to-follower sync | Yes, requires `SYNC_PASSWORD` and writes followers |
+| `scripts/mds/*.sh` | ADR-001 export/load/migration/onboarding workflow | Dry-run by default; writes only behind explicit `--confirm` gates |
+
+The legacy maintenance scripts share `scripts/maintenance/_master_sync_lib.sh`.
+Set `MASTER_SYNC_PASSWORD` or `SYNC_PASSWORD` to override the legacy fallback
+password, and prefer SSH keys wherever possible.
 
 ## Buckets produced
 

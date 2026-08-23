@@ -116,7 +116,7 @@ class AllotmentValidationService:
         # Check value limit (with buffer)
         required_value = to_decimal(allotment.required_value, DEC_0)
         required_with_buffer = to_decimal(
-            allotment.required_value_with_buffer or (required_value + Decimal('20')),
+            getattr(allotment, 'required_value_with_buffer', None) or (required_value + Decimal('20')),
             DEC_0
         )
         if new_value > required_with_buffer:
@@ -216,7 +216,7 @@ class AllotmentValidationService:
         balanced_qty = to_decimal(allotment.balanced_quantity, DEC_0)
         required_value = to_decimal(allotment.required_value, DEC_0)
         required_with_buffer = to_decimal(
-            allotment.required_value_with_buffer or (required_value + Decimal('20')),
+            getattr(allotment, 'required_value_with_buffer', None) or (required_value + Decimal('20')),
             DEC_0
         )
 

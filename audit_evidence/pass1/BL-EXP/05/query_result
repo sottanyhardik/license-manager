@@ -1,0 +1,8 @@
+ id | license_number | license_expiry_date
+----+----------------+----------------------
+(0 rows)
+
+-- current_date at time of test: 2026-08-07
+-- No license in the current 228-row dataset expires exactly today, so the
+-- boundary mismatch cannot be demonstrated against live data right now. It is
+-- reported purely from tracing the two code paths (see sql.sql / notes.md).

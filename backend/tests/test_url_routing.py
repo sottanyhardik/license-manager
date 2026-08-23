@@ -10,10 +10,11 @@ Three concerns pinned:
      when DEBUG=False; and anonymous access is rejected in non-DEBUG mode.
 """
 import inspect
+from pathlib import Path
 
-import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.template.loader import get_template
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
@@ -181,6 +182,34 @@ class URLRoutingRegressionTests(APITestCase):
             f"Expected application/json content-type, got {content_type!r}",
         )
 
+    def test_html_404_template_renders_without_external_assets(self):
+        """
+        The production Django 404 template must render standalone without
+        relying on stale DAdmin assets, external fonts, or JavaScript.
+        """
+        rendered = get_template("404.html").render({})
+
+        self.assertIn("Page not found", rendered)
+        self.assertIn('href="/"', rendered)
+        self.assertIn('name="robots"', rendered)
+        self.assertNotIn("fonts.googleapis.com", rendered)
+        self.assertNotIn("assets/js/", rendered)
+        self.assertNotIn("assets/css/", rendered)
+
+    def test_html_500_template_renders_without_external_assets(self):
+        """
+        The production Django 500 template must render standalone without
+        context, external fonts, or JavaScript.
+        """
+        rendered = get_template("500.html").render({})
+
+        self.assertIn("Something went wrong", rendered)
+        self.assertIn('href="/"', rendered)
+        self.assertIn('name="robots"', rendered)
+        self.assertNotIn("fonts.googleapis.com", rendered)
+        self.assertNotIn("assets/js/", rendered)
+        self.assertNotIn("assets/css/", rendered)
+
     def test_api_catchall_pattern_exists_in_urlpatterns(self):
         """
         A ^api/ regex pattern with callback _api_404 must be present in
@@ -208,6 +237,17 @@ class URLRoutingRegressionTests(APITestCase):
             spa_idx,
             "_api_404 must be positioned before the SPA catch-all in urlpatterns",
         )
+
+    def test_spa_catchall_resolves_react_entry_template(self):
+        """
+        The SPA catch-all must resolve to the built React entry, not a
+        stale backend demo template named index.html.
+        """
+        template = get_template("index.html")
+        origin_name = Path(template.origin.name).resolve()
+        expected = (settings.BASE_DIR.parent / "frontend" / "dist" / "index.html").resolve()
+
+        self.assertEqual(origin_name, expected)
 
     def test_api_unknown_path_post_returns_json_404(self):
         """

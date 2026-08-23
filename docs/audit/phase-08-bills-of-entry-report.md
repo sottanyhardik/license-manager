@@ -1,0 +1,409 @@
+# Phase 8 Bills of Entry Audit Report
+
+## backend/apps/bill_of_entry/__init__.py
+
+- File Path(s): `backend/apps/bill_of_entry/__init__.py`
+- Module: Bills of Entry / Django app package marker
+- Total LOC: 0
+- Lines Reviewed: 0-byte file verified with `wc -l` and `xxd`; every possible line/import/symbol/side effect is absent.
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None required; the package marker has no input handling, serializers, forms, API paths, commands, parsers, uploads, exports, transactions, or database access.
+- Package Replacements: None
+- Performance Improvements: None required; no executed code exists.
+- Security Improvements: None required; no executable code, imports, URL handling, file handling, SQL, template rendering, or request handling exists.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior exists to regress.
+- Verification Results:
+  - `wc -l backend/apps/bill_of_entry/__init__.py` -> 0 lines.
+  - `xxd -g 1 backend/apps/bill_of_entry/__init__.py` -> empty output.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/__init__.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/__init__.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `python3 -m json.tool docs/audit/audit-database.json` -> valid JSON.
+  - `python3 -m json.tool docs/audit/repository-knowledge-graph.json` -> valid JSON.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this package marker.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/scripts/__init__.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/__init__.py`
+- Module: Bills of Entry / Scripts package marker
+- Total LOC: 0
+- Lines Reviewed: 0-byte file verified with `wc -l` and `xxd`; every possible line/import/symbol/side effect is absent.
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None required; no script entrypoints, arguments, shell calls, file reads, or runtime validation paths exist.
+- Package Replacements: None
+- Performance Improvements: None required; no executed code exists.
+- Security Improvements: None required; no executable code, imports, subprocess usage, path handling, file handling, or network calls exist.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior exists to regress.
+- Verification Results:
+  - `wc -l backend/apps/bill_of_entry/scripts/__init__.py` -> 0 lines.
+  - `xxd -g 1 backend/apps/bill_of_entry/scripts/__init__.py` -> empty output.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts/__init__.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/__init__.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/__init__.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this package marker.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/parsers/__init__.py
+
+- File Path(s): `backend/apps/bill_of_entry/parsers/__init__.py`
+- Module: Bills of Entry / Parser package marker
+- Total LOC: 0
+- Lines Reviewed: 0-byte file verified with `wc -l` and `xxd`; every possible line/import/symbol/side effect is absent.
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None required; no parser functions, file reads, decoding paths, upload handling, or runtime validation paths exist.
+- Package Replacements: None
+- Performance Improvements: None required; no executed code exists.
+- Security Improvements: None required; no executable code, imports, file handling, PDF parsing, path handling, or request handling exists.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior exists to regress.
+- Verification Results:
+  - `wc -l backend/apps/bill_of_entry/parsers/__init__.py` -> 0 lines.
+  - `xxd -g 1 backend/apps/bill_of_entry/parsers/__init__.py` -> empty output.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/parsers/__init__.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/parsers/__init__.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/parsers/__init__.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this package marker.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/migrations/0001_initial.py
+
+- File Path(s): `backend/apps/bill_of_entry/migrations/0001_initial.py`
+- Module: Bills of Entry / Initial Django migration
+- Total LOC: 75
+- Lines Reviewed: 75
+- Functions Reviewed: 0
+- Classes Reviewed: 1 (`Migration`)
+- Validation Improvements: None applied; this historical migration already encodes non-negative decimal validators for exchange rate, CIF INR, CIF FC, and quantity fields.
+- Package Replacements: None; standard Django migration primitives, `Decimal`, swappable user dependency, and model field declarations are appropriate.
+- Performance Improvements: None applied; follow-up migration `0002_initial.py` intentionally adds lookup indexes after dependent license migration availability.
+- Security Improvements: Reviewed file upload path, FK deletion behavior, nullable audit-user FKs, validators, and absence of executable data operations. No migration rewrite was safe or necessary.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior changed.
+- Verification Results:
+  - Line-by-line review covered imports, dependencies, `BillOfEntryModel` field declarations/options, `RowDetails` field declarations/options, FK/M2M relationships, validators, defaults, and follow-up migration compatibility.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/migrations/0001_initial.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/migrations/0001_initial.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/migrations/0001_initial.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Configured migration import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> `initial=True`, 3 dependencies, 2 operations.
+  - `git diff --check -- backend/apps/bill_of_entry/migrations/0001_initial.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this migration. Semantic model behavior remains queued for the model/service/API files that own runtime validation.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/migrations/0002_initial.py
+
+- File Path(s): `backend/apps/bill_of_entry/migrations/0002_initial.py`
+- Module: Bills of Entry / Secondary initial Django migration
+- Total LOC: 58
+- Lines Reviewed: 58
+- Functions Reviewed: 0
+- Classes Reviewed: 1 (`Migration`)
+- Validation Improvements: None applied; the migration preserves the historical FK and uniqueness constraints generated by Django.
+- Package Replacements: None; Django migration primitives and model index declarations are appropriate.
+- Performance Improvements: Reviewed seven explicit `BillOfEntryModel` indexes for BOE number, company/date, port/date, date, invoice/date, fetch status, and product-name lookup paths. No historical migration rewrite was safe or needed.
+- Security Improvements: Reviewed cascade behavior on `RowDetails.sr_number`, unique constraints that reduce duplicate BOE/row records, and absence of data operations or raw SQL.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior changed.
+- Verification Results:
+  - Line-by-line review covered imports, dependencies, `sr_number` FK, all index declarations, both `AlterUniqueTogether` operations, and compatibility with `0003_alter_billofentrymodel_unique_together.py`.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/migrations/0002_initial.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/migrations/0002_initial.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/migrations/0002_initial.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Configured migration import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> `initial=True`, 2 dependencies, 10 operations.
+  - `git diff --check -- backend/apps/bill_of_entry/migrations/0002_initial.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this migration. Runtime validation and duplicate-record behavior remain queued for serializers/services/views.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py
+
+- File Path(s): `backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py`
+- Module: Bills of Entry / Unique constraint migration
+- Total LOC: 15
+- Lines Reviewed: 15
+- Functions Reviewed: 0
+- Classes Reviewed: 1 (`Migration`)
+- Validation Improvements: None applied; the migration intentionally restores the current model-level uniqueness contract for `bill_of_entry_number` and `bill_of_entry_date`.
+- Package Replacements: None; the Django `AlterUniqueTogether` operation is the correct historical migration primitive.
+- Performance Improvements: None required; no data scan or custom operation exists in this migration file.
+- Security Improvements: Reviewed duplicate-record constraint behavior and absence of raw SQL, data operations, request handling, file handling, or executable side effects.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior changed.
+- Verification Results:
+  - Line-by-line review covered import, dependency on `0002_initial`, `AlterUniqueTogether`, and alignment with `BillOfEntryModel.Meta.unique_together`.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Configured migration import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> 1 dependency, 1 operation.
+  - `git diff --check -- backend/apps/bill_of_entry/migrations/0003_alter_billofentrymodel_unique_together.py` -> clean.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this migration.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/migrations/__init__.py
+
+- File Path(s): `backend/apps/bill_of_entry/migrations/__init__.py`
+- Module: Bills of Entry / Django migrations package marker
+- Total LOC: 0
+- Lines Reviewed: 0-byte file verified with `wc -l` and `xxd`; every possible line/import/symbol/side effect is absent.
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None required; no migration operations or runtime validation paths exist.
+- Package Replacements: None
+- Performance Improvements: None required; no executed code exists.
+- Security Improvements: None required; no executable code, imports, database operations, raw SQL, file handling, or request handling exists.
+- Dead Code Removed: None
+- Duplicate Logic Removed: None
+- Tests Added: None; no behavior exists to regress.
+- Verification Results:
+  - `wc -l backend/apps/bill_of_entry/migrations/__init__.py` -> 0 lines.
+  - `xxd -g 1 backend/apps/bill_of_entry/migrations/__init__.py` -> empty output.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/migrations/__init__.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/migrations/__init__.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/migrations/__init__.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - None for this package marker.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/scripts/boe.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/boe.py`; `backend/tests/test_boe_script_helpers.py`
+- Module: Bills of Entry / ICEGATE helper script
+- Total LOC: 333 source lines; 142 focused test lines
+- Lines Reviewed: 333 source lines plus 142 regression-test lines
+- Functions Reviewed: 18 helper/parser methods and test helpers
+- Classes Reviewed: 1 (`_InputValueParser`) plus 3 focused test doubles
+- Validation Improvements: Trimmed and normalized submitted BE form values, rejected incomplete BE payloads before network calls, normalized cookie/form value extraction, rejected non-image captcha payloads, handled `requests.RequestException` paths, and preserved the existing helper return contracts for callers.
+- Package Replacements: Replaced missing `bs4`/BeautifulSoup usage with Python standard-library `html.parser`; no new dependency introduced.
+- Performance Improvements: Added bounded `DEFAULT_TIMEOUT = 15` request timeouts to avoid unbounded external ICEGATE calls; bounded response snippets logged from failed submissions.
+- Security Improvements: Removed global `urllib3.disable_warnings`, constrained logging of remote response bodies, avoided implicit network calls for incomplete input, and covered network error paths without leaking full response content.
+- Dead Code Removed: Removed dependency on unavailable BeautifulSoup import path.
+- Duplicate Logic Removed: None; parser extraction keeps behavior local to this helper until adjacent BOE script files are audited.
+- Tests Added: `backend/tests/test_boe_script_helpers.py` with 6 focused tests for CSRF extraction, non-image captcha rejection, network exceptions, timeout propagation, cookie coercion, BE form normalization, incomplete payload short-circuiting, and detail/current-status parsing.
+- Verification Results:
+  - `.venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py -q` -> 6 passed.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Configured import verification from `backend/` -> `DEFAULT_TIMEOUT=15` and `_input_value(...) == "abc"`.
+  - `git diff --check -- backend/apps/bill_of_entry/scripts/boe.py backend/tests/test_boe_script_helpers.py` -> clean before code commit.
+  - `python3 -m json.tool docs/audit/audit-database.json` -> valid JSON after audit database update.
+- Commit SHA: `e912f2242b1202cf87524998e4cdd1c2ca2d5230`
+- Commit Timestamp: `2026-07-16T16:57:31+05:30`
+- Commit Summary: `fix(bill_of_entry): harden icegate helpers`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Adjacent BOE scripts remain queued and must be audited separately; no additional helper extraction was safe until their call contracts are reviewed.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/scripts/generate_tl.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/generate_tl.py`; `docs/operations/PURCHASE_STATUS_FK_MIGRATION.md`
+- Module: Bills of Entry / Obsolete transfer-letter one-off script
+- Total LOC: 27 source lines; 1 related operations-note line updated
+- Lines Reviewed: 27 source lines plus repository-wide dependency references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an import-time script path that executed database queries and file-generation side effects without arguments, permission checks, transaction boundaries, or input validation.
+- Package Replacements: None; deletion was safer than converting the one-off script to a maintained command because active transfer-letter generation already exists in BOE transfer views and core transfer-letter utilities.
+- Performance Improvements: Removed an unbounded top-level queryset over BOE records and per-record item traversal from importable source.
+- Security Improvements: Removed hardcoded `TransferLetterModel` primary key usage, import-time write side effects, and unguarded media-path generation from a script with no live caller.
+- Dead Code Removed: Deleted verified-dead `backend/apps/bill_of_entry/scripts/generate_tl.py`.
+- Duplicate Logic Removed: Removed duplicate transfer-letter generation workflow superseded by `backend/apps/bill_of_entry/views/transfer_views.py` and `backend/apps/core/utils/transfer_letter.py`.
+- Tests Added: None; no live behavior path remained. Existing BOE API/helper regressions were run to guard adjacent transfer/export behavior.
+- Verification Results:
+  - Repository-wide runtime reference scan excluding audit docs -> no imports, URL routes, commands, tests, middleware, signals, dynamic imports, or execution paths.
+  - Historical operations checklist reference updated to document removal rather than future query updates.
+  - `.venv/bin/python -m pytest backend/tests/test_boe_script_helpers.py backend/tests/test_api_boe.py -q` -> 18 passed.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts docs/operations/PURCHASE_STATUS_FK_MIGRATION.md` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/__init__.py backend/apps/bill_of_entry/scripts/boe.py backend/apps/bill_of_entry/scripts/utils.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- backend/apps/bill_of_entry/scripts/generate_tl.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md` -> clean before code commit.
+- Commit SHA: `1e4ecac9cb814cdb40dfbee97401e0de10c5a9ae`
+- Commit Timestamp: `2026-07-16T17:05:46+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove dead transfer letter script`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Adjacent BOE script utilities remain queued and must be audited separately.
+- Status: DELETED
+
+## backend/apps/bill_of_entry/scripts/utils.py
+
+- File Path(s): `backend/apps/bill_of_entry/scripts/utils.py`
+- Module: Bills of Entry / ICEGATE port-code lookup
+- Total LOC: 237
+- Lines Reviewed: 237
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None applied; this file is a static lookup map and performs no input parsing, request handling, database access, file I/O, or validation.
+- Package Replacements: None; the static mapping remains a live BOE fetch dependency, and no existing project utility or standard-library wrapper reduces risk without changing the Celery payload contract.
+- Performance Improvements: None required; import loads a single 235-entry dictionary.
+- Security Improvements: Reviewed for executable side effects, dynamic imports, path handling, SQL, templates, request handling, and external I/O; none exist.
+- Dead Code Removed: None; repository-wide search found `port_dict` is imported by `backend/apps/bill_of_entry/views/fetch_views.py`.
+- Duplicate Logic Removed: None; no duplicate port-code dictionary was found elsewhere in active source.
+- Tests Added: None; source behavior was retained unchanged.
+- Verification Results:
+  - Repository-wide dependency search found `port_dict` imported only by `backend/apps/bill_of_entry/views/fetch_views.py` and passed to `fetch_data_to_model`.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/scripts/utils.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/scripts/utils.py backend/apps/bill_of_entry/views/fetch_views.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry/scripts/utils.py backend/apps/bill_of_entry/views/fetch_views.py` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 12 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Direct import check from `backend/` -> `len(port_dict)=235`, `port_dict["INNSA1"] == "NHAVA SHEVA SEA (INNSA1)"`.
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Broad Ruff including pending `backend/apps/bill_of_entry/views/fetch_views.py` found an existing unused `reverse` import; that file remains queued separately as `REQUIRES_RECHECK`.
+- Status: COMPLETED
+
+## backend/apps/bill_of_entry/tasks.py
+
+- File Path(s): `backend/apps/bill_of_entry/tasks.py`
+- Module: Bills of Entry / Obsolete Celery balance task
+- Total LOC: 10
+- Lines Reviewed: 10 plus repository-wide task dependency references
+- Functions Reviewed: 1 (`update_balance_values_task`)
+- Classes Reviewed: 0
+- Validation Improvements: Removed a stale task path that accepted arbitrary item IDs without type validation, missing-object handling, transaction boundaries, retry policy, or permission context.
+- Package Replacements: None; active balance updates already use synchronous model/signal paths and the shared `update_balance_values` implementation.
+- Performance Improvements: Removed duplicate asynchronous balance-update surface and import-time Celery task registration for an uncalled task.
+- Security Improvements: Removed an unused externally addressable Celery task name that could load and mutate license import item balances by ID if invoked out of band.
+- Dead Code Removed: Deleted verified-dead `backend/apps/bill_of_entry/tasks.py`.
+- Duplicate Logic Removed: Removed duplicate wrapper around `apps.core.scripts.calculate_balance.update_balance_values`; current BOE row saves call the synchronous model update path.
+- Tests Added: None; no live task caller remained. Existing BOE API regressions were run to guard adjacent behavior.
+- Verification Results:
+  - Repository-wide dependency search found no `update_balance_values_task` imports, `.delay()`, `.apply_async()`, URL paths, commands, tests, middleware, or signals; only a historical removed-import comment remains.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/scripts backend/tests/test_api_boe.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/models.py backend/apps/bill_of_entry/views/fetch_views.py backend/apps/bill_of_entry/scripts/utils.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py -q` -> 12 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- backend/apps/bill_of_entry/tasks.py` -> clean before source commit.
+- Commit SHA: `b6bb035b05c8497f9c6c9a71fb3f609bf02ef521`
+- Commit Timestamp: `2026-07-16T17:11:47+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove dead balance task`
+- Blocked Items:
+  - Broad `ruff check backend/apps/bill_of_entry backend/tests/test_api_boe.py` remains blocked by existing findings in queued files `models.py`, `tests.py`, `views/common.py`, `views/detail_update_views.py`, and `views/fetch_views.py`.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Queued BOE files own the broad Ruff findings and must be completed separately.
+- Status: DELETED
+
+## BOE Legacy Django Template-View Stack
+
+- File Path(s): `backend/apps/bill_of_entry/templates/bill_of_entry/add.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/ajax_list.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/card.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/detail.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/fetch.html`; `backend/apps/bill_of_entry/templates/bill_of_entry/list.html`; `backend/apps/bill_of_entry/views/common.py`; `backend/apps/bill_of_entry/views/detail_update_views.py`; `backend/apps/bill_of_entry/views/fetch_views.py`; `backend/apps/bill_of_entry/views/transfer_views.py`; `backend/apps/bill_of_entry/scripts/utils.py`; `docs/operations/PURCHASE_STATUS_FK_MIGRATION.md`
+- Module: Bills of Entry / Legacy Django template-view stack
+- Total LOC: 1117 source lines removed; 1 related operations-note line updated
+- Lines Reviewed: 1117 source lines plus repository-wide dependency references
+- Functions Reviewed: Legacy class methods and view dispatch/post/get/context paths in `detail_update_views.py`, `fetch_views.py`, and `transfer_views.py`
+- Classes Reviewed: `BillOfEntryDetailView`, `BillOfEntryLicenseImportItemInline`, `BillOfEntryUpdateDetailView`, `BillOfEntryUpdateView`, `BillOfEntryFetchView`, `GenerateTransferLetterView`
+- Validation Improvements: Removed unrouted template forms and captcha/transfer-letter POST surfaces that lacked the active DRF permission, serializer, transaction, and validation contracts used by React/API workflows.
+- Package Replacements: None; deletion was safer than refactoring legacy Django templates because no runtime path remained and React/DRF are the active BOE surfaces.
+- Performance Improvements: Removed obsolete template rendering, unbounded BOE fetch list processing, and legacy transfer-letter archive generation paths from importable source.
+- Security Improvements: Removed stale CSRF-hidden-input template paths, captcha submission surface, direct media/archive response construction, and legacy POST views outside the current API permission model.
+- Dead Code Removed: Deleted six BOE Django templates, four legacy view modules, and the now-orphaned `scripts/utils.py` static port dictionary after recursive dependency analysis.
+- Duplicate Logic Removed: Removed duplicate BOE add/update/detail/list/fetch/transfer-letter workflows superseded by DRF/React paths and active core transfer-letter utilities.
+- Tests Added: None; no live behavior path remained. Existing BOE API/helper regressions were run to guard active workflows.
+- Verification Results:
+  - Repository-wide dependency scan found no active `render()`, `render_to_response()`, `TemplateResponse`, generic/class-based view, `include`, `extends`, custom/inclusion tag, email/PDF/report/export, management command, test, URL route, middleware, signal, dynamic import, cached template path, third-party package, or runtime loader reference to the deleted templates/views.
+  - Remaining references are stale legacy navigation URL tags in other legacy templates plus docs/audit history; recorded as technical debt outside this BOE deletion unit.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/views/__init__.py backend/apps/bill_of_entry/views/boe.py backend/apps/bill_of_entry/views/parse_pdf.py backend/apps/bill_of_entry/views_export.py backend/tests/test_api_boe.py docs/operations/PURCHASE_STATUS_FK_MIGRATION.md` -> clean.
+  - Remaining BOE views `py_compile` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q` -> 18 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check` scoped to deleted stack and operations note -> clean before source commit.
+- Commit SHA: `0d42a515b6349520b665ad388f49fe92a78d45bc`
+- Commit Timestamp: `2026-07-16T17:17:06+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove dead legacy template views`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Stale legacy nav URL tags remain in `backend/templates/base/main.html`, `backend/apps/core/templates/base.html`, and `backend/apps/core/templates/core/list.html`; these are outside the current BOE unit and should be handled when their owning templates are selected.
+  - `backend/apps/bill_of_entry/tests.py` remains the next BOE file marked `REQUIRES_RECHECK` in the active audit database.
+- Status: DELETED
+
+## backend/apps/bill_of_entry/tests.py
+
+- File Path(s): `backend/apps/bill_of_entry/tests.py`
+- Module: Bills of Entry / Empty Django test stub
+- Total LOC: 3
+- Lines Reviewed: 3 plus repository-wide dependency references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None required; file contained no executable tests, validation paths, fixtures, imports beyond unused `TestCase`, or assertions.
+- Package Replacements: None; deletion was preferred over replacing an empty generated stub.
+- Performance Improvements: Removed a no-op test discovery file from active source inventory.
+- Security Improvements: None required; file had no runtime path.
+- Dead Code Removed: Deleted empty generated Django test stub.
+- Duplicate Logic Removed: None; active BOE coverage remains in `backend/tests/test_api_boe.py` and `backend/tests/test_boe_script_helpers.py`.
+- Tests Added: None; existing focused BOE API/helper regressions were run.
+- Verification Results:
+  - Repository-wide dependency scan found no runtime imports or active references; remaining references before metadata update were audit docs/database only.
+  - `.venv/bin/ruff check backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py backend/tests/test_api_boe.py` -> clean.
+  - `.venv/bin/python -m py_compile backend/apps/bill_of_entry/__init__.py backend/apps/bill_of_entry/apps.py backend/apps/bill_of_entry/admin.py backend/apps/bill_of_entry/urls.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/bill_of_entry` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_boe.py backend/tests/test_boe_script_helpers.py -q` -> 18 passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations bill_of_entry --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `git diff --check -- backend/apps/bill_of_entry/tests.py` -> clean before source commit.
+- Commit SHA: `07cc55e742f061e66643eb02034f7c9078531b4c`
+- Commit Timestamp: `2026-07-16T17:27:18+05:30`
+- Commit Summary: `cleanup(bill_of_entry): remove empty test stub`
+- Blocked Items:
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining Technical Debt:
+  - Phase 8 active audit database has no remaining BOE files marked `NOT_STARTED` or `REQUIRES_RECHECK`.
+- Status: DELETED

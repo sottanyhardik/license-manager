@@ -25,7 +25,7 @@ Usage
     python manage.py migrate_purchase_status_np_to_mi --dry-run
     python manage.py migrate_purchase_status_np_to_mi --confirm
 """
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Count
 
@@ -127,7 +127,7 @@ class Command(BaseCommand):
                 # Safety: any other FK still pointing at src would block delete.
                 blockers = self._other_fk_blockers(src)
                 if blockers:
-                    raise RuntimeError(
+                    raise CommandError(
                         f"Refusing to delete PurchaseStatus(id={src.id}): still referenced by "
                         f"{blockers}. Re-point those FKs first."
                     )
@@ -137,7 +137,7 @@ class Command(BaseCommand):
 
         # ── Post-state report ─────────────────────────────────────────────
         post = PurchaseStatus.objects.filter(code__in=(SRC_CODE, DST_CODE)).annotate(
-            n=Count("licensedetailsmodel"),
+            n=Count("licenses"),
         )
         self.stdout.write("")
         self.stdout.write(self.style.NOTICE("Post-migration state:"))
@@ -151,7 +151,7 @@ class Command(BaseCommand):
         LicenseDetailsModel (which we've already reassigned). Returns a dict
         of {model_label: count} when any are found."""
         blockers = {}
-        for rel in ps._meta.model._meta.get_fields():
+        for rel in ps._meta.get_fields():
             if not rel.is_relation or not rel.auto_created or rel.concrete:
                 continue
             related_model = rel.related_model

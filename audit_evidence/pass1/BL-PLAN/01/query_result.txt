@@ -1,0 +1,43 @@
+balance_cif = 343.400
+
+Raw engine output (plan_e126_per_item_split, unmodified production code):
+  {'planning_item': 'PALM KERNEL OIL - E126', 'reason': 'HSN/desc=1513 AND Olive Oil signal (1509/1500/1510) — 50% PKO / 50% Olive Oil split', 'planned_quantity': Decimal('50.5'), 'unit_price': Decimal('1.80'), 'planned_cif': Decimal('90.900')}
+  {'planning_item': 'OLIVE OIL - E126', 'reason': 'HSN/desc=1513 AND Olive Oil signal (1509/1500/1510) — 50% PKO / 50% Olive Oil split', 'planned_quantity': Decimal('50.5'), 'unit_price': Decimal('5.00'), 'planned_cif': Decimal('252.500')}
+
+Persisted LicenseItemPlan row values exactly as compute_e126_auto_plan builds them:
+  item_name='PALM KERNEL OIL - E126'  planned_quantity=50.0  unit_price=1.8  planned_cif_fc=90.9
+    -> planned_quantity * unit_price = 90.0   MISMATCH (planned_cif_fc - qty*price) = 0.9
+  item_name='OLIVE OIL - E126'  planned_quantity=50.0  unit_price=5.0  planned_cif_fc=252.5
+    -> planned_quantity * unit_price = 250.0   MISMATCH (planned_cif_fc - qty*price) = 2.5
+
+total_planned_cif recorded against license balance: 343.4  vs balance_cif: 343.4
+
+Net effect: 1 unit of the group's 101-unit available_quantity (101 - 50 - 50 = 1) is NEVER recorded in any plan line's planned_quantity, yet 100% of balance_cif ($343.40) is marked consumed -- $3.40 of real DFIA license CIF entitlement is permanently unaccounted for against any plannable quantity.
+detect_norm() distribution across all 228 real licenses: {'E5': 76, '': 124, 'E1': 25, 'A3627': 1, 'E132': 2}
+
+The 2 real E132 licenses and their import items' classification:
+LICENSE id=2462 number=0311041993 balance_cif=0.0
+    import_item=37984 available_quantity=0.00 -> classified=None  (None)
+    import_item=37569 available_quantity=23146.00 -> classified=None  (None)
+    import_item=37985 available_quantity=0.00 -> classified=None  (None)
+    import_item=37986 available_quantity=4959.00 -> classified=None  (None)
+    import_item=37987 available_quantity=0.00 -> classified=None  (None)
+LICENSE id=2435 number=0311046523 balance_cif=137436.58
+    import_item=37536 available_quantity=30191.00 -> classified=None  (None)
+    import_item=37537 available_quantity=4.00 -> classified='PKO - E132'  (HSN/desc=1513)
+    import_item=37538 available_quantity=503.00 -> classified=None  (None)
+    import_item=37539 available_quantity=3019.00 -> classified=None  (None)
+    import_item=37540 available_quantity=22833.00 -> classified='Aluminium Foil - E132'  (Description contains '7607')
+
+Fractional available_quantity DOES occur in this same real DB (other norms) -- confirms the underlying data shape that would trigger BL-PLAN-01 on an E126/E132 license is realistic:
+  22 of 2401 import items across the whole DB have a fractional available_quantity
+    import_item=37678 license_id=2500 available_quantity=22754.85
+    import_item=39628 license_id=2674 available_quantity=35211.71
+    import_item=39591 license_id=2664 available_quantity=61321.80
+    import_item=39592 license_id=2664 available_quantity=20440.60
+    import_item=39593 license_id=2664 available_quantity=3066.09
+    import_item=39594 license_id=2664 available_quantity=511.02
+    import_item=39595 license_id=2664 available_quantity=10.22
+    import_item=39596 license_id=2664 available_quantity=102.20
+    import_item=39597 license_id=2664 available_quantity=102.20
+    import_item=39598 license_id=2664 available_quantity=5110.15

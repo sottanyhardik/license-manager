@@ -10,7 +10,8 @@ This module provides reusable mixins for DRF serializers including:
 import json
 import logging
 import re
-from typing import Dict, List, Any, Optional
+from collections.abc import Callable
+from typing import Any
 
 from rest_framework import serializers
 
@@ -40,7 +41,7 @@ class FormDataParserMixin:
     """
 
     # Override in subclass to specify which fields are nested arrays
-    nested_array_fields: List[str] = []
+    nested_array_fields: list[str] = []
 
     def to_internal_value(self, data):
         """Parse JSON strings OR flattened FormData from multipart/form-data"""
@@ -161,7 +162,7 @@ class NestedObjectNormalizerMixin:
     """
 
     # Override in subclass to specify which fields are nested objects
-    nested_object_fields: List[str] = []
+    nested_object_fields: list[str] = []
 
     def to_internal_value(self, data):
         """Extract IDs from nested objects"""
@@ -208,10 +209,10 @@ class EmptyStringNormalizerMixin:
     """
 
     # Override in subclass - numeric fields where empty string should be removed
-    empty_to_none_fields: List[str] = []
+    empty_to_none_fields: list[str] = []
 
     # Override in subclass - string fields where empty string should become None
-    empty_string_to_none: List[str] = []
+    empty_string_to_none: list[str] = []
 
     def to_internal_value(self, data):
         """Remove empty string fields to prevent overwriting with zeros"""
@@ -275,11 +276,11 @@ class NestedValidationMixin:
 
     def validate_nested_items(
         self,
-        items: List[Dict[str, Any]],
+        items: list[dict[str, Any]],
         field_name: str = 'items',
-        min_items: Optional[int] = None,
-        max_items: Optional[int] = None,
-        validators: Optional[List[callable]] = None
+        min_items: int | None = None,
+        max_items: int | None = None,
+        validators: list[Callable[[dict[str, Any], int], None]] | None = None
     ):
         """
         Validate nested items with custom validators.

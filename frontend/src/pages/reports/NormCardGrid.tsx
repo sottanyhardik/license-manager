@@ -1,43 +1,48 @@
 import { Inbox, Loader2, RefreshCw, Tag } from "lucide-react";
+import { normalizeNormCards } from "./normCardGridUtils";
+
+type AvailableNorm = {
+    norm_class?: unknown;
+    description?: unknown;
+} | string | null | undefined;
+
 
 interface NormCardGridProps {
-    availableNorms: any[];
+    availableNorms: AvailableNorm[];
     activeNormTab: string | null;
-    setActiveNormTab: (n: any) => void;
-    setReportData: (d: any) => void;
+    setActiveNormTab: (n: string) => void;
+    setReportData: (d: null) => void;
     loading: boolean;
 }
 
+
 /** "Available Norms" selector grid — extracted verbatim from ItemPivotReport. */
 export default function NormCardGrid({ availableNorms, activeNormTab, setActiveNormTab, setReportData, loading }: NormCardGridProps) {
+    const normCards = normalizeNormCards(availableNorms);
+
     return (
             <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
                     <div className="flex items-center gap-2">
-                        <Tag className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <Tag className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available Norms</span>
-                        {availableNorms.length > 0 && (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>
-                                {availableNorms.length}
+                        {normCards.length > 0 && (
+                            <span className="rounded-full bg-primary/5 px-2 py-0.5 text-[10px] font-bold text-primary">
+                                {normCards.length}
                             </span>
                         )}
                     </div>
                     <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <RefreshCw className="size-3" />E1, E5, E126, E132 are conversion norms
+                        <RefreshCw className="size-3" aria-hidden="true" />E1, E5, E126, E132 are conversion norms
                     </span>
                 </div>
 
                 {/* Norm grid */}
                 <div className="p-4">
-                    {availableNorms.length > 0 ? (
+                    {normCards.length > 0 ? (
                         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
-                            {availableNorms.map((normObj) => {
-                                const normClass = normObj.norm_class || normObj;
-                                // Never render a blank norm card (guards against malformed/empty entries).
-                                if (!normClass) return null;
-                                const description = normObj.description || '';
-                                const isConversionNorm = ['E1', 'E5', 'E126', 'E132'].includes(normClass);
+                            {normCards.map(({ normClass, description, isConversionNorm }) => {
                                 const isActive = activeNormTab === normClass;
                                 const activeBg = isConversionNorm ? 'var(--tb-success)' : 'var(--tb-brand)';
                                 const softBg = isConversionNorm ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)';
@@ -47,6 +52,7 @@ export default function NormCardGrid({ availableNorms, activeNormTab, setActiveN
                                     <button
                                         key={normClass}
                                         type="button"
+                                        aria-pressed={isActive}
                                         onClick={() => {
                                             if (activeNormTab !== normClass) setReportData(null);
                                             setActiveNormTab(normClass);
@@ -71,14 +77,14 @@ export default function NormCardGrid({ availableNorms, activeNormTab, setActiveN
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
                                             <span style={{
-                                                fontSize: 18, fontWeight: '800', letterSpacing: '-0.5px', lineHeight: 1,
+                                                fontSize: 18, fontWeight: '800', letterSpacing: 0, lineHeight: 1,
                                                 color: isActive ? '#fff' : softText,
                                             }}>{normClass}</span>
                                             {loading && isActive && (
-                                                <Loader2 className="size-3.5 animate-spin ml-auto" style={{ color: '#fff' }} />
+                                                <Loader2 className="size-3.5 animate-spin ml-auto" style={{ color: '#fff' }} aria-label="Loading selected norm" />
                                             )}
                                             {isConversionNorm && !isActive && (
-                                                <RefreshCw className="ml-auto size-3" style={{ color: softText, opacity: 0.6 }} />
+                                                <RefreshCw className="ml-auto size-3" style={{ color: softText, opacity: 0.6 }} aria-hidden="true" />
                                             )}
                                         </div>
                                         {description && (
@@ -96,7 +102,7 @@ export default function NormCardGrid({ availableNorms, activeNormTab, setActiveN
                         </div>
                     ) : (
                         <div className="flex flex-col items-center py-6 text-center text-muted-foreground">
-                            <Inbox className="mb-2 size-8 opacity-30" />
+                            <Inbox className="mb-2 size-8 opacity-30" aria-hidden="true" />
                             <p className="text-sm">No norms available. Try adjusting the filters.</p>
                         </div>
                     )}

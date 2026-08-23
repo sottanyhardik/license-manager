@@ -1,77 +1,368 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
+import { toast } from 'sonner';
+import {
+    downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
+} from '../services/licenseLedgerExport';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import { formatDate as formatDateUtil } from '../utils/dateFormatter';
-import { generatePDF, generateExcel } from '../utils/ledgerExport';
+import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, TriangleAlert } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+    ArrowLeft, Building2, FileSpreadsheet, FileText, Loader2, Minus, ScrollText,
+    TrendingDown, TrendingUp, TriangleAlert, Wallet,
+} from "lucide-react";
+import { selectLedgerDisplayRows } from '@/utils/ledgerDisplayRows';
+import StatCard from '@/components/StatCard';
+import type {
+    CanonicalLedgerResponse, CanonicalTransaction, CompanyUtilization, LedgerSummary, ProfitState,
+} from '../types/canonicalLedger';
+import { buildLedgerDetailPath, normalizeLedgerDetail } from './licenseLedgerDetailUtils';
+
+// ─── Pure utilities ─────────────────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function normalizeText(value: unknown, fallback = ''): string {
+    const normalized = String(value ?? '').trim();
+    return normalized || fallback;
+}
+
+function toFiniteNumber(value: unknown): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function getApiErrorMessage(error: unknown, fallback: string): string {
+    if (isRecord(error) && isRecord(error.response) && isRecord(error.response.data)) {
+        const message = (error.response.data as Record<string, unknown>).error
+            ?? (error.response.data as Record<string, unknown>).detail
+            ?? (error.response.data as Record<string, unknown>).message;
+        if (message) return normalizeText(message, fallback);
+    }
+    if (error instanceof Error) return normalizeText(error.message, fallback);
+    return fallback;
+}
+
+/**
+ * THE one money formatter for this page — symbol + Indian digit grouping.
+ *
+ * PRESENTATION ONLY. `toFiniteNumber` exists to hand `formatIndianNumber` a
+ * number to group the digits of; it is NOT arithmetic on the value. Every
+ * figure arrives from the backend already correct and already quantized to 2dp,
+ * and it is rendered at that same 2dp — nothing is summed, netted, converted or
+ * re-rounded on the client.
+ *
+ * `currency` must be the currency the BACKEND declared for that specific figure
+ * (`balance_currency` / `bill_currency` / `profit_currency`) — never guessed
+ * from the licence type at the call site. The three are genuinely different for
+ * one DFIA licence: balance in USD, bill and profit in INR.
+ */
+function formatMoney(value: unknown, currency = 'INR'): string {
+    if (!value && value !== 0) return '-';
+    const symbol = currency === 'USD' ? '$' : '₹';
+    return `${symbol}${formatIndianNumber(toFiniteNumber(value), 2)}`;
+}
+
+/**
+ * Presentation of the four `profit_state` values from the backend.
+ *
+ * Driven ENTIRELY by the backend's `profit_state` — this page never inspects the
+ * sign of `total_profit_loss` to decide a colour or a label. Consequences the
+ * spec requires and this table encodes:
+ *   * PROFIT is green, LOSS is red, BREAK_EVEN and UNAVAILABLE are neutral.
+ *   * LOSS shows the MAGNITUDE under a "LOSS" label, so "-$5,000" can never
+ *     appear beneath the word "PROFIT". The direction is in the word, never in
+ *     colour alone.
+ *   * BREAK_EVEN reads "BREAK-EVEN" — exact zero is a real financial statement.
+ *   * UNAVAILABLE shows "PROFIT / LOSS" with "N/A" instead of a figure.
+ */
+const PROFIT_STATE_PRESENTATION: Record<ProfitState, {
+    label: string; tone: 'success' | 'danger' | 'neutral'; icon: typeof TrendingUp;
+    /** Strip the sign: the label already carries the direction. */
+    magnitude: boolean;
+}> = {
+    PROFIT: { label: 'PROFIT', tone: 'success', icon: TrendingUp, magnitude: false },
+    LOSS: { label: 'LOSS', tone: 'danger', icon: TrendingDown, magnitude: true },
+    BREAK_EVEN: { label: 'BREAK-EVEN', tone: 'neutral', icon: Minus, magnitude: false },
+    UNAVAILABLE: { label: 'PROFIT / LOSS', tone: 'neutral', icon: Wallet, magnitude: false },
+};
+
+/**
+ * The CA summary band: TOTAL CREDIT / TOTAL DEBIT / CURRENT BALANCE /
+ * PROFIT-LOSS.
+ *
+ * Every value is a string straight from `summary` — no `reduce`, no `+`, no
+ * `-`, no re-rounding, no classification. Renders nothing at all when `summary`
+ * is absent (an older cached payload): showing zeros there would be inventing
+ * figures.
+ *
+ * Credit is tinted as a gain and Debit as a reduction, matching the row tints in
+ * the table below: a purchase adds licence value, a sale consumes it.
+ *
+ * Reuses `@/components/StatCard` (the app's existing KPI card, in `compact`
+ * mode — built precisely for long currency strings). No new card component.
+ */
+function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined }) {
+    if (!summary) return null;
+
+    const profit = PROFIT_STATE_PRESENTATION[summary.profit_state]
+        // Unknown/newer state from the server degrades to neutral rather than
+        // crashing the financial screen.
+        ?? PROFIT_STATE_PRESENTATION.UNAVAILABLE;
+
+    const profitValue = !summary.total_profit_loss && summary.total_profit_loss !== '0'
+        ? 'N/A'
+        : formatMoney(
+            profit.magnitude
+                // Sign stripped for display only — the direction is in the label,
+                // so "-$46,499.94" can never sit under the word PROFIT.
+                ? String(summary.total_profit_loss).replace(/^-/, '')
+                : summary.total_profit_loss,
+            summary.profit_currency,
+        );
+
+    return (
+        <div
+            data-testid="ledger-summary-cards"
+            className="grid grid-cols-1 gap-2 px-3 pt-3 sm:grid-cols-2 xl:grid-cols-4"
+        >
+            <StatCard
+                compact
+                label="Total Purchase"
+                value={formatMoney(summary.total_purchase, summary.balance_currency)}
+                secondaryValue={`Bill ${formatMoney(summary.total_purchase_bill_inr, summary.bill_currency)}`}
+                icon={Wallet}
+                tone="success"
+            />
+            <StatCard
+                compact
+                label="Total Sale"
+                value={formatMoney(summary.total_sale, summary.balance_currency)}
+                secondaryValue={`Bill ${formatMoney(summary.total_sale_bill_inr, summary.bill_currency)}`}
+                icon={Wallet}
+                tone="danger"
+            />
+            <StatCard
+                compact
+                label="Current Balance"
+                value={formatMoney(summary.current_balance, summary.balance_currency)}
+                secondaryValue="Total Purchase − Total Sale"
+                icon={ScrollText}
+                tone="primary"
+            />
+            <StatCard
+                compact
+                label={profit.label}
+                value={profitValue}
+                icon={profit.icon}
+                tone={profit.tone}
+                secondaryValue="Total Purchase − Total Sale"
+            />
+        </div>
+    );
+}
+
+function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
+    const companiesMap: Record<string, { company_id: string | number | null; company_name: string; transactions: CanonicalTransaction[] }> = {};
+    transactions.forEach((txn, index) => {
+        const key = txn.company_id != null ? String(txn.company_id) : `unknown-${index}`;
+        if (!companiesMap[key]) {
+            companiesMap[key] = { company_id: txn.company_id ?? key, company_name: normalizeText(txn.company_name, '-'), transactions: [] };
+        }
+        companiesMap[key].transactions.push(txn);
+    });
+    return Object.values(companiesMap);
+}
+
+// ─── Shared ledger table chrome ─────────────────────────────────────────────────
+
+/**
+ * The one column set for the ledger table — reused by the opening starting-state
+ * block and by every company group so the two always line up.
+ */
+function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCurrency: string }) {
+    // Sale/Purchase render the LICENCE value (CIF FC for DFIA, INR otherwise), so
+    // these headers must carry the same symbol their cells are formatted with.
+    // They previously hardcoded "(₹)" while the cells rendered "$…" for DFIA —
+    // the header contradicted the number beneath it.
+    const licenceSuffix = isDFIA ? '($)' : '(₹)';
+    // The BILL columns are a different quantity in a different currency (always
+    // INR), so they get their own symbol from the backend's `bill_currency` —
+    // never the licence suffix above.
+    const billSuffix = billCurrency === 'USD' ? '($)' : '(₹)';
+    return (
+        <thead className="sticky top-0 z-10">
+            <tr className="border-b-2 border-primary/20 bg-primary/8">
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Date</th>
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Particulars</th>
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Invoice Number</th>
+                <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Type</th>
+                {/* Items is DFIA-only: incentive licences have no item link in
+                    the data model, so the column would be permanently empty. */}
+                {isDFIA && <th scope="col" className="px-2.5 py-[7px] text-left font-bold text-foreground">Items</th>}
+                {/* Sale = SALE (consumes licence value), Purchase = PURCHASE
+                    (adds it) — see `transaction_semantics.ledger_column_for`,
+                    the single definition. Sale is listed first to match the
+                    conventional reading order. */}
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-destructive">Sale {licenceSuffix}</th>
+                <th scope="col" className="px-2.5 py-[7px] text-right font-bold text-success">Purchase {licenceSuffix}</th>
+                {/* Full-strength semantic colours (never a faded opacity) so the
+                    bill columns keep WCAG AA contrast; the lighter FONT WEIGHT,
+                    not a lower contrast, is what distinguishes them from the
+                    licence-value columns above. */}
+                <th scope="col" className="whitespace-nowrap px-2.5 py-[7px] text-right font-medium text-destructive">
+                    Sale Bill {billSuffix}
+                </th>
+                <th scope="col" className="whitespace-nowrap px-2.5 py-[7px] text-right font-medium text-success">
+                    Purchase Bill {billSuffix}
+                </th>
+                {/* NO per-row "License Balance" and NO "Status" column: this is a
+                    transaction ledger, not a running-balance statement. A
+                    per-row running balance printed a figure that double-counts a
+                    purchased licence's acquisition, contradicting the Current
+                    Balance card above. The balance is stated ONCE, in the
+                    summary band. */}
+            </tr>
+        </thead>
+    );
+}
+
+function InvoiceDocumentCell({ transaction }: { transaction: CanonicalTransaction }) {
+    const document = transaction.invoice_document;
+    const invoiceNumber = normalizeText(document?.invoice_number, '-');
+
+    if (document?.document_exists && document.secure_url) {
+        return (
+            <td className="px-2.5 py-[5px] text-foreground">
+                <a
+                    href={document.secure_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+                    aria-label={`Open invoice ${invoiceNumber} (${document.signed ? 'signed' : 'unsigned'})`}
+                >
+                    {invoiceNumber}
+                </a>
+                <span className="ml-1.5 whitespace-nowrap text-[10px] font-semibold text-muted-foreground">
+                    {document.signed ? 'SIGNED' : 'UNSIGNED'}
+                </span>
+            </td>
+        );
+    }
+
+    return (
+        <td className="px-2.5 py-[5px] text-foreground">
+            <span>{invoiceNumber}</span>
+            {document?.status === 'COPY_UNAVAILABLE' && (
+                <span className="ml-1.5 whitespace-nowrap text-[10px] text-muted-foreground">Copy unavailable</span>
+            )}
+        </td>
+    );
+}
+
+/**
+ * The Items cell — real item names, never a bare "-" placeholder when names
+ * exist.
+ *
+ * One trade is ONE row however many items it bills, so several names are shown
+ * inline with the overflow collapsed into "+N" and the full list on hover
+ * (`title`) for accessibility. The row is NEVER duplicated per item.
+ */
+function LedgerItemsCell({ itemNames }: { itemNames: string[] | undefined }) {
+    const names = (itemNames ?? []).filter(Boolean);
+    if (!names.length) {
+        return <td className="px-2.5 py-[5px] text-muted-foreground">-</td>;
+    }
+    const [first, ...rest] = names;
+    const fullList = names.join(', ');
+    return (
+        <td
+            className="max-w-[220px] px-2.5 py-[5px] text-foreground"
+            // `title` serves sighted mouse users; `aria-label` gives screen
+            // readers the COMPLETE list rather than the truncated "Palm Oil +2",
+            // so the collapsed items are not information available only on hover.
+            title={fullList}
+            aria-label={fullList}
+        >
+            <span className="block truncate">
+                {first}
+                {rest.length > 0 && (
+                    <span className="ml-1 text-muted-foreground" aria-hidden="true">+{rest.length}</span>
+                )}
+            </span>
+        </td>
+    );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────────
 
 export default function LicenseLedgerDetail() {
-    const { id, companyId } = useParams();
+    const { licenseId, itemId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const [ledger, setLedger] = useState<Record<string, any> | null>(null);
+    const [ledger, setLedger] = useState<CanonicalLedgerResponse | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<string | null>(null);
+    const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
 
-    // Get license_type from query params or location state
     const queryParams = new URLSearchParams(location.search);
-    const licenseType = queryParams.get('license_type') || location.state?.license_type || 'DFIA';
+    const licenseType = queryParams.get('license_type') || (location.state as Record<string, unknown>)?.license_type || 'DFIA';
 
     useEffect(() => {
         const fetchLedgerDetail = async () => {
             setLoading(true);
             setError(null);
             try {
-                const params = new URLSearchParams();
-                if (companyId) params.append('company', companyId);
-                const queryString = params.toString();
-                const url = `license-ledger/${id}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
+                const url = buildLedgerDetailPath(licenseId, itemId);
+                if (!url) { setLedger(null); setError('Missing license ledger identifier'); return; }
                 const response = await api.get(url);
-                setLedger(response.data);
+                const normalizedLedger = normalizeLedgerDetail(response.data);
+                if (!normalizedLedger) { setLedger(null); setError('Ledger details response was malformed'); return; }
+                setLedger(normalizedLedger);
             } catch (err) {
-                console.error('Error fetching ledger detail:', err);
-                setError(err.response?.data?.error || 'Failed to load ledger details');
+                setError(getApiErrorMessage(err, 'Failed to load ledger details'));
             } finally {
                 setLoading(false);
             }
         };
-
         fetchLedgerDetail();
-    }, [id, licenseType, companyId]);
+    }, [licenseId, licenseType, itemId]);
 
-    const formatDate = (dateStr) => {
+    const formatDate = (dateStr: unknown): string => {
         if (!dateStr) return '-';
-        return formatDateUtil(dateStr) || '-';
+        return formatDateUtil(String(dateStr)) || '-';
     };
 
-    const formatCurrency = (value, currency = 'INR') => {
-        if (!value && value !== 0) return '-';
-        const symbol = currency === 'USD' ? '$' : '₹';
-        return `${symbol}${formatIndianNumber(value, 2)}`;
-    };
+    // Single implementation, shared with the summary cards (see `formatMoney`).
+    const formatCurrency = formatMoney;
 
+    // ── Loading state ────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <div className="container-fluid py-4">
+            <div className="py-4">
                 <div className="flex flex-col items-center gap-2 py-12 text-center">
-                    <Loader2 className="size-8 animate-spin text-primary" />
+                    <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
                     <span className="text-sm text-muted-foreground">Loading…</span>
                 </div>
             </div>
         );
     }
 
+    // ── Error state ──────────────────────────────────────────────────────────
     if (error) {
         return (
-            <div className="container-fluid py-4">
+            <div className="py-4">
                 <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
-                    <TriangleAlert className="size-4 shrink-0" />
+                    <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
                     {error}
                 </div>
                 <Button onClick={() => navigate(-1)}>
-                    <ArrowLeft className="size-4" />Go Back
+                    <ArrowLeft className="size-4" aria-hidden="true" />Go Back
                 </Button>
             </div>
         );
@@ -79,124 +370,122 @@ export default function LicenseLedgerDetail() {
 
     if (!ledger) return null;
 
+    const exportScope = { licenseId: licenseId!, itemId: itemId!, licenseType: ledger.license_type };
+    const runExport = async (format: 'pdf' | 'xlsx') => {
+        if (exporting) return;
+        setExporting(format);
+        try {
+            if (format === 'pdf') await previewLicenseLedgerPdf(exportScope);
+            else await downloadLicenseLedgerExcel(exportScope);
+        } catch (exportError) {
+            toast.error(licenseLedgerExportError(exportError, `Failed to generate ${format === 'pdf' ? 'PDF' : 'Excel'}.`));
+        } finally {
+            setExporting(null);
+        }
+    };
+
     const isDFIA = ledger.license_type === 'DFIA';
-    const hasPurchases = (ledger.transactions || []).some(t => t.type === 'PURCHASE' || t.type === 'OPENING');
-    const currentBalance = ledger.available_balance || 0;
+    // NOTE: not a display decision — this drives the "Action Required" banner and
+    // deliberately reads the COMPLETE financial collection (`transactions`),
+    // opening row included. Which rows get rendered is decided further down by
+    // `selectLedgerDisplayRows`.
+    const hasPurchases = ledger.has_purchase_transaction ?? false;
+    // The canonical reconciliation block. Optional only for older cached
+    // payloads; when absent the summary band is hidden rather than zero-filled.
+    const summary = ledger.summary;
+    // Currency comes from the BACKEND per figure. The `isDFIA` fallbacks exist
+    // solely for pre-`summary` payloads and reproduce the old behaviour; they
+    // are not a second source of truth.
+    const balanceCurrency = summary?.balance_currency ?? (isDFIA ? 'USD' : 'INR');
+    const billCurrency = summary?.bill_currency ?? 'INR';
+    // ONE balance, ONE source: the header figure and the Current Balance card
+    // both read `summary.current_balance`, so they cannot disagree.
+    //
+    // The `license_running_balance` fallback is ONLY for pre-`summary` cached
+    // payloads. It is deliberately not the primary: it double-counts the
+    // acquisition of a purchased licence (opening + the purchase that created
+    // that opening), which is the very figure the summary replaces.
+    const currentBalanceValue = summary?.current_balance ?? ledger.license_running_balance;
+    // Numeric form used ONLY for the sign — which colour to paint, and whether
+    // to raise the deficit warning. Never used to derive a displayed figure.
+    const currentBalance = toFiniteNumber(currentBalanceValue);
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
-    const handleDownloadPDF = () => {
-        const filename = `License_Ledger_${String(ledger.license_number).replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.pdf`;
-        generatePDF([ledger], filename);
-    };
-
-    const handleDownloadExcel = async () => {
-        const filename = `License_Ledger_${String(ledger.license_number).replace(/\//g, '-')}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        await generateExcel([ledger], filename);
-    };
-
-
     return (
-        <div className="container-fluid" style={{ backgroundColor: 'var(--tb-sunken)', minHeight: '100vh', padding: '0' }}>
-            {/* Tally-Style Header */}
-            <div style={{
-                backgroundColor: 'var(--tb-text)',
-                color: '#fff',
-                padding: '10px 20px',
-                borderBottom: '2px solid var(--tb-border-strong)'
-            }}>
-                <div className="flex justify-between items-center">
+        <div className="min-h-screen bg-muted/40">
+            {/* ── Tally-style toolbar ───────────────────────────── */}
+            <div className="sticky top-0 z-20 border-b border-border-strong bg-foreground px-3 py-2 shadow-sm sm:px-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                         <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
-                            <ArrowLeft className="size-4" />Back
+                            <ArrowLeft className="size-4" aria-hidden="true" />Back
                         </Button>
-                        <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>License Ledger</span>
+                        <span className="text-[1.1rem] font-medium text-white">License Ledger</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="destructive" size="sm" onClick={handleDownloadPDF}>
-                            <FileText className="size-4" />Download PDF
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => runExport('pdf')}>
+                            {exporting === 'pdf' ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}Preview PDF
                         </Button>
-                        <Button size="sm" onClick={handleDownloadExcel} style={{ background: 'var(--tb-success)', color: '#fff' }}>
-                            <FileSpreadsheet className="size-4" />Download Excel
+                        <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => runExport('xlsx')}>
+                            {exporting === 'xlsx' ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}Download Excel
                         </Button>
-                        <span className="ml-1" style={{ fontSize: 14.5 }}>
-                            {formatDate(new Date())}
+                        <span className="ml-1 hidden text-xs text-white/70 lg:inline">
+                            {formatDate(new Date().toISOString())}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* Purchase Warning Alert */}
+            {/* ── Purchase warning ──────────────────────────────── */}
             {showPurchaseWarning && (
-                <div style={{
-                    backgroundColor: 'var(--warning-bg)',
-                    border: '1px solid var(--tb-warning)',
-                    borderLeft: '5px solid var(--tb-warning)',
-                    padding: '15px 20px',
-                    margin: '0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '15px'
-                }}>
-                    <TriangleAlert className="size-4" aria-hidden="true" />
+                <div className="mx-3 mt-3 flex items-center gap-3 rounded-md border border-warning/30 border-l-4 border-warning bg-warning/10 px-3 py-2.5 sm:mx-5">
+                    <TriangleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
                     <div>
-                        <strong style={{ color: 'var(--warning-text)', display: 'block', marginBottom: '5px' }}>
-                            ⚠️ Action Required
-                        </strong>
-                        <span style={{ color: 'var(--warning-text)' }}>
+                        <strong className="mb-1 block text-sm font-semibold text-warning">⚠️ Action Required</strong>
+                        <span className="text-[13px] text-warning/80">
                             {!hasPurchases && isNegativeBalance &&
                                 'No purchase transactions found and balance is negative. Please add purchase entries to maintain proper accounting.'}
                             {!hasPurchases && !isNegativeBalance &&
                                 'No purchase transactions found. Please add purchase entries for this license.'}
                             {hasPurchases && isNegativeBalance &&
-                                `Balance is negative (${formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')}). Please add purchase transactions to cover the deficit.`}
+                                `Balance is negative (${formatCurrency(currentBalanceValue, balanceCurrency)}). Please add purchase transactions to cover the deficit.`}
                         </span>
                     </div>
                 </div>
             )}
 
-            {/* Professional License Header */}
-            <div style={{
-                backgroundColor: 'var(--tb-card-bg)',
-                border: '1px solid var(--tb-border)',
-                borderTop: 'none',
-                padding: '25px 30px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-            }}>
-                <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-3">
-                    <div className="md:col-span-2">
-                        <h4 style={{ marginBottom: '15px', color: 'var(--tb-text)', fontWeight: '600' }}>
-                            {ledger.license_number}
-                            <span style={{
-                                marginLeft: '15px',
-                                fontSize: 12,
-                                padding: '4px 12px',
-                                backgroundColor: isDFIA ? 'var(--primary-color)' : 'var(--info-color)',
-                                color: '#fff',
-                                borderRadius: 'var(--tb-r-sm)',
-                                fontWeight: '500'
-                            }}>
-                                {ledger.license_type}
-                            </span>
+            {/* ── License header ────────────────────────────────── */}
+            <div className="mx-3 mt-3 rounded-lg border border-border bg-card px-3 py-3 shadow-sm sm:mx-5 sm:px-4">
+                <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div>
+                        <h4 className="mb-2 flex flex-wrap items-center gap-2 text-base font-semibold text-foreground">
+                            {String(ledger.license_number)}
+                            <Badge
+                                variant={isDFIA ? "default" : "info"}
+                                className="px-2 py-0.5 text-[11px]"
+                            >
+                                {String(ledger.license_type)}
+                            </Badge>
                         </h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: 15 }}>
+                        <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-[13px] sm:grid-cols-2 xl:grid-cols-3">
                             <div>
-                                <span style={{ color: 'var(--tb-text-secondary)', marginRight: '10px' }}>Exporter:</span>
-                                <strong>{ledger.exporter || 'N/A'}</strong>
+                                <span className="mr-2.5 text-muted-foreground">Exporter:</span>
+                                <strong>{normalizeText(ledger.exporter_name, 'N/A')}</strong>
                             </div>
                             <div>
-                                <span style={{ color: 'var(--tb-text-secondary)', marginRight: '10px' }}>License Date:</span>
+                                <span className="mr-2.5 text-muted-foreground">License Date:</span>
                                 <strong>{formatDate(ledger.license_date)}</strong>
                             </div>
                             {isDFIA && (
                                 <div>
-                                    <span style={{ color: 'var(--tb-text-secondary)', marginRight: '10px' }}>SION Norms:</span>
-                                    <strong style={{ color: 'var(--info-color)' }}>
+                                    <span className="mr-2.5 text-muted-foreground">SION Norms:</span>
+                                    <strong className="text-info">
                                         {(() => {
                                             const allNorms = [...new Set(
                                                 ledger.transactions
                                                     .filter(t => t.sion_norms)
-                                                    .flatMap(t => t.sion_norms.split(', '))
+                                                    .flatMap(t => String(t.sion_norms).split(', '))
                                             )];
                                             return allNorms.length > 0 ? allNorms.join(', ') : 'N/A';
                                         })()}
@@ -204,188 +493,234 @@ export default function LicenseLedgerDetail() {
                                 </div>
                             )}
                             <div>
-                                <span style={{ color: 'var(--tb-text-secondary)', marginRight: '10px' }}>Expiry Date:</span>
+                                <span className="mr-2.5 text-muted-foreground">Expiry Date:</span>
                                 <strong>{formatDate(ledger.expiry_date)}</strong>
                             </div>
                             <div>
-                                <span style={{ color: 'var(--tb-text-secondary)', marginRight: '10px' }}>Total Value:</span>
-                                <strong style={{ color: 'var(--primary-color)' }}>
-                                    {formatCurrency(ledger.total_value, isDFIA ? 'USD' : 'INR')}
+                                <span className="mr-2.5 text-muted-foreground">Total Value:</span>
+                                <strong className="text-primary">
+                                    {/* The canonical contract has no `total_value`; reading it
+                                        made this always render as 0. The legacy endpoint defined
+                                        the field as total purchase CIF, which the canonical
+                                        service already publishes as `totals.total_purchases`
+                                        (Decimal, USD for DFIA / INR for incentive). */}
+                                    {formatCurrency(ledger.totals?.total_purchases, balanceCurrency)}
                                 </strong>
                             </div>
                         </div>
                     </div>
-                    <div className="text-end">
-                        <div style={{
-                            padding: '20px',
-                            backgroundColor: 'var(--tb-sunken)',
-                            borderRadius: 'var(--tb-r-md)',
-                            border: '2px solid var(--tb-border)'
-                        }}>
-                            <div style={{ fontSize: 13.5, color: 'var(--tb-text-secondary)', marginBottom: '8px', fontWeight: '500' }}>
+
+                    {/* Balance panel */}
+                    <div className="text-right">
+                        <div className="inline-block rounded-md border border-border bg-muted/60 px-3 py-2 text-right">
+                            <div className="mb-0.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                                 CURRENT BALANCE
                             </div>
-                            <div style={{
-                                fontSize: '1.75rem',
-                                fontWeight: '700',
-                                color: currentBalance >= 0 ? 'var(--success-color)' : 'var(--danger-color)'
-                            }}>
-                                {formatCurrency(currentBalance, isDFIA ? 'USD' : 'INR')}
+                            <div className={cn(
+                                "text-xl font-bold tabular-nums",
+                                currentBalance >= 0 ? "text-success" : "text-destructive",
+                            )}>
+                                {formatCurrency(currentBalanceValue, balanceCurrency)}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Company-grouped Ledger Table */}
+            {/* ── CA summary band ──────────────────────────────── */}
+            <LedgerSummaryCards summary={summary} />
+
+            {/* ── Ledger tables ─────────────────────────────────── */}
             {(() => {
-                const companiesMap: Record<string, { company_id: any; company_name: string; transactions: Record<string, any>[] }> = {};
-                (ledger.transactions || []).forEach(txn => {
-                    const key = txn.company_id != null ? txn.company_id : 'unknown';
-                    if (!companiesMap[key]) {
-                        companiesMap[key] = {
-                            company_id: txn.company_id,
-                            company_name: txn.company_name || 'N/A',
-                            transactions: []
-                        };
-                    }
-                    companiesMap[key].transactions.push(txn);
-                });
-                const companiesGrouped = Object.values(companiesMap);
+                // THE DISPLAY RULE lives in `selectLedgerDisplayRows` — never
+                // re-expressed here. `rows` is PURCHASE + SALE only (so the
+                // synthetic OPENING row can no longer form a bogus "N/A"
+                // company group); `openingRow` is the starting state, present
+                // only when this licence has no purchase.
+                const { rows, openingRow } = selectLedgerDisplayRows<CanonicalTransaction>(ledger);
 
-                const TXN_SORT_ORDER = { OPENING: 0, PURCHASE: 1, SALE: 2 };
-
-                return companiesGrouped.map((company, ci) => {
-                    const rawTxns = company.transactions;
-
-                    // Sort per-company: OPENING/PURCHASE before SALE
-                    const txns = [...rawTxns].sort((a, b) =>
-                        ((TXN_SORT_ORDER[a.type] ?? 1) - (TXN_SORT_ORDER[b.type] ?? 1))
-                    );
-
-                    // Compute per-company running balance (backend balance is global)
-                    let companyRunning = 0;
-                    const companyBalMap = new Map();
-                    for (const txn of txns) {
-                        if (txn.type === 'PURCHASE' || txn.type === 'OPENING') {
-                            companyRunning += isDFIA ? (txn.debit_cif || 0) : (txn.debit_license_value || 0);
-                        } else if (txn.type === 'SALE') {
-                            companyRunning -= isDFIA ? (txn.credit_cif || 0) : (txn.credit_license_value || 0);
-                        }
-                        companyBalMap.set(txn, companyRunning);
-                    }
-
-                    const totalDebit = txns.reduce((s, t) => s + (t.debit_amount || 0), 0);
-                    const totalCredit = txns.reduce((s, t) => s + (t.credit_amount || 0), 0);
-                    // Bottom-line P/L for the party = all sales (credits) minus all
-                    // purchases/costs (debits). This subtracts the FULL purchase cost
-                    // (incl. the still-unsold balance), unlike the per-row realized
-                    // gain (sale − cost of only the CIF sold), so it reconciles to
-                    // Credit − Debit.
-                    const companyPL = totalCredit - totalDebit;
-
+                if (!rows.length && !openingRow) {
                     return (
-                        <div key={company.company_id ?? ci} style={{
-                            backgroundColor: 'var(--tb-card-bg)',
-                            border: '1px solid var(--tb-border)',
-                            borderRadius: 'var(--tb-r-md)',
-                            marginTop: ci === 0 ? '20px' : '12px',
-                            marginLeft: '20px',
-                            marginRight: '20px',
-                            marginBottom: ci === companiesGrouped.length - 1 ? '20px' : '0',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                            overflow: 'hidden'
-                        }}>
-                            {/* Company Header */}
-                            <div style={{
-                                backgroundColor: 'var(--tb-brand-active)',
-                                color: '#fff',
-                                padding: '10px 20px',
-                                fontWeight: '700',
-                                fontSize: 15,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                            }}>
-                                <Building2 className="size-4" aria-hidden="true" />
-                                {company.company_name}
-                            </div>
+                        <div className="mx-5 my-5 flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-card px-5 py-12 text-center">
+                            <ScrollText className="size-8 text-muted-foreground" aria-hidden="true" />
+                            <p className="text-sm font-semibold text-foreground">No transactions</p>
+                            <p className="text-[13px] text-muted-foreground">
+                                No ledger entries found for this license.
+                            </p>
+                        </div>
+                    );
+                }
 
-                            <table style={{ width: '100%', fontSize: '0.82rem', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr style={{ background: 'var(--tb-brand-50)', borderBottom: '2px solid var(--tb-brand-100)' }}>
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'left' }}>Date</th>
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'left' }}>Particulars</th>
-                                        {isDFIA && <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'left' }}>Items</th>}
-                                        {isDFIA ? (
-                                            <>
-                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>CIF $ Dr</th>
-                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>CIF $ Cr</th>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>Value Dr</th>
-                                                <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>Value Cr</th>
-                                            </>
-                                        )}
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>Rate</th>
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-success-text)', textAlign: 'right' }}>Debit (₹)</th>
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-danger-text)', textAlign: 'right' }}>Credit (₹)</th>
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>{isDFIA ? 'Balance ($)' : 'Balance (₹)'}</th>
-                                        <th style={{ padding: '7px 10px', fontWeight: '700', color: 'var(--tb-text)', textAlign: 'right' }}>P/L</th>
-                                    </tr>
-                                </thead>
+                // Group ONLY the display rows by company (structure only)
+                const companiesGrouped = groupTransactionsByCompany(rows);
+                // Get company utilizations from canonical API (not recalculated)
+                const companyUtilizations: Record<string, CompanyUtilization> = ledger.company_utilizations || {};
+
+                const openingBlock = openingRow ? (
+                    <div
+                        data-testid="ledger-opening-state"
+                        className={cn(
+                            "mx-3 mt-3 overflow-hidden rounded-lg border border-border shadow-sm sm:mx-5",
+                            companiesGrouped.length ? "mb-0" : "mb-3",
+                        )}
+                    >
+                        {/* Starting state — deliberately NOT a company group header */}
+                        <div className="flex flex-wrap items-center justify-between gap-1 border-b border-border bg-muted px-3 py-2">
+                            <div className="flex items-center gap-2">
+                                <Wallet className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                <span className="text-[15px] font-bold text-foreground">Opening Balance</span>
+                            </div>
+                            <span className="text-[13px] text-muted-foreground">
+                                Starting state — carried forward, not a transaction
+                            </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse bg-card text-[0.82rem]">
+                                <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
                                 <tbody>
-                                    {txns.map((txn, ti) => {
-                                        const isPurchase = txn.type === 'PURCHASE' || txn.type === 'OPENING';
-                                        const rowBg = isPurchase ? 'var(--tb-success-soft)' : (txn.type === 'SALE' ? 'var(--tb-danger-soft)' : 'var(--tb-card-bg)');
-                                        const rowBorder = isPurchase ? '1px solid var(--tb-success-border)' : (txn.type === 'SALE' ? '1px solid var(--tb-danger-border)' : '1px solid var(--tb-border-soft)');
-                                        return (
-                                            <tr key={ti} style={{ background: rowBg, borderBottom: rowBorder }}>
-                                                <td style={{ padding: '5px 10px', color: 'var(--tb-text-secondary)', whiteSpace: 'nowrap' }}>{formatDate(txn.date)}</td>
-                                                <td style={{ padding: '5px 10px', color: 'var(--tb-text)' }}>
-                                                    {txn.particular}
-                                                    {txn.invoice_number && <span style={{ color: 'var(--tb-text-secondary)', fontSize: 12, display: 'block' }}>({txn.invoice_number})</span>}
-                                                </td>
-                                                {isDFIA && <td style={{ padding: '5px 10px', color: 'var(--tb-text)' }}>{txn.items || '-'}</td>}
-                                                {isDFIA ? (
-                                                    <>
-                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--tb-success-text)' }}>{txn.debit_cif ? formatIndianNumber(txn.debit_cif, 2) : '-'}</td>
-                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--tb-danger-text)' }}>{txn.credit_cif ? formatIndianNumber(txn.credit_cif, 2) : '-'}</td>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--tb-success-text)' }}>{txn.debit_license_value ? formatIndianNumber(txn.debit_license_value, 2) : '-'}</td>
-                                                        <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--tb-danger-text)' }}>{txn.credit_license_value ? formatIndianNumber(txn.credit_license_value, 2) : '-'}</td>
-                                                    </>
-                                                )}
-                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: 'var(--tb-text)' }}>{txn.rate ? formatIndianNumber(txn.rate, 2) : '-'}</td>
-                                                <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: '600', color: 'var(--tb-success-text)' }}>{txn.debit_amount ? `₹${formatIndianNumber(txn.debit_amount, 2)}` : '-'}</td>
-                                                <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: '600', color: 'var(--tb-danger-text)' }}>{txn.credit_amount ? `₹${formatIndianNumber(txn.credit_amount, 2)}` : '-'}</td>
-                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: (companyBalMap.get(txn) ?? 0) >= 0 ? 'var(--tb-success-text)' : 'var(--tb-danger-text)' }}>{formatIndianNumber(companyBalMap.get(txn) ?? 0, 2)}</td>
-                                                <td style={{ padding: '5px 10px', textAlign: 'right', color: txn.profit_loss >= 0 ? 'var(--tb-success-text)' : 'var(--tb-danger-text)' }}>
-                                                    {txn.type === 'SALE' && txn.profit_loss != null ? formatIndianNumber(Math.abs(txn.profit_loss), 2) : '-'}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    {/* Company Total Row */}
-                                    <tr style={{ background: 'var(--tb-brand-active)', color: '#fff', fontWeight: '700' }}>
-                                        <td colSpan={isDFIA ? 6 : 5} style={{ padding: '7px 10px', textAlign: 'right', fontSize: 12.5 }}>
-                                            Total — {company.company_name}
+                                    <tr className="border-b border-border bg-muted/50">
+                                        <td className="whitespace-nowrap px-2.5 py-[5px] text-muted-foreground">
+                                            {formatDate(openingRow.date)}
                                         </td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#86efac' }}>₹{formatIndianNumber(totalDebit, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#fca5a5' }}>₹{formatIndianNumber(totalCredit, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: '#fff' }}>{formatIndianNumber(companyRunning, 2)}</td>
-                                        <td style={{ padding: '7px 10px', textAlign: 'right', color: companyPL >= 0 ? '#86efac' : '#fca5a5' }}>
-                                            {companyPL !== 0 ? `${companyPL >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(companyPL), 2)}` : '-'}
+                                        {/* A carried-forward state, not a trade: no counterparty,
+                                            no invoice, no billed item. All three stay blank. */}
+                                        <td className="px-2.5 py-[5px] font-medium text-foreground">Opening Balance</td>
+                                        <td className="px-2.5 py-[5px] text-muted-foreground">-</td>
+                                        <td className="px-2.5 py-[5px] text-foreground">
+                                            <Badge variant="secondary" className="text-[11px]">{openingRow.type}</Badge>
                                         </td>
+                                        {isDFIA && <td className="px-2.5 py-[5px] text-muted-foreground">-</td>}
+                                        {/* An opening balance ADDS licence value, exactly
+                                            like a purchase, so it occupies the Purchase
+                                            column — and is already counted in
+                                            `summary.total_purchase`. */}
+                                        <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">-</td>
+                                        <td className="px-2.5 py-[5px] text-right font-semibold text-success">
+                                            {formatCurrency(openingRow.purchase_amount, balanceCurrency)}
+                                        </td>
+                                        <td className="px-2.5 py-[5px] text-right text-muted-foreground">-</td>
+                                        <td className="px-2.5 py-[5px] text-right text-muted-foreground">-</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                ) : null;
+
+                const companyBlocks = companiesGrouped.map((company, ci) => {
+                    const txns = company.transactions as CanonicalTransaction[];
+                    // Get company balance from canonical API data
+                    const companyUtilization = Object.values(companyUtilizations).find(
+                        cu => cu.company_id === Number(company.company_id)
+                    );
+                    const companyBalance = companyUtilization ? toFiniteNumber(companyUtilization.utilization_balance) : 0;
+
+                    const marginTop = ci === 0 && !openingBlock ? "mt-3" : "mt-2";
+                    const marginBottom = ci === companiesGrouped.length - 1 ? "mb-3" : "mb-0";
+
+                    return (
+                        <div
+                            key={company.company_id ?? ci}
+                            data-testid="ledger-company-block"
+                            className={cn(
+                                "mx-3 overflow-hidden rounded-lg border border-border shadow-sm sm:mx-5",
+                                marginTop, marginBottom,
+                            )}
+                        >
+                            {/* Company header */}
+                            <div className="flex flex-wrap items-center justify-between gap-1 bg-primary px-3 py-2 text-primary-foreground">
+                                <div className="flex items-center gap-2">
+                                    <Building2 className="size-4 shrink-0" aria-hidden="true" />
+                                    <span data-testid="ledger-company-group" className="text-[15px] font-bold">
+                                        {company.company_name}
+                                    </span>
+                                </div>
+                                <div className="text-[13px] text-primary-foreground/80">
+                                    Company Balance: <span className="font-semibold">{formatCurrency(companyBalance, balanceCurrency)}</span>
+                                </div>
+                            </div>
+
+                            {/* Company ledger table */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse bg-card text-[0.82rem]">
+                                    <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
+                                    <tbody>
+                                        {txns.map((txn, ti) => {
+                                            // `txns` is PURCHASE + SALE only (display rule), so the
+                                            // amount lands in the credit column for sales and the
+                                            // debit column for everything else.
+                                            const isSale = txn.sale_amount != null;
+                                            const isPurchase = txn.purchase_amount != null;
+                                            const isCommission = txn.is_commission;
+
+                                            return (
+                                                <tr
+                                                    key={ti}
+                                                    className={cn(
+                                                        "border-b",
+                                                        isPurchase ? "border-success/20 bg-success/[0.06]"
+                                                            : isSale ? "border-destructive/20 bg-destructive/[0.06]"
+                                                            : "border-border/60 bg-card",
+                                                    )}
+                                                >
+                                                    <td className="whitespace-nowrap px-2.5 py-[5px] text-muted-foreground">
+                                                        {formatDate(txn.date)}
+                                                    </td>
+                                                    {/* Particulars = the COUNTERPARTY, not us. The
+                                                        group header above already names our company;
+                                                        `company_name` here would just echo it. '-'
+                                                        when the party relation is genuinely absent —
+                                                        never substituted with our own company. */}
+                                                    <td className="px-2.5 py-[5px] text-foreground">
+                                                        {normalizeText(txn.party_name, '-')}
+                                                    </td>
+                                                    <InvoiceDocumentCell transaction={txn} />
+                                                    <td className="px-2.5 py-[5px] text-foreground">
+                                                        <Badge variant={isCommission ? "secondary" : "outline"} className="text-[11px]">
+                                                            {txn.type}
+                                                        </Badge>
+                                                    </td>
+                                                    {isDFIA && <LedgerItemsCell itemNames={txn.item_names} />}
+                                                    {/* Licence value (USD for DFIA) — NOT the bill.
+                                                        SALE → Debit (consumes licence value),
+                                                        PURCHASE → Credit (adds it). Both render
+                                                        `amount` as-is: the canonical service emits it
+                                                        as a positive magnitude and encodes direction
+                                                        in `type`, so neither side needs a sign flip. */}
+                                                    <td className="px-2.5 py-[5px] text-right font-semibold text-destructive">
+                                                        {formatCurrency(txn.sale_amount, balanceCurrency)}
+                                                    </td>
+                                                    <td className="px-2.5 py-[5px] text-right font-semibold text-success">
+                                                        {formatCurrency(txn.purchase_amount, balanceCurrency)}
+                                                    </td>
+                                                    {/* Bill columns: the INVOICED amount, in INR — a
+                                                        different quantity and currency from the two
+                                                        columns above. Never assumed equal to them.
+                                                        Each bill sits under the SAME column as its own
+                                                        licence value, so a sale's bill is a Sale Bill
+                                                        and a purchase's bill is a Purchase Bill. */}
+                                                    <td className="px-2.5 py-[5px] text-right tabular-nums text-destructive">
+                                                        {formatCurrency(txn.sale_bill_amount, billCurrency)}
+                                                    </td>
+                                                    <td className="px-2.5 py-[5px] text-right tabular-nums text-success">
+                                                        {formatCurrency(txn.purchase_bill_amount, billCurrency)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     );
                 });
+
+                return (
+                    <>
+                        {openingBlock}
+                        {companyBlocks}
+                    </>
+                );
             })()}
         </div>
     );

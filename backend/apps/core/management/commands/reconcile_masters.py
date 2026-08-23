@@ -40,8 +40,8 @@ The command mutates nothing.  Its only side effects are writing the report file
 (``--out``) and printing a human-readable summary to stdout.
 """
 import json
-import os
 from datetime import datetime
+from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -131,13 +131,13 @@ class Command(BaseCommand):
                 raise CommandError(f"Bad --input '{item}': empty server label or path.")
             if label in snapshots:
                 raise CommandError(f"Duplicate server label '{label}' in --input.")
-            if not os.path.isfile(path):
+            input_path = Path(path)
+            if not input_path.is_file():
                 raise CommandError(f"Input file not found for server '{label}': {path}")
             try:
-                with open(path, "r") as f:
-                    data = json.load(f)
+                data = json.loads(input_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError) as exc:
-                raise CommandError(f"Could not read/parse JSON for server '{label}' ({path}): {exc}")
+                raise CommandError(f"Could not read/parse JSON for server '{label}' ({path}): {exc}") from exc
             if not isinstance(data, dict) or "tables" not in data:
                 raise CommandError(
                     f"File for server '{label}' ({path}) is not an audit_masters "
@@ -409,10 +409,12 @@ class Command(BaseCommand):
         out_path = opts.get("out")
         if out_path:
             try:
-                with open(out_path, "w") as f:
-                    json.dump(report, f, indent=2, default=str)
+                Path(out_path).write_text(
+                    json.dumps(report, indent=2, default=str),
+                    encoding="utf-8",
+                )
             except OSError as exc:
-                raise CommandError(f"Could not write report to {out_path}: {exc}")
+                raise CommandError(f"Could not write report to {out_path}: {exc}") from exc
             self.stdout.write(self.style.SUCCESS(f"Wrote reconciliation report to {out_path}"))
 
         self._print_summary(report)

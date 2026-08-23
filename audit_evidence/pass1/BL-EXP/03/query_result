@@ -1,0 +1,24 @@
+-- query 1: rows with NULL transfer_initiation_date
+ id | license_id | transfer_date | from_company_id | to_company_id | transfer_initiation_date | transfer_status
+----+------------+---------------+------------------+----------------+---------------------------+-----------------
+(0 rows)
+
+-- query 2: duplicate-looking rows
+ license_id | from_company_id | to_company_id | transfer_status | transfer_initiation_date | transfer_date | count
+------------+------------------+----------------+------------------+---------------------------+---------------+-------
+(0 rows)
+
+-- Additional confirmation the singular endpoint is not exercised by anything live today:
+$ grep -rln "update-license-transfer" . | grep -v .claude/index
+backend/tests/test_authorization_permissions.py   (permission-only test, does not
+                                                    exercise the create/update logic)
+backend/apps/license/management/commands/update_license_ownership.py
+                                                   (defines SERVER_API constant
+                                                    pointing at this URL, but
+                                                    SERVER_API is never referenced
+                                                    anywhere else in the file --
+                                                    dead constant; the real sync
+                                                    path is bulk_sync_to_server()
+                                                    -> POST .../bulk-update-license-transfer/)
+backend/apps/license/views_actions.py             (defines the endpoint)
+$ grep -rn "update-license-transfer" frontend/src   -> no matches

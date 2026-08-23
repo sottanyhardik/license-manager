@@ -1,0 +1,1604 @@
+# Phase 11 Documents Audit Report
+
+## backend/templates/profile.html
+
+- File Path(s): `backend/templates/profile.html`
+- Module: Documents / Legacy Django template
+- Total LOC: 901
+- Lines Reviewed: 901 plus repository-wide dependency references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed a legacy static HTML profile page with no live validation, form, upload, export, or authenticated runtime path.
+- Package Replacements: None; deletion was preferred because React is the active frontend and no Django runtime dependency remained.
+- Performance Improvements: Removed a 901-line legacy template and its static asset/script load surface from active source inventory.
+- Security Improvements: Removed stale unauthenticated legacy profile markup, external font loading, local asset/script references, static demo links, and inactive form controls from active source inventory.
+- Dead Code Removed: Deleted verified-dead `backend/templates/profile.html`.
+- Duplicate Logic Removed: Removed duplicate legacy profile/dashboard UI surface superseded by the React application.
+- Tests Added: None; no live caller remained. Existing URL-routing regression coverage was run.
+- Verification Results:
+  - Repository-wide dependency scan found no live `render()`, `render_to_response()`, `TemplateResponse`, generic/class-based view, `include`, `extends`, custom/inclusion tag, email/PDF/report/export, management command, test, URL route, middleware, signal, dynamic import, cached template path, third-party package, or runtime loader reference to `backend/templates/profile.html`.
+  - Remaining `profile.html` references are stale static `href` links inside other legacy `backend/templates/*.html` files.
+  - React entry HTML remains preserved: the Django catch-all serves `index.html`, and template `DIRS` resolve `frontend/dist` before `backend/templates`.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check -- backend/templates/profile.html` -> clean before source commit.
+- Source Commit SHA: `08269148be7f2eea870d8c61158372764e388572`
+- Source Commit Timestamp: `2026-07-17T10:54:25+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead profile template`
+- Blocked Items:
+  - Scoped Ruff is blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other legacy `backend/templates/*.html` files still contain stale static links to `profile.html`; audit them only when selected by the Phase 11 queue or marked `REQUIRES_RECHECK`.
+- Status: DELETED
+
+## docs/media-security-cutover.md
+
+- File Path(s): `docs/media-security-cutover.md`
+- Module: Documents / Media security runbook
+- Total LOC: 105
+- Lines Reviewed: 105 plus deployment script, nginx snippet, authenticated media view, query-token auth, frontend media helpers, and referenced tests
+- Functions Reviewed: 0 in the document; referenced `ProtectedMediaView.get`, `JWTAuthenticationFromQueryParam.authenticate`, `toProtectedMediaPath`, `openAuthedFile`, and `openDocument`
+- Classes Reviewed: 0 in the document; referenced `ProtectedMediaView` and `JWTAuthenticationFromQueryParam`
+- Validation Improvements: Updated stale instructions to reflect current authenticated blob helper usage and the restricted `GET`/`HEAD` download/export query-token fallback.
+- Package Replacements: Replaced obsolete `grep` guidance with project-standard `rg`; no dependency added.
+- Performance Improvements: Preserved the X-Accel-Redirect operational path and clarified that nginx should serve bytes only from the internal protected-media location after cutover.
+- Security Improvements: Removed stale claims that frontend direct media/token flows still exist, documented the remaining public nginx `/media/` operational risk, and clarified final query-token fallback removal criteria.
+- Dead Code Removed: None; dependency analysis proved the runbook is live through deployment and frontend helper references.
+- Duplicate Logic Removed: None; this is an operational document, not an implementation module.
+- Tests Added: None; documentation-only source update. Existing media/auth routing regressions were run.
+- Verification Results:
+  - Dependency scan found live references from `scripts/deployment/auto-deploy.sh` and `frontend/src/utils/documentDownload.ts`; retained and updated rather than deleted.
+  - Frontend direct token/media scan returned only authenticated helper implementation, comments, tests, and `AuthedImage`-style authenticated media consumers.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py backend/tests/test_authentication_query_param.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/apps/core/views/media.py backend/apps/core/authentication.py backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - `.venv/bin/python -m py_compile backend/apps/core/views/media.py backend/apps/core/authentication.py backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/core/views/media.py backend/apps/core/authentication.py backend/lmanagement backend/tests/test_authentication_query_param.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check -- docs/media-security-cutover.md` -> clean before source commit.
+- Source Commit SHA: `96f0da8f0903b8a18c7ddc1460146572b8994689`
+- Source Commit Timestamp: `2026-07-17T10:58:35+05:30`
+- Source Commit Summary: `docs(documents): update media security cutover`
+- Blocked Items:
+  - Scoped Ruff is blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Public nginx `/media/` remains an operational cutover risk until Step 3 is applied on deployed servers.
+  - Restricted query-token JWT fallback remains configured until production logs prove it can be removed.
+- Status: COMPLETED
+
+## frontend/src/hooks/useFileUpload.js
+
+- File Path(s): `frontend/src/hooks/useFileUpload.js`, `frontend/src/test/useFileUpload.test.ts`
+- Module: Documents / Upload hook
+- Total LOC: 919
+- Lines Reviewed: 515 hook lines plus 404 focused regression-test lines and live `LedgerUpload.tsx` import paths
+- Functions Reviewed: 12 hook/helper/callback functions plus 18 focused test cases
+- Classes Reviewed: 0
+- Validation Improvements: Added malformed file-object rejection, invalid/non-finite size rejection, invalid max-file-size fallback, case-insensitive MIME matching, safe empty event file-list handling, unsafe endpoint rejection, bounded progress percentages, malformed success response normalization, trimmed error extraction, and non-finite file-size formatting.
+- Package Replacements: Reused existing React hooks, Axios API client, and Vitest/testing-library coverage; no new dependency introduced.
+- Performance Improvements: Prevented NaN/Infinity progress state and exception-prone response access during upload progress/render cycles.
+- Security Improvements: Rejected absolute/protocol-relative upload endpoints and backslash/control-character endpoint paths before multipart POST.
+- Dead Code Removed: None; dependency analysis confirmed the hook is live through `frontend/src/pages/LedgerUpload.tsx` and exported by `frontend/src/hooks/index.js`.
+- Duplicate Logic Removed: Consolidated repeated response/error/progress handling into local helpers inside the hook.
+- Tests Added: Extended `frontend/src/test/useFileUpload.test.ts` with malformed file, MIME case, unsafe endpoint, malformed response/progress, and size-formatting regressions.
+- Verification Results:
+  - Dependency scan found live imports in `frontend/src/pages/LedgerUpload.tsx` and `frontend/src/hooks/index.js`.
+  - `npm test -- useFileUpload.test.ts` -> 18 passed.
+  - `npm run typecheck` -> passed.
+  - `npm run lint -- --quiet src/hooks/useFileUpload.js src/test/useFileUpload.test.ts` -> clean.
+  - `npm run build` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `py_compile`/`compileall` not applicable to JavaScript/TypeScript source; frontend typecheck/build executed instead.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check -- frontend/src/hooks/useFileUpload.js frontend/src/test/useFileUpload.test.ts` -> clean before source commit.
+- Source Commit SHA: `70602d69d878a865aa7b71bd064f194cd927ad5b`
+- Source Commit Timestamp: `2026-07-17T11:02:48+05:30`
+- Source Commit Summary: `fix(documents): harden file upload hook`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - `frontend/src/pages/LedgerUpload.tsx` remains its own audited page/component surface and should stay frozen unless dependency changes mark it `REQUIRES_RECHECK`.
+- Status: COMPLETED
+
+
+## frontend/src/pages/Profile.tsx
+
+- File Path(s): `frontend/src/pages/Profile.tsx`, `frontend/src/context/AuthContext.tsx`, `frontend/src/types/index.ts`, `frontend/src/pages/Profile.test.tsx`, `frontend/src/test/useAuth.test.tsx`, `frontend/src/pages/admin/UserForm.test.tsx`, `frontend/src/pages/admin/UserList.test.tsx`
+- Module: Documents / React profile page
+- Total LOC: 1280 across the audited source/test dependency unit
+- Lines Reviewed: 289 profile page lines plus the AuthContext user-update contract, auth types, and affected regression fixtures
+- Functions Reviewed: 11 profile helper/component/callback functions plus AuthContext `updateUser` and 22 focused test cases
+- Classes Reviewed: 0
+- Validation Improvements: Trimmed profile PATCH fields, normalized blank email to `null`, added model-aligned first/last name input limits, synchronized form state after async user hydration, normalized duplicate/malformed role strings, and extracted DRF field/non-field/native error messages safely.
+- Package Replacements: Reused React built-ins, existing AuthContext, Axios API client, Vitest, and Testing Library; no new dependency introduced.
+- Performance Improvements: Memoized normalized role rendering and avoided unnecessary auth token localStorage rewrites after profile PATCH.
+- Security Improvements: Removed `loginSuccess` misuse that could persist `null` access/refresh tokens from localStorage; profile updates now call `updateUser` and only refresh the serialized user snapshot.
+- Dead Code Removed: None; dependency analysis confirmed the React profile page is live through `/profile` in `frontend/src/routes/AppRoutes.tsx`.
+- Duplicate Logic Removed: Added shared local helpers for profile payload normalization, error extraction, and role normalization inside the page module.
+- Tests Added: Added `frontend/src/pages/Profile.test.tsx` and extended `frontend/src/test/useAuth.test.tsx`; updated typed admin auth fixtures for the new context contract.
+- Verification Results:
+  - Dependency scan found live `/profile` route in `frontend/src/routes/AppRoutes.tsx` behind `ProtectedRoute` and `AdminLayout`; backend dependency is `/auth/me/` served by `backend/apps/accounts/views/auth.py::MeView` with `UserSerializer`.
+  - `npm test -- Profile.test.tsx useAuth.test.tsx UserForm.test.tsx UserList.test.tsx` -> 22 passed.
+  - `npm test` -> 38 files passed, 161 tests passed.
+  - `npm run typecheck` -> passed.
+  - `npm run lint -- --quiet src/pages/Profile.tsx src/pages/Profile.test.tsx src/context/AuthContext.tsx src/types/index.ts src/pages/admin/UserForm.test.tsx src/pages/admin/UserList.test.tsx src/test/useAuth.test.tsx` -> clean.
+  - `npm run lint -- --quiet` -> clean.
+  - `npm run build` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for the source unit -> clean before source commit.
+- Source Commit SHA: `f0bb9e719b23ad4dc17ae53f187366e135bfdb64`
+- Source Commit Timestamp: `2026-07-17T11:08:56+05:30`
+- Source Commit Summary: `fix(documents): harden profile page updates`
+- Blocked Items:
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Broader AuthContext session-loading behavior remains outside this Documents unit and should stay frozen unless dependency changes mark it `REQUIRES_RECHECK`.
+- Status: COMPLETED
+
+
+## nginx-protected-media.conf
+
+- File Path(s): `nginx-protected-media.conf`
+- Module: Documents / nginx protected media snippet
+- Total LOC: 23
+- Lines Reviewed: 23 plus `docs/media-security-cutover.md`, active nginx media blocks, `scripts/deployment/auto-deploy.sh`, and `backend/apps/core/views/media.py`
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Clarified that the `alias` must match `MEDIA_ROOT` with a trailing slash so X-Accel-Redirect path joins remain correct.
+- Package Replacements: None; nginx built-in `internal`, `alias`, and `add_header` directives retained.
+- Performance Improvements: Preserved nginx byte-serving through the internal X-Accel-Redirect location, avoiding file bytes through gunicorn.
+- Security Improvements: Added `Cache-Control: private, no-store` to the reusable internal media snippet for authenticated customs/PII documents.
+- Dead Code Removed: None; dependency analysis confirmed the snippet is live operational documentation for secure media cutover.
+- Duplicate Logic Removed: None in this unit; active concrete nginx configs already contain related internal blocks and remain queued separately if marked `REQUIRES_RECHECK`.
+- Tests Added: None; config-template change only.
+- Verification Results:
+  - Dependency scan found live references from `docs/media-security-cutover.md`, `scripts/deployment/auto-deploy.sh`, and `backend/apps/core/views/media.py` documentation.
+  - Duplicate/config scan found concrete `/protected-media/` blocks in `nginx-license-manager.conf`, `nginx-labdhi.conf`, and `nginx-license-tractor.conf`; broader config parity remains separate queued work.
+  - `nginx -v` -> command not found; local nginx syntax validation unavailable.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/core/views/media.py backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/apps/core/views/media.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for `nginx-protected-media.conf` -> clean before source commit.
+- Source Commit SHA: `95bc45513b56f735540d92aefc6508c08cba34ae`
+- Source Commit Timestamp: `2026-07-17T11:14:12+05:30`
+- Source Commit Summary: `fix(documents): harden protected media nginx snippet`
+- Blocked Items:
+  - `nginx` binary is unavailable locally, so full nginx syntax validation could not be run.
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Active concrete nginx configs should be audited separately when their queued `REQUIRES_RECHECK` items are selected, especially for cache-header parity.
+- Status: COMPLETED
+
+
+## scripts/diagnostics/sync-media.sh
+
+- File Path(s): `scripts/diagnostics/sync-media.sh`
+- Module: Documents / media sync diagnostics script
+- Total LOC: 371
+- Lines Reviewed: 371 plus `scripts/database/db-tools.sh`, `docs/guides/SCRIPTS_README.md`, `scripts/README.md`, deployment media paths, and Django `MEDIA_ROOT`
+- Functions Reviewed: 12 shell functions / command branches
+- Classes Reviewed: 0
+- Validation Improvements: Added strict mode, explicit config validation, absolute path enforcement, unsupported remote-path character rejection, unknown-option rejection, `sync --dry-run` handling, and `sync --delete` rejection.
+- Package Replacements: Reused shell built-ins plus existing `ssh`/`rsync`; no new dependency introduced.
+- Performance Improvements: Preserved rsync incremental transfer behavior while making failure handling explicit under `set -e`.
+- Security Improvements: Corrected stale root-level `media` paths to `backend/media`, quoted SSH/rsync invocations, made SSH/rsync binaries environment-overridable, and blocked unsafe/destructive option paths before network execution.
+- Dead Code Removed: None; docs prove this diagnostics script remains live.
+- Duplicate Logic Removed: Aligned path contract with `scripts/database/db-tools.sh` rather than maintaining a conflicting media location.
+- Tests Added: None; shell-script behavior verified through syntax and non-network command-path checks.
+- Verification Results:
+  - Dependency scan found live references from `docs/guides/SCRIPTS_README.md` and `scripts/README.md`.
+  - Duplicate/path scan found `scripts/database/db-tools.sh` already uses `backend/media`, which this script now matches.
+  - `bash -n scripts/diagnostics/sync-media.sh` -> passed.
+  - `bash scripts/diagnostics/sync-media.sh` -> usage printed, exit 0.
+  - `bash scripts/diagnostics/sync-media.sh download --bad-option` -> rejected before SSH/rsync.
+  - `bash scripts/diagnostics/sync-media.sh sync --delete` -> rejected before SSH/rsync.
+  - `REMOTE_MEDIA_PATH=relative bash scripts/diagnostics/sync-media.sh status` -> rejected before SSH/rsync.
+  - `shfmt -d scripts/diagnostics/sync-media.sh` -> command not found; shell formatter unavailable locally.
+  - `shellcheck scripts/diagnostics/sync-media.sh` -> command not found; shell linter unavailable locally.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for `scripts/diagnostics/sync-media.sh` -> clean before source commit.
+- Source Commit SHA: `9bddcf84789ce0825b165f34b1db940a44a2532c`
+- Source Commit Timestamp: `2026-07-17T11:18:04+05:30`
+- Source Commit Summary: `fix(documents): harden media sync diagnostics`
+- Blocked Items:
+  - `shfmt` and `shellcheck` are unavailable locally.
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Actual SSH/rsync transfer paths were not executed because they require remote server credentials/network access.
+- Status: COMPLETED
+
+
+## nginx-http-only-tractor.conf
+
+- File Path(s): `nginx-http-only-tractor.conf`
+- Module: Documents / tractor HTTP-only nginx bootstrap config
+- Total LOC: 30
+- Lines Reviewed: 30 plus `scripts/deployment/auto-deploy.sh`, `docs/media-security-cutover.md`, `nginx-license-tractor.conf`, and related nginx config parity
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Retained the live cert-bootstrap server block and aligned proxy timeout handling with the production nginx config family.
+- Package Replacements: None; nginx built-in proxy/header directives remain the correct implementation.
+- Performance Improvements: Added explicit client/proxy timeout directives to avoid premature upload/download interruption during bootstrap traffic.
+- Security Improvements: Added `proxy_redirect off`, `X-Frame-Options`, `X-Content-Type-Options`, and `Referrer-Policy` headers to the HTTP-only bootstrap config.
+- Dead Code Removed: None; dependency analysis confirmed the file is live through `scripts/deployment/auto-deploy.sh` for `165.232.185.220`.
+- Duplicate Logic Removed: None; this file is a distinct HTTP-only certbot bootstrap config and should not be merged with TLS nginx configs.
+- Tests Added: None; nginx config hardening only.
+- Verification Results:
+  - Dependency scan found live references in `scripts/deployment/auto-deploy.sh`, deployment documentation, and tractor nginx config references.
+  - `nginx -v` -> command not found; local nginx syntax validation unavailable.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 14 passed.
+  - `.venv/bin/python -m py_compile backend/manage.py backend/lmanagement/settings.py backend/lmanagement/urls.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/lmanagement backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/lmanagement/urls.py backend/lmanagement/settings.py backend/tests/test_url_routing.py` -> blocked by pre-existing unused imports in `backend/tests/test_url_routing.py` (`pytest`, `django.test.TestCase`).
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for `nginx-http-only-tractor.conf` -> clean before source commit.
+- Source Commit SHA: `45a2223bc7f7ad1ac954e2c87de62c775cd106ac`
+- Source Commit Timestamp: `2026-07-17T11:21:21+05:30`
+- Source Commit Summary: `fix(documents): harden tractor http nginx bootstrap`
+- Blocked Items:
+  - `nginx` binary is unavailable locally, so full nginx syntax validation could not be run.
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other active nginx configs remain separate queued Phase 11 `REQUIRES_RECHECK` items and should be audited only when selected.
+- Status: COMPLETED
+
+
+## Legacy Allotment Django Templates
+
+- File Path(s): `backend/apps/allotment/templates/allotment/add.html`, `backend/apps/allotment/templates/allotment/card.html`, `backend/apps/allotment/templates/allotment/delete.html`, `backend/apps/allotment/templates/allotment/generate.html`, `backend/apps/allotment/templates/allotment/item.html`, `backend/apps/allotment/templates/allotment/list.html`, `backend/apps/allotment/templates/allotment/quantity_input.html`, `backend/apps/allotment/templates/allotment/table.html`, `backend/apps/allotment/templates/allotment/value_input.html`, `backend/apps/allotment/templates/allotment/verify.html`, `backend/apps/allotment/templatetags/__init__.py`, `backend/apps/allotment/templatetags/app_tags.py`
+- Module: Documents / legacy allotment Django template and tag stack
+- Total LOC: 844
+- Lines Reviewed: 844 plus `backend/apps/allotment/views.py`, `backend/apps/allotment/urls.py`, `backend/lmanagement/urls.py`, `backend/apps/core/templates/core/list.html`, route tests, and repository-wide template-loader/reference scans
+- Functions Reviewed: 8 template tag functions
+- Classes Reviewed: 0
+- Validation Improvements: Removed orphaned templates containing stale form, URL tag, inline AJAX, and CSRF surfaces that no active Django route renders.
+- Package Replacements: None; removed dead Django template/tag code instead of replacing it.
+- Performance Improvements: Removed orphaned template tag database lookups and unused template rendering logic from the active codebase.
+- Security Improvements: Removed stale legacy URL actions and inline AJAX paths from an otherwise unreachable template surface.
+- Dead Code Removed: Deleted 10 legacy allotment templates and the private `app_tags` template tag package.
+- Duplicate Logic Removed: Removed duplicate legacy allotment rendering and totaling helpers superseded by active DRF/React allotment flows.
+- Tests Added: None; behavior preserved by deletion of verified-dead code.
+- Verification Results:
+  - Dependency scan found no live `render()`, `render_to_response`, `TemplateResponse`, `template_name`, include/extends, custom tag, URLConf, middleware, signal, management command, test, email/PDF/report/export, dynamic loader, cached path, or third-party runtime path for the deleted allotment templates or `app_tags`.
+  - Remaining pre-deletion hits were self-contained stale template URL/include tags plus one orphaned `backend/apps/core/templates/core/list.html` legacy link; no live render path exists for that core template either.
+  - `.venv/bin/python -m pytest backend/tests/test_api_allotment.py backend/tests/test_url_routing.py -q` -> 25 passed.
+  - `.venv/bin/python -m py_compile backend/apps/allotment/views.py backend/apps/allotment/views_actions.py backend/apps/allotment/views_export.py backend/apps/allotment/urls.py backend/tests/test_api_allotment.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - `.venv/bin/ruff check backend/apps/allotment backend/tests/test_api_allotment.py backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> blocked by pre-existing unused imports in unchanged allotment modules and `backend/tests/test_url_routing.py`.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletions -> clean before source commit.
+- Source Commit SHA: `99ed3080ed82f0923fe5538108dca80353cdd5a9`
+- Source Commit Timestamp: `2026-07-17T16:04:27+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead allotment templates`
+- Blocked Items:
+  - Scoped backend Ruff remains blocked by pre-existing unused imports in unchanged allotment modules and `backend/tests/test_url_routing.py`.
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - `backend/apps/core/templates/core/list.html` still contains a stale `allotment-add` URL tag, but dependency analysis found no live render path; leave it for its own queued Phase 11 legacy-template audit item.
+- Status: COMPLETED
+
+
+## Production 404 Template
+
+- File Path(s): `backend/templates/404.html`, `backend/tests/test_url_routing.py`
+- Module: Documents / Django production error template
+- Total LOC: 438 (`404.html`: 86; focused route test module: 352)
+- Lines Reviewed: 100 original template lines, 86 replacement template lines, route URLConf, Django template settings, and 352 test lines
+- Functions Reviewed: 1 added regression test method
+- Classes Reviewed: 1 existing `URLRoutingRegressionTests` class touched for coverage
+- Validation Improvements: Added a regression proving `404.html` renders through Django's template loader without runtime context.
+- Package Replacements: Removed stale DAdmin/static asset dependency from the template; no new package introduced.
+- Performance Improvements: Removed external font fetch, stale CSS bundles, stale JavaScript bundles, and obsolete search form from production 404 responses.
+- Security Improvements: Added `noindex,nofollow`, removed external Google Font loading, removed JavaScript execution, and replaced the stale dashboard-relative link with `/`.
+- Dead Code Removed: Removed DAdmin wrapper, broken asset references, and unused search form from the active 404 template.
+- Duplicate Logic Removed: None; retained Django's conventional `404.html` contract.
+- Tests Added: `URLRoutingRegressionTests.test_html_404_template_renders_without_external_assets`
+- Verification Results:
+  - Dependency scan retained `backend/templates/404.html` because `backend/templates` is in `TEMPLATES["DIRS"]` and Django can load `404.html` by convention for production 404 handling.
+  - Remaining `404.html` references are stale links from other queued legacy DAdmin templates, not render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 15 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source files -> clean before source commit.
+- Source Commit SHA: `d7e55f2ef8b03c4fe95cab4f751641f16fd36892`
+- Source Commit Timestamp: `2026-07-17T16:08:27+05:30`
+- Source Commit Summary: `fix(documents): harden production 404 template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Queued legacy DAdmin templates still link to `404.html`; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Production 500 Template
+
+- File Path(s): `backend/templates/500.html`, `backend/tests/test_url_routing.py`
+- Module: Documents / Django production error template
+- Total LOC: 452 (`500.html`: 86; focused route test module: 366)
+- Lines Reviewed: 90 original template lines, 86 replacement template lines, route URLConf, Django template settings, and 366 test lines
+- Functions Reviewed: 1 added regression test method
+- Classes Reviewed: 1 existing `URLRoutingRegressionTests` class touched for coverage
+- Validation Improvements: Added a regression proving `500.html` renders through Django's template loader without runtime context.
+- Package Replacements: Removed stale DAdmin/static asset dependency from the template; no new package introduced.
+- Performance Improvements: Removed external font fetch, stale CSS bundles, stale JavaScript bundles, and obsolete dashboard wrapper from production 500 responses.
+- Security Improvements: Added `noindex,nofollow`, removed external Google Font loading, removed JavaScript execution, and replaced the stale dashboard-relative link with `/`.
+- Dead Code Removed: Removed DAdmin wrapper, broken asset references, and unused script/style dependencies from the active 500 template.
+- Duplicate Logic Removed: None; retained Django's conventional `500.html` contract.
+- Tests Added: `URLRoutingRegressionTests.test_html_500_template_renders_without_external_assets`
+- Verification Results:
+  - Dependency scan retained `backend/templates/500.html` because `backend/templates` is in `TEMPLATES["DIRS"]` and Django can load `500.html` by convention for production 500 handling.
+  - Remaining `500.html` references are stale links from other queued legacy DAdmin templates, not render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source files -> clean before source commit.
+- Source Commit SHA: `6ed96a35cfed4a23c98530b8e232c90d22511876`
+- Source Commit Timestamp: `2026-07-17T16:11:22+05:30`
+- Source Commit Summary: `fix(documents): harden production 500 template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Queued legacy DAdmin templates still link to `500.html`; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Base/DFIA Template Stack
+
+- File Path(s): `backend/templates/base/main.html`, `backend/templates/blank.html`, `backend/templates/dfia/box.html`, `backend/templates/dfia/list.html`
+- Module: Documents / legacy DAdmin Django template stack
+- Total LOC: 956
+- Lines Reviewed: 956 plus exact template inheritance, Django render/template loader, URLConf, command, test, frontend runtime, and queued legacy-template reference scans
+- Functions Reviewed: 3 legacy JavaScript helper functions in `dfia/list.html`
+- Classes Reviewed: 0
+- Validation Improvements: Removed orphaned templates containing stale URL tags, inline AJAX helpers, and context-dependent filter/pagination paths that no active Django route renders.
+- Package Replacements: None; removed verified-dead Django templates instead of replacing them.
+- Performance Improvements: Removed an unused base template that loaded multiple stale CSS/JS bundles and external fonts.
+- Security Improvements: Removed stale inline AJAX/CSRF JavaScript, broken legacy route links, and external Google Font loading from an unreachable template surface.
+- Dead Code Removed: Deleted the legacy DAdmin base template, blank child page, and orphaned DFIA list/box templates.
+- Duplicate Logic Removed: Removed duplicate legacy DFIA list/card rendering superseded by active DRF/React license flows.
+- Tests Added: None; behavior preserved by deletion of verified-dead templates.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, include, URLConf, management command, test, frontend runtime, or third-party runtime path for the deleted templates.
+  - Remaining `blank.html` references are stale links inside other queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletions -> clean before source commit.
+- Source Commit SHA: `9d56821b2e08bcf5f9c35ccb54a705c208c6a84d`
+- Source Commit Timestamp: `2026-07-17T16:15:04+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead base template stack`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `blank.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Buttons Template
+
+- File Path(s): `backend/templates/buttons.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 881
+- Lines Reviewed: 881 plus exact render/template loader, URLConf, command, test, frontend runtime, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin UI demo page that no active Django route renders.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, and demo markup from the active source tree.
+- Security Improvements: Removed stale external asset loading and static demo navigation from an unreachable template surface.
+- Dead Code Removed: Deleted `backend/templates/buttons.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live render, TemplateResponse, template_name, template-loader, URLConf, command, test, frontend runtime, or third-party runtime path for `buttons.html`.
+  - Remaining `buttons.html` references are stale links inside other queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `d5acf8867c565340f98d260be80ab6bbe4275c40`
+- Source Commit Timestamp: `2026-07-17T16:18:07+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead buttons template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `buttons.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Calendar Template
+
+- File Path(s): `backend/templates/calendar.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 554
+- Lines Reviewed: 554 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin calendar demo page that no active Django route renders.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, FullCalendar demo script loading, and demo markup from the active source tree.
+- Security Improvements: Removed stale external asset loading and static demo navigation from an unreachable template surface.
+- Dead Code Removed: Deleted `backend/templates/calendar.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `calendar.html`.
+  - Remaining `calendar.html` references are stale links inside queued legacy DAdmin templates and theme demo HTML, not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `d7bd46dd1d86c235a43d33b30be25dafbc053937`
+- Source Commit Timestamp: `2026-07-17T16:32:14+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead calendar template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates and theme demo HTML still contain static `calendar.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Chat Template
+
+- File Path(s): `backend/templates/chat.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 811
+- Lines Reviewed: 811 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin chat demo page that no active Django route renders and whose forms posted nowhere.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicated demo shell markup, and demo chat script loading from the active source tree.
+- Security Improvements: Removed stale external asset loading, static demo navigation, and unreachable dummy chat forms from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/chat.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation and repeated static chat message markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `chat.html`.
+  - Remaining `chat.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `9a28332abd8b450ee150247a39b028797454c723`
+- Source Commit Timestamp: `2026-07-17T16:34:59+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead chat template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `chat.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Coming Soon Template
+
+- File Path(s): `backend/templates/coming-soon.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 118
+- Lines Reviewed: 118 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin coming-soon demo page that no active Django route renders and whose subscribe form posted nowhere.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, countdown plugin loading, and static hero/demo markup from the active source tree.
+- Security Improvements: Removed stale external asset loading and an unreachable dummy email subscribe form from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/coming-soon.html`.
+- Duplicate Logic Removed: Removed duplicate standalone DAdmin account-page shell markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `coming-soon.html`.
+  - Remaining `coming-soon.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `bf98069e905b23c8399fe21482bc8cc7ebc5263d`
+- Source Commit Timestamp: `2026-07-17T16:36:55+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead coming soon template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `coming-soon.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Contacts Template
+
+- File Path(s): `backend/templates/contacts.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 788
+- Lines Reviewed: 788 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin contacts demo page that no active Django route renders and whose search/edit/delete/contact actions posted nowhere.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static contact list markup, and unused chat page script loading.
+- Security Improvements: Removed stale external asset loading, static demo navigation, unreachable contact action links, and dummy phone/contact data from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/contacts.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `contacts.html`.
+  - Remaining `contacts.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `15feeab987c3f075a9d89fc94296aeb34397a07e`
+- Source Commit Timestamp: `2026-07-17T16:38:58+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead contacts template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `contacts.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Dropzone Template
+
+- File Path(s): `backend/templates/dropzone.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 512
+- Lines Reviewed: 512 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin upload demo page that no active Django route renders and whose multipart form posted to `#`.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, and unused Dropzone demo script loading from the active source tree.
+- Security Improvements: Removed an unreachable file-upload form with no CSRF/backend validation path plus stale external/static asset loading from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/dropzone.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `dropzone.html`.
+  - Remaining `dropzone.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies; unrelated Dropzone asset includes remain for their own queued audits.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `cab26558c5a2a7d9bd24c3e48872cf725a5dfc88`
+- Source Commit Timestamp: `2026-07-17T17:04:51+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead dropzone template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `dropzone.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Ecommerce Template
+
+- File Path(s): `backend/templates/ecommerce.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 1076
+- Lines Reviewed: 1076 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin ecommerce dashboard demo page that no active Django route renders and whose search, todo, dropdown, export, timeline, chart, and table actions had no backend validation path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static ecommerce widgets, product/order demo rows, chart placeholders, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user/order data, and unauthenticated static dashboard controls from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/ecommerce.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `ecommerce.html`.
+  - Remaining `ecommerce.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `352896d1fafcde024e78295a5b79b5d0133e5b06`
+- Source Commit Timestamp: `2026-07-17T17:07:44+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead ecommerce template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `ecommerce.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Footer Dark Template
+
+- File Path(s): `backend/templates/footer-dark.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 519
+- Lines Reviewed: 519 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin footer layout demo page that no active Django route renders and whose search/dropdown/panel controls had no backend validation path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static footer demo content, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, and unauthenticated static layout controls from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/footer-dark.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `footer-dark.html`.
+  - Remaining `footer-dark.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `27de35568432be9f954f348378a5539d9380bc2f`
+- Source Commit Timestamp: `2026-07-17T17:10:42+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead footer dark template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `footer-dark.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Footer Light Template
+
+- File Path(s): `backend/templates/footer-light.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 519
+- Lines Reviewed: 519 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin footer layout demo page that no active Django route renders and whose search/dropdown/panel controls had no backend validation path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static footer demo content, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, and unauthenticated static layout controls from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/footer-light.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `footer-light.html`.
+  - Remaining `footer-light.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `d5a38159aa65c90ae1f08aa638a2c230ce5d0ccc`
+- Source Commit Timestamp: `2026-07-17T18:03:20+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead footer light template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `footer-light.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Footer Transparent Template
+
+- File Path(s): `backend/templates/footer-transparent.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 519
+- Lines Reviewed: 519 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin footer layout demo page that no active Django route renders and whose search/dropdown/panel controls had no backend validation path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static footer demo content, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, and unauthenticated static layout controls from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/footer-transparent.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `footer-transparent.html`.
+  - Remaining `footer-transparent.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `71ae4b146fd625f6918e3532743c150b86a6551e`
+- Source Commit Timestamp: `2026-07-17T18:05:43+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead footer transparent template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `footer-transparent.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Form Elements Template
+
+- File Path(s): `backend/templates/form-elements.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 1164
+- Lines Reviewed: 1164 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, form/action, modal, input, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin form demo page that no active Django route renders and whose email/password/file/select/checkbox/radio/number/modal controls had no backend validation or submission path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static form demo markup, modal demo markup, and unused plugin script loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, unauthenticated static form controls, and modal/dropdown surfaces from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/form-elements.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo form component markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `form-elements.html`.
+  - Remaining `form-elements.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `6274c78e293cc8b3613d7698bac7bcece05872f6`
+- Source Commit Timestamp: `2026-07-17T18:08:38+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead form elements template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `form-elements.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## Legacy Form Wizard Template
+
+- File Path(s): `backend/templates/form-wizard.html`
+- Module: Documents / legacy DAdmin standalone template
+- Total LOC: 611
+- Lines Reviewed: 611 plus exact render/template loader, URLConf, command, test, frontend runtime, third-party runtime, asset usage, wizard form/action, validation plugin, and queued legacy-template reference scans
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Removed an orphaned static DAdmin wizard demo page that no active Django route renders and whose required name/email/password/address fields had only client-side demo validation with no backend submission path.
+- Package Replacements: None; removed verified-dead template code.
+- Performance Improvements: Removed unused external font, stale CSS/JS bundle references, duplicate DAdmin shell markup, static wizard form markup, and unused validation/steps plugin loading from the active template tree.
+- Security Improvements: Removed stale external/static asset loading, unreachable form/action surfaces, dummy user data, unauthenticated static wizard controls, password fields, and profile-navigation actions from the runtime template tree.
+- Dead Code Removed: Deleted `backend/templates/form-wizard.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo form wizard markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `form-wizard.html`.
+  - Remaining `form-wizard.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 16 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `0c00797b5d3ed2a225860574acd3c9b9f1da8c42`
+- Source Commit Timestamp: `2026-07-17T18:10:43+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead form wizard template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `form-wizard.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/index.html
+
+- File Path(s): `backend/templates/index.html`, `backend/tests/test_url_routing.py`
+- Total LOC: 1512 deleted template LOC; 13 test LOC added
+- Lines Reviewed: 1512 template lines plus SPA catch-all route/template-loader dependency path
+- Functions Reviewed: 1 regression test added; no template functions
+- Classes Reviewed: 0
+- Validation Improvements:
+  - Added regression coverage proving `get_template("index.html")` resolves to `frontend/dist/index.html`, not a stale backend demo template.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed a shadowed 1512-line DAdmin demo fallback with many unused CSS/JS/static asset references.
+- Security Improvements:
+  - Removed stale external font/demo asset references and demo dashboard markup from the backend template fallback path.
+- Dead Code Removed: Deleted `backend/templates/index.html`.
+- Duplicate Logic Removed: Removed duplicate legacy DAdmin dashboard shell/navigation markup already being removed across the queued legacy template set.
+- Tests Added:
+  - `URLRoutingRegressionTests.test_spa_catchall_resolves_react_entry_template`
+- Verification Results:
+  - Dependency scan found the only live runtime `index.html` request is the SPA catch-all in `backend/lmanagement/urls.py`.
+  - Django template loader proof: `get_template("index.html")` resolves `/Users/drushahardiksottany/PycharmProjects/license-manager/frontend/dist/index.html`.
+  - `frontend/dist/index.html` was retained as the live React SPA entry.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `00c07c493d8898bfb25a655142f7778b45dd8c57`
+- Source Commit Timestamp: `2026-07-17T18:13:38+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead backend index template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `index.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/invoice.html
+
+- File Path(s): `backend/templates/invoice.html`
+- Total LOC: 602
+- Lines Reviewed: 602
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with external/static demo CSS and JavaScript references.
+- Security Improvements:
+  - Removed stale demo invoice markup, demo payment/card text, external font references, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/invoice.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo invoice layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `invoice.html`.
+  - Remaining `invoice.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `124b512635fec3877549e4da98cc664727a0a4f2`
+- Source Commit Timestamp: `2026-07-17T18:17:33+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead invoice template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `invoice.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/lock-screen.html
+
+- File Path(s): `backend/templates/lock-screen.html`
+- Total LOC: 109
+- Lines Reviewed: 109
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with external/static demo CSS and JavaScript references.
+- Security Improvements:
+  - Removed stale demo lock-screen markup, external font references, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/lock-screen.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin account-page shell and demo form markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `lock-screen.html`.
+  - Remaining `lock-screen.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `48f8244401f52a2b07f5d2208d27b56d98944f30`
+- Source Commit Timestamp: `2026-07-17T18:19:41+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead lock screen template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `lock-screen.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/mailbox_compose.html
+
+- File Path(s): `backend/templates/mailbox_compose.html`
+- Total LOC: 622
+- Lines Reviewed: 622
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with Summernote, external/static demo CSS, and JavaScript references.
+- Security Improvements:
+  - Removed stale demo mailbox form markup, external font references, and unused DAdmin/Summernote asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/mailbox_compose.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo mailbox compose layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `mailbox_compose.html`.
+  - Remaining `mailbox_compose.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `8f3116ed501285b3ef042a9d8bf44e605a6a642b`
+- Source Commit Timestamp: `2026-07-17T18:28:23+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead mailbox compose template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `mailbox_compose.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/mailbox_inbox.html
+
+- File Path(s): `backend/templates/mailbox_inbox.html`
+- Total LOC: 969
+- Lines Reviewed: 969
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with external/static demo CSS, JavaScript, and mailbox list markup.
+- Security Improvements:
+  - Removed stale demo mailbox content, external font references, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/mailbox_inbox.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo mailbox inbox layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `mailbox_inbox.html`.
+  - Remaining `mailbox_inbox.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `d5e35698edcd11f8fe6cdb9dd87cf4b44d9772c4`
+- Source Commit Timestamp: `2026-07-17T18:30:32+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead mailbox inbox template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `mailbox_inbox.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/maintenance.html
+
+- File Path(s): `backend/templates/maintenance.html`
+- Total LOC: 96
+- Lines Reviewed: 96
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with external/static demo CSS, JavaScript, and maintenance splash markup.
+- Security Improvements:
+  - Removed stale unauthenticated maintenance demo markup, external font references, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/maintenance.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo maintenance page layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `maintenance.html`.
+  - Remaining `maintenance.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `80bfa6809e0e5374acdb53e1f38d591e90b95b3f`
+- Source Commit Timestamp: `2026-07-17T18:33:05+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead maintenance template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `maintenance.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/modals.html
+
+- File Path(s): `backend/templates/modals.html`
+- Total LOC: 706
+- Lines Reviewed: 706
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and Bootstrap modal demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated modal demo markup, external font references, hash-only action controls, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/modals.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo modal layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `modals.html`.
+  - Remaining `modals.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `14b3c52373baa290945ca53b96451cda5095dd65`
+- Source Commit Timestamp: `2026-07-17T20:39:17+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead modals template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `modals.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/notes.html
+
+- File Path(s): `backend/templates/notes.html`
+- Total LOC: 594
+- Lines Reviewed: 594
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static notes-app demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated notes demo markup, external font references, hash-only form/actions, and unused DAdmin notes JavaScript from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/notes.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo notes layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `notes.html`.
+  - Remaining `notes.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected; sandboxed PostgreSQL connection warning only.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `608deb78e29db73d6228b2ec2c60aca8aa589f91`
+- Source Commit Timestamp: `2026-07-17T21:44:18+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead notes template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `notes.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/order-view.html
+
+- File Path(s): `backend/templates/order-view.html`
+- Total LOC: 709
+- Lines Reviewed: 709
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static ecommerce order-detail demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated order demo markup, external font references, hash-only actions, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/order-view.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo order-view layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, include, URLConf, command, test, frontend runtime, or third-party runtime path for `order-view.html`.
+  - Remaining `order-view.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `7900d79df12518cba4cc5259e986314190c46152`
+- Source Commit Timestamp: `2026-07-17T21:50:43+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead order view template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `order-view.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/orders.html
+
+- File Path(s): `backend/templates/orders.html`
+- Total LOC: 902
+- Lines Reviewed: 902
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static ecommerce orders table demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated orders demo markup, external font references, hash-only actions, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/orders.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo orders table layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `orders.html`.
+  - Remaining `orders.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `65a1b886a87bcdc2d296f49d57bd70b66b7dc8f5`
+- Source Commit Timestamp: `2026-07-17T21:53:25+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead orders template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `orders.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/page-light.html
+
+- File Path(s): `backend/templates/page-light.html`
+- Total LOC: 519
+- Lines Reviewed: 519
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static light page-layout demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated page-layout demo markup, external font references, hash-only controls, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/page-light.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo page-layout markup shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `page-light.html`.
+  - Remaining `page-light.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `9902a251342eba170b57068f2d75427c799766ed`
+- Source Commit Timestamp: `2026-07-17T22:02:47+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead page light template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `page-light.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/pagination.html
+
+- File Path(s): `backend/templates/pagination.html`
+- Total LOC: 661
+- Lines Reviewed: 661
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static Bootstrap pagination demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated pagination demo markup, external font references, hash-only pagination controls, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/pagination.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo UI component layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `pagination.html`.
+  - Remaining `pagination.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `c0e2ce4a61c321297f161c77e434bbc95378e86c`
+- Source Commit Timestamp: `2026-07-17T22:04:28+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead pagination template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `pagination.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/pricing-tables.html
+
+- File Path(s): `backend/templates/pricing-tables.html`
+- Total LOC: 841
+- Lines Reviewed: 841
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static pricing-table demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated pricing demo markup, external font references, hash-only purchase actions, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/pricing-tables.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and extra-page demo layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `pricing-tables.html`.
+  - Remaining `pricing-tables.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `6a2926338790014f5a62d041fe05f353eb088c88`
+- Source Commit Timestamp: `2026-07-17T22:06:30+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead pricing tables template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `pricing-tables.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/products-edit.html
+
+- File Path(s): `backend/templates/products-edit.html`
+- Total LOC: 669
+- Lines Reviewed: 669
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static product edit form demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated product edit demo markup, external font references, hash-only actions, `action="#"` form handling, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/products-edit.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo ecommerce form layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `products-edit.html`.
+  - Remaining `products-edit.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `a9112acf849e3e453c41e491d02c858cee88fd80`
+- Source Commit Timestamp: `2026-07-17T22:14:10+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead products edit template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `products-edit.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/products.html
+
+- File Path(s): `backend/templates/products.html`
+- Total LOC: 991
+- Lines Reviewed: 991
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static ecommerce product table demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated product listing demo markup, external font references, hash-only row actions, `action="#"` search form handling, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/products.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo ecommerce table layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `products.html`.
+  - Remaining `products.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `62433533c488e97760870475de53bc771bdf7d9d`
+- Source Commit Timestamp: `2026-07-17T22:17:21+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead products template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `products.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/progress-bars.html
+
+- File Path(s): `backend/templates/progress-bars.html`
+- Total LOC: 724
+- Lines Reviewed: 724
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin shell markup, external/static demo CSS, JavaScript, and static progress bar demo markup.
+- Security Improvements:
+  - Removed stale unauthenticated UI progress demo markup, external font references, hash-only controls, and unused DAdmin asset loading from the backend template tree.
+- Dead Code Removed: Deleted `backend/templates/progress-bars.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin shell/navigation markup and demo UI component layout shared by queued legacy templates.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, or third-party runtime path for `progress-bars.html`.
+  - Remaining `progress-bars.html` references are stale links inside queued legacy DAdmin templates and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `7c2383c933653b70b65814feec01bcf7b6196296`
+- Source Commit Timestamp: `2026-07-17T22:19:22+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead progress bars template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates still contain static `progress-bars.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+## backend/templates/register.html
+
+- File Path(s): `backend/templates/register.html`
+- Total LOC: 154
+- Lines Reviewed: 154
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: None; dependency analysis proved no live validation/render path.
+- Package Replacements: None
+- Performance Improvements:
+  - Removed an unused legacy template with duplicated DAdmin account-page markup, external/static demo CSS, JavaScript, and static registration form markup.
+- Security Improvements:
+  - Removed stale unauthenticated registration demo markup, external font references, `action="#"` account creation form handling, and unused DAdmin asset loading from the backend template tree.
+- Convention Review:
+  - Top-level `backend/templates/register.html` is not a Django auth convention template for this project; active auth uses API/frontend routes and Django convention auth templates live under `registration/`.
+- Dead Code Removed: Deleted `backend/templates/register.html`.
+- Duplicate Logic Removed: Removed duplicate DAdmin account shell markup and demo registration form layout.
+- Tests Added: None; behavior preserved by deletion of verified-dead template.
+- Verification Results:
+  - Dependency scan found no live `render()`, `TemplateResponse`, `template_name`, `get_template()`, `select_template()`, URLConf, command, test, frontend runtime, auth-runtime, or third-party runtime path for `register.html`.
+  - Remaining `register.html` references are stale links inside queued legacy DAdmin templates/theme files and are not live render dependencies.
+  - `.venv/bin/python -m pytest backend/tests/test_url_routing.py -q` -> 17 passed.
+  - `.venv/bin/ruff check backend/tests/test_url_routing.py --select F401,F821,F811,E741,F841` -> clean.
+  - `.venv/bin/python -m py_compile backend/tests/test_url_routing.py backend/lmanagement/urls.py backend/lmanagement/settings.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/tests/test_url_routing.py backend/lmanagement` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> no issues.
+  - `.venv/bin/python backend/manage.py makemigrations --check --dry-run` -> no changes detected.
+  - Security tooling unavailable locally: `.venv/bin` contains no `bandit`, `semgrep`, `pip-audit`, or `safety` executable.
+  - `git diff --check` and `git diff --cached --check` for source deletion -> clean before source commit.
+- Source Commit SHA: `ca6fa5d28bcac0c7a57f42c4263ec492ecdef8f2`
+- Source Commit Timestamp: `2026-07-17T22:21:10+05:30`
+- Source Commit Summary: `cleanup(documents): remove dead register template`
+- Blocked Items:
+  - Security tooling is unavailable locally.
+- Remaining Technical Debt:
+  - Other queued legacy DAdmin templates/theme files still contain static `register.html` hrefs; audit them only when selected by the Phase 11 queue.
+- Status: COMPLETED
+
+
+## .claude/agents/README.md
+
+- File Path(s): `.claude/agents/README.md`
+- Module: Documents / Specialist agent guidance
+- Total LOC: 103
+- Lines Reviewed: 103 plus `CLAUDE.md`, `.claude/rules.md`, agent document references, and test-runner path references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Corrected backend quality-gate guidance from missing root `./run-tests.sh` to targeted `pytest` or `scripts/testing/run-tests.sh` for broader runs.
+- Package Replacements: None; documentation-only correction reused existing repository test tooling.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Reduced stale verification guidance that could cause agents to skip backend validation because the documented root script does not exist.
+- Dead Code Removed: None; dependency analysis proved the README is live repository guidance.
+- Duplicate Logic Removed: None; related agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live reference from `CLAUDE.md` to `.claude/agents/README.md`.
+  - Reviewed every line of the README and confirmed it defines the specialist-agent roster, invocation model, shared rules, and source-editing note.
+  - Test-runner scan confirmed `scripts/testing/run-tests.sh` exists and is executable; root `./run-tests.sh` is not present.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `3c3b7ee8ee25eef07493aea2a975eed3c0931ce6`
+- Source Commit Timestamp: `2026-07-18T05:35:13+05:30`
+- Source Commit Summary: `docs(agents): correct backend verification guidance`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED
+
+
+## .claude/agents/backend-engineer.md
+
+- File Path(s): `.claude/agents/backend-engineer.md`
+- Module: Documents / Specialist backend agent guidance
+- Total LOC: 55
+- Lines Reviewed: 55 plus `CLAUDE.md`, `.claude/agents/README.md`, related agent references, and repository test-runner documentation
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Corrected backend quality-gate guidance from missing root `./run-tests.sh` to targeted Django/pytest paths or `scripts/testing/run-tests.sh` for broader runs.
+- Package Replacements: None; documentation-only correction reused existing repository test tooling.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Reduced stale backend verification guidance that could lead the backend agent to skip validation when the missing root script fails.
+- Dead Code Removed: None; dependency analysis proved the backend agent document is live guidance.
+- Duplicate Logic Removed: None; other agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live references from `CLAUDE.md`, `.claude/agents/README.md`, `.claude/agents/tech-lead.md`, and `.claude/agents/code-reviewer.md`.
+  - Reviewed every line of the backend agent guide and confirmed it defines backend scope, index-first workflow, engineering standards, quality gates, and output contract.
+  - Test-runner scan confirmed `scripts/testing/run-tests.sh` exists and is executable; root `./run-tests.sh` is not present.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `4fcec92fb0cca52e7122640a1112ece89e35a47b`
+- Source Commit Timestamp: `2026-07-18T05:37:58+05:30`
+- Source Commit Summary: `docs(agents): correct backend engineer test runner`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED
+
+
+## .claude/agents/code-reviewer.md
+
+- File Path(s): `.claude/agents/code-reviewer.md`
+- Module: Documents / Specialist code-review guidance
+- Total LOC: 47
+- Lines Reviewed: 47 plus `CLAUDE.md`, `.claude/agents/README.md`, related agent references, and staged-diff command references
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Standardized the staged-diff review command from `git diff --staged` to repository-standard `git diff --cached`.
+- Package Replacements: None; documentation-only correction reused Git built-ins.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Preserved read-only reviewer constraints and kept security-adjacent findings routed to `security-auditor` for deep dives.
+- Dead Code Removed: None; dependency analysis proved the code-reviewer document is live guidance.
+- Duplicate Logic Removed: None; other agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live references from `CLAUDE.md`, `.claude/agents/README.md`, and `.claude/agents/tech-lead.md`.
+  - Reviewed every line of the code-reviewer guide and confirmed it defines read-only scope, diff-first workflow, graph checks, review priorities, and output contract.
+  - Staged-diff command scan confirmed the guide now uses `git diff --cached`.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `f158e89ba7cb0740d37b84f47454435150863733`
+- Source Commit Timestamp: `2026-07-18T05:39:29+05:30`
+- Source Commit Summary: `docs(agents): standardize code reviewer staged diff`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED
+
+
+## .claude/agents/data-engineer.md
+
+- File Path(s): `.claude/agents/data-engineer.md`
+- Module: Documents / Specialist data-engineering guidance
+- Total LOC: 57
+- Lines Reviewed: 57 plus `CLAUDE.md`, `.claude/agents/README.md`, related agent references, and referenced pipeline/script paths
+- Functions Reviewed: 0
+- Classes Reviewed: 0
+- Validation Improvements: Updated bare script names to current repository paths for DGFT/SION/rates imports, master sync, index deployment, and DB integrity audit scripts.
+- Package Replacements: None; documentation-only correction reused existing repository scripts.
+- Performance Improvements: None; documentation-only unit.
+- Security Improvements: Preserved destructive database operation warnings and made referenced operational scripts unambiguous.
+- Dead Code Removed: None; dependency analysis proved the data-engineer document is live guidance.
+- Duplicate Logic Removed: None; other agent documents remain separate queued Phase 11 units.
+- Tests Added: None; markdown-only source update.
+- Verification Results:
+  - Dependency scan found live references from `CLAUDE.md`, `.claude/agents/README.md`, `.claude/agents/devops-sre.md`, and MDS architecture/operations docs.
+  - Reviewed every line of the data-engineer guide and confirmed it defines ETL/database scope, non-destructive DB rules, pipeline standards, quality gates, and output contract.
+  - Script path scan confirmed the referenced scripts exist under `scripts/imports/`, `scripts/maintenance/`, `scripts/deployment/`, and `scripts/database/`.
+  - `git diff --check` -> clean before source commit.
+  - `git diff --cached --check` -> clean before source commit.
+  - Backend `pytest`, Ruff, `py_compile`, `compileall`, Django check, and makemigrations check were not run because this unit changed only markdown guidance and no backend runtime source, templates, migrations, or tests.
+  - Frontend ESLint, TypeScript, and production build were not run because this unit changed only markdown guidance and no frontend runtime source.
+  - Security scanners were not run for this markdown-only guidance change; the existing Phase 11 local security-tool availability blocker remains recorded.
+- Source Commit SHA: `c2f9552ea7423492e97b92db7bccaa080d9faf96`
+- Source Commit Timestamp: `2026-07-18T05:41:05+05:30`
+- Source Commit Summary: `docs(agents): update data engineer script paths`
+- Blocked Items:
+  - None for this markdown-only unit.
+- Remaining Technical Debt:
+  - Other queued `.claude/agents/*.md` documents still contain their own verification guidance and must be audited only when their Phase 11 queue position is selected.
+- Status: COMPLETED

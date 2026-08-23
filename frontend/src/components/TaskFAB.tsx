@@ -1,5 +1,6 @@
-import { useState } from "react";
-import TaskDrawer from "./TaskDrawer";
+import { lazy, Suspense, useState } from "react";
+
+const TaskDrawer = lazy(() => import("./TaskDrawer"));
 import { CheckSquare } from "lucide-react";
 
 /**
@@ -76,7 +77,11 @@ export default function TaskFAB({ bottomOffset = 110 }) {
                     Tasks
                 </span>
             </button>
-            <TaskDrawer show={show} onClose={() => setShow(false)} />
+            {show && (
+                <Suspense fallback={null}>
+                    <TaskDrawer show={show} onClose={() => setShow(false)} />
+                </Suspense>
+            )}
         </>
     );
 }

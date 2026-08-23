@@ -1,12 +1,12 @@
 # accounts/views/user_management.py
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from rest_framework import viewsets, status
+from rest_framework import serializers, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from ..serializers import UserManagementSerializer
 from ..permissions import UserManagementPermission
+from ..serializers import UserManagementSerializer, validate_user_password
 
 User = get_user_model()
 
@@ -65,6 +65,10 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         password = request.data.get('password')
         if not password:
             return Response({'error': 'Password is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_user_password(password, user)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(password)
         user.save()
         return Response({'message': 'Password reset successfully'})

@@ -1,0 +1,87 @@
+Raw output captured from the Django shell reproduction (all inside one
+transaction.atomic() block, rolled back at the end -- no permanent change
+to the real "lmanagement" database).
+
+Command:
+  cd backend && source ../.venv/bin/activate && python3 manage.py shell -c "
+  from django.db import transaction
+  from apps.trade.models import LicenseTradeLine
+  from apps.bill_of_entry.models import RowDetails
+  from apps.license.models import LicenseDetailsModel, LicenseBalance
+  from apps.reconciliation.models import InvoiceBOEAllocation
+  from apps.license.services.balance_calculator import LicenseBalanceCalculator as C
+
+  lic = LicenseDetailsModel.objects.get(license_number='0311054433')
+  line = LicenseTradeLine.objects.filter(trade_id=518).first()
+  row = RowDetails.objects.get(id=274889)
+  print('trade line', line.id, line.cif_fc, 'row', row.id, row.cif_fc)
+
+  try:
+      with transaction.atomic():
+          before_stored = LicenseBalance.objects.get(license=lic).balance_cif
+          before_debit = C.calculate_debit(lic)
+          before_live_fin = C.calculate_financial_balance(lic)
+          before_live_cust = C.calculate_balance(lic)
+          print('BEFORE: stored', before_stored, 'calculate_debit', before_debit,
+                'financial_balance', before_live_fin, 'customs_balance', before_live_cust)
+
+          alloc = InvoiceBOEAllocation.objects.create(
+              trade_line=line, row_details=row,
+              allocated_qty=0, allocated_cif_fc=10000,
+              status=InvoiceBOEAllocation.STATUS_ACTIVE, is_current=True,
+          )
+
+          lic.refresh_from_db()
+          after_stored = LicenseBalance.objects.get(license=lic).balance_cif
+          after_debit = C.calculate_debit(lic)
+          after_live_fin = C.calculate_financial_balance(lic)
+          after_live_cust = C.calculate_balance(lic)
+          print('AFTER create alloc: stored', after_stored, 'calculate_debit', after_debit,
+                'financial_balance', after_live_fin, 'customs_balance', after_live_cust)
+          raise Exception('rollback - test only, no real change made')
+  except Exception as e:
+      print('rolled back:', e)
+  "
+
+Output:
+  trade line 846 9560.00 row 274889 21669.770
+  BEFORE: stored 338299.59 calculate_debit 21669.770 financial_balance 338299.59 customs_balance 369859.57
+  AFTER create alloc: stored 338299.59 calculate_debit 11669.770 financial_balance 348299.59 customs_balance 369859.57
+  rolled back: rollback - test only, no real change made
+
+Interpretation:
+  stored (license_licensebalance.balance_cif, what active_dfia_report.py,
+  planned_report.py, license_report.py, item_plan.py and
+  license_balance_ledger.py read directly) = 338299.59, UNCHANGED.
+
+  live get_balance_cif() (calculate_financial_balance, the value the
+  License Overview / detail page and the fixed-up list view actually
+  show) = 348299.59, i.e. +10000.00 higher, matching the 10000.00 just
+  allocated off calculate_debit().
+
+  The two figures, which were equal before the allocation, are now
+  10000.00 apart, and will STAY apart in the real system (this
+  reproduction only used a transaction rollback to avoid persisting a
+  fake allocation row) until some unrelated write to this license's
+  RowDetails / AllotmentItems / LicenseTradeLine / import or export item
+  happens to fire update_license_flags() again for license 0311054433.
+
+Supporting grep (no signal wiring exists for either reconciliation
+allocation model):
+  $ grep -rn "update_license_flags" backend/apps/reconciliation --include="*.py"
+  (no output)
+
+  $ grep -n "sender=" backend/apps/license/signals.py
+  @receiver(post_save, sender=LicenseDetailsModel)
+  @receiver(post_save, sender=LicenseExportItemModel)
+  @receiver(post_delete, sender=LicenseExportItemModel)
+  @receiver(post_save, sender=LicenseImportItemsModel)
+  @receiver(post_delete, sender=LicenseImportItemsModel)
+  @receiver(post_save, sender=AllotmentItems)
+  @receiver(post_delete, sender=AllotmentItems)
+  @receiver(post_save, sender=RowDetails)
+  @receiver(post_delete, sender=RowDetails)
+  @receiver(post_save, sender=LicenseTradeLine)
+  @receiver(post_delete, sender=LicenseTradeLine)
+  @receiver(pre_delete, sender=CompanyModel)
+  -- no InvoiceBOEAllocation / BOEAllotmentAllocation entry in this list.

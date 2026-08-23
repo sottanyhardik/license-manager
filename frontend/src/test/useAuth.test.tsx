@@ -24,6 +24,14 @@ vi.mock('@/api/axios', () => ({
     get: vi.fn(),
     post: vi.fn(),
   },
+  AUTH_SESSION_EVENT_KEY: 'auth:session-event',
+  clearStoredAuth: () => {
+    localStorage.removeItem('access')
+    localStorage.removeItem('refresh')
+    localStorage.removeItem('user')
+  },
+  publishAuthEvent: vi.fn(),
+  refreshAccessToken: vi.fn(),
 }))
 
 // Also mock raw axios used for /api/auth/refresh/ (proactive token refresh)
@@ -33,7 +41,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import api from '@/api/axios'
+import api, { publishAuthEvent, refreshAccessToken } from '@/api/axios'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const MOCK_USER: AuthUser = {
@@ -60,6 +68,12 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>{children}</AuthProvider>
 )
 
+const tokenExpiringAt = (milliseconds: number) => {
+  const payload = btoa(JSON.stringify({ exp: Math.floor(milliseconds / 1000) }))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+  return `header.${payload}.signature`
+}
+
 describe('AuthProvider / AuthContext', () => {
   beforeEach(() => {
     // Start with a clean localStorage and no pending timers
@@ -73,6 +87,7 @@ describe('AuthProvider / AuthContext', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     localStorage.clear()
   })
 
@@ -134,6 +149,23 @@ describe('AuthProvider / AuthContext', () => {
     const stored = localStorage.getItem('user')
     expect(stored).not.toBeNull()
     expect(JSON.parse(stored!)).toEqual(MOCK_USER)
+  })
+
+  it('updateUser() refreshes the stored user without rewriting tokens', async () => {
+    const updatedUser = { ...MOCK_USER, first_name: 'Updated' }
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    localStorage.setItem('access', 'existing-access')
+    localStorage.setItem('refresh', 'existing-refresh')
+
+    act(() => {
+      result.current.updateUser(updatedUser)
+    })
+
+    expect(result.current.user).toEqual(updatedUser)
+    expect(JSON.parse(localStorage.getItem('user')!)).toEqual(updatedUser)
+    expect(localStorage.getItem('access')).toBe('existing-access')
+    expect(localStorage.getItem('refresh')).toBe('existing-refresh')
   })
 
   // ── Role helpers after login ──────────────────────────────────────────────
@@ -235,5 +267,73 @@ describe('AuthProvider / AuthContext', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     expect(result.current.user).toEqual(MOCK_USER)
+  })
+
+  it('ignores corrupted serialized user data from localStorage', async () => {
+    localStorage.setItem('user', '{bad json')
+
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.user).toBeNull()
+    expect(localStorage.getItem('user')).toBeNull()
+  })
+
+  it('logs out only after five continuous minutes without activity', async () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await act(async () => { await vi.runAllTimersAsync() })
+    act(() => { result.current.loginSuccess(MOCK_LOGIN_RESPONSE) })
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60 * 1000 - 1) })
+    expect(result.current.user).toEqual(MOCK_USER)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(result.current.user).toBeNull()
+  })
+
+  it('meaningful activity resets the inactivity deadline', async () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await act(async () => { await vi.runAllTimersAsync() })
+    act(() => { result.current.loginSuccess(MOCK_LOGIN_RESPONSE) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60 * 1000) })
+    act(() => window.dispatchEvent(new Event('pointerdown')))
+    await act(async () => { await vi.advanceTimersByTimeAsync(3 * 60 * 1000 + 1) })
+    expect(result.current.user).toEqual(MOCK_USER)
+    await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60 * 1000) })
+    expect(result.current.user).toBeNull()
+  })
+
+  it('refreshes a near-expiry token once and cleans timers on unmount', async () => {
+    vi.useFakeTimers()
+    const now = Date.now()
+    localStorage.setItem('access', tokenExpiringAt(now + 6 * 60 * 1000))
+    localStorage.setItem('refresh', 'mock-refresh-token')
+    localStorage.setItem('user', JSON.stringify(MOCK_USER))
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: MOCK_USER })
+    ;(refreshAccessToken as ReturnType<typeof vi.fn>).mockResolvedValue('new-access')
+    const { unmount } = renderHook(() => useContext(AuthContext), { wrapper })
+    await act(async () => { await Promise.resolve() })
+    await act(async () => { await vi.advanceTimersByTimeAsync(60 * 1000) })
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+    unmount()
+    await act(async () => { await vi.advanceTimersByTimeAsync(30 * 60 * 1000) })
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+  })
+
+  it('responds to a cross-tab logout without calling the server logout endpoint', async () => {
+    localStorage.setItem('access', 'mock-access-token')
+    localStorage.setItem('user', JSON.stringify(MOCK_USER))
+    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: MOCK_USER })
+    const { result } = renderHook(() => useContext(AuthContext), { wrapper })
+    await waitFor(() => expect(result.current.user).toEqual(MOCK_USER))
+    await act(async () => { await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+    act(() => window.dispatchEvent(new StorageEvent('storage', {
+      key: 'auth:session-event', newValue: JSON.stringify({ type: 'logout' }),
+    })))
+    expect(result.current.user).toBeNull()
+    expect(api.post).not.toHaveBeenCalled()
+    expect(publishAuthEvent).not.toHaveBeenCalled()
   })
 })

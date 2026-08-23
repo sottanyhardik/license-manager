@@ -1,6 +1,8 @@
 import api from './axios';
 
-export const listUsers = (params) => api.get('auth/users/', {params});
+// `signal` is optional so older callers retain their exact API behaviour while
+// React Query list screens can cancel an obsolete filter request.
+export const listUsers = (params, signal) => api.get('auth/users/', {params, signal});
 export const getUser = (id) => api.get(`auth/users/${id}/`);
 export const createUser = (data) => api.post('auth/users/', data);
 export const updateUser = (id, data) => api.put(`auth/users/${id}/`, data);

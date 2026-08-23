@@ -5,8 +5,10 @@ Use when local DB is up-to-date (e.g. update_license_ownership succeeded locally
 but the remote sync failed mid-run (server briefly on old code, network blip, etc.).
 """
 from datetime import date as date_cls
+from urllib.parse import urlparse
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Prefetch
 
 from apps.license.models import LicenseDetailsModel, LicenseOwnership, LicenseTransferModel
 from apps.license.management.commands.update_license_ownership import (
@@ -15,6 +17,64 @@ from apps.license.management.commands.update_license_ownership import (
     authenticate,
     bulk_sync_to_server,
 )
+
+
+def _parse_license_numbers(raw_value):
+    if raw_value is None:
+        return None
+
+    license_numbers = []
+    seen = set()
+    for value in raw_value.split(","):
+        license_number = value.strip()
+        if license_number and license_number not in seen:
+            seen.add(license_number)
+            license_numbers.append(license_number)
+
+    if not license_numbers:
+        raise CommandError("--licenses must contain at least one non-blank license number.")
+    return license_numbers
+
+
+def _parse_since_date(raw_value):
+    if raw_value is None:
+        return date_cls.today()
+
+    value = raw_value.strip()
+    if not value:
+        raise CommandError("--since must not be blank.")
+
+    try:
+        return date_cls.fromisoformat(value)
+    except ValueError as exc:
+        raise CommandError("--since must be an ISO date in YYYY-MM-DD format.") from exc
+
+
+def _validate_positive_int(value, option_name):
+    if value is not None and value < 1:
+        raise CommandError(f"{option_name} must be greater than zero.")
+
+
+def _normalize_server_url(server_url):
+    value = (server_url or "").strip().rstrip("/")
+    if not value:
+        raise CommandError("--server must not be blank.")
+
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise CommandError("--server must be an absolute http(s) URL.")
+    return value
+
+
+def _iter_license_batches(queryset, batch_size):
+    batch = []
+    for license_obj in queryset.iterator(chunk_size=batch_size):
+        batch.append(license_obj)
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
 
 
 def _build_payload_from_local(lic):
@@ -28,11 +88,14 @@ def _build_payload_from_local(lic):
         co = ownership.current_owner
         current_owner = {"iec": co.iec, "name": co.name}
 
-    transfers_qs = (
-        LicenseTransferModel.objects.filter(license=lic)
-        .select_related("from_company", "to_company")
-        .order_by("transfer_initiation_date")
-    )
+    if "transfers" in getattr(lic, "_prefetched_objects_cache", {}):
+        transfers_qs = lic.transfers.all()
+    else:
+        transfers_qs = (
+            LicenseTransferModel.objects.filter(license=lic)
+            .select_related("from_company", "to_company")
+            .order_by("transfer_initiation_date")
+        )
     transfers = [
         {
             "from_iec": t.from_company.iec if t.from_company else None,
@@ -104,30 +167,38 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        server_url = options["server"] or SERVER_BASE_URL
-        license_numbers_str = options["licenses"]
-        since_str = options["since"]
+        server_url = _normalize_server_url(options["server"] or SERVER_BASE_URL)
+        license_numbers = _parse_license_numbers(options["licenses"])
         limit = options["limit"]
         batch_size = options["batch_size"]
         dry_run = options["dry_run"]
 
-        if license_numbers_str:
-            license_numbers = [ln.strip() for ln in license_numbers_str.split(",") if ln.strip()]
+        _validate_positive_int(limit, "--limit")
+        _validate_positive_int(batch_size, "--batch-size")
+
+        if license_numbers:
             qs = LicenseDetailsModel.objects.filter(license_number__in=license_numbers)
-            scope_desc = f"licenses {license_numbers_str}"
+            scope_desc = f"licenses {', '.join(license_numbers)}"
         else:
-            since_date = date_cls.fromisoformat(since_str) if since_str else date_cls.today()
+            since_date = _parse_since_date(options["since"])
             qs = LicenseDetailsModel.objects.filter(
                 ownership__last_ownership_fetch__date__gte=since_date,
             )
             scope_desc = f"last_ownership_fetch >= {since_date.isoformat()}"
 
-        qs = qs.select_related("exporter", "ownership__current_owner").order_by("id")
+        transfer_qs = (
+            LicenseTransferModel.objects.select_related("from_company", "to_company")
+            .order_by("transfer_initiation_date", "id")
+        )
+        qs = (
+            qs.select_related("exporter", "ownership__current_owner")
+            .prefetch_related(Prefetch("transfers", queryset=transfer_qs))
+            .order_by("id")
+        )
         if limit:
             qs = qs[:limit]
 
-        licenses = list(qs)
-        total = len(licenses)
+        total = qs.count()
 
         self.stdout.write("\n" + "=" * 70)
         self.stdout.write(f"📤 Resync to {server_url}")
@@ -140,7 +211,7 @@ class Command(BaseCommand):
             return
 
         if dry_run:
-            for lic in licenses[:5]:
+            for lic in qs[:5]:
                 self.stdout.write(f"  would push: id={lic.id} number={lic.license_number}")
             if total > 5:
                 self.stdout.write(f"  ... and {total - 5} more")
@@ -149,25 +220,27 @@ class Command(BaseCommand):
         self.stdout.write("🔐 Authenticating with server...")
         ok, resolved_url = authenticate(server_url)
         if not ok:
-            self.stdout.write(self.style.ERROR(f"❌ Auth failed for {server_url}"))
-            return
+            raise CommandError(f"Auth failed for {server_url}")
         server_url = resolved_url
 
         total_synced = 0
         total_failed = 0
         all_errors = []
 
-        for batch_start in range(0, total, batch_size):
-            batch = licenses[batch_start : batch_start + batch_size]
-            batch_num = (batch_start // batch_size) + 1
-            total_batches = (total + batch_size - 1) // batch_size
-            self.stdout.write(f"\nBatch {batch_num}/{total_batches} — building {len(batch)} payloads...")
+        total_batches = (total + batch_size - 1) // batch_size
+        for batch_index, batch in enumerate(_iter_license_batches(qs, batch_size), start=1):
+            self.stdout.write(f"\nBatch {batch_index}/{total_batches} — building {len(batch)} payloads...")
 
             payloads = [_build_payload_from_local(lic) for lic in batch]
-            result = bulk_sync_to_server(payloads, server_url)
+            result = bulk_sync_to_server(payloads, server_url) or {}
+            if not isinstance(result, dict):
+                raise CommandError("Remote sync returned an invalid response.")
 
-            s = result.get("success", 0)
-            f = result.get("failed", 0)
+            try:
+                s = int(result.get("success") or 0)
+                f = int(result.get("failed") or 0)
+            except (TypeError, ValueError) as exc:
+                raise CommandError("Remote sync returned non-numeric counters.") from exc
             total_synced += s
             total_failed += f
 
@@ -184,3 +257,5 @@ class Command(BaseCommand):
             self.stdout.write("\nFirst 10 errors:")
             for err in all_errors[:10]:
                 self.stdout.write(f"  • {err}")
+        if total_failed:
+            raise CommandError(f"Remote sync failed for {total_failed} license(s).")

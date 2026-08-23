@@ -1,4 +1,4 @@
-import {useEffect, useState, useMemo} from "react";
+import {useCallback, useEffect, useState, useMemo, useRef} from "react";
 import {useParams, useNavigate, useLocation} from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,9 +8,39 @@ import ConditionBadge from "../components/ConditionBadge";
 import TransferLetterForm from "../components/TransferLetterForm";
 import {openPdfPreview} from "../utils/pdfPreview";
 import {useBackButton} from "../hooks/useBackButton";
+import {usePurchaseStatusOptions} from "../hooks/useMasterOptions";
+import {formatDate} from "../utils/dateFormatter";
+import {useDebounce} from "@/hooks/useDebounce";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
-import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, ChevronDown, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import EmptyState from "@/components/EmptyState";
+
+interface PlanningOption {
+    plan_line_id: number;
+    item_name: string;
+    remaining_quantity?: string;
+    remaining_cif_fc?: string;
+    [key: string]: any;
+}
+type SearchMode = "PLAN" | "ACTUAL";
+type AllocationBasis = "PLAN" | "ACTUAL";
+type DebitBasis = SearchMode;
+
+interface AllocationInitialization {
+    default_search_mode: SearchMode;
+    default_allocation_basis: AllocationBasis;
+    default_item: { id: number; name: string } | null;
+    planning_target_item: { id: number; name: string } | null;
+    sion: string | null;
+    has_active_plan: boolean;
+    plan_status: string;
+    plan_message: string | null;
+    reason_code?: string | null;
+    message?: string | null;
+}
 
 interface AvailableItem {
     id: number;
@@ -24,9 +54,63 @@ interface AvailableItem {
     license_expiry_date?: string;
     description: string;
     exporter_name?: string;
-    items_detail?: Array<{ name: string }>;
+    items_detail?: Array<{ id?: number; name: string }>;
     available_quantity: string;
     balance_cif_fc: string;
+    // Utilization-plan status for this item's product group (always present;
+    // the numeric fields are only set when has_plan is true). Original = the
+    // Plan tab / auto-plan cap (immutable from allotment code). Used = live
+    // sum of existing allotments for the group. Remaining = Original − Used
+    // — recomputed on every fetch, so it reflects allotment create/delete/edit
+    // automatically with no client-side bookkeeping.
+    has_plan?: boolean;
+    original_planned_quantity?: string;
+    used_planned_quantity?: string;
+    remaining_planned_quantity?: string;
+    original_planned_cif_fc?: string;
+    used_planned_cif_fc?: string;
+    remaining_planned_cif_fc?: string;
+    has_active_plan?: boolean;
+    remaining_planned_qty?: string;
+    remaining_planned_cif?: string;
+    display_plan_qty?: string;
+    display_plan_cif?: string;
+    max_allotment_qty?: string;
+    max_allotment_cif?: string;
+    can_create_allotment?: boolean;
+    reason_code?: string | null;
+    message?: string | null;
+    actual_position?: { available_qty: string; balance_cif: string };
+    plan_position?: { exists: boolean; is_active: boolean; status: string; plan_line_id: number | null; remaining_qty: string; remaining_cif: string };
+    allotment_requirement?: { remaining_qty: string; remaining_cif: string };
+    basis_options?: Record<"actual" | "plan", {
+        enabled: boolean;
+        max_qty: string;
+        max_cif: string;
+        allocation_limit?: { paired_max_qty: string; paired_max_cif: string; limiting_factor: string; can_allocate: boolean };
+        reason_code?: string | null;
+        message?: string | null;
+    }>;
+    // Plan mode (Debit Based On = Plan) only — one row per LicenseItemPlan
+    // line. `id` is the plan line's own id (unique per split row); the real
+    // underlying import item is `import_item_id` — the Confirm-allot payload
+    // must submit that, never the plan line's id. `available_quantity`/
+    // `balance_cif_fc` above are ALIASED to this row's own planned amount in
+    // Plan mode (see backend `_available_licenses_plan_mode`), so this
+    // interface's existing fields already cover display; these two are only
+    // needed for submission + the new "Planned Item Name" column.
+    import_item_id?: number;
+    planned_item_name?: string;
+    // Item-specific planning splits (DWP, SWP, PKO, etc.)
+    // Only present when the item has planning relationships
+    planning_options?: PlanningOption[];
+}
+
+function getAllocationErrorMessage(error: unknown): string {
+    const data = (error as any)?.response?.data ?? error as any;
+    const item = data?.item_name;
+    if (data?.code === "NO_PLANNED_BALANCE") return `Cannot allocate ${item || "this item"}: no planned quantity or value remains.`;
+    return data?.message || data?.detail || data?.error || data?.errors?.[0]?.message || data?.errors?.[0]?.error || "The allocation could not be completed.";
 }
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -39,6 +123,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const id = propId || paramId;
 
     const [allocationData, setAllocationData] = useState({});
+    const [transferLetterOpen, setTransferLetterOpen] = useState(false);
     // When an allot is rejected for exceeding the utilization plan, we stash the
     // item here so the planning panel can open and retry the allot after editing.
     const [planModal, setPlanModal] = useState(null);
@@ -56,18 +141,59 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         hs_code: "",
         is_expired: "all",
         is_restricted: "all",
-        purchase_status: "GE,GO,SM,MI",  // GE Purchase, GE Operating, SM Purchase, Conversion
+        // Purchase Status default is applied once the master data loads
+        // (see the usePurchaseStatusOptions effect below) — never hardcoded.
+        purchase_status: "",
+        // Available licences start with an active-only view; users can still
+        // deliberately switch the filter to All or Expired.
         license_status: "active",
-        item_names: "",
+        item_id: "",
         expiry_date_from: "",
-        expiry_date_to: ""
+        expiry_date_to: "",
+        // Plan balances are the safe default; Actual is an explicit override.
+        // or 'plan' (one row per LicenseItemPlan line — see AvailableItem's
+        // planned_item_name/import_item_id fields).
+        debit_based_on: null as DebitBasis | null
     });
-    const [isFirstLoad, setIsFirstLoad] = useState(true);
+    // Purchase Status options + default selection both come from the
+    // Purchase Status master (never hardcoded) — see useMasterOptions.ts.
+    const { options: purchaseStatusOptions } = usePurchaseStatusOptions();
+    const purchaseStatusDefaultApplied = useRef(false);
+    useEffect(() => {
+        if (!purchaseStatusDefaultApplied.current && purchaseStatusOptions.length > 0) {
+            purchaseStatusDefaultApplied.current = true;
+            setFilters(prev => ({...prev, purchase_status: purchaseStatusOptions.map(o => o.value).join(',')}));
+        }
+    }, [purchaseStatusOptions]);
+    const [hydratedRouteId, setHydratedRouteId] = useState<string | number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 20;
+    // The candidate area is a working queue, not an unbounded search-result
+    // table.  The server remains responsible for eligibility and ordering;
+    // asking it for ten rows gives a completed row an immediate successor on
+    // the next invalidation without client-side balance calculations.
+    const pageSize = 10;
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // A draft is scoped to the selected balance source.  Never let a Qty/CIF
+    // entered for one Planning Target be submitted after the target changes.
+    const updateFilters = (nextFilters: typeof filters) => {
+        if (filters.debit_based_on !== nextFilters.debit_based_on || filters.item_id !== nextFilters.item_id) {
+            setAllocationData({});
+        }
+        setFilters(nextFilters);
+    };
+
+    // Keep text inputs responsive while avoiding a full licence-query reload
+    // for each character typed into description, licence number, or HS code.
+    const debouncedDescription = useDebounce(filters.description, 400);
+    const debouncedLicenseNumber = useDebounce(filters.license_number, 400);
+    const debouncedHsCode = useDebounce(filters.hs_code, 400);
+
+    // Confirm dialogs (replaces window.confirm)
+    const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; allotmentItemId: number | null }>({ show: false, allotmentItemId: null });
+    const [copyConfirm, setCopyConfirm] = useState(false);
 
     // Enable browser back button support with filter preservation
     useBackButton('allotments', !isModal);
@@ -100,6 +226,18 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     });
     const availableItemNames = rawItemNames;
 
+    // Planned Item Name options (Plan mode filter) — item names actually
+    // used as a planning-item target on at least one LicenseItemPlan line.
+    const { data: rawPlannedItemNames = [] } = useQuery({
+        queryKey: ['allotments-planned-item-names'],
+        queryFn: () =>
+            api.get('item-report/planned-item-names/').then(r =>
+                (r.data || []).map((item: { id: unknown; name: string }) => ({ value: item.id, label: item.name }))
+            ),
+        staleTime: Infinity,
+    });
+    const isPlanMode = filters.debit_based_on === "PLAN";
+
     // Allotment header info (details, progress, allotted items)
     const {
         data: allotment,
@@ -110,13 +248,52 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         enabled: Boolean(id),
     });
 
-    // Set description filter from allotment item_name on first load
-    useEffect(() => {
-        if (isFirstLoad && allotment?.item_name) {
-            setFilters(prev => ({ ...prev, description: allotment.item_name }));
-            setIsFirstLoad(false);
+    // The server is authoritative for route defaults.  In particular, a
+    // Planning Target Item alone is metadata; it does not prove that a
+    // current plan exists for the target and canonical SION.
+    const {
+        data: allocationInitialization,
+        isLoading: initializationLoading,
+        isError: initializationFailed,
+        refetch: retryInitialization,
+    } = useQuery<AllocationInitialization>({
+        queryKey: ['allotment-allocation-initialization', id],
+        queryFn: () => api.get(`allotment-actions/${id}/allocation-initialization/`).then(r => r.data),
+        enabled: Boolean(id),
+    });
+
+    const itemFilterOptions = useMemo(() => {
+        const options = isPlanMode ? rawPlannedItemNames : availableItemNames;
+        if (isPlanMode && allotment?.planning_target_item && !options.some(option => String(option.value) === String(allotment.planning_target_item))) {
+            return [{ value: allotment.planning_target_item, label: allotment.planning_target_item_name || String(allotment.planning_target_item) }, ...options];
         }
-    }, [allotment, isFirstLoad]);
+        return options;
+    }, [isPlanMode, rawPlannedItemNames, availableItemNames, allotment]);
+
+    // Do not infer a Plan default from target-item presence.  The backend
+    // verifies the current plan identity and supplies the only valid default.
+    useEffect(() => {
+        if (!allotment || !allocationInitialization || hydratedRouteId === id) return;
+        const defaultItem = allocationInitialization.default_item;
+        setFilters(prev => ({
+            ...prev,
+            debit_based_on: allocationInitialization.default_search_mode,
+            item_id: defaultItem == null ? "" : String(defaultItem.id),
+            // This runs only once per route identity, so later filter edits
+            // and allocation refetches remain entirely user-owned.
+            description: allotment.item_name || "",
+        }));
+        setAllocationData({});
+        setCurrentPage(1);
+        setHydratedRouteId(id);
+    }, [allotment, allocationInitialization, hydratedRouteId, id]);
+
+    useEffect(() => {
+        // A route change must never reuse an already-hydrated target.
+        if (hydratedRouteId != null && hydratedRouteId !== id) {
+            setHydratedRouteId(null);
+        }
+    }, [id, hydratedRouteId]);
 
     // Surface allotment load failure into the error banner
     useEffect(() => {
@@ -128,9 +305,49 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     // Build API params from current filter state (skip empty values)
     const apiParams = useMemo(() => {
         const params: Record<string, string | number> = { page: currentPage, page_size: pageSize };
-        Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
+        Object.entries(filters).forEach(([k, v]) => {
+            // These free-text filters are attached below from debounced state.
+            if (k !== "description" && k !== "license_number" && k !== "hs_code" && v != null && v !== "") {
+                params[k] = v as string;
+            }
+        });
+        if (debouncedDescription) params.description = debouncedDescription;
+        if (debouncedLicenseNumber) params.license_number = debouncedLicenseNumber;
+        if (debouncedHsCode) params.hs_code = debouncedHsCode;
+        if (filters.debit_based_on === "PLAN" && filters.item_id) {
+            // The filter is the current target.  The route target only
+            // supplies the initial selection, never a later override.
+            params.planning_target_item_id = filters.item_id;
+            if (String(filters.item_id) === String(allocationInitialization?.default_item?.id) && allocationInitialization?.sion) {
+                params.sion = allocationInitialization.sion;
+            }
+        }
         return params;
-    }, [filters, currentPage, pageSize]);
+    }, [filters, currentPage, pageSize, allocationInitialization, debouncedDescription, debouncedLicenseNumber, debouncedHsCode]);
+
+    const planFiltersReady = hydratedRouteId === id
+        && filters.debit_based_on === "PLAN";
+    // Actual availability does not require a plan or a canonical Planning
+    // Target Item.  An actual item identity is ideal, but Item Description is
+    // also an established Actual-mode filter (for example, `7607`).
+    const actualFiltersReady = hydratedRouteId === id
+        && filters.debit_based_on === "ACTUAL"
+        && Boolean(filters.item_id || debouncedDescription.trim());
+    const filtersReady = planFiltersReady || actualFiltersReady;
+
+    const previousDebitBasis = useRef<DebitBasis | null>(null);
+    useEffect(() => {
+        const currentDebitBasis = filters.debit_based_on;
+        if (!currentDebitBasis) return;
+        if (previousDebitBasis.current && previousDebitBasis.current !== currentDebitBasis) {
+            // A Plan child is never an implicit selection in Actual mode.
+            // Clear drafts as well, so an old Plan response cannot be submitted
+            // after the user changes the authoritative mode.
+            setAllocationData({});
+            setCurrentPage(1);
+        }
+        previousDebitBasis.current = currentDebitBasis;
+    }, [filters.debit_based_on]);
 
     // Available licenses list — re-fetches when filters or page changes,
     // but only after the first-load description filter has been applied.
@@ -139,13 +356,32 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         isLoading: initialLoading,
         isFetching: tableLoading,
     } = useQuery({
-        queryKey: ['allotments', id, 'available-licenses', apiParams],
-        queryFn: () => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams }).then(r => r.data),
-        enabled: Boolean(id) && !isFirstLoad,
-        placeholderData: (prev) => prev,
+        queryKey: ['allotment-available-licenses', id, filters.debit_based_on, allotment?.planning_target_item ?? null, allotment?.planning_target_sion ?? null, apiParams],
+        // React Query aborts an obsolete query when its key changes.  Passing
+        // its signal to Axios is important here: an old filter/refill response
+        // must not put a completed candidate back into the live queue.
+        queryFn: ({ signal }) => api.get(`allotment-actions/${id}/available-licenses/`, { params: apiParams, signal }).then(r => r.data),
+        enabled: Boolean(id) && filtersReady,
+        // Changing a filter should refresh just the results, not blank the
+        // workspace and make the page appear to reload.
+        placeholderData: (previousData) => previousData,
+        refetchOnWindowFocus: false,
     });
 
-    const availableItems: AvailableItem[] = availableLicensesData?.available_items ?? availableLicensesData?.results ?? [];
+    const availableItems: AvailableItem[] = useMemo(() => {
+        if (!filtersReady) return [];
+        const serverItems: AvailableItem[] = availableLicensesData?.available_items ?? availableLicensesData?.results ?? [];
+        // A PLAN line and an ACTUAL licence item have different canonical row
+        // identities.  Deduplicate only identical server candidates, rather
+        // than collapsing legitimate split plan lines from the same licence.
+        const seen = new Set<string>();
+        return serverItems.filter(item => {
+            const identity = `${filters.debit_based_on}:${item.id}`;
+            if (seen.has(identity)) return false;
+            seen.add(identity);
+            return true;
+        }).slice(0, pageSize);
+    }, [filtersReady, availableLicensesData, filters.debit_based_on, pageSize]);
     const totalItems: number = availableLicensesData?.count ?? 0;
     const totalPages: number = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
 
@@ -178,23 +414,50 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         qc.invalidateQueries({ queryKey: ['allotments', id] });
     };
 
+    // Keep the existing query key intact: its filters, debounce values and
+    // current page are part of that key.  Invalidating this prefix therefore
+    // reloads the exact grid the user is looking at, rather than resetting it.
+    const refreshAvailableLicenses = async () => {
+        await qc.cancelQueries({ queryKey: ['allotment-available-licenses', id] });
+        await qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] });
+    };
+
     const allocateMutation = useMutation({
-        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) =>
-            api.post(`allotment-actions/${id}/allocate-items/`, {
+        mutationFn: (payload: { item: AvailableItem; allocation: { qty: string; cif_fc: string } }) => {
+            const followsPlan = filters.debit_based_on === "PLAN";
+            // Description-driven Actual searches do not have a filter item ID.
+            // The candidate's canonical actual item identity is still sent for
+            // backend validation, rather than falling back to a plan identity.
+            const actualItemId = filters.item_id || payload.item.items_detail?.[0]?.id;
+            return api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
-                    item_id: payload.item.id,
+                    // Plan mode's row id is the LicenseItemPlan line's own id
+                    // (unique per split row) — allocation always targets the
+                    // real underlying import item, via import_item_id when set.
+                    item_id: payload.item.import_item_id ?? payload.item.id,
                     qty: payload.allocation.qty,
                     cif_fc: payload.allocation.cif_fc,
+                    // Plan mode only: names the specific plan line (e.g. PKO
+                    // vs Cheese) this allocation was made against, so the
+                    // backend can decrement THAT line's own remaining balance
+                    // independently of its siblings (see allocate_items).
+                    ...(followsPlan ? { plan_line_id: payload.item.id } : {}),
+                    debit_based_on: filters.debit_based_on,
+                    search_mode: filters.debit_based_on,
+                    allocation_basis: followsPlan ? "PLAN" : "ACTUAL",
+                    license_status: filters.license_status,
+                    ...(filters.debit_based_on === "PLAN" ? { planning_target_item_id: filters.item_id } : { actual_item_id: actualItemId }),
                 }],
-            }).then(r => r.data),
-        onSuccess: (data, { item, allocation }) => {
+            }).then(r => r.data);
+        },
+        onSuccess: async (data, { item, allocation }) => {
             if (data.errors && data.errors.length > 0) {
                 const firstErr = data.errors[0];
                 if (firstErr.plan_exceeded) {
                     setPlanModal({ error: firstErr, item });
                     return;
                 }
-                const errorMsg = `Error: ${firstErr.error}`;
+                const errorMsg = getAllocationErrorMessage(firstErr);
                 setError(errorMsg);
                 toast.error(errorMsg);
                 return;
@@ -211,8 +474,15 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 return next;
             });
 
-            // Invalidate so allotment header re-fetches updated balances + available list
-            invalidateAllotment();
+            // Stop an older in-flight list request before requesting the
+            // authoritative queue again.  The refreshed first page naturally
+            // promotes candidate 11 after candidate 1 is exhausted; a partial
+            // allocation stays because the backend continues to return it
+            // with its recalculated balances.
+            await Promise.all([
+                qc.invalidateQueries({ queryKey: ['allotments', id] }),
+                refreshAvailableLicenses(),
+            ]);
 
             // Scroll to transfer letter if balance is now exactly 0
             if (data.allotment) {
@@ -226,7 +496,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             }
         },
         onError: (err: unknown) => {
-            const errorMsg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to allocate item";
+            const errorMsg = getAllocationErrorMessage(err);
             setError(errorMsg);
             toast.error(errorMsg);
         },
@@ -235,11 +505,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const deleteAllocationMutation = useMutation({
         mutationFn: (allotmentItemId: number) =>
             api.delete(`allotment-actions/${id}/delete-item/${allotmentItemId}/`).then(r => r.data),
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
             const successMsg = data.message || "Successfully removed allocation";
             setSuccess(successMsg);
             toast.success(successMsg);
             invalidateAllotment();
+            await refreshAvailableLicenses();
         },
         onError: (err: unknown) => {
             const errorMsg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to delete allocation";
@@ -262,181 +533,111 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         setCurrentPage(1);
     }, [filters]);
 
-    const calculateMaxAllocation = (item) => {
-        if (!allotment?.unit_value_per_unit) return { qty: 0, value: 0 };
-
-        const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        // Use balanced_quantity directly from backend (already calculated: required - allotted)
-        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
-        const requiredValue = parseFloat(allotment.required_value || 0);
-        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
-        const allottedValue = parseFloat(allotment.allotted_value || 0);
-        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        // Floor to integer — backend's calculate_available_quantity() rounds DOWN
-        // to whole units, so any fractional part of the stored available_quantity
-        // would be rejected on submit.
-        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
-        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
-
-        // Max quantity is the minimum of balanced quantity and available quantity
-        let maxQty = Math.floor(Math.min(balancedQty, availableQty));
-
-        // Calculate value for this quantity
-        let maxValue = maxQty * unitPrice;
-
-        // Check if value exceeds available CIF FC (using balance_cif_fc)
-        if (maxValue > availableCifFc) {
-            // Adjust quantity based on available CIF FC
-            maxQty = Math.floor(availableCifFc / unitPrice);
-            maxValue = maxQty * unitPrice;
-        }
-
-        // Check if value exceeds balanced value (with $10 buffer already included)
-        if (maxValue > balancedValueWithBuffer) {
-            // Adjust quantity based on balanced value with buffer
-            maxQty = Math.floor(balancedValueWithBuffer / unitPrice);
-            maxValue = maxQty * unitPrice;
-        }
-
-        // Belt-and-suspenders: clamp maxValue to all caps (restricted CIF + balanced
-        // value) and truncate to 2 decimal places. Math.floor(X/Y)*Y can drift past
-        // X by a float-epsilon, and .toFixed(2) can round half-cents UP — this
-        // line ensures the requested cif_fc never crosses the backend's check.
-        maxValue = Math.min(maxValue, availableCifFc, balancedValueWithBuffer);
-        maxValue = Math.floor(maxValue * 100) / 100;
-
+    const calculateMaxAllocation = useCallback((item) => {
+        // One server-generated paired Decimal cap is the only client cap.
+        // React may display this value; it must not rebuild it from balances.
+        const basis = filters.debit_based_on === "PLAN" ? "plan" : "actual";
+        const limit = item.basis_options?.[basis];
+        const pair = limit?.allocation_limit;
         return {
-            qty: maxQty,
-            value: maxValue
+            qty: Number(pair?.paired_max_qty ?? "0"),
+            value: Number(pair?.paired_max_cif ?? "0"),
+            qtyText: pair?.paired_max_qty ?? "0",
+            valueText: pair?.paired_max_cif ?? "0",
+            enabled: Boolean(limit?.enabled && pair?.can_allocate),
+            reasonCode: limit?.reason_code,
+            message: limit?.message,
         };
-    };
+    }, [filters.debit_based_on]);
+
+    // A response/mode change can turn a formerly valid draft into an invalid
+    // Plan allocation.  Remove it immediately; never leave a stale raw-value
+    // draft available for Confirm.
+    useEffect(() => {
+        setAllocationData(previous => {
+            let changed = false;
+            const next = { ...previous };
+            availableItems.forEach(item => {
+                const max = calculateMaxAllocation(item);
+                const draft = next[item.id];
+                if (draft && (max.qty <= 0 || max.value <= 0 || Number(draft.qty) > max.qty || Number(draft.cif_fc) > max.value)) {
+                    delete next[item.id];
+                    changed = true;
+                }
+            });
+            return changed ? next : previous;
+        });
+    }, [filters.debit_based_on, availableItems, calculateMaxAllocation]);
 
     const handleQuantityChange = (itemId, qty) => {
         const item = availableItems.find(i => i.id === itemId);
-        if (!item) return;
+        const maximum = item && calculateMaxAllocation(item);
+        if (!item || !maximum?.enabled) return;
 
-        const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        let inputQty = parseInt(qty) || 0;
-
-        // Get balance quantities and values with buffer
-        // Use balanced_quantity from backend (already calculated: required - allotted)
-        const balancedQty = parseFloat(allotment.balanced_quantity || 0);
-        const requiredValue = parseFloat(allotment.required_value || 0);
-        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
-        const allottedValue = parseFloat(allotment.allotted_value || 0);
-        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
-        // Floor: backend rounds available_quantity DOWN to whole units, so we must too.
-        const availableQty = Math.floor(parseFloat(item.available_quantity || "0"));
-
-        // Show warning if user tries to exceed limits
-        if (inputQty > balancedQty) {
-            toast.warning(`Quantity adjusted to balanced quantity: ${balancedQty}`);
-            inputQty = balancedQty;
+        // Qty and CIF are a pair.  The server has already calculated the
+        // executable maximum after intersecting actual, plan and allotment
+        // caps.  Clamp to that pair before calculating the visible Value so a
+        // user cannot type a quantity whose value would exceed Balance/Plan
+        // CIF (e.g. $999 at $10/unit becomes 99 / $990, never 100 / $1,000).
+        const requestedQty = Number(qty);
+        if (!qty || !Number.isFinite(requestedQty) || requestedQty <= 0) {
+            setAllocationData(previous => ({
+                ...previous,
+                [itemId]: { qty, cif_fc: "" },
+            }));
+            return;
         }
-        if (inputQty > availableQty) {
-            toast.warning(`Quantity adjusted to available quantity: ${availableQty}`);
-            inputQty = availableQty;
-        }
-
-        // Calculate value from quantity
-        let allocateCifFc = inputQty * unitPrice;
-
-        // If calculated value exceeds balanced value with buffer, adjust quantity down
-        if (allocateCifFc > balancedValueWithBuffer) {
-            inputQty = Math.floor(balancedValueWithBuffer / unitPrice);
-            allocateCifFc = inputQty * unitPrice;
-            toast.warning(`Quantity adjusted to match value limit: ${inputQty}`);
-        }
-
-        // If calculated value exceeds available CIF FC, adjust quantity down
-        if (allocateCifFc > availableCifFc) {
-            inputQty = Math.floor(availableCifFc / unitPrice);
-            allocateCifFc = inputQty * unitPrice;
-            toast.warning(`Quantity adjusted to available CIF: ${inputQty}`);
-        }
-
-        setAllocationData({
-            ...allocationData,
-            [itemId]: {
-                qty: inputQty.toString(),
-                cif_fc: allocateCifFc.toFixed(2)
-            }
-        });
+        const boundedQty = Math.min(requestedQty, maximum.qty);
+        const unitPrice = Number(allotment?.unit_value_per_unit || 0);
+        const calculatedCif = Math.round((boundedQty * unitPrice + Number.EPSILON) * 100) / 100;
+        // Preserve the server's one-cent final-settlement pair exactly when
+        // the typed quantity reaches its executable maximum.
+        const cif = boundedQty === maximum.qty ? maximum.value : calculatedCif;
+        setAllocationData(previous => ({
+            ...previous,
+            [itemId]: { qty: String(boundedQty), cif_fc: String(cif) },
+        }));
     };
 
     const handleValueChange = (itemId, value) => {
         const item = availableItems.find(i => i.id === itemId);
-        if (!item) return;
-
-        const unitPrice = parseFloat(allotment.unit_value_per_unit);
-        let inputValue = parseFloat(value) || 0;
-
-        // Get balance values with buffer
-        const balancedQty = parseInt(allotment.balanced_quantity || 0);
-        const requiredValue = parseFloat(allotment.required_value || 0);
-        const requiredValueWithBuffer = parseFloat(allotment.required_value_with_buffer || (requiredValue + 20));
-        const allottedValue = parseFloat(allotment.allotted_value || 0);
-        const balancedValueWithBuffer = requiredValueWithBuffer - allottedValue;
-        const availableCifFc = parseFloat(item.balance_cif_fc || "0");
-
-        // Constrain to balanced value with buffer
-        if (inputValue > balancedValueWithBuffer) {
-            inputValue = balancedValueWithBuffer;
-        }
-
-        // Constrain to available CIF FC
-        if (inputValue > availableCifFc) {
-            inputValue = availableCifFc;
-        }
-
-        // Calculate quantity from value (round down to integer)
-        let allocateQty = Math.floor(inputValue / unitPrice);
-
-        // Constrain to balanced quantity
-        if (allocateQty > balancedQty) {
-            allocateQty = balancedQty;
-        }
-
-        // Recalculate value based on adjusted quantity
-        const adjustedValue = (allocateQty * unitPrice).toFixed(2);
-
-        setAllocationData({
-            ...allocationData,
-            [itemId]: {
-                qty: allocateQty.toString(),
-                cif_fc: adjustedValue
-            }
-        });
+        if (!item || !calculateMaxAllocation(item).enabled) return;
+        setAllocationData(previous => ({
+            ...previous,
+            [itemId]: { qty: previous[itemId]?.qty || "", cif_fc: value },
+        }));
     };
 
     const handleMaxQuantity = (item) => {
         const maxAllocation = calculateMaxAllocation(item);
-        setAllocationData({
-            ...allocationData,
-            [item.id]: {
-                qty: maxAllocation.qty.toString(),
-                cif_fc: maxAllocation.value.toFixed(2)
-            }
-        });
+        if (!maxAllocation.enabled) return;
+        setAllocationData({...allocationData, [item.id]: {qty: maxAllocation.qtyText, cif_fc: maxAllocation.valueText}});
     };
 
     const handleMaxValue = (item) => {
         const maxAllocation = calculateMaxAllocation(item);
-        setAllocationData({
-            ...allocationData,
-            [item.id]: {
-                qty: maxAllocation.qty.toString(),
-                cif_fc: maxAllocation.value.toFixed(2)
-            }
-        });
+        if (!maxAllocation.enabled) return;
+        setAllocationData({...allocationData, [item.id]: {qty: maxAllocation.qtyText, cif_fc: maxAllocation.valueText}});
     };
 
     const handleConfirmAllot = (item) => {
+        // A mutation is deliberately single-flight at the screen level.  The
+        // backend remains the authority, but this prevents a rapid double
+        // click from creating two identical POSTs before React paints the
+        // disabled state.
+        if (allocateMutation.isPending) return;
+        const max = calculateMaxAllocation(item);
+        if (max.qty <= 0 || max.value <= 0) {
+            const itemName = item.planned_item_name || item.description;
+            const message = max.message || `Cannot allocate ${itemName}: no available quantity or value remains.`;
+            setError(message);
+            toast.error(message);
+            return;
+        }
         const allocation = allocationData[item.id];
-        if (!allocation || parseFloat(allocation.qty) <= 0) {
-            toast.error("Please enter a valid quantity");
-            setError("Please enter a valid quantity");
+        if (!allocation || parseFloat(allocation.qty) <= 0 || parseFloat(allocation.cif_fc) <= 0) {
+            toast.error("Enter a positive quantity and CIF value.");
+            setError("Enter a positive quantity and CIF value.");
             return;
         }
         setError("");
@@ -445,64 +646,78 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const handleDeleteAllotment = (allotmentItemId) => {
-        if (!window.confirm("Are you sure you want to remove this allocation?")) {
-            return;
-        }
-        setError("");
-        setSuccess("");
-        deleteAllocationMutation.mutate(allotmentItemId);
+        setDeleteConfirm({ show: true, allotmentItemId });
     };
 
-    if (initialLoading) return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
-            <div className="flex justify-between items-center mb-4 placeholder-glow">
+    const confirmDelete = () => {
+        if (deleteConfirm.allotmentItemId == null) return;
+        setError("");
+        setSuccess("");
+        deleteAllocationMutation.mutate(deleteConfirm.allotmentItemId);
+        setDeleteConfirm({ show: false, allotmentItemId: null });
+    };
+
+    if (initialLoading || initializationLoading) return (
+        <div className="min-h-screen bg-background">
+            <div className="flex justify-between items-center mb-4 animate-pulse">
                 <div>
-                    <div className="placeholder col-5" style={{ height: 28, borderRadius: 6, display: 'block' }}></div>
-                    <div className="placeholder col-3 mt-1" style={{ height: 14, borderRadius: 4, display: 'block' }}></div>
+                    <div className="h-7 w-48 rounded-md bg-muted block"></div>
+                    <div className="h-3.5 w-32 rounded bg-muted mt-1 block"></div>
                 </div>
                 <div className="flex gap-2">
                     {[80, 90, 110, 90, 100].map((w, i) => (
-                        <div key={i} className="placeholder" style={{ width: w, height: 32, borderRadius: 6 }}></div>
+                        <div key={i} className="h-8 rounded-md bg-muted" style={{ width: w }}></div>
                     ))}
                 </div>
             </div>
-            <div className="card mb-3" style={{ borderRadius: 12 }}>
-                <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <div className="placeholder col-3" style={{ height: 18, borderRadius: 4 }}></div>
+            <div className="mb-3 overflow-hidden rounded-xl border border-border bg-card">
+                <div className="border-b border-border/60 px-5 py-3">
+                    <div className="h-4 w-1/3 rounded bg-muted"></div>
                 </div>
                 <div className="flex gap-3 p-5">
-                    {[1,2,3,4].map(i => <div key={i} className="placeholder flex-fill" style={{ borderRadius: 8, height: 72 }}></div>)}
+                    {[1,2,3,4].map(i => <div key={i} className="flex-1 h-[72px] rounded-lg bg-muted"></div>)}
                 </div>
             </div>
-            <div className="card" style={{ borderRadius: 12 }}>
-                <div className="card-header py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                    <div className="placeholder col-4" style={{ height: 18, borderRadius: 4 }}></div>
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="border-b border-border/60 px-5 py-3">
+                    <div className="h-4 w-1/4 rounded bg-muted"></div>
                 </div>
-                <div className="p-5">
-                    {[1,2,3].map(i => <div key={i} className="placeholder w-full mb-2" style={{ height: 90, borderRadius: 8 }}></div>)}
+                <div className="p-5 space-y-2">
+                    {[1,2,3].map(i => <div key={i} className="h-[90px] rounded-lg bg-muted"></div>)}
                 </div>
             </div>
         </div>
     );
 
+    if (initializationFailed) return (
+        <div className="min-h-screen bg-muted/40 p-6" role="alert">
+            <div className="max-w-xl rounded-xl border border-destructive/30 bg-card p-5 text-sm">
+                <h1 className="font-semibold text-foreground">Unable to load allocation rules. Retry before selecting licences.</h1>
+                <button
+                    type="button"
+                    onClick={() => retryInitialization()}
+                    className="mt-3 rounded bg-primary px-3 py-2 text-primary-foreground"
+                >
+                    Retry
+                </button>
+            </div>
+        </div>
+    );
+
     return (
-        <div style={{
-            height: isModal ? '100%' : 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: isModal ? 'transparent' : 'var(--tb-sunken)',
-            padding: isModal ? '0' : '24px',
-            minHeight: isModal ? 'auto' : '100vh'
-        }}>
+        <div className={cn(
+            "allotment-action-page flex min-h-0 flex-col",
+            isModal ? "h-full" : "h-[calc(100vh-1rem)] bg-muted/40 p-2 sm:h-[calc(100vh-2rem)] sm:p-3"
+        )}>
             {!isModal && (
-                <div className="flex justify-between items-center flex-wrap gap-2 mb-4">
+                <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-card/80 px-3 py-2 shadow-sm backdrop-blur-sm">
                     <div>
-                        <h4 className="mb-0 font-bold" style={{ color: 'var(--tb-text)' }}>
+                        <h4 className="font-bold text-foreground flex items-center gap-1.5">
                             <Network className="size-4" aria-hidden="true" />
                             Allocate License Items
                         </h4>
                         {allotment && (
-                            <small className="text-muted">
+                            <small className="text-muted-foreground">
                                 {allotment.item_name}
                                 {allotment.invoice && <span className="ml-2">— Invoice #{allotment.invoice}</span>}
                             </small>
@@ -522,16 +737,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </button>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                            onClick={async () => {
-                                if (!window.confirm('Are you sure you want to create a copy of this allotment?')) return;
-                                try {
-                                    const response = await api.post(`allotments/${id}/copy/`);
-                                    toast.success('Allotment copied successfully!');
-                                    navigate(`/allotments/${response.data.id}/edit`);
-                                } catch (err) {
-                                    toast.error(err.response?.data?.error || 'Failed to copy allotment');
-                                }
-                            }}
+                            onClick={() => setCopyConfirm(true)}
                             title="Create a copy of this allotment"
                         >
                             <Files className="size-4" aria-hidden="true" />Copy
@@ -554,14 +760,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 }
                             }}
                             title="Download Allotment PDF"
-                            style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))', border: 'none' }}
                         >
                             <FileText className="size-4" aria-hidden="true" />Download PDF
                         </button>
                         {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                             <button
                                 className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                                onClick={() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' })}
+                                onClick={() => {
+                                    setTransferLetterOpen(true);
+                                    window.setTimeout(() => document.getElementById('transfer-letter-section')?.scrollIntoView({ behavior: 'smooth' }), 0);
+                                }}
                                 title="Generate Transfer Letter"
                             >
                                 <FileText className="size-4" aria-hidden="true" />Transfer Letter
@@ -581,7 +789,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             )}
 
             {/* Scrollable content area */}
-            <div style={{flex: 1, overflowY: 'auto', paddingRight: '8px'}}>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
 
             {allotment && (() => {
                 const unitPrice = parseFloat(allotment.unit_value_per_unit || 0);
@@ -593,15 +801,21 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 const balanceValue = requiredValue - allotedValue;
                 const progressPct = requiredQty > 0 ? Math.min(100, Math.round((allotedQty / requiredQty) * 100)) : 0;
                 const isComplete = progressPct >= 100;
-                const progressColor = isComplete ? 'var(--tb-success)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning)';
+                const progressBarCls = isComplete ? 'bg-success' : progressPct >= 60 ? 'bg-primary' : 'bg-warning';
+                const progressTextCls = isComplete ? 'text-success' : progressPct >= 60 ? 'text-primary' : 'text-warning';
+                const statusBadgeCls = isComplete
+                    ? 'bg-success/10 text-success'
+                    : progressPct >= 60
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-warning/10 text-warning';
 
                 return (
-                    <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+                    <div className="mb-2 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         {/* Header */}
-                        <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-                            <div className="flex items-center gap-3">
-                                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'var(--tb-brand-50)', border: '1px solid var(--tb-brand-100)' }}>
-                                    <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-1.5">
+                            <div className="flex items-center gap-2">
+                                <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20">
+                                    <ListChecks className="size-4 text-primary" aria-hidden="true" />
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Allotment Details</p>
@@ -611,71 +825,68 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
                                     <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-                                        <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progressPct}%`, background: progressColor }} />
+                                        <div className={cn("h-full rounded-full transition-[width] duration-500", progressBarCls)} style={{ width: `${progressPct}%` }} />
                                     </div>
-                                    <span className="text-xs font-bold tabular-nums" style={{ color: progressColor }}>{progressPct}%</span>
+                                    <span className={cn("text-xs font-bold tabular-nums", progressTextCls)}>{progressPct}%</span>
                                 </div>
-                                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none" style={{
-                                    background: isComplete ? 'var(--tb-success-soft)' : progressPct >= 60 ? 'var(--tb-brand-50)' : 'var(--tb-warning-soft)',
-                                    color: isComplete ? 'var(--tb-success-text)' : progressPct >= 60 ? 'var(--tb-brand)' : 'var(--tb-warning-text)',
-                                }}>
+                                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none", statusBadgeCls)}>
                                     {isComplete ? '✓ Complete' : 'In Progress'}
                                 </span>
                             </div>
                         </div>
 
                         {/* 4-column stat grid with dividers */}
-                        <div className="grid grid-cols-2 divide-y divide-border/40 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                        <div className="grid grid-cols-2 divide-y divide-border/40 sm:grid-cols-4 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
                             {/* Unit Price */}
-                            <div className="flex flex-col px-5 py-4">
-                                <div className="mb-2 flex items-center gap-1.5">
-                                    <span className="size-2 shrink-0 rounded-full" style={{ background: 'var(--tb-info)' }} />
+                            <div className="flex flex-col px-3 py-2">
+                                <div className="mb-1 flex items-center gap-1.5">
+                                    <span className="size-2 shrink-0 rounded-full bg-info" />
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Unit Price</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: 'var(--tb-info)' }}>
+                                <span className="text-base font-extrabold leading-none tabular-nums text-info">
                                     {unitPrice.toFixed(3)}
                                 </span>
-                                <span className="mt-1.5 text-[11px] text-muted-foreground">USD per unit</span>
+                                <span className="mt-1 text-[10px] text-muted-foreground">USD per unit</span>
                             </div>
 
                             {/* Required */}
-                            <div className="flex flex-col px-5 py-4">
-                                <div className="mb-2 flex items-center gap-1.5">
+                            <div className="flex flex-col px-3 py-2">
+                                <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-muted-foreground/40" />
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Required</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums text-foreground">
+                                <span className="text-base font-extrabold leading-none tabular-nums text-foreground">
                                     {requiredQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold text-muted-foreground">
+                                <span className="mt-1 text-[10px] font-semibold text-muted-foreground">
                                     ${requiredValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
 
                             {/* Allotted */}
-                            <div className="flex flex-col px-5 py-4" style={{ background: 'rgba(16,185,129,0.04)' }}>
-                                <div className="mb-2 flex items-center gap-1.5">
-                                    <span className="size-2 shrink-0 rounded-full" style={{ background: 'var(--tb-success)' }} />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--tb-success-text)' }}>Allotted</span>
+                            <div className="flex flex-col bg-success/[0.04] px-3 py-2">
+                                <div className="mb-1 flex items-center gap-1.5">
+                                    <span className="size-2 shrink-0 rounded-full bg-success" />
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-success">Allotted</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: 'var(--tb-success)' }}>
+                                <span className="text-base font-extrabold leading-none tabular-nums text-success">
                                     {allotedQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold" style={{ color: 'var(--tb-success-text)' }}>
+                                <span className="mt-1 text-[10px] font-semibold text-success">
                                     ${allotedValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
 
                             {/* Balance */}
-                            <div className="flex flex-col px-5 py-4" style={{ background: balanceQty <= 0 ? 'rgba(16,185,129,0.06)' : 'var(--tb-brand-50)' }}>
-                                <div className="mb-2 flex items-center gap-1.5">
-                                    <span className="size-2 shrink-0 rounded-full" style={{ background: balanceQty <= 0 ? 'var(--tb-success)' : 'var(--tb-brand)' }} />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: balanceQty <= 0 ? 'var(--tb-success-text)' : 'var(--tb-brand)' }}>Balance</span>
+                            <div className={cn("flex flex-col px-3 py-2", balanceQty <= 0 ? "bg-success/[0.06]" : "bg-primary/10")}>
+                                <div className="mb-1 flex items-center gap-1.5">
+                                    <span className={cn("size-2 shrink-0 rounded-full", balanceQty <= 0 ? "bg-success" : "bg-primary")} />
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-widest", balanceQty <= 0 ? "text-success" : "text-primary")}>Balance</span>
                                 </div>
-                                <span className="text-[1.65rem] font-extrabold leading-none tabular-nums" style={{ color: balanceQty <= 0 ? 'var(--tb-success)' : 'var(--tb-brand-active)' }}>
+                                <span className={cn("text-base font-extrabold leading-none tabular-nums", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     {balanceQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1.5 text-[11px] font-semibold" style={{ color: balanceQty <= 0 ? 'var(--tb-success-text)' : 'var(--tb-brand)' }}>
+                                <span className={cn("mt-1 text-[10px] font-semibold", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     ${balanceValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     <span className="ml-1 font-normal opacity-50">+$20 buf</span>
                                 </span>
@@ -687,12 +898,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
             {/* Allotted Items Table */}
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div className="card mb-3" style={{ borderRadius: 'var(--tb-r-md)' }}>
-                    <div className="card-header border-bottom flex justify-between items-center py-3" style={{ borderRadius: '12px 12px 0 0' }}>
-                        <h6 className="mb-0 font-semibold">
+                <div className="mb-3 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm shadow-primary/5">
+                    <div className="flex justify-between items-center border-b border-border/60 px-3 py-2">
+                        <h6 className="font-semibold text-foreground flex items-center gap-1.5">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
-                            <span className="chip chip-success">{allotment.allotment_details.length}</span>
+                            <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-bold text-success">{allotment.allotment_details.length}</span>
                         </h6>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
@@ -713,6 +924,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             parseFloat(detail.cif_fc || 0).toFixed(2)
                                         ];
                                     });
+                                    if (allotment.allotment_details.length > 1) {
+                                        rows.push([
+                                            '', '', '', '', '', '', '', 'Total DFIA allocation',
+                                            parseInt(allotment.alloted_quantity || 0).toLocaleString(),
+                                            `$${parseFloat(allotment.allotted_value || 0).toLocaleString('en-US', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2,
+                                            })}`,
+                                        ]);
+                                    }
                                     const tsv = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\n');
                                     navigator.clipboard.writeText(tsv).then(() => {
                                         toast.success('Copied to clipboard!');
@@ -726,54 +947,54 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             </button>
                     </div>
                     <div>
-                        <div style={{overflowX: 'auto'}}>
-                            <table className="w-full text-sm" style={{width: '100%'}}>
-                                <thead style={{ backgroundColor: 'var(--tb-sunken)', borderBottom: '2px solid var(--tb-border)' }}>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-[980px] w-full text-sm">
+                                <thead className="sticky top-0 z-10 bg-muted/95 border-b-2 border-border">
                                 <tr>
-                                    <th style={{minWidth: '120px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>License</th>
-                                    <th style={{minWidth: '70px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>Serial</th>
-                                    <th style={{minWidth: '240px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Description</th>
-                                    <th style={{minWidth: '80px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>HSN Code</th>
-                                    <th style={{minWidth: '160px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Exporter</th>
-                                    <th style={{minWidth: '140px', fontWeight: '600', fontSize: 12, padding: '8px'}}>Transfer<br/>Status</th>
-                                    <th style={{minWidth: '100px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>License<br/>Date</th>
-                                    <th style={{minWidth: '100px', fontWeight: '600', fontSize: 13.5, padding: '12px 8px'}}>Expiry<br/>Date</th>
-                                    <th style={{minWidth: '80px', textAlign: 'right', fontWeight: '600', fontSize: 12, padding: '8px'}}>Allotted<br/>Qty</th>
-                                    <th style={{minWidth: '90px', textAlign: 'right', fontWeight: '600', fontSize: 12, padding: '8px'}}>Allotted<br/>Value</th>
-                                    <th style={{minWidth: '64px', whiteSpace: 'nowrap', fontWeight: '600', fontSize: 12, padding: '8px'}}>Action</th>
+                                    <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-[12px] p-2">License</th>
+                                    <th scope="col" className="min-w-[70px] whitespace-nowrap font-semibold text-[12px] p-2">Serial</th>
+                                    <th scope="col" className="min-w-[240px] font-semibold text-[12px] p-2">Description</th>
+                                    <th scope="col" className="min-w-[80px] whitespace-nowrap font-semibold text-[12px] p-2">HSN Code</th>
+                                    <th scope="col" className="min-w-[160px] font-semibold text-[12px] p-2">Exporter</th>
+                                    <th scope="col" className="min-w-[140px] font-semibold text-[12px] p-2">Transfer<br/>Status</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-[12px] p-2">License<br/>Date</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-[12px] p-2">Expiry<br/>Date</th>
+                                    <th scope="col" className="min-w-[80px] text-right font-semibold text-[12px] p-2">Allotted<br/>Qty</th>
+                                    <th scope="col" className="min-w-[90px] text-right font-semibold text-[12px] p-2">Allotted<br/>Value</th>
+                                    <th scope="col" className="min-w-[64px] whitespace-nowrap font-semibold text-[12px] p-2">Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {allotment.allotment_details.map((detail) => (
                                     <tr key={detail.id} className="border-b border-border/40 transition-colors hover:bg-muted/30">
-                                        <td className='px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground' style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{detail.license_number}</td>
-                                        <td className='px-3 py-1.5 text-[12.5px]' style={{whiteSpace: 'nowrap'}}><span className='font-medium'>{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
-                                        <td className='px-3 py-1.5 text-[12.5px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.product_description}</td>
-                                        <td className='px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.hs_code || '-'}</td>
-                                        <td className='px-3 py-1.5 text-[12.5px]' style={{wordWrap: 'break-word', whiteSpace: 'normal'}}>{detail.exporter}</td>
-                                        <td style={{wordWrap: 'break-word', whiteSpace: 'normal', fontSize: '0.80rem', lineHeight: '1.3'}}>
+                                        <td className="px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">{detail.license_number}</td>
+                                        <td className="px-3 py-1.5 text-[12.5px] whitespace-nowrap"><span className="font-medium">{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
+                                        <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.product_description}</td>
+                                        <td className="px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground whitespace-nowrap">{detail.hs_code || '-'}</td>
+                                        <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.exporter}</td>
+                                        <td className="px-3 py-1.5 text-[0.80rem] leading-[1.3] break-words whitespace-normal">
                                             {detail.current_owner && detail.file_transfer_status ? (
                                                 <div>
-                                                    <div className="mb-1" style={{fontWeight: '600'}}>
+                                                    <div className="mb-1 font-semibold">
                                                         {detail.current_owner}
                                                     </div>
-                                                    <div className="text-muted" style={{fontSize: 12}}>
+                                                    <div className="text-muted-foreground text-[12px]">
                                                         {detail.file_transfer_status}
                                                     </div>
                                                 </div>
                                             ) : detail.current_owner ? (
-                                                <div style={{fontWeight: '600'}}>{detail.current_owner}</div>
+                                                <div className="font-semibold">{detail.current_owner}</div>
                                             ) : detail.file_transfer_status ? (
-                                                <div className="text-muted">{detail.file_transfer_status}</div>
+                                                <div className="text-muted-foreground">{detail.file_transfer_status}</div>
                                             ) : (
-                                                <span className="text-muted">-</span>
+                                                <span className="text-muted-foreground">-</span>
                                             )}
                                         </td>
-                                        <td className='px-3 py-1.5 text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_date}</td>
-                                        <td className='px-3 py-1.5 text-[12px] text-muted-foreground' style={{whiteSpace: 'nowrap'}}>{detail.license_expiry}</td>
-                                        <td className='px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px]' style={{whiteSpace: 'nowrap'}}>{parseInt(detail.qty || 0).toLocaleString()}</td>
-                                        <td className='px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px]' style={{whiteSpace: 'nowrap'}}>{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
-                                        <td className="px-2 py-1.5 text-center" style={{whiteSpace: 'nowrap'}}>
+                                        <td className="px-3 py-1.5 text-[12px] text-muted-foreground whitespace-nowrap">{detail.license_date}</td>
+                                        <td className="px-3 py-1.5 text-[12px] text-muted-foreground whitespace-nowrap">{detail.license_expiry}</td>
+                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseInt(detail.qty || 0).toLocaleString()}</td>
+                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
+                                        <td className="px-2 py-1.5 text-center whitespace-nowrap">
                                             <button
                                                 className="flex size-7 items-center justify-center rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/10 hover:border-destructive cursor-pointer transition-colors"
                                                 onClick={() => handleDeleteAllotment(detail.id)}
@@ -790,49 +1011,38 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </tr>
                                 ))}
                                 </tbody>
-                                <tfoot>
-                                <tr style={{ background: 'var(--tb-sunken)', borderTop: '2px solid var(--tb-border)' }}>
-                                    <th colSpan={8} className="px-3 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
-                                    <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</th>
-                                    <th className="px-3 py-1.5 text-right text-[13px] font-extrabold tabular-nums text-foreground">{parseFloat(allotment.allotted_value || 0).toFixed(2)}</th>
-                                    <th></th>
-                                </tr>
-                                </tfoot>
+                                {allotment.allotment_details.length > 1 && <tfoot>
+                                    <tr className="bg-primary/5 border-t-2 border-primary/30">
+                                        <th scope="row" colSpan={8} className="px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total DFIA allocation</th>
+                                        <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Quantity">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
+                                        <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Dollar value">${parseFloat(allotment.allotted_value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>}
                             </table>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Transfer Letter Generation */}
-            {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
-                <div id="transfer-letter-section">
-                    <TransferLetterForm
-                        instanceId={id}
-                        instanceType="allotment"
-                        items={allotment.allotment_details.map(detail => ({
-                            id: detail.id,
-                            license_number: detail.license_number || '-',
-                            cif_fc: detail.cif_fc || 0,
-                            purchase_status: detail.purchase_status || 'N/A'
-                        }))}
-                        onSuccess={(msg) => toast.success(msg)}
-                        onError={(msg) => toast.error(msg)}
-                    />
-                </div>
-            )}
-
-            <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
+            <div className="mb-3 overflow-hidden rounded-xl border border-border/80 bg-card shadow-md shadow-primary/5">
+                <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
                     <div className="flex items-center gap-2">
-                        <ListChecks className="size-4" style={{ color: 'var(--tb-brand)' }} aria-hidden="true" />
+                        <ListChecks className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available License Items</span>
                         {totalItems > 0 && (
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: 'var(--tb-brand-50)', color: 'var(--tb-brand)' }}>{totalItems} items</span>
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{totalItems} items</span>
                         )}
                     </div>
                 </div>
-                <div className="p-5">
+                <div className="p-3">
+
+                    {allocationInitialization?.plan_status === "AMBIGUOUS_ACTIVE_PLAN" && (
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900" role="alert">
+                            <TriangleAlert className="size-4" aria-hidden="true" />
+                            <div>{allocationInitialization.message || allocationInitialization.plan_message}</div>
+                        </div>
+                    )}
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
@@ -843,7 +1053,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                     )}
                     {success && (
-                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px]" style={{ color: 'var(--tb-success-text)' }} role="alert">
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success" role="alert">
                             <CheckCircle2 className="size-4" aria-hidden="true" />
                             <div className="flex-1">{success}</div>
                             <button type="button" className="ml-auto shrink-0 cursor-pointer opacity-60 hover:opacity-100" onClick={() => setSuccess("")}><X className="size-3.5" /></button>
@@ -852,215 +1062,207 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     <AllotmentFilters
                         filters={filters}
-                        setFilters={setFilters}
-                        availableItemNames={availableItemNames}
+                        setFilters={updateFilters}
+                        availableItemNames={itemFilterOptions}
                         notificationOptions={notificationOptions}
+                        purchaseStatusOptions={purchaseStatusOptions}
+                        routePlanningTarget={null}
+                        defaultSearchMode={allocationInitialization?.default_search_mode}
+                        defaultItemId={allocationInitialization?.default_item?.id ?? null}
                     />
 
-                    <div style={{ maxHeight: '650px', overflowY: 'auto', paddingRight: '2px' }}>
-                        {availableItems.map((item) => {
-                            const maxAllocation = calculateMaxAllocation(item);
-                            const currentAllocation = allocationData[item.id];
-                            const qty = parseFloat(item.available_quantity || "0");
-                            const cifFc = parseFloat(item.balance_cif_fc || "0");
-                            const average = qty > 0 ? (cifFc / qty).toFixed(2) : '0.00';
-                            const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0;
+                    {filtersReady && (
+                        <div className="mb-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
+                            {filters.debit_based_on === "PLAN" ? <><strong>PLAN BALANCE MODE</strong> — Available values are based on current remaining planned Qty and CIF.</> : <><strong>ACTUAL BALANCE MODE</strong> — Available values are based on current raw licence-item availability.</>}
+                        </div>
+                    )}
 
-                            return (
-                                <div key={item.id} style={{
-                                    display: 'block',
-                                    background: 'var(--tb-card-bg)',
-                                    border: `1px solid ${isReady ? 'var(--primary-color)' : 'var(--tb-border-soft)'}`,
-                                    borderLeft: `4px solid ${isReady ? 'var(--primary-color)' : 'var(--tb-border-strong)'}`,
-                                    borderRadius: 'var(--tb-r-md)',
-                                    marginBottom: '10px',
-                                    overflow: 'hidden',
-                                    boxShadow: isReady ? '0 2px 12px rgba(79,70,229,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
-                                }}>
-                                    {/* ── Row 1: Identity bar ── */}
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        flexWrap: 'wrap',
-                                        gap: '6px',
-                                        padding: '6px 12px',
-                                        background: 'var(--tb-sunken)',
-                                        borderBottom: '1px solid var(--tb-border)',
-                                    }}>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    const licenseId = item.license_id || item.license;
-                                                    const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
-                                                    openPdfPreview(response.data, `${item.license_number || licenseId}-copy.pdf`);
-                                                } catch {
-                                                    toast.error('Failed to load license document');
-                                                }
-                                            }}
-                                            title="View license document"
-                                            style={{
-                                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                                                fontWeight: '700', fontSize: 14, color: 'var(--primary-color)',
-                                                marginRight: '4px', display: 'inline-flex', alignItems: 'center',
-                                                textDecoration: 'underline', textUnderlineOffset: '3px', textDecorationStyle: 'dotted'
-                                            }}
-                                        >
-                                            <FileText className="size-4" aria-hidden="true" />
-                                            {item.license_number}
-                                        </button>
-                                        <span style={{
-                                            background: 'var(--tb-border)', color: 'var(--text-secondary)',
-                                            borderRadius: 'var(--tb-r-sm)', padding: '1px 7px', fontSize: 12, fontWeight: '600'
-                                        }}>#{item.serial_number}</span>
-                                        <ConditionBadge type={item.condition_type} size="xs" />
+                    <div className="allotment-candidate-queue max-h-[650px] overflow-y-auto pr-1">
+                        {(() => {
+                            // Group items by license
+                            const groupedByLicense: Record<string, AvailableItem[]> = {};
+                            availableItems.forEach(item => {
+                                const key = item.license_number || item.license || 'unknown';
+                                if (!groupedByLicense[key]) {
+                                    groupedByLicense[key] = [];
+                                }
+                                groupedByLicense[key].push(item);
+                            });
 
-                                        {item.hs_code_label && (
-                                            <span style={{
-                                                background: 'var(--indigo-50)', color: 'var(--primary-dark)',
-                                                border: '1px solid var(--indigo-200)',
-                                                borderRadius: 'var(--tb-r-sm)', padding: '1px 7px', fontSize: 12,
-                                            }}>HS: {item.hs_code_label}</span>
-                                        )}
-                                        {item.notification_number && (
-                                            <span style={{fontSize: 12, color: 'var(--text-secondary)'}}>
-                                                Notif: {item.notification_number}
-                                            </span>
-                                        )}
-                                        <span style={{
-                                            marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)',
-                                            display: 'flex', alignItems: 'center', gap: '4px'
-                                        }}>
-                                            <Calendar className="size-4" aria-hidden="true" />
-                                            Exp: {item.license_expiry_date || '—'}
-                                        </span>
-                                        {/* Restriction is read-only — driven by the licence's
-                                            condition_type. Use the shared badge. */}
-                                        {item.condition_type
-                                            ? <ConditionBadge type={item.condition_type} size="xs" />
-                                            : (
-                                                <span className="badge" style={{background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', fontSize: 11}}>
-                                                    <Unlock className="size-4" aria-hidden="true" />Open
-                                                </span>
-                                            )}
-                                    </div>
+                            return Object.entries(groupedByLicense).map(([licenseKey, groupItems]) => {
+                                const firstItem = groupItems[0];
+                                const licenseId = firstItem.license_id || firstItem.license;
 
-                                    {/* ── Row 2: Compact description + exporter + chips ── */}
-                                    <div style={{padding: '5px 12px 5px', borderBottom: '1px solid var(--tb-border-soft)', background: 'var(--tb-card-bg)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', minHeight: 0}}>
-                                        <span style={{fontWeight: '700', fontSize: 13, color: 'var(--tb-text)'}}>
-                                            {item.description}
-                                        </span>
-                                        <span style={{width: 1, height: 12, background: 'var(--tb-border)', flexShrink: 0, display: 'inline-block'}} />
-                                        <span style={{fontSize: 11.5, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3}}>
-                                            <Building2 className="size-3" aria-hidden="true" />{item.exporter_name}
-                                        </span>
-                                        {item.items_detail && item.items_detail.length > 0 && item.items_detail.map((i, idx) => (
-                                            <span key={idx} style={{
-                                                background: 'var(--tb-brand-50)', color: 'var(--tb-brand)',
-                                                border: '1px solid var(--tb-brand-100)',
-                                                borderRadius: 4, padding: '0px 6px',
-                                                fontSize: '0.7rem', fontWeight: '600', lineHeight: '1.6',
-                                            }}>{i.name}</span>
-                                        ))}
-                                    </div>
-
-                                    {/* ── Row 3: Stats + Inputs + Action (compact bottom bar) ── */}
-                                    <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0', background: 'var(--tb-sunken)'}}>
-
-                                        {/* Availability stats */}
-                                        <div style={{display: 'flex', gap: '12px', padding: '7px 12px', flexShrink: 0}}>
-                                            {[
-                                                {label: 'Avail Qty', value: qty.toFixed(3)},
-                                                {label: 'CIF FC', value: cifFc.toFixed(2)},
-                                                {label: 'Avg', value: average},
-                                            ].map(({label, value}) => (
-                                                <div key={label}>
-                                                    <div style={{fontSize: '0.62rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px'}}>{label}</div>
-                                                    <div style={{fontWeight: '700', fontSize: 13, color: 'var(--tb-text)', lineHeight: '1.2'}}>{value}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div style={{width: '1px', height: '36px', background: 'var(--tb-border-soft)', flexShrink: 0}} />
-
-                                        {/* Allocation inputs */}
-                                        <div style={{display: 'flex', gap: '8px', padding: '7px 12px', flexWrap: 'wrap', flex: 1, minWidth: '260px'}}>
-                                            <div style={{flex: '1', minWidth: '130px'}}>
-                                                <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
-                                                    Qty <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.qty}</span>
-                                                </label>
-                                                <div className="relative flex">
-                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                                        value={currentAllocation?.qty || ""}
-                                                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                                                        placeholder="Qty"
-                                                        step="1" min="0" max={maxAllocation.qty}
-                                                        style={{fontSize: '0.82rem'}}
-                                                    />
-                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" type="button"
-                                                        onClick={() => handleMaxQuantity(item)}
-                                                        style={{fontSize: 12, fontWeight: '600'}}>Max</button>
-                                                </div>
-                                            </div>
-                                            <div style={{flex: '1', minWidth: '130px'}}>
-                                                <label style={{fontSize: '0.62rem', color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', display: 'block', marginBottom: '3px'}}>
-                                                    Value <span style={{fontWeight: '400', textTransform: 'none'}}>/ max {maxAllocation.value.toFixed(2)}</span>
-                                                </label>
-                                                <div className="relative flex">
-                                                    <input type="number" className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
-                                                        value={currentAllocation?.cif_fc || ""}
-                                                        onChange={(e) => handleValueChange(item.id, e.target.value)}
-                                                        placeholder="Value"
-                                                        step="0.01" min="0"
-                                                        style={{fontSize: '0.82rem'}}
-                                                    />
-                                                    <button className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted" type="button"
-                                                        onClick={() => handleMaxValue(item)}
-                                                        style={{fontSize: 12, fontWeight: '600'}}>Max</button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div style={{width: '1px', height: '36px', background: 'var(--tb-border-soft)', flexShrink: 0}} />
-
-                                        {/* Confirm action */}
-                                        <div style={{
-                                            flexShrink: 0, padding: '7px 12px',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}>
-                                            <button
-                                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                                                style={{
-                                                    background: isReady ? 'var(--primary-gradient)' : 'var(--tb-gray-100)',
-                                                    border: 'none',
-                                                    color: isReady ? 'white' : 'var(--text-secondary)',
-                                                    fontWeight: '600',
-                                                    fontSize: '0.82rem',
-                                                    padding: '10px 16px',
-                                                    borderRadius: 'var(--tb-r-md)',
-                                                    whiteSpace: 'nowrap',
-                                                    transition: 'all 200ms',
-                                                    cursor: isReady ? 'pointer' : 'not-allowed',
-                                                }}
-                                                onClick={() => handleConfirmAllot(item)}
-                                                disabled={!isReady || (allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id)}
-                                            >
-                                                {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
-                                                    <>
-                                                        <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1" aria-hidden="true" />
-                                                        Saving…
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <CheckCircle2 className="size-4" aria-hidden="true" />
-                                                        Confirm
-                                                    </>
+                                return (
+                                    <div key={licenseKey} className="mb-3 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:shadow-primary/5">
+                                        {/* ── LICENSE HEADER (compact) ── */}
+                                        <div className="px-3 py-1.5 bg-muted/50 border-b border-border/60 text-[12px]">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const response = await api.get(`licenses/${licenseId}/merged-documents/`, { responseType: 'blob' });
+                                                            openPdfPreview(response.data, `${licenseKey}-copy.pdf`);
+                                                        } catch {
+                                                            toast.error('Failed to load license document');
+                                                        }
+                                                    }}
+                                                    title="View license document"
+                                                    className="inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-[13px] text-primary underline decoration-dotted underline-offset-[2px] hover:opacity-80"
+                                                >
+                                                    <FileText className="size-3.5" aria-hidden="true" />
+                                                    {licenseKey}
+                                                </button>
+                                                <span className="text-muted-foreground">|</span>
+                                                <span className="text-muted-foreground">{formatDate(firstItem.license_expiry_date) || '—'}</span>
+                                                <span className="text-foreground font-semibold">{firstItem.exporter_name || '—'}</span>
+                                                {firstItem.license_expiry_date && (
+                                                    <span className="text-muted-foreground">Exp: {formatDate(firstItem.license_expiry_date) || '—'}</span>
                                                 )}
-                                            </button>
+                                                {firstItem.notification_number && (
+                                                    <span className="text-muted-foreground">Notif: {firstItem.notification_number}</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* ── GROUPED ITEMS WITH ITEM-SPECIFIC PLANNING ── */}
+
+                                        {/* ── ITEMS WITH ITEM-SPECIFIC PLANNING ── */}
+                                        <div className="p-2 space-y-3">
+                                            {groupItems.map((item, itemIdx) => {
+                                                const maxAllocation = calculateMaxAllocation(item);
+                                                const currentAllocation = allocationData[item.id];
+                                                // Both figures are always shown. In Plan mode the row's
+                                                // legacy available_* fields describe the plan line, so use
+                                                // the explicit canonical positions for the common UI.
+                                                const actualQty = parseFloat(item.actual_position?.available_qty ?? item.available_quantity ?? "0");
+                                                const actualCif = parseFloat(item.actual_position?.balance_cif ?? item.balance_cif_fc ?? "0");
+                                                const planQty = parseFloat(item.plan_position?.remaining_qty ?? item.remaining_planned_qty ?? "0");
+                                                const planCif = parseFloat(item.plan_position?.remaining_cif ?? item.remaining_planned_cif ?? "0");
+                                                const remainingRequirementCif = parseFloat(item.allotment_requirement?.remaining_cif ?? "0");
+                                                const plannedQty = parseFloat(item.original_planned_quantity ?? "0");
+                                                const plannedCif = parseFloat(item.original_planned_cif_fc ?? "0");
+                                                const average = actualQty > 0 ? (actualCif / actualQty).toFixed(2) : '0.00';
+                                                const isReady = currentAllocation && parseFloat(currentAllocation.qty) > 0 && parseFloat(currentAllocation.cif_fc) > 0;
+                                                const isBlocked = !maxAllocation.enabled;
+
+                                                return (
+                                                    <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
+                                                        {/* Item header with item-specific info */}
+                                                        {itemIdx === 0 && (
+                                                            <div className="px-1 py-1 mb-1.5 text-[12px] border-b border-border/60">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className="font-bold text-foreground">{item.description}</span>
+                                                                    {item.hs_code_label && (
+                                                                        <>
+                                                                            <span className="text-muted-foreground">·</span>
+                                                                            <span className="text-muted-foreground">HS: {item.hs_code_label}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Item identifier + availability info (compact inline) */}
+                                                        <div className="mb-1.5 flex flex-col gap-2 text-[11px] sm:flex-row sm:items-center sm:justify-between">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-semibold text-foreground">SR #{item.serial_number}</span>
+                                                                {item.condition_type
+                                                                    ? <ConditionBadge type={item.condition_type} size="xs" />
+                                                                    : (
+                                                                        <span className="inline-flex items-center gap-0.5 rounded border border-success/30 bg-success/10 px-1 py-px text-[9px] text-success">
+                                                                            <Unlock className="size-2.5" aria-hidden="true" />Open
+                                                                        </span>
+                                                                    )}
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground sm:ml-auto">
+                                                                <span>Actual Qty: <span className="font-semibold text-foreground">{actualQty.toFixed(3)}</span></span>
+                                                                <span>Actual $: <span className="font-semibold text-foreground">${actualCif.toFixed(2)}</span></span>
+                                                                <span>Avg: <span className="font-semibold text-foreground">{average}</span></span>
+                                                                {item.plan_position?.exists && <>
+                                                                    <span>Planned Qty: <span className="font-semibold text-foreground">{plannedQty.toFixed(3)}</span></span>
+                                                                    <span>Planned $: <span className="font-semibold text-foreground">${plannedCif.toFixed(2)}</span></span>
+                                                                    <span>Plan Remaining Qty: <span className="font-semibold text-foreground">{planQty.toFixed(3)}</span></span>
+                                                                    <span>Plan Remaining $: <span className="font-semibold text-foreground">${planCif.toFixed(2)}</span></span>
+                                                                </>}
+                                                                <span>Max Qty: <span className="font-semibold text-foreground">{maxAllocation.qty.toFixed(3)}</span></span>
+                                                                <span>Max $: <span className="font-semibold text-foreground">${(remainingRequirementCif || maxAllocation.value).toFixed(2)}</span>{remainingRequirementCif > 0 && <span className="ml-1">+$20 buf</span>}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Allocation controls (compact inline) */}
+                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status">
+                                                            <strong className="mr-1">Allocation unavailable</strong>
+                                                            {maxAllocation.message || "No quantity or CIF remains for the selected mode."}
+                                                        </div> : <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                                            <div className="flex min-w-[200px] flex-1 items-center gap-1 sm:min-w-[200px]">
+                                                                <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    className="flex h-11 flex-1 rounded border border-input bg-card px-2 py-1 text-base outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring sm:h-7 sm:px-1.5 sm:py-0.5 sm:text-[0.78rem]"
+                                                                    value={currentAllocation?.qty || ""}
+                                                                    onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                                                                    placeholder="Qty"
+                                                                    step="1"
+                                                                    min="0"
+                                                                    max={maxAllocation.qty}
+                                                                    title={`Max: ${maxAllocation.qty}`}
+                                                                />
+                                                                <button
+                                                                    className="min-h-11 rounded border border-border bg-card px-2 py-1 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap sm:min-h-0 sm:px-1.5 sm:py-0.5"
+                                                                    type="button"
+                                                                    onClick={() => handleMaxQuantity(item)}
+                                                                    title={`Set to max: ${maxAllocation.qty}`}
+                                                                >Max</button>
+                                                            </div>
+
+                                                            <div className="flex min-w-[200px] flex-1 items-center gap-1 sm:min-w-[200px]">
+                                                                <label className="text-muted-foreground font-semibold whitespace-nowrap">Value:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    className="flex h-11 flex-1 rounded border border-input bg-card px-2 py-1 text-base outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring sm:h-7 sm:px-1.5 sm:py-0.5 sm:text-[0.78rem]"
+                                                                    value={currentAllocation?.cif_fc || ""}
+                                                                    onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                                    placeholder="Value"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    title={`Max: ${maxAllocation.value.toFixed(2)}`}
+                                                                />
+                                                                <button
+                                                                    className="min-h-11 rounded border border-border bg-card px-2 py-1 font-semibold text-muted-foreground cursor-pointer hover:bg-muted whitespace-nowrap sm:min-h-0 sm:px-1.5 sm:py-0.5"
+                                                                    type="button"
+                                                                    onClick={() => handleMaxValue(item)}
+                                                                    title={`Set to max: ${maxAllocation.value.toFixed(2)}`}
+                                                                >Max</button>
+                                                            </div>
+
+                                                            {/* Confirm button */}
+                                                            <button
+                                                                className={cn(
+                                                                    "rounded px-2.5 py-1 font-semibold whitespace-nowrap transition-all duration-200",
+                                                                    isReady
+                                                                        ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground cursor-pointer hover:opacity-90"
+                                                                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                                                                )}
+                                                                onClick={() => handleConfirmAllot(item)}
+                                                                disabled={!isReady || allocateMutation.isPending}
+                                                                title="Allocate this item"
+                                                            >
+                                                                {allocateMutation.isPending && allocateMutation.variables?.item?.id === item.id ? (
+                                                                    <span className="inline-block size-2.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                                                                ) : (
+                                                                    'Confirm'
+                                                                )}
+                                                            </button>
+                                                        </div>}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            });
+                        })()}
                     </div>
 
                     {tableLoading && (
@@ -1070,29 +1272,25 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         </div>
                     )}
 
-                    {!tableLoading && availableItems.length === 0 && (
-                        <div className="text-center py-5" style={{ border: '2px dashed var(--tb-border)', borderRadius: 'var(--tb-r-md)', background: 'var(--tb-card-bg)' }}>
-                            <Inbox className="size-4" aria-hidden="true" />
-                            <div className="font-semibold text-muted-foreground mb-1">No available license items found</div>
-                            <small className="text-muted">Try adjusting the filters above</small>
+                    {!tableLoading && availableItems.length === 0 && (availableLicensesData?.code === "ALLOTMENT_REQUIREMENT_EXHAUSTED" ? (
+                        <div className="flex min-h-12 items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 text-sm font-medium text-success" role="status">
+                            <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Allotment fully allocated — no further licence allocation is required.
                         </div>
-                    )}
+                    ) : (
+                        <div className="rounded-xl border-2 border-dashed border-border bg-card"><EmptyState icon={Inbox} title={isPlanMode ? "No applicable active plan" : "No available license items found"} description={isPlanMode ? "PLAN remains selected. Choose ACTUAL to allocate from live licence availability." : "Try adjusting the filters above"} /></div>
+                    ))}
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div className="flex justify-between items-center mt-3 pt-3" style={{ borderTop: '1px solid var(--tb-border)' }}>
-                            <div className="text-muted" style={{ fontSize: 14.5 }}>
+                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
+                            <div className="text-muted-foreground text-[14.5px]">
                                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
                             </div>
-                            <nav>
-                                <ul className="pagination mb-0">
-                                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                            <nav aria-label="Pagination">
+                                <ul className="flex items-center gap-1">
+                                    <li>
                                         <button
-                                            className="page-link"
-                                            style={{
-                                                borderRadius: '6px 0 0 6px',
-                                                fontWeight: '500'
-                                            }}
+                                            className="inline-flex h-8 items-center rounded-l-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                                             onClick={() => setCurrentPage(prev => prev - 1)}
                                             disabled={currentPage === 1}
                                         >
@@ -1108,15 +1306,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             (pageNum >= currentPage - 2 && pageNum <= currentPage + 2)
                                         ) {
                                             return (
-                                                <li key={pageNum} className={`page-item ${currentPage === pageNum ? 'active' : ''}`}>
+                                                <li key={pageNum}>
                                                     <button
-                                                        className="page-link"
-                                                        style={{
-                                                            background: currentPage === pageNum ? 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' : 'white',
-                                                            border: currentPage === pageNum ? 'none' : '1px solid var(--tb-border)',
-                                                            color: currentPage === pageNum ? 'white' : 'var(--primary-color)',
-                                                            fontWeight: '500'
-                                                        }}
+                                                        className={cn(
+                                                            "inline-flex h-8 min-w-[32px] items-center justify-center rounded border px-2 text-sm font-medium transition-colors",
+                                                            currentPage === pageNum
+                                                                ? "bg-gradient-to-br from-primary to-primary/70 border-transparent text-primary-foreground"
+                                                                : "border-border bg-card text-foreground hover:bg-muted"
+                                                        )}
                                                         onClick={() => setCurrentPage(pageNum)}
                                                     >
                                                         {pageNum}
@@ -1127,17 +1324,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             pageNum === currentPage - 3 ||
                                             pageNum === currentPage + 3
                                         ) {
-                                            return <li key={pageNum} className="page-item disabled"><span className="page-link">...</span></li>;
+                                            return <li key={pageNum}><span className="inline-flex h-8 items-center px-1 text-sm text-muted-foreground">…</span></li>;
                                         }
                                         return null;
                                     })}
-                                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                    <li>
                                         <button
-                                            className="page-link"
-                                            style={{
-                                                borderRadius: '0 6px 6px 0',
-                                                fontWeight: '500'
-                                            }}
+                                            className="inline-flex h-8 items-center rounded-r-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                                             onClick={() => setCurrentPage(prev => prev + 1)}
                                             disabled={currentPage === totalPages}
                                         >
@@ -1150,6 +1343,31 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
                 </div>
             </div>
+
+            {/* Secondary paperwork stays below allocation so the operational
+                grid is immediately visible without scrolling past a form. */}
+            {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
+                <section id="transfer-letter-section" className="mb-3 overflow-hidden rounded-lg border border-border bg-card">
+                    <button type="button" onClick={() => setTransferLetterOpen(open => !open)} aria-expanded={transferLetterOpen} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <span className="flex min-w-0 items-center gap-2"><FileText className="size-4 shrink-0 text-primary" aria-hidden="true" /><span><span className="block text-[13px] font-bold text-foreground">Generate Transfer Letter</span><span className="block text-[11px] text-muted-foreground">{allotment.allotment_details.length} selected licence{allotment.allotment_details.length === 1 ? "" : "s"} · expand to manage recipients</span></span></span>
+                        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", transferLetterOpen && "rotate-180")} aria-hidden="true" />
+                    </button>
+                    <div className={transferLetterOpen ? "border-t border-border/60" : "hidden"}>
+                    <TransferLetterForm
+                        instanceId={id}
+                        instanceType="allotment"
+                        items={allotment.allotment_details.map(detail => ({
+                            id: detail.id,
+                            license_number: detail.license_number || '-',
+                            cif_fc: detail.cif_fc || 0,
+                            purchase_status: detail.purchase_status || 'N/A'
+                        }))}
+                        onSuccess={(msg) => toast.success(msg)}
+                        onError={(msg) => toast.error(msg)}
+                    />
+                    </div>
+                </section>
+            )}
 
             {/* End scrollable content area */}
             </div>
@@ -1167,6 +1385,37 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     setPlanModal(null);
                     if (item) handleConfirmAllot(item);
                 }}
+            />
+
+            {/* Delete allocation confirm dialog */}
+            <ConfirmDialog
+                show={deleteConfirm.show}
+                title="Remove Allocation"
+                message="Are you sure you want to remove this allocation?"
+                severity="danger"
+                confirmText="Remove"
+                onConfirm={confirmDelete}
+                onCancel={() => setDeleteConfirm({ show: false, allotmentItemId: null })}
+            />
+
+            {/* Copy allotment confirm dialog */}
+            <ConfirmDialog
+                show={copyConfirm}
+                title="Copy Allotment"
+                message="Are you sure you want to create a copy of this allotment?"
+                severity="info"
+                confirmText="Copy"
+                onConfirm={async () => {
+                    setCopyConfirm(false);
+                    try {
+                        const response = await api.post(`allotments/${id}/copy/`);
+                        toast.success('Allotment copied successfully!');
+                        navigate(`/allotments/${response.data.id}/edit`);
+                    } catch (err: unknown) {
+                        toast.error((err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Failed to copy allotment');
+                    }
+                }}
+                onCancel={() => setCopyConfirm(false)}
             />
 
         </div>

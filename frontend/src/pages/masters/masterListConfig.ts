@@ -10,7 +10,7 @@
 export function getDefaultFilters(entityName: string): Record<string, string> {
   switch (entityName) {
     case "allotments":
-      return { type: "AT", is_boe: "False", is_allotted: "all" };
+      return { type: "AT", is_boe: "False", is_allotted: "True" };
     case "bill-of-entries":
       return { is_invoice: "False" };
     case "incentive-licenses":

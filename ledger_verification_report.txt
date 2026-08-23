@@ -1,0 +1,165 @@
+75 objects imported automatically (use -v 2 for details).
+
+======================================================================
+STEP 1: QUERY LICENSE
+======================================================================
+✓ Found license: 0310833996
+  - License ID: 2616
+  - License Type: DFIA
+  - License Date: 2020-01-08
+  - Expiry Date: 2026-09-26
+  - Exporter: PARLE PRODUCTS PRIVATE LIMITED
+
+======================================================================
+STEP 2: FETCH LEDGER DATASET
+======================================================================
+✓ Ledger dataset built successfully
+  - Total transactions: 5
+  - Display transactions: 4
+  - Opening display: False
+
+======================================================================
+LICENSE METADATA
+======================================================================
+License Number: 0310833996
+License Type: DFIA
+Exporter: PARLE PRODUCTS PRIVATE LIMITED
+License Date: 2020-01-08
+Expiry Date: 2026-09-26
+Port: NHAVA SHEVA SEA (INNSA1)
+First Purchase Date: 2026-06-17
+Has Purchase Bill: True
+Purchase Bill Status: WITH_PURCHASE_BILL
+
+======================================================================
+BALANCES AND TOTALS
+======================================================================
+Opening Balance: 192805.77 USD
+License Running Balance: 192834.54 USD
+Closing Balance: 192834.54 USD
+
+Total Purchases: 192806.27 USD
+Total Sales: 192777.50 USD
+Total Commission: 0.00 USD
+
+======================================================================
+SUMMARY BLOCK (Display Values)
+======================================================================
+Total Credit (displayed): 192806.27 USD
+Total Debit (displayed): 192777.50 USD
+Total Credit Bill (INR): 6524056.00 INR
+Total Debit Bill (INR): 4583719.00 INR
+Opening Balance: 192805.77 USD
+Opening in Debit: False
+Current Balance: 28.77 USD
+Total Profit/Loss: 1940337.00 INR
+Profit State: PROFIT
+
+======================================================================
+ALL TRANSACTIONS (Full List)
+======================================================================
+Total transactions in full list: 5
+
+[0] Transaction ID: 0
+    Date: 2020-01-08
+    Type: OPENING
+    Amount: 192805.77 USD
+    Bill Amount: None INR
+    Company: None (ID: None)
+    Party: None (ID: None)
+    Is Commission: False
+    Affects Balance: True
+    Running Balance: 192805.77 USD
+    Company Utilization: None
+    SION Norms: 
+
+[1] Transaction ID: 433
+    Date: 2026-06-17
+    Type: PURCHASE
+    Amount: 192806.27 USD
+    Bill Amount: 4583719.00 INR
+    Company: LABDHI GLOBAL LLP (ID: 881)
+    Party: EXIM SOLUTIONS (ID: 949)
+    Is Commission: False
+    Affects Balance: True
+    Running Balance: 385612.04 USD
+    Company Utilization: 192806.27
+    SION Norms: E5
+
+[2] Transaction ID: 434
+    Date: 2026-06-17
+    Type: SALE
+    Amount: 76320.50 USD
+    Bill Amount: 2901564.00 INR
+    Company: LABDHI GLOBAL LLP (ID: 881)
+    Party: SURYA CORPORATION (ID: 783)
+    Is Commission: False
+    Affects Balance: True
+    Running Balance: 309291.54 USD
+    Company Utilization: 116485.77
+    SION Norms: E5
+
+[3] Transaction ID: 435
+    Date: 2026-06-17
+    Type: SALE
+    Amount: 55809.00 USD
+    Bill Amount: 1668209.00 INR
+    Company: LABDHI GLOBAL LLP (ID: 881)
+    Party: SURYA CORPORATION (ID: 783)
+    Is Commission: False
+    Affects Balance: True
+    Running Balance: 253482.54 USD
+    Company Utilization: 60676.77
+    SION Norms: E5
+
+[4] Transaction ID: 436
+    Date: 2026-06-17
+    Type: SALE
+    Amount: 60648.00 USD
+    Bill Amount: 1954283.00 INR
+    Company: LABDHI GLOBAL LLP (ID: 881)
+    Party: SURYA CORPORATION (ID: 783)
+    Is Commission: False
+    Affects Balance: True
+    Running Balance: 192834.54 USD
+    Company Utilization: 28.77
+    SION Norms: E5
+
+
+======================================================================
+DISPLAY ANALYSIS
+======================================================================
+Full transactions count: 5
+  - OPENING: 1
+  - PURCHASE: 1
+  - SALE: 3
+  - COMMISSION: 0
+
+Display transactions count: 4
+  - PURCHASE: 1
+  - SALE: 3
+
+Opening Display: False
+
+--- Display Rule Analysis ---
+Has PURCHASE transactions: True
+Opening is NOT displayed because: PURCHASE exists (opening suppressed when purchase is present)
+
+======================================================================
+COMPANY UTILIZATIONS
+======================================================================
+Total companies: 1
+
+Company ID: 881
+  - Name: LABDHI GLOBAL LLP
+  - Utilization Balance: 28.77 USD
+
+
+======================================================================
+DATA QUALITY CHECKS
+======================================================================
+✓ No data quality issues found
+
+======================================================================
+VERIFICATION COMPLETE
+======================================================================

@@ -1,5 +1,5 @@
-import { useContext, useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { type FormEvent, useContext, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
     ShieldCheck,
@@ -13,6 +13,7 @@ import {
 
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
+import { getSafeRedirect } from "../utils/authRedirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,7 @@ export default function Login() {
     const searchParams = new URLSearchParams(location.search);
     const redirectParam = searchParams.get("redirect");
     const reason = searchParams.get("reason");
-    const from = location.state?.from || redirectParam || "/dashboard";
+    const from = getSafeRedirect(location.state?.from) ?? getSafeRedirect(redirectParam) ?? "/dashboard";
 
     const sessionMessage =
         reason === "idle" ? "You were logged out due to inactivity." :
@@ -52,7 +53,7 @@ export default function Login() {
         if (!authLoading && user) navigate(from, { replace: true });
     }, [user, authLoading, navigate, from]);
 
-    const submit = async (e) => {
+    const submit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");
         setSubmitting(true);
@@ -61,73 +62,94 @@ export default function Login() {
             loginSuccess({ access: data.access, refresh: data.refresh, user: data.user });
             navigate(from, { replace: true });
         } catch (err) {
-            setError(err.response?.data?.detail || "Invalid username or password.");
+            const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+            setError(detail || "Invalid username or password.");
             setSubmitting(false);
         }
     };
 
     return (
-        <div className="flex min-h-screen bg-background">
-            {/* Brand panel — hidden below lg */}
+        <div className="min-h-screen bg-muted/35 p-0 lg:p-4">
+            <main className="mx-auto flex min-h-screen max-w-[1440px] overflow-hidden bg-background lg:min-h-[calc(100vh-2rem)] lg:rounded-xl lg:border lg:border-border/80 lg:shadow-sm">
+            {/* Operations panel — hidden below lg */}
             <aside
-                className="relative hidden w-[440px] shrink-0 flex-col justify-between overflow-hidden p-12 text-white lg:flex"
-                style={{
-                    background:
-                        "linear-gradient(145deg, #1E3A5F 0%, var(--tb-brand-active) 55%, var(--tb-brand) 100%)",
-                }}
+                className="relative hidden w-[470px] shrink-0 flex-col overflow-hidden border-r border-primary-foreground/10 bg-primary text-primary-foreground lg:flex"
                 aria-hidden="true"
             >
-                {/* Decorative blobs */}
-                <div className="pointer-events-none absolute -right-28 -top-28 size-96 rounded-full bg-white/[0.06]" />
-                <div className="pointer-events-none absolute -bottom-20 -left-20 size-72 rounded-full bg-white/[0.04]" />
+                <div
+                    className="pointer-events-none absolute inset-0 opacity-[0.08]"
+                    style={{
+                        backgroundImage:
+                            "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
+                        backgroundSize: "28px 28px",
+                    }}
+                />
 
-                <div className="relative z-10 flex items-center gap-3 text-lg font-semibold tracking-tight">
-                    <span className="flex size-10 items-center justify-center rounded-xl border border-white/20 bg-white/15 backdrop-blur-sm">
-                        <ShieldCheck className="size-5" />
-                    </span>
-                    License Manager
+                <div className="relative z-10 flex-shrink-0 p-9 pb-0">
+                    <div className="flex items-center gap-3">
+                        <span className="flex size-9 items-center justify-center rounded-lg border border-primary-foreground/25 bg-primary-foreground/10">
+                            <ShieldCheck className="size-4.5 text-white" />
+                        </span>
+                        <span className="text-[15px] font-semibold tracking-tight text-white">
+                            License Manager
+                        </span>
+                    </div>
                 </div>
 
-                <div className="relative z-10">
-                    <h2 className="mb-3 text-3xl font-bold leading-tight tracking-tight text-white">
-                        Trade compliance,<br />simplified.
+                <div className="relative z-10 flex flex-1 flex-col justify-center px-9">
+                    <div className="mb-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-foreground/75">
+                        <span className="size-1.5 rounded-full bg-emerald-400" />
+                        Trade Operations Platform
+                    </div>
+                    <h2 className="mt-4 text-[2rem] font-bold leading-[1.18] tracking-tight text-white">
+                        Your operational<br />
+                        <span className="text-primary-foreground/70">control centre.</span>
                     </h2>
-                    <p className="max-w-sm text-[15px] leading-relaxed text-white/70">
-                        Manage EPCG, advance licenses, BOE entries, allotments,
-                        and SION norms in one unified platform.
+                    <p className="mt-4 max-w-[310px] text-[13px] leading-relaxed text-primary-foreground/70">
+                        Work confidently across licences, BOE records, allotments,
+                        utilization, and SION compliance from one secure workspace.
+                    </p>
+
+                    <ul className="mt-8 flex flex-col gap-2.5">
+                        {FEATURES.map((f) => (
+                            <li key={f} className="flex items-center gap-3 text-[13px] text-white/80">
+                                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-foreground/15">
+                                    <svg className="size-2.5 text-white" viewBox="0 0 10 8" fill="none">
+                                        <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </span>
+                                {f}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="relative z-10 flex-shrink-0 border-t border-primary-foreground/10 px-9 py-5">
+                    <p className="text-[11px] text-white/40">
+                        Secure access · Role-based permissions enabled
                     </p>
                 </div>
-
-                <ul className="relative z-10 flex flex-col gap-2.5">
-                    {FEATURES.map((f) => (
-                        <li key={f} className="flex items-center gap-2.5 text-[13px] text-white/85">
-                            <span className="size-1.5 shrink-0 rounded-full bg-white/60" />
-                            {f}
-                        </li>
-                    ))}
-                </ul>
             </aside>
 
-            {/* Form panel */}
-            <div className="flex flex-1 items-center justify-center px-6 py-8">
+            <section className="flex flex-1 flex-col items-center justify-center bg-background px-5 py-8 sm:px-8 lg:px-12">
                 <motion.div
-                    className="w-full max-w-sm"
-                    initial={reduce ? false : { opacity: 0, y: 10 }}
+                    className="w-full max-w-[430px]"
+                    initial={reduce ? false : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 >
-                    {/* Header */}
-                    <div className="mb-8 text-center">
-                        <div className="mx-auto mb-4 flex size-13 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
-                            <ShieldCheck className="size-6" />
+                    <div className="border-b border-border pb-7">
+                        <div className="mb-7">
+                            <div className="mb-4 flex size-10 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
+                                <ShieldCheck className="size-5" />
+                            </div>
+                            <h1 className="text-[1.5rem] font-bold leading-tight tracking-tight text-foreground">
+                                Welcome back
+                            </h1>
+                            <p className="mt-1.5 text-sm text-muted-foreground">
+                                Sign in to continue to License Manager
+                            </p>
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                            Welcome back
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Sign in to your account
-                        </p>
-                    </div>
 
                     {/* Session alert */}
                     {sessionMessage && (
@@ -185,6 +207,12 @@ export default function Login() {
                             </div>
                         </div>
 
+                        <div className="-mt-2 text-right">
+                            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+                                Forgot password?
+                            </Link>
+                        </div>
+
                         <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
                             {submitting ? (
                                 <>
@@ -199,12 +227,14 @@ export default function Login() {
                             )}
                         </Button>
                     </form>
+                    </div>
 
-                    <p className="mt-7 text-center text-[11.5px] text-muted-foreground/70">
-                        License Manager · Built by Hardik Sottany
+                    <p className="mt-5 text-center text-[11px] text-muted-foreground">
+                        License Manager · Secure sign-in
                     </p>
                 </motion.div>
-            </div>
+            </section>
+            </main>
         </div>
     );
 }

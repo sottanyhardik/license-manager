@@ -1,0 +1,87 @@
+Skeptic independent re-verification of SEC-02
+==============================================
+
+Command run:
+  cd backend && source ../.venv/bin/activate && \
+  python -m pytest ../audit_evidence/pass1/SEC-02/skeptic_check_test.py -v -s --no-cov
+
+Ran against pytest-django's throwaway test database (test_lmanagement),
+created and destroyed for this run only. The real local "lmanagement"
+database (228 real license rows) was never touched or queried by this check.
+
+Full captured output:
+--------------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collected 1 item
+
+audit_evidence/pass1/SEC-02/skeptic_check_test.py::test_zero_role_authenticated_user_can_read_company_banking_fields
+Creating test database for alias 'default'...
+  Populated 0 SchemeCode row(s) and 0 NotificationNumber row(s); backfilled FK columns on existing licenses.
+user roles = []
+GET /api/masters/companies/ -> status 200
+BODY KEYS (results[0]) = ['account_type', 'address_line_1', 'address_line_2', 'bank_account_number', 'bank_name', 'bill_colour', 'contact_person', 'created_by', 'created_on', 'email', 'gst_number', 'id', 'iec', 'ifsc_code', 'logo', 'modified_by', 'modified_on', 'name', 'pan', 'phone_number', 'signature', 'stamp']
+bank_account_number = 000123456789
+bank_name = HDFC Bank
+ifsc_code = HDFC0000123
+pan = ABCDE1234F
+gst_number = 27ABCDE1234F1Z5
+CONFIRMED: zero-role authenticated user received full banking/PAN/GST fields via GET /api/masters/companies/
+PASSED
+Destroying test database for alias 'default'...
+
+1 passed, 1 warning in 4.02s
+--------------------------------------------------------------------------
+
+Interpretation
+--------------
+- The test user has ZERO group memberships (get_role_codes() == []) --
+  stronger than the claim's example (a user whose ONLY role is
+  INCENTIVE_LICENSE_VIEWER). This rules out any role-specific carve-out
+  logic being the reason the original finding's exploit works.
+- The request goes through the REAL URLconf
+  (backend/lmanagement/urls.py -> api/masters/ -> apps.core.urls ->
+  router.register(r'companies', CompanyViewSet)), the REAL CompanyViewSet
+  (backend/apps/core/views/views.py:188, built by
+  MasterViewSet.create_viewset with no permission_classes override), the
+  REAL MasterDataPermission (backend/apps/core/views/master_view.py:43-52),
+  and the REAL CompanySerializer (backend/apps/core/serializers/models.py:23-26,
+  fields = "__all__"). Nothing was mocked or monkeypatched.
+- Result: HTTP 200, response body includes bank_account_number, bank_name,
+  ifsc_code, pan, and gst_number verbatim for the seeded company.
+
+Independent source-code confirmation (read directly, not trusted from the
+original finding's evidence text):
+- backend/apps/core/serializers/models.py:23-26 -- confirmed CompanySerializer
+  Meta.fields = "__all__".
+- backend/apps/core/views/master_view.py:43-52 -- confirmed
+  MasterDataPermission.has_permission returns True for any authenticated
+  user when request.method in permissions.SAFE_METHODS, with NO call to
+  has_any_role for reads (only for writes, gated on is_superuser).
+- backend/apps/core/views/master_view.py:81-97 -- confirmed MasterViewSet's
+  default permission_classes = [MasterDataPermission], and the comment
+  "Individual viewsets override this with role-specific permission
+  classes" -- CompanyViewSet does NOT do so.
+- backend/apps/core/views/views.py:188-215 -- confirmed
+  CompanyViewSet = MasterViewSet.create_viewset(CompanyModel,
+  CompanySerializer, config=...) with no permission_classes key/override
+  anywhere in the config dict.
+- backend/apps/core/urls.py:21 and backend/lmanagement/urls.py:51 --
+  confirmed route wiring to /api/masters/companies/.
+- backend/apps/core/models.py:224-264 -- confirmed CompanyModel field
+  definitions for pan, gst_number, bank_account_number, bank_name,
+  ifsc_code.
+- backend/apps/accounts/permissions.py -- confirmed the contrasting pattern:
+  other permission classes in this file (used by License/BOE/Trade/Report
+  endpoints) DO call request.user.has_any_role(...) for read access (e.g.
+  lines 24, 51, 95, 129, 140, 159, 181, 255), supporting the claim's
+  contextual point that MasterDataPermission is an outlier in not doing so
+  for a sensitive-data model.
+
+Verdict: CONFIRMED. Independently reproduced end-to-end via a real HTTP
+request through the actual URLconf/view/serializer/permission stack, and
+independently re-read every cited source location. No contradicting
+evidence found (no additional permission_classes override, no field
+exclusion, no has_any_role gate anywhere in the request path for GET on
+this endpoint).

@@ -1,0 +1,160 @@
+FILE|CLASS|FUNCTION|CALLERS|INPUTS|OUTPUTS|DATABASE|BUSINESS_RULE|CALCULATION|RISK|STATUS
+backend/apps/license/services/norm_plan.py|None|detect_norm|auto_plan,e1_auto_plan,PlannerFactory.run|license_obj|str (norm code)|ImportLicense|Norm selection priority (E132>E126>E5>E1)|Classification logic|NONE|CANONICAL
+backend/apps/license/services/norm_plan.py|None|effective_plan_for_license|Item Pivot Report,License Overview|license_obj,balance_cif|source,plan_map dict|NONE (reads plans)|Manual > Norm > Remaining composition|Plan merging and allotment deduction|NONE|CANONICAL
+backend/apps/license/services/norm_plan.py|None|norm_plan_for_license|balance_calculator,planning forms|license_obj,balance_cif|plan_map dict|NONE (reads)|Delegates to norm engine|Per-norm planning|NONE|CANONICAL
+backend/apps/license/services/planner_factory.py|None|_load_defaults|supported_norms,is_supported,run|NONE|None (mutates registry)|NONE|Lazy registry initialization|Registration of E1/E5/E126/E132/A3627|Circular import risk|HELPER
+backend/apps/license/services/planner_factory.py|PlannerFactory|register|auto-plan setup,tests|norm_code,callable|None (mutates registry)|NONE|Extensibility point|Registry mutation|Allows overriding planners|INFRASTRUCTURE
+backend/apps/license/services/planner_factory.py|PlannerFactory|supported_norms|API responses,UI norm selector|NONE|list[str]|NONE|Returns registered norm codes|Registry query|O(n) sort|INFRASTRUCTURE
+backend/apps/license/services/planner_factory.py|PlannerFactory|is_supported|auto_plan views,allocation validation|norm_code|bool|NONE|Checks norm coverage (BL-PLAN-02 gap for PP)|Registry lookup|NONE|INFRASTRUCTURE
+backend/apps/license/services/planner_factory.py|PlannerFactory|run|auto_plan,auto_plan_all,e1_auto_plan views|license_obj,norm_code|PlanResult(lines,remaining_cif)|NONE|Norm dispatch with error handling|Delegates to norm engine|Propagates underlying planner errors|INFRASTRUCTURE
+backend/apps/license/services/e1_auto_plan.py|None|compute_e1_auto_plan|PlannerFactory.run,auto_plan_all|license_obj|lines list,remaining_cif float|LicenseItemPlan|E1 category waterfall allocation|Calls plan_e1_items,save_plan_lines_for_license|NONE|CANONICAL
+backend/apps/license/services/e1_plan.py|None|_quantize|E1 internal|Decimal value|Decimal (quantized)|NONE|Decimal precision control|Round to 2 decimal places|NONE|HELPER
+backend/apps/license/services/e1_plan.py|None|_norm|classify_e1_item|str|str (normalized)|NONE|String normalization for matching|Strip whitespace|NONE|HELPER
+backend/apps/license/services/e1_plan.py|None|_hsn_digits|classify_e1_item|hsn_code|first 2 chars|NONE|HS code extraction|String slicing|NONE|HELPER
+backend/apps/license/services/e1_plan.py|None|classify_e1_item|plan_e1_items|item_name,hs_code,description|E1 category code or empty|NONE|E1 category classification (7 categories)|Code-based matching (not price-based)|NONE|CANONICAL
+backend/apps/license/services/e1_plan.py|None|_generic_stage|plan_e1_items|items,balance_cif,category|E1PlanLine list|NONE|Waterfall stage for one category|Proportional allocation within category|NONE|HELPER
+backend/apps/license/services/e1_plan.py|None|plan_e1_items|compute_e1_auto_plan,norm_plan_for_license,Item Pivot Report|items list,balance_cif|E1PlanResult with lines|NONE|E1 category waterfall (7-stage)|Group by category, allocate proportionally, compute unit price|NONE|CANONICAL
+backend/apps/license/services/e1_plan.py|None|_run_generic|plan_e1_items|items,allocated_cif,category|allocated CIF amount|NONE|Allocate CIF to one category|Proportional by quantity|NONE|HELPER
+backend/apps/license/services/e5_auto_plan.py|None|_is_milk_group|compute_e5_auto_plan|items list|bool|NONE|Detect if items are milk-group|HSN matching|NONE|HELPER
+backend/apps/license/services/e5_auto_plan.py|None|_milk_category|compute_e5_auto_plan|hsn_code|Milk_40/Milk_60 or empty|NONE|Assign milk split category|40/60 split logic|NONE|HELPER
+backend/apps/license/services/e5_auto_plan.py|None|compute_e5_auto_plan|PlannerFactory.run,auto_plan_all|license_obj|lines list,remaining_cif float|LicenseItemPlan|E5 category waterfall with milk split|Calls plan_e5_items,save_plan_lines_for_license|NONE|CANONICAL
+backend/apps/license/services/e5_auto_plan.py|None|_add_group|compute_e5_auto_plan|group,result,items,allocated|None (mutates result)|NONE|Add one item group to result|Aggregates quantities for group|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|_quantize|E5 internal|Decimal|Decimal|NONE|Precision control|Round to 2dp|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|_norm|classify_e5_item|str|str|NONE|String normalization|Strip whitespace|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|classify_e5_item|plan_e5_items|item_name,hs_code,description|E5 category or empty|NONE|E5 category classification|Calls classify_e5_hsn,is_wheat_flour|NONE|CANONICAL
+backend/apps/license/services/e5_plan.py|None|classify_e5_hsn|classify_e5_item|hsn_code|E5 category or None|NONE|HSN-to-category mapping|String matching (1005,1006,1512,1513,0401)|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|is_wheat_flour|classify_e5_item|hsn_code,item_name|bool|NONE|Detect wheat flour vs grain|HSN 1101 + 'flour' keyword|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|_fixed_rate_line|plan_e5_items|category,avail_qty,unit_price,planned_cif|dict with planned values|NONE|Build fixed-rate plan line|No calculation (values passed in)|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|plan_e5_items|compute_e5_auto_plan,norm_plan_for_license,Item Pivot Report|items list,balance_cif|E5PlanResult|NONE|E5 category waterfall with milk split|Category grouping + milk_planner.plan_milk() for milk group|NONE|CANONICAL
+backend/apps/license/services/e5_plan.py|None|_emit|plan_e5_items|category,result,items,allocated|allocated CIF|NONE|Emit plan lines for category|Handles Oils and non-milk categories|NONE|HELPER
+backend/apps/license/services/e5_plan.py|None|_run_oils|plan_e5_items|items,allocated_cif,config|allocated CIF|NONE|Allocate oils category|May call milk_planner.split_milk_0404 if milk detected|NONE|HELPER
+backend/apps/license/services/e126_auto_plan.py|None|_r2|compute_e126_auto_plan|Decimal|Decimal|NONE|Round to 2 decimals|Quantize operation|NONE|HELPER
+backend/apps/license/services/e126_auto_plan.py|None|_floor_qty|compute_e126_auto_plan|Decimal|Decimal|NONE|Floor to integer|DEFECT: result not used to recompute planned_cif|BL-PLAN-01 defect (cif/qty mismatch)|HELPER
+backend/apps/license/services/e126_auto_plan.py|None|compute_e126_auto_plan|PlannerFactory.run,auto_plan_all|license_obj|lines list,remaining_cif|LicenseItemPlan|E126 veg oils (PKO/Olive-Oil split)|Calls plan_e126_per_item_split,save_plan_lines_for_license|BL-PLAN-01: planned_cif != floored_qty * unit_price|CANONICAL_DEFECTIVE
+backend/apps/license/services/e126_plan.py|None|_norm_text|E126 internal|str|str|NONE|Normalize text|Uppercase + strip|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_norm_hsn|E126 internal|hsn_code|str|NONE|Normalize HSN|String format|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_hsn_matches|E126 internal|hsn,pattern|bool|NONE|Check HSN substring match|String matching|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_has_word|E126 internal|text,word|bool|NONE|Check word presence (case-insensitive)|Regex word boundary|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_hsn_or_desc|E126 internal|record,hsn,words|bool|NONE|Check HSN or description match|Dual-mode matching|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_rule_nuts|classify_e126_record|record|bool|NONE|Detect nuts (planning item 1)|HSN 0802 + keywords|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_is_pko_signal|classify_e126_record|record|bool|NONE|Detect PKO signal|Keyword 'Palm' or 'PKO'|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_is_olive_oil_signal|classify_e126_record|record|bool|NONE|Detect Olive Oil signal|Keyword 'Olive' + HSN 1513|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_rule_priority_2|classify_e126_record|record|planning_item_id or None|NONE|Classify as RBD or Almond (priority 2)|HSN matching + keyword logic|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|classify_e126_record|plan_e126_per_item_split|record dict|ClassificationResult|NONE|Classify import item for E126 (5 planning items + split)|Determines Planning Item and split signal|NONE|CANONICAL
+backend/apps/license/services/e126_plan.py|None|_d|E126 internal|dict, key, default|value|NONE|Safe dict access|dict.get()|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_allocate_step|E126 internal|items,cif,rate|allocated CIF|NONE|Allocate one step|Round by unit price|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_split_pko_olive_record|E126 internal|record,available_qty,unit_price|dict with splits|NONE|Execute 50/50 PKO/Olive split|Halve quantities and values|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_allocate_buckets|E126 internal|buckets,balance_cif,rates|allocated CIF dict|NONE|Allocate CIF across multiple items|Waterfall by rate and quantity|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_agg_from|E126 internal|dict,keys|aggregated value|NONE|Sum values for keys|Dictionary aggregation|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_add|E126 internal|dict,key,value|None (mutates)|NONE|Add to accumulator|dict += operation|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_classify_records|plan_e126_per_item|import_item|list of classification results|NONE|Classify all records in import item|Calls classify_e126_record for each|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_rebalance_pko_olive_wastage|plan_e126_per_item|classifications,available_qty|rebalanced list|NONE|Rebalance fractional splits|Adjusts quantities to prevent rounding loss|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_classify_and_allocate|plan_e126_per_item|import_item,balance_cif|allocation dict|NONE|Classify + allocate one item|Full item-to-plan mapping|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_effective_rate|E126 internal|planning_item_id,rates|unit price|NONE|Get rate for planning item|Rate lookup|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|_blended_pko_olive_rate|E126 internal|pko_rate,olive_rate,pko_qty,olive_qty|blended rate|NONE|Compute weighted average rate|Weighted average calculation|NONE|HELPER
+backend/apps/license/services/e126_plan.py|None|plan_e126_per_item|norm_plan_for_license|import_item,balance_cif|plan dict|NONE|Generate E126 plan for 1 item (deterministic)|Calls _classify_and_allocate|NONE|CANONICAL
+backend/apps/license/services/e126_plan.py|None|plan_e126_per_item_split|compute_e126_auto_plan|import_item,balance_cif|plan dict with splits|NONE|Generate E126 plan with fractional splits|Calls classify_e126_record,_split_pko_olive_record|Produces fractional quantities before flooring|CANONICAL
+backend/apps/license/services/e126_plan.py|None|plan_e126|tests only|import_items,balance_cif|full plan dict|NONE|Batch plan E126 items|Calls plan_e126_per_item for each|NONE|TEST_HELPER
+backend/apps/license/services/e132_auto_plan.py|None|_r2|compute_e132_auto_plan|Decimal|Decimal|NONE|Round to 2 decimals|Quantize|NONE|HELPER
+backend/apps/license/services/e132_auto_plan.py|None|_floor_qty|compute_e132_auto_plan|Decimal|Decimal|NONE|Floor to integer|IDENTICAL DEFECT to E126|BL-PLAN-01 (cif/qty mismatch)|HELPER
+backend/apps/license/services/e132_auto_plan.py|None|compute_e132_auto_plan|PlannerFactory.run,auto_plan_all|license_obj|lines list,remaining_cif|LicenseItemPlan|E132 oils + dairy (PKO/Cheese 40/60 split)|Calls plan_e132_per_item_split,save_plan_lines_for_license|BL-PLAN-01: Identical to E126 defect|CANONICAL_DEFECTIVE
+backend/apps/license/services/e132_plan.py|None|_norm_text|E132 internal|str|str|NONE|Text normalization|Uppercase|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_norm_hsn|E132 internal|hsn|str|NONE|HSN normalization|Format|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_hsn_matches|E132 internal|hsn,pattern|bool|NONE|HSN substring match|String matching|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_has_word|E132 internal|text,word|bool|NONE|Word presence check|Regex|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_hsn_or_desc|E132 internal|record,hsn,words|bool|NONE|HSN or description match|Dual-mode|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_rule_nuts|classify_e132_record|record|bool|NONE|Detect nuts (planning item 1)|HSN 0802|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_rule_yeast|classify_e132_record|record|bool|NONE|Detect yeast (planning item 2)|HSN 2102 + keywords|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_is_explicit_cheese|E132 internal|description|bool|NONE|Detect explicit cheese mention|Keyword 'CHEESE'|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_is_cheese_strict|E132 internal|record|bool|NONE|Strict cheese detection|HSN 0406 + keywords|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_is_rbd|E132 internal|record|bool|NONE|Detect RBD oil|Keyword 'RBD'|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_is_pko_signal|classify_e132_record|record|bool|NONE|Detect PKO signal|Keyword 'PALM'|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_rule_priority_3|classify_e132_record|record|planning_item_id or None|NONE|Classify RBD/Almond (priority 3)|Keyword matching|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_rule_aluminium|classify_e132_record|record|bool|NONE|Detect aluminium foil|HSN 7607 + keywords|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|classify_e132_record|plan_e132_per_item_split|record dict|ClassificationResult|NONE|Classify import for E132 (6 planning items + split)|Determines item and split signal|NONE|CANONICAL
+backend/apps/license/services/e132_plan.py|None|_d|E132 internal|dict,key,default|value|NONE|Safe dict access|dict.get()|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_allocate_step|E132 internal|items,cif,rate|allocated|NONE|Allocate one step|Round by rate|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_split_veg_oil_record|E132 internal|record,avail_qty|split dict|NONE|Execute 40/60 veg oil split|Proportional split|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_allocate_buckets|E132 internal|buckets,balance_cif,rates|allocated dict|NONE|Allocate CIF across items|Waterfall|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_agg_from|E132 internal|dict,keys|sum|NONE|Sum values|Aggregation|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_add|E132 internal|dict,key,value|None (mutates)|NONE|Add to accumulator|dict += operation|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_classify_records|plan_e132_per_item|import_item|classification list|NONE|Classify all records in item|Calls classify_e132_record|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_rebalance_veg_oil_wastage|plan_e132_per_item|classifications,avail_qty|rebalanced list|NONE|Rebalance fractional splits|Adjust quantities|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_classify_and_allocate|plan_e132_per_item|import_item,balance_cif|allocation dict|NONE|Classify + allocate|Full mapping|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_effective_rate|E132 internal|planning_item_id,rates|unit_price|NONE|Get rate|Lookup|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|_blended_veg_oil_rate|E132 internal|oil_rates,qty|blended rate|NONE|Weighted rate|Weighted average|NONE|HELPER
+backend/apps/license/services/e132_plan.py|None|plan_e132_per_item|norm_plan_for_license|import_item,balance_cif|plan dict|NONE|Generate E132 plan for 1 item (deterministic)|Calls _classify_and_allocate|NONE|CANONICAL
+backend/apps/license/services/e132_plan.py|None|plan_e132_per_item_split|compute_e132_auto_plan|import_item,balance_cif|plan dict|NONE|Generate E132 plan with fractional splits|Calls classify_e132_record,_split_veg_oil_record|Produces fractional quantities before flooring|CANONICAL
+backend/apps/license/services/e132_plan.py|None|plan_e132|tests only|import_items,balance_cif|full plan dict|NONE|Batch plan E132 items|Calls plan_e132_per_item for each|NONE|TEST_HELPER
+backend/apps/license/services/a3627_auto_plan.py|None|_matched_ids_by_category|compute_a3627_auto_plan|import_items,category|list of import item ids|NONE|Filter items by category|Category matching|NONE|HELPER
+backend/apps/license/services/a3627_auto_plan.py|None|_rutile_avg_import_price|compute_a3627_auto_plan|import_items|Decimal|NONE|Calculate average rutile import price|Group by HSN, compute weighted average|NONE|HELPER
+backend/apps/license/services/a3627_auto_plan.py|None|_allocate_fixed_rate|compute_a3627_auto_plan|items,balance_cif,rates|allocated dict|NONE|Allocate at fixed rates|Waterfall allocation|NONE|HELPER
+backend/apps/license/services/a3627_auto_plan.py|None|compute_a3627_auto_plan|PlannerFactory.run,auto_plan_all|license_obj|lines list,remaining_cif|LicenseItemPlan|A3627 ores/minerals (rutile,etc.) fixed-rate|Calls _allocate_fixed_rate,save_plan_lines_for_license|NEW ENGINE (added most recently)|CANONICAL_INPROGRESS
+backend/apps/license/services/plan_enforcement.py|None|_item_pk|plan_enforcement internal|import_item_id|tuple|NONE|Normalize item ID to tuple|Type conversion|NONE|HELPER
+backend/apps/license/services/plan_enforcement.py|None|_normalize_item_ids|plan_enforcement internal|list[any]|list[tuple]|NONE|Normalize list of item IDs|Calls _item_pk for each|NONE|HELPER
+backend/apps/license/services/plan_enforcement.py|None|live_allotted_qty|License overview,balance reports|license_id|float|AllotmentItems|Get total allocated qty for license|SUM(allocated_quantity) for all items|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|live_allotted_value|License overview,balance reports|license_id|float|AllotmentItems|Get total allocated CIF for license|SUM(allocated_value) for all items|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|live_allotted_qty_for|Allocation forms,Item Pivot|import_item_id|float|AllotmentItems|Get allocated qty for one item|SUM for single item|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|live_allotted_value_for|Allocation forms,Item Pivot|import_item_id|float|AllotmentItems|Get allocated CIF for one item|SUM for single item|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|planned_totals_for|License overview,balance calc|license_id|qty,cif tuple|LicenseItemPlan|Get aggregate planned qty and CIF|SUM(planned_quantity),SUM(planned_cif_fc)|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|group_used_snapshot|allocation validation|license_id|dict|AllotmentItems,LicenseItemPlan|Get group allocation state|Per-group allocated values snapshot|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|save_plan_lines_for_license|All auto-plan compute functions|license_id,plan_lines,remaining_cif|None (creates LicenseItemPlan)|LicenseItemPlan|Create/update plan lines for license|Delete non-preserved lines, create fresh lines|BL-PLAN-01 DEFECT: remaining_cif_fc = planned_cif_fc verbatim (inherits mismatch)|CANONICAL_DEFECTIVE
+backend/apps/license/services/plan_enforcement.py|None|_baseline|save_plan_lines_for_license|plan_line dict|baseline snapshot|NONE|Extract baseline values from plan line|Copy key fields for baseline tracking|NONE|HELPER
+backend/apps/license/services/plan_enforcement.py|None|plan_status_for_ids|allocation form pre-fill|license_id,import_item_ids|dict of status dicts|LicenseItemPlan,AllotmentItems|Get plan status for batch of items|Calls plan_status_for for each|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|plan_status_for|allocation validation|license_id,import_item_id|status dict|LicenseItemPlan,AllotmentItems|Get plan/allocated/remaining for item|Sums, deductions, floor at 0|NONE|CANONICAL
+backend/apps/license/services/plan_enforcement.py|None|plan_status_for_items|compute_e1_auto_plan,compute_e5_auto_plan|license_id,import_item_ids|dict of status dicts|LicenseItemPlan,AllotmentItems|Batch version of plan_status_for|Used by auto-plan compute to merge with existing|NONE|CANONICAL
+backend/apps/license/services/plan_grouping.py|None|_normalize_text|plan_grouping internal|str|str|NONE|Text normalization|Lowercase|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|_description_of|plan_grouping internal|record|description str|NONE|Extract description|Record field access|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|_hsn_of|plan_grouping internal|record|hsn str|NONE|Extract HSN|Record field access|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|_item_names_of|plan_grouping internal|record|list[str]|NONE|Extract item names|Record field access|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|plan_group_key|merge_planned_import_items|record|group key str|NONE|Generate group key for record|Combines HSN, description, item names|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|merge_key|plan_grouping internal|key1,key2|merged key|NONE|Merge two group keys|Deterministic merge|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|merge_planned_import_items|auto-plan compute functions|import_items list|merged dict|NONE|Merge items into planning groups|Groups by norm classification|NONE|CANONICAL
+backend/apps/license/services/plan_grouping.py|None|merge_items_for_classification|plan normalization|import_items,norm|merged dict|NONE|Merge items for norm classification|Norm-specific grouping logic|NONE|CANONICAL
+backend/apps/license/services/plan_grouping.py|None|_raw_hsn_of|plan_grouping internal|record|hsn str|NONE|Extract raw HSN|Record field access|NONE|HELPER
+backend/apps/license/services/plan_grouping.py|None|existing_split_balances_for_groups|allocation validation|license_id,group_ids|split balance dict|LicenseItemPlan|Get existing split allocations|Groups planned lines by split signal|NONE|CANONICAL
+backend/apps/license/services/plan_grouping.py|None|validate_group_plan_lines|auto-plan compute functions|license_obj,group_id,plan_lines|is_valid bool,errors list|NONE|Validate plan lines (partial validation)|Checks unit_price <= ceiling + tolerance, total_qty <= avail + tolerance|DEFECT: Does NOT check planned_cif == qty*price (BL-PLAN-01)|CANONICAL
+backend/apps/license/services/plan_grouping.py|None|validate_fresh_plan_lines|allocation validation|fresh_lines,plan_lines|validation result|NONE|Validate fresh vs existing plan|Checks consistency between fresh and existing|NONE|CANONICAL
+backend/apps/license/services/plan_grouping.py|None|group_ids_of|plan utility|import_items,norm|group ids list|NONE|Get group IDs for items|Applies norm-specific grouping|NONE|CANONICAL
+backend/apps/license/services/milk_planner.py|None|_zero_result|split_milk_0404,plan_milk|NONE|empty result dict|NONE|Return zero result for no milk|Empty dict with zero allocations|NONE|HELPER
+backend/apps/license/services/milk_planner.py|None|split_milk_0404|plan_e5_items,plan_e5_items|avail_qty,balance_cif,config|milk split dict|NONE|Execute 40/60 milk split|Allocates 40% and 60% of CIF to two items|NONE|CANONICAL
+backend/apps/license/services/milk_planner.py|None|plan_milk|plan_e5_items,plan_e132_items|raw_milk_qty,balance_cif,config|milk plan dict|NONE|Allocate milk CIF to milk items|Category waterfall for milk|NONE|CANONICAL
+backend/apps/license/services/auto_plan_shared.py|None|ensure_plan_item_names|All auto-plan compute functions|license_obj|None (creates PlanningItemModel)|PlanningItemModel|Ensure all planning items exist|Creates missing items from norm definition|NONE|CANONICAL
+backend/apps/license/services/auto_plan_shared.py|None|_get_norm|auto_plan_shared internal|license_obj|norm code str|NONE|Extract norm from license|Calls detect_norm|NONE|HELPER
+backend/apps/license/services/auto_plan_shared.py|None|optimal_milk_split|auto-plan config|qty,cif,ceiling_price|optimal split config|NONE|Compute optimal 40/60 split config|Optimizes within constraints|NONE|CANONICAL
+backend/apps/license/services/plan_reporting.py|None|_build_map|plan_map_for_license|license_id|plan dict|NONE|Build plan map for license|Merges manual and norm plans|NONE|HELPER
+backend/apps/license/services/plan_reporting.py|None|plan_map_for_license|Item Pivot Report,Excel export|license_id|plan dict|NONE|Get plan map for reporting|Combines effective_plan_for_license and live allotments|NONE|CANONICAL
+backend/apps/license/services/plan_reporting.py|None|plan_map_for_import_items|Planned Report View|import_item_ids|plan dict|NONE|Get plan map for items|Batch version|NONE|CANONICAL
+backend/apps/license/services/plan_utilization.py|None|_dec|plan_utilization_rows|Decimal|str|NONE|Format decimal for display|To string|NONE|HELPER
+backend/apps/license/services/plan_utilization.py|None|plan_utilization_rows|Balance Excel export,Dashboard|license_id|utilization rows list|NONE|Generate plan utilization rows for export|Row data for utilization section|NONE|CANONICAL
+backend/apps/license/services/planning_allocation.py|None|d|allocation utility|dict,key,default|value|NONE|Safe dict access|dict.get()|NONE|HELPER
+backend/apps/license/services/planning_allocation.py|None|quantize_money|allocation internal|Decimal|Decimal|NONE|Quantize money to 2 decimals|Quantize operation|NONE|HELPER
+backend/apps/license/services/planning_allocation.py|None|allocate_step|allocation algorithm|items,cif,rate|allocated CIF|NONE|Allocate CIF in one step|Waterfall step|NONE|CANONICAL
+backend/apps/license/services/exporters/planning_split_rows.py|None|_default_split_fill|split rows internal|NONE|color|NONE|Get default split fill color|Constant color|NONE|HELPER
+backend/apps/license/services/exporters/planning_split_rows.py|None|_default_split_font|split rows internal|NONE|font|NONE|Get default split font|Constant font|NONE|HELPER
+backend/apps/license/services/exporters/planning_split_rows.py|None|_default_split_badge_font|split rows internal|NONE|font|NONE|Get default badge font|Constant font|NONE|HELPER
+backend/apps/license/services/exporters/planning_split_rows.py|None|rows_for_splits|Balance Excel export|plan_lines|excel rows list|NONE|Generate Excel rows for split sub-items|Formats split data for Excel|NONE|CANONICAL
+backend/apps/license/services/exporters/planning_split_rows.py|None|write_split_sub_rows|Balance Excel export|worksheet,plan_data,start_row|None (writes to worksheet)|NONE|Write split rows to Excel|Excel row writing|NONE|CANONICAL
+backend/apps/license/services/exporters/planning_split_rows.py|None|render_plan_utilization_section|Balance Excel export|worksheet,license_id,start_row|None (writes to worksheet)|NONE|Render plan utilization section in Excel|Full section rendering|NONE|CANONICAL
+backend/apps/license/services/exporters/planning_split_rows.py|None|_hdr|split rows internal|text,color|cell style|NONE|Create header cell style|Cell formatting|NONE|HELPER
+backend/apps/license/services/exporters/planning_split_rows.py|None|_cell|split rows internal|value,font,fill|cell style|NONE|Create cell style|Cell formatting|NONE|HELPER
+backend/apps/license/views/item_plan.py|None|_validate_plan_line_cap|perform_create,perform_update|plan_line,license_obj|None (raises if invalid)|LicenseItemPlan|Validate plan line does not exceed caps|Calls validate_group_plan_lines|NONE|CANONICAL
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|perform_create|DRF POST|request,serializer|None (creates plan line)|LicenseItemPlan|Validate and persist new plan line|Calls _validate_plan_line_cap|NONE|CANONICAL
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|perform_update|DRF PATCH|request,serializer|None (updates plan line)|LicenseItemPlan|Validate and update plan line|Calls _validate_plan_line_cap|NONE|CANONICAL
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|norm_prefill|GET /norm-prefill/|request,license_id|Response|NONE (reads plans)|Get norm pre-filled plan lines|Calls effective_plan_for_license|NONE|CANONICAL
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|bulk_upsert|POST /bulk-upsert/|request,license_id|Response|LicenseItemPlan|Bulk create/update plan lines|Batch persistence|NONE|CANONICAL
+backend/apps/license/views/item_plan.py|None|_baseline|item_plan internal|plan_line|baseline dict|NONE|Extract baseline snapshot|Copies key fields|NONE|HELPER
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|e1_auto_plan|POST /e1-auto-plan/|request,license_id|Response|LicenseItemPlan|Generate E1 auto-plan (ignores detected norm)|Calls PlannerFactory.run with norm='E1'|NONE|CANONICAL
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|auto_plan|POST /auto-plan/|request,license_id|Response|LicenseItemPlan|Generate auto-plan (detects norm)|Calls detect_norm then PlannerFactory.run|Returns 'unknown norm' if not supported (BL-PLAN-02 gap for PP)|CANONICAL
+backend/apps/license/views/item_plan.py|LicenseItemPlanViewSet|auto_plan_all|POST /auto-plan-all/|request|Response|LicenseItemPlan|Generate auto-plan for all licenses|Batch operation (iterates all licenses)|NONE|CANONICAL
+backend/apps/license/views/planned_report.py|PlannedReportView|get|GET /planned-report/|request,license_id|Response|NONE (reads plans)|Get planned report data|Calls generate_report|NONE|CANONICAL
+backend/apps/license/views/planned_report.py|PlannedReportView|generate_report|planned_report view|license_obj,filters|report dict|NONE (reads plans)|Generate report data structure|Aggregates plan data for display|NONE|CANONICAL
+backend/apps/license/views/planned_report.py|PlannedReportView|export_to_excel|GET /planned-report/export/|request,license_id|Excel response|NONE (reads plans)|Export report to Excel|Calls create_sheet|NONE|CANONICAL
+backend/apps/license/views/planned_report.py|None|_safe|planned_report internal|value,default|safe value|NONE|Safe value access with default|Value coercion|NONE|HELPER
+backend/apps/license/views/planned_report.py|None|create_sheet|export_to_excel|workbook,data,licenses|None (writes to workbook)|NONE|Create Excel sheet for export|Excel generation|NONE|CANONICAL
+backend/apps/license/views/planned_report.py|PlannedReportViewSet|available_items|GET /available-items/|request,license_id|Response|ImportItem|Get available items for planning|Lists items for license|NONE|CANONICAL
+backend/apps/license/management/commands/plan_norms.py|None|_fmt_duration|plan_norms cmd|seconds|str|NONE|Format duration for display|Seconds to HH:MM:SS|NONE|HELPER
+backend/apps/license/management/commands/plan_norms.py|None|_is_fully_planned|plan_norms cmd|license_obj|bool|NONE|Check if license is fully planned|All items have plan lines|NONE|HELPER
+backend/apps/license/management/commands/plan_norms.py|None|_save_lines|plan_norms cmd|license_id,plan_lines|None (saves to DB)|LicenseItemPlan|Save plan lines (internal cmd)|Calls save_plan_lines_for_license|NONE|HELPER
+backend/apps/license/management/commands/plan_norms.py|Command|add_arguments|Django CLI|parser|None (mutates parser)|NONE|Add command-line arguments|Argument registration|NONE|HELPER
+backend/apps/license/management/commands/plan_norms.py|Command|handle|Django CLI|**options|None (persists plan)|LicenseItemPlan|Run batch planning command|Iterates licenses, calls auto-plan for each|NONE|CANONICAL

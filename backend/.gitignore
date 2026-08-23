@@ -29,6 +29,11 @@ local_settings.py
 # Media / static build outputs
 media/
 staticfiles/
+# WhiteNoise validates STATIC_ROOT at application startup.  Keep an empty
+# tracked directory while continuing to ignore collectstatic output.
+!staticfiles/
+staticfiles/*
+!staticfiles/.gitkeep
 static/
 
 # PyInstaller

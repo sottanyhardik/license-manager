@@ -22,7 +22,7 @@ Usage:
 import functools
 import hashlib
 import logging
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
 
 from django.conf import settings
 from django.core.cache import cache
@@ -31,6 +31,11 @@ from django.utils.encoding import force_bytes
 from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_key_hash(value: str) -> str:
+    """Return a short hash for cache keys; this is not used for security."""
+    return hashlib.md5(force_bytes(value), usedforsecurity=False).hexdigest()[:16]
 
 # ============================================================================
 # Cache Key Generators
@@ -59,7 +64,7 @@ def generate_cache_key(prefix: str, *args, **kwargs) -> str:
     key_string = "|".join(key_parts)
 
     # Hash for consistent length
-    key_hash = hashlib.md5(force_bytes(key_string)).hexdigest()[:16]
+    key_hash = _cache_key_hash(key_string)
 
     return f"{prefix}:{key_hash}"
 
@@ -90,7 +95,7 @@ def generate_view_cache_key(request: HttpRequest, view_name: str) -> str:
 
     # Hash params if too long
     if len(params_str) > 100:
-        params_hash = hashlib.md5(force_bytes(params_str)).hexdigest()[:16]
+        params_hash = _cache_key_hash(params_str)
         return f"view:{view_name}:user{user_id}:{params_hash}"
 
     return f"view:{view_name}:user{user_id}:{params_str}"
@@ -101,7 +106,7 @@ def generate_view_cache_key(request: HttpRequest, view_name: str) -> str:
 # ============================================================================
 
 
-def cache_view(timeout: int = 300, key_prefix: Optional[str] = None):
+def cache_view(timeout: int = 300, key_prefix: str | None = None):
     """
     Decorator for view-level caching of entire API responses.
 
@@ -134,21 +139,21 @@ def cache_view(timeout: int = 300, key_prefix: Optional[str] = None):
             # Try to get from cache
             cached_response = cache.get(cache_key)
             if cached_response is not None:
-                logger.debug(f"Cache HIT: {cache_key}")
+                logger.debug("Cache HIT: %s", cache_key)
                 # Ensure we return proper Response object
                 if isinstance(cached_response, dict):
                     return Response(cached_response)
                 return cached_response
 
             # Cache miss - execute view
-            logger.debug(f"Cache MISS: {cache_key}")
+            logger.debug("Cache MISS: %s", cache_key)
             response = view_func(request, *args, **kwargs)
 
             # Only cache successful responses
             if isinstance(response, Response) and 200 <= response.status_code < 300:
                 # Cache the data, not the Response object
                 cache.set(cache_key, response.data, timeout)
-                logger.debug(f"Cached response for {cache_key} (TTL: {timeout}s)")
+                logger.debug("Cached response for %s (TTL: %ss)", cache_key, timeout)
             elif isinstance(response, JsonResponse) and 200 <= response.status_code < 300:
                 cache.set(cache_key, response.content, timeout)
 
@@ -186,16 +191,16 @@ def cache_query(key_prefix: str, timeout: int = 900):
             # Try cache first
             cached_result = cache.get(cache_key)
             if cached_result is not None:
-                logger.debug(f"Query cache HIT: {cache_key}")
+                logger.debug("Query cache HIT: %s", cache_key)
                 return cached_result
 
             # Cache miss - execute function
-            logger.debug(f"Query cache MISS: {cache_key}")
+            logger.debug("Query cache MISS: %s", cache_key)
             result = func(*args, **kwargs)
 
             # Cache result
             cache.set(cache_key, result, timeout)
-            logger.debug(f"Cached query result for {cache_key} (TTL: {timeout}s)")
+            logger.debug("Cached query result for %s (TTL: %ss)", cache_key, timeout)
 
             return result
 
@@ -234,11 +239,11 @@ def cache_method(timeout: int = 300):
             # Try cache
             cached_result = cache.get(cache_key)
             if cached_result is not None:
-                logger.debug(f"Method cache HIT: {cache_key}")
+                logger.debug("Method cache HIT: %s", cache_key)
                 return cached_result
 
             # Execute method
-            logger.debug(f"Method cache MISS: {cache_key}")
+            logger.debug("Method cache MISS: %s", cache_key)
             result = method(self, *args, **kwargs)
 
             # Cache result
@@ -291,7 +296,7 @@ def invalidate_cache(pattern: str) -> int:
     try:
         # django-redis supports delete_pattern
         deleted_count = cache.delete_pattern(pattern)
-        logger.info(f"Invalidated {deleted_count} cache keys matching: {pattern}")
+        logger.info("Invalidated %s cache keys matching: %s", deleted_count, pattern)
         return deleted_count
     except AttributeError:
         # Fallback if delete_pattern not available
@@ -300,7 +305,7 @@ def invalidate_cache(pattern: str) -> int:
         return 1
 
 
-def invalidate_model_caches(model_name: str, instance_id: Optional[int] = None):
+def invalidate_model_caches(model_name: str, instance_id: int | None = None):
     """
     Invalidate all caches related to a model.
 
@@ -327,7 +332,7 @@ def invalidate_model_caches(model_name: str, instance_id: Optional[int] = None):
     for pattern in patterns:
         total_deleted += invalidate_cache(pattern)
 
-    logger.info(f"Invalidated {total_deleted} cache keys for {model_name}")
+    logger.info("Invalidated %s cache keys for %s", total_deleted, model_name)
     return total_deleted
 
 
@@ -364,9 +369,9 @@ def get_cache_stats() -> dict:
             'memory_used': info.get('used_memory_human', 'N/A'),
             'connected_clients': info.get('connected_clients', 0),
         }
-    except Exception as e:
-        logger.error(f"Failed to get cache stats: {e}")
-        return {'error': str(e)}
+    except Exception as exc:
+        logger.exception("Failed to get cache stats")
+        return {'error': str(exc)}
 
 
 def warm_cache(func: Callable, cache_key: str, timeout: int, *args, **kwargs):
@@ -384,7 +389,7 @@ def warm_cache(func: Callable, cache_key: str, timeout: int, *args, **kwargs):
     """
     result = func(*args, **kwargs)
     cache.set(cache_key, result, timeout)
-    logger.info(f"Warmed cache for {cache_key}")
+    logger.info("Warmed cache for %s", cache_key)
     return result
 
 
@@ -408,6 +413,7 @@ class cache_disabled:
         self.old_backend = settings.CACHES['default']['BACKEND']
         settings.CACHES['default']['BACKEND'] = 'django.core.cache.backends.dummy.DummyCache'
         cache._cache = cache._lib.get_cache(settings.CACHES['default'])
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         settings.CACHES['default']['BACKEND'] = self.old_backend

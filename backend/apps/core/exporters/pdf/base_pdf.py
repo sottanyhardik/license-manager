@@ -2,9 +2,11 @@
 Base PDF exporter class with common PDF generation functionality.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional, Tuple, Any
+from typing import Any
 
 from reportlab.lib.pagesizes import A4, landscape, portrait
 from reportlab.lib.units import inch
@@ -16,7 +18,7 @@ from ..base import BaseExporter
 @dataclass
 class PDFConfig:
     """Configuration for PDF generation."""
-    page_size: Tuple[float, float] = A4
+    page_size: tuple[float, float] = A4
     orientation: str = 'portrait'  # 'portrait' or 'landscape'
     margin_left: float = 30
     margin_right: float = 30
@@ -34,7 +36,7 @@ class BasePDFExporter(BaseExporter):
     Provides common functionality for creating PDF documents.
     """
 
-    def __init__(self, config: Optional[PDFConfig] = None, **kwargs):
+    def __init__(self, config: PDFConfig | None = None, **kwargs):
         """
         Initialize PDF exporter.
         

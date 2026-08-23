@@ -248,12 +248,12 @@ Severity: **H** = ship-stoppers / data-corruption / security, **M** = production
 
 | # | Sev | Category | Location | Issue | Fix |
 |---|---|---|---|---|---|
-| 1 | **H** | Security | `auto-deploy.sh:30–34` | Hardcoded password `"admin"` + sshpass for 3 prod servers, in git | Move to SSH keys; rotate password immediately |
+| 1 | **H** | Security | `scripts/deployment/auto-deploy.sh:30–34` | Hardcoded password `"admin"` + sshpass for 3 prod servers, in git | Move to SSH keys; rotate password immediately |
 | 2 | **H** | Security | `backend/core/views/throttle_status.py:217` | `ThrottleHealthView.permission_classes = []` — public, leaks throttle config | Gate to authenticated/staff |
 | 3 | **H** | Data integrity | `backend/license/signals.py:42–158` | `_update_all_import_items_available_value` recomputes all items on every license touch; silent failure on `compute_condition_pools` exceptions (lines 99–100) | Wrap in `transaction.on_commit`; log failures to Sentry; defer to Celery |
 | 4 | **H** | Data integrity | `backend/license/signals.py:332–379` | Cross-app signals use string sender refs; rename of any sender model = silent data corruption | Switch to direct imports; add integration test verifying handlers are wired |
 | 5 | **H** | External API safety | `backend/core/management/commands/sync_from_ge_server.py:268` | `# TODO: Implement actual GE server API calls` — stub in production | Validate or remove. If keeping, add schema validation on upstream responses |
-| 6 | **H** | Deployment | `auto-deploy.sh` (all) | Sequential deploy across 3 servers, no health check between, no rollback. Failed mid-way = split-state cluster | Add health check; rollback function; consider parallel deploy + CI gate |
+| 6 | **H** | Deployment | `scripts/deployment/auto-deploy.sh` (all) | Sequential deploy across 3 servers, no health check between, no rollback. Failed mid-way = split-state cluster | Add health check; rollback function; consider parallel deploy + CI gate |
 | 7 | **M** | Data integrity | `backend/bill_of_entry/models.py:42–58` | `company`, `port` use `on_delete=CASCADE` to high-value FKs | Switch to `PROTECT` or `SET_NULL`; add soft-delete |
 | 8 | **M** | Performance | `backend/license/serializers.py:157–187` | N+1 in `LicenseImportItemSerializer.get_items_detail()` — for 50 import items × 5 items each = 250 SELECTs per response | Move to view-level prefetch_related |
 | 9 | **M** | Performance | `backend/license/serializers.py:617–624` | `.filter().exists()` for booleans, 2× per object in list views | Annotate booleans via `Case/When` on queryset |
@@ -436,7 +436,7 @@ Phase 2 is design only — still no code changes. We block on your approval befo
 
 Independent of the broader refactor, these three should be patched on the current codebase ASAP:
 
-1. **Rotate the `"admin"` password and remove from `auto-deploy.sh`** — replace with SSH key auth.
+1. **Rotate the `"admin"` password and remove from `scripts/deployment/auto-deploy.sh`** — replace with SSH key auth.
 2. **Gate `ThrottleHealthView`** to authenticated/staff users.
 3. **Verify `backend/allotment/templatetags/app_tags.py:3` and the Django templates** — if dead, delete templatetag + templates folder; if live, fix the import.
 

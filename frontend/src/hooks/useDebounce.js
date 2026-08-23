@@ -15,7 +15,7 @@
  * }, [debouncedSearchTerm]);
  */
 
-import {useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 
 export const useDebounce = (value, delay = 300) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -51,36 +51,32 @@ export const useDebounce = (value, delay = 300) => {
  */
 
 export const useDebouncedCallback = (callback, delay = 300) => {
-    const [timeoutId, setTimeoutId] = useState(null);
+    const timeoutRef = useRef(null);
+    // Keep callback ref fresh without needing it in the useCallback deps
+    const callbackRef = useRef(callback);
+    useEffect(() => { callbackRef.current = callback; });
 
+    // Cleanup on unmount
     useEffect(() => {
-        // Cleanup on unmount
         return () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [timeoutId]);
+    }, []);
 
-    const debouncedCallback = (...args) => {
-        // Return a promise for async compatibility
+    const debouncedCallback = useCallback((...args) => {
         return new Promise((resolve, reject) => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
-
-            const newTimeoutId = setTimeout(async () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            timeoutRef.current = setTimeout(async () => {
+                timeoutRef.current = null;
                 try {
-                    const result = await callback(...args);
+                    const result = await callbackRef.current(...args);
                     resolve(result);
                 } catch (error) {
                     reject(error);
                 }
             }, delay);
-
-            setTimeoutId(newTimeoutId);
         });
-    };
+    }, [delay]); // only changes when delay changes
 
     return debouncedCallback;
 };

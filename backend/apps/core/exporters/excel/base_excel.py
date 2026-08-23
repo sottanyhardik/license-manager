@@ -2,9 +2,11 @@
 Base Excel exporter class with common Excel generation functionality.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional, Any
+from typing import Any
 
 import openpyxl
 from openpyxl.workbook import Workbook
@@ -19,7 +21,7 @@ class ExcelConfig:
     sheet_name: str = "Sheet1"
     title: str = ""
     author: str = ""
-    freeze_panes: Optional[str] = None  # e.g., "A2" to freeze first row
+    freeze_panes: str | None = None  # e.g., "A2" to freeze first row
 
 
 class BaseExcelExporter(BaseExporter):
@@ -29,7 +31,7 @@ class BaseExcelExporter(BaseExporter):
     Provides common functionality for creating Excel workbooks.
     """
 
-    def __init__(self, config: Optional[ExcelConfig] = None, **kwargs):
+    def __init__(self, config: ExcelConfig | None = None, **kwargs):
         """
         Initialize Excel exporter.
         
@@ -39,8 +41,8 @@ class BaseExcelExporter(BaseExporter):
         """
         super().__init__(**kwargs)
         self.config = config or ExcelConfig()
-        self.workbook: Optional[Workbook] = None
-        self.worksheet: Optional[Worksheet] = None
+        self.workbook: Workbook | None = None
+        self.worksheet: Worksheet | None = None
 
     def get_content_type(self) -> str:
         """Get Excel MIME type."""
@@ -138,7 +140,7 @@ class BaseExcelExporter(BaseExporter):
         for idx, row_data in enumerate(data):
             self.write_row(start_row + idx, row_data, start_col)
 
-    def apply_freeze_panes(self, cell: Optional[str] = None) -> None:
+    def apply_freeze_panes(self, cell: str | None = None) -> None:
         """
         Apply freeze panes to worksheet.
         

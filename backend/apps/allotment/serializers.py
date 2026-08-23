@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.allotment.models import AllotmentModel, AllotmentItems
 from apps.core.serializers.fields import IndianDateField
+from apps.license.serializers.license import PlanningOptionSerializer
 
 
 class AllotmentItemSerializer(serializers.ModelSerializer):
@@ -16,6 +17,7 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     product_description = serializers.CharField(read_only=True, required=False, allow_blank=True)
     hs_code = serializers.CharField(read_only=True, required=False, allow_null=True)
     license_number = serializers.CharField(read_only=True, required=False, allow_null=True)
+    license_id = serializers.IntegerField(source='item.license.id', read_only=True)
     license_date = serializers.SerializerMethodField()
     exporter = serializers.CharField(read_only=True, required=False, allow_null=True, source='exporter.name')
     license_expiry = serializers.SerializerMethodField()
@@ -28,6 +30,12 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     current_owner = serializers.SerializerMethodField()
     file_transfer_status = serializers.SerializerMethodField()
     condition_type = serializers.SerializerMethodField()
+    id = serializers.IntegerField(required=False)
+
+    # Planning options from the related import item — all LicenseItemPlan rows split
+    # across this item, each with its own remaining availability after allocations.
+    # Loaded via prefetch_related to avoid N+1 queries.
+    planning_options = serializers.SerializerMethodField(read_only=True)
 
     def get_ledger(self, obj):
         ledger = obj.ledger
@@ -80,20 +88,42 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
     def get_condition_type(self, obj):
         return getattr(obj.item, 'condition_type', '') or ''
 
+    def get_planning_options(self, obj):
+        """
+        Return all LicenseItemPlan rows for the related import item.
+        Allows the frontend to display planning options and enforce per-plan-line caps.
+
+        The related LicenseItemPlan objects are loaded via prefetch_related in the view
+        (same pattern as the import_item's utilization_plans), so this is O(1) per item.
+        Falls back to a fresh query if no prefetch is present (e.g., standalone usage).
+        """
+        if obj.item is None:
+            return []
+        # utilization_plans is the related_name on LicenseItemPlan.import_item
+        plans = obj.item.utilization_plans.all()
+        serializer = PlanningOptionSerializer(plans, many=True)
+        return serializer.data
+
     class Meta:
         model = AllotmentItems
+        # Nested updates are resolved explicitly by ID in AllotmentSerializer;
+        # running ModelSerializer's create-oriented unique-together validator
+        # here would incorrectly reject an unchanged existing allocation.
+        validators = []
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
-            'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number',
+            'search_mode', 'allocation_basis', 'planning_target_item', 'plan_line',
+            'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number', 'license_id',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',
-            'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type'
+            'purchase_status', 'current_owner', 'file_transfer_status', 'condition_type', 'planning_options',
         ]
 
 
 class AllotmentSerializer(serializers.ModelSerializer):
-    # Nested serializer for read operations
-    allotment_details_read = AllotmentItemSerializer(source='allotment_details', many=True, read_only=True)
+    # Nested rows are source/allocation read-only in the edit form.  The one
+    # writable field is planning_target_item, persisted by update() below.
+    allotment_details = AllotmentItemSerializer(many=True, required=False)
 
     # Date field handling
     estimated_arrival_date = IndianDateField(required=False, allow_null=True)
@@ -118,6 +148,16 @@ class AllotmentSerializer(serializers.ModelSerializer):
     # Custom label field for dropdown display
     display_label = serializers.SerializerMethodField(read_only=True)
 
+    # Counts for UI display
+    allotted_items_count = serializers.SerializerMethodField(read_only=True)
+    allocated_licenses_count = serializers.SerializerMethodField(read_only=True)
+    # The allocation route is initialized from this persisted canonical target,
+    # never from the free-text ``item_name`` description.
+    planning_target_item_name = serializers.CharField(
+        source='planning_target_item.name', read_only=True, allow_null=True
+    )
+    planning_target_sion = serializers.SerializerMethodField(read_only=True)
+
     def get_is_boe(self, obj):
         """
         Calculate is_boe at runtime based on whether the allotment has a bill of entry.
@@ -138,6 +178,44 @@ class AllotmentSerializer(serializers.ModelSerializer):
         if obj.required_quantity:
             parts.append(f"Qty: {obj.required_quantity}")
         return " | ".join(parts) if parts else obj.item_name
+
+    def get_allotted_items_count(self, obj):
+        """Count of items allocated to this allotment"""
+        try:
+            return obj.allotment_details.count()
+        except Exception:
+            return 0
+
+    def get_allocated_licenses_count(self, obj):
+        """Count of unique licenses that have items allocated to this allotment"""
+        try:
+            from apps.core.constants import DEC_0
+
+            # Count unique licenses in allotment_details
+            # Only count if there's still balanced quantity (otherwise fully allocated)
+            if obj.balanced_quantity and obj.balanced_quantity > DEC_0:
+                allocated_licenses = obj.allotment_details.values_list('item__license_id', flat=True).distinct()
+                return len(set(allocated_licenses))
+            return 0
+        except Exception:
+            return 0
+
+    def get_planning_target_sion(self, obj):
+        """Return an unambiguous SION for the target when one can be derived.
+
+        Older allotments do not persist a SION.  In that case returning null is
+        intentional: the allocation route still locks to the canonical target
+        and does not invent a SION from the free-text description.
+        """
+        if not obj.planning_target_item_id:
+            return None
+        from apps.license.models import LicenseItemPlan
+        sions = list(
+            LicenseItemPlan.objects.filter(item_name_id=obj.planning_target_item_id)
+            .values_list('import_item__license__export_license__norm_class__norm_class', flat=True)
+            .distinct()[:2]
+        )
+        return sions[0] if len(sions) == 1 else None
 
     def get_created_on(self, obj):
         if obj.created_on:
@@ -163,15 +241,22 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'id', 'company', 'type', 'required_quantity', 'unit_value_per_unit',
             'cif_fc', 'cif_inr', 'exchange_rate',
             'item_name', 'contact_person', 'contact_number', 'invoice',
+            'planning_target_item', 'planning_mapping_status', 'planning_mapping_source',
+            'planning_target_item_name', 'planning_target_sion',
             'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
             'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
             'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
-            'related_company_name', 'display_label', 'allotment_details_read'
+            'related_company_name', 'display_label', 'allotment_details',
+            'allotted_items_count', 'allocated_licenses_count'
         ]
 
     def create(self, validated_data):
         """Set default values for type and exchange_rate if not provided"""
+        # Detail rows are allocated through the allocation workflow.  They
+        # are not created from the master edit form (which only maps existing
+        # rows), so do not pass a reverse relation to ModelSerializer.create.
+        validated_data.pop("allotment_details", None)
         # Set default type to 'AT' (Allotment) if not provided
         if 'type' not in validated_data or not validated_data['type']:
             validated_data['type'] = 'AT'  # ALLOTMENT
@@ -189,9 +274,29 @@ class AllotmentSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        """Persist mapping changes only; never mutate allocation economics here."""
+        allotment_details_data = validated_data.pop("allotment_details", None)
+        instance = super().update(instance, validated_data)
+
+        if allotment_details_data is not None:
+            existing_by_id = {
+                detail.id: detail
+                for detail in instance.allotment_details.select_related("item").all()
+            }
+            for detail_data in allotment_details_data:
+                detail_id = detail_data.get("id")
+                if not detail_id or detail_id not in existing_by_id:
+                    raise serializers.ValidationError({
+                        "allotment_details": "Only existing allotment rows may be mapped from this screen."
+                    })
+                detail = existing_by_id[detail_id]
+                # Allocation details are source/quantity records only. Parent
+                # AllotmentModel owns the planning target mapping.
+                continue
+
+        return instance
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        # Rename nested field for frontend compatibility
-        if 'allotment_details_read' in representation:
-            representation['allotment_details'] = representation.pop('allotment_details_read')
         return representation

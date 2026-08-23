@@ -16,10 +16,10 @@ Usage:
 
 import logging
 
-from django.db.models.signals import post_save, post_delete, m2m_changed
+from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
-from apps.core.cache_utils import invalidate_cache, invalidate_model_caches
+from apps.core.cache_utils import invalidate_cache
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,11 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-@receiver([post_save, post_delete], sender='license.LicenseDetailsModel')
+@receiver(
+    [post_save, post_delete],
+    sender='license.LicenseDetailsModel',
+    dispatch_uid='invalidate_license_caches',
+)
 def invalidate_license_caches(sender, instance, **kwargs):
     """
     Invalidate caches when a license is created, updated, or deleted.
@@ -39,24 +43,28 @@ def invalidate_license_caches(sender, instance, **kwargs):
     - Dashboard statistics
     - Item reports (if license has import items)
     """
-    logger.debug(f"Invalidating caches for License: {instance.license_number}")
+    logger.debug("Invalidating caches for License: %s", instance.license_number)
 
     # Invalidate license-specific caches
     patterns = [
-        f'view:license*',  # All license list/detail views
-        f'view:dashboard*',  # Dashboard shows license stats
+        'view:license*',  # All license list/detail views
+        'view:dashboard*',  # Dashboard shows license stats
         f'license_balance:{instance.id}',  # Specific license balance
         f'LicenseDetailsModel:*:{instance.id}:*',  # Method caches
-        f'view:item_report*',  # Item reports include license data
-        f'view:active_licenses*',  # Active license reports
-        f'view:expiring_licenses*',  # Expiring license reports
+        'view:item_report*',  # Item reports include license data
+        'view:active_licenses*',  # Active license reports
+        'view:expiring_licenses*',  # Expiring license reports
     ]
 
     for pattern in patterns:
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='license.LicenseImportItemsModel')
+@receiver(
+    [post_save, post_delete],
+    sender='license.LicenseImportItemsModel',
+    dispatch_uid='invalidate_import_item_caches',
+)
 def invalidate_import_item_caches(sender, instance, **kwargs):
     """
     Invalidate caches when import items are modified.
@@ -67,12 +75,12 @@ def invalidate_import_item_caches(sender, instance, **kwargs):
     - License detail (includes import items)
     - Inventory balance reports
     """
-    logger.debug(f"Invalidating caches for LicenseImportItem: {instance.id}")
+    logger.debug("Invalidating caches for LicenseImportItem: %s", instance.id)
 
     patterns = [
-        f'view:item_report*',
-        f'view:item_pivot*',
-        f'view:inventory_balance*',
+        'view:item_report*',
+        'view:item_pivot*',
+        'view:inventory_balance*',
         f'view:license*:{instance.license_id}*',  # Parent license detail
         f'license_balance:{instance.license_id}',  # License balance affected
     ]
@@ -81,15 +89,19 @@ def invalidate_import_item_caches(sender, instance, **kwargs):
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='license.LicenseExportItemModel')
+@receiver(
+    [post_save, post_delete],
+    sender='license.LicenseExportItemModel',
+    dispatch_uid='invalidate_export_item_caches',
+)
 def invalidate_export_item_caches(sender, instance, **kwargs):
     """Invalidate caches when export items are modified."""
-    logger.debug(f"Invalidating caches for LicenseExportItem: {instance.id}")
+    logger.debug("Invalidating caches for LicenseExportItem: %s", instance.id)
 
     patterns = [
         f'view:license*:{instance.license_id}*',
         f'license_balance:{instance.license_id}',
-        f'view:item_pivot*',
+        'view:item_pivot*',
     ]
 
     for pattern in patterns:
@@ -100,10 +112,10 @@ def invalidate_export_item_caches(sender, instance, **kwargs):
 # after models are loaded, since string references don't work with .through
 def invalidate_import_item_m2m_caches(sender, instance, **kwargs):
     """Invalidate caches when import item <-> item names relationship changes."""
-    logger.debug(f"Invalidating M2M caches for import item: {instance.id}")
+    logger.debug("Invalidating M2M caches for import item: %s", instance.id)
 
-    invalidate_cache(f'view:item_report*')
-    invalidate_cache(f'view:item_pivot*')
+    invalidate_cache('view:item_report*')
+    invalidate_cache('view:item_pivot*')
 
 
 # ============================================================================
@@ -111,7 +123,11 @@ def invalidate_import_item_m2m_caches(sender, instance, **kwargs):
 # ============================================================================
 
 
-@receiver([post_save, post_delete], sender='bill_of_entry.BillOfEntryModel')
+@receiver(
+    [post_save, post_delete],
+    sender='bill_of_entry.BillOfEntryModel',
+    dispatch_uid='invalidate_boe_caches',
+)
 def invalidate_boe_caches(sender, instance, **kwargs):
     """
     Invalidate caches when BOE is modified.
@@ -121,26 +137,30 @@ def invalidate_boe_caches(sender, instance, **kwargs):
     - Dashboard BOE stats
     - Related license balances
     """
-    logger.debug(f"Invalidating caches for BOE: {instance.bill_of_entry_number}")
+    logger.debug("Invalidating caches for BOE: %s", instance.bill_of_entry_number)
 
     patterns = [
-        f'view:boe*',
-        f'view:dashboard*',
-        f'view:bill_of_entry*',
+        'view:boe*',
+        'view:dashboard*',
+        'view:bill_of_entry*',
     ]
 
     for pattern in patterns:
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='bill_of_entry.RowDetails')
+@receiver(
+    [post_save, post_delete],
+    sender='bill_of_entry.RowDetails',
+    dispatch_uid='invalidate_row_details_caches',
+)
 def invalidate_row_details_caches(sender, instance, **kwargs):
     """
     Invalidate caches when BOE line items (RowDetails) are modified.
 
     CRITICAL: This affects balance calculations!
     """
-    logger.debug(f"Invalidating caches for RowDetails: {instance.id}")
+    logger.debug("Invalidating caches for RowDetails: %s", instance.id)
 
     # Invalidate license balance if linked to a license item
     if instance.sr_number and hasattr(instance.sr_number, 'license'):
@@ -150,8 +170,8 @@ def invalidate_row_details_caches(sender, instance, **kwargs):
 
     patterns = [
         f'view:boe*:{instance.bill_of_entry_id}*',
-        f'view:item_report*',  # Affects balance calculations in item reports
-        f'view:inventory_balance*',
+        'view:item_report*',  # Affects balance calculations in item reports
+        'view:inventory_balance*',
     ]
 
     for pattern in patterns:
@@ -163,28 +183,36 @@ def invalidate_row_details_caches(sender, instance, **kwargs):
 # ============================================================================
 
 
-@receiver([post_save, post_delete], sender='allotment.AllotmentModel')
+@receiver(
+    [post_save, post_delete],
+    sender='allotment.AllotmentModel',
+    dispatch_uid='invalidate_allotment_caches',
+)
 def invalidate_allotment_caches(sender, instance, **kwargs):
     """Invalidate caches when allotment is modified."""
-    logger.debug(f"Invalidating caches for Allotment: {instance.id}")
+    logger.debug("Invalidating caches for Allotment: %s", instance.id)
 
     patterns = [
-        f'view:allotment*',
-        f'view:dashboard*',
+        'view:allotment*',
+        'view:dashboard*',
     ]
 
     for pattern in patterns:
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='allotment.AllotmentItems')
+@receiver(
+    [post_save, post_delete],
+    sender='allotment.AllotmentItems',
+    dispatch_uid='invalidate_allotment_items_caches',
+)
 def invalidate_allotment_items_caches(sender, instance, **kwargs):
     """
     Invalidate caches when allotment items are modified.
 
     CRITICAL: This affects license balance calculations!
     """
-    logger.debug(f"Invalidating caches for AllotmentItems: {instance.id}")
+    logger.debug("Invalidating caches for AllotmentItems: %s", instance.id)
 
     # Invalidate license balance if linked
     if instance.item and hasattr(instance.item, 'license'):
@@ -194,8 +222,8 @@ def invalidate_allotment_items_caches(sender, instance, **kwargs):
 
     patterns = [
         f'view:allotment*:{instance.allotment_id}*',
-        f'view:item_report*',
-        f'view:inventory_balance*',
+        'view:item_report*',
+        'view:inventory_balance*',
     ]
 
     for pattern in patterns:
@@ -207,65 +235,81 @@ def invalidate_allotment_items_caches(sender, instance, **kwargs):
 # ============================================================================
 
 
-@receiver([post_save, post_delete], sender='core.CompanyModel')
+@receiver(
+    [post_save, post_delete],
+    sender='core.CompanyModel',
+    dispatch_uid='invalidate_company_caches',
+)
 def invalidate_company_caches(sender, instance, **kwargs):
     """
     Invalidate caches when company master data is modified.
 
     Companies are used everywhere, so this is a broad invalidation.
     """
-    logger.debug(f"Invalidating caches for Company: {instance.name}")
+    logger.debug("Invalidating caches for Company: %s", instance.name)
 
     patterns = [
-        f'view:company*',
-        f'view:license*company*',  # License filters by company
-        f'view:boe*company*',
-        f'view:allotment*company*',
+        'view:company*',
+        'view:license*company*',  # License filters by company
+        'view:boe*company*',
+        'view:allotment*company*',
     ]
 
     for pattern in patterns:
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='core.ItemNameModel')
+@receiver(
+    [post_save, post_delete],
+    sender='core.ItemNameModel',
+    dispatch_uid='invalidate_item_name_caches',
+)
 def invalidate_item_name_caches(sender, instance, **kwargs):
     """Invalidate caches when item names are modified."""
-    logger.debug(f"Invalidating caches for ItemName: {instance.name}")
+    logger.debug("Invalidating caches for ItemName: %s", instance.name)
 
     patterns = [
-        f'view:item*',
-        f'view:item_report*',
-        f'view:item_pivot*',
+        'view:item*',
+        'view:item_report*',
+        'view:item_pivot*',
     ]
 
     for pattern in patterns:
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='core.HSCodeModel')
+@receiver(
+    [post_save, post_delete],
+    sender='core.HSCodeModel',
+    dispatch_uid='invalidate_hscode_caches',
+)
 def invalidate_hscode_caches(sender, instance, **kwargs):
     """Invalidate caches when HS codes are modified."""
-    logger.debug(f"Invalidating caches for HSCode: {instance.hs_code}")
+    logger.debug("Invalidating caches for HSCode: %s", instance.hs_code)
 
     patterns = [
-        f'view:hscode*',
-        f'view:item_report*',
+        'view:hscode*',
+        'view:item_report*',
     ]
 
     for pattern in patterns:
         invalidate_cache(pattern)
 
 
-@receiver([post_save, post_delete], sender='core.PurchaseStatus')
+@receiver(
+    [post_save, post_delete],
+    sender='core.PurchaseStatus',
+    dispatch_uid='invalidate_purchase_status_caches',
+)
 def invalidate_purchase_status_caches(sender, instance, **kwargs):
     """Invalidate caches when purchase statuses are modified."""
-    logger.debug(f"Invalidating caches for PurchaseStatus: {instance.code}")
+    logger.debug("Invalidating caches for PurchaseStatus: %s", instance.code)
 
     # Purchase status is heavily used in license filtering
     patterns = [
-        f'view:license*',
-        f'view:dashboard*',
-        f'view:item_report*',
+        'view:license*',
+        'view:dashboard*',
+        'view:item_report*',
     ]
 
     for pattern in patterns:
@@ -317,6 +361,21 @@ def get_invalidation_patterns_for_model(model_name: str) -> list:
     return patterns_map.get(model_name, [f'*{model_name.lower()}*'])
 
 
+CACHE_INVALIDATION_RECEIVERS = (
+    (invalidate_license_caches, 'license.LicenseDetailsModel', 'invalidate_license_caches'),
+    (invalidate_import_item_caches, 'license.LicenseImportItemsModel', 'invalidate_import_item_caches'),
+    (invalidate_export_item_caches, 'license.LicenseExportItemModel', 'invalidate_export_item_caches'),
+    (invalidate_boe_caches, 'bill_of_entry.BillOfEntryModel', 'invalidate_boe_caches'),
+    (invalidate_row_details_caches, 'bill_of_entry.RowDetails', 'invalidate_row_details_caches'),
+    (invalidate_allotment_caches, 'allotment.AllotmentModel', 'invalidate_allotment_caches'),
+    (invalidate_allotment_items_caches, 'allotment.AllotmentItems', 'invalidate_allotment_items_caches'),
+    (invalidate_company_caches, 'core.CompanyModel', 'invalidate_company_caches'),
+    (invalidate_item_name_caches, 'core.ItemNameModel', 'invalidate_item_name_caches'),
+    (invalidate_hscode_caches, 'core.HSCodeModel', 'invalidate_hscode_caches'),
+    (invalidate_purchase_status_caches, 'core.PurchaseStatus', 'invalidate_purchase_status_caches'),
+)
+
+
 # ============================================================================
 # Debug/Testing: Disable Signals
 # ============================================================================
@@ -334,32 +393,17 @@ class disable_cache_invalidation:
                 license.save()
     """
     def __enter__(self):
-        self.receivers = []
         # Disconnect all cache invalidation receivers
-        for receiver_func in [
-            invalidate_license_caches,
-            invalidate_import_item_caches,
-            invalidate_export_item_caches,
-            invalidate_boe_caches,
-            invalidate_row_details_caches,
-            invalidate_allotment_caches,
-            invalidate_allotment_items_caches,
-            invalidate_company_caches,
-            invalidate_item_name_caches,
-            invalidate_hscode_caches,
-            invalidate_purchase_status_caches,
-        ]:
-            # Store receiver info for reconnection
-            self.receivers.append((receiver_func, receiver_func.sender))
-            # Disconnect
-            post_save.disconnect(receiver_func, sender=receiver_func.sender)
-            post_delete.disconnect(receiver_func, sender=receiver_func.sender)
+        for receiver_func, sender, dispatch_uid in CACHE_INVALIDATION_RECEIVERS:
+            post_save.disconnect(receiver_func, sender=sender, dispatch_uid=dispatch_uid)
+            post_delete.disconnect(receiver_func, sender=sender, dispatch_uid=dispatch_uid)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Reconnect all receivers
-        for receiver_func, sender in self.receivers:
-            post_save.connect(receiver_func, sender=sender)
-            post_delete.connect(receiver_func, sender=sender)
+        for receiver_func, sender, dispatch_uid in CACHE_INVALIDATION_RECEIVERS:
+            post_save.connect(receiver_func, sender=sender, dispatch_uid=dispatch_uid)
+            post_delete.connect(receiver_func, sender=sender, dispatch_uid=dispatch_uid)
 
 
 # ============================================================================
@@ -378,8 +422,8 @@ def connect_m2m_signals():
         m2m_changed.connect(
             invalidate_import_item_m2m_caches,
             sender=LicenseImportItemsModel.items.through,
-            dispatch_uid='invalidate_import_item_m2m_caches'
+            dispatch_uid='invalidate_import_item_m2m_caches',
         )
         logger.info("Connected M2M cache invalidation signals")
-    except Exception as e:
-        logger.warning(f"Could not connect M2M signals: {e}")
+    except Exception:
+        logger.warning("Could not connect M2M signals", exc_info=True)

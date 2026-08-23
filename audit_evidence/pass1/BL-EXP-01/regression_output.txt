@@ -1,0 +1,111 @@
+==================================================================
+BL-EXP-01 REGRESSION TEST EVIDENCE (re-verification pass)
+Generated: Fri Aug  7 16:42:52 IST 2026
+Command: pytest --no-cov --no-migrations apps/allotment/tests/ -v --tb=short
+==================================================================
+
+NOTE: --no-migrations is used because a pre-existing, unrelated
+migration-ordering issue in apps/core/migrations/0003_create_materialized_views.py
+(missing dependency edge on the allotment app) makes a fresh
+migration-built test DB fail with 'column ai.item_id does not exist'
+on this same test module even without any BL-EXP-01 change. This is
+an environment/infra issue, out of scope for BL-EXP-01, and does not
+affect the validity of the --no-migrations run below (schema is built
+directly from current models).
+
+==================================================================
+1) New/extended expiry regression file alone
+   apps/allotment/tests/test_allocate_items_expiry_check.py
+==================================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+cachedir: .pytest_cache
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 14 items
+
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsRejectsExpiredLicense::test_rejects_allocation_against_expired_license_with_positive_balance PASSED [  7%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsRejectsExpiredLicense::test_rejects_even_when_license_expired_yesterday_only PASSED [ 14%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsUnaffectedForNonExpiredLicenses::test_succeeds_for_license_expiring_today_is_not_treated_as_expired PASSED [ 21%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsUnaffectedForNonExpiredLicenses::test_succeeds_for_future_expiry_license_unchanged PASSED [ 28%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_rejects_license_expired_long_ago PASSED [ 35%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_succeeds_for_license_expiring_tomorrow PASSED [ 42%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_succeeds_for_license_expiring_years_in_the_future PASSED [ 50%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_succeeds_for_license_with_null_expiry_date PASSED [ 57%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_rejects_expired_license_regardless_of_condition_type[] PASSED [ 64%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_rejects_expired_license_regardless_of_condition_type[AU] PASSED [ 71%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_rejects_expired_license_regardless_of_condition_type[5%] PASSED [ 78%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_succeeds_for_non_expired_license_regardless_of_condition_type[] PASSED [ 85%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_succeeds_for_non_expired_license_regardless_of_condition_type[AU] PASSED [ 92%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryScopedPerCompanyInSameRequest::test_batch_with_two_companies_rejects_only_the_expired_one PASSED [100%]
+
+============================== 14 passed in 3.81s ==============================
+
+==================================================================
+2) Full apps/allotment/tests/ suite (regression scope: pre-existing
+   CIF-live-balance, E1/legacy group-plan-cap, plan-line-balance,
+   available-licenses filters/plan-mode tests -- all unrelated to
+   expiry and must be unaffected by the fix)
+==================================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+cachedir: .pytest_cache
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 49 items
+
+apps/allotment/tests/test_allocate_items_cif_validation.py::TestAllocateItemsUsesLiveBalance::test_succeeds_despite_stale_is_restricted_flag_and_stale_stored_available_value PASSED [  2%]
+apps/allotment/tests/test_allocate_items_cif_validation.py::TestAllocateItemsUsesLiveBalance::test_rejects_when_live_balance_genuinely_insufficient PASSED [  4%]
+apps/allotment/tests/test_allocate_items_cif_validation.py::TestAllocateItemsUsesLiveBalance::test_succeeds_at_exactly_the_live_balance_boundary PASSED [  6%]
+apps/allotment/tests/test_allocate_items_e1_group_plan_cap.py::TestE1MixedHsnGroupsPlanIndependently::test_auto_plan_saves_two_separate_lines_not_pooled PASSED [  8%]
+apps/allotment/tests/test_allocate_items_e1_group_plan_cap.py::TestE1MixedHsnGroupsPlanIndependently::test_item2_has_its_own_correctly_scoped_cap_not_unconstrained PASSED [ 10%]
+apps/allotment/tests/test_allocate_items_e1_group_plan_cap.py::TestE1MixedHsnGroupsPlanIndependently::test_item2_debit_within_its_own_cap_succeeds PASSED [ 12%]
+apps/allotment/tests/test_allocate_items_e1_group_plan_cap.py::TestE1MixedHsnGroupsPlanIndependently::test_item1_cap_is_independent_of_item2s_group PASSED [ 14%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsRejectsExpiredLicense::test_rejects_allocation_against_expired_license_with_positive_balance PASSED [ 16%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsRejectsExpiredLicense::test_rejects_even_when_license_expired_yesterday_only PASSED [ 18%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsUnaffectedForNonExpiredLicenses::test_succeeds_for_license_expiring_today_is_not_treated_as_expired PASSED [ 20%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsUnaffectedForNonExpiredLicenses::test_succeeds_for_future_expiry_license_unchanged PASSED [ 22%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_rejects_license_expired_long_ago PASSED [ 24%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_succeeds_for_license_expiring_tomorrow PASSED [ 26%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_succeeds_for_license_expiring_years_in_the_future PASSED [ 28%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossDateRangeBoundaries::test_succeeds_for_license_with_null_expiry_date PASSED [ 30%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_rejects_expired_license_regardless_of_condition_type[] PASSED [ 32%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_rejects_expired_license_regardless_of_condition_type[AU] PASSED [ 34%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_rejects_expired_license_regardless_of_condition_type[5%] PASSED [ 36%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_succeeds_for_non_expired_license_regardless_of_condition_type[] PASSED [ 38%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryAcrossConditionTypes::test_succeeds_for_non_expired_license_regardless_of_condition_type[AU] PASSED [ 40%]
+apps/allotment/tests/test_allocate_items_expiry_check.py::TestAllocateItemsExpiryScopedPerCompanyInSameRequest::test_batch_with_two_companies_rejects_only_the_expired_one PASSED [ 42%]
+apps/allotment/tests/test_allocate_items_group_plan_cap.py::TestGroupPlanCapIsNotDoubleCounted::test_auto_plan_consolidates_onto_one_representative_not_all_three_members PASSED [ 44%]
+apps/allotment/tests/test_allocate_items_group_plan_cap.py::TestGroupPlanCapIsNotDoubleCounted::test_debit_within_the_true_consolidated_cap_succeeds PASSED [ 46%]
+apps/allotment/tests/test_allocate_items_group_plan_cap.py::TestGroupPlanCapIsNotDoubleCounted::test_debit_exceeding_the_true_consolidated_cap_is_rejected PASSED [ 48%]
+apps/allotment/tests/test_allocate_items_group_plan_cap.py::TestGroupPlanCapIsNotDoubleCounted::test_debit_at_exactly_the_cap_succeeds_and_next_unit_is_rejected PASSED [ 51%]
+apps/allotment/tests/test_allocate_items_plan_line_balance.py::TestPlanLineBalanceDecrement::test_allocating_from_pko_reduces_only_pko PASSED [ 53%]
+apps/allotment/tests/test_allocate_items_plan_line_balance.py::TestPlanLineBalanceDecrement::test_second_allocation_drains_pko_to_zero PASSED [ 55%]
+apps/allotment/tests/test_allocate_items_plan_line_balance.py::TestPlanLineBalanceDecrement::test_allocating_from_cheese_after_pko_only_reduces_cheese PASSED [ 57%]
+apps/allotment/tests/test_allocate_items_plan_line_balance.py::TestPlanLineBalanceDecrement::test_remaining_never_goes_negative PASSED [ 59%]
+apps/allotment/tests/test_allocate_items_plan_line_balance.py::TestPlanLineBalanceDecrement::test_missing_plan_line_id_leaves_plan_lines_untouched PASSED [ 61%]
+apps/allotment/tests/test_allocate_items_plan_line_balance.py::TestPlanLineBalanceDecrement::test_stale_plan_line_id_does_not_fail_the_allocation PASSED [ 63%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableQuantityFilter::test_min_qty_below_available_quantity_includes_item PASSED [ 65%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableQuantityFilter::test_min_qty_above_available_quantity_excludes_item PASSED [ 67%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableQuantityFilter::test_max_qty_above_available_quantity_includes_item PASSED [ 69%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableQuantityFilter::test_max_qty_below_available_quantity_excludes_item PASSED [ 71%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableValueFilterUsesLiveValue::test_min_value_includes_item_when_live_value_clears_bar_even_though_stored_value_is_stale_and_low PASSED [ 73%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableValueFilterUsesLiveValue::test_min_value_above_live_value_excludes_item PASSED [ 75%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableValueFilterUsesLiveValue::test_max_value_excludes_item_when_live_value_exceeds_cap_even_though_stored_value_would_pass PASSED [ 77%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableValueFilterUsesLiveValue::test_max_value_above_live_value_includes_item PASSED [ 79%]
+apps/allotment/tests/test_available_licenses_filters.py::TestAvailableValueFilterUsesLiveValue::test_malformed_value_param_is_ignored_not_500 PASSED [ 81%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeSplitRows::test_actual_mode_shows_full_import_item_quantity_unaffected_by_plan PASSED [ 83%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeSplitRows::test_plan_mode_shows_two_separate_rows_with_own_quantities PASSED [ 85%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeSplitRows::test_plan_mode_never_shows_full_100kg_on_either_split_row PASSED [ 87%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeSplitRows::test_fully_consumed_plan_line_disappears_from_the_grid PASSED [ 89%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlannedItemNameFilter::test_selecting_pko_shows_only_pko_row PASSED [ 91%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlannedItemNameFilter::test_filter_is_ignored_in_actual_mode PASSED [ 93%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeRangeFilters::test_min_qty_above_pko_share_excludes_pko_but_keeps_cheese PASSED [ 95%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeRangeFilters::test_max_value_below_cheese_share_excludes_cheese_but_keeps_pko PASSED [ 97%]
+apps/allotment/tests/test_available_licenses_plan_mode.py::TestPlanModeRangeFilters::test_malformed_range_param_is_ignored_not_500 PASSED [100%]
+
+============================= 49 passed in 10.55s ==============================

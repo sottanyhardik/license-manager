@@ -1,7 +1,5 @@
-import React, {useEffect, useState, useCallback} from "react";
-import {useNavigate} from "react-router-dom";
-import Select from "react-select";
-import AsyncSelectField from "../../components/AsyncSelectField";
+import React, {useEffect, useState, useCallback, useRef, useLayoutEffect} from "react";
+import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
 import {formatDate} from "../../utils/dateFormatter";
@@ -9,17 +7,20 @@ import {formatIndianNumber} from "../../utils/numberFormatter";
 import {toast} from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeftRight, Bell, Building2, Calculator, CalendarCheck, CalendarDays, CalendarRange, DollarSign, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, MinusCircle, Package, RefreshCw, ShoppingCart, SlidersHorizontal, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
+import { openAuthedFile } from "../../utils/documentDownload";
+import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
+import { buildItemPivotReportPath, toFiniteNumber, type ItemPivotPathOptions } from "./itemPivotReportUtils";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
-const DEFAULT_PURCHASE_STATUS = ['GE', 'MI', 'CO'];
-
 // Distinct, subtle background tints cycled per item so each item's column
 // group (and its name header) is easy to tell apart at a glance.
 const ITEM_BG_COLORS = [
@@ -33,6 +34,69 @@ const ITEM_BG_COLORS = [
     'rgba(107,114,128,0.10)',  // gray
 ];
 const itemBgColor = (idx) => ITEM_BG_COLORS[idx % ITEM_BG_COLORS.length];
+
+// Compact Scroll Mode — while a pivot table is scrolled horizontally away
+// from its resting position, the mid-table columns (Exporter through
+// Planned CIF) are removed from the rendered table entirely (not just
+// styled to zero width — `table-layout: auto` doesn't reliably treat
+// max-width as a hard clamp, so a CSS-only collapse can leave reserved
+// space) so the frozen Sr No/DFIA No/Expiry Dt/Balance CIF columns and the
+// per-item pivot columns sit directly adjacent, needing far less scrolling
+// to compare items across a wide license. Reverses itself automatically
+// since it's driven live off `scrollLeft` rather than any persisted state.
+//
+// The frozen columns' sticky `left` offsets are never hard-coded pixel
+// guesses — DFIA No/Expiry Dt/Balance CIF's cells genuinely vary in width
+// (e.g. the DFIA No cell carries a license-number link, a "Docs" button,
+// and stacked status badges), so a fixed px offset drifts out of alignment
+// with real content and either overlaps the next column or leaves a gap.
+// Instead each group's Sr No/DFIA No/Expiry Dt header cells are measured
+// via ref after layout (see `useFrozenColumnOffsets` below) and the
+// cumulative real widths are used as the `left` values.
+function useFrozenColumnOffsets(measureKeys: string[]) {
+    const cellRefs = useRef<Record<string, { srNo?: HTMLElement | null; dfia?: HTMLElement | null; expiry?: HTMLElement | null }>>({});
+    const [offsets, setOffsets] = useState<Record<string, { dfia: number; expiry: number; balance: number }>>({});
+
+    const makeRef = useCallback((groupKey: string, col: 'srNo' | 'dfia' | 'expiry') => (el: HTMLElement | null) => {
+        if (!cellRefs.current[groupKey]) cellRefs.current[groupKey] = {};
+        cellRefs.current[groupKey][col] = el;
+    }, []);
+
+    const measure = useCallback(() => {
+        setOffsets(prev => {
+            let changed = false;
+            const next = { ...prev };
+            for (const groupKey of measureKeys) {
+                const cells = cellRefs.current[groupKey];
+                if (!cells?.srNo || !cells?.dfia || !cells?.expiry) continue;
+                const srNoWidth = cells.srNo.getBoundingClientRect().width;
+                const dfiaWidth = cells.dfia.getBoundingClientRect().width;
+                const expiryWidth = cells.expiry.getBoundingClientRect().width;
+                const dfia = srNoWidth;
+                const expiry = srNoWidth + dfiaWidth;
+                const balance = srNoWidth + dfiaWidth + expiryWidth;
+                const prevForGroup = prev[groupKey];
+                if (!prevForGroup || prevForGroup.dfia !== dfia || prevForGroup.expiry !== expiry || prevForGroup.balance !== balance) {
+                    next[groupKey] = { dfia, expiry, balance };
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [measureKeys]);
+
+    useLayoutEffect(() => {
+        measure();
+    });
+
+    useEffect(() => {
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, [measure]);
+
+    return { makeRef, offsets };
+}
+
 
 // Shared style for the compact Condition / Transfer / Note action pills that
 // sit next to each DFIA number. Soft tint + coloured text/border, icon inline.
@@ -78,16 +142,94 @@ function PurchaseStatusBadge({ code, label }) {
     );
 }
 
+function pivotNumber(value: unknown, digits: number) {
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    // Backend positions are normalized; retain this final display guard so a
+    // malformed response can never present a negative business balance.
+    return Math.max(n, 0).toLocaleString('en-IN', {minimumFractionDigits: digits, maximumFractionDigits: digits});
+}
+
+/** A stale response must never turn serialized decimal zero into an issue. */
+function isPositivePivotIssue(issue: any) {
+    const type = String(issue?.type || '');
+    const excess = type.includes('_cif_')
+        ? (type.includes('over_planned') ? issue?.planned_excess_cif : issue?.actual_excess_cif)
+        : (type.includes('over_planned') ? issue?.planned_excess_qty : issue?.actual_excess_qty);
+    const value = Number(excess ?? 0);
+    return Number.isFinite(value) && value > 0;
+}
+
+function PivotTotalCells({ group }: { group: any }) {
+    return <>{group.item_groups.flatMap((item, itemIndex) => {
+        const total = group.totals?.items?.[item.key];
+        const bg = {backgroundColor: itemBgColor(itemIndex)};
+        return ['hsn','description','total_qty','allotted_qty','debited_qty','balance_qty','restriction_percent','restriction_value','plan_qty','planned_cif'].map(key => {
+            const text = ['hsn','description','restriction_percent'].includes(key) ? '—' : pivotNumber(total?.[key], key.includes('cif') || key.includes('value') ? 2 : 3);
+            return <td key={`${item.key}-total-${key}`} className={cn('border p-2', ['total_qty','allotted_qty','debited_qty','balance_qty','restriction_value','plan_qty','planned_cif'].includes(key) && 'text-right')} style={bg}>{text}</td>;
+        });
+    })}</>;
+}
+
+function FioriSummary({ summary, groups, grandTotal, onException }: { summary: any; groups: any[]; grandTotal: any; onException: (item: any, group?: any) => void }) {
+    // The backend owns the row order.  Prefixing the visible item label makes
+    // that active SION-rule priority auditable without re-sorting in React.
+    const withPriorityLabel = (group: any) => ({
+        ...group,
+        item_summary: (group?.item_summary || []).map((item: any) => ({
+            ...item,
+            item_name: item.planning_priority != null ? `${item.planning_priority} · ${item.item_name}` : item.item_name,
+        })),
+    });
+    groups = groups.map(withPriorityLabel);
+    grandTotal = withPriorityLabel(grandTotal);
+    const cards = [
+        ['Total Licences', summary?.license_count, 0, 'text-blue-700'], ['Total Licence CIF', summary?.total_cif, 2, 'text-blue-700'],
+        ['Actual BOE CIF', summary?.actual_boe_cif, 2, 'text-amber-700'], ['Actual Allotment CIF', summary?.actual_allotment_cif, 2, 'text-amber-700'],
+        ['Actual Balance CIF', summary?.actual_balance_cif, 2, 'text-green-700'], ['Effective Planned CIF', summary?.effective_planned_cif, 2, 'text-blue-700'],
+        ['Final Balance CIF', summary?.final_balance_cif, 2, 'text-green-700'], ['Coverage %', summary?.planning_coverage_percent, 2, 'text-green-700'],
+    ];
+    const Section = ({ title, group, strong = false }: { title: string; group: any; strong?: boolean }) => <Card className={cn("mt-4 rounded-md shadow-none", strong && "border-2 border-primary")}><CardHeader className={cn("border-b py-3", strong ? "bg-primary text-primary-foreground" : "bg-muted/40")}><div><h2 className="text-base font-semibold">{title}</h2><p className="text-xs opacity-80">{group?.license_count ?? 0} Licences · canonical item and SION reconciliation</p></div></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="min-w-[1120px] w-full border-collapse text-xs"><thead className="sticky top-0 z-10 bg-muted"><tr><th rowSpan={2} className="border p-2 text-left">ITEM</th><th rowSpan={2} className="border p-2">SION</th><th rowSpan={2} className="border p-2">HSN CODES</th><th rowSpan={2} className="border p-2">LICENCES</th><th colSpan={7} className="border p-2 text-center">QUANTITY POSITION</th><th colSpan={5} className="border p-2 text-center">CIF POSITION</th><th rowSpan={2} className="border p-2">EXCEPTIONS</th><th rowSpan={2} className="border p-2">STATUS</th></tr><tr>{['TOTAL QTY','BOE QTY','ALLOTTED QTY','USED QTY','AVAILABLE QTY','PLANNED QTY','BALANCE QTY','USED CIF','AVAILABLE CIF','PLANNED CIF','BALANCE CIF','AVG PRICE'].map(name => <th key={name} className="border p-2 text-right whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{(group?.item_summary || []).map((item: any) => <tr key={`${item.canonical_item_id}:${item.sion}`} className="hover:bg-muted/30"><td className="border p-2 font-semibold">{item.item_name}</td><td className="border p-2 text-center">{item.sion}</td><td className="border p-2">{item.hsn_codes?.join(', ') || '—'}</td><td className="border p-2 text-right">{item.license_count}</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(item[key], 3)}</td>)}{['actual_used_cif','available_cif','planned_cif','balance_cif','average_unit_price'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{(key === 'available_cif' || key === 'balance_cif') && item[key] == null ? '—' : pivotNumber(item[key], 2)}</td>)}<td className="border p-2 text-center">{item.exception_count || '—'}</td><td className="border p-2">{item.exception_count ? <button type="button" onClick={() => onException(item, group)}><Badge variant="destructive">{item.status}</Badge></button> : <Badge variant="secondary">{item.status}</Badge>}</td></tr>)}<tr className="bg-muted font-bold"><td colSpan={4} className="border p-2">SUBTOTAL</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(group?.item_summary_totals?.[key], 3)}</td>)}{['actual_used_cif','available_cif','planned_cif','balance_cif','weighted_average_unit_price'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(group?.item_summary_totals?.[key], 2)}</td>)}<td colSpan={2} className="border p-2" /></tr></tbody></table></div></CardContent></Card>;
+    return <><div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">{cards.map(([label, value, digits, color]) => <Card key={String(label)} className="rounded-md shadow-none"><CardContent className="p-3"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><div className={cn('mt-1 text-sm font-bold tabular-nums', color as string)}>{pivotNumber(value, digits as number)}</div></CardContent></Card>)}</div>{groups.map(group => <Section key={`${group.notification_number}:${group.purchase_status?.name}`} title={`Notification Number: ${group.notification_number} · ${group.purchase_status?.name || 'UNASSIGNED'}`} group={group} />)}<Section title="TOTAL SUMMARY — ALL NOTIFICATIONS" group={grandTotal} strong /></>;
+}
+
+/** Backend-owned canonical pivot DTO.  This component formats only. */
+function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, selectedItem, exceptionOnly }: { groups: any[]; onCondition: (license: any) => void; onTransfer: (license: any) => void; onReplan: (license: any) => void; onIssue: (license: any) => void; selectedItem?: string | null; exceptionOnly?: boolean }) {
+    const fixed = ['SR NO', 'DFIA NO', 'EXPIRY DT', 'EXPORTER', 'TOTAL CIF', 'DEBITED CIF', 'ALLOTTED CIF', 'PLANNED CIF', 'BALANCE CIF', 'ISSUES'];
+    return <div className="space-y-5">
+        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`}>
+            <CardHeader className="flex-row items-center justify-between text-primary-foreground" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
+                <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
+                <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
+            </CardHeader>
+            <CardContent className="p-0"><div className="overflow-x-auto"><table className="w-max min-w-full border-collapse text-sm"><thead className="sticky top-0 z-20 bg-muted"><tr>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
+                <tbody>{visibleLicenses.map((license, index) => {
+                    const pivotCells = group.item_groups.flatMap((item, itemIndex) => {
+                        const cell = license.items?.[item.key];
+                        const bg = {backgroundColor: itemBgColor(itemIndex)};
+                        return ['hsn_code','description','total_qty','allotted_qty','debited_qty','balance_qty','restriction_percent','restriction_value','plan_qty','planned_cif'].map(key => {
+                            const display = !cell ? '—' : (key === 'description' || key === 'hsn_code' ? (cell[key] || '—') : key === 'restriction_percent' && cell[key] != null ? <Badge>{cell[key]}%</Badge> : pivotNumber(cell[key], key.includes('cif') || key.includes('value') ? 2 : 3));
+                            return <td key={`${item.key}-${key}`} className={cn('border p-2', ['total_qty','allotted_qty','debited_qty','balance_qty','restriction_value','plan_qty','planned_cif'].includes(key) && 'text-right', key === 'debited_qty' && 'text-orange-700', key === 'allotted_qty' && 'text-blue-700', key === 'balance_qty' && 'text-green-700')} style={bg}>{display}</td>;
+                        });
+                    });
+                    return <tr key={license.license_id} className={cn('align-middle hover:bg-muted/40', license.issue_count && 'border-l-4 border-l-red-600')}><td className="sticky left-0 z-10 border bg-background p-2 text-right">{index + 1}</td><td className="dfia-sticky-cell sticky z-20 border bg-background p-2" style={{left: 58, pointerEvents: 'auto'}}><Link to={`/licenses/${license.license_id}/overview`} className="font-semibold text-primary underline hover:text-primary/80 focus-visible:outline focus-visible:outline-2">{license.license_number}</Link>{license.highest_issue && <Badge variant="destructive" className="ml-1 text-[10px]">{license.highest_issue.replace('_', ' ')}</Badge>}<div className="mt-1 flex flex-col gap-1 text-[11px]">{license.condition_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onCondition(license); }} style={{...ACTION_PILL_BASE, color: '#92610a', backgroundColor: 'rgba(234,179,8,0.13)', border: '1px solid rgba(234,179,8,0.45)'}}><FileText className="size-3.5" />Condition</button> : <button type="button" disabled title="No condition sheet is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Condition</button>}{license.transfer_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onTransfer(license); }} style={{...ACTION_PILL_BASE, color: '#1d4ed8', backgroundColor: 'rgba(59,130,246,0.13)', border: '1px solid rgba(59,130,246,0.45)'}}><ArrowLeftRight className="size-3.5" />Transfer</button> : <button type="button" disabled title="No transfer status is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Transfer</button>}<button type="button" onClick={(event) => { event.stopPropagation(); onReplan(license); }} style={{...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid #a5b4fc'}}><Target className="size-3.5" />Re Plan me</button></div></td><td className="border p-2 whitespace-nowrap">{license.expiry_date || '—'}</td><td className="border p-2 min-w-48 whitespace-normal">{license.exporter || '—'}</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className={cn('border p-2 text-right whitespace-nowrap', key === 'debited_cif' && 'text-orange-700', key === 'allotted_cif' && 'text-blue-700', key === 'balance_cif' && 'text-green-700')}>{pivotNumber(license[key], 2)}</td>)}<td className="border p-2 text-center">{license.issue_count ? <button type="button" onClick={() => onIssue(license)}><Badge variant="destructive">{license.issue_count} Issues</Badge></button> : <Badge variant="secondary" className="text-green-700">OK</Badge>}</td>{pivotCells}</tr>;
+                })}<tr className="border-t-4 border-double border-slate-400 bg-slate-200 font-bold"><td className="sticky left-0 z-10 border bg-slate-200 p-2 text-right" colSpan={2}>TOTAL — {group.license_count} LICENCES</td><td className="border bg-slate-200 p-2">—</td><td className="border bg-slate-200 p-2">—</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className="border bg-slate-200 p-2 text-right whitespace-nowrap">{pivotNumber(group.totals?.[key], 2)}</td>)}<td className="border bg-slate-200 p-2">{group.issue_license_count || 'OK'}</td><PivotTotalCells group={group} /></tr></tbody></table></div></CardContent>
+        </Card> : null})}
+    </div>;
+}
+
 export default function ItemPivotReport() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
+    const [reportView, setReportView] = useState<'summary' | 'matrix'>(searchParams.get('view') === 'license-matrix' ? 'matrix' : 'summary');
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
     const [excludeCompanies, setExcludeCompanies] = useState([]);
-    const [, setSionNorms] = useState([]);
     const [filtersCollapsed, setFiltersCollapsed] = useState(false);
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);
@@ -95,18 +237,46 @@ export default function ItemPivotReport() {
     const [licenseStatus, setLicenseStatus] = useState('active');
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
-    // Purchase Status filter — populated from /masters/purchase-statuses/.
-    const [purchaseStatus, setPurchaseStatus] = useState(DEFAULT_PURCHASE_STATUS);
-    const [purchaseStatusOptions, setPurchaseStatusOptions] = useState([]);
+    // Purchase Status filter — options AND the default selection both come
+    // from the Purchase Status master's `is_active` rows (never hardcoded —
+    // see useMasterOptions.ts), applied once as soon as the master data
+    // loads (matches the same one-time-default pattern the Item Report page
+    // uses for its own Purchase Status filter).
+    const { options: purchaseStatusOptions } = usePurchaseStatusOptions();
+    const [purchaseStatus, setPurchaseStatus] = useState<string[]>([]);
+    const purchaseStatusDefaultApplied = useRef(false);
+    useEffect(() => {
+        if (!purchaseStatusDefaultApplied.current && purchaseStatusOptions.length > 0) {
+            purchaseStatusDefaultApplied.current = true;
+            setPurchaseStatus(purchaseStatusOptions.map(o => o.value));
+        }
+    }, [purchaseStatusOptions]);
     const [conditionModal, setConditionModal] = useState(null); // { licenseNumber, content }
     const [transferModal, setTransferModal] = useState(null); // { licenseNumber, content }
+    const [issueModal, setIssueModal] = useState(null);
     const [noteModal, setNoteModal] = useState(null); // { licenseNumber, content }
     // Utilization planning panel (same component the licenses page uses).
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
 
+    // AbortController ref — cancels the previous in-flight loadReport request
+    // when a new one starts, preventing stale responses from overwriting fresh data.
+    const reportAbortRef = useRef<AbortController | null>(null);
+
+    // Compact Scroll Mode — one flag per notification-group table (each group
+    // renders its own independently-scrollable pivot table), keyed by that
+    // group's key. Derived live from each table's scrollLeft — never written
+    // anywhere else, so it always reflects the table's actual scroll position
+    // and needs no reset/cleanup of its own.
+    const [compactScrollGroups, setCompactScrollGroups] = useState<Record<string, boolean>>({});
+    const handlePivotTableScroll = useCallback((groupKey: string) => (e: React.UIEvent<HTMLDivElement>) => {
+        const isScrolled = e.currentTarget.scrollLeft > 0;
+        setCompactScrollGroups(prev => (prev[groupKey] === isScrolled ? prev : {...prev, [groupKey]: isScrolled}));
+    }, []);
+    const pivotGroupKeys = Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {});
+    const { makeRef: makeFrozenColRef, offsets: frozenColOffsets } = useFrozenColumnOffsets(pivotGroupKeys);
+
     useEffect(() => {
-        loadFilterOptions();
         loadAvailableNorms();
     }, []);
 
@@ -117,29 +287,6 @@ export default function ItemPivotReport() {
             loadAvailableNorms();
         }
     }, [minBalance, licenseStatus]);
-
-    const loadFilterOptions = async () => {
-        try {
-            // Load SION norms (only active ones)
-            const normsResponse = await api.get('masters/sion-classes/?is_active=true');
-            const normsData = normsResponse.data?.results || normsResponse.data || [];
-            setSionNorms(Array.isArray(normsData) ? normsData : []);
-        } catch (error) {
-            setSionNorms([]);
-        }
-        try {
-            // Purchase Status dropdown — show only active rows, ordered by display_order.
-            const psResp = await api.get('masters/purchase-statuses/');
-            const psData = psResp.data?.results || psResp.data || [];
-            const opts = (Array.isArray(psData) ? psData : [])
-                .filter(p => p.is_active !== false)
-                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-                .map(p => ({value: p.code, label: p.label}));
-            setPurchaseStatusOptions(opts);
-        } catch (error) {
-            setPurchaseStatusOptions([]);
-        }
-    };
 
     const loadAvailableNorms = async () => {
         try {
@@ -160,31 +307,48 @@ export default function ItemPivotReport() {
     const loadReport = useCallback(async (normClass) => {
         if (!normClass) return;
 
+        // Cancel any in-flight request for this report — prevents the classic
+        // "stale response overwrites fresh data" race condition where a slow
+        // first request resolves after a faster second one and resets the table.
+        if (reportAbortRef.current) {
+            reportAbortRef.current.abort();
+        }
+        const controller = new AbortController();
+        reportAbortRef.current = controller;
+
         setLoading(true);
         try {
-            let url = `reports/item-pivot/?format=json&days=30&sion_norm=${normClass}`;
+            const response = await api.get(buildItemPivotReportPath({
+                format: "json",
+                normClass,
+                selectedCompanies,
+                excludeCompanies,
+                minBalance,
+                licenseStatus,
+                expiryDateFrom,
+                expiryDateTo,
+                purchaseStatus,
+            }), { signal: controller.signal });
 
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
+            // Only commit state if this request was not superseded
+            if (!controller.signal.aborted) {
+                setReportData(response.data);
             }
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
-            }
-            url += `&min_balance=${minBalance}`;
-            url += `&license_status=${licenseStatus}`;
-            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
-            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
-            }
-
-            const response = await api.get(url);
-            setReportData(response.data);
         } catch (error) {
+            // Axios names aborted requests 'CanceledError'; ignore them silently
+            if (
+                error?.name === 'CanceledError' ||
+                error?.code === 'ERR_CANCELED' ||
+                controller.signal.aborted
+            ) {
+                return;
+            }
             toast.error(error?.response?.data?.error || 'Failed to load report. Please try again.');
             setReportData(null);
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) {
+                setLoading(false);
+            }
         }
     }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus]);
 
@@ -204,6 +368,10 @@ export default function ItemPivotReport() {
                 license_status: licenseStatus
             });
             const taskId = response.data.task_id;
+            if (!taskId) {
+                toast.error('Balance update did not return a task id.');
+                return;
+            }
 
             // Show immediate toast notification
             toast.info(`Balance update started for ${statusText} licenses. You'll be notified when complete.`, {
@@ -224,8 +392,10 @@ export default function ItemPivotReport() {
 
             if (state === 'SUCCESS') {
                 // Show success notification
+                const updatedCount = toFiniteNumber(result?.updated, 0);
+                const elapsedSeconds = toFiniteNumber(result?.elapsed_seconds, 0);
                 toast.success(
-                    `Balance update completed! Updated ${result.updated} licenses in ${result.elapsed_seconds.toFixed(1)}s`,
+                    `Balance update completed! Updated ${updatedCount} licenses in ${elapsedSeconds.toFixed(1)}s`,
                     { duration: 6000 }
                 );
 
@@ -248,43 +418,49 @@ export default function ItemPivotReport() {
     const handleExport = async () => {
         setDownloading(true);
         try {
-            let url = `reports/item-pivot/?format=excel&days=30`;
-
-            if (activeNormTab) {
-                url += `&sion_norm=${activeNormTab}`;
-            }
-            if (selectedCompanies.length > 0) {
-                url += `&company_ids=${selectedCompanies.join(',')}`;
-            }
-            if (excludeCompanies.length > 0) {
-                url += `&exclude_company_ids=${excludeCompanies.join(',')}`;
-            }
-            url += `&min_balance=${minBalance}`;
-            url += `&license_status=${licenseStatus}`;
-            if (expiryDateFrom) url += `&expiry_date_from=${expiryDateFrom}`;
-            if (expiryDateTo) url += `&expiry_date_to=${expiryDateTo}`;
-            if (purchaseStatus.length > 0) {
-                url += `&purchase_status=${purchaseStatus.join(',')}`;
-            }
-
-            const response = await api.get(url, {
-                responseType: 'blob',
-            });
-
-            const downloadUrl = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.setAttribute('download', `item_pivot_report.xlsx`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(downloadUrl);
+            await openAuthedFile(buildItemPivotReportPath({
+                format: "excel",
+                normClass: activeNormTab,
+                selectedCompanies,
+                excludeCompanies,
+                minBalance,
+                licenseStatus,
+                expiryDateFrom,
+                expiryDateTo,
+                purchaseStatus,
+            }), "item_pivot_report.xlsx");
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to download report. Please try again.');
         } finally {
             setDownloading(false);
         }
     };
+
+    const handleCanonicalReplan = (license) => {
+        // Reuse the established planning panel: it owns the corrected Auto
+        // Plan mutation, loading state, cache refresh, and error handling.
+        setPlanLicense({ id: license.license_id, number: license.license_number, balance: Number(license.balance_cif || 0) });
+        setShowPlanModal(true);
+    };
+    const handleCanonicalCondition = (license) => setConditionModal({ licenseNumber: license.license_number, content: license.condition_sheet });
+    const handleCanonicalTransfer = (license) => setTransferModal({ licenseNumber: license.license_number, content: license.latest_transfer });
+    const handleCanonicalIssue = (license) => setIssueModal({
+        ...license,
+        issues: (license.issues || []).filter(isPositivePivotIssue),
+    });
+    const handleSummaryException = (item, group) => {
+        setReportView('matrix');
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.set('view', 'license-matrix'); next.set('item', `${item.canonical_item_id}:${item.sion}`); next.set('exception', item.status); next.set('exceptions_only', '1');
+            if (group?.notification_number) next.set('notification', group.notification_number);
+            return next;
+        });
+    };
+    const clearExceptionFilter = () => setSearchParams((current) => { const next = new URLSearchParams(current); ['item', 'exception', 'exceptions_only'].forEach(key => next.delete(key)); return next; });
+    useEffect(() => {
+        if (reportView === 'matrix' && searchParams.get('item')) document.getElementById(`pivot-item-${searchParams.get('item')}`)?.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+    }, [reportView, searchParams]);
 
     const handleCompanyChange = (values) => {
         setSelectedCompanies(values || []);
@@ -301,13 +477,15 @@ export default function ItemPivotReport() {
         setLicenseStatus('active');
         setExpiryDateFrom('');
         setExpiryDateTo('');
-        setPurchaseStatus(DEFAULT_PURCHASE_STATUS);
+        // Back to the master's active-status default, not a hardcoded list.
+        setPurchaseStatus(purchaseStatusOptions.map(o => o.value));
     };
 
-    // Purchase Status is "active" only when it differs from the default trio.
+    // Purchase Status is "active" only when it differs from the master's
+    // full active-status default (order-independent).
     const isDefaultPurchaseStatus =
-        purchaseStatus.length === DEFAULT_PURCHASE_STATUS.length &&
-        DEFAULT_PURCHASE_STATUS.every(v => purchaseStatus.includes(v));
+        purchaseStatus.length === purchaseStatusOptions.length &&
+        purchaseStatusOptions.every(o => purchaseStatus.includes(o.value));
     const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus;
 
     const getTotalLicenseCount = () => {
@@ -330,119 +508,11 @@ export default function ItemPivotReport() {
         return total;
     };
 
-    // Calculate summary for a notification
-    const calculateNotificationSummary = (licenses) => {
-        const summary: Record<string, any> = {
-            openingBalance: 0,
-            regularItems: {},
-            restrictedItemsByPercentage: {},
-            totalAvailable: 0
-        };
-
-        // Calculate opening balance (sum of all license balances)
-        licenses.forEach(license => {
-            const balance = parseFloat(license.balance_cif || 0);
-            summary.openingBalance += balance;
-        });
-
-        // First pass: Calculate restriction values per license (not per item, as it's shared)
-        const processedRestrictions = new Set(); // Track processed license+percentage combinations
-        licenses.forEach(license => {
-            if (reportData?.items) {
-                reportData.items.forEach(item => {
-                    const itemData = license.items?.[item.name];
-                    if (itemData && itemData.restriction !== null && itemData.restriction !== undefined) {
-                        const restrictionPercentage = parseFloat(itemData.restriction || 0);
-                        const restrictionKey = `${license.license_number}_${restrictionPercentage}`;
-
-                        // Only add restriction value once per license per percentage
-                        if (!processedRestrictions.has(restrictionKey)) {
-                            processedRestrictions.add(restrictionKey);
-
-                            if (!summary.restrictedItemsByPercentage[restrictionPercentage]) {
-                                summary.restrictedItemsByPercentage[restrictionPercentage] = {
-                                    items: {},
-                                    sharedRestrictionValue: 0
-                                };
-                            }
-                            summary.restrictedItemsByPercentage[restrictionPercentage].sharedRestrictionValue += parseFloat(itemData.restriction_value || 0);
-                        }
-                    }
-                });
-            }
-        });
-
-        // Second pass: Calculate item quantities
-        if (reportData?.items) {
-            reportData.items.forEach(item => {
-                let itemAvailable  = 0;
-                let itemPlanned    = 0;   // planned CIF (manual plan if present, else norm)
-                let itemPlannedQty = 0;   // planned quantity backing that CIF
-                let hasRestriction = false;
-                let restrictionPercentage = 0;
-
-                licenses.forEach(license => {
-                    const itemData = license.items?.[item.name];
-                    if (itemData) {
-                        // Available quantity
-                        itemAvailable += parseFloat(itemData.available_quantity || 0);
-                        // Planned CIF + quantity. A manually-planned DFIA uses its
-                        // authored plan (plan_cif / plan_quantity); otherwise fall
-                        // back to the norm-derived planned_cif over available qty.
-                        const manual = license.plan_source === 'manual';
-                        itemPlanned    += manual
-                            ? parseFloat(itemData.plan_cif || 0)
-                            : parseFloat(itemData.planned_cif || 0);
-                        itemPlannedQty += manual
-                            ? parseFloat(itemData.plan_quantity || 0)
-                            : parseFloat(itemData.available_quantity || 0);
-
-                        // Check if item has restriction
-                        if (itemData.restriction !== null && itemData.restriction !== undefined) {
-                            hasRestriction = true;
-                            restrictionPercentage = parseFloat(itemData.restriction || 0);
-                        }
-                    }
-                });
-
-                if (itemAvailable > 0) {
-                    const itemSummary = {
-                        available:    itemAvailable,
-                        planned_cif:  itemPlanned,
-                        planned_qty:  itemPlannedQty,
-                        // Unit price = Total Planned CIF / Total Planned QTY.
-                        unit_price:   itemPlannedQty > 0 ? itemPlanned / itemPlannedQty : 0,
-                    };
-
-                    if (hasRestriction) {
-                        // Add item to its restriction percentage group
-                        if (!summary.restrictedItemsByPercentage[restrictionPercentage]) {
-                            summary.restrictedItemsByPercentage[restrictionPercentage] = {
-                                items: {},
-                                sharedRestrictionValue: 0
-                            };
-                        }
-                        summary.restrictedItemsByPercentage[restrictionPercentage].items[item.name] = itemSummary;
-                    } else {
-                        summary.regularItems[item.name] = itemSummary;
-                    }
-
-                    summary.totalAvailable += itemAvailable;
-                    summary.totalPlanned = (summary.totalPlanned || 0) + itemPlanned;
-                    summary.totalPlannedQty = (summary.totalPlannedQty || 0) + itemPlannedQty;
-                }
-            });
-        }
-
-        return summary;
-    };
-
-
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--tb-body-bg)' }}>
+        <div className="min-h-screen bg-background">
             {/* Tabler-style page header */}
             <div className="page-header">
-                <div style={{ minWidth: 0 }}>
+                <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
                             href="/"
@@ -451,9 +521,9 @@ export default function ItemPivotReport() {
                         >
                             Home
                         </a>
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         Reports
-                        <span style={{ margin: '0 6px', opacity: 0.5 }}>/</span>
+                        <span className="mx-1.5 opacity-50">/</span>
                         Item Pivot Report
                     </div>
                     <h1>Item Pivot Report</h1>
@@ -535,8 +605,8 @@ export default function ItemPivotReport() {
                     {/* Empty state: norms exist but none selected */}
                     {!activeNormTab && !loading && availableNorms.length > 0 && (
                         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-center">
-                            <div className="flex size-16 items-center justify-center rounded-2xl" style={{ background: 'var(--tb-brand-50)' }}>
-                                <Tag className="size-8" style={{ color: 'var(--tb-brand)' }} />
+                            <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10">
+                                <Tag className="size-8 text-primary" />
                             </div>
                             <div>
                                 <p className="text-base font-bold text-foreground">Select a Norm to View Report</p>
@@ -561,8 +631,8 @@ export default function ItemPivotReport() {
                     {/* Loading state */}
                     {loading && activeNormTab && (
                         <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-14 text-center shadow-sm">
-                            <div className="flex size-14 items-center justify-center rounded-full" style={{ background: 'var(--tb-brand-50)' }}>
-                                <Loader2 className="size-7 animate-spin" style={{ color: 'var(--tb-brand)' }} />
+                            <div className="flex size-14 items-center justify-center rounded-full bg-primary/10">
+                                <Loader2 className="size-7 animate-spin text-primary" />
                             </div>
                             <div>
                                 <p className="font-semibold text-foreground">Loading {activeNormTab} Report…</p>
@@ -576,7 +646,7 @@ export default function ItemPivotReport() {
                         <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-12 text-center shadow-sm">
                             <Inbox className="size-10 opacity-20" aria-hidden="true" />
                             <div>
-                                <p className="font-semibold text-foreground">No licenses found for <span style={{ color: 'var(--tb-brand)' }}>{activeNormTab}</span></p>
+                                <p className="font-semibold text-foreground">No licenses found for <span className="text-primary">{activeNormTab}</span></p>
                                 <p className="mt-0.5 text-[12.5px] text-muted-foreground">Try adjusting your filters — e.g. increase minimum balance or change purchase status.</p>
                             </div>
                             {hasActiveFilters && (
@@ -588,25 +658,61 @@ export default function ItemPivotReport() {
                         </div>
                     )}
 
+                    {!loading && activeNormTab && Array.isArray(reportData?.groups) && (
+                        reportData.groups.length ? <><div className="mb-3 flex gap-1 border-b"><Button variant={reportView === 'summary' ? 'default' : 'ghost'} size="sm" onClick={() => setReportView('summary')}>Item Summary</Button><Button variant={reportView === 'matrix' ? 'default' : 'ghost'} size="sm" onClick={() => setReportView('matrix')}>Licence Matrix</Button>{searchParams.get('exceptions_only') && <Button variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</div>{reportView === 'summary' ? <FioriSummary summary={reportData.global_summary || reportData.summary} groups={reportData.notification_groups || reportData.groups} grandTotal={reportData.grand_total} onException={handleSummaryException} /> : <CanonicalPivot groups={reportData.groups} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} />}</> : (
+                            <div className="rounded-xl border border-border bg-card py-12 text-center text-muted-foreground">No licences match the selected filters.</div>
+                        )
+                    )}
+
                     {/* Show report data */}
-                    {!loading && activeNormTab && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
+                    {!loading && activeNormTab && !Array.isArray(reportData?.groups) && reportData?.licenses_by_norm_notification?.[activeNormTab] && Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length > 0 && (
                         <div>
                             {/* Notifications within active norm */}
                             {(Object.entries(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}) as [string, any][]).sort().map(([groupKey, licenses]: [string, any]) => {
+                                // Backend-computed grand totals for this (norm, notification)
+                                // group — the footer TOTAL row reads these directly instead of
+                                // reducing `licenses` itself (Phase 2B.2A; see
+                                // docs/architecture/ITEM_PIVOT_DISPLAY_DATASET_DESIGN.md).
+                                const groupTotals = reportData?.notification_totals?.[activeNormTab]?.[groupKey] || {};
                                 // Group key is "<Purchase Status> — <notification>" (see backend).
                                 // Split it so the table header shows purchase status as a chip
                                 // and the notification on its own.
                                 const emIdx = groupKey.indexOf(' — ');
                                 const psLabel = emIdx >= 0 ? groupKey.slice(0, emIdx) : (licenses[0]?.purchase_status_label || '');
                                 const notification = emIdx >= 0 ? groupKey.slice(emIdx + 3) : groupKey;
+                                // Per-group item filter: only render columns for items that have
+                                // actual data (import qty, balance, or plan) in THIS notification
+                                // group. Using the global reportData.items list would cause every
+                                // possible E1/E5 item to appear as an empty column even when no
+                                // license in this group planned or imported it.
+                                const groupItems = (reportData.items as any[]).filter((item: any) => {
+                                    if (!item.name) return false;
+                                    return (licenses as any[]).some((license: any) => {
+                                        const d = license.items?.[item.name] || {};
+                                        return (
+                                            (d.quantity ?? 0) > 0 ||
+                                            (d.available_quantity ?? 0) > 0 ||
+                                            (d.plan_quantity ?? 0) > 0 ||
+                                            (d.plan_cif ?? 0) > 0
+                                        );
+                                    });
+                                });
+                                const isCompact = !!compactScrollGroups[groupKey];
+                                // Fallback offsets (used only for the very first paint, before
+                                // the ref-measured real widths land) — approximate, never relied
+                                // on once `useFrozenColumnOffsets` has measured actual layout.
+                                const frozenOffsets = frozenColOffsets[groupKey] || {dfia: 60, expiry: 210, balance: 310};
+                                const dfiaLeft = `${frozenOffsets.dfia}px`;
+                                const expiryLeft = `${frozenOffsets.expiry}px`;
+                                const balanceLeft = `${frozenOffsets.balance}px`;
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
-                                    <div className="card">
-                                        <div
-                                            className="card-header bg-gradient text-primary flex justify-between items-center"
+                                    <Card>
+                                        <CardHeader
+                                            className="flex-row items-center justify-between gap-4 text-primary-foreground"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
-                                                <h5 className="mb-0">
+                                                <h5 className="mb-0 flex items-center gap-2 font-semibold">
                                                     <Bell className="size-4" aria-hidden="true" />
                                                     Notification Number: {notification}
                                                     {notification === 'Unknown' && (
@@ -627,14 +733,14 @@ export default function ItemPivotReport() {
                                                 </small>
                                             </div>
                                             <span className="chip chip-neutral">{licenses.length}</span>
-                                        </div>
-                                        <div className="card-body" style={{padding:0}}>
-                                            <div className="table-responsive" style={{overflowX: 'auto'}}>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container">
                                                 <table className="table table-hover table-sm table-bordered mb-0"
-                                                       style={{tableLayout: 'auto', minWidth: '860px'}}>
+                                                       style={{tableLayout: 'auto', minWidth: '960px'}}>
                                                     <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
                                                     <tr className="table-light">
-                                                        <th className="text-center" style={{
+                                                        <th ref={makeFrozenColRef(groupKey, 'srNo')} scope="col" className="text-center" style={{
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
@@ -642,57 +748,37 @@ export default function ItemPivotReport() {
                                                             minWidth: '60px'
                                                         }}>Sr No
                                                         </th>
-                                                        <th style={{
+                                                        <th ref={makeFrozenColRef(groupKey, 'dfia')} scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '60px',
+                                                            left: dfiaLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '120px'
                                                         }}>DFIA No
                                                         </th>
-                                                        <th style={{
+                                                        <th ref={makeFrozenColRef(groupKey, 'expiry')} scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '180px',
+                                                            left: expiryLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '100px'
                                                         }}>Expiry Dt
                                                         </th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '280px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '150px'
-                                                        }}>Exporter
+                                                        {!isCompact && (<>
+                                                        <th scope="col" style={{minWidth: '150px'}}>Exporter
                                                         </th>
-                                                        <th className="text-end" style={{
-                                                            position: 'sticky',
-                                                            left: '430px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Total CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Total CIF
                                                         </th>
-                                                        <th className="text-end" style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Debited CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Debited CIF
                                                         </th>
-                                                        <th className="text-end" style={{
-                                                            position: 'sticky',
-                                                            left: '630px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-sunken)',
-                                                            minWidth: '100px'
-                                                        }}>Alloted CIF
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Alloted CIF
                                                         </th>
-                                                        <th className="text-end" style={{
+                                                        <th scope="col" className="text-right" style={{minWidth: '100px'}}>Remaining CIF
+                                                        </th>
+                                                        </>)}
+                                                        <th scope="col" className="text-right" style={{
                                                             position: 'sticky',
-                                                            left: '730px',
+                                                            left: balanceLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-sunken)',
                                                             minWidth: '110px',
@@ -704,7 +790,7 @@ export default function ItemPivotReport() {
                                                         <th style={{ minWidth: '100px' }}>DFIA Dt</th>
                                                         <th style={{ minWidth: '120px' }}>Notif No</th>
                                                         */}
-                                                        {reportData.items.filter(item => item.name).map((item, itemIdx) => {
+                                                        {groupItems.map((item, itemIdx) => {
                                                             // Sub-cols per item: HSN, Description, Total, Allotted,
                                                             // Debited, Balance, Plan Qty, Plan CIF
                                                             // + 2 optional restriction cols when applicable
@@ -714,7 +800,7 @@ export default function ItemPivotReport() {
                                                                 + (item.has_restriction ? 2 : 0)
                                                                 + (isRutile ? 1 : 0);
                                                             return (
-                                                                <th key={`${item.id}-qty`} colSpan={colSpan}
+                                                                <th scope="col" key={`${item.id}-qty`} colSpan={colSpan}
                                                                     className="text-center"
                                                                     style={{minWidth: '200px', backgroundColor: itemBgColor(itemIdx)}}>
                                                                     <Package className="size-4" aria-hidden="true" />
@@ -724,95 +810,78 @@ export default function ItemPivotReport() {
                                                         })}
                                                     </tr>
                                                     <tr className="table-secondary">
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: 0,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '60px',
+                                                            left: dfiaLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '180px',
+                                                            left: expiryLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)'
                                                         }}></th>
-                                                        <th style={{
+                                                        {!isCompact && (<>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        <th scope="col" style={{backgroundColor: 'var(--tb-border)'}}></th>
+                                                        </>)}
+                                                        <th scope="col" style={{
                                                             position: 'sticky',
-                                                            left: '280px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '430px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '630px',
-                                                            zIndex: 11,
-                                                            backgroundColor: 'var(--tb-border)'
-                                                        }}></th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            left: '730px',
+                                                            left: balanceLeft,
                                                             zIndex: 11,
                                                             backgroundColor: 'var(--tb-border)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}></th>
                                                         {/* DFIA Dt / Notif No spacers temporarily hidden */}
-                                                        {reportData.items.filter(item => item.name).map(item => (
+                                                        {groupItems.map(item => (
                                                             <React.Fragment key={`${item.id}-headers`}>
-                                                                <th style={{minWidth: '90px', fontSize: 13.5}}>HSN
+                                                                <th scope="col" style={{minWidth: '90px', fontSize: 13.5}}>HSN
                                                                     Code
                                                                 </th>
-                                                                <th style={{
+                                                                <th scope="col" style={{
                                                                     minWidth: '150px',
                                                                     fontSize: 13.5
                                                                 }}>Description
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '90px',
                                                                     fontSize: 13.5
                                                                 }}>Total QTY
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '100px',
                                                                     fontSize: 13.5
                                                                 }}>Allotted QTY
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '100px',
                                                                     fontSize: 13.5
                                                                 }}>Debited QTY
                                                                 </th>
-                                                                <th className="text-end" style={{
+                                                                <th scope="col" className="text-right" style={{
                                                                     minWidth: '110px',
                                                                     fontSize: 13.5
                                                                 }}>Balance QTY
                                                                 </th>
                                                                 {item.has_restriction && (
                                                                     <>
-                                                                        <th className="text-center" style={{
+                                                                        <th scope="col" className="text-center" style={{
                                                                             minWidth: '90px',
                                                                             fontSize: 13.5
                                                                         }}>Restriction %
                                                                         </th>
-                                                                        <th className="text-end" style={{
+                                                                        <th scope="col" className="text-right" style={{
                                                                             minWidth: '120px',
                                                                             fontSize: 13.5
                                                                         }}>Restriction Val
@@ -820,10 +889,10 @@ export default function ItemPivotReport() {
                                                                     </>
                                                                 )}
                                                                 {/* Manual plan when present, else norm unit price / planned CIF */}
-                                                                <th className="text-end" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty / Unit Price</th>
-                                                                <th className="text-end" style={{ minWidth: '110px', fontSize: 13.5 }}>Planned CIF</th>
+                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Plan Qty</th>
+                                                                <th scope="col" className="text-right" style={{ minWidth: '110px', fontSize: 13.5 }}>Remaining CIF</th>
                                                                 {item.name === 'RUTILE - A3627' && (
-                                                                    <th className="text-end" style={{
+                                                                    <th scope="col" className="text-right" style={{
                                                                         minWidth: '100px',
                                                                         fontSize: 13.5
                                                                     }}>Unit Price (RUTILE)
@@ -845,7 +914,7 @@ export default function ItemPivotReport() {
                                                             }}>{idx + 1}</td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
-                                                                left: '60px',
+                                                                left: dfiaLeft,
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>
@@ -859,21 +928,17 @@ export default function ItemPivotReport() {
                                                                                     e.preventDefault();
                                                                                     e.stopPropagation();
                                                                                     try {
-                                                                                        const response = await api.get(`licenses/${license.id}/merged-documents/`, {
-                                                                                            responseType: 'blob',
-                                                                                            headers: { Authorization: `Bearer ${localStorage.getItem('access')}` }
-                                                                                        });
-                                                                                        window.open(URL.createObjectURL(response.data), '_blank', 'noopener');
+                                                                                        await openAuthedFile(`licenses/${license.id}/merged-documents/`);
                                                                                     } catch {
                                                                                         toast.error('Failed to open DFIA documents');
                                                                                     }
                                                                                 }}
-                                                                                style={{ fontWeight: 600, color: 'var(--tb-brand)', textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                                className="cursor-pointer whitespace-nowrap font-semibold text-primary underline"
                                                                             >
                                                                                 {license.license_number}
                                                                             </a>
                                                                         ) : (
-                                                                            <span style={{ fontWeight: 600 }}>{license.license_number}</span>
+                                                                            <span className="font-semibold">{license.license_number}</span>
                                                                         )}
                                                                         <div className="mt-1">
                                                                             <PurchaseStatusBadge
@@ -933,40 +998,29 @@ export default function ItemPivotReport() {
                                                             </td>
                                                             <td className="text-nowrap" style={{
                                                                 position: 'sticky',
-                                                                left: '180px',
+                                                                left: expiryLeft,
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)'
                                                             }}>{formatDate(license.license_expiry_date)}</td>
-                                                            <td className="text-truncate" style={{
-                                                                position: 'sticky',
-                                                                left: '280px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)',
-                                                                maxWidth: '150px'
-                                                            }} title={license.exporter}>
+                                                            {!isCompact && (<>
+                                                            <td className="text-truncate" style={{maxWidth: '150px'}} title={license.exporter}>
                                                                 {license.exporter}
                                                             </td>
-                                                            <td className="text-end font-semibold" style={{
+                                                            <td className="text-right font-semibold">{license.total_cif.toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-warning">{(license.debited_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-info">{(license.alloted_cif || 0).toFixed(2)}</td>
+                                                            <td className="text-right font-semibold text-secondary">
+                                                                {/* Planned CIF for this license — backend-computed sum of
+                                                                    every item column's own effective planned CIF (manual
+                                                                    plan when the product was manually planned, else
+                                                                    norm-derived). See `total_effective_planned_cif` in
+                                                                    item_pivot_report.py's `_build_license_row`. */}
+                                                                {(license.total_effective_planned_cif || 0).toFixed(2)}
+                                                            </td>
+                                                            </>)}
+                                                            <td className="text-right font-semibold text-success" style={{
                                                                 position: 'sticky',
-                                                                left: '430px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{license.total_cif.toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-warning" style={{
-                                                                position: 'sticky',
-                                                                left: '530px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{(license.debited_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-info" style={{
-                                                                position: 'sticky',
-                                                                left: '630px',
-                                                                zIndex: 1,
-                                                                backgroundColor: 'var(--tb-card-bg)'
-                                                            }}>{(license.alloted_cif || 0).toFixed(2)}</td>
-                                                            <td className="text-end font-semibold text-success" style={{
-                                                                position: 'sticky',
-                                                                left: '730px',
+                                                                left: balanceLeft,
                                                                 zIndex: 1,
                                                                 backgroundColor: 'var(--tb-card-bg)',
                                                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
@@ -976,13 +1030,28 @@ export default function ItemPivotReport() {
                                                             <td className="text-nowrap">{formatDate(license.license_date)}</td>
                                                             <td className="text-nowrap">{license.notification_number}</td>
                                                             */}
-                                                            {reportData.items.filter(item => item.name).map((item, itemIdx) => {
+                                                            {groupItems.map((item, itemIdx) => {
                                                                 const itemData = license.items[item.name] || {};
                                                                 const hasData = itemData.quantity > 0;
-                                                                // Per license: if the license is manually planned show the
-                                                                // manual plan; otherwise show the norm-derived unit price /
-                                                                // planned CIF. Never both for the same license.
-                                                                const hasManualPlan = license.plan_source === 'manual';
+                                                                // Verification data: the exact import item(s) behind this
+                                                                // cell's plan lines (see item_pivot_report.py). The backend
+                                                                // already merges every import item that's the SAME physical
+                                                                // product (same HSN + normalized description) into one
+                                                                // `planned_import_items` entry before this ever reaches the
+                                                                // UI — so `plannedItems.length` is 1 in the overwhelming
+                                                                // common case, rendered identically to before via
+                                                                // `itemData.hs_code`/`description`/`*_quantity` (which
+                                                                // resolve to that one merged entry). More than one entry
+                                                                // here means genuinely DIFFERENT products share this
+                                                                // item-name column (different HSN or description) — that
+                                                                // is never merged into one value; each is listed
+                                                                // separately, one aligned line per column, below.
+                                                                const plannedItems = itemData.planned_import_items || [];
+                                                                const hasMultiplePlannedItems = plannedItems.length > 1;
+                                                                // Per-product: whether THIS product was manually planned
+                                                                // (independent of every other product on this license).
+                                                                // A product was manually planned when its plan_quantity or
+                                                                // plan_cif is non-zero; otherwise show norm-derived values.
                                                                 // Each item's cells share one background tint so the item's
                                                                 // column group is visually distinct from its neighbours.
                                                                 const itemBg = itemBgColor(itemIdx);
@@ -990,26 +1059,49 @@ export default function ItemPivotReport() {
                                                                     <React.Fragment
                                                                         key={`${license.license_number}-${item.id}`}>
                                                                         <td style={{backgroundColor: itemBg}}>
-                                                                            {itemData.hs_code || '-'}
+                                                                            {hasMultiplePlannedItems ? (
+                                                                                <div className="d-flex flex-column gap-1">
+                                                                                    <span
+                                                                                        className="chip chip-neutral text-nowrap"
+                                                                                        title={`${plannedItems.length} distinct products share this item — different HSN/description, so they couldn't be merged into one row`}
+                                                                                    >
+                                                                                        {plannedItems.length} items
+                                                                                    </span>
+                                                                                    <span className="text-nowrap">
+                                                                                        {plannedItems.map((pit) => pit.hs_code || '-').join(', ')}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ) : (itemData.hs_code || '-')}
                                                                             {itemData.condition_type && (
                                                                                 <ConditionBadge type={itemData.condition_type} size="xs" />
                                                                             )}
                                                                         </td>
                                                                         <td className="text-truncate"
                                                                             style={{maxWidth: '180px', backgroundColor: itemBg}}
-                                                                            title={itemData.description || ''}>
-                                                                            {itemData.description || '-'}
+                                                                            title={hasMultiplePlannedItems
+                                                                                ? plannedItems.map((pit) => pit.description || '-').join(', ')
+                                                                                : (itemData.description || '')}>
+                                                                            {hasMultiplePlannedItems
+                                                                                ? plannedItems.map((pit) => pit.description || '-').join(', ')
+                                                                                : (itemData.description || '-')}
                                                                         </td>
-                                                                        <td className="text-end" style={{backgroundColor: itemBg}}>
+                                                                        {/* Quantity/Allotted/Debited/Available are already
+                                                                            summed across every distinct product sharing this
+                                                                            cell by the backend (see _build_license_row in
+                                                                            item_pivot_report.py) — unlike HSN/Description
+                                                                            (strings, never merged), these numeric totals are
+                                                                            unambiguous, so `itemData.*` is rendered as-is here
+                                                                            with no per-product branching. */}
+                                                                        <td className="text-right" style={{backgroundColor: itemBg}}>
                                                                             {itemData.quantity ? itemData.quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'font-semibold text-primary' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                        <td className={cn('text-right', hasData && 'font-semibold text-primary')} style={{backgroundColor: itemBg}}>
                                                                             {itemData.allotted_quantity ? itemData.allotted_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className="text-end" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
+                                                                        <td className="text-right" style={{backgroundColor: itemBg, ...(hasData ? {color: 'var(--warning-color)'} : {})}}>
                                                                             {itemData.debited_quantity ? itemData.debited_quantity.toFixed(3) : '-'}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'text-success font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                        <td className={cn('text-right', hasData && 'text-success font-semibold')} style={{backgroundColor: itemBg}}>
                                                                             {itemData.available_quantity ? itemData.available_quantity.toFixed(3) : '-'}
                                                                         </td>
                                                                         {item.has_restriction && (
@@ -1020,24 +1112,40 @@ export default function ItemPivotReport() {
                                                                                             className="chip chip-info">{itemData.restriction}%</span>
                                                                                     ) : '-'}
                                                                                 </td>
-                                                                                <td className={`text-end ${hasData ? 'font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                                <td className={cn('text-right', hasData && 'font-semibold')} style={{backgroundColor: itemBg}}>
                                                                                     {itemData.restriction_value ? itemData.restriction_value.toFixed(2) : '-'}
                                                                                 </td>
                                                                             </>
                                                                         )}
-                                                                        {/* Manual plan if present, else norm unit price / planned CIF */}
-                                                                        <td className="text-end" style={{backgroundColor: itemBg}}>
-                                                                            {hasManualPlan
+                                                                        {/* Per-product plan: manual plan takes priority when
+                                                                            this product was manually planned; fall back to
+                                                                            norm-derived values otherwise. `plan_quantity`/
+                                                                            `plan_cif`/`unit_price`/`planned_cif` are already
+                                                                            cell-level totals for the WHOLE item-name column
+                                                                            (see `row_data['items'][item_name]` in
+                                                                            item_pivot_report.py — sourced independently of
+                                                                            `planned_import_items`), so — exactly like the
+                                                                            Excel export's equivalent column — there is no
+                                                                            per-product branching here even when the cell
+                                                                            has several genuinely distinct merged products. */}
+                                                                        <td className="text-right" style={{backgroundColor: itemBg}}>
+                                                                            {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
                                                                                 ? Number(itemData.plan_quantity || 0).toFixed(3)
-                                                                                : (itemData.unit_price ? Number(itemData.unit_price).toFixed(2) : '-')}
+                                                                                : (itemData.unit_price != null ? Number(itemData.unit_price).toFixed(2) : '-')}
                                                                         </td>
-                                                                        <td className={`text-end ${hasData ? 'font-semibold' : ''}`} style={{backgroundColor: itemBg}}>
-                                                                            {hasManualPlan
-                                                                                ? Number(itemData.plan_cif || 0).toFixed(2)
-                                                                                : (itemData.planned_cif ? Number(itemData.planned_cif).toFixed(2) : '-')}
+                                                                        <td className={cn('text-right', hasData && 'font-semibold')} style={{backgroundColor: itemBg}}>
+                                                                            {/* Value is the backend's single manual-vs-norm
+                                                                                selection (`effective_planned_cif`) — the
+                                                                                manual/hasManual check here is display-only
+                                                                                (a manually-planned $0 CIF still shows "0.00",
+                                                                                a norm-derived $0 shows "-"), not a re-derivation
+                                                                                of which figure is authoritative. */}
+                                                                            {(Number(itemData.plan_quantity || 0) > 0 || Number(itemData.plan_cif || 0) > 0)
+                                                                                ? Number(itemData.effective_planned_cif || 0).toFixed(2)
+                                                                                : (itemData.effective_planned_cif ? Number(itemData.effective_planned_cif).toFixed(2) : '-')}
                                                                         </td>
                                                                         {item.name === 'RUTILE - A3627' && (
-                                                                            <td className={`text-end ${hasData ? 'font-semibold text-warning' : ''}`} style={{backgroundColor: itemBg}}>
+                                                                            <td className={cn('text-right', hasData && 'font-semibold text-warning')} style={{backgroundColor: itemBg}}>
                                                                                 {itemData.unit_price ? itemData.unit_price.toFixed(4) : '-'}
                                                                             </td>
                                                                         )}
@@ -1059,111 +1167,93 @@ export default function ItemPivotReport() {
                                                             left: 0,
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)'
-                                                        }} colSpan={4}>
+                                                        }} colSpan={3}>
                                                             <Calculator className="size-4" aria-hidden="true" />
                                                             TOTAL
                                                         </td>
-                                                        <td className="text-end text-primary" style={{
-                                                            position: 'sticky',
-                                                            left: '430px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
-                                                            {licenses.reduce((sum, lic) => sum + lic.total_cif, 0).toFixed(2)}
+                                                        {!isCompact && (<>
+                                                        <td style={{backgroundColor: 'var(--warning-bg)'}}></td>
+                                                        <td className="text-right text-primary" style={{backgroundColor: 'var(--warning-bg)'}}>
+                                                            {(groupTotals.total_cif || 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-warning" style={{
-                                                            position: 'sticky',
-                                                            left: '530px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
-                                                            {licenses.reduce((sum, lic) => sum + (lic.debited_cif || 0), 0).toFixed(2)}
+                                                        <td className="text-right text-warning" style={{backgroundColor: 'var(--warning-bg)'}}>
+                                                            {(groupTotals.debited_cif || 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-info" style={{
-                                                            position: 'sticky',
-                                                            left: '630px',
-                                                            zIndex: 1,
-                                                            backgroundColor: 'var(--warning-bg)'
-                                                        }}>
-                                                            {licenses.reduce((sum, lic) => sum + (lic.alloted_cif || 0), 0).toFixed(2)}
+                                                        <td className="text-right text-info" style={{backgroundColor: 'var(--warning-bg)'}}>
+                                                            {(groupTotals.alloted_cif || 0).toFixed(2)}
                                                         </td>
-                                                        <td className="text-end text-success" style={{
+                                                        <td className="text-right text-secondary" style={{backgroundColor: 'var(--warning-bg)'}}>
+                                                            {(groupTotals.total_effective_planned_cif || 0).toFixed(2)}
+                                                        </td>
+                                                        </>)}
+                                                        <td className="text-right text-success" style={{
                                                             position: 'sticky',
-                                                            left: '730px',
+                                                            left: balanceLeft,
                                                             zIndex: 1,
                                                             backgroundColor: 'var(--warning-bg)',
                                                             boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                             borderRight: '2px solid var(--tb-border)'
                                                         }}>
-                                                            {licenses.reduce((sum, lic) => sum + lic.balance_cif, 0).toFixed(2)}
+                                                            {(groupTotals.balance_cif || 0).toFixed(2)}
                                                         </td>
                                                         {/* DFIA Dt / Notif No totals temporarily hidden */}
-                                                        {reportData.items.filter(item => item.name).map(item => {
-                                                            const totalQty = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.quantity || 0);
-                                                            }, 0);
-                                                            const totalAllotted = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.allotted_quantity || 0);
-                                                            }, 0);
-                                                            const totalDebited = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.debited_quantity || 0);
-                                                            }, 0);
-                                                            const totalAvail = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.available_quantity || 0);
-                                                            }, 0);
-                                                            const totalRestrictionVal = licenses.reduce((sum, lic) => {
-                                                                return sum + (lic.items[item.name]?.restriction_value || 0);
-                                                            }, 0);
-                                                            // Planned CIF + quantity, manual plan aware (matches the
-                                                            // per-licence rows): manual DFIAs use plan_cif/plan_quantity,
-                                                            // norm DFIAs use planned_cif over available quantity.
-                                                            const totalPlanned = licenses.reduce((sum, lic) => {
-                                                                const it = lic.items[item.name] || {};
-                                                                return sum + (lic.plan_source === 'manual'
-                                                                    ? (it.plan_cif || 0)
-                                                                    : (it.planned_cif || 0));
-                                                            }, 0);
-                                                            const totalPlannedQty = licenses.reduce((sum, lic) => {
-                                                                const it = lic.items[item.name] || {};
-                                                                return sum + (lic.plan_source === 'manual'
-                                                                    ? (it.plan_quantity || 0)
-                                                                    : (it.available_quantity || 0));
-                                                            }, 0);
-                                                            // Effective unit price = total planned CIF / total planned qty.
-                                                            const effectiveUnit = totalPlannedQty > 0 ? totalPlanned / totalPlannedQty : 0;
+                                                        {groupItems.map(item => {
+                                                            // Backend-computed per-item totals for this group — see
+                                                            // `notification_totals[...].items` in item_pivot_report.py.
+                                                            // React only reads and formats them (Phase 2B.2A).
+                                                            const itemTotals = groupTotals.items?.[item.name] || {};
+                                                            const totalQty = itemTotals.quantity || 0;
+                                                            const totalAllotted = itemTotals.allotted_quantity || 0;
+                                                            const totalDebited = itemTotals.debited_quantity || 0;
+                                                            const totalAvail = itemTotals.available_quantity || 0;
+                                                            const totalRestrictionVal = itemTotals.restriction_value || 0;
+                                                            // Planned CIF: the backend's single manual-vs-norm selection
+                                                            // rule (`effective_planned_cif`), already resolved and summed.
+                                                            const totalPlanned = itemTotals.effective_planned_cif || 0;
+                                                            // Total Plan Qty: sum of the manually-planned quantity only —
+                                                            // mirrors exactly what the per-row "Plan Qty" cell shows (it
+                                                            // never falls back to available_quantity/unit_price), so a
+                                                            // norm-driven row with no manual plan contributes 0 here
+                                                            // rather than being folded into a blended rate.
+                                                            const totalPlanQty = itemTotals.plan_quantity || 0;
                                                             return (
                                                                 <React.Fragment key={`total-${item.id}`}>
-                                                                    <td className="text-muted">-</td>
-                                                                    <td className="text-muted">-</td>
-                                                                    <td className="text-end">
+                                                                    <td className="text-muted-foreground">-</td>
+                                                                    <td className="text-muted-foreground">-</td>
+                                                                    <td className="text-right">
                                                                         {totalQty > 0 ? totalQty.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end text-primary">
+                                                                    <td className="text-right text-primary">
                                                                         {totalAllotted > 0 ? totalAllotted.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end" style={{color: 'var(--warning-color)'}}>
+                                                                    <td className="text-right text-warning">
                                                                         {totalDebited > 0 ? totalDebited.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end text-success">
+                                                                    <td className="text-right text-success">
                                                                         {totalAvail > 0 ? totalAvail.toFixed(3) : '-'}
                                                                     </td>
                                                                     {item.has_restriction && (
                                                                         <>
-                                                                            <td className="text-muted">-</td>
-                                                                            <td className="text-end font-bold">
+                                                                            <td className="text-muted-foreground">-</td>
+                                                                            <td className="text-right font-bold">
                                                                                 {totalRestrictionVal > 0 ? totalRestrictionVal.toFixed(2) : '-'}
                                                                             </td>
                                                                         </>
                                                                     )}
-                                                                    {/* Unit Price (effective rate) + Planned CIF total. */}
-                                                                    <td className="text-end">
-                                                                        {effectiveUnit > 0 ? effectiveUnit.toFixed(2) : '-'}
+                                                                    {/* Plan Qty total. Must be exactly one <td> here — an
+                                                                        extra placeholder cell shifts this and every later
+                                                                        item's totals out from under their headers (this
+                                                                        column previously rendered blank "-" under
+                                                                        "Plan Qty / Unit Price" while the real number
+                                                                        landed one column over). */}
+                                                                    <td className="text-right">
+                                                                        {totalPlanQty > 0 ? totalPlanQty.toFixed(3) : '-'}
                                                                     </td>
-                                                                    <td className="text-end font-bold">
+                                                                    <td className="text-right font-bold">
                                                                         {totalPlanned > 0 ? totalPlanned.toFixed(2) : '-'}
                                                                     </td>
                                                                     {item.name === 'RUTILE - A3627' && (
-                                                                        <td className="text-muted">-</td>
+                                                                        <td className="text-muted-foreground">-</td>
                                                                     )}
                                                                 </React.Fragment>
                                                             );
@@ -1175,7 +1265,10 @@ export default function ItemPivotReport() {
 
                                             {/* Summary Table */}
                                             {(() => {
-                                                const summary = calculateNotificationSummary(licenses);
+                                                // Backend-computed Notification Summary (Phase 2B.2B) — pure
+                                                // rendering layer, no local aggregation. See
+                                                // docs/architecture/ITEM_PIVOT_NOTIFICATION_SUMMARY_DESIGN.md.
+                                                const summary = reportData?.notification_summary?.[activeNormTab]?.[groupKey] || {};
                                                 return (
                                                     <div className="mt-4 px-3 pb-3">
                                                         <h6 className="mb-3 text-primary">
@@ -1186,83 +1279,92 @@ export default function ItemPivotReport() {
                                                             <table className="table table-bordered table-sm" style={{tableLayout: 'fixed', width: '1400px'}}>
                                                                 <thead className="table-light">
                                                                 <tr>
-                                                                    <th style={{width: '80px'}}>Sr No</th>
-                                                                    <th style={{width: '620px'}}>Item Name</th>
-                                                                    <th className="text-end" style={{width: '230px'}}>Available Balance QTY</th>
-                                                                    <th className="text-end" style={{width: '170px'}}>Unit Price</th>
-                                                                    <th className="text-end" style={{width: '300px'}}>Total Planned CIF ($)</th>
+                                                                    <th scope="col" style={{width: '70px'}}>Sr No</th>
+                                                                    <th scope="col" style={{width: '460px'}}>Item Name</th>
+                                                                    <th scope="col" className="text-right" style={{width: '220px'}}>Available Balance QTY</th>
+                                                                    <th scope="col" className="text-right" style={{width: '150px'}}>Remaining Qty</th>
+                                                                    <th scope="col" className="text-right" style={{width: '170px'}}>Unit Price</th>
+                                                                    <th scope="col" className="text-right" style={{width: '300px'}}>Total Remaining CIF ($)</th>
                                                                 </tr>
                                                                 </thead>
                                                                 <tbody>
                                                                 {/* Opening Balance */}
                                                                 <tr className="table-info">
                                                                     <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
-                                                                    <td className="text-end font-bold">
-                                                                        {formatIndianNumber(summary.openingBalance, 2)}
+                                                                    <td className="text-right font-bold">
+                                                                        {formatIndianNumber(summary.opening_balance || 0, 2)}
                                                                     </td>
-                                                                    <td className="text-end font-bold">-</td>
-                                                                    <td className="text-end font-bold">-</td>
+                                                                    <td className="text-right font-bold">-</td>
+                                                                    <td className="text-right font-bold">-</td>
+                                                                    <td className="text-right font-bold">-</td>
                                                                 </tr>
 
                                                                 {/* Regular Items */}
-                                                                {(Object.entries(summary.regularItems) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
+                                                                {(Object.entries(summary.regular_items || {}) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                     <tr key={itemName}>
                                                                         <td className="text-center">{idx + 1}</td>
                                                                         <td className="font-bold">{itemName}</td>
-                                                                        <td className="text-end">
+                                                                        <td className="text-right">
                                                                             {formatIndianNumber(itemData.available, 2)}
                                                                         </td>
-                                                                        <td className="text-end">
+                                                                        <td className="text-right">
+                                                                            {itemData.planned_qty ? formatIndianNumber(itemData.planned_qty, 2) : '-'}
+                                                                        </td>
+                                                                        <td className="text-right">
                                                                             {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                         </td>
-                                                                        <td className="text-end font-semibold">
+                                                                        <td className="text-right font-semibold">
                                                                             {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                         </td>
                                                                     </tr>
                                                                 ))}
 
                                                                 {/* Restricted Items Grouped by Percentage */}
-                                                                {Object.keys(summary.restrictedItemsByPercentage).length > 0 && (
+                                                                {Object.keys(summary.restricted_items_by_percentage || {}).length > 0 && (
                                                                     <>
-                                                                        {Object.entries(summary.restrictedItemsByPercentage)
+                                                                        {Object.entries(summary.restricted_items_by_percentage || {})
                                                                             .sort(([pctA], [pctB]) => parseFloat(pctA) - parseFloat(pctB))
                                                                             .map(([percentage, groupData], groupIdx) => {
-                                                                                const startIdx = Object.keys(summary.regularItems).length +
-                                                                                    Object.entries(summary.restrictedItemsByPercentage)
+                                                                                const startIdx = Object.keys(summary.regular_items || {}).length +
+                                                                                    Object.entries(summary.restricted_items_by_percentage || {})
                                                                                         .slice(0, groupIdx)
                                                                                         .reduce((acc: number, [, data]: [string, any]) => acc + Object.keys((data as any).items || {}).length, 0);
 
                                                                                 return (
                                                                                     <React.Fragment key={percentage}>
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan={5} className="text-center font-bold">
+                                                                                            <td colSpan={6} className="text-center font-bold">
                                                                                                 <TriangleAlert className="size-4" aria-hidden="true" />
-                                                                                                RESTRICTED ITEMS - {percentage}%
+                                                                                                RESTRICTED ITEMS - {parseFloat(percentage)}%
                                                                                             </td>
                                                                                         </tr>
                                                                                         {(Object.entries((groupData as any).items || {}) as [string, any][]).map(([itemName, itemData]: [string, any], idx) => (
                                                                                             <tr key={itemName} className="table-light">
                                                                                                 <td className="text-center">{startIdx + idx + 1}</td>
                                                                                                 <td className="font-bold">{itemName}</td>
-                                                                                                <td className="text-end">
+                                                                                                <td className="text-right">
                                                                                                     {formatIndianNumber(itemData.available, 2)}
                                                                                                 </td>
-                                                                                                <td className="text-end">
+                                                                                                <td className="text-right">
+                                                                                                    {itemData.planned_qty ? formatIndianNumber(itemData.planned_qty, 2) : '-'}
+                                                                                                </td>
+                                                                                                <td className="text-right">
                                                                                                     {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
                                                                                                 </td>
-                                                                                                <td className="text-end font-semibold">
+                                                                                                <td className="text-right font-semibold">
                                                                                                     {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
                                                                                                 </td>
                                                                                             </tr>
                                                                                         ))}
                                                                                         {/* Balance for this restriction percentage (shared across all items) */}
                                                                                         <tr className="table-warning">
-                                                                                            <td colSpan={2} className="text-center font-bold">Balance {percentage}%</td>
-                                                                                            <td className="text-end font-bold">
-                                                                                                {formatIndianNumber((groupData as any).sharedRestrictionValue, 2)}
+                                                                                            <td colSpan={2} className="text-center font-bold">Balance {parseFloat(percentage)}%</td>
+                                                                                            <td className="text-right font-bold">
+                                                                                                {formatIndianNumber((groupData as any).shared_restriction_value, 2)}
                                                                                             </td>
-                                                                                            <td className="text-end font-bold">-</td>
-                                                                                            <td className="text-end font-bold">-</td>
+                                                                                            <td className="text-right font-bold">-</td>
+                                                                                            <td className="text-right font-bold">-</td>
+                                                                                            <td className="text-right font-bold">-</td>
                                                                                         </tr>
                                                                                     </React.Fragment>
                                                                                 );
@@ -1271,17 +1373,20 @@ export default function ItemPivotReport() {
                                                                 )}
                                                                 {/* Grand-total row for the Summary table. */}
                                                                 <tr className="table-success">
-                                                                    <td colSpan={2} className="text-center font-bold">TOTAL PLANNED CIF ($)</td>
-                                                                    <td className="text-end font-bold">
-                                                                        {formatIndianNumber(summary.totalAvailable || 0, 2)}
+                                                                    <td colSpan={2} className="text-center font-bold">TOTAL REMAINING CIF ($)</td>
+                                                                    <td className="text-right font-bold">
+                                                                        {formatIndianNumber(summary.total_available || 0, 2)}
                                                                     </td>
-                                                                    <td className="text-end font-bold">
-                                                                        {summary.totalPlannedQty > 0
-                                                                            ? (summary.totalPlanned / summary.totalPlannedQty).toFixed(2)
+                                                                    <td className="text-right font-bold">
+                                                                        {formatIndianNumber(summary.total_planned_qty || 0, 2)}
+                                                                    </td>
+                                                                    <td className="text-right font-bold">
+                                                                        {summary.total_planned_qty > 0
+                                                                            ? summary.blended_unit_price.toFixed(2)
                                                                             : '-'}
                                                                     </td>
-                                                                    <td className="text-end font-bold">
-                                                                        {formatIndianNumber(summary.totalPlanned || 0, 2)}
+                                                                    <td className="text-right font-bold">
+                                                                        {formatIndianNumber(summary.total_planned_cif || 0, 2)}
                                                                     </td>
                                                                 </tr>
                                                                 </tbody>
@@ -1290,29 +1395,127 @@ export default function ItemPivotReport() {
                                                     </div>
                                                 );
                                             })()}
-                                        </div>
-                                    </div>
+                                        </CardContent>
+                                    </Card>
                                 </div>
                                 );
                             })}
+
+                            {/* ── Norms Total Summary ────────────────────────── */}
+                            {(() => {
+                                // Flatten all licenses across every notification group
+                                // for the active norm — used only to gate rendering and
+                                // show the license count; the summary numbers themselves
+                                // come from the backend-owned norm_summary (Phase 2B.2B).
+                                const allNormLicenses: any[] = Object.values(
+                                    reportData?.licenses_by_norm_notification?.[activeNormTab] || {}
+                                ).flat();
+                                if (allNormLicenses.length === 0) return null;
+                                const totalLicenses = allNormLicenses.length;
+                                const ns = reportData?.norm_summary?.[activeNormTab] || {};
+                                const itemRows = [
+                                    ...Object.entries((ns.regular_items || {}) as Record<string, any>),
+                                    ...Object.values((ns.restricted_items_by_percentage || {}) as Record<string, any>)
+                                        .flatMap((g: any) => Object.entries(g.items || {})),
+                                ] as [string, any][];
+
+                                return (
+                                    <Card className="mb-4 border-primary/30">
+                                        <CardHeader
+                                            className="flex-row items-center gap-3 text-primary-foreground"
+                                            style={{ background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))' }}>
+                                            <Calculator className="size-4" aria-hidden="true" />
+                                            <h5 className="mb-0 font-semibold">
+                                                {activeNormTab} — Norms Total Summary
+                                            </h5>
+                                            <span className="chip chip-neutral ml-auto">{totalLicenses} Licenses</span>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div style={{ maxWidth: '1400px', overflowX: 'auto' }}>
+                                                <table className="table table-bordered table-sm mb-0" style={{ tableLayout: 'fixed', width: '1400px' }}>
+                                                    <thead className="table-light">
+                                                        <tr>
+                                                            <th scope="col" style={{ width: '50px' }}>Sr No</th>
+                                                            <th scope="col" style={{ width: '400px' }}>Item Name</th>
+                                                            <th scope="col" className="text-right" style={{ width: '220px' }}>Available Balance QTY</th>
+                                                            <th scope="col" className="text-right" style={{ width: '150px' }}>Remaining Qty</th>
+                                                            <th scope="col" className="text-right" style={{ width: '170px' }}>Unit Price</th>
+                                                            <th scope="col" className="text-right" style={{ width: '300px' }}>Total Remaining CIF ($)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {/* Opening Balance */}
+                                                        <tr className="table-info">
+                                                            <td colSpan={2} className="text-center font-bold">OPENING BALANCE</td>
+                                                            <td className="text-right font-bold">{formatIndianNumber(ns.opening_balance || 0, 2)}</td>
+                                                            <td className="text-right font-bold">-</td>
+                                                            <td className="text-right font-bold">-</td>
+                                                            <td className="text-right font-bold">-</td>
+                                                        </tr>
+
+                                                        {/* Item rows */}
+                                                        {itemRows.map(([itemName, itemData], idx) => (
+                                                            <tr key={itemName}>
+                                                                <td className="text-center">{idx + 1}</td>
+                                                                <td className="font-bold">{itemName}</td>
+                                                                <td className="text-right">
+                                                                    {formatIndianNumber(itemData.available, 2)}
+                                                                </td>
+                                                                <td className="text-right">
+                                                                    {itemData.planned_qty ? formatIndianNumber(itemData.planned_qty, 2) : '-'}
+                                                                </td>
+                                                                <td className="text-right">
+                                                                    {itemData.unit_price ? itemData.unit_price.toFixed(2) : '-'}
+                                                                </td>
+                                                                <td className="text-right font-semibold">
+                                                                    {itemData.planned_cif ? formatIndianNumber(itemData.planned_cif, 2) : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+
+                                                        {/* Grand total */}
+                                                        <tr className="table-primary font-bold">
+                                                            <td colSpan={2} className="text-center font-bold">TOTAL REMAINING CIF ($)</td>
+                                                            <td className="text-right font-bold">
+                                                                {formatIndianNumber(ns.total_available || 0, 2)}
+                                                            </td>
+                                                            <td className="text-right font-bold">
+                                                                {formatIndianNumber(ns.total_planned_qty || 0, 2)}
+                                                            </td>
+                                                            <td className="text-right font-bold">
+                                                                {(ns.total_planned_qty || 0) > 0
+                                                                    ? (ns.blended_unit_price || 0).toFixed(2)
+                                                                    : '-'}
+                                                            </td>
+                                                            <td className="text-right font-bold">
+                                                                {formatIndianNumber(ns.total_planned_cif || 0, 2)}
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })()}
 
                             {/* Notes and Conditions Section */}
                             {activeNormTab && reportData?.norm_notes_conditions?.[activeNormTab] && (
                                 reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 || reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0
                             ) && (
-                                <div className="card mb-4">
-                                    <div className="card-header bg-light">
-                                        <h5 className="mb-0">
+                                <Card className="mb-4">
+                                    <CardHeader>
+                                        <h5 className="flex items-center gap-2 font-semibold">
                                             <Info className="size-4" aria-hidden="true" />
                                             SION Norm {activeNormTab} - Notes & Conditions
                                         </h5>
-                                    </div>
-                                    <div className="card-body">
-                                        <div className="row">
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-4">
                                             {/* Notes Section */}
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.notes?.length > 0 && (
                                                 <div>
-                                                    <h6 className="text-primary mb-3">
+                                                    <h6 className="mb-3 flex items-center gap-2 text-primary">
                                                         <StickyNote className="size-4" aria-hidden="true" />
                                                         Notes
                                                     </h6>
@@ -1323,7 +1526,7 @@ export default function ItemPivotReport() {
                                                                 <div key={index} className="list-group-item border-start border-primary border-3">
                                                                     <div className="flex w-full justify-between items-start">
                                                                         <span className="chip chip-primary mr-2">{index + 1}</span>
-                                                                        <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
+                                                                        <p className="mb-0 flex-grow whitespace-pre-wrap">
                                                                             {note.note_text}
                                                                         </p>
                                                                     </div>
@@ -1336,7 +1539,7 @@ export default function ItemPivotReport() {
                                             {/* Conditions Section */}
                                             {reportData?.norm_notes_conditions?.[activeNormTab]?.conditions?.length > 0 && (
                                                 <div>
-                                                    <h6 className="text-warning mb-3">
+                                                    <h6 className="mb-3 flex items-center gap-2 text-warning">
                                                         <TriangleAlert className="size-4" aria-hidden="true" />
                                                         Conditions
                                                     </h6>
@@ -1347,7 +1550,7 @@ export default function ItemPivotReport() {
                                                                 <div key={index} className="list-group-item border-start border-warning border-3">
                                                                     <div className="flex w-full justify-between items-start">
                                                                         <span className="chip chip-warning mr-2">{index + 1}</span>
-                                                                        <p className="mb-0 flex-grow-1" style={{whiteSpace: 'pre-wrap'}}>
+                                                                        <p className="mb-0 flex-grow whitespace-pre-wrap">
                                                                             {condition.condition_text}
                                                                         </p>
                                                                     </div>
@@ -1357,8 +1560,8 @@ export default function ItemPivotReport() {
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                </div>
+                                    </CardContent>
+                                </Card>
                             )}
                         </div>
                     )}
@@ -1375,7 +1578,7 @@ export default function ItemPivotReport() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="max-h-[65vh] overflow-y-auto">
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                            <pre className="m-0 whitespace-pre-wrap break-words font-[inherit] text-[14.5px] text-foreground">
                                 {conditionModal.content}
                             </pre>
                         </div>
@@ -1396,13 +1599,22 @@ export default function ItemPivotReport() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="max-h-[65vh] overflow-y-auto">
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                            <pre className="m-0 whitespace-pre-wrap break-words font-[inherit] text-[14.5px] text-foreground">
                                 {transferModal.content}
                             </pre>
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setTransferModal(null)}>Close</Button>
                         </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {issueModal && (
+                <Dialog open={!!issueModal} onOpenChange={(open) => !open && setIssueModal(null)}>
+                    <DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>Issues — {issueModal.license_number}</DialogTitle></DialogHeader>
+                        <div className="space-y-2">{(issueModal.issues || []).filter(isPositivePivotIssue).length ? (issueModal.issues || []).filter(isPositivePivotIssue).map((issue) => { const type = String(issue.type); const isCif = type.includes("_cif_"); const planned = type.includes("over_planned"); const excessQty = planned ? issue.planned_excess_qty : issue.actual_excess_qty; const excessCif = planned ? issue.planned_excess_cif : issue.actual_excess_cif; const label = ({ item_cif_over_utilized: "Item CIF Over-Utilized", item_cif_over_planned: "Item CIF Over-Planned", item_qty_over_utilized: "Item Quantity Over-Utilized", item_qty_over_planned: "Item Quantity Over-Planned" } as Record<string, string>)[type] ?? type.replace(/_/g, ' '); return <div key={`${issue.item_key}-${type}`} className="rounded border border-red-200 bg-red-50 p-3 text-sm"><div className="font-semibold text-red-800">{label}</div><div>{issue.item_key}{issue.sion ? ` · ${issue.sion}` : ''}</div>{isCif ? <div className="mt-1 space-y-0.5"><div>Item CIF Cap: {pivotNumber(issue.item_cif_cap, 2)} · BOE-Used CIF: {pivotNumber(issue.boe_used_cif, 2)} · Allotment CIF: {pivotNumber(issue.allotted_cif, 2)}</div><div>Total Actual Used CIF: {pivotNumber(issue.actual_used_cif, 2)} · Available CIF Before Plan: {pivotNumber(issue.available_cif, 2)}</div><div>Effective Planned CIF: {pivotNumber(issue.effective_planned_cif, 2)} · Balance CIF After Plan: {pivotNumber(issue.balance_cif_after_plan, 2)}</div><div>Positive Excess CIF: {pivotNumber(excessCif, 2)}</div></div> : <div className="mt-1"><div>Total Qty: {pivotNumber(issue.total_qty, 3)} · Total Utilized Qty: {pivotNumber(issue.total_utilized_qty, 3)}</div><div>Available Qty: {pivotNumber(issue.available_qty, 3)} · Effective Planned Qty: {pivotNumber(issue.planned_qty, 3)} · Positive Excess Qty: {pivotNumber(excessQty, 3)}</div></div>}</div>; }) : <p className="text-sm text-muted-foreground">No planning exceptions found.</p>}</div>
+                        <DialogFooter><Button variant="outline" onClick={() => setIssueModal(null)}>Close</Button><Button onClick={() => handleCanonicalReplan(issueModal)}>Re Plan me</Button><Button onClick={() => navigate(`/licenses/${issueModal.license_id}/overview`)}>Open Licence</Button></DialogFooter>
                     </DialogContent>
                 </Dialog>
             )}
@@ -1417,7 +1629,7 @@ export default function ItemPivotReport() {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="max-h-[65vh] overflow-y-auto">
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 14.5, margin: 0, color: 'var(--tb-text)' }}>
+                            <pre className="m-0 whitespace-pre-wrap break-words font-[inherit] text-[14.5px] text-foreground">
                                 {noteModal.content}
                             </pre>
                         </div>

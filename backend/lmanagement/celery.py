@@ -12,7 +12,7 @@ import sys
 # worker's main process, before workers fork) so local dev on macOS doesn't
 # segfault. On Linux (production) the variable is meaningless and ignored, so
 # this is a no-op there. If workers still crash on macOS/Python 3.14, run the
-# worker with a non-forking pool: `--pool=solo` (see run-celery-dev.sh).
+# worker with a non-forking pool: `--pool=solo` (see scripts/development/run-celery-dev.sh).
 if sys.platform == "darwin":
     os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
@@ -76,7 +76,7 @@ app.conf.beat_schedule = {
     # schedule `core.tasks.fetch_exchange_rates` on Celery beat here.  Instead,
     # the fetch runs from a local cron on the dev machine and pushes the result
     # to license-manager; the existing master-sync cron replicates it to the
-    # other servers.  See: fetch-and-push-rates.sh
+    # other servers.  See: scripts/imports/fetch-and-push-rates.sh
 
     # Cleanup old task records every hour
     "cleanup-old-tasks-hourly": {
@@ -86,6 +86,14 @@ app.conf.beat_schedule = {
         "options": {
             "expires": 3600,  # Task expires after 1 hour
         }
+    },
+    # Durable outbox-style recovery for a process crash between database
+    # commit and broker publish.  Work is bounded inside the task.
+    "recover-pending-license-replans-every-5-min": {
+        "task": "planning.recover_pending_replan_requests",
+        "schedule": crontab(minute="*/5"),
+        "args": (),
+        "options": {"expires": 240},
     },
 }
 
@@ -109,6 +117,33 @@ if getattr(settings, "MDS_ENABLED", False):
             "expires": 300,  # skip a run rather than pile up if a beat is late
         },
     }
+
+
+# Peer master synchronisation is deliberately disabled by default.  When it is
+# enabled, the durable event ledger must be driven even after a broker/network
+# outage; defining tasks without Beat entries leaves an offline peer divergent
+# forever unless an operator remembers to run a management command.
+if getattr(settings, "SYNC_ENABLED", False):
+    app.conf.beat_schedule.update({
+        "sync-pull-peers-every-5-min": {
+            "task": "sync.pull_from_peers",
+            "schedule": crontab(minute="*/5"),
+            "args": (),
+            "options": {"expires": 240},
+        },
+        "sync-push-durable-events-every-5-min": {
+            "task": "sync.push_changes",
+            "schedule": crontab(minute="*/5"),
+            "args": (),
+            "options": {"expires": 240},
+        },
+        "sync-process-media-every-5-min": {
+            "task": "sync.process_media_tasks",
+            "schedule": crontab(minute="*/5"),
+            "args": (),
+            "options": {"expires": 240},
+        },
+    })
 
 
 @signals.worker_process_init.connect

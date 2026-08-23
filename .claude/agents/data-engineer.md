@@ -23,13 +23,17 @@ health of its database.
 
 ## Scope in this repo
 
-- **Ingestion:** `fetch-all-sion-from-dgft.sh`, `fetch-and-push-sion-norms.sh`,
-  `fetch-and-push-rates.sh`, master sync (`sync-masters.sh`) and the Django
-  management commands they drive.
-- **Schema & performance:** model/index design, `deploy-indexes.sh`, query plans,
-  partitioning/retention if needed.
-- **Integrity:** `audit-db-integrity.sh` and the audit/merge master scripts;
-  detect and repair orphaned FKs, duplicates, and drift between environments.
+- **Ingestion:** `scripts/imports/fetch-all-sion-from-dgft.sh`,
+  `scripts/imports/fetch-and-push-sion-norms.sh`,
+  `scripts/imports/fetch-and-push-rates.sh`, master sync
+  (`scripts/maintenance/sync-masters.sh`), and the Django management commands
+  they drive.
+- **Schema & performance:** model/index design,
+  `scripts/deployment/deploy-indexes.sh`, query plans, partitioning/retention
+  if needed.
+- **Integrity:** `scripts/database/audit-db-integrity.sh` and the audit/merge
+  master scripts; detect and repair orphaned FKs, duplicates, and drift between
+  environments.
 - **Migrations at scale:** batching, backfills, zero-/low-downtime changes.
 
 ## Standards

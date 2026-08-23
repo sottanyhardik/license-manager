@@ -1,17 +1,14 @@
 # license/views_actions.py
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.accounts.permissions import LicensePermission, LicenseLedgerViewPermission
+from apps.accounts.permissions import LicensePermission
 from apps.core.models import CompanyModel
 from apps.core.utils.exceptions import api_error
-from apps.license.ledger_pdf import generate_license_ledger_pdf
 from apps.license.models import LicenseDetailsModel, LicenseOwnership, LicenseTransferModel
 
 
@@ -22,72 +19,24 @@ class LicenseActionViewSet(ViewSet):
     permission_classes = [LicensePermission]
 
     def get_permissions(self):
-        # download-ledger is also accessible to LEDGER_MANAGER
-        if self.action == 'download_ledger':
-            return [LicenseLedgerViewPermission()]
         return super().get_permissions()
-
-    @action(detail=True, methods=['get'], url_path='download-ledger')
-    def download_ledger(self, request, pk=None):
-        """
-        Download detailed ledger PDF for a license.
-        Groups items by head and shows:
-        - Import items with quantities and CIF
-        - Allotments (pending BOE)
-        - Bill of Entry (debited)
-        - Available balance
-        """
-        license_obj = get_object_or_404(
-            LicenseDetailsModel.objects.prefetch_related(
-                'import_license__items__group',
-                'import_license__items__sion_norm_class',
-                'import_license__allotment_details__allotment__company',
-                'import_license__hs_code'
-            ).select_related(
-                'exporter',
-                'port'
-            ),
-            pk=pk
-        )
-
-        try:
-            # Generate PDF grouped by item
-            pdf_content = generate_license_ledger_pdf(license_obj)
-
-            # Create response
-            response = HttpResponse(pdf_content, content_type='application/pdf')
-            filename = f"License_Ledger_{license_obj.license_number}.pdf"
-            response['Content-Disposition'] = f'inline; filename="{filename}"'
-
-            return response
-
-        except Exception as e:
-            return Response(
-                api_error('Failed to generate PDF', e, __name__),
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
 
     @action(detail=True, methods=['post'], url_path='fetch-ledger')
     def fetch_ledger(self, request, pk=None):
         """
-        Fetch ledger details from DGFT API and update database.
-        Retrieves latest transaction data for the license.
+        Return an explicit unsupported response for remote DGFT ledger fetching.
+
+        Ownership fetches are implemented by `fetch_ownership`; ledger imports
+        are supported through the upload-ledger workflow. A live remote ledger
+        integration requires endpoint and credential decisions that are not part
+        of this API contract.
         """
         license_obj = get_object_or_404(LicenseDetailsModel, pk=pk)
 
         try:
-            # TODO: Implement DGFT API call
-            # For now, return a placeholder response
-            # The actual implementation will require:
-            # 1. DGFT API endpoint URL
-            # 2. Authentication credentials/tokens
-            # 3. API request parameters (license number, etc.)
-            # 4. Response parsing logic
-            # 5. Database update logic using ledger_parser_refactored
-
             return Response({
                 'success': False,
-                'message': 'DGFT API integration pending - endpoint and credentials required',
+                'message': 'Remote DGFT ledger fetch is not configured. Use ledger upload instead.',
                 'license_number': license_obj.license_number
             }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -97,7 +46,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='update-license-transfer', permission_classes=[LicensePermission])
     def update_license_transfer(self, request):
         """
         Update license ownership and transfer information.
@@ -229,7 +178,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=['post'], url_path='bulk-update-license-transfer', permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['post'], url_path='bulk-update-license-transfer', permission_classes=[LicensePermission])
     def bulk_update_license_transfer(self, request):
         """
         Bulk update license ownership and transfer information for multiple licenses.
@@ -418,7 +367,7 @@ class LicenseActionViewSet(ViewSet):
 
                         success_count += 1
 
-                except Exception as e:
+                except Exception:
                     import logging as _log
                     _log.getLogger(__name__).exception(
                         "bulk_update_license_transfer: failed for license %s",
@@ -440,7 +389,7 @@ class LicenseActionViewSet(ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=True, methods=['get'], url_path='ownership-data', permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['get'], url_path='ownership-data', permission_classes=[LicensePermission])
     def ownership_data(self, request, pk=None):
         """
         Return the locally-saved DGFT ownership snapshot for a license:
@@ -492,7 +441,7 @@ class LicenseActionViewSet(ViewSet):
             'transfers': transfers,
         })
 
-    @action(detail=True, methods=['post'], url_path='fetch-ownership', permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], url_path='fetch-ownership', permission_classes=[LicensePermission])
     def fetch_ownership(self, request, pk=None):
         """
         Fetch ownership info for a single license from DGFT and save locally.

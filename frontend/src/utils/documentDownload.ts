@@ -14,13 +14,47 @@
  */
 import api from "../api/axios";
 
+const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^(?:[a-z][a-z\d+.-]*:)?\/\//i;
+
+function hasUnsafePathCharacters(path: string): boolean {
+  return [...path].some((char) => {
+    const code = char.charCodeAt(0);
+    return char === "\\" || code < 32 || code === 127;
+  });
+}
+
+export function normalizeAuthedFilePath(path: string): string {
+  const normalized = String(path ?? "").trim();
+
+  if (!normalized) {
+    throw new Error("Authenticated file path is required.");
+  }
+  if (ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(normalized)) {
+    throw new Error("Authenticated file path must be relative to the API origin.");
+  }
+  if (hasUnsafePathCharacters(normalized)) {
+    throw new Error("Authenticated file path contains unsafe characters.");
+  }
+
+  return normalized;
+}
+
 /**
  * Normalize a stored file URL/path to the authenticated media endpoint path,
  * relative to the axios baseURL (which is the `/api` prefix).
  * Accepts "/media/foo/bar.pdf", "media/foo/bar.pdf" or "foo/bar.pdf".
  */
 export function toProtectedMediaPath(fileUrlOrPath: string): string {
-  const path = fileUrlOrPath.replace(/^https?:\/\/[^/]+/i, "").replace(/^\/?media\//, "").replace(/^\/+/, "");
+  const value = String(fileUrlOrPath ?? "").trim();
+  const path = value
+    .replace(/^(?:https?:)?\/\/[^/]+/i, "")
+    .replace(/^\/?media\//, "")
+    .replace(/^\/+/, "");
+
+  if (!path || hasUnsafePathCharacters(path)) {
+    throw new Error("Protected media path is required.");
+  }
+
   return `/media/${path}`;
 }
 
@@ -31,7 +65,8 @@ export function toProtectedMediaPath(fileUrlOrPath: string): string {
  * "/licenses/123/balance-excel/".
  */
 export async function openAuthedFile(path: string, filename?: string): Promise<void> {
-  const res = await api.get(path, { responseType: "blob" });
+  const safePath = normalizeAuthedFilePath(path);
+  const res = await api.get(safePath, { responseType: "blob" });
   const blobUrl = URL.createObjectURL(res.data as Blob);
   try {
     if (filename) {

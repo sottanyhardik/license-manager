@@ -1,0 +1,347 @@
+==================================================================
+BL-PLAN-01 REGRESSION EVIDENCE
+Finding: E126/E132 Auto-Plan planned_cif_fc != planned_quantity * unit_price
+         whenever the classified/split quantity is fractional.
+Run date: Fri Aug  7 16:49:46 IST 2026
+Command base: pytest --no-migrations --no-cov --reuse-db
+==================================================================
+
+------------------------------------------------------------------
+STEP 1 — Targeted regression tests (verbose), incl. NEW tests added
+in this pass: TestFractionalQuantityCifInvariant in both
+test_e126_auto_plan.py and test_e132_auto_plan.py.
+------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 55 items
+
+apps/license/tests/test_e126_auto_plan.py::TestComputeE126AutoPlanBasics::test_no_import_items_plans_nothing PASSED [  1%]
+apps/license/tests/test_e126_auto_plan.py::TestComputeE126AutoPlanBasics::test_item_below_min_plan_qty_is_not_planned PASSED [  3%]
+apps/license/tests/test_e126_auto_plan.py::TestComputeE126AutoPlanBasics::test_plain_categories_plan_at_fixed_price PASSED [  5%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_fresh_split_targets_50_50_of_available_quantity PASSED [  7%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_split_follows_available_quantity_down_after_real_consumption PASSED [  9%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_reruns_with_no_existing_split_and_unchanged_available_quantity_are_stable PASSED [ 10%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_same_hsn_and_description_items_are_pooled_into_one_group PASSED [ 12%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_different_description_items_are_never_pooled PASSED [ 14%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_different_hsn_items_are_never_pooled PASSED [ 16%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_representative_is_lowest_serial_number PASSED [ 18%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitAvailableQuantity::test_scattered_legacy_balances_across_group_members_are_consolidated PASSED [ 20%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveWastageRebalanceAutoPlan::test_leftover_balance_shifts_pko_into_olive_oil PASSED [ 21%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveWastageRebalanceAutoPlan::test_reruns_with_unchanged_available_quantity_are_stable PASSED [ 23%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveWastageRebalanceAutoPlan::test_partial_rebalance_leaves_other_categories_untouched PASSED [ 25%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitPreservedOnceGenerated::test_no_existing_plan_gets_fresh_split_with_remaining_equal_to_planned PASSED [ 27%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitPreservedOnceGenerated::test_existing_partially_consumed_plan_is_preserved_not_recalculated PASSED [ 29%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitPreservedOnceGenerated::test_preserved_even_after_available_quantity_shrinks PASSED [ 30%]
+apps/license/tests/test_e126_auto_plan.py::TestPkoOliveSplitPreservedOnceGenerated::test_fully_consumed_plan_line_still_reported_at_zero PASSED [ 32%]
+apps/license/tests/test_e126_auto_plan.py::TestCorruptedPreservedPlanIsRejected::test_preserved_price_above_fixed_ceiling_rejects_whole_item PASSED [ 34%]
+apps/license/tests/test_e126_auto_plan.py::TestCorruptedPreservedPlanIsRejected::test_preserved_price_within_ceiling_is_unaffected PASSED [ 36%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_exact_finding_reproduction_101_units PASSED [ 38%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_plain_fixed_price_category_with_fractional_available_quantity PASSED [ 40%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_invariant_holds_across_a_range_of_fractional_available_quantities[100.1] PASSED [ 41%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_invariant_holds_across_a_range_of_fractional_available_quantities[100.9] PASSED [ 43%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_invariant_holds_across_a_range_of_fractional_available_quantities[142.3] PASSED [ 45%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_fix_applies_identically_across_different_companies PASSED [ 47%]
+apps/license/tests/test_e126_auto_plan.py::TestFractionalQuantityCifInvariant::test_preserved_branch_is_deliberately_untouched_by_this_fix PASSED [ 49%]
+apps/license/tests/test_e132_auto_plan.py::TestComputeE132AutoPlanBasics::test_no_import_items_plans_nothing PASSED [ 50%]
+apps/license/tests/test_e132_auto_plan.py::TestComputeE132AutoPlanBasics::test_item_below_min_plan_qty_is_not_planned PASSED [ 52%]
+apps/license/tests/test_e132_auto_plan.py::TestComputeE132AutoPlanBasics::test_plain_categories_plan_at_fixed_price PASSED [ 54%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_fresh_split_targets_40_60_of_available_quantity PASSED [ 56%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_split_follows_available_quantity_down_after_real_consumption PASSED [ 58%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_reruns_with_no_existing_split_and_unchanged_available_quantity_are_stable PASSED [ 60%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_explicit_cheese_ignores_unrelated_history PASSED [ 61%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_same_hsn_and_description_items_are_pooled_into_one_group PASSED [ 63%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_different_description_items_are_never_pooled PASSED [ 65%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_different_hsn_items_are_never_pooled PASSED [ 67%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_representative_is_lowest_serial_number PASSED [ 69%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitAvailableQuantity::test_scattered_legacy_balances_across_group_members_are_consolidated PASSED [ 70%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilWastageRebalanceAutoPlan::test_leftover_balance_shifts_pko_into_cheese PASSED [ 72%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilWastageRebalanceAutoPlan::test_reruns_with_unchanged_available_quantity_are_stable PASSED [ 74%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilWastageRebalanceAutoPlan::test_partial_rebalance_leaves_other_categories_untouched PASSED [ 76%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitPreservedOnceGenerated::test_no_existing_plan_gets_fresh_split_with_remaining_equal_to_planned PASSED [ 78%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitPreservedOnceGenerated::test_existing_partially_consumed_plan_is_preserved_not_recalculated PASSED [ 80%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitPreservedOnceGenerated::test_preserved_even_after_available_quantity_shrinks PASSED [ 81%]
+apps/license/tests/test_e132_auto_plan.py::TestVegOilSplitPreservedOnceGenerated::test_fully_consumed_plan_line_still_reported_at_zero PASSED [ 83%]
+apps/license/tests/test_e132_auto_plan.py::TestCorruptedPreservedPlanIsRejected::test_preserved_price_above_fixed_ceiling_rejects_whole_item PASSED [ 85%]
+apps/license/tests/test_e132_auto_plan.py::TestCorruptedPreservedPlanIsRejected::test_preserved_price_within_ceiling_is_unaffected PASSED [ 87%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_split_with_non_multiple_of_5_available_quantity PASSED [ 89%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_plain_fixed_price_category_with_fractional_available_quantity PASSED [ 90%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_invariant_holds_across_a_range_of_fractional_available_quantities[51.3] PASSED [ 92%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_invariant_holds_across_a_range_of_fractional_available_quantities[83] PASSED [ 94%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_invariant_holds_across_a_range_of_fractional_available_quantities[119.4] PASSED [ 96%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_fix_applies_identically_across_different_companies PASSED [ 98%]
+apps/license/tests/test_e132_auto_plan.py::TestFractionalQuantityCifInvariant::test_preserved_branch_is_deliberately_untouched_by_this_fix PASSED [100%]
+
+============================== 55 passed in 5.96s ==============================
+EXIT_CODE=0
+
+------------------------------------------------------------------
+STEP 2 — Broader 'unaffected norms/engines' regression sweep:
+E1, E5, E126 (plain engine), E132 (plain engine), plan_grouping,
+item_matcher, milk_planner — none of which route through the fixed
+compute_e126_auto_plan/compute_e132_auto_plan fresh-generation
+branch (confirmed via .claude/index/dependents.tsv: only callers
+of e126_auto_plan.py/e132_auto_plan.py are planner_factory.py,
+item_plan.py views, and their own test files).
+------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collected 377 items
+
+apps/license/tests/test_e126_auto_plan.py ...........................    [  7%]
+apps/license/tests/test_e132_auto_plan.py ............................   [ 14%]
+apps/license/tests/test_plan_grouping.py .........                       [ 16%]
+apps/license/tests/test_item_matcher.py ..............................   [ 24%]
+apps/license/tests/test_e126_plan.py ................................... [ 34%]
+..............                                                           [ 37%]
+apps/license/tests/test_e132_plan.py ................................... [ 47%]
+...........................                                              [ 54%]
+apps/license/tests/test_plan_grouping.py .............                   [ 57%]
+apps/license/tests/test_item_matcher.py ...............................  [ 66%]
+apps/license/tests/test_e1_plan.py ..................................... [ 75%]
+............F.FF...........                                              [ 83%]
+apps/license/tests/test_e5_plan.py ...........................F....F...F [ 92%]
+FF...........                                                            [ 96%]
+apps/license/tests/test_milk_planner.py FF......F...F.                   [100%]
+
+=================================== FAILURES ===================================
+_ TestMilkStageDelegatesToSharedSplitter.test_milk_avg_above_ceiling_all_dwp_no_swp _
+apps/license/tests/test_e1_plan.py:287: in test_milk_avg_above_ceiling_all_dwp_no_swp
+    assert dwp.planned_cif == Decimal('250.0000')
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = E1PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkStageDelegatesToSharedSplitter.test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate _
+apps/license/tests/test_e1_plan.py:311: in test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+    assert dwp.unit_price == Decimal('5.0000')
+E   AssertionError: assert Decimal('6.5000') == Decimal('5.0000')
+E    +  where Decimal('6.5000') = E1PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).unit_price
+E    +  and   Decimal('5.0000') = Decimal('5.0000')
+_ TestMilkStageDelegatesToSharedSplitter.test_multiple_milk_items_planned_independently_in_order _
+apps/license/tests/test_e1_plan.py:300: in test_multiple_milk_items_planned_independently_in_order
+    assert {ln.step for ln in m2_lines} == {'SWP'}   # avg = 50/50 = 1.0 < 1.5
+E   AssertionError: assert set() == {'SWP'}
+E     
+E     Extra items in the right set:
+E     'SWP'
+E     Use -v to get more diff
+________ TestSpecialValidation.test_not_triggered_runs_oils_before_milk ________
+apps/license/tests/test_e5_plan.py:165: in test_not_triggered_runs_oils_before_milk
+    assert _cif(result, 'DWP') == Decimal('250.0000')
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = _cif(E5PlanResult(lines=[E5PlanLine(key='oil', category='PALM KERNEL OIL', step='PALM KERNEL OIL', planned_qty=Decimal('100...mal('6.5000'), planned_cif=Decimal('325.0000'))], remaining_cif=Decimal('4495.00'), special_validation_triggered=False), 'DWP')
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+____ TestMilkPerItemNoAveraging.test_0404_avg_above_ceiling_all_dwp_no_swp _____
+apps/license/tests/test_e5_plan.py:222: in test_0404_avg_above_ceiling_all_dwp_no_swp
+    assert dwp.planned_cif == Decimal('250.0000')   # 50*5
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkPerItemNoAveraging.test_all_0404_items_processed_before_any_3502_item _
+apps/license/tests/test_e5_plan.py:270: in test_all_0404_items_processed_before_any_3502_item
+    assert result.remaining_cif == Decimal('700')   # 1000 - 50 (DWP) - 250 (WPC)
+E   AssertionError: assert Decimal('685.0') == Decimal('700')
+E    +  where Decimal('685.0') = E5PlanResult(lines=[E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('10'), unit_price=De...imal('25.0000'), planned_cif=Decimal('250.0000'))], remaining_cif=Decimal('685.0'), special_validation_triggered=False).remaining_cif
+E    +  and   Decimal('700') = Decimal('700')
+_ TestMilkPerItemNoAveraging.test_mixed_licence_items_never_blended_into_one_rate _
+apps/license/tests/test_e5_plan.py:254: in test_mixed_licence_items_never_blended_into_one_rate
+    assert dwp and dwp[0].key == 'm' and dwp[0].planned_cif == Decimal('250.0000')
+E   AssertionError: assert ([E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))] and 'm' == 'm'
+E     
+E       m and Decimal('300.0000') == Decimal('250.0000'))
+E    +  where Decimal('300.0000') = E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkPerItemNoAveraging.test_multiple_0404_items_planned_independently_in_input_order _
+apps/license/tests/test_e5_plan.py:285: in test_multiple_0404_items_planned_independently_in_input_order
+    assert _cif(result, 'DWP') == Decimal('250.0000')
+E   AssertionError: assert Decimal('300.0000') == Decimal('250.0000')
+E    +  where Decimal('300.0000') = _cif(E5PlanResult(lines=[E5PlanLine(key='m1', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))], remaining_cif=Decimal('0'), special_validation_triggered=False), 'DWP')
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+________________ TestMilkConfigConstants.test_e1_config_prices _________________
+apps/license/tests/test_milk_planner.py:15: in test_e1_config_prices
+    assert MILK_CONFIG.dwp_price == Decimal('5')
+E   AssertionError: assert Decimal('6.5') == Decimal('5')
+E    +  where Decimal('6.5') = MilkConfig(dwp_price=Decimal('6.5'), dwp_min_price=Decimal('4.40'), swp_price=Decimal('1.5'), wpc_price=Decimal('25')).dwp_price
+E    +  and   Decimal('5') = Decimal('5')
+_ TestPlanMilk0404Only.test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over _
+apps/license/tests/test_milk_planner.py:31: in test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+    assert planned['DWP'] == Decimal('250')      # 50 * 5.00
+E   AssertionError: assert Decimal('300') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+___ TestPlanMilkMixedRunsSequentially.test_runs_0404_then_3502_sequentially ____
+apps/license/tests/test_milk_planner.py:101: in test_runs_0404_then_3502_sequentially
+    assert planned['DWP'] == Decimal('250')    # 50 * 5
+E   AssertionError: assert Decimal('325.0') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+______________ TestPlanMilkEdgeCases.test_tolerant_type_coercion _______________
+apps/license/tests/test_milk_planner.py:120: in test_tolerant_type_coercion
+    assert planned['DWP'] == Decimal('250')
+E   AssertionError: assert Decimal('325.0') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+=========================== short test summary info ============================
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_multiple_milk_items_planned_independently_in_order
+FAILED apps/license/tests/test_e5_plan.py::TestSpecialValidation::test_not_triggered_runs_oils_before_milk
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_0404_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_all_0404_items_processed_before_any_3502_item
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_mixed_licence_items_never_blended_into_one_rate
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_multiple_0404_items_planned_independently_in_input_order
+FAILED apps/license/tests/test_milk_planner.py::TestMilkConfigConstants::test_e1_config_prices
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilk0404Only::test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkMixedRunsSequentially::test_runs_0404_then_3502_sequentially
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkEdgeCases::test_tolerant_type_coercion
+======================== 12 failed, 365 passed in 8.81s ========================
+EXIT_CODE=1
+
+------------------------------------------------------------------
+STEP 3 — Isolation check: do the milk-related failures above
+reproduce with the e126/e132 auto-plan files EXCLUDED entirely,
+proving they are pre-existing and unrelated to the BL-PLAN-01 fix
+/ this pass's new tests (not caused by cross-test DB state or
+fixture bleed)?
+------------------------------------------------------------------
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collected 128 items
+
+apps/license/tests/test_e1_plan.py ..................................... [ 28%]
+............F.FF...........                                              [ 50%]
+apps/license/tests/test_e5_plan.py ...........................F....F...F [ 78%]
+FF...........                                                            [ 89%]
+apps/license/tests/test_milk_planner.py FF......F...F.                   [100%]
+
+=================================== FAILURES ===================================
+_ TestMilkStageDelegatesToSharedSplitter.test_milk_avg_above_ceiling_all_dwp_no_swp _
+apps/license/tests/test_e1_plan.py:287: in test_milk_avg_above_ceiling_all_dwp_no_swp
+    assert dwp.planned_cif == Decimal('250.0000')
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = E1PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkStageDelegatesToSharedSplitter.test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate _
+apps/license/tests/test_e1_plan.py:311: in test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+    assert dwp.unit_price == Decimal('5.0000')
+E   AssertionError: assert Decimal('6.5000') == Decimal('5.0000')
+E    +  where Decimal('6.5000') = E1PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).unit_price
+E    +  and   Decimal('5.0000') = Decimal('5.0000')
+_ TestMilkStageDelegatesToSharedSplitter.test_multiple_milk_items_planned_independently_in_order _
+apps/license/tests/test_e1_plan.py:300: in test_multiple_milk_items_planned_independently_in_order
+    assert {ln.step for ln in m2_lines} == {'SWP'}   # avg = 50/50 = 1.0 < 1.5
+E   AssertionError: assert set() == {'SWP'}
+E     
+E     Extra items in the right set:
+E     'SWP'
+E     Use -v to get more diff
+________ TestSpecialValidation.test_not_triggered_runs_oils_before_milk ________
+apps/license/tests/test_e5_plan.py:165: in test_not_triggered_runs_oils_before_milk
+    assert _cif(result, 'DWP') == Decimal('250.0000')
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = _cif(E5PlanResult(lines=[E5PlanLine(key='oil', category='PALM KERNEL OIL', step='PALM KERNEL OIL', planned_qty=Decimal('100...mal('6.5000'), planned_cif=Decimal('325.0000'))], remaining_cif=Decimal('4495.00'), special_validation_triggered=False), 'DWP')
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+____ TestMilkPerItemNoAveraging.test_0404_avg_above_ceiling_all_dwp_no_swp _____
+apps/license/tests/test_e5_plan.py:222: in test_0404_avg_above_ceiling_all_dwp_no_swp
+    assert dwp.planned_cif == Decimal('250.0000')   # 50*5
+E   AssertionError: assert Decimal('325.0000') == Decimal('250.0000')
+E    +  where Decimal('325.0000') = E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.5000'), planned_cif=Decimal('325.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkPerItemNoAveraging.test_all_0404_items_processed_before_any_3502_item _
+apps/license/tests/test_e5_plan.py:270: in test_all_0404_items_processed_before_any_3502_item
+    assert result.remaining_cif == Decimal('700')   # 1000 - 50 (DWP) - 250 (WPC)
+E   AssertionError: assert Decimal('685.0') == Decimal('700')
+E    +  where Decimal('685.0') = E5PlanResult(lines=[E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('10'), unit_price=De...imal('25.0000'), planned_cif=Decimal('250.0000'))], remaining_cif=Decimal('685.0'), special_validation_triggered=False).remaining_cif
+E    +  and   Decimal('700') = Decimal('700')
+_ TestMilkPerItemNoAveraging.test_mixed_licence_items_never_blended_into_one_rate _
+apps/license/tests/test_e5_plan.py:254: in test_mixed_licence_items_never_blended_into_one_rate
+    assert dwp and dwp[0].key == 'm' and dwp[0].planned_cif == Decimal('250.0000')
+E   AssertionError: assert ([E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))] and 'm' == 'm'
+E     
+E       m and Decimal('300.0000') == Decimal('250.0000'))
+E    +  where Decimal('300.0000') = E5PlanLine(key='m', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000')).planned_cif
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+_ TestMilkPerItemNoAveraging.test_multiple_0404_items_planned_independently_in_input_order _
+apps/license/tests/test_e5_plan.py:285: in test_multiple_0404_items_planned_independently_in_input_order
+    assert _cif(result, 'DWP') == Decimal('250.0000')
+E   AssertionError: assert Decimal('300.0000') == Decimal('250.0000')
+E    +  where Decimal('300.0000') = _cif(E5PlanResult(lines=[E5PlanLine(key='m1', category='MILK PRODUCTS', step='DWP', planned_qty=Decimal('50'), unit_price=Decimal('6.0000'), planned_cif=Decimal('300.0000'))], remaining_cif=Decimal('0'), special_validation_triggered=False), 'DWP')
+E    +  and   Decimal('250.0000') = Decimal('250.0000')
+________________ TestMilkConfigConstants.test_e1_config_prices _________________
+apps/license/tests/test_milk_planner.py:15: in test_e1_config_prices
+    assert MILK_CONFIG.dwp_price == Decimal('5')
+E   AssertionError: assert Decimal('6.5') == Decimal('5')
+E    +  where Decimal('6.5') = MilkConfig(dwp_price=Decimal('6.5'), dwp_min_price=Decimal('4.40'), swp_price=Decimal('1.5'), wpc_price=Decimal('25')).dwp_price
+E    +  and   Decimal('5') = Decimal('5')
+_ TestPlanMilk0404Only.test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over _
+apps/license/tests/test_milk_planner.py:31: in test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+    assert planned['DWP'] == Decimal('250')      # 50 * 5.00
+E   AssertionError: assert Decimal('300') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+___ TestPlanMilkMixedRunsSequentially.test_runs_0404_then_3502_sequentially ____
+apps/license/tests/test_milk_planner.py:101: in test_runs_0404_then_3502_sequentially
+    assert planned['DWP'] == Decimal('250')    # 50 * 5
+E   AssertionError: assert Decimal('325.0') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+______________ TestPlanMilkEdgeCases.test_tolerant_type_coercion _______________
+apps/license/tests/test_milk_planner.py:120: in test_tolerant_type_coercion
+    assert planned['DWP'] == Decimal('250')
+E   AssertionError: assert Decimal('325.0') == Decimal('250')
+E    +  where Decimal('250') = Decimal('250')
+=========================== short test summary info ============================
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_milk_stage_uses_split_milk_0404s_own_rate_ceiling_not_a_generic_rate
+FAILED apps/license/tests/test_e1_plan.py::TestMilkStageDelegatesToSharedSplitter::test_multiple_milk_items_planned_independently_in_order
+FAILED apps/license/tests/test_e5_plan.py::TestSpecialValidation::test_not_triggered_runs_oils_before_milk
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_0404_avg_above_ceiling_all_dwp_no_swp
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_all_0404_items_processed_before_any_3502_item
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_mixed_licence_items_never_blended_into_one_rate
+FAILED apps/license/tests/test_e5_plan.py::TestMilkPerItemNoAveraging::test_multiple_0404_items_planned_independently_in_input_order
+FAILED apps/license/tests/test_milk_planner.py::TestMilkConfigConstants::test_e1_config_prices
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilk0404Only::test_avg_above_ceiling_all_dwp_at_max_rate_balance_left_over
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkMixedRunsSequentially::test_runs_0404_then_3502_sequentially
+FAILED apps/license/tests/test_milk_planner.py::TestPlanMilkEdgeCases::test_tolerant_type_coercion
+======================== 12 failed, 116 passed in 0.10s ========================
+EXIT_CODE=1
+
+------------------------------------------------------------------
+STEP 4 — Confirm milk_planner.py / test_milk_planner.py / e1_plan.py
+/ e5_plan.py / their test files are completely untouched in this
+working tree (git diff/status run from repo root).
+------------------------------------------------------------------
+(empty output above == no changes / not modified in this working tree -- confirmed pre-existing, unrelated)
+
+==================================================================
+SUMMARY
+  55 targeted regression tests (41 pre-existing + 14 new)  : PASS
+  365/377 broader planning-engine regression sweep (incl.
+    test_milk_planner.py) : PASS
+  12 milk-domain failures (MILK_CONFIG.dwp_price mismatch) : pre-existing,
+    reproduce identically with e126/e132 files fully excluded (Step 3),
+    and milk_planner.py/test_milk_planner.py/e1_plan.py/e5_plan.py/
+    test_e1_plan.py/test_e5_plan.py are all untouched in this working
+    tree (Step 4) -- confirmed unrelated to the fix under test.
+==================================================================
+
+------------------------------------------------------------------
+STEP 5 — Standalone arithmetic verification (no repo files touched):
+confirms the OLD (pre-fix) formula from the finding's own line
+(`cif = _r2(planned_cif)` computed from the un-floored qty, per
+`git diff`'s '-' side) reproduces the finding's exact reported
+actual_result (90.90 / 252.50, total 343.40), and the NEW formula
+now in e126_auto_plan.py/e132_auto_plan.py (`cif = _r2(fqty *
+price)`) reproduces the finding's exact stated expected_result
+(90.00 / 250.00, total 340.00).
+------------------------------------------------------------------
+OLD (pre-fix) behavior — PKO: (50.0, 90.9)  Olive: (50.0, 252.5)  total_cif: 343.4
+Matches finding's stated actual_result (90.90 / 252.50, total 343.40) -- CONFIRMED defect is real.
+NEW (fixed) behavior   — PKO: (50.0, 90.0)  Olive: (50.0, 250.0)  total_cif: 340.0
+Matches finding's stated expected_result (90.00 / 250.00, total 340.00) -- CONFIRMED fix is correct.

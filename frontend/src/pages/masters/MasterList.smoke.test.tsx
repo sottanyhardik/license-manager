@@ -84,6 +84,22 @@ describe("MasterList smoke", () => {
     await waitFor(() => expect(container).not.toBeEmptyDOMElement());
   });
 
+  it("renders generic master rows with their data (gates GenericMasterCards extraction)", async () => {
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        ...META,
+        results: [
+          {
+            id: 11,
+            name: "Acme Trading",
+          },
+        ],
+      },
+    });
+    renderAt("companies");
+    expect(await screen.findByText("Acme Trading")).toBeInTheDocument();
+  });
+
   it("renders the licenses entity without crashing", async () => {
     const { container } = renderAt("licenses");
     await waitFor(() => expect(container).not.toBeEmptyDOMElement());

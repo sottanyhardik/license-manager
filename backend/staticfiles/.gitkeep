@@ -1,0 +1,1 @@
+This directory is intentionally tracked so WhiteNoise has a valid STATIC_ROOT before collectstatic runs.

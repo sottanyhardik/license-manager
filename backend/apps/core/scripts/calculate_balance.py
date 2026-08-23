@@ -1,6 +1,6 @@
 from django.db.models import Sum, Q
 
-from apps.core.constants import N2015
+from apps.core.constants import DEBIT
 from apps.core.utils.decimal_utils import round_decimal_down as round_down, to_float
 
 
@@ -15,13 +15,18 @@ def _get_aggregated_values(instance):
       result is bit-for-bit identical to the SQL SUM(... WHERE transaction_type='D').
 
     allotment_details (AllotmentItems):
-      Always uses a SQL aggregate. The AT filter relies on
-      allotment__bill_of_entry__isnull=True, which checks the M2M join table
-      directly — there is no single stored boolean on AllotmentModel that is
-      guaranteed to stay in sync in all edge-cases (admin edits, cascade deletes).
-      One aggregate query is issued regardless of how many allotment rows exist,
-      so there is no N+1 risk here.
+      `allotted_qty`/`allotted_value` (AT-type, outstanding-only) are computed
+      via `LicenseBalanceCalculator.get_outstanding_allotment_totals` — the
+      SAME Balance Engine query (`Exists()` against the real `BillOfEntryModel
+      .allotment` M2M, plus `BOEAllotmentAllocation` partial-allocation
+      netting) the Financial/Customs Ledgers and Item Summary use, so this
+      stored-field writer can never structurally drift from them. `aro_qty`/
+      `aro_value` (ARO-type, folded into "debited" rather than "allotted" —
+      unchanged business rule) stay a plain local aggregate; ARO allotments
+      aren't subject to BOE-linking exclusion.
     """
+    from apps.license.services.balance_calculator import ItemBalanceCalculator, LicenseBalanceCalculator
+
     prefetch_cache = getattr(instance, '_prefetched_objects_cache', {})
 
     # ------------------------------------------------------------------ #
@@ -30,73 +35,73 @@ def _get_aggregated_values(instance):
     # ------------------------------------------------------------------ #
     if 'item_details' in prefetch_cache:
         rows = prefetch_cache['item_details']
-        debited_qty = sum(float(r.qty or 0) for r in rows if r.transaction_type == 'D')
-        debited_value = sum(float(r.cif_fc or 0) for r in rows if r.transaction_type == 'D')
+        debited_qty = sum(float(r.qty or 0) for r in rows if r.transaction_type == DEBIT)
+        debited_value = sum(float(r.cif_fc or 0) for r in rows if r.transaction_type == DEBIT)
     else:
         item_agg = instance.item_details.aggregate(
-            debited_qty=Sum('qty', filter=Q(transaction_type='D')),
-            debited_value=Sum('cif_fc', filter=Q(transaction_type='D'))
+            debited_qty=Sum('qty', filter=Q(transaction_type=DEBIT)),
+            debited_value=Sum('cif_fc', filter=Q(transaction_type=DEBIT))
         )
         debited_qty = to_float(item_agg['debited_qty'])
         debited_value = to_float(item_agg['debited_value'])
 
     # ------------------------------------------------------------------ #
-    # allotment_details (AllotmentItems): always one SQL aggregate query. #
-    # The AT filter uses the M2M join table directly, which is the        #
-    # authoritative source of truth for whether an allotment has a BOE.  #
+    # allotment_details (AllotmentItems): ARO stays a plain local aggregate;
+    # AT (outstanding, BOE-link-excluded) delegates to the shared Balance
+    # Engine helper — one extra query, but this function already runs
+    # per-item (from a per-item save signal), so it's not a new N+1 pattern.
     # ------------------------------------------------------------------ #
-    allot_agg = instance.allotment_details.aggregate(
+    aro_agg = instance.allotment_details.aggregate(
         aro_qty=Sum('qty', filter=Q(allotment__type='ARO')),
         aro_value=Sum('cif_fc', filter=Q(allotment__type='ARO')),
-        allotted_qty=Sum('qty', filter=Q(
-            allotment__bill_of_entry__isnull=True,
-            allotment__type='AT'
-        )),
-        allotted_value=Sum('cif_fc', filter=Q(
-            allotment__bill_of_entry__isnull=True,
-            allotment__type='AT'
-        ))
     )
+    allotted_qty, allotted_value = LicenseBalanceCalculator.get_outstanding_allotment_totals(instance)
+    direct_sale_qty = ItemBalanceCalculator.calculate_direct_sale_quantity(instance)
 
     return {
         'debited_qty': debited_qty,
         'debited_value': debited_value,
-        'aro_qty': to_float(allot_agg['aro_qty']),
-        'aro_value': to_float(allot_agg['aro_value']),
-        'allotted_qty': to_float(allot_agg['allotted_qty']),
-        'allotted_value': to_float(allot_agg['allotted_value']),
+        'aro_qty': to_float(aro_agg['aro_qty']),
+        'aro_value': to_float(aro_agg['aro_value']),
+        'allotted_qty': to_float(allotted_qty),
+        'allotted_value': to_float(allotted_value),
+        'direct_sale_qty': to_float(direct_sale_qty),
     }
 
 
 def calculate_available_quantity(instance, agg_values=None):
+    """
+    Available Quantity = current stored licence item quantity − Debited −
+    Outstanding (unlinked) Allotted, and direct SALE quantity (a SALE with
+    no BOE), floored at 0. A BOE-linked sale is excluded because its BOE is
+    already the physical debit.
+
+    Always uses `instance.quantity` (the current, possibly-amended licence
+    item quantity) — NEVER `instance.old_quantity`. A prior restricted-item/
+    notification-019-2015 branch substituted `old_quantity` (a frozen,
+    pre-amendment snapshot) as the ceiling here, which silently reintroduced
+    the item's ORIGINAL quantity after a licence amendment increased it —
+    e.g. old_quantity=857, current quantity=2909.261, already debited=857:
+    the old branch computed `857 - 857 = 0` (wrong — pinned to the obsolete
+    baseline) instead of `2909.261 - 857 = 2052.261` (correct — reflects the
+    amendment). Removed entirely; this is now the single, unconditional
+    formula for every licence item, restricted or not.
+    """
     if agg_values is None:
         agg_values = _get_aggregated_values(instance)
 
     credit = to_float(instance.quantity)
-
-    # Use prefetched data if available, otherwise query
-    try:
-        items = list(instance.items.all())  # Use prefetched data
-        first_item = items[0] if items else None
-    except Exception:
-        first_item = instance.items.first() if instance.items.exists() else None
-
-    # Check if first item has restrictions (sion_norm_class and restriction_percentage)
-    if first_item and first_item.sion_norm_class and first_item.restriction_percentage > 0:
-        notif_code = instance.license.notification_number.code if instance.license.notification_number_id else None
-        if instance.old_quantity or notif_code == N2015:
-            credit = to_float(instance.old_quantity) or to_float(instance.quantity)
-
     debited = agg_values['debited_qty'] + agg_values['aro_qty']
     allotted = agg_values['allotted_qty']
-    value = round_down(credit - debited - allotted, 0)
+    direct_sale_qty = agg_values['direct_sale_qty']
+    value = round_down(credit - debited - allotted - direct_sale_qty, 0)
     return max(round(value, 2), 0)
 
 
 def calculate_debited_quantity(instance, agg_values=None):
     if agg_values is None:
         agg_values = _get_aggregated_values(instance)
-    return round(agg_values['debited_qty'] + agg_values['aro_qty'], 2)
+    return round(agg_values['debited_qty'] + agg_values['aro_qty'] + agg_values['direct_sale_qty'], 2)
 
 
 def calculate_allotted_quantity(instance, agg_values=None):
@@ -118,37 +123,42 @@ def calculate_allotted_value(instance, agg_values=None):
 
 
 def calculate_available_value(instance):
+    """
+    Single source of truth: `LicenseImportItemsModel.available_value_calculated`
+    (condition_type `%`-pool + 0.01-CIF-marker aware) — the same property
+    `apps.license.signals._update_all_import_items_available_value` writes
+    from the item-save signal. Previously this re-derived its own formula
+    (a bare `LicenseBalanceCalculator.calculate_balance()` call, blind to
+    both the pool and marker rules), which could disagree with that other
+    writer for restricted/marker items. The one carve-out that ISN'T part
+    of the pooled property: if every OTHER item on the licence has zero
+    CIF, serial_number 1 takes the licence's full balance directly.
+
+    BL-LEDGER-02: that "full balance" now reads the LIVE
+    `LicenseBalanceCalculator.calculate_financial_balance()` figure rather
+    than `instance.license.balance_cif` (the denormalized `LicenseBalance`
+    cache) — the cache has no signal on reconciliation-allocation changes
+    and can go stale, while this rule's business semantics ("serial 1
+    absorbs the licence's full balance when nothing else carries CIF")
+    are unchanged; only the source of "full balance" is now guaranteed
+    live instead of potentially stale.
+    """
     from apps.license.models import LicenseImportItemsModel
     from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
-    # Use the centralized calculator directly to avoid recursion through properties
-    available_value = LicenseBalanceCalculator.calculate_balance(instance.license)
-    balance_value = available_value
-
-    # Business Logic: If all items OTHER THAN serial_number = 1 have CIF = 0,
-    # then serial_number 1's available_value should be balance_cif
     if instance.license:
         all_import_items = LicenseImportItemsModel.objects.filter(license=instance.license)
-
-        # Get all items except serial_number = 1
         other_items = [item for item in all_import_items if item.serial_number != 1]
-
-        # Check if all other items (not serial_number 1) have zero CIF
         all_others_zero_cif = all(
             to_float(item.cif_fc) == 0 and to_float(item.cif_inr) == 0
             for item in other_items
         ) if other_items else False
 
-        # If all other items have zero CIF, and this is serial_number 1
         if all_others_zero_cif and instance.serial_number == 1:
-            # Return the license's balance_cif (use stored value to avoid recursion)
-            return round(to_float(instance.license.balance_cif), 2)
+            live_balance = LicenseBalanceCalculator.calculate_financial_balance(instance.license)
+            return round(to_float(live_balance), 2)
 
-    # NOTE: This logic is now handled by available_value_calculated property in the model
-    # which uses restriction_percentage directly from ItemNameModel
-    # Keeping this for backward compatibility but it should delegate to the model property
-    value = available_value
-    return round(value, 2)
+    return round(to_float(instance.available_value_calculated), 2)
 
 
 def update_balance_values(item):

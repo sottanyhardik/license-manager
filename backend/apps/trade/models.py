@@ -1,10 +1,12 @@
 # trade/models.py
 import re
+import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
+from django.core.exceptions import ValidationError
 from django.db.models.signals import pre_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
@@ -177,12 +179,10 @@ class LicenseTrade(AuditModel):
         help_text="Incentive License (RODTEP/ROSTL/MEIS) - used when license_type is INCENTIVE"
     )
 
-    # Optional: one BOE can be referenced by many trades
-    boe = models.ForeignKey(
+    # Optional: many BOEs can be referenced by many trades
+    boes = models.ManyToManyField(
         BillOfEntryModel,
-        null=True,
         blank=True,
-        on_delete=models.SET_NULL,
         related_name="license_trades",
     )
 
@@ -239,6 +239,21 @@ class LicenseTrade(AuditModel):
         related_name='paired_trades',
         help_text="Links this trade to its paired counterpart (Sale↔Purchase)"
     )
+    # `linked_trade` predates enforced paired-copy semantics and remains for
+    # backwards-compatible manual links.  Counterpart pairs created by the
+    # domain service use these fields exclusively.
+    transaction_pair_uuid = models.UUIDField(null=True, blank=True, db_index=True, editable=False)
+    counterpart = models.OneToOneField(
+        'self', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='counterpart_of', editable=False,
+        help_text='Reciprocal immutable Sale↔Purchase counterpart.',
+    )
+    copied_from = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='copies_created', editable=False,
+    )
+    copied_from_type = models.CharField(max_length=20, blank=True, default='', editable=False)
+    source_document_number = models.CharField(max_length=128, blank=True, default='', editable=False)
 
     class Meta:
         ordering = ["-invoice_date", "-invoice_number", "-created_on"]
@@ -270,6 +285,7 @@ class LicenseTrade(AuditModel):
 
     def __str__(self) -> str:
         return f"Trade[{self.id}] {self.direction} Inv:{self.invoice_number or '-'}"
+
 
     # ------ computed fields / helpers ------
     @property
@@ -422,6 +438,14 @@ class LicenseTradeLine(models.Model):
     trade = models.ForeignKey(
         LicenseTrade, on_delete=models.CASCADE, related_name="lines", db_index=True
     )
+    counterpart_line = models.OneToOneField(
+        # A paired line is a single commercial detail.  CASCADE lets Django's
+        # collector remove both halves together (including from Admin) instead
+        # of two reciprocal PROTECT references deadlocking deletion.
+        'self', null=True, blank=True, on_delete=models.CASCADE,
+        related_name='counterpart_of_line', editable=False,
+    )
+    transaction_pair_uuid = models.UUIDField(null=True, blank=True, db_index=True, editable=False)
     # Billed SR (carries the license context)
     sr_number = models.ForeignKey(
         LicenseImportItemsModel,
@@ -566,6 +590,101 @@ class LicenseTradePayment(models.Model):
         return f"Payment[{self.id}] Trade#{self.trade_id} ₹{q2(self.amount)} on {self.date}"
 
 
+class TradePairAudit(models.Model):
+    """Append-only audit record for paired commercial-document operations."""
+    pair_uuid = models.UUIDField(db_index=True)
+    source = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name='pair_audit_as_source')
+    counterpart = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name='pair_audit_as_counterpart')
+    action = models.CharField(max_length=32)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-occurred_at', '-id']
+
+
+class TradeInvoiceDocument(models.Model):
+    """Immutable generated SALE-invoice version.
+
+    Uploaded supplier invoices deliberately remain on
+    ``LicenseTrade.purchase_invoice_copy``.  A sale invoice is a different
+    business object: it is rendered from the sale bill and persisted here so
+    opening it repeatedly never creates divergent documents.
+    """
+
+    trade = models.ForeignKey(
+        LicenseTrade, on_delete=models.CASCADE, related_name="generated_invoice_documents"
+    )
+    version_hash = models.CharField(max_length=64)
+    file = models.FileField(upload_to="trade/generated_sale_invoices/")
+    signed = models.BooleanField(default=False)
+    sale_bill_inr = models.DecimalField(max_digits=20, decimal_places=2)
+    generated_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-generated_on", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trade", "version_hash"], name="uniq_trade_invoice_document_version"
+            )
+        ]
+
+    def __str__(self):
+        return f"SaleInvoiceDocument[{self.pk}] trade={self.trade_id} signed={self.signed}"
+
+
+class InvoiceDocumentAccessToken(models.Model):
+    """Opaque, short-lived capability for viewing one invoice document."""
+
+    TYPE_PURCHASE_UPLOADED = "PURCHASE_UPLOADED"
+    TYPE_SALE_GENERATED = "SALE_GENERATED"
+    DOCUMENT_TYPE_CHOICES = (
+        (TYPE_PURCHASE_UPLOADED, "Purchase uploaded invoice"),
+        (TYPE_SALE_GENERATED, "Generated sale invoice"),
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    trade = models.ForeignKey(LicenseTrade, on_delete=models.CASCADE, related_name="invoice_access_tokens")
+    document_type = models.CharField(max_length=32, choices=DOCUMENT_TYPE_CHOICES)
+    storage_name = models.CharField(max_length=500)
+    document_version = models.CharField(max_length=128, blank=True, default="")
+    signed = models.BooleanField(default=False)
+    issued_to = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_document_tokens")
+    authorized_company = models.ForeignKey(CompanyModel, null=True, blank=True, on_delete=models.CASCADE, related_name="invoice_document_tokens")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    max_views = models.PositiveSmallIntegerField(default=2)
+    view_count = models.PositiveSmallIntegerField(default=0)
+    last_viewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["expires_at", "view_count"])]
+
+
+class InvoiceDocumentAuditEvent(models.Model):
+    """Security audit trail; metadata must never contain raw bearer tokens."""
+
+    EVENT_PURCHASE_VIEWED = "PURCHASE_DOCUMENT_VIEWED"
+    EVENT_SALE_GENERATED = "SALE_INVOICE_GENERATED"
+    EVENT_SALE_VIEWED = "SALE_INVOICE_VIEWED"
+    EVENT_EXPIRED = "DOCUMENT_VIEW_EXPIRED"
+    EVENT_FORBIDDEN = "DOCUMENT_VIEW_FORBIDDEN"
+    EVENT_CHOICES = (
+        (EVENT_PURCHASE_VIEWED, "Purchase document viewed"),
+        (EVENT_SALE_GENERATED, "Sale invoice generated"),
+        (EVENT_SALE_VIEWED, "Sale invoice viewed"),
+        (EVENT_EXPIRED, "Document view expired"),
+        (EVENT_FORBIDDEN, "Document view forbidden"),
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.CharField(max_length=40, choices=EVENT_CHOICES, db_index=True)
+    trade = models.ForeignKey(LicenseTrade, on_delete=models.CASCADE, related_name="invoice_document_events")
+    access_token = models.ForeignKey(InvoiceDocumentAccessToken, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_events")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_document_events")
+    occurred_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+
 # -----------------------------------------------------------------------------
 # Signals
 # -----------------------------------------------------------------------------
@@ -575,12 +694,20 @@ def clear_boe_invoice_on_trade_delete(sender, instance, **kwargs):
     When a trade is deleted, clear the invoice_no from the associated BOE.
     This allows the BOE to be reused for other trades.
     """
-    if instance.boe and instance.invoice_number:
-        # Only clear if the BOE's invoice_no matches this trade's invoice_number
-        if instance.boe.invoice_no == instance.invoice_number:
-            instance.boe.invoice_no = None
-            instance.boe.invoice_date = None
-            instance.boe.save(update_fields=['invoice_no', 'invoice_date'])
+    if instance.invoice_number:
+        for boe in instance.boes.all():
+            # Only clear if the BOE's invoice_no matches this trade's invoice_number
+            if boe.invoice_no == instance.invoice_number:
+                boe.invoice_no = None
+                boe.invoice_date = None
+                boe.save(update_fields=['invoice_no', 'invoice_date'])
+
+
+@receiver(pre_delete, sender=LicenseTrade)
+def prevent_single_counterpart_delete(sender, instance, **kwargs):
+    """A paired transfer is an audited unit; it cannot be deleted one-sided."""
+    if instance.counterpart_id:
+        raise ValidationError('This trade has a linked counterpart. Use the audited pair-deletion workflow.')
 
 
 @receiver(post_save, sender=IncentiveTradeLine)
@@ -601,6 +728,3 @@ def update_incentive_license_on_trade_line_delete(sender, instance, **kwargs):
     """
     if instance.incentive_license and instance.trade.direction == 'SALE':
         instance.incentive_license.update_sold_status()
-
-
-

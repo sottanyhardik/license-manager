@@ -120,10 +120,10 @@ if license.purchase_status and license.purchase_status.code == GE:
     - Update references to license.purchase_status
 
 15. **bill_of_entry/views/transfer_views.py**
-    - Update filter queries
+    - Removed as obsolete, un-routed legacy Django template-view code; active BOE workflows use DRF/React paths.
 
 16. **bill_of_entry/scripts/generate_tl.py**
-    - Update filter queries
+    - Removed as an obsolete, unreferenced one-off script; active transfer-letter generation lives in BOE transfer views and core transfer-letter utilities.
 
 17. **core/utils/transfer_letter.py**
     - Update filter queries

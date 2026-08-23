@@ -27,8 +27,67 @@ from apps.trade.services.trade_service import (
     get_prefilled_invoice_number,
     build_trade_summary,
     link_trades,
+    stamp_boe_invoice_from_trade,
     PartnerTradeNotFound,
+    copy_sale_to_purchase,
+    copy_purchase_to_sale,
 )
+
+
+class CounterpartCopyTests(TestCase):
+    def setUp(self):
+        from apps.core.models import CompanyModel
+        from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+        self.seller = CompanyModel.objects.create(name='Labdhi Mercantile LLP', iec=_unique_iec())
+        self.buyer = CompanyModel.objects.create(name='Labdhi Global LLP', iec=_unique_iec())
+        self.license = LicenseDetailsModel.objects.create(
+            license_number='0311049585', exporter=self.seller,
+            license_date=date(2026, 8, 3), license_expiry_date=date(2027, 8, 3),
+        )
+        self.item = LicenseImportItemsModel.objects.create(license=self.license, serial_number=1, description='DFIA item')
+        self.sale = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_SALE, from_company=self.seller, to_company=self.buyer,
+            invoice_number='LML/2026-27/0023', invoice_date=date(2026, 8, 3),
+        )
+        LicenseTradeLine.objects.create(
+            trade=self.sale, sr_number=self.item, description='DFIA item', mode=LicenseTradeLine.MODE_CIF_INR,
+            qty_kg=Decimal('2.0000'), cif_fc=Decimal('218076.00'), exc_rate=Decimal('1.0000'),
+            cif_inr=Decimal('218076.00'), pct=Decimal('100.000'), amount_inr=Decimal('218076.00'),
+        )
+
+    def test_sale_to_purchase_is_idempotent_and_reciprocal(self):
+        source, purchase, created = copy_sale_to_purchase(self.sale.id)
+        self.assertTrue(created)
+        self.assertEqual(purchase.direction, 'PURCHASE')
+        self.assertEqual(purchase.from_company_id, self.seller.id)
+        self.assertEqual(purchase.to_company_id, self.buyer.id)
+        self.assertEqual(purchase.total_amount, Decimal('218076.00'))
+        self.assertEqual(purchase.lines.count(), 1)
+        source.refresh_from_db(); purchase.refresh_from_db()
+        self.assertEqual(source.counterpart_id, purchase.id)
+        self.assertEqual(purchase.counterpart_id, source.id)
+        _, repeated, created_again = copy_sale_to_purchase(self.sale.id)
+        self.assertFalse(created_again)
+        self.assertEqual(repeated.id, purchase.id)
+
+    def test_purchase_to_sale_returns_existing_pair(self):
+        _, purchase, _ = copy_sale_to_purchase(self.sale.id)
+        source, sale, created = copy_purchase_to_sale(purchase.id)
+        self.assertFalse(created)
+        self.assertEqual(source.id, purchase.id)
+        self.assertEqual(sale.id, self.sale.id)
+
+    def test_deleting_one_paired_line_deletes_the_counterpart_without_protect_loop(self):
+        _, purchase, _ = copy_sale_to_purchase(self.sale.id)
+        source_line = self.sale.lines.get()
+        counterpart_line_id = purchase.lines.get().id
+
+        source_line.delete()
+
+        from apps.trade.models import LicenseTradeLine
+        self.assertFalse(LicenseTradeLine.objects.filter(pk=source_line.pk).exists())
+        self.assertFalse(LicenseTradeLine.objects.filter(pk=counterpart_line_id).exists())
 
 
 # ---------------------------------------------------------------------------
@@ -273,3 +332,230 @@ class LinkTradesTests(TestCase):
         self.assertIsNone(t2.linked_trade_id)
         t3.refresh_from_db()
         self.assertEqual(t3.linked_trade_id, t1.pk)
+
+
+# ---------------------------------------------------------------------------
+# stamp_boe_invoice_from_trade — hidden-BOE guard regression
+#
+# A genuinely-hidden (previous-owner) BOE must never have its invoice_no
+# silently overwritten by attaching it to an unrelated trade for invoicing
+# purposes -- that would un-hide it with no audit trail and inflate the
+# license's live balance. Only the audited hide_boe/restore_boe workflow may
+# change hidden state. These fixtures are deliberately independent of any
+# other test's company/license/BOE so they exercise the general rule, not
+# just one specific license.
+# ---------------------------------------------------------------------------
+
+class StampBoeInvoiceFromTradeHiddenGuardTests(TestCase):
+    def _make_company(self, name="Stamp Test Co"):
+        from apps.core.models import CompanyModel
+        return CompanyModel.objects.create(iec=_unique_iec(), name=name)
+
+    def _make_license(self, company, license_number=None):
+        from apps.license.models import LicenseDetailsModel
+        return LicenseDetailsModel.objects.create(
+            license_number=license_number or f"03{next(_iec_counter):08d}",
+            license_date=date(2024, 1, 1),
+            license_expiry_date=date(2027, 1, 1),
+            exporter=company,
+        )
+
+    def _make_item(self, license_obj, serial_number=1):
+        from apps.license.models import LicenseImportItemsModel
+        return LicenseImportItemsModel.objects.create(
+            license=license_obj,
+            serial_number=serial_number,
+            description=f"Stamp Test Item {serial_number}",
+            quantity=Decimal("1000.000"),
+            available_quantity=Decimal("1000.000"),
+        )
+
+    def _make_export_item(self, license_obj, cif_fc):
+        from apps.license.models import LicenseExportItemModel
+        return LicenseExportItemModel.objects.create(license=license_obj, cif_fc=cif_fc)
+
+    def _make_boe(self, company, invoice_no=""):
+        from apps.bill_of_entry.models import BillOfEntryModel
+        return BillOfEntryModel.objects.create(
+            company=company,
+            bill_of_entry_number=str(next(_iec_counter)),
+            bill_of_entry_date=date(2026, 5, 1),
+            exchange_rate=Decimal("84.50"),
+            invoice_no=invoice_no,
+        )
+
+    def _make_debit_row(self, boe, item, cif_fc, qty=Decimal("10.000")):
+        from apps.bill_of_entry.models import RowDetails
+        from apps.core.constants import DEBIT
+        return RowDetails.objects.create(
+            bill_of_entry=boe,
+            sr_number=item,
+            transaction_type=DEBIT,
+            cif_inr=cif_fc * Decimal("84.5"),
+            cif_fc=cif_fc,
+            qty=qty,
+        )
+
+    def _make_sale_trade(self, company, invoice_number, invoice_date_=date(2026, 6, 1)):
+        from apps.trade.models import LicenseTrade
+        return LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_SALE,
+            from_company=company,
+            invoice_number=invoice_number,
+            invoice_date=invoice_date_,
+        )
+
+    def test_genuinely_hidden_boe_is_not_restamped(self):
+        """Attaching a genuinely-hidden BOE to an unrelated Sale trade for
+        invoicing must not overwrite invoice_no, must not un-hide it, and
+        must not move the license's live balance."""
+        from apps.bill_of_entry.models import genuinely_hidden_boe_ids
+        from apps.bill_of_entry.services.boe_service import hide_boe
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        from apps.reconciliation.models import ReconciliationLog
+
+        company = self._make_company("Hidden Guard Co")
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        self._make_export_item(license_obj, cif_fc=Decimal("50000.00"))
+
+        boe = self._make_boe(company, invoice_no="LGL/2026-27/0099")
+        self._make_debit_row(boe, item, cif_fc=Decimal("5000.00"), qty=Decimal("50.000"))
+
+        hide_result = hide_boe(boe, user=None, reason="Previous owner utilisation")
+        self.assertTrue(hide_result["is_hidden"])
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "OTH")
+
+        license_obj.refresh_from_db()
+        balance_before = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+        log_count_before = ReconciliationLog.objects.count()
+
+        # Attach to an unrelated Sale trade purely for invoicing.
+        trade = self._make_sale_trade(company, invoice_number="PUR/2026-27/9999")
+        trade.boes.add(boe)
+        stamp_boe_invoice_from_trade(trade, boe)
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "OTH", "hidden BOE's invoice_no must not be overwritten")
+        self.assertIn(boe.id, genuinely_hidden_boe_ids(boe_ids=[boe.id]),
+                      "BOE must remain genuinely hidden after being linked to a trade")
+
+        license_obj.refresh_from_db()
+        balance_after = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+        self.assertEqual(balance_after, balance_before,
+                          "linking a hidden BOE to a trade must not move the live balance")
+
+        # stamp_boe_invoice_from_trade itself must not write any audit trail
+        # (only the link view's own ACTION_LINK log, if any, is expected).
+        self.assertEqual(
+            ReconciliationLog.objects.exclude(action=ReconciliationLog.ACTION_LINK).count(),
+            log_count_before,
+        )
+
+    def test_non_hidden_boe_is_still_stamped_normally(self):
+        """Baseline: the fix must not regress ordinary (non-hidden) linking."""
+        company = self._make_company("Normal Stamp Co")
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        boe = self._make_boe(company, invoice_no="")
+        self._make_debit_row(boe, item, cif_fc=Decimal("1000.00"))
+
+        trade = self._make_sale_trade(company, invoice_number="PUR/2026-27/0001",
+                                       invoice_date_=date(2026, 6, 15))
+        trade.boes.add(boe)
+        stamp_boe_invoice_from_trade(trade, boe)
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "PUR/2026-27/0001")
+        self.assertEqual(boe.invoice_date, date(2026, 6, 15))
+
+    def test_coincidental_oth_invoice_no_without_hide_log_is_still_stamped(self):
+        """`invoice_no == 'OTH'` alone is legacy free-text data on ~35-40% of
+        real BOEs, NOT a hidden marker, unless a HIDE_BOE log backs it up
+        (see genuinely_hidden_boe_ids). The guard must not over-fire and
+        block stamping for these — that would be a new, opposite bug."""
+        company = self._make_company("Coincidental OTH Co")
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        boe = self._make_boe(company, invoice_no="OTH")  # legacy data, never hidden via hide_boe
+        self._make_debit_row(boe, item, cif_fc=Decimal("2000.00"))
+
+        trade = self._make_sale_trade(company, invoice_number="PUR/2026-27/0002")
+        trade.boes.add(boe)
+        stamp_boe_invoice_from_trade(trade, boe)
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "PUR/2026-27/0002",
+                          "an 'OTH' BOE with no genuine hide log must be stamped like any other")
+
+    def test_restored_boe_is_stamped_normally_afterwards(self):
+        """Once a BOE is restored (audited path), it is no longer genuinely
+        hidden and must go back to normal stamping behaviour."""
+        from apps.bill_of_entry.services.boe_service import hide_boe, restore_boe
+
+        company = self._make_company("Restore Then Stamp Co")
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        boe = self._make_boe(company, invoice_no="LGL/2026-27/0050")
+        self._make_debit_row(boe, item, cif_fc=Decimal("3000.00"))
+
+        hide_boe(boe, user=None, reason="Previous owner")
+        restore_boe(boe, user=None, reason="Restored in error")
+        boe.refresh_from_db()
+        self.assertNotEqual(boe.invoice_no, "OTH")
+
+        trade = self._make_sale_trade(company, invoice_number="PUR/2026-27/0003")
+        trade.boes.add(boe)
+        stamp_boe_invoice_from_trade(trade, boe)
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "PUR/2026-27/0003")
+
+    def test_trade_without_invoice_number_is_noop_regardless_of_hidden_state(self):
+        """Pre-existing early-return behaviour (empty trade.invoice_number)
+        must be unaffected by the new guard, hidden or not."""
+        from apps.bill_of_entry.services.boe_service import hide_boe
+
+        company = self._make_company("No Invoice Number Co")
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        boe = self._make_boe(company, invoice_no="LGL/2026-27/0060")
+        self._make_debit_row(boe, item, cif_fc=Decimal("1500.00"))
+        hide_boe(boe, user=None, reason="Previous owner")
+        boe.refresh_from_db()
+        original_invoice_no = boe.invoice_no
+
+        trade = self._make_sale_trade(company, invoice_number="")
+        trade.boes.add(boe)
+        stamp_boe_invoice_from_trade(trade, boe)
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, original_invoice_no)
+
+    def test_serializer_update_call_site_does_not_unhide_boe(self):
+        """The second live call site (LicenseTradeSerializer.update()'s
+        per-BOE re-stamp loop) must share the same guard -- both call sites
+        route through the same stamp_boe_invoice_from_trade, so fixing it
+        once closes both."""
+        from apps.bill_of_entry.models import genuinely_hidden_boe_ids
+        from apps.bill_of_entry.services.boe_service import hide_boe
+        from apps.trade.serializers import LicenseTradeSerializer
+
+        company = self._make_company("Serializer Guard Co")
+        license_obj = self._make_license(company)
+        item = self._make_item(license_obj)
+        boe = self._make_boe(company, invoice_no="LGL/2026-27/0070")
+        self._make_debit_row(boe, item, cif_fc=Decimal("4000.00"))
+        hide_boe(boe, user=None, reason="Previous owner")
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "OTH")
+
+        trade = self._make_sale_trade(company, invoice_number="PUR/2026-27/0004")
+
+        LicenseTradeSerializer().update(trade, {"boes": [boe]})
+
+        boe.refresh_from_db()
+        self.assertEqual(boe.invoice_no, "OTH",
+                          "LicenseTradeSerializer.update() must not unhide a genuinely-hidden BOE")
+        self.assertIn(boe.id, genuinely_hidden_boe_ids(boe_ids=[boe.id]))

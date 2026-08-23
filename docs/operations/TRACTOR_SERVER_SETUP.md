@@ -8,9 +8,9 @@
 
 ## Files Updated
 1. **backend/lmanagement/settings.py** - Added 178.128.58.219 to ALLOWED_HOSTS
-2. **auto-deploy.sh** - Updated server list with new IP
+2. **scripts/deployment/auto-deploy.sh** - Updated server list with new IP
 3. **nginx-license-tractor.conf** - New nginx configuration file
-4. **setup-ssl-tractor.sh** - SSL setup script for Let's Encrypt
+4. **scripts/deployment/setup-ssl-tractor.sh** - SSL setup script for Let's Encrypt
 
 ## Deployment Steps
 
@@ -133,11 +133,11 @@ Before running this step, ensure:
 
 ```bash
 # Make the script executable
-chmod +x /home/django/license-manager/setup-ssl-tractor.sh
+chmod +x /home/django/license-manager/scripts/deployment/setup-ssl-tractor.sh
 
 # Run the SSL setup script
 cd /home/django/license-manager
-./setup-ssl-tractor.sh
+./scripts/deployment/setup-ssl-tractor.sh
 ```
 
 Alternatively, manually setup SSL:
@@ -192,7 +192,7 @@ After initial setup, use the automated deployment script from your local machine
 ```bash
 # From your local machine
 cd /path/to/license-manager
-./auto-deploy.sh
+./scripts/deployment/auto-deploy.sh
 ```
 
 This will deploy to all configured servers including the new tractor server at 178.128.58.219.

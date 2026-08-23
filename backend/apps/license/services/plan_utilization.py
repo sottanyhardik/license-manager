@@ -1,0 +1,317 @@
+"""
+Shared "one row per planning item" view over a licence's import items.
+
+Product wants every Plan Utilization screen/report to show ONE row per
+planning item (the same `plan_grouping.plan_group_key` product group that
+`plan_enforcement.py` already caps allotments against) instead of one row
+per raw SION S.No entry — three import-item rows that share a description
+(e.g. "Refined Cane Sugar" split across S.No 3/13/23) collapse into one row
+whose S.No column lists every merged serial.
+
+This module is the SINGLE place that composes the grouping (`plan_grouping`)
+with the group-level plan status (`plan_enforcement.plan_status_for`) and the
+split breakdown (`plan_reporting.plan_map_for_license` /
+`plan_map_for_import_items`) into report-ready rows. It does not change any
+of those modules' semantics — `plan_group_key`/`group_ids_of` remain the
+single definition of "group" (correctness-critical for allotment-cap
+enforcement), and `plan_status_for` remains the single definition of
+Original/Used/Remaining.
+
+Callers:
+  - `apps.license.views.license.LicenseDetailsViewSet.retrieve` — adds a
+    top-level `plan_utilization` key to the licence-detail response.
+  - `apps.license.services.exporters.license_balance_excel` — the
+    single-licence and bulk "Plan Utilization" Excel sections.
+"""
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+
+from apps.core.constants import DEC_0, DEC_000
+from apps.license.services.planning_tolerances import (
+    effective_planning_available_quantity,
+    effective_planning_balance_cif,
+)
+
+
+STATUS_FEASIBLE = "FEASIBLE"
+STATUS_SHORT = "SHORT"
+STATUS_UNPLANNED = "UNPLANNED"
+STATUS_BLOCKED_UNIT_MISMATCH = "BLOCKED_UNIT_MISMATCH"
+
+
+def _dec(value, default: Decimal = DEC_000) -> Decimal:
+    if value is None:
+        return default
+    return value if isinstance(value, Decimal) else Decimal(str(value))
+
+
+def plan_utilization_rows(
+    license_obj,
+    *,
+    plan_map: Optional[Dict[int, Dict[str, Any]]] = None,
+    items: Optional[List[Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Group `license_obj`'s import items by `plan_grouping.plan_group_key` and
+    return one dict per group, in first-seen (= lowest serial number) order.
+
+    Each row:
+      group_id            - id of the group's representative import item
+                             (lowest serial number) — matches the convention
+                             `PlanningEditor.tsx`/`bulk_upsert` already use
+                             for where a group's `LicenseItemPlan` rows live.
+      description          - representative item's description, falling
+                             back to its joined item names / "ID:<id>" (same
+                             fallback the frontend's `groupKeyOf` uses).
+      hs_code               - first non-empty HS code among the group's members.
+      serials               - sorted list of every member's serial_number.
+      member_ids            - every member's import-item id, in serial order.
+      item_names            - deduped {id, name} dicts for every attached
+                             ItemNameModel across all members, name-sorted.
+      available_quantity    - Σ available_quantity across members (Decimal).
+      total_quantity         - Σ quantity across members (Decimal).
+      balance_cif_fc         - Σ available_value across members (Decimal) —
+                             the same item-level "available CIF" the licence
+                             detail serializer exposes as `balance_cif_fc`
+                             (a stored field; NOT the costlier
+                             `LicenseImportItemsModel.balance_cif_fc`
+                             property, which re-queries per call).
+      splits                 - concatenation of every member's plan-map
+                             `splits` list (defensive union across the whole
+                             group — mirrors `plan_status_for`'s own
+                             defensiveness via `group_ids_of`).
+      has_plan / original_quantity / used_quantity / remaining_quantity /
+      original_cif_fc / used_cif_fc / remaining_cif_fc
+                             - group-level plan status from ONE
+                             `plan_status_for(representative)` call (it
+                             already aggregates across the whole group
+                             internally). `has_plan=False` and the six
+                             numeric fields omitted when the group has no
+                             `LicenseItemPlan` rows at all.
+
+    Args:
+      plan_map: pre-built `{import_item_id: {...}}` map (from
+        `plan_map_for_license`/`plan_map_for_import_items`) for callers that
+        already batched it — e.g. `item_pivot_report.py`'s per-report batch.
+        Computed here (one query) when not supplied.
+      items: explicit list of import-item model instances to group, for
+        callers that need their OWN filtered/prefetched subset (e.g. a
+        report that already applied a balance floor) rather than every
+        import item on the licence. Defaults to
+        `license_obj.import_license.all()`. Sorted by `serial_number` in
+        Python (not via `.order_by()`, which would issue a fresh query
+        against any prefetch cache the caller already populated).
+    """
+    from apps.license.services.plan_enforcement import plan_status_for, plan_status_for_items
+    from apps.license.services.plan_grouping import plan_group_key
+    from apps.license.services.plan_reporting import plan_map_for_license
+
+    # The default full-license path can use the batched status service below.
+    # A caller-supplied filtered subset retains `plan_status_for` because its
+    # local member ids may not represent the complete physical group.
+    _items_explicit = items is not None
+    if items is None:
+        items = list(license_obj.import_license.all())
+    items = sorted(items, key=lambda it: it.serial_number or 0)
+
+    # Item.available_quantity is a denormalized post-commit convenience
+    # field.  A planning read made in the same transaction as an allotment
+    # must instead use the Balance Engine's batched live calculation so a
+    # just-created debit cannot temporarily inflate plan feasibility.
+    from apps.license.services.balance_calculator import ItemBalanceCalculator
+    live_available_by_item = ItemBalanceCalculator.calculate_available_quantity_for_items(items)
+
+    # Resolve every group's original/allotted/baseline totals in one batched
+    # pass.  The former per-group `plan_status_for_ids` path repeated aggregate
+    # queries for every row and grew linearly with the number of planning items.
+    status_by_item = None if _items_explicit else plan_status_for_items(items)
+
+    if plan_map is None:
+        plan_map = plan_map_for_license(license_obj.id)
+
+    groups: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+
+    for item in items:
+        key = plan_group_key(item)
+        group = groups.get(key)
+        if group is None:
+            group = {
+                "group_id": item.id,
+                "_representative": item,
+                "description": (item.description or "").strip() or None,
+                "hs_code": None,
+                "serials": [],
+                "member_ids": [],
+                "_units": set(),
+                "_item_name_ids": set(),
+                "item_names": [],
+                "available_quantity": DEC_000,
+                "total_quantity": DEC_000,
+                "balance_cif_fc": DEC_0,
+                "splits": [],
+            }
+            groups[key] = group
+            order.append(key)
+
+        group["serials"].append(item.serial_number)
+        group["member_ids"].append(item.id)
+        group["_units"].add((item.unit or "KG").strip().upper())
+        if not group["hs_code"]:
+            hs = getattr(item, "hs_code", None)
+            if hs and getattr(hs, "hs_code", None):
+                group["hs_code"] = hs.hs_code
+        for name_obj in item.items.all():
+            name = (getattr(name_obj, "name", "") or "").strip()
+            if name_obj.id not in group["_item_name_ids"]:
+                group["_item_name_ids"].add(name_obj.id)
+                group["item_names"].append({"id": name_obj.id, "name": name})
+        # Retain an explicitly lower persisted availability (for example a
+        # reconciled/manual restriction) while preventing a stale, higher
+        # denormalized value from masking a just-written live debit.
+        stored_available = _dec(item.available_quantity, DEC_000)
+        live_available = _dec(live_available_by_item.get(item.id), DEC_000)
+        group["available_quantity"] += min(stored_available, live_available)
+        group["total_quantity"] += _dec(item.quantity)
+        group["balance_cif_fc"] += _dec(item.available_value, DEC_0)
+        member_plan = plan_map.get(item.id)
+        if member_plan:
+            group["splits"].extend(member_plan.get("splits", []))
+
+    license_balance_cif = _dec(getattr(license_obj, "get_balance_cif", DEC_0), DEC_0)
+    effective_license_balance_cif = effective_planning_balance_cif(license_balance_cif)
+    rows: List[Dict[str, Any]] = []
+    for key in order:
+        group = groups[key]
+        representative = group.pop("_representative")
+        group.pop("_item_name_ids")
+        units = sorted(unit for unit in group.pop("_units") if unit)
+        group["serials"] = sorted(group["serials"])
+        group["item_names"].sort(key=lambda n: (n["name"] or "").casefold())
+        if not group["description"]:
+            group["description"] = (
+                ", ".join(n["name"] for n in group["item_names"]) or f"ID:{group['group_id']}"
+            )
+
+        if _items_explicit:
+            status = plan_status_for(representative)
+        else:
+            status = status_by_item.get(representative.id)
+        if status is None:
+            group["has_plan"] = False
+            planned = DEC_000
+            allocated = DEC_000
+            remaining = DEC_000
+        else:
+            group["has_plan"] = True
+            group["original_quantity"] = status["original_quantity"]
+            group["used_quantity"] = status["used_quantity"]
+            group["remaining_quantity"] = status["remaining_quantity"]
+            group["original_cif_fc"] = status["original_cif_fc"]
+            group["used_cif_fc"] = status["used_cif_fc"]
+            group["remaining_cif_fc"] = status["remaining_cif_fc"]
+            planned = _dec(status["original_quantity"])
+            # Canonical Module 06 uses the lifetime-cap interpretation already
+            # enforced by allotment: original plan versus ALL live allocation.
+            # ``used_quantity`` remains the legacy cycle/since-replan display.
+            allocated = _dec(status["allocated_quantity"])
+            remaining = max(DEC_000, planned - allocated)
+
+        # Canonical Module 06 planning result.  The older fields above remain
+        # for API compatibility, but all new consumers should use these names.
+        #
+        # ``planned_qty`` is the fixed target captured when the plan is saved.
+        # ``allocated_qty``/``consumed_qty`` is the all-time live allocation
+        # against the same physical group. Therefore feasibility compares the
+        # unallocated plan remainder with CURRENT item availability. Comparing
+        # current availability with the original lifetime target is the source of
+        # the misleading "Available < Planned" production display.
+        # Preserve the canonical live balances and apply tolerances only to
+        # operational feasibility/status.  Theoretical plan and persisted
+        # model values remain untouched.
+        available = _dec(group["available_quantity"])
+        effective_available = effective_planning_available_quantity(available)
+        unit_mismatch = len(units) > 1
+        # Shortage/excess describe the underlying plan and therefore retain
+        # raw arithmetic. Tolerances are exposed separately for the final
+        # operational completion status consumed by the UI.
+        shortage = max(DEC_000, remaining - available)
+        excess = max(DEC_000, available - remaining)
+        if unit_mismatch:
+            canonical_status = STATUS_BLOCKED_UNIT_MISMATCH
+            feasible = False
+        elif not group["has_plan"]:
+            canonical_status = STATUS_UNPLANNED
+            feasible = True
+        elif shortage > DEC_000:
+            canonical_status = STATUS_SHORT
+            feasible = False
+        else:
+            canonical_status = STATUS_FEASIBLE
+            feasible = True
+
+        planner_cif_exhausted = effective_license_balance_cif == DEC_0
+        planner_quantity_exhausted = effective_available == DEC_000
+        if effective_license_balance_cif < DEC_0 or effective_available < DEC_000:
+            operational_status = "MANUAL_PLANNING_REQUIRED"
+        elif planner_cif_exhausted or planner_quantity_exhausted:
+            operational_status = "PLANNED"
+        else:
+            operational_status = canonical_status
+
+        group.update({
+            "source_unit": units[0] if len(units) == 1 else None,
+            "planning_unit": units[0] if len(units) == 1 else None,
+            # No conversion is performed: a planning group is required to have
+            # one unit.  Mixed-unit groups are explicitly blocked above.
+            "unit_conversion": Decimal("1") if len(units) == 1 else None,
+            "available_qty": available,
+            # Presentation positions are canonical, post-reconciliation values.
+            # The import item's available quantity already excludes BOE and
+            # allotment usage, so derive utilization once from the adjusted
+            # total and never include newly planned quantity.
+            "total_qty": max(_dec(group["total_quantity"]), DEC_000),
+            "total_utilized_qty": max(_dec(group["total_quantity"]) - available, DEC_000),
+            "balance_qty": max(available - planned, DEC_000),
+            "over_utilized_qty": max(available - _dec(group["total_quantity"]), DEC_000),
+            "over_planned_qty": max(planned - available, DEC_000),
+            "effective_available_quantity": effective_available,
+            "effective_available_qty": effective_available,
+            "license_balance_cif": license_balance_cif,
+            "effective_license_balance_cif": effective_license_balance_cif,
+            "balance_cif_ignored_by_tolerance": (
+                license_balance_cif != effective_license_balance_cif
+            ),
+            "planner_cif_exhausted": planner_cif_exhausted,
+            "planner_quantity_exhausted": planner_quantity_exhausted,
+            "operational_status": operational_status,
+            "planned_qty": planned,
+            "allocated_qty": allocated,
+            "consumed_qty": allocated,
+            "remaining_qty": remaining,
+            "shortage_qty": shortage,
+            "excess_qty": excess,
+            "feasible": feasible,
+            "status": canonical_status,
+            "presentation_status": (
+                "planned" if planned > DEC_000 and max(available - planned, DEC_000) <= Decimal("10.000")
+                else "partially_planned" if planned > DEC_000
+                else "fully_utilized" if available <= Decimal("10.000") and max(_dec(group["total_quantity"]) - available, DEC_000) > DEC_000
+                else "not_planned"
+            ),
+            "source_records": {
+                "license_id": license_obj.id,
+                "import_item_ids": list(group["member_ids"]),
+                "plan_line_ids": [
+                    split.get("id", split.get("plan_line_id"))
+                    for split in group["splits"]
+                    if split.get("id", split.get("plan_line_id")) is not None
+                ],
+            },
+        })
+
+        rows.append(group)
+
+    return rows

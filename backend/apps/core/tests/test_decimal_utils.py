@@ -120,6 +120,11 @@ class TestRoundDecimalDown(TestCase):
         # floor of -10.567 with 2 decimals is -10.57
         assert result == Decimal('-10.57')
 
+    def test_round_down_preserves_decimal_precision(self):
+        """Test rounding down without float conversion precision loss."""
+        result = round_decimal_down(Decimal("999999999999999999.999"), 2)
+        assert result == Decimal("999999999999999999.99")
+
 
 class TestRoundDecimal(TestCase):
     """Tests for round_decimal function."""

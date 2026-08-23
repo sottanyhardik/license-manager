@@ -9,15 +9,17 @@ const LT_SOFT_BG: Record<string, string> = { DFIA: 'var(--tb-info-soft)', INCENT
 const LT_LABELS: Record<string, string> = { DFIA: 'DFIA License', INCENTIVE: 'Incentive License' };
 
 export default function TradeMetaBadges({ direction, licenseType }: { direction: string; licenseType?: string }) {
+    const directionLabel = DIR_LABELS[direction] || direction;
+    const licenseLabel = licenseType ? (LT_LABELS[licenseType] || licenseType) : undefined;
     return (
-        <div className="flex gap-2">
-            <span className="badge flex items-center gap-1" style={{ background: DIR_SOFT_BG[direction], color: DIR_COLORS[direction], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
-                {DIR_LABELS[direction]}
+        <div className="flex flex-wrap gap-1.5" aria-label={`Trade: ${directionLabel}${licenseLabel ? `; ${licenseLabel}` : ''}`}>
+            <span className="inline-flex min-h-6 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: DIR_SOFT_BG[direction] || 'var(--tb-muted)', color: DIR_COLORS[direction] || 'var(--tb-text-secondary)' }}>
+                {directionLabel}
             </span>
             {licenseType && (
-                <span className="badge flex items-center gap-1" style={{ background: LT_SOFT_BG[licenseType], color: LT_COLORS[licenseType], fontWeight: '600', fontSize: 12, padding: '5px 10px', borderRadius: 6 }}>
+                <span className="inline-flex min-h-6 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold" style={{ background: LT_SOFT_BG[licenseType] || 'var(--tb-muted)', color: LT_COLORS[licenseType] || 'var(--tb-text-secondary)' }}>
                     <FileText className="size-4" aria-hidden="true" />
-                    {LT_LABELS[licenseType]}
+                    {licenseLabel}
                 </span>
             )}
         </div>

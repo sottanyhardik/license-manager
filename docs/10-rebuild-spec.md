@@ -71,7 +71,7 @@ license-manager/
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── vite.config.ts
-├── sync-masters.sh           # Cross-server master data sync
+├── scripts/maintenance/sync-masters.sh           # Cross-server master data sync
 └── CLAUDE.md
 ```
 

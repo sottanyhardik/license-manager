@@ -1,0 +1,57 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.6, pytest-8.3.4, pluggy-1.6.0 -- /Users/drushahardiksottany/PycharmProjects/license-manager/.venv/bin/python
+cachedir: .pytest_cache
+django: version: 6.0.4, settings: lmanagement.settings (from ini)
+rootdir: /Users/drushahardiksottany/PycharmProjects/license-manager/backend
+configfile: pytest.ini
+plugins: cov-6.0.0, Faker-40.28.1, django-4.9.0
+collecting ... collected 19 items
+
+tests/test_authorization_permissions.py::LicenseActionAuthorizationTests::test_license_transfer_update_requires_license_manager_role PASSED [  5%]
+tests/test_authorization_permissions.py::MasterDataAuthorizationTests::test_authenticated_non_superuser_can_read_but_not_create_master_data PASSED [ 10%]
+tests/test_authorization_permissions.py::MasterDataAuthorizationTests::test_other_master_data_entities_remain_unaffected_by_company_scoping PASSED [ 15%]
+tests/test_authorization_permissions.py::MasterDataAuthorizationTests::test_superuser_can_create_master_data PASSED [ 21%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_authenticated_user_with_no_business_role_is_blocked PASSED [ 26%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_every_documented_legitimate_role_can_read_multiple_companies PASSED [ 31%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_every_documented_legitimate_role_is_still_blocked_from_writing PASSED [ 36%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_report_viewer_role_still_receives_banking_fields_in_response PASSED [ 42%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_role_scoped_user_still_cannot_write_company_data PASSED [ 47%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_unauthenticated_request_is_denied PASSED [ 52%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_user_with_trade_viewer_role_can_read_company_data PASSED [ 57%]
+tests/test_authorization_permissions.py::CompanyPermissionAuthorizationTests::test_user_with_unrelated_role_cannot_read_company_data PASSED [ 63%]
+tests/test_authorization_permissions.py::BOEPdfParseAuthorizationTests::test_allotment_manager_cannot_reach_boe_pdf_parser PASSED [ 68%]
+tests/test_authorization_permissions.py::BOEPdfParseAuthorizationTests::test_boe_manager_can_reach_boe_pdf_parser PASSED [ 73%]
+tests/test_authorization_permissions.py::DirectReportAuthorizationTests::test_direct_report_urls_require_authentication PASSED [ 78%]
+tests/test_authorization_permissions.py::DirectReportAuthorizationTests::test_direct_report_urls_require_report_role PASSED [ 84%]
+tests/test_authorization_permissions.py::DirectReportAuthorizationTests::test_report_viewer_reaches_direct_report_view PASSED [ 89%]
+tests/test_authorization_permissions.py::TradeNestedAuthorizationTests::test_trade_endpoints_require_trade_role PASSED [ 94%]
+tests/test_authorization_permissions.py::TradeNestedAuthorizationTests::test_trade_viewer_can_read_trade_endpoints PASSED [100%]
+
+============================== 19 passed in 4.26s ==============================
+
+---
+Command: cd backend && source ../.venv/bin/activate && python -m pytest tests/test_authorization_permissions.py -v --no-migrations --no-cov
+
+Note on --no-migrations: the shared Postgres test database cannot be created via
+the normal migration path because of a PRE-EXISTING, unrelated broken migration
+(apps/core/migrations/0003_create_materialized_views.py references
+allotment_items.item_id, which is added by a later allotment migration that
+0003 does not declare a dependency on -> "column ai.item_id does not exist").
+This blocks `manage.py migrate` / plain pytest-django test-DB creation for the
+WHOLE repo regardless of the SEC-02 change (reproduced independently by running
+the same suite without --no-migrations; see below). --no-migrations makes
+pytest-django build the test schema directly from the current model state
+(Django's schema-editor, bypassing the broken migration graph entirely), so the
+tests below are still full request/response-level API tests against a real
+Postgres test database and real DRF routing/permission/serializer stack - they
+are not a logic-only harness. This pre-existing migration bug is out of scope
+for SEC-02 and was left untouched, per instructions.
+
+Reproduction of the pre-existing unrelated blocker (for the record):
+$ python -m pytest tests/test_authorization_permissions.py -k Company -v
+...
+django.db.utils.ProgrammingError: column ai.item_id does not exist
+LINE 60:     ON ai.item_id = lii.id
+(fails during django_db_setup / create_test_db, before any test runs - confirms
+this is a test-database bootstrap problem, not something introduced by the
+SEC-02 fix or these regression tests)

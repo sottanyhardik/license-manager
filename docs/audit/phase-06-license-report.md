@@ -1,0 +1,3377 @@
+# Phase 06 - License Audit Report
+
+Append-only engineering audit report for the License phase.
+
+## 2026-07-16 - `backend/apps/license/models/invoice.py`
+
+- File path: `backend/apps/license/models/invoice.py`
+- Module: License / Models / Invoice
+- Status: COMPLETED
+- Total LOC: 253
+- Lines reviewed: 253
+- Functions reviewed: 12 (`_clean_required`, `_clean_optional`, `Invoice._normalize_fields`, `Invoice.clean_fields`, `Invoice.clean`, `Invoice.save`, `Invoice.__str__`, `InvoiceItem._normalize_fields`, `InvoiceItem.clean_fields`, `InvoiceItem.clean`, `InvoiceItem.save`, `InvoiceItem.__str__`)
+- Classes reviewed: 4 (`Invoice`, `Invoice.Meta`, `InvoiceItem`, `InvoiceItem.Meta`)
+- Imports reviewed: 6
+- Validation improvements:
+  - Added defensive required/optional string normalization for `None`, whitespace-only input, non-string direct model assignments, Unicode, and lowercase PAN/GST.
+  - Moved normalization into `clean_fields()` so Django field validation sees stripped/uppercased values before max-length and blank checks.
+  - Added `save()` validation through `full_clean()` while preserving Django's no-op behavior for `save(update_fields=[])`.
+  - Added non-negative validators for invoice totals and invoice item quantity/value fields.
+  - Added database `CheckConstraint`s for non-negative invoice totals and invoice item numeric values so bulk writes cannot bypass the rule.
+  - Preserved `InvoiceItem.license_no` derivation from `sr_number` and made it validation-order safe.
+- Security improvements:
+  - Hardened PAN/GST normalization and validation paths to reject malformed tax identifiers consistently before persistence.
+  - Added DB-level numeric guards for bulk-write paths that bypass model `save()`.
+- Performance improvements:
+  - No query expansion introduced; only one existing related-object access remains for `InvoiceItem.license_no` derivation when needed.
+- Package/library replacements:
+  - Reused existing `apps.core.utils.validation.validate_pan_number`.
+  - Kept local `GST_VALIDATOR` because the existing shared GST helper is less strict for the embedded PAN section.
+  - No new dependency introduced.
+- Dead code removed: none.
+- Duplicate logic removed: inline billing/sale choices replaced by module constants; validation now flows through shared PAN helper.
+- Migrations generated:
+  - `backend/apps/license/migrations/0011_harden_invoice_validation.py`
+  - `backend/apps/license/migrations/0012_enforce_invoice_non_negative_constraints.py`
+- Tests added:
+  - `backend/apps/license/tests/test_invoice_models.py`
+  - Covers valid save/normalization, Unicode/emoji text, zero values, partial saves, no-op saves, blank/None required fields, invalid PAN/GST, duplicate invoice numbers, missing foreign keys, negative values, decimal overflow, bulk-create DB constraint enforcement, derived invoice item license numbers, blank invoice item fields, and string representations.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/models/invoice.py backend/apps/license/tests/test_invoice_models.py backend/apps/license/migrations/0011_harden_invoice_validation.py backend/apps/license/migrations/0012_enforce_invoice_non_negative_constraints.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/models/invoice.py backend/apps/license/tests/test_invoice_models.py backend/apps/license/migrations/0011_harden_invoice_validation.py backend/apps/license/migrations/0012_enforce_invoice_non_negative_constraints.py` -> passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_invoice_models.py -q` -> 19 passed.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - Duplicate invoice items were reviewed but no uniqueness constraint was added because the file does not establish a verified business rule forbidding multiple invoice lines for the same import item.
+  - Bulk update paths bypass model `save()` by Django design; non-negative values are protected by DB constraints, while tax/text normalization remains an application-level model validation concern.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/tests/test_e1_plan.py`
+
+- File path: `backend/apps/license/tests/test_e1_plan.py`
+- Module: License / Tests / E1 Planning
+- Status: COMPLETED
+- Total LOC: 289
+- Lines reviewed: 289
+- Functions reviewed: 34 test/helper functions.
+- Classes reviewed: 3 test classes.
+- Imports reviewed: 2 import blocks.
+- Validation improvements:
+  - Added explicit coverage for `None`, blank, and Unicode classification inputs.
+  - Added coverage for invalid utilization quantities and negative balances planning to zero.
+  - Preserved existing coverage for category classification, condition exclusions, dynamic unit-price caps, sequential deduction, balance exhaustion, planned-value cap, display-vs-util quantity behavior, exact-balance utilization, and lookup tables.
+- Package/framework replacements:
+  - No dependency changes.
+- Performance improvements:
+  - No production-code changes; test-only edge coverage.
+- Security improvements:
+  - No direct security-sensitive paths in this pure planning test file.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Tests added:
+  - Added `test_null_blank_and_unicode_inputs_are_safe`.
+  - Added `test_invalid_util_quantities_and_negative_balance_plan_zero`.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_e1_plan.py -q` -> 34 passed.
+  - `.venv/bin/ruff check backend/apps/license/tests/test_e1_plan.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/tests/test_e1_plan.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/tests/test_e1_plan.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - `split_display_util_qty()` still relies on `float(row.get("qty") or 0)` and would raise for malformed non-empty quantity strings; that belongs to the pending production `e1_plan.py` service audit rather than this completed test-file pass.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/tests/test_e5_plan.py`
+
+- File path: `backend/apps/license/tests/test_e5_plan.py`
+- Module: License / Tests / E5 Planning
+- Status: COMPLETED
+- Total LOC: 362
+- Lines reviewed: 362
+- Functions reviewed: 43 test/helper functions.
+- Classes reviewed: 6 test classes.
+- Imports reviewed: 2 import blocks.
+- Validation improvements:
+  - Added explicit coverage for `None`, blank, and Unicode classification inputs.
+  - Added coverage for invalid quantity coercion and negative license balances planning to zero.
+  - Preserved existing coverage for classification precedence, HSN compatibility, fixed-rate steps, SWP reallocation, WPC dynamic pricing, wheat-flour mop-up, full waterfall capping, legacy `wf_qty`, and default balance behavior.
+- Package/framework replacements:
+  - No dependency changes.
+- Performance improvements:
+  - No production-code changes; test-only edge coverage.
+- Security improvements:
+  - No direct security-sensitive paths in this pure planning test file.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Tests added:
+  - Added `test_null_blank_and_unicode_inputs_are_safe`.
+  - Added `test_invalid_quantities_and_negative_balance_plan_zero`.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_e5_plan.py -q` -> 43 passed.
+  - `.venv/bin/ruff check backend/apps/license/tests/test_e5_plan.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/tests/test_e5_plan.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/tests/test_e5_plan.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - Production `e5_plan.py` has a stale comment saying WPC is `[12, 27]` where constants/tests use `[0, 22]`; that belongs to the pending service-file audit rather than this completed test-file pass.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/tests/test_e132_plan.py`
+
+- File path: `backend/apps/license/tests/test_e132_plan.py`
+- Module: License / Tests / E132 Planning
+- Status: COMPLETED
+- Total LOC: 425
+- Lines reviewed: 425
+- Functions reviewed: 59 test/helper methods.
+- Classes reviewed: 13 test classes.
+- Imports reviewed: 3 import blocks.
+- Validation improvements:
+  - Added explicit regression coverage for Unicode description normalization and malformed quantity coercion to zero.
+  - Preserved coverage for null/blank HSN and description, whitespace normalization, case-insensitive matching, HSN formatting, overlapping rules, balance caps, wastage promotion, milk splitting, and exception reporting.
+- Package/framework replacements:
+  - Removed duplicate `Decimal` alias import and reused the existing standard-library `Decimal` import.
+  - No dependency changes.
+- Performance improvements:
+  - No production-code changes; test-only cleanup.
+- Security improvements:
+  - No direct security-sensitive paths in this pure planning test file.
+- Dead code removed:
+  - Removed redundant `from decimal import Decimal as _Dec`.
+- Duplicate logic removed:
+  - Replaced `_Dec(...)` calls with the existing `Decimal(...)` import.
+- Tests added:
+  - Added `test_unicode_description_and_invalid_quantity_are_safe`.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_e132_plan.py -q` -> 59 passed.
+  - `.venv/bin/ruff check backend/apps/license/tests/test_e132_plan.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/tests/test_e132_plan.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/tests/test_e132_plan.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/tests/test_e132_plan.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - The production `e132_plan.py` service still contains business-assumption comments requiring confirmation; those belong to the pending service-file audit, not this completed test-file pass.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/tables.py`
+
+- File path: `backend/apps/license/tables.py`
+- Module: License / Tables
+- Status: COMPLETED
+- Total LOC: 731
+- Lines reviewed: 731
+- Functions reviewed: 40 (`_as_decimal`, 24 total-column render methods, 7 `render_sr_no` methods, `ColumnTotal.__init__`, `ColumnTotal.render_total_value`, `ColumnTotal.render_footer`, `DecimalColumnWithTotal.__init__`, `DecimalColumnWithTotal.render`, `DecimalColumnWithTotal.render_footer`, `PrefixMixin.prefixed`, `TruncatedTextColumn.render`, `TruncatedBigTextColumn.render`, `ColumnWithThousandsSeparator.__init__`, `ColumnWithThousandsSeparator.render`, `ColumnWithThousandsSeparator.render_footer`)
+- Classes reviewed: 53 table/column classes.
+- Imports reviewed: 6.
+- Validation improvements:
+  - Added `_as_decimal()` normalization for table numeric render paths so `None`, empty strings, invalid strings, invalid types, `NaN`, and infinities render and total as zero instead of raising during report rendering.
+  - Converted `DecimalColumnWithTotal` to use the shared decimal normalizer and exact `Decimal(str(value))` conversion to avoid float binary precision surprises.
+  - Hardened truncation columns to treat `None` as blank and convert non-string values before length checks.
+- Package/framework replacements:
+  - Replaced `import decimal` module usage with direct standard-library `Decimal` and `InvalidOperation` imports.
+  - No new dependency introduced.
+- Framework improvements:
+  - Preserved existing `django_tables2` table/column behavior and accessors.
+  - Kept the existing `PaperBoardQuantityColumn.get_pp()` accessor unchanged because changing it to `get_paper_board()` would be a business-behavior change not proven by this file.
+- Performance improvements:
+  - Numeric normalization is constant-time and avoids exception paths during common blank/invalid display cases.
+- Security improvements:
+  - Report rendering no longer exposes unhandled exceptions for malformed numeric values supplied by model properties or import-derived fields.
+- Dead code removed:
+  - Removed misleading class-level total accumulators from `ColumnTotal` and `ColumnWithThousandsSeparator`; totals are now instance-scoped only.
+- Duplicate logic removed:
+  - Consolidated total accumulation/formatting for legacy quantity columns through `ColumnTotal.render_total_value()`.
+- Tests added:
+  - Added `backend/apps/license/tests/test_tables.py`.
+  - Covers instance-scoped totals, `None`, invalid numeric strings, `NaN`, infinity, method-backed totals, decimal formatting, text truncation, and thousands-separator total accumulation.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/tables.py backend/apps/license/tests/test_tables.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/tables.py backend/apps/license/tests/test_tables.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/tables.py backend/apps/license/tests/test_tables.py` -> passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_tables.py -q` -> blocked/skipped because `django_tables2` is not installed in `.venv` and is not declared in `backend/requirements*.txt`; pytest collected 0 runnable tests and returned exit code 5 after the dependency-gated skip.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/tables.py backend/apps/license/tests/test_tables.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - `tables.py` remains large and still contains many near-identical table declarations. A broader table-column factory extraction is possible, but was not applied because existing accessors encode domain-specific report behavior and need golden rendering coverage with `django_tables2` installed.
+  - The table runtime regression file is present but cannot run in this environment until `django-tables2` is added to the backend dependency set or installed in the active virtualenv.
+- Blocked items:
+  - Runtime table tests are blocked by missing `django_tables2` in `.venv` and absent backend dependency declarations.
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/tests/test_balance_calculator.py`
+
+- File path: `backend/apps/license/tests/test_balance_calculator.py`
+- Module: License / Tests / Balance Calculator
+- Status: COMPLETED
+- Total LOC: 526
+- Lines reviewed: 526
+- Functions reviewed: 27 test methods.
+- Classes reviewed: 3 (`TestLicenseBalanceCalculator`, `TestItemBalanceCalculator`, `TestEdgeCases`)
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - Corrected mock patch targets to the service module namespace (`apps.license.services.balance_calculator.*`) so the tests validate the code paths actually executed by `balance_calculator.py`.
+  - Added direct coverage for `calculate_trade()` to verify only `SALE` trade lines debit the license.
+  - Strengthened debit and allotment query assertions to verify the BOE-linked trade exclusion and non-BOE allotment predicates.
+- Package/framework replacements:
+  - No dependency changes.
+  - Kept the existing `unittest.TestCase` structure because it matches the surrounding test file and did not block pytest execution.
+- Performance improvements:
+  - No runtime production-code changes; test mocks now avoid accidental ORM query construction against `Mock` objects.
+- Security improvements:
+  - Trade double-counting exclusion and SALE-only trade filtering are now explicitly regression-tested.
+- Dead code removed:
+  - Removed unused `MagicMock` and `QuerySet` imports.
+- Duplicate logic removed:
+  - No helper extraction performed; this file is test-only and the repeated setup is explicit per balance scenario.
+- Tests added:
+  - Added `test_calculate_trade_counts_only_sale_trades`.
+  - Updated existing tests to assert exact query filters.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q` -> 27 passed.
+  - `.venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/tests/test_balance_calculator.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - The production service file still has two uncovered exception-free lines in `calculate_trade()` per coverage output before adding future service-file audit; that belongs to the pending `backend/apps/license/services/balance_calculator.py` audit entry rather than this test-file completion.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/services/exporters/license_balance_excel.py`
+
+- File path: `backend/apps/license/services/exporters/license_balance_excel.py`
+- Module: License / Services / Exporters / Excel
+- Status: COMPLETED
+- Total LOC: 2,123
+- Lines reviewed: 2,123
+- Functions reviewed: 15 (`build_balance_excel_unused`, `build_balance_excel`, `build_bulk_balance_excel`, and nested workbook/style/sheet/formula helpers)
+- Classes reviewed: 0
+- Imports reviewed: all function-local imports reviewed; 10 unused imports removed.
+- Validation improvements:
+  - Hardened `build_bulk_balance_excel()` request validation so `license_numbers` must be a non-empty list of non-blank strings.
+  - Strips and deduplicates requested license numbers before querying.
+  - Preserves existing 404 behavior when the validated list has no matching licenses.
+- Package/framework replacements:
+  - Used Python `dict.fromkeys()` for stable de-duplication instead of custom tracking logic.
+  - Kept OpenPyXL implementation; no new dependency introduced.
+- Framework improvements:
+  - Cross-sheet formulas now reference the actual OpenPyXL worksheet title after duplicate/truncated sheet-name collision handling.
+- Performance improvements:
+  - Invalid non-list payloads now return before any database query.
+  - Duplicate license numbers are removed before the `license_number__in` query.
+- Security improvements:
+  - Input type validation prevents string payloads from being interpreted as iterables of characters.
+- Dead code removed:
+  - Removed unused imports from all exporter paths.
+  - `build_balance_excel_unused()` was reviewed but retained because `views/license.py` still exposes it via `balance-excel-unused`.
+- Duplicate logic removed:
+  - No large extraction performed in this file; the existing large-module decomposition plan still covers future structural extraction, but this pass only made safe local changes.
+- Tests added:
+  - Added bulk balance Excel regression coverage in `backend/tests/test_api_license.py` for non-list payload rejection.
+  - Added duplicate/truncated worksheet-title regression coverage to ensure summary formulas reference the actual generated sheet names.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/services/exporters/license_balance_excel.py backend/tests/test_api_license.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/exporters/license_balance_excel.py backend/tests/test_api_license.py` -> passed.
+  - `.venv/bin/python -m pytest backend/tests/test_api_license.py -q` -> 13 passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check` for touched files -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - File remains oversized and contains repeated workbook style/helper sections. Safe decomposition should be handled as a dedicated extraction with workbook golden-shape coverage because this file has high formatting blast radius.
+  - `balance-excel-unused` remains externally reachable despite stale wording that says “no longer exposed”; removal would require a coordinated view/API contract change, so it was not removed in this single-file pass.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/utils/query_builder.py`
+
+- File path: `backend/apps/license/utils/query_builder.py`
+- Module: License / Utilities / Query Builder
+- Status: COMPLETED
+- Total LOC: 259
+- Lines reviewed: 259
+- Functions reviewed: 19 (`QueryFilterBuilder.__init__`, `add_and_filters`, `add_or_filters`, `add_exclude_filters`, `add_and_or_filters`, `build`; `DateRangeHandler.parse_date_range`, `get_expiry_filters`; `LicenseQueryBuilder.__init__`, `with_base_filters`, `with_date_range`, `with_expiry_filters`, `with_purchase_status`, `with_norm_class`, `with_party`, `exclude_party`, `with_is_au`, `order_by`, `build`)
+- Classes reviewed: 3 (`QueryFilterBuilder`, `DateRangeHandler`, `LicenseQueryBuilder`)
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - Trimmed date-range boundary strings before parsing so leading/trailing whitespace around valid `YYYY-MM-DD` input is accepted.
+  - Blank date-range boundaries now produce no filter instead of trying to parse whitespace.
+  - Preserved malformed date behavior: invalid non-blank date strings still raise `ValueError`.
+  - Explicit empty include/exclude lists for `__icontains` filters are now true no-ops, avoiding negated empty `Q()` objects.
+  - `expiry_days=0` is now honored as an explicit override instead of falling back to `settings.EXPIRY_DAY`.
+- Package/framework replacements:
+  - Modernized annotations to Python built-in generics and `| None` with `from __future__ import annotations`.
+  - No new dependency introduced.
+- Framework improvements:
+  - Preserved Django `Q` and `QuerySet` behavior and kept datetime return values for compatibility with existing date-filter callers.
+- Performance improvements:
+  - `get_expiry_filters()` now captures `today()` once and reuses it for both lower and upper bounds, avoiding microsecond drift inside a single filter object.
+  - Empty list filters return without constructing unnecessary nested `Q()` objects.
+- Security improvements:
+  - Whitespace-only date input can no longer trigger unhandled parsing exceptions in callers that pass blank form/query values through this helper.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Tests added:
+  - Added `backend/apps/license/tests/test_query_builder.py`.
+  - Covers AND/OR/exclude filter composition, scalar fallback, grouped filters, empty list no-ops, trimmed dates, blank dates, malformed date failure, default date offsets, zero-day expiry override, expired-window bounds, queryset ordering, and `distinct()` behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_query_builder.py -q` -> 13 passed.
+  - `.venv/bin/ruff check backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/utils/query_builder.py backend/apps/license/tests/test_query_builder.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - This helper still returns `datetime.datetime` objects for `DateField` filters to preserve existing caller behavior. A future date-only migration should be coordinated with all report services and API filtering tests.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/helper.py`
+
+- File path: `backend/apps/license/helper.py`
+- Module: License / Legacy Helpers
+- Status: COMPLETED - removed as verified dead code.
+- Total LOC: 107
+- Lines reviewed: 107
+- Functions reviewed: 3 (`item_wise_debiting`, `item_wise_allotment`, `fetch_item_details`)
+- Classes reviewed: 0
+- Imports reviewed: 2 (`django.db.models.Sum` plus function-local model imports)
+- Validation improvements:
+  - Removed obsolete helper paths that had no callers and contained unchecked division by aggregate quantity.
+- Package/framework replacements:
+  - No replacement needed; the file was unreferenced and removed.
+- Framework improvements:
+  - Removed dead lazy ORM imports for BOE rows, allotments, and license import items.
+- Performance improvements:
+  - Removed unreachable N+1-style helper logic that repeatedly filtered and aggregated per company.
+- Security improvements:
+  - Removed an unused data aggregation surface that accepted raw item-name fragments and built broad `icontains` queries.
+- Dead code removed:
+  - Deleted `backend/apps/license/helper.py` after repository-wide reference scans found no external import or call sites.
+- Duplicate logic removed:
+  - Removed legacy aggregation helpers whose responsibilities are covered by active model/report methods in `models/core.py`, `item_report.py`, and report services.
+- Tests added: none; deletion was verified by reference scans and existing API/query-builder regression tests.
+- Migrations added: none.
+- Verification results:
+  - `rg "item_wise_debiting|item_wise_allotment|fetch_item_details|apps\\.license\\.helper|license\\.helper" .` excluding generated audit/cache artifacts -> no references.
+  - `.venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_query_builder.py -q` -> 26 passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/helper.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> blocked by 224 pre-existing findings in other pending License files; none referenced deleted `helper.py`.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - No remaining debt for this file; it has been removed.
+- Blocked items:
+  - Broad License Ruff remains blocked by existing unaudited findings outside this deleted file.
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/management/__init__.py`
+
+- File path: `backend/apps/license/management/__init__.py`
+- Module: License / Management Package
+- Status: COMPLETED
+- Total LOC: 0
+- Lines reviewed: 0
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Imports reviewed: 0
+- Validation improvements: none; file is intentionally empty.
+- Package/framework replacements: none.
+- Framework improvements:
+  - Retained empty package marker for Django management command discovery/import compatibility.
+- Performance improvements: none.
+- Security improvements: none; no executable surface.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Tests added: none.
+- Migrations added: none.
+- Verification results:
+  - `xxd -g 1 backend/apps/license/management/__init__.py` -> no bytes; file is empty.
+  - `.venv/bin/ruff check backend/apps/license/management/__init__.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/__init__.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/__init__.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt: none.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/management/commands/__init__.py`
+
+- File path: `backend/apps/license/management/commands/__init__.py`
+- Module: License / Management Commands Package
+- Status: COMPLETED
+- Total LOC: 0
+- Lines reviewed: 0
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Imports reviewed: 0
+- Validation improvements: none; file is intentionally empty.
+- Package/framework replacements: none.
+- Framework improvements:
+  - Retained empty command package marker for Django management command discovery.
+- Performance improvements: none.
+- Security improvements: none; no executable surface.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Tests added: none.
+- Migrations added: none.
+- Verification results:
+  - `xxd -g 1 backend/apps/license/management/commands/__init__.py` -> no bytes; file is empty.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/__init__.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/__init__.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/__init__.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt: none.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/management/commands/delete_licenses_by_exporter.py`
+
+- File path: `backend/apps/license/management/commands/delete_licenses_by_exporter.py`
+- Module: License / Management Commands / Destructive Cleanup
+- Status: COMPLETED
+- Total LOC: 362
+- Lines reviewed: 362
+- Functions reviewed: 2 (`Command.add_arguments`, `Command.handle`)
+- Classes reviewed: 1 (`Command`)
+- Imports reviewed: 13 import statements, including function-local signal imports.
+- Validation improvements:
+  - Added pre-query validation that rejects blank/whitespace-only `--exporter` values with `CommandError`.
+  - Added pre-query validation that rejects `--batch-size` values below 1, preventing division-by-zero and invalid slicing paths.
+  - Normalized exporter input with `strip()` before building the query and summary text.
+- Package/framework replacements:
+  - Reused Django `CommandError` for invalid command input.
+  - No new dependency introduced.
+- Framework improvements:
+  - Kept Django `transaction.atomic()` batch boundaries and command argument choices.
+  - Preserved dry-run-first behavior if both `--dry-run` and `--confirm` are supplied.
+- Performance improvements:
+  - Removed unused signal bookkeeping list.
+  - Invalid blank exporter and batch-size inputs now fail before any database count/query.
+- Security improvements:
+  - Hardened destructive command input validation to prevent accidental broad deletes from whitespace exporter filters.
+- Dead code removed:
+  - Removed unused `django.db.connection` import.
+  - Removed unused `pre_save` signal import.
+  - Removed unused `disconnected_signals` list and append calls.
+- Duplicate logic removed: none.
+- Tests added:
+  - Added `backend/apps/license/tests/test_delete_licenses_by_exporter_command.py`.
+  - Covers blank exporter rejection, invalid batch-size rejection, missing `--dry-run`/`--confirm` guard, and dry-run no-match behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_delete_licenses_by_exporter_command.py -q` -> 4 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py delete_licenses_by_exporter --help` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/delete_licenses_by_exporter.py backend/apps/license/tests/test_delete_licenses_by_exporter_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - The command still deletes orphaned allotments and BOEs globally after each batch, not only objects orphaned by that batch. This was not changed because narrowing that behavior could alter the cleanup contract documented for the command.
+  - The `--disable-signals` mode still uses direct signal disconnect/connect calls. A context-manager extraction may improve maintainability, but was not required for this safe validation pass.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py`
+
+- File path: `backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py`
+- Module: License / Management Commands / Master Data Migration
+- Status: COMPLETED
+- Total LOC: 164
+- Lines reviewed: 164
+- Functions reviewed: 3 (`Command.add_arguments`, `Command.handle`, `Command._other_fk_blockers`)
+- Classes reviewed: 1 (`Command`)
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - Converted blocker failure from generic `RuntimeError` to Django `CommandError` so command failures are reported through the management-command error path.
+- Package/framework replacements:
+  - Reused Django `CommandError`.
+  - No new dependency introduced.
+- Framework improvements:
+  - Fixed post-migration annotation from `Count("licensedetailsmodel")` to `Count("licenses")`, matching `LicenseDetailsModel.purchase_status.related_name`.
+  - Simplified model metadata traversal from `ps._meta.model._meta.get_fields()` to `ps._meta.get_fields()`.
+- Performance improvements:
+  - No query expansion introduced.
+- Security improvements:
+  - Safer command error handling for unresolved foreign-key blockers avoids raw runtime exceptions after partial command progress.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Tests added:
+  - Added `backend/apps/license/tests/test_migrate_purchase_status_command.py`.
+  - Covers NP-to-MI rename, NP-to-existing-MI merge, dry-run no-write behavior, and refusal to write without `--confirm`.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_migrate_purchase_status_command.py -q` -> 4 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py migrate_purchase_status_np_to_mi --help` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/migrate_purchase_status_np_to_mi.py backend/apps/license/tests/test_migrate_purchase_status_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Remaining technical debt:
+  - The command documentation says “any other FK” can be reassigned, but implementation intentionally blocks if non-license FKs still reference NP. The safer blocking behavior was preserved.
+- Blocked items:
+  - Python security/dependency audit for this file is blocked by missing local tooling: `bandit`, `pip-audit`, `safety`, and `semgrep` are not installed in `.venv/bin`.
+
+## 2026-07-16 - `backend/apps/license/management/commands/populate_license_items.py`
+
+- File path: `backend/apps/license/management/commands/populate_license_items.py`
+- Module: License / Management Commands / Item Linking
+- Status: COMPLETED
+- Total LOC: 246
+- Lines reviewed: 246
+- Functions reviewed: 8 (`Command.add_arguments`, `Command.get_item_definitions`, `Command.handle`, `Command._clear_existing_links`, `Command._build_items_to_create`, `Command._ensure_item_names`, `Command._populate_associations`, `Command._bulk_add_item_links`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 3 (`--dry-run`, `--clear`, `--batch-size`)
+- Imports reviewed: 8 imported symbols across 6 import statements.
+- Validation improvements:
+  - Added `--batch-size` validation with `CommandError` for values below 1.
+  - Added item-definition validation for blank `base_name`, missing norms, blank norms, missing filters, and non-`Q` filters.
+  - Preserved dry-run no-write behavior while reporting would-create paths.
+- Command hardening:
+  - Fixed the production bug where every non-dry-run execution cleared all existing M2M links even without `--clear`.
+  - Made `--clear` the only path that deletes existing item associations, matching the documented command behavior.
+  - Wrapped the write workflow in `transaction.atomic()` so item creation, link clearing, and association population roll back together on failure.
+  - Re-raised unexpected per-item processing exceptions after logging them, preventing silent partial success.
+- Performance improvements:
+  - Replaced per-import-item clearing/counting with direct through-table count/delete.
+  - Prefetched norm classes in one query instead of one lookup per item definition.
+  - Replaced per-row `items.add()` calls with batched through-table `bulk_create(..., ignore_conflicts=True)`.
+  - Added `.distinct()` to matching import queries to avoid duplicate links/counts when export-side joins duplicate rows.
+  - Added iterator chunking for large matching querysets.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Used Django `CommandError`, `transaction.atomic`, M2M through model, `bulk_create(ignore_conflicts=True)`, and `QuerySet.iterator(chunk_size=...)`.
+- Dead code removed:
+  - Removed the old unconditional clear loop and repeated norm lookup logic.
+- Duplicate logic removed:
+  - Split repeated command stages into focused helpers for clear, item-definition expansion, item creation/update, association population, and through-table insertion.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_populate_license_items_command.py`.
+  - Covers dry-run no-write behavior, default no-clear behavior, explicit clear rebuild, repeat/idempotent execution, invalid batch size, malformed definitions, and transaction rollback on link failure.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_populate_license_items_command.py -q` -> 7 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py populate_license_items --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/populate_license_items.py backend/apps/license/tests/test_populate_license_items_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The command still uses the large shared `item_matcher` definition list; broader classification-rule review belongs to the pending `backend/apps/license/utils/item_matcher.py` audit.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/management/commands/repair_license_subtables.py`
+
+- File path: `backend/apps/license/management/commands/repair_license_subtables.py`
+- Module: License / Management Commands / Schema Repair
+- Status: COMPLETED
+- Total LOC: 382
+- Lines reviewed: 382
+- Functions reviewed: 15 (`Command.add_arguments`, `Command.handle`, `Command._repair_model_columns`, `Command._repair_lookup_fks`, `Command._backfill_lookup_fk`, `Command._repair_split_tables`, `Command._columns`, `Command._backfill_from_legacy_columns`, `Command._backfill_defaults`, `Command._report_counts`, `Command._count_missing_subrows`, `Command._count_orphaned_subrows`, `Command._validate_required_tables`, `Command._quote_identifier_path`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 2 (`--dry-run`, `--confirm`)
+- Imports reviewed: 4 import statements.
+- Validation improvements:
+  - Added explicit `--dry-run` and `--confirm` command modes.
+  - Added `CommandError` refusal when neither safe preview nor explicit apply mode is supplied.
+  - Added required-table validation before repair logic runs.
+  - Added dry-run planning paths for missing model columns, lookup FK repairs, split table creation, and sub-row backfill selection.
+  - Replaced final count-only reconciliation with missing-subrow and orphaned-subrow verification for each split table.
+- Command hardening:
+  - Wrapped confirmed schema/data repair in `transaction.atomic()`.
+  - Converted incomplete repair failure from generic `RuntimeError` to Django `CommandError`.
+  - Preserved idempotent `ON CONFLICT` backfill behavior for repeated execution.
+  - Kept destructive schema creation unavailable unless `--confirm` is provided.
+- Performance improvements:
+  - Final verification now uses direct `NOT EXISTS` SQL checks for missing/orphaned split-table rows instead of relying only on broad table counts.
+  - No per-license Python loops were added; repair data paths remain bulk SQL.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Reused Django `CommandError`, `transaction.atomic`, `schema_editor`, and `connection.ops.quote_name`.
+- Security improvements:
+  - Added explicit confirmation for a command that can alter schema and backfill production data.
+  - Quoted dynamic SQL table/column identifiers derived from Django metadata.
+  - Added dry-run behavior so production operators can inspect planned schema/data work before applying changes.
+- Dead code removed: none.
+- Duplicate logic removed:
+  - Extracted split-table model metadata and legacy-column sets into module constants.
+  - Added shared identifier quoting and split-table reconciliation helpers.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_repair_license_subtables_command.py`.
+  - Covers missing confirmation rejection, dry-run no-write dispatch, schema-qualified identifier quoting, missing sub-table detection, and healthy sub-table reconciliation.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_repair_license_subtables_command.py -q` -> 5 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py repair_license_subtables --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/repair_license_subtables.py backend/apps/license/tests/test_repair_license_subtables_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The command intentionally remains PostgreSQL-oriented because the underlying production drift and `ON CONFLICT` repair SQL are PostgreSQL-specific.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/management/commands/resync_local_to_server.py`
+
+- File path: `backend/apps/license/management/commands/resync_local_to_server.py`
+- Module: License / Management Commands / Remote Ownership Resync
+- Status: COMPLETED
+- Total LOC: 261
+- Lines reviewed: 261
+- Functions reviewed: 9 (`_parse_license_numbers`, `_parse_since_date`, `_validate_positive_int`, `_normalize_server_url`, `_iter_license_batches`, `_build_payload_from_local`, `Command.add_arguments`, `Command.handle`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 6 (`--server`, `--licenses`, `--since`, `--limit`, `--batch-size`, `--dry-run`)
+- Imports reviewed: 7 import statements.
+- Validation improvements:
+  - Added `CommandError` validation for blank `--licenses`, invalid `--since`, blank/relative `--server`, non-positive `--limit`, and non-positive `--batch-size`.
+  - Added license-number trimming and deduplication while preserving input order.
+  - Normalized server URLs by trimming whitespace and trailing slashes before authentication/posting.
+  - Added validation for malformed remote sync responses and non-numeric counters.
+- Command hardening:
+  - Dry-run now remains a no-network path and is covered by regression tests.
+  - Authentication failure now raises `CommandError` instead of returning a successful process exit.
+  - Remote batch failures now raise `CommandError` even when the remote helper returns no explicit error strings.
+- Performance improvements:
+  - Replaced full queryset materialization with streamed iterator batches.
+  - Added transfer prefetching with `select_related("from_company", "to_company")` so payload building avoids per-license transfer queries when run through the command.
+  - Kept queryset count/slicing database-side for `--limit` and dry-run previews.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Reused Django `CommandError`, `Prefetch`, queryset `iterator(chunk_size=...)`, `select_related`, and `prefetch_related`.
+- Security improvements:
+  - Server target must now be an absolute `http` or `https` URL, preventing malformed or accidental relative targets.
+  - Failed authentication and failed remote writes now produce failing command exits for scheduler/automation observability.
+- Dead code removed: none.
+- Duplicate logic removed:
+  - Extracted parser/validation helpers for license lists, date parsing, positive integers, server URL normalization, and queryset batching.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_resync_local_to_server_command.py`.
+  - Covers invalid license lists, invalid dates, invalid batch size, invalid server URL, deduped license parsing, payload serialization, dry-run no-network behavior, batched posting, and remote failure exit behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_resync_local_to_server_command.py -q` -> 9 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py resync_local_to_server --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/resync_local_to_server.py backend/apps/license/tests/test_resync_local_to_server_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The command still relies on `authenticate()` and `bulk_sync_to_server()` from `update_license_ownership.py`; deeper HTTP retry/auth behavior belongs to that pending command dependency.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/management/commands/sync_licenses.py`
+
+- File path: `backend/apps/license/management/commands/sync_licenses.py`
+- Module: License / Management Commands / License Balance Sync
+- Status: COMPLETED
+- Total LOC: 299
+- Lines reviewed: 299
+- Functions reviewed: 7 (`_quantize_money`, `_validate_batch_size`, `_normalize_license_number`, `Command.add_arguments`, `Command.handle`, `Command._process_license`, `Command._update_import_items`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 4 (`--license`, `--no-items`, `--dry-run`, `--batch-size`)
+- Imports reviewed: 8 import statements.
+- Validation improvements:
+  - Added `CommandError` validation for blank `--license` and non-positive `--batch-size`.
+  - Added exact Decimal quantization for money comparisons, replacing float round-trip comparison.
+  - Added explicit error counting and failing command exit when balance calculation fails for any license.
+- Command hardening:
+  - Fixed stale writes to read-only `LicenseDetailsModel.balance_cif`, `is_null`, and `is_expired` compatibility properties.
+  - Writes now target `LicenseBalance.balance_cif` and `LicenseFlags.is_null/is_expired` directly.
+  - Each license is processed inside `transaction.atomic()` so partial balance/flag/item updates for a single license roll back together on exceptions.
+  - Dry-run still calculates/report changes without saving split-table updates.
+- Performance improvements:
+  - Queryset now uses `select_related("balance", "flags")` for split sub-table access.
+  - Batch queryset is ordered by primary key for deterministic chunking.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Reused Django `CommandError`, `transaction.atomic`, `select_related`, and queryset slicing.
+- Security improvements:
+  - Command failures now surface through `CommandError`, improving scheduler/automation observability for production sync jobs.
+- Dead code removed:
+  - Removed unused `timedelta` import.
+- Duplicate logic removed:
+  - Extracted batch-size validation, license-number normalization, and Decimal money quantization helpers.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_sync_licenses_command.py`.
+  - Covers blank `--license`, invalid `--batch-size`, split balance/flag persistence, and dry-run preservation.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_sync_licenses_command.py -q` -> 4 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py sync_licenses --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/sync_licenses.py backend/apps/license/tests/test_sync_licenses_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Import-item balance recalculation still uses per-row aggregate queries; broader bulk aggregation can be considered during the pending balance-calculation service audit if behavior can be proven identical.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/management/commands/update_balance_cif.py`
+
+- File path: `backend/apps/license/management/commands/update_balance_cif.py`
+- Module: License / Management Commands / Balance Recalculation
+- Status: COMPLETED
+- Total LOC: 137
+- Lines reviewed: 137
+- Functions reviewed: 5 (`_validate_batch_size`, `_normalize_license_number`, `Command.add_arguments`, `Command.handle`, `Command.update_license_balance`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 3 (`--batch-size`, `--license-number`, `--dry-run`)
+- Imports reviewed: 4 import statements.
+- Validation improvements:
+  - Added `CommandError` validation for non-positive `--batch-size`.
+  - Added trimming and blank rejection for `--license-number`.
+  - Missing single-license targets now raise `CommandError` instead of printing an error and exiting successfully.
+- Command hardening:
+  - Added `--dry-run` to calculate/report balances without writes.
+  - Bulk mode now raises `CommandError` if any license update fails.
+  - Per-license updates run inside `transaction.atomic()`.
+  - Missing `LicenseBalance` split subrows are recreated with `get_or_create()` before update.
+- Performance improvements:
+  - Bulk queryset is ordered by primary key and streamed with `iterator(chunk_size=batch_size)`.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Reused Django `CommandError`, `transaction.atomic`, and queryset `iterator(chunk_size=...)`.
+- Security improvements:
+  - Failed updates now produce a failing command exit for production scheduler/monitoring visibility.
+- Dead code removed: none.
+- Duplicate logic removed:
+  - Extracted batch-size validation and license-number normalization helpers.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_update_balance_cif_command.py`.
+  - Covers invalid batch size, blank license number, missing license failure, split balance updates, dry-run preservation, and missing split-row recreation.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_update_balance_cif_command.py -q` -> 6 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed after adding explicit exception chaining for the missing-license `CommandError`.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py update_balance_cif --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/update_balance_cif.py backend/apps/license/tests/test_update_balance_cif_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - This command delegates calculation correctness to the pending `LicenseBalanceCalculator` service audit.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/management/commands/update_license_expiry.py`
+
+- File path: `backend/apps/license/management/commands/update_license_expiry.py`
+- Module: License / Management Commands / Expiry Date Import
+- Status: COMPLETED
+- Total LOC: 260
+- Lines reviewed: 260
+- Functions reviewed: 8 (`Command.add_arguments`, `Command.parse_date`, `Command._resolve_csv_path`, `Command._read_csv_rows`, `Command._prepare_updates`, `Command._write_limited_messages`, `Command._write_summary`, `Command.handle`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 2 (`csv_file`, `--dry-run`)
+- Imports reviewed: 6 import statements.
+- Validation improvements:
+  - Replaced `csv.Sniffer().has_header()` with deterministic optional-header handling for `license_number,license_expiry_date`.
+  - Added blank path, missing file, directory path, empty CSV, blank license number, blank expiry date, malformed row width, invalid date, duplicate CSV license number, and missing database license validation.
+  - Changed validation to all-or-nothing: parse errors and missing licenses now raise `CommandError` before any database write.
+  - Fixed legacy two-digit years from `69` through `99` to normalize to 2069-2099 instead of invalid 3969-3999 dates.
+- Command hardening:
+  - Replaced `os.path.exists`/raw `open` with `pathlib.Path` and explicit file validation.
+  - Replaced per-row `get()` lookups with one `in_bulk(..., field_name="license_number")` lookup after CSV validation.
+  - Fixed save `update_fields` from nonexistent `updated_at` to the model's real `modified_on` audit field.
+  - Preserved `save()` instead of bulk update so the existing `LicenseDetailsModel` post-save signal refreshes split-table expiry flags.
+  - Wrapped writes in `transaction.atomic()` and added exception chaining for write failures.
+- Performance improvements:
+  - Avoided N+1 license lookups by batching license retrieval with `in_bulk`.
+  - CSV parsing remains bounded to one normalized update plan so bad files cannot partially mutate data.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Reused Django `CommandError`, `transaction.atomic`, model `save(update_fields=...)`, and queryset `in_bulk`.
+- Security improvements:
+  - Production import now fails closed on ambiguous duplicate rows, malformed rows, and missing target licenses.
+  - Command failure paths now return non-zero `CommandError` exits for scheduler/operator visibility.
+- Dead code removed:
+  - Removed unused `os` import and fragile `csv.Sniffer` branch.
+- Duplicate logic removed:
+  - Extracted path validation, CSV row loading, update planning, limited message output, and summary rendering into command helpers.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_update_license_expiry_command.py`.
+  - Covers blank/missing/directory/empty CSV inputs, two-digit year normalization, header and no-header CSVs, whitespace trimming, dry-run no-write behavior, malformed rows, duplicate rows, missing licenses, invalid dates, flag refresh through post-save, and transaction rollback on save failure.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_update_license_expiry_command.py -q` -> 13 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py update_license_expiry --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/update_license_expiry.py backend/apps/license/tests/test_update_license_expiry_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The command intentionally preserves per-license `save()` calls rather than bulk updates so existing License post-save side effects remain intact; this is slower than bulk update for very large files but behaviorally safer for production expiry imports.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/management/commands/upload_dfia_copies.py`
+
+- File path: `backend/apps/license/management/commands/upload_dfia_copies.py`
+- Module: License / Management Commands / DFIA Copy Upload
+- Status: COMPLETED
+- Total LOC: 245
+- Lines reviewed: 245
+- Functions reviewed: 13 (`Command.add_arguments`, `Command.handle`, `Command._resolve_folder_path`, `Command._collect_pdf_paths`, `Command._build_upload_plan`, `Command._has_pdf_signature`, `Command._license_candidates`, `Command._resolve_license`, `Command._replace_document`, `Command._write_header`, `Command._write_errors`, `Command._initial_stats`, `Command._write_summary`)
+- Classes reviewed: 1 (`Command`)
+- Arguments reviewed: 3 (`folder_path`, `--dry-run`, `--confirm`)
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - Added blank folder, missing folder, non-directory path, empty PDF folder, empty PDF file, invalid PDF signature, missing license, and duplicate-target-license validation.
+  - Added all-or-nothing folder planning before any database or storage mutation.
+  - Added `--confirm` for live uploads because the command replaces existing `LICENSE COPY` documents.
+  - Preserved dry-run as a no-write path after full folder validation.
+- Command hardening:
+  - Replaced raw `os` path handling with `pathlib.Path`.
+  - Replaced manual file deletion with Django storage deletion scheduled via `transaction.on_commit`.
+  - Wrapped each license document replacement in `transaction.atomic()`.
+  - Added cleanup of newly stored files if document creation fails.
+  - Converted swallowed per-file exceptions into failing `CommandError` exits for production observability.
+- Performance improvements:
+  - Replaced repeated per-file `LicenseDetailsModel.objects.get()` matching with a single `in_bulk(..., field_name="license_number")` candidate lookup.
+  - File discovery now iterates direct files only and avoids directory entries.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Reused Django `CommandError`, `transaction.atomic`, `transaction.on_commit`, `File`, model file storage, and queryset `in_bulk`.
+- Security improvements:
+  - Live destructive replacement requires `--confirm`.
+  - Files must have a `.pdf` suffix and a `%PDF` header before upload.
+  - Invalid or ambiguous input now fails closed before writes.
+- Dead code removed:
+  - Removed broad per-file exception swallowing and verbosity-only traceback printing.
+  - Removed direct `os.remove()` deletion path.
+- Duplicate logic removed:
+  - Extracted folder validation, PDF discovery, upload planning, license candidate resolution, document replacement, and summary rendering helpers.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_upload_dfia_copies_command.py`.
+  - Covers invalid paths, no PDF files, missing `--confirm`, invalid PDF signatures, missing license all-or-nothing behavior, duplicate target files, dry-run preservation, formatted license matching, existing document replacement/storage cleanup, and transaction rollback on upload failure.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_upload_dfia_copies_command.py -q` -> 12 passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py` -> passed.
+  - `.venv/bin/python backend/manage.py upload_dfia_copies --help` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `Command`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/management/commands/upload_dfia_copies.py backend/apps/license/tests/test_upload_dfia_copies_command.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The command validates the PDF header, not full PDF parseability; deeper parse validation belongs to the DFIA parser/upload workflow if business rules require parsing every uploaded copy at import time.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0001_initial.py`
+
+- File path: `backend/apps/license/migrations/0001_initial.py`
+- Module: License / Migrations / Initial Schema
+- Status: COMPLETED
+- Total LOC: 351
+- Lines reviewed: 351
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 7 import statements.
+- Validation improvements:
+  - No migration changes made; this is historical generated schema and later migrations depend on its exact field/model state.
+  - Reviewed generated validators for PAN, GST, non-negative monetary/quantity fields, indexes, unique constraints, foreign keys, upload path references, and dependency ordering.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Reviewed initial indexes for license numbers, file numbers, dates, owner/status fields, import item lookup fields, and incentive license filters.
+  - No index changes made in the initial migration because subsequent migrations already evolve the schema.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing generated migration uses Django migration operations, model fields, validators, indexes, and swappable auth dependency.
+- Security improvements:
+  - Verified the migration uses `settings.AUTH_USER_MODEL` via `migrations.swappable_dependency`.
+  - Verified file upload path is model-level `license_path`; no raw filesystem path is embedded in migration operations.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0001_initial.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0001_initial.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0001_initial.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0001_initial.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, `Migration.initial=True`, 30 operations.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0001_initial.py` -> passed.
+  - `.venv/bin/python backend/manage.py showmigrations license --plan` -> blocked by sandboxed Postgres connection (`Operation not permitted` to localhost/127.0.0.1/::1).
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `showmigrations --plan` database-backed migration graph display blocked by sandboxed PostgreSQL connection.
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Historical migration still reflects pre-split License fields by design; later migrations perform the FK conversions, split-table normalization, and invoice hardening.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py`
+
+- File path: `backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py`
+- Module: License / Migrations / Scheme and Notification FK Conversion
+- Status: COMPLETED
+- Total LOC: 165
+- Lines reviewed: 165
+- Functions reviewed: 2 (`populate_and_backfill`, `noop_reverse`)
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 3 import statements.
+- Validation improvements:
+  - Reviewed migration ordering, temporary nullable FK fields, lookup seeding, old-column removal, field renames, final related names, and no-op reverse behavior.
+  - No schema behavior changes made.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Preserved raw SQL backfill path for production-scale license rows.
+  - No new per-row license saves introduced.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Replaced global `django.db.connection` usage with `schema_editor.connection` so the data migration uses the active migration database connection/alias.
+- Security improvements:
+  - Preserved `PROTECT` FK behavior for lookup integrity.
+  - Backfill SQL remains parameterized for code values and primary keys.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added:
+  - No direct migration test added; behavior change is limited to using the migration-provided connection and was verified by import/syntax/static checks.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, `Migration.atomic=False`, 9 operations.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0002_scheme_and_notification_to_fk.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Reverse migration intentionally cannot restore original strings after the old columns are dropped; this is documented in the migration and preserved.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py`
+
+- File path: `backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py`
+- Module: License / Migrations / Obsolete Lookup Index Removal
+- Status: COMPLETED
+- Total LOC: 21
+- Lines reviewed: 21
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 import statement.
+- Validation improvements:
+  - No changes made; migration only removes obsolete indexes after `scheme_code` and `notification_number` become foreign keys.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Reviewed removal of obsolete pre-FK CharField indexes; no additional index changes made.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing generated migration uses Django `RemoveIndex` operations.
+- Security improvements:
+  - No security-sensitive operations present.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, 2 operations.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0003_remove_licensedetailsmodel_license_lic_notific_5b1519_idx_and_more.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this generated migration.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/formset.html` Recheck
+
+- File path: `backend/apps/license/templates/license/formset.html`
+- Module: License / Legacy Django Templates / Formset Partial
+- Status: COMPLETED - REMOVED
+- Total LOC: 122
+- Lines reviewed: 122
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: none.
+- Validation improvements:
+  - No runtime validation retained because the partial no longer has a live include or render path.
+  - Rechecked formset management-form rendering, hidden/visible field rendering, error rendering, empty-form template behavior, delete-button behavior, prefix branching, and table structure before removal.
+- Template dependency analysis:
+  - Recheck was triggered after `backend/apps/license/templates/license/item_list_edit.html` was verified dead and removed.
+  - Repository-wide source search for `license/formset.html`, `templates/license/formset.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export usage, commands, middleware, signals, tests, URL routes, cached template paths, and dynamic template-loading patterns found no remaining live usage outside audit docs/state.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and the Django template partial was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable legacy formset rendering and inline form-template markup.
+- Security improvements:
+  - Removed unreachable legacy formset markup and delete controls that depended on a now-deleted parent template.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/formset.html`.
+- Duplicate logic removed:
+  - Removed a dead formset partial that duplicated legacy inline formset rendering patterns.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - `rg -n "license/formset.html|templates/license/formset.html|include ['\"]license/formset|extends ['\"].*formset|template_name\\s*=.*formset|get_template\\(['\"]license/formset|select_template\\(.*license/formset|render_to_string\\(['\"]license/formset|TemplateResponse\\([^\\n]*formset|render\\([^\\n]*formset|formset.html" backend docs frontend --glob '!backend/theme/**' --glob '!**/*.min.js' --glob '!docs/audit/audit-database.json' --glob '!docs/audit/repository-knowledge-graph.json' --glob '!docs/audit/dashboard.md' --glob '!docs/audit/work-queue.md'` -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/formset.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Stale `license-item-update` links remain in blocked legacy templates and should be handled when those files are selected or rechecked.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/views/license_report.py`
+
+- File path: `backend/apps/license/views/license_report.py`
+- Module: License / API Views / Parle License Report Action
+- Status: COMPLETED
+- Total LOC: 179
+- Lines reviewed: 179
+- Functions reviewed: 1 (`add_license_report_action`)
+- Classes reviewed: 2 (`OptionalQueryBooleanField`, `ParleLicenseReportQuerySerializer`)
+- Arguments reviewed:
+  - `viewset_class` in `add_license_report_action`
+  - `self` and `request` in the attached `parle_license_report` action
+- Imports reviewed:
+  - `defaultdict`, `date`, `Decimal`
+  - Django `Prefetch`, `Q`
+  - DRF `serializers`, `status`, `action`, `Response`
+- Validation improvements:
+  - Added `ParleLicenseReportQuerySerializer` for typed query parameter validation.
+  - Validates `exporter` as a positive integer, `notification` as a trimmed nonblank string, and `is_expired` / `is_null` as optional booleans.
+  - Added `OptionalQueryBooleanField` so omitted query booleans remain absent instead of being coerced to `False`.
+  - Invalid query parameters now return `400 BAD REQUEST` with serializer errors instead of silently filtering or over-filtering.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Replaced ad hoc string boolean checks with DRF serializer field validation.
+  - Replaced per-license aggregate query with prefetched ORM rows and Python `Decimal` summation.
+- React built-in replacements:
+  - Not applicable.
+- Performance improvements:
+  - Removed the N+1 `export_license.aggregate(Sum("cif_fc"))` query inside the license loop.
+  - Prefetches export items with `norm_class`, import items with `hs_code`, and parent display relations used by the response payload.
+  - Avoids unsafe split-table `select_related("current_owner")` / reverse joins that can exclude valid rows.
+- Security improvements:
+  - Rejects malformed query input before it reaches ORM filters.
+  - Keeps all filters parameterized through Django ORM lookups; no raw SQL, template rendering, subprocess, filesystem, or network access.
+- Dead code removed:
+  - Removed unused header comment and unused `Sum` import.
+- Duplicate logic removed:
+  - Consolidated boolean parsing into `ParleLicenseReportQuerySerializer`.
+- Files split:
+  - None; module remains scoped to the Parle license report action.
+- Files merged:
+  - None.
+- Scripts merged:
+  - None.
+- Tests added:
+  - Added `backend/apps/license/tests/test_license_report_view.py`.
+  - Covered grouped JSON output, default Parle exporter filtering, primitive purchase-status serialization, invalid query parameters, and boolean filter behavior.
+- Migrations added:
+  - None.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_license_report_view.py -q` -> passed, 3 passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests backend/tests/test_api_license.py backend/tests/test_all_conditions.py -q` -> passed, 388 passed, 2 skipped.
+  - `.venv/bin/ruff check backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py` -> passed.
+  - Import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported report serializer/action; empty query params validate to `{}`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/views/license_report.py backend/apps/license/tests/test_license_report_view.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Similar ad hoc query parsing exists in `backend/apps/license/views/active_dfia_report.py`; handle when that file is selected.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/views/license_items.py`
+
+- File path: `backend/apps/license/views/license_items.py`
+- Module: License / API Views / License Items
+- Status: COMPLETED
+- Total LOC: 61
+- Lines reviewed: 61
+- Functions reviewed: 1 (`LicenseItemSimpleSerializer.get_label`)
+- Classes reviewed: 2 (`LicenseItemSimpleSerializer`, `LicenseItemViewSet`)
+- Arguments reviewed:
+  - `obj` in `get_label`
+  - implicit DRF `self` in `get_serializer_class`
+- Imports reviewed:
+  - `DjangoFilterBackend`
+  - DRF `serializers`, `filters`, `mixins`, and `viewsets`
+  - `LicensePermission`
+  - `LicenseImportItemsModel`
+- Validation improvements:
+  - Added null-safe representation for missing `hs_code` values in the simple read serializer.
+  - Made dropdown label generation tolerant of missing in-memory `license` references while preserving normal FK-backed output.
+  - Rechecked filter inputs for `license` and `hs_code`, search fields, ordering fields, partial updates, invalid methods, missing auth, and missing role paths.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Replaced `ModelViewSet` with the narrower DRF mixin composition: `ListModelMixin`, `RetrieveModelMixin`, `UpdateModelMixin`, and `GenericViewSet`.
+  - Added explicit `http_method_names = ["get", "put", "patch", "head", "options"]`.
+- React built-in replacements:
+  - Not applicable; React call sites continue to use GET/PATCH against `/license-items/`.
+- Performance improvements:
+  - Retained `select_related("license", "hs_code")` and `prefetch_related("items")` because list responses and update serializer output need those relations without N+1 queries.
+  - No extra database queries were introduced in the simple label path.
+- Security improvements:
+  - Added `LicensePermission` so license item reads require license/trade read roles and writes require `LICENSE_MANAGER`.
+  - Removed create/delete/TRACE from the exposed endpoint method surface; the endpoint now serves only list, retrieve, update, and partial update.
+- Dead code removed:
+  - Removed obsolete file header comment and the unused create/delete behavior inherited from `ModelViewSet`.
+- Duplicate logic removed:
+  - None.
+- Files split:
+  - None; the 61-line view module remains cohesive.
+- Files merged:
+  - None.
+- Scripts merged:
+  - None.
+- Tests added:
+  - Added `backend/apps/license/tests/test_license_items_view.py`.
+  - Covered unauthenticated access, authenticated user without role, `LICENSE_VIEWER` list access with null HS code, `LICENSE_MANAGER` PATCH behavior, and POST/DELETE 405 responses.
+- Migrations added:
+  - None.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_license_items_view.py -q` -> passed, 5 passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests backend/tests/test_api_license.py backend/tests/test_all_conditions.py -q` -> passed, 385 passed, 2 skipped.
+  - `.venv/bin/ruff check backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py` -> passed.
+  - Import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `LicenseItemViewSet`, confirmed `LicensePermission`, and confirmed explicit method list.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/views/license_items.py backend/apps/license/tests/test_license_items_view.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this endpoint module.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/utils/item_matcher.py`
+
+- File path: `backend/apps/license/utils/item_matcher.py`
+- Module: License / Utilities / Item Matcher
+- Status: COMPLETED
+- Total LOC: 877
+- Lines reviewed: 877
+- Functions reviewed: 3 (`get_item_filters`, `bulk_auto_link_license_items`, `match_import_item_to_items`)
+- Classes reviewed: 0
+- Arguments reviewed:
+  - `license_instance` in `bulk_auto_link_license_items`
+  - `import_item` and `license_norm_classes` in `match_import_item_to_items`
+- Imports reviewed:
+  - Module-level `Q`
+  - Function-local `ItemNameModel`, `LicenseExportItemsModel`, `LicenseImportItemsModel`, and `LicenseItemLinkModel`
+- Validation improvements:
+  - Rechecked no-norm, no-filter-match, missing `ItemNameModel`, missing related license data, duplicate match, and empty-queryset paths.
+  - Fixed multi-norm matching so `match_import_item_to_items` derives the target item name from the applicable norm for the matched filter instead of always using `license_norm_classes[0]`.
+- Package replacements:
+  - No new dependency introduced.
+  - Existing Django `Q` objects remain appropriate for ORM filter composition.
+- Django built-in replacements:
+  - Retained Django queryset APIs, `values_list`, `exists`, and set-based ID collection; no custom ORM replacement needed.
+- React built-in replacements:
+  - Not applicable.
+- Performance improvements:
+  - Moved `LicenseImportItemsModel` import and base import-item queryset construction outside the inner filter loop.
+  - Replaced model-object accumulation plus re-querying with `values_list("id", flat=True)` into a Python `set`, reducing object materialization and duplicate IDs.
+- Security improvements:
+  - Reviewed generated query filters; all user-facing text matching remains parameterized through Django ORM lookups.
+  - No raw SQL, file access, network access, subprocess execution, or unsafe template rendering exists in the file.
+- Dead code removed:
+  - None.
+- Duplicate logic removed:
+  - Removed repeated model import and repeated base queryset setup inside the inner loop.
+- Files split:
+  - None; file remains cohesive around license item matching despite the large static filter catalog.
+- Files merged:
+  - None.
+- Scripts merged:
+  - None.
+- Tests added:
+  - Added `backend/apps/license/tests/test_item_matcher.py`.
+  - Covered multi-norm applicable-norm matching and empty norm-class behavior.
+- Migrations added:
+  - None.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_item_matcher.py -q` -> passed, 2 passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 302 passed, 2 skipped.
+  - `.venv/bin/ruff check backend/apps/license/utils/item_matcher.py backend/apps/license/tests/test_item_matcher.py docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/utils/item_matcher.py backend/apps/license/tests/test_item_matcher.py docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/utils/item_matcher.py backend/apps/license/tests/test_item_matcher.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The static filter catalog is intentionally retained; deeper domain taxonomy changes would require business validation.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/pdf_consolidate.html`
+
+- File path: `backend/apps/license/templates/license/pdf_consolidate.html`
+- Module: License / Legacy Django Templates / Consolidated PDF
+- Status: COMPLETED - REMOVED
+- Total LOC: 385
+- Lines reviewed: 385
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 2 template directives (`extends "pdf_base.html"`, `load core_tag`).
+- Validation improvements:
+  - No runtime validation retained because the template no longer has a live render path.
+  - Reviewed all template variables before removal: `biscuit_list`, `object.*` license fields, nested balance dictionaries, and `total_dict.*` summary cells.
+- Template dependency analysis:
+  - Repository-wide search for `pdf_consolidate`, `license/pdf_consolidate.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage outside audit docs/state.
+  - Related report data builders still exist for active reports, but no runtime path loads this exact legacy template.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React/API reporting and newer PDF templates are the active paths; this Django template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable rendering of a 385-line landscape PDF table with repeated nested table markup.
+- Security improvements:
+  - Removed unreachable legacy PDF HTML surface that rendered unguarded nested report values and loaded an unused template tag library.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/pdf_consolidate.html`.
+- Duplicate logic removed:
+  - Removed duplicated legacy consolidated report table markup rather than extracting components for unreachable Django template code.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by repository-wide dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/pdf_consolidate.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this verified-dead legacy template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/tests.py`
+
+- File path: `backend/apps/license/tests.py`
+- Module: License / Tests / Legacy Stub
+- Status: COMPLETED - REMOVED
+- Total LOC: 3
+- Lines reviewed: 3
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 unused import (`django.test.TestCase`).
+- Validation improvements:
+  - Not applicable; file contained no executable tests or validation logic.
+- Dependency analysis:
+  - Repository-wide search found no imports or runtime references to `backend/apps/license/tests.py`, `apps.license.tests`, or related import paths.
+  - Real License regression tests are under `backend/apps/license/tests/` and remained intact.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removed unused default Django `TestCase` import rather than retaining an empty stub.
+- React built-in replacements:
+  - None.
+- Performance improvements:
+  - Removed an unnecessary module from test discovery/import surface.
+- Security improvements:
+  - None required; file had no runtime behavior.
+- Dead code removed:
+  - Deleted `backend/apps/license/tests.py`.
+- Duplicate logic removed:
+  - Removed obsolete empty test stub now superseded by the package-style test suite.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; this was dead test scaffolding removal with existing License tests preserved.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live imports or runtime references.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/tests.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this deleted stub.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/tests/__init__.py`
+
+- File path: `backend/apps/license/tests/__init__.py`
+- Module: License / Tests / Package Marker
+- Status: COMPLETED
+- Total LOC: 3 before, 0 after
+- Lines reviewed: 3
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: none.
+- Validation improvements:
+  - Not applicable; file is a package marker and contains no validation logic.
+- Dependency analysis:
+  - `backend/apps/license/tests/` is the active License pytest package with 300 passing tests; the `__init__.py` marker remains in place.
+  - Repository-wide search found no direct imports requiring the module docstring content.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - None.
+- React built-in replacements:
+  - None.
+- Performance improvements:
+  - Removed non-functional package docstring from the test import surface.
+- Security improvements:
+  - None required; file has no runtime behavior.
+- Dead code removed:
+  - Removed the non-functional module docstring.
+- Duplicate logic removed:
+  - None.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; existing License test package remained intact.
+- Migrations added:
+  - None.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check backend/apps/license/tests/__init__.py docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/tests/__init__.py docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/tests/__init__.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this package marker.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/report_form.html`
+
+- File path: `backend/apps/license/templates/license/report_form.html`
+- Module: License / Legacy Django Templates / Report Form
+- Status: COMPLETED - REMOVED
+- Total LOC: 40
+- Lines reviewed: 40
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 2 template directives (`extends 'base/main.html'`, `load static`).
+- Validation improvements:
+  - No runtime validation retained because the template no longer has a live render path.
+  - Reviewed all form inputs before removal: `start_date`, `end_date`, submit names `item_report` and `item_generate`, and request context reads.
+- Template dependency analysis:
+  - Repository-wide search for `report_form`, `license/report_form.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage outside audit docs/state.
+  - Secondary search found `item_report` only in active API/React contexts and this deleted template; `item_generate` was not used by live report API views.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because active reports are API/React/Excel endpoints and this server-rendered form was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable legacy form rendering and stale submit branches.
+- Security improvements:
+  - Removed unreachable unactioned GET form surface for report generation.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/report_form.html`.
+- Duplicate logic removed:
+  - Removed obsolete legacy report form rather than extracting reusable components for dead Django template code.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by repository-wide dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/report_form.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this verified-dead legacy template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/report.html`
+
+- File path: `backend/apps/license/templates/license/report.html`
+- Module: License / Legacy Django Templates / Item Report Index
+- Status: COMPLETED - REMOVED
+- Total LOC: 15
+- Lines reviewed: 15
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 2 template directives (`extends 'base/main.html'`, `load static`).
+- Validation improvements:
+  - No runtime validation retained because the template no longer has a live render path.
+  - Reviewed all template variables before removal: `items`, `item.id`, `item.name`, loop counter, and the `item_report_list` URL reversal.
+- Template dependency analysis:
+  - Repository-wide search for `license/report.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage outside audit docs/state.
+  - Secondary search found the stale `item_report_list` link only inside this deleted template; no corresponding live template view chain was found.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React/API reports are the active UI path and this server-rendered index was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable item-loop rendering and stale URL reversing.
+- Security improvements:
+  - Removed unreachable legacy page surface that rendered item names and IDs through a stale server-rendered report index.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/report.html`.
+- Duplicate logic removed:
+  - Removed obsolete legacy report-index markup; no reusable component extraction was warranted for dead code.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by repository-wide dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/report.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this verified-dead legacy template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/preimum_calc.html`
+
+- File path: `backend/apps/license/templates/license/preimum_calc.html`
+- Module: License / Legacy Django Templates / Premium Calculation PDF
+- Status: COMPLETED - REMOVED
+- Total LOC: 116
+- Lines reviewed: 116
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 3 template directives (`extends "pdf_base.html"`, `load django_tables2`, `load i18n`).
+- Validation improvements:
+  - No runtime validation retained because the template no longer has a live render path.
+  - Reviewed all template variables before removal: `today_date`, `tables`, `table_dict.label`, django-tables2 attributes, columns, rows, cells, localization branches, empty text, and footer rendering.
+- Template dependency analysis:
+  - Repository-wide search for `preimum_calc`, `premium_calc`, `preimum`, `premium.*calc`, `license/preimum_calc.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage outside audit docs/state.
+  - The misspelled filename had no dynamic fallback or corrected-name runtime path.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because this django-tables2 PDF template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable django-tables2 rendering loop and repeated `colspan="18"` table cell expansion.
+- Security improvements:
+  - Removed unreachable legacy PDF HTML surface that rendered arbitrary table labels/cells and loaded unused template libraries.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/preimum_calc.html`.
+- Duplicate logic removed:
+  - Removed duplicated PDF table rendering markup rather than extracting reusable components for unreachable Django template code.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by repository-wide dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/preimum_calc.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this verified-dead legacy template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/pdf_ledger_new.html`
+
+- File path: `backend/apps/license/templates/license/pdf_ledger_new.html`
+- Module: License / Legacy Django Templates / Alternate Ledger PDF
+- Status: COMPLETED - REMOVED
+- Total LOC: 223
+- Lines reviewed: 223
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 template directive (`extends "pdf_base.html"`).
+- Validation improvements:
+  - No runtime validation retained because the template no longer has a live render path.
+  - Reviewed all template variables before removal: `object` license fields, export/import related managers, `item_details.all`, `allotment_details.all`, BOE values, allotment values, balance totals, and branch checks for missing BOE/invoice values.
+- Template dependency analysis:
+  - Repository-wide search for `pdf_ledger_new`, `license/pdf_ledger_new.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage outside audit docs/state.
+  - Active ledger export paths use ReportLab generators through `apps.license.ledger_pdf.generate_license_ledger_pdf` and `apps.license.services.exporters.ledger_pdf`, not this legacy alternate template.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because the active ledger export is a Python PDF generator and this template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable nested loops over export items, import items, item details, and allotment details.
+- Security improvements:
+  - Removed unreachable legacy PDF HTML that exposed license, BOE, allotment, and company values through an unused server-rendered surface.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/pdf_ledger_new.html`.
+- Duplicate logic removed:
+  - Removed duplicated legacy ledger PDF markup that overlapped with the already-deleted `pdf_ledger.html`.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by repository-wide dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/pdf_ledger_new.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this verified-dead legacy template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/pdf_ledger.html`
+
+- File path: `backend/apps/license/templates/license/pdf_ledger.html`
+- Module: License / Legacy Django Templates / Ledger PDF
+- Status: COMPLETED - REMOVED
+- Total LOC: 163
+- Lines reviewed: 163
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 template directive (`extends "pdf_base.html"`).
+- Validation improvements:
+  - No runtime validation retained because the template no longer has a live render path.
+  - Reviewed all template variables before removal: `object` license fields, `object.export_license.all`, `object.import_license.all`, `item_details_cached`, `allotments_filtered`, BOE fields, allotment fields, and import balance totals.
+- Template dependency analysis:
+  - Repository-wide search for `pdf_ledger`, `license/pdf_ledger.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage outside audit docs/state.
+  - Active ledger export paths use ReportLab generators through `apps.license.ledger_pdf.generate_license_ledger_pdf` and `apps.license.services.exporters.ledger_pdf`, not this template.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because the active ledger export is a Python PDF generator and this template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable nested loops over export/import/allotment ledger rows.
+- Security improvements:
+  - Removed unreachable legacy PDF HTML that exposed BOE, allotment, and license values through an unused server-rendered surface.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/pdf_ledger.html`.
+- Duplicate logic removed:
+  - Removed duplicated legacy ledger PDF markup rather than extracting components for unreachable Django template code.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by repository-wide dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/pdf_ledger.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this verified-dead legacy template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/item_pdf.html`
+
+- File path: `backend/apps/license/templates/license/item_pdf.html`
+- Module: License / Legacy Django Templates / Item PDF
+- Status: COMPLETED - REMOVED
+- Total LOC: 303
+- Lines reviewed: 303
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 template inheritance dependency (`pdf_base.html`).
+- Validation improvements:
+  - No runtime validation retained because the template has no live render path.
+  - Reviewed all template variables before removal, including `object`, `export_license`, `import_license`, `sorted_item_list`, `sorted_allotment_list`, bill-of-entry fields, allotment fields, balances, totals, and PDF table markup.
+- Template dependency analysis:
+  - Repository-wide search for `item_pdf.html`, `license/item_pdf.html`, `item_pdf`, `ItemPDF`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage.
+  - Additional License URL/view/PDF-service search found no route or PDF exporter referencing this template; current PDF endpoints use ReportLab/exporter services or other templates.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and the Django PDF template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable PDF template rendering, nested loops, and repeated relation traversal from the legacy template surface.
+- Security improvements:
+  - Removed dead server-rendered PDF HTML path and its unguarded nested attribute traversal.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/item_pdf.html`.
+- Duplicate logic removed:
+  - Removed unreachable item PDF markup that duplicated current license balance/ledger PDF responsibilities handled by active exporter services.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Repository-wide dependency search -> no live source references.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/item_pdf.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this removed template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/pdf_amend.html`
+
+- File path: `backend/apps/license/templates/license/pdf_amend.html`
+- Module: License / Legacy Django Templates / Amendment PDF
+- Status: COMPLETED - REMOVED
+- Total LOC: 134
+- Lines reviewed: 134
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 template inheritance dependency (`pdf_base.html`).
+- Validation improvements:
+  - No runtime validation retained because the template has no live render path.
+  - Reviewed license header fields, import item iteration, amendment condition, nested head/HS-code access, and PDF table markup before removal.
+- Template dependency analysis:
+  - Repository-wide search for `license/pdf_amend.html`, `templates/license/pdf_amend.html`, `pdf_amend`, `amend-license-pdf`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, cached template paths, and dynamic template-loading patterns found no live usage.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and this amendment PDF template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable amendment-condition loop over import items.
+- Security improvements:
+  - Removed stale server-rendered PDF HTML path with nested relation traversal.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/pdf_amend.html`.
+- Duplicate logic removed:
+  - Removed obsolete amendment PDF markup from the legacy template surface.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Repository-wide dependency search -> no live source references.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/pdf_amend.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this removed template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - License Legacy List Template Component
+
+- File path: `backend/apps/license/templates/license/list.html`
+- File path: `backend/apps/license/templates/license/ajax-list.html`
+- File path: `backend/apps/license/templates/license/card.html`
+- Module: License / Legacy Django Templates / License List
+- Status: COMPLETED - REMOVED
+- Total LOC: 398 (`list.html` 129, `ajax-list.html` 169, `card.html` 100)
+- Lines reviewed: 398
+- Functions reviewed: 0 Python functions; 3 legacy JavaScript event hooks/calls reviewed (`fetch_page`, `select2` focus handler, AJAX target usage).
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed:
+  - `list.html`: `base/main.html`, `django_tables2`, `core_tag`, `static`, `i18n`.
+  - `ajax-list.html`: `core_tag`.
+  - `card.html`: none.
+- Validation improvements:
+  - No runtime validation retained because the component has no live render path.
+  - Reviewed filter form variables, pagination variables, object list iteration, included card variables, URL reversals, tab targets, and AJAX target attributes before removal.
+- Template dependency analysis:
+  - Repository-wide search found no live loader for `license/list.html`.
+  - `list.html` only loaded `license/ajax-list.html`; `ajax-list.html` only loaded `license/card.html`; the include chain is now verified dead.
+  - The chain depended on missing legacy URL names including `license-list`, `license-ajax-list`, `license-add`, `license-detail`, `license-update`, `license-item-update`, `license_ledger`, `amend-license-pdf`, and `license-pdf`, none of which are registered in the current License URLConf.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and this server-rendered list component was verified dead.
+- React built-in replacements:
+  - None; active License list/report flows remain React/API-driven.
+- Performance improvements:
+  - Removed unreachable django-tables2/static/select2 loading, duplicated `django_select2.js` include, pagination rendering, and per-license partial rendering.
+- Security improvements:
+  - Removed stale AJAX URL targets and unregistered legacy action links, including the obsolete item-update route.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/list.html`.
+  - Deleted `backend/apps/license/templates/license/ajax-list.html`.
+  - Deleted `backend/apps/license/templates/license/card.html`.
+- Duplicate logic removed:
+  - Removed obsolete server-rendered list/detail/action markup duplicated by React/API flows.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Repository-wide dependency search -> no live source loader outside audit docs/state for the deleted component.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/list.html backend/apps/license/templates/license/ajax-list.html backend/apps/license/templates/license/card.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Stale `license-list` and `license-item-update` URL references remain in non-License legacy base/DFIA templates and should be handled when those files are selected by the audit graph.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/pdf.html`
+
+- File path: `backend/apps/license/templates/license/pdf.html`
+- Module: License / Legacy Django Templates / PDF Summary
+- Status: COMPLETED - REMOVED
+- Total LOC: 184
+- Lines reviewed: 184
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 template inheritance dependency (`pdf_base.html`).
+- Validation improvements:
+  - No runtime validation retained because the template has no live render path.
+  - Reviewed all template variables before removal, including license header fields, export/import relation loops, numeric display conditionals, and total helpers.
+- Template dependency analysis:
+  - Repository-wide search for `license/pdf.html`, `templates/license/pdf.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, cached template paths, and dynamic template-loading patterns found no live usage.
+  - Active report service references `license/report_pdf.html`, not this template.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and this Django PDF template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable PDF table rendering and relation traversal.
+- Security improvements:
+  - Removed stale server-rendered PDF HTML path.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/pdf.html`.
+- Duplicate logic removed:
+  - Removed obsolete PDF summary markup duplicated by active report/exporter paths.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Repository-wide dependency search -> no live source references.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/pdf.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this removed template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/license_details.html`
+
+- File path: `backend/apps/license/templates/license/license_details.html`
+- Module: License / Legacy Django Templates / License Details
+- Status: COMPLETED - REMOVED
+- Total LOC: 170
+- Lines reviewed: 170
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 3 template dependencies (`base.html`, `formset_tags`, `static`).
+- Validation improvements:
+  - No runtime validation retained because the template has no live render path.
+  - Reviewed all template variables before removal, including `object`, `license`, export/import relation traversal, nested detail/allotment loops, table totals, and display methods.
+- Template dependency analysis:
+  - Repository-wide specific-template search for `license_details.html`, `license/license_details.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, cached template paths, and dynamic template-loading patterns found no live usage.
+  - Broad `LicenseDetailsModel` and active API references were reviewed as unrelated to this template file.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and the Django detail template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable nested relation traversal and table rendering from legacy template surface.
+- Security improvements:
+  - Removed stale server-rendered detail page with unused template tag/static loads and fragile nested attribute traversal.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/license_details.html`.
+- Duplicate logic removed:
+  - Removed unreachable license detail markup duplicated by active React/API detail flows and retained report exporters.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Repository-wide specific-template dependency search -> no live source references.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/license_details.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this removed template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/item_report.html`
+
+- File path: `backend/apps/license/templates/license/item_report.html`
+- Module: License / Legacy Django Templates / Item Report PDF Table
+- Status: COMPLETED - REMOVED
+- Total LOC: 107
+- Lines reviewed: 107
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 3 template dependencies (`pdf_base.html`, `django_tables2`, `i18n`).
+- Validation improvements:
+  - No runtime validation retained because the template has no live render path.
+  - Reviewed table context variables, django-tables2 rendering tags, localization branches, empty-text branch, footer branch, and table attributes before removal.
+- Template dependency analysis:
+  - Repository-wide search for `item_report.html`, `license/item_report.html`, direct includes/extends, `template_name`, `get_template`, `select_template`, `render`, `TemplateResponse`, `render_to_string`, email/PDF/report/export generation, management commands, tests, URL routes, middleware, signals, documentation runtime paths, cached template paths, and dynamic template-loading patterns found no live usage.
+  - Active item report code uses API endpoints, React pages, `license/report_pdf_ITEM.html`, and `license/report_pdf.html`; it does not load `license/item_report.html`.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and the Django template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable django-tables2 PDF table rendering and localization branches.
+- Security improvements:
+  - Removed a dead server-rendered table path that could emit arbitrary table cell HTML if it were accidentally wired back.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/item_report.html`.
+- Duplicate logic removed:
+  - Removed unreachable item report table markup duplicated by active API/React report paths and retained PDF templates.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Repository-wide dependency search -> no live source references.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/item_report.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this removed template.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/templates/license/item_list_edit.html`
+
+- File path: `backend/apps/license/templates/license/item_list_edit.html`
+- Module: License / Legacy Django Templates / Item List Edit
+- Status: COMPLETED - REMOVED
+- Total LOC: 72
+- Lines reviewed: 72
+- Functions reviewed: 1 JavaScript function (`calculateCurrency`)
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 2 template library loads (`formset_tags`, `static`) and 2 static JavaScript includes.
+- Validation improvements:
+  - No runtime validation retained because the template has no live render path.
+  - Reviewed the removed POST target, formset include, submit side effect, numeric JavaScript parsing, Select2 focus handler, and formset initialization paths before deletion.
+- Template dependency analysis:
+  - Repository-wide search for `item_list_edit`, `license/item_list_edit.html`, direct includes/extends, `template_name`, `get_template_names`, `render`, `TemplateResponse`, `render_to_response`, `get_template`, `select_template`, `render_to_string`, custom tags, inclusion tags, management commands, reports, PDFs, exports, middleware, signals, tests, docs, cached template paths, and URL routes found no live loader for this template.
+  - Remaining `license-item-update` references are stale legacy links in `backend/apps/license/templates/license/card.html` and `backend/templates/dfia/*.html`; the URL name is not registered in the current URLConf and does not load this template.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and the Django template was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed one unreachable legacy template render path with inline JavaScript and duplicate static asset loading.
+- Security improvements:
+  - Removed dead legacy inline JavaScript that used fragile numeric parsing and global event handlers.
+  - Removed a stale POST form target pointing at an unregistered legacy URL name.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/item_list_edit.html`.
+- Duplicate logic removed:
+  - Removed an unreachable duplicate `calculateCurrency` implementation that overlapped with the legacy add template logic.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - `rg -n "item_list_edit|license/item_list_edit.html|include ['\"]license/item_list_edit|template_name\\s*=.*item_list_edit|license/formset.html|include ['\"]license/formset.html" backend docs frontend --glob '!backend/theme/**' --glob '!**/*.min.js' --glob '!docs/audit/audit-database.json'` -> no remaining `item_list_edit` references outside audit docs/state.
+  - `rg -n "license-item-update" backend docs frontend --glob '!backend/theme/**' --glob '!**/*.min.js' --glob '!docs/audit/audit-database.json'` -> stale references remain only in blocked legacy `card.html`/DFIA templates and audit docs.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/item_list_edit.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The stale `license-item-update` links in blocked legacy templates remain outside this file and should be handled when those files are selected or rechecked.
+  - `backend/apps/license/templates/license/formset.html` is now marked `REQUIRES_RECHECK` because its only known live include was removed.
+- Status: COMPLETED - REMOVED
+
+## 2026-07-16 - `backend/apps/license/signals.py`
+
+- File path: `backend/apps/license/signals.py`
+- Module: License / Signals / Materialized Balance and Cross-App Recalculation
+- Status: COMPLETED
+- Total LOC: 438
+- Lines reviewed: 438
+- Functions reviewed: 16 (`_flags_suspended`, `suspend_license_flag_recalc`, `_instance_id`, `_related_license`, `_update_all_import_items_available_value`, `update_license_flags`, `auto_fetch_import_items`, `update_license_on_export_item_change`, `update_license_on_export_item_delete`, `update_license_on_import_item_change`, `update_license_on_import_item_delete`, `update_license_on_allotment_item_change`, `update_license_on_boe_item_change`, `update_license_on_trade_line_change`, `snapshot_exporter_name_on_company_delete`, plus receiver registration paths)
+- Classes reviewed: 0
+- Arguments reviewed:
+  - Receiver arguments `sender`, `instance`, `created`, `kwargs`, `raw`, and `update_fields`.
+  - Direct helper arguments `license_instance`, `instance`, and relation names for cross-app model traversal.
+- Validation improvements:
+  - Added direct guards for `None` and unsaved license instances in balance-update helpers.
+  - Promoted balance-only `update_fields` to a module constant so skip behavior is explicit and test-covered.
+  - Added regression coverage for suspended recalculation, balance-only partial saves, missing license objects, expired/null flag updates, and available-value marker/percentage/open item paths.
+- Command hardening: not applicable; this file has no management command interface.
+- Performance improvements:
+  - Preserved the existing O(M) condition-pool recalculation and `.update()` writes that bypass recursive `post_save` behavior.
+  - Kept the balance-only partial-save skip and added regression coverage to prevent future O(N) recalculation regressions.
+  - Consolidated repeated relation traversal for allotment, BOE, and trade-line signals with `_related_license`.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Continued using Django receivers, queryset `.update()`, `refresh_from_db(fields=[...])`, and model relation access.
+- Security improvements:
+  - Replaced f-string logging with parameterized logging to avoid unnecessary string interpolation and keep log fields safe.
+  - Changed swallowed broad exception paths to `logger.exception(...)` so operational failures retain stack traces.
+  - Preserved raw fixture skip and serializer bulk-suspension behavior.
+- Dead code removed:
+  - Removed repeated local `logging` imports and an unused `MagicMock` test import.
+- Duplicate logic removed:
+  - Extracted `_instance_id` for safe log identifiers.
+  - Extracted `_related_license` for repeated cross-app relation-to-license traversal.
+  - Extracted `SPECIAL_AVAILABLE_VALUE` and `BALANCE_ONLY_UPDATE_FIELDS`.
+- Regression tests added:
+  - Expanded `backend/apps/license/tests/test_signals.py` from 8 to 15 tests.
+  - New tests cover suspension restoration after exceptions, direct `None`/unsaved helper calls, balance-only partial-save skip, suspended import-item signal skip, flag/balance subrow updates, available-value recalculation for open/percentage/marker import items, and missing-license no-op behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_signals.py -q` -> 15 passed.
+  - `.venv/bin/ruff check backend/apps/license/signals.py backend/apps/license/tests/test_signals.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/signals.py backend/apps/license/tests/test_signals.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/signals.py backend/apps/license/tests/test_signals.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/signals.py backend/apps/license/tests/test_signals.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `suspend_license_flag_recalc`, `update_license_flags`, and `update_license_on_import_item_change`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/signals.py backend/apps/license/tests/test_signals.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Existing file still intentionally catches broad exceptions around recalculation to preserve signal non-fatal behavior; stack traces are now logged for production diagnosis.
+  - Full end-to-end performance for million-row recalculation requires production-like data and database access outside this sandbox.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/table_columns.py`
+
+- File path: `backend/apps/license/table_columns.py`
+- Module: License / Table Column Helpers
+- Status: COMPLETED
+- Total LOC: 160
+- Lines reviewed: 160
+- Functions reviewed: 6 (`_as_decimal`, `ColumnTotal.__init__`, `ColumnTotal.render_total_value`, `ColumnTotal.render_footer`, `ColumnFactory.create_total_column`, `ColumnFactory.create_attribute_column`, `CustomCalculationColumn.render`)
+- Classes reviewed: 3 (`ColumnTotal`, `ColumnFactory`, `CustomCalculationColumn`)
+- Arguments reviewed:
+  - Factory inputs `method_name`, `attribute_name`, and `decimals`.
+  - Render inputs `record`, footer inputs `bound_column` and `table`, and arbitrary column constructor args/kwargs.
+- Validation improvements:
+  - Added `_as_decimal` normalization for `None`, empty strings, invalid strings, invalid types, `NaN`, and infinity.
+  - Added per-instance total initialization in `ColumnTotal.__init__`, removing shared class-level total state.
+  - Hardened dynamic method and attribute access so missing attributes safely total as zero.
+  - Updated `CustomCalculationColumn` to handle callable or attribute-style `get_balance_cif` values and use Decimal arithmetic.
+- Command hardening: not applicable; this file has no command interface.
+- Performance improvements:
+  - No query or I/O paths present.
+  - Reused local Decimal normalization instead of adding dependencies.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Continued using `django_tables2.Column` and Django's `intcomma`.
+- Security improvements:
+  - Defensive coercion prevents malformed table values from raising during render/footer generation.
+  - Added explicit `__all__` for the compatibility export surface.
+- Dead code removed:
+  - Removed implicit class-level mutable numeric state.
+- Duplicate logic removed:
+  - Centralized numeric coercion and total accumulation in `_as_decimal` and `render_total_value`.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_table_columns.py`.
+  - Tests cover Decimal/string/None/empty/invalid render values, instance-local totals, attribute columns, missing attributes, and custom calculation behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_table_columns.py -q` -> blocked/skipped, `django_tables2` is not installed in the local venv; pytest collected 0 tests / 1 skipped and returned exit code 5.
+  - `.venv/bin/python -c "import django_tables2"` -> blocked, `ModuleNotFoundError: No module named 'django_tables2'`.
+  - `.venv/bin/ruff check backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/table_columns.py backend/apps/license/tests/test_table_columns.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - Runtime table-column tests/import verification blocked by missing `django_tables2`.
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Install the declared table rendering dependency in the local venv and rerun `backend/apps/license/tests/test_table_columns.py`.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/add.html`
+
+- File path: `backend/apps/license/templates/license/add.html`
+- Module: License / Templates / Legacy Add/Edit Form
+- Status: COMPLETED
+- Total LOC: 249
+- Lines reviewed: 249
+- Functions reviewed: 2 JavaScript functions/handlers (`calculateCurrency`, scoped submit handler)
+- Classes reviewed: 0
+- Arguments reviewed:
+  - Template context variables `license`, `form`, `inlines`, `formset`, `field`, and `formset.prefix`.
+  - JavaScript field inputs `fob_fc`, `fob_inr`, `value_addition`, `cif_fc`, and `cif_inr`.
+- Validation improvements:
+  - Replaced malformed/empty source-value handling in `calculateCurrency` with explicit numeric parsing and finite checks.
+  - Guarded against zero FOB FC and non-positive total value addition before division.
+  - Preserved empty CIF auto-fill behavior while avoiding malformed source calculations.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Avoided double rendering hidden fields by iterating `visible_fields` after rendering `hidden_fields`.
+  - Scoped AJAX submit binding to `form.license-form` instead of every form on the page.
+- Package replacements:
+  - Removed stale `{% load formset_tags %}` dependency from this template.
+- Django built-in replacements:
+  - Used built-in form field `id_for_label` for accessible label targets.
+  - Used Django template `visible_fields`/`hidden_fields` instead of iterating all fields twice.
+- Security improvements:
+  - Template now compiles without the unavailable third-party `formset_tags` library.
+  - Client-side arithmetic no longer produces `Infinity`/`NaN` output for malformed or zero values.
+  - CSRF token remains present for the POST form.
+- Dead code removed:
+  - Removed unused `{% load formset_tags %}` and `escapescript` wrapping from this template.
+- Duplicate logic removed:
+  - Removed duplicate hidden-field rendering for the main form and inline formsets.
+- Regression tests added:
+  - No standalone test file added; verified through Django template loader compilation.
+- Migrations added: none.
+- Verification results:
+  - `cd backend && ../.venv/bin/python -c "..."` with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> `get_template('license/add.html')` passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/templates/license/add.html` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Other legacy templates still load unavailable `formset_tags`; they remain pending and should be handled one file at a time.
+  - Inline JavaScript is still legacy jQuery; broader extraction would touch multiple frozen/pending template files and was not done in this file-only pass.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/ajax-list.html`
+
+- File path: `backend/apps/license/templates/license/ajax-list.html`
+- Module: License / Templates / Legacy AJAX List
+- Status: BLOCKED
+- Total LOC: 164
+- Lines reviewed: 164
+- Functions reviewed: 0 Python functions; template pagination/include/control-flow paths reviewed.
+- Classes reviewed: 0
+- Arguments reviewed:
+  - Template context variables `request.GET.urlencode`, `is_paginated`, `page_obj`, `paginator`, `is_active`, and `object_list`.
+  - Included template path `license/card.html`.
+- Validation improvements:
+  - Added an explicit empty-state row when `object_list` is empty.
+  - Cleaned pagination `data-url` attributes so AJAX fetch URLs do not include large whitespace blocks.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Reduced template output size from 189 to 164 lines by removing whitespace-only URL blocks.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Continued using existing `core_tag.relative_url` for query-string preservation.
+- Security improvements:
+  - Disabled pagination controls now render as inert spans with `aria-disabled="true"` instead of clickable `href="#"` anchors.
+  - Header-only labels were replaced with spans to avoid invalid form-label semantics.
+  - CSV download link now has an explicit accessible label.
+- Dead code removed:
+  - Removed whitespace-only template output inside `data-url` attributes.
+- Duplicate logic removed:
+  - Duplicate top/bottom pagination remains intentionally because it preserves current UX. Shared partial extraction would touch additional templates and was not done in this file-only pass.
+- Regression tests added:
+  - No standalone test added for this template; verified by template loader compilation.
+- Migrations added: none.
+- Verification results:
+  - `cd backend && ../.venv/bin/python -c "..."` with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> `get_template('license/ajax-list.html')` passed.
+  - Full render verification with empty `object_list` -> blocked by `NoReverseMatch: Reverse for 'license-list' not found`; `license-list`/`license-ajax-list` are legacy URL names not registered in the current URLConf.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/templates/license/ajax-list.html` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools/items:
+  - Full render is blocked by missing legacy URL names `license-list` and `license-ajax-list`.
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Route ownership for legacy server-rendered License templates must be resolved: either restore compatibility URL names or migrate templates to current namespaced API/frontend routes.
+  - Top/bottom pagination duplication should be extracted only after the shared route contract is resolved.
+- Status: BLOCKED
+
+## 2026-07-16 - `backend/apps/license/templates/license/card.html`
+
+- File path: `backend/apps/license/templates/license/card.html`
+- Module: License / Templates / Legacy List Card Row
+- Status: BLOCKED
+- Total LOC: 126
+- Lines reviewed: 126
+- Functions reviewed: 0 Python functions; collapse/tab/link template paths reviewed.
+- Classes reviewed: 0
+- Arguments reviewed:
+  - Template context object `license` and its displayed attributes `id`, `license_number`, `license_date`, `license_expiry_date`, `file_number`, `exporter`, `get_norm_class`, `get_notification_number_display`, `port.name`, `get_balance_cif`, `user_comment`, and `ledger_date`.
+- Validation improvements:
+  - No data mutation or form validation paths exist in this template.
+- Command hardening: not applicable.
+- Performance improvements:
+  - No query or loop changes made; rendering still depends on caller-provided `license` objects.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Continued using Django URL reversal and template escaping.
+- Security improvements:
+  - New-tab links now include `rel="noopener"`.
+  - Duplicate `id="pills-home-tab"` values were replaced with license-scoped IDs to avoid invalid DOM and tab-target ambiguity.
+  - Collapse trigger now exposes `role="button"` and `tabindex="0"`.
+- Dead code removed:
+  - Removed repeated static tab IDs.
+- Duplicate logic removed:
+  - No broader extraction performed; this file is a partial included by `ajax-list.html`.
+- Regression tests added:
+  - No standalone test added; verified by template loader compilation.
+- Migrations added: none.
+- Verification results:
+  - `cd backend && ../.venv/bin/python -c "..."` with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> `get_template('license/card.html')` passed.
+  - Full render verification -> blocked by legacy URL names used in this server-rendered template (`license-detail`, `license-update`, `license-item-update`, `license_ledger`, `amend-license-pdf`, `license-pdf`) that are not registered in the current URLConf.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/templates/license/card.html` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools/items:
+  - Full render is blocked by missing legacy URL names.
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Resolve the legacy License template route contract before marking this template fully completed.
+- Status: BLOCKED
+
+## 2026-07-16 - `backend/apps/license/templates/license/consolidated.html`
+
+- File path: `backend/apps/license/templates/license/consolidated.html`
+- Module: License / Templates / Consolidated Balance PDF
+- Status: COMPLETED
+- Total LOC: 134
+- Lines reviewed: 134
+- Functions reviewed: 0 Python functions; template loops and conditionals reviewed.
+- Classes reviewed: 0
+- Arguments reviewed:
+  - Template context variable `license_list`.
+  - License fields and relations `license_number`, `license_date`, `license_expiry_date`, `port.code`, `file_number`, `exporter`, `export_license`, and `import_license`.
+  - Import item fields and relations `hs_code.hs_code`, `items.first.head`, `description`, `balance_quantity`, `cif_fc`, and `balance_cif_fc`.
+- Validation improvements:
+  - Added fallback display for missing nullable license and item fields.
+  - Added explicit empty states for missing licenses and missing import items.
+  - Replaced Decimal-vs-float `item.cif_fc == 0.0` check with truthy Decimal handling and a visible fallback.
+- Command hardening: not applicable.
+- Performance improvements:
+  - No query changes made; template remains dependent on caller-side prefetching.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Used Django `default` filter and `{% empty %}` loop branches.
+  - Used `{% with %}` for the first linked item lookup.
+- Security improvements:
+  - Continued relying on Django template autoescaping.
+  - Fixed invalid table header structure by wrapping header cells in `<tr>`.
+- Dead code removed:
+  - Replaced stale `item.item.head` reference with the actual `item.items.first.head` path.
+- Duplicate logic removed:
+  - No shared extraction performed; this is a standalone PDF template.
+- Regression tests added:
+  - No standalone test added; verified by rendering with an empty license list.
+- Migrations added: none.
+- Verification results:
+  - `cd backend && ../.venv/bin/python -c "..."` with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> rendered `license/consolidated.html` with `license_list=[]` and confirmed empty-state output.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/templates/license/consolidated.html` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Caller should prefetch `export_license`, `import_license__hs_code`, and `import_license__items__head` for large PDF batches to avoid N+1 queries.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/detail.html`
+
+- File path: `backend/apps/license/templates/license/detail.html`
+- Module: License / Templates / Legacy Detail Partial
+- Status: COMPLETED
+- Total LOC: 97
+- Lines reviewed: 97
+- Functions reviewed: 0 Python functions; export/import table loops and conditionals reviewed.
+- Classes reviewed: 0
+- Arguments reviewed:
+  - Template context object `object`.
+  - Export fields `item`, `cif_fc`, and `balance_cif_fc`.
+  - Import fields `serial_number`, `hs_code`, `items.first`, `description`, `quantity`, `old_quantity`, `new_quantity`, `balance_quantity`, `cif_fc`, and `balance_cif_fc`.
+- Validation improvements:
+  - Added fallback display for missing export/import values.
+  - Added explicit empty states for export and import item tables.
+  - Replaced stale `import_item.item` relation usage with the actual `import_item.items.first` relation and description fallback.
+- Command hardening: not applicable.
+- Performance improvements:
+  - No query changes made; template remains dependent on caller-side prefetching.
+- Package replacements:
+  - Removed unused unavailable `{% load formset_tags %}` dependency.
+- Django built-in replacements:
+  - Used Django `default`, `{% empty %}`, and `{% with %}` template features.
+- Security improvements:
+  - Continued relying on Django template autoescaping.
+  - Fixed malformed table rows/cells and wrapped header cells in `<tr>`.
+- Dead code removed:
+  - Removed unused `formset_tags` load.
+  - Removed stale direct `import_item.item` display path.
+- Duplicate logic removed:
+  - No shared extraction performed; this is a small partial.
+- Regression tests added:
+  - No standalone test added; verified by rendering with empty related managers.
+- Migrations added: none.
+- Verification results:
+  - `cd backend && ../.venv/bin/python -c "..."` with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> rendered `license/detail.html` with empty export/import managers and confirmed both empty-state outputs.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/templates/license/detail.html` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Caller should prefetch `export_license`, `import_license__hs_code`, and `import_license__items` for large detail renders to avoid N+1 queries.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/formset.html`
+
+- File path: `backend/apps/license/templates/license/formset.html`
+- Module: License / Templates / Legacy Inline Formset Partial
+- Status: COMPLETED
+- Total LOC: 122
+- Lines reviewed: 122
+- Functions reviewed: 0 Python functions; template include, formset loops, hidden/visible field handling, management-form rendering, error rendering, and empty-form template reviewed.
+- Classes reviewed: 0
+- Dependency analysis:
+  - Repository-wide search found a live include from `backend/apps/license/templates/license/item_list_edit.html`.
+  - No deletion was performed because this template has a live template include path.
+- Validation improvements:
+  - Replaced all-field iteration with `hidden_fields` plus `visible_fields` so hidden fields are not duplicated in visible table headers/cells.
+  - Fixed the always-true header condition (`not A or not B or not C`) by removing the custom condition and relying on `visible_fields`.
+  - Empty form template now uses `formset.empty_form.hidden_fields` and `formset.empty_form.visible_fields`, avoiding stale references to the last loop `form`.
+  - Added fallback heading text for unknown formset prefixes.
+  - Added an explicit empty-state row when a formset contains no forms.
+- Package replacements:
+  - Removed unavailable `{% load formset_tags %}` and the dependent `{% escapescript %}` block.
+  - Removed unused `{% load static %}`.
+- Django built-in replacements:
+  - Used Django form APIs exposed in templates: `hidden_fields`, `visible_fields`, `empty_form`, `id_for_label`, and management form rendering.
+- React built-in replacements: none; this is a retained legacy Django partial because it is still included by another pending template.
+- Performance improvements:
+  - Avoided duplicate hidden-field/header rendering and reduced output from 132 to 122 LOC.
+- Security improvements:
+  - Continued relying on Django autoescaping for form fields and errors.
+  - Removed dependency on unavailable custom template tag library.
+  - Added screen-reader labels tied to generated field IDs for keyboard/screen-reader users.
+- Dead code removed:
+  - Removed stale `formset_tags` and `static` loads.
+  - Removed unreachable blank heading branch for non-special prefixes.
+- Duplicate logic removed:
+  - Consolidated field rendering around Django `visible_fields` rather than repeating manual name checks for `license`, `DELETE`, and `id`.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - No standalone test file added; verified by rendering with a real Django `formset_factory` formset.
+- Verification results:
+  - Repository-wide dependency search for `license/formset.html`, `formset.html`, template includes/extends, render paths, and template loading -> live include found from `backend/apps/license/templates/license/item_list_edit.html`.
+  - `cd backend && ../.venv/bin/python -c "..."` with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> rendered `license/formset.html` with a real Django formset and confirmed title, empty-form template, and screen-reader labels.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/templates/license/formset.html` -> passed.
+  - Ruff, `py_compile`, and `compileall` are not applicable to this HTML-only template.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked items:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Parent template `item_list_edit.html` remains pending; if that parent is later proven dead and removed, this formset partial should be re-evaluated for removal.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/services/ledger_service.py`
+
+- File path: `backend/apps/license/services/ledger_service.py`
+- Module: License / Services / Ledger Aggregation
+- Status: COMPLETED
+- Total LOC: 790
+- Lines reviewed: 790
+- Functions reviewed: 17 (`_get_text_param`, `_get_license_type`, `_get_bool_param`, `_parse_decimal`, `_parse_int`, `_parse_iso_date`, `_as_decimal`, `_as_model_list`, `get_sold_status`, `prepare_dfia_data`, `prepare_incentive_data`, `get_incentive_breakdown`, `build_license_queryset`, `get_ledger_summary`, `search_licenses`, `get_company_wise_trades`, `get_license_wise_trades`)
+- Classes reviewed: 0
+- Arguments reviewed: query params `license_type`, `min_balance`, `exporter`, `company`, `no_purchases`, `active_only`, `purchase_date_from`, `purchase_date_to`, `q`, and `search`.
+- Imports reviewed: 9 import statements covering stdlib logging/date/decimal, Django timezone/ORM/date parsing, and License models.
+- Validation improvements:
+  - Added shared query-parameter normalization for text, booleans, decimals, integer IDs, ISO dates, and license type values.
+  - Rejected malformed decimal values including `NaN`/`Infinity` before they reach ORM filters.
+  - Rejected malformed and impossible ISO dates before they reach date-field ORM filters.
+  - Normalized license type filtering to uppercase known values and safely falls back to `ALL`.
+  - Hardened `get_sold_status()` for `None` totals/balances.
+- Command hardening: not applicable; service file only.
+- Performance improvements:
+  - Preserved existing grouped aggregate query strategy for DFIA and Incentive purchase/sale totals.
+  - Preserved `select_related()`/`prefetch_related()` paths while extracting reusable model-list preparation.
+  - Avoided duplicate parser logic across list, summary, search, company-wise, and license-wise paths.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Replaced manual `datetime.strptime()` parsing with Django's `parse_date()` plus explicit malformed-date exception handling.
+- Security improvements:
+  - Prevented malformed query parameters from propagating into ORM date/decimal filters.
+  - Preserved read-only aggregation behavior; no database writes in this service.
+  - Kept company/license search values parameterized through ORM filters.
+- Dead code removed:
+  - Removed duplicate local imports and repeated parser blocks.
+- Duplicate logic removed:
+  - Extracted common query-param parsers and license-type constants.
+  - Shared QuerySet/list preparation between DFIA and Incentive paths.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_ledger_service.py`.
+  - Covers Incentive plain-list preparation, null sold-status values, malformed ledger filters, normalized search type handling, invalid decimal rejection, blank search rejection, and invalid date filters in license-wise aggregation.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_ledger_service.py -q` -> 5 passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_ledger_service.py backend/tests/test_api_trade.py::TestLicenseLedgerAPI -q` -> 7 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py` -> passed.
+  - `.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> imported `prepare_incentive_data`, `build_license_queryset`, and `get_ledger_summary`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/services/ledger_service.py backend/apps/license/tests/test_ledger_service.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - No remaining technical debt identified for this file after the focused hardening pass.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/services/plan_enforcement.py`
+
+- File path: `backend/apps/license/services/plan_enforcement.py`
+- Module: License / Services / Utilization Plan Enforcement
+- Status: COMPLETED
+- Total LOC: 89
+- Lines reviewed: 89
+- Functions reviewed: 6 (`_item_pk`, `_normalize_item_ids`, `live_allotted_qty`, `live_allotted_value`, `live_allotted_qty_for`, `live_allotted_value_for`)
+- Classes reviewed: 0
+- Arguments reviewed: `item`, `item_ids`.
+- Imports reviewed: 6 import statements covering `Decimal`, Django ORM aggregate primitives, `Coalesce`, and core decimal constants.
+- Validation improvements:
+  - Added explicit handling for `None` items, unsaved item instances, `None` item-id iterables, blank IDs, and duplicate IDs.
+  - Changed single-item helpers to filter by `item_id` only after a valid primary key exists, preventing nullable orphan `AllotmentItems` rows from being counted.
+  - Changed group helpers to deduplicate valid IDs before `item_id__in` aggregation.
+- Command hardening: not applicable; service file only.
+- Performance improvements:
+  - Preserved single aggregate-query behavior for single-item and group cap checks.
+  - Deduplicated group IDs before the `IN` filter to avoid unnecessary repeated parameters.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Continued using Django `Q`, `Sum`, `Coalesce`, `Value`, and `DecimalField` aggregate primitives.
+- Security improvements:
+  - Prevented invalid/null caller inputs from widening cap calculations to orphan rows.
+  - Preserved parameterized ORM filters; no raw SQL or user-controlled SQL fragments.
+- Dead code removed: none.
+- Duplicate logic removed:
+  - Extracted `_item_pk()` and `_normalize_item_ids()` to share validation across quantity/value helpers.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_plan_enforcement.py`.
+  - Covers non-BOE `AT` rows, BOE-attached exclusions, non-AT exclusions, duplicate item IDs, model-instance IDs, `None` inputs, blank IDs, and orphan allotment rows.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_plan_enforcement.py -q` -> 2 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py` -> passed.
+  - `.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> imported helpers and verified zero return for invalid inputs.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/services/plan_enforcement.py backend/apps/license/tests/test_plan_enforcement.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - `apps/core/scripts/calculate_balance.py` still contains an existing `allotment__type='ARO'` aggregate filter even though stored row codes are two characters; that file belongs to a previously completed phase and was not reopened here.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/services/plan_grouping.py`
+
+- File path: `backend/apps/license/services/plan_grouping.py`
+- Module: License / Services / Utilization Plan Grouping
+- Status: COMPLETED
+- Total LOC: 61
+- Lines reviewed: 61
+- Functions reviewed: 4 (`_description_of`, `_item_names_of`, `plan_group_key`, `group_ids_of`)
+- Classes reviewed: 0
+- Arguments reviewed: `item`.
+- Imports reviewed: 1 future import plus one lazy model import inside `group_ids_of`.
+- Validation improvements:
+  - Added safe description normalization for `None`/missing descriptions.
+  - Added safe item-name fallback handling for missing managers, blank names, and deterministic case-insensitive sorting.
+  - Added invalid-input handling so `group_ids_of(None)` and unsaved items return `[]` instead of querying with `license_id=None`.
+- Command hardening: not applicable; service file only.
+- Performance improvements:
+  - Preserved a single sibling query with `prefetch_related("items")`.
+  - Avoided database work for invalid/unsaved items.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Continued using Django ORM and M2M prefetching; no raw SQL introduced.
+- Security improvements:
+  - Prevented malformed service inputs from widening grouping queries to unrelated nullable-license rows.
+- Dead code removed: none.
+- Duplicate logic removed:
+  - Extracted `_description_of()` and `_item_names_of()` from inline grouping logic.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_plan_grouping.py`.
+  - Covers trimmed/uppercase description grouping, item-name fallback ordering, distinct description groups, `None` inputs, and unsaved items.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_plan_grouping.py -q` -> 3 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py` -> passed.
+  - `.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> imported helpers and verified invalid-input return values.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/services/plan_grouping.py backend/apps/license/tests/test_plan_grouping.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this file after the focused hardening pass.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/services/validation_service.py`
+
+- File path: `backend/apps/license/services/validation_service.py`
+- Module: License / Services / Business Rule Validation
+- Status: COMPLETED
+- Total LOC: 342
+- Lines reviewed: 342
+- Functions reviewed: 9 (`validate_license_active`, `validate_license_complete`, `check_license_expiring_soon`, `validate_sufficient_balance`, `validate_sufficient_quantity`, `validate_restriction_limit`, `validate_allocation`, `check_individual_license`, `update_license_flags`)
+- Classes reviewed: 1 (`LicenseValidationService`)
+- Arguments reviewed: `license_obj`, `import_item`, `required_value`, `required_quantity`, `quantity`, `value`, `days`.
+- Imports reviewed: 6 import statements covering stdlib date/decimal, Django timezone, core constants, date utilities, and decimal utilities.
+- Validation improvements:
+  - Added explicit missing-license and missing-import-item guards across all public validation methods.
+  - Added negative required-value and required-quantity rejection.
+  - Hardened expiry-window parsing so malformed `days` values fall back to 90 days.
+  - Coerced license balance reads through `to_decimal()` before threshold comparisons.
+  - Added safe `None` return contract for `update_license_flags()`.
+- Command hardening: not applicable; service file only.
+- Performance improvements:
+  - Preserved existing lazy imports and query paths.
+  - Avoided unnecessary database work for invalid missing-object calls.
+- Package replacements:
+  - No new dependency introduced.
+- Standard library replacements:
+  - Replaced deprecated `typing.List`/`typing.Dict` annotations with built-in generics.
+- Django built-in replacements:
+  - No framework replacement needed; retained Django timezone/date utilities and ORM-backed model properties.
+- Security improvements:
+  - Prevented negative allocation values from being treated as valid.
+  - Prevented malformed service inputs from reaching downstream balance calculators or relation queries.
+- Dead code removed:
+  - Removed unused `typing` imports.
+- Duplicate logic removed:
+  - Reused existing `to_decimal()` for balance and required-value normalization.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_validation_service.py`.
+  - Covers missing-object guards, negative value/quantity rejection, valid active/complete/balance/quantity/allocation paths, malformed `days`, expiry threshold behavior, and flag generation.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_validation_service.py -q` -> 4 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py` -> passed.
+  - `.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` -> imported `LicenseValidationService` and verified missing-license result.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/services/validation_service.py backend/apps/license/tests/test_validation_service.py docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this file after the focused hardening pass.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/serializers/_license_write.py`
+
+- File path: `backend/apps/license/serializers/_license_write.py`
+- Module: License / Serializers / License Write Path
+- Status: COMPLETED
+- Total LOC: 858
+- Lines reviewed: 858
+- Functions reviewed: 6 (`_pop_sub_table_writes`, `_apply_sub_table_writes`, `_calculate_import_quantity`, `_create_import_item`, `create`, `update`)
+- Classes reviewed: 1 (`LicenseWriteMixin`)
+- Arguments reviewed: serializer validated-data payloads for create/update, nested export/import/document/transfer/purchase writes, sub-table write routing, M2M item linking, and moved-field persistence.
+- Imports reviewed: 25 import statements after cleanup.
+- Validation improvements:
+  - Reviewed nested write normalization for empty strings, `None`, whitespace-only unit values, optional decimal fields, FK conversion, duplicate import serial handling, document type/file checks, protected deletion paths, transaction boundaries, and moved sub-table fields.
+  - No behavior-changing validation edits made; serializer validation remains owned by `LicenseDetailsSerializer` field definitions and this mixin continues to normalize only write-path payloads already accepted by DRF.
+- Command hardening: not applicable; file is a serializer mixin, not a management command.
+- Performance improvements:
+  - Reviewed bulk item linking, one-pass license-flag recalculation, row-level locking on update, sub-table `update()` writes, and post-create `available_quantity` bulk update.
+  - No query-shape changes made because existing behavior and ordering are security/consistency sensitive.
+- Package replacements:
+  - Replaced deprecated `typing.Iterable` runtime import with `collections.abc.Iterable`.
+  - No external dependency introduced.
+- Django built-in replacements:
+  - Existing code already uses Django transactions, `select_for_update()`, `F()` expressions, ORM `update()`, and DRF `ValidationError` paths where applicable.
+- Security improvements:
+  - Removed stale copied imports that exposed unused models/serializers in the write mixin.
+  - Reviewed protected delete exception handling for export/import items and confirmed errors fail closed with `ValidationError`.
+  - Reviewed concurrent update protection through transaction scopes and row-level locking.
+- Dead code removed:
+  - Removed unused imports for `datetime.date`, `datetime.datetime`, `datetime.time`, `typing.Any`, `typing.Dict`, `rest_framework.serializers`, `ItemNameModel`, `SchemeCode`, `NotificationNumber`, `HSCodeSerializer`, `SionNormClassNestedSerializer`, `IndianDateField`, `IncentiveLicense`, and `LicenseItemPlan`.
+  - Removed no-op f-string prefixes from static error-message fragments.
+- Duplicate logic removed: none; duplicated nested import-update branches remain because consolidating them would be behavior-risky without broader serializer contract tests.
+- Regression tests added: none; cleanup was import/static-string only. Existing focused API and query-builder regression coverage was rerun.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/tests/test_api_license.py backend/apps/license/tests/test_query_builder.py -q` -> 26 passed.
+  - `.venv/bin/ruff check backend/apps/license/serializers/_license_write.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/serializers/_license_write.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/serializers/_license_write.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `LicenseWriteMixin`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/serializers/_license_write.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - The create/update nested import item paths still contain repeated normalization/update logic. It was reviewed and intentionally left unchanged because extracting it safely needs broader behavior coverage for malformed nested payloads, protected deletes, auto-link side effects, and historical frontend payload shapes.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/serializers/incentive.py`
+
+- File path: `backend/apps/license/serializers/incentive.py`
+- Module: License / Serializers / Incentive Licenses and Item Plans
+- Status: COMPLETED
+- Total LOC: 109
+- Lines reviewed: 109
+- Functions reviewed: 4 (`get_sold_value`, `get_balance_value`, `get_sold_status`, `to_representation`)
+- Classes reviewed: 2 (`IncentiveLicenseSerializer`, `LicenseItemPlanSerializer`)
+- Arguments reviewed: serializer instances for cached incentive values, model instances passed to representation, DRF field declarations, item-plan related-field querysets, and read-only frontend context fields.
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - Reviewed `license_date`, `license_expiry_date`, FK display fields, computed sold/balance/status fields, item-plan FK fields, decimal display fields, and read-only license context.
+  - Preserved `license_expiry_date` as writable because the frontend incentive-license form calculates and submits it; making the explicitly declared field read-only would break current create/update payloads.
+  - Hardened cached sold/balance serializer methods so corrupted or in-memory `None` values serialize as zero instead of raising.
+- Command hardening: not applicable; file is a serializer module.
+- Performance improvements:
+  - Replaced per-call deprecated model accessor usage with direct cached field access for `sold_value` and `balance_value`.
+  - Moved decimal zero construction to a module constant.
+- Package replacements:
+  - No new dependency introduced; used Python standard-library `decimal.Decimal`.
+- Django built-in replacements:
+  - Existing serializer continues to use DRF `ModelSerializer`, `SerializerMethodField`, `PrimaryKeyRelatedField`, `DecimalField`, and project `IndianDateField`.
+- Security improvements:
+  - Reviewed write exposure of incentive computed fields; `sold_value` and `balance_value` remain serializer method fields and are not client-writable.
+  - Reviewed item-plan FKs; serializer accepts primary keys while view-level bulk upsert validates license membership and capacity.
+- Dead code removed:
+  - Removed calls to deprecated `IncentiveLicense.get_sold_value()` and `get_balance_value()` in favor of cached model fields.
+  - Removed method-local `Decimal` import.
+- Duplicate logic removed:
+  - Simplified `get_sold_status()` branch flow by removing unnecessary `elif`/`else` after returns.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_incentive_serializers.py`.
+  - Covered direct cached-field access without deprecated methods, `None` cached-value handling, and the preserved writable `license_expiry_date` contract.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_incentive_serializers.py -q` -> 3 passed.
+  - `.venv/bin/ruff check backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `IncentiveLicenseSerializer` and `LicenseItemPlanSerializer`; `license_expiry_date.read_only` remained `False`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/serializers/incentive.py backend/apps/license/tests/test_incentive_serializers.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - `LicenseItemPlanSerializer` relies on `LicenseItemPlanViewSet.bulk_upsert()` for cross-line capacity and shared-CIF validation; no serializer-level duplicate of those whole-request checks was added.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/services/balance_calculator.py`
+
+- File path: `backend/apps/license/services/balance_calculator.py`
+- Module: License / Services / Balance Calculation
+- Status: COMPLETED
+- Total LOC: 385
+- Lines reviewed: 385
+- Functions reviewed: 12 (`quantize_2dp`, `calculate_credit`, `calculate_debit`, `calculate_allotment`, `calculate_trade`, `calculate_balance`, `calculate_all_components`, `calculate_item_credit_debit`, `calculate_item_balance`, `calculate_available_quantity`, `calculate_item_components`, `calculate_available_value_for_allocation`)
+- Classes reviewed: 2 (`LicenseBalanceCalculator`, `ItemBalanceCalculator`)
+- Arguments reviewed: license objects, import-item objects, aggregate result values, unit price, required-value buffer, zero/negative values, malformed numeric values, empty aggregate results, and trade/allotment/BOE filters.
+- Imports reviewed: 10 import statements.
+- Validation improvements:
+  - Normalized `unit_price` through existing `to_decimal()` before allocation-value comparisons, so `None` or malformed values now fail closed to zero allocation instead of raising `TypeError`.
+  - Normalized `required_value_with_buffer` through `to_decimal()` and ignored non-positive caps, preventing malformed or negative caps from producing exceptions or negative maximum allocations.
+  - Hardened `quantize_2dp()` to normalize its input via `to_decimal()` before quantizing.
+- Command hardening: not applicable; file is a service module.
+- Performance improvements:
+  - Added a module-level `DECIMAL_CENT` constant so `quantize_2dp()` no longer constructs `Decimal("0.01")` on every call.
+  - Reviewed aggregate query paths for export credit, BOE debit, allotment debit, trade debit, item debit, and available quantity; no extra queries introduced.
+- Package replacements:
+  - Replaced legacy `typing.Dict`, `typing.Tuple`, and `typing.Optional` annotations with Python built-in generics and `| None`.
+  - No external dependency introduced.
+- Django built-in replacements:
+  - Existing query aggregation continues to use Django `Sum`, `Coalesce`, `Value`, and `DecimalField`.
+  - Existing BOE debit logic preserves the trade-linked BOE exclusion to avoid double counting.
+- Security improvements:
+  - Allocation calculation now fails closed for missing or invalid unit prices.
+  - Negative required-value caps no longer force negative quantity/value outputs.
+- Dead code removed:
+  - Removed unused legacy typing imports.
+  - Removed unnecessary `# noqa: E402` markers from normal module-level imports.
+- Duplicate logic removed: none; repeated aggregate expressions remain explicit to preserve query intent by component.
+- Regression tests added:
+  - Expanded `backend/apps/license/tests/test_balance_calculator.py` from 27 to 30 focused tests.
+  - Added coverage for `None` unit price, malformed required-value cap, and negative required-value cap.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py -q` -> 30 passed.
+  - `.venv/bin/python -m pytest backend/tests/test_all_conditions.py::TestLicenseBalanceCalculator backend/tests/test_all_conditions.py::TestItemBalanceCalculator -q` -> 26 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `LicenseBalanceCalculator`, `ItemBalanceCalculator`, and verified `quantize_2dp("1.235") == Decimal("1.24")`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/services/balance_calculator.py backend/apps/license/tests/test_balance_calculator.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Item-level aggregate helpers still use direct `Sum()` result keys instead of named `Coalesce(..., output_field=DecimalField())` aliases. This remains behaviorally safe due to `to_decimal(None, DEC_0)`, and no refactor was needed for correctness.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/services/dgft_ownership.py`
+
+- File path: `backend/apps/license/services/dgft_ownership.py`
+- Module: License / Services / DGFT Ownership Fetch
+- Status: COMPLETED
+- Total LOC: 136
+- Lines reviewed: 136
+- Functions reviewed: 2 (`_clean_optional`, `fetch_scrip_ownership`)
+- Classes reviewed: 0
+- Arguments reviewed: scrip number, issue date, IEC, app ID, session ID, CSRF token, proxy, AWSALB cookie, retry attempts, request timeout, request params, request form data, headers, cookies, and exception paths.
+- Imports reviewed: 4 import statements.
+- Validation improvements:
+  - Added required-value validation for scrip number, issue date, IEC, app ID, session ID, and CSRF token before external network I/O.
+  - Added whitespace normalization for all required string inputs.
+  - Added whitespace normalization for optional proxy and AWSALB values.
+  - Preserved the existing return contract: returns `requests.Response` on success and `None` on validation/network failure.
+- Command hardening:
+  - Verified the owning `update_license_ownership` management command help still loads after the service change.
+  - Missing DGFT tokens now fail locally without sending malformed external requests.
+- Performance improvements:
+  - Moved DGFT URL, headers, retry count, retry delay, and timeout to module constants instead of rebuilding static configuration per call.
+  - Preserved existing bounded retry behavior: 4 attempts with exponential backoff for 429/request exceptions.
+- Package replacements:
+  - No new dependency introduced; retained existing `requests` usage.
+- Django built-in replacements: not applicable; file performs external HTTP only.
+- Security improvements:
+  - Prevented whitespace-only session/CSRF/app/license values from being sent to DGFT.
+  - Ensured proxy and AWSALB cookie values are stripped before use.
+  - Kept logs free of token/cookie values; missing-field logs include field names only.
+- Dead code removed:
+  - Removed duplicated per-call static header construction.
+- Duplicate logic removed:
+  - Extracted `_clean_optional()` for reusable input normalization inside the helper.
+- Regression tests added:
+  - Added `backend/apps/license/tests/test_dgft_ownership.py`.
+  - Covered sanitized request payload/cookies/proxy, proxy environment fallback, missing required input skipping network calls, 429 retry behavior, and request-exception exhaustion.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_dgft_ownership.py -q` -> 5 passed.
+  - `.venv/bin/ruff check backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `fetch_scrip_ownership` and `DGFT_URL`.
+  - `.venv/bin/python backend/manage.py update_license_ownership --help` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/services/dgft_ownership.py backend/apps/license/tests/test_dgft_ownership.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Live DGFT behavior was not exercised in the restricted audit environment; network behavior is covered through mocked `requests.post` tests.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/__init__.py`
+
+- File path: `backend/apps/license/migrations/__init__.py`
+- Module: License / Migrations / Package Marker
+- Status: COMPLETED
+- Total LOC: 0
+- Lines reviewed: 0
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 0 import statements.
+- Validation improvements: none; empty package marker is required for Django migration discovery.
+- Command hardening: not applicable.
+- Performance improvements: none.
+- Package replacements: none.
+- Django built-in replacements: none.
+- Security improvements: no executable code present.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; no executable behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/__init__.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/__init__.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/__init__.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `apps.license.migrations`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/__init__.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/models_integration.py`
+
+- File path: `backend/apps/license/models_integration.py`
+- Module: License / Models / Obsolete Service Integration Scaffold
+- Status: COMPLETED
+- Total LOC: 128
+- Lines reviewed: 128
+- Functions reviewed: 8 (`LicenseBalanceMixin.get_balance_cif`, `LicenseBalanceMixin.get_restriction_balances`, `LicenseBalanceMixin._calculate_license_credit`, `LicenseBalanceMixin._calculate_license_debit`, `LicenseBalanceMixin._calculate_license_allotment`, `LicenseBalanceMixin.validate_active`, `LicenseBalanceMixin.update_status_flags`, `LicenseItemBalanceMixin.calculate_max_allocation`)
+- Classes reviewed: 2 (`LicenseBalanceMixin`, `LicenseItemBalanceMixin`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 7 import statements.
+- Validation improvements:
+  - Removed obsolete mixin scaffold that was not imported by live models.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Removed unused import-time dependencies on balance, condition-pool, and validation services.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Not applicable.
+- Security improvements:
+  - Removed dead code paths that could diverge from the production model/service implementations.
+- Dead code removed:
+  - Deleted `backend/apps/license/models_integration.py`.
+- Duplicate logic removed:
+  - Removed duplicate service-wrapper methods that replicated live `LicenseDetailsModel` behavior in `backend/apps/license/models/core.py`.
+- Regression tests added:
+  - No new test file added; deletion was verified by reference scan, compileall, and existing balance/query-builder regressions.
+- Migrations added: none.
+- Verification results:
+  - `rg models_integration|LicenseBalanceMixin|LicenseItemBalanceMixin backend docs tests -g '!docs/audit/audit-database.json' -g '!docs/audit/repository-knowledge-graph.json'` -> no references.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `.venv/bin/python -m pytest backend/apps/license/tests/test_balance_calculator.py backend/apps/license/tests/test_query_builder.py -q` -> 40 passed.
+  - `.venv/bin/ruff check backend/apps/license --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> blocked by 209 pre-existing findings in other pending License files, none related to deleted `models_integration.py`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/models_integration.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - Broad License Ruff remains blocked by pre-existing pending-file findings outside this deleted file.
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this file; it has been removed.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/parsers/__init__.py`
+
+- File path: `backend/apps/license/parsers/__init__.py`
+- Module: License / Parsers / Package Marker
+- Status: COMPLETED
+- Total LOC: 0
+- Lines reviewed: 0
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: 0 import statements.
+- Validation improvements: none; empty package marker is required for parser package imports.
+- Command hardening: not applicable.
+- Performance improvements: none.
+- Package replacements: none.
+- Django built-in replacements: none.
+- Security improvements: no executable code present.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; no executable behavior.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/parsers/__init__.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/parsers/__init__.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/parsers/__init__.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported `apps.license.parsers`.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/parsers/__init__.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py`
+
+- File path: `backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py`
+- Module: License / Migrations / License Item Plan Extensions
+- Status: COMPLETED
+- Total LOC: 38
+- Lines reviewed: 38
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - No changes made; migration adds nullable item name FK, non-negative unit price, multi-plan import-item FK, and import-item index.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Reviewed added `import_item` index for utilization plan lookup.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing generated migration uses Django `AddField`, `AlterField`, `AddIndex`, validators, and swappable auth dependency.
+- Security improvements:
+  - Reviewed nullable item FK `SET_NULL` behavior and import-item cascade behavior.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, 4 operations.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0010_licenseitemplan_item_name_licenseitemplan_unit_price_and_more.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this generated migration.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py`
+
+- File path: `backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py`
+- Module: License / Migrations / License Split Tables
+- Status: COMPLETED
+- Total LOC: 242
+- Lines reviewed: 242
+- Functions reviewed: 2 (`copy_and_verify`, `noop_reverse`)
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 4 import statements.
+- Validation improvements:
+  - Reviewed data-copy order, row-count verification, old-column drop ordering, materialized view drops, new sub-table indexes, and no-op reverse behavior.
+  - No schema behavior changes made.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Preserved bulk SQL insert strategy for four split tables.
+  - Preserved count verification before destructive `RemoveField` operations.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Replaced global `django.db.connection` usage with `schema_editor.connection` so the data migration uses the active migration database connection/alias.
+- Security improvements:
+  - Verified split-table FKs cascade only from parent license rows and ownership `current_owner` remains `PROTECT`.
+  - Verified balance field keeps `MinValueValidator(Decimal("0.00"))`.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added:
+  - No direct migration test added; behavior change is limited to using the migration-provided connection and was verified by import/syntax/static checks.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, `Migration.atomic=False`, 30 operations.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0005_licensebalance_licenseflags_licensenotes_and_more.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Reverse migration intentionally cannot restore old parent columns after the split-table migration drops them; this is documented in the migration and preserved.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py`
+
+- File path: `backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py`
+- Module: License / Migrations / Obsolete Column Drift Repair
+- Status: COMPLETED
+- Total LOC: 39
+- Lines reviewed: 39
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 import statement.
+- Validation improvements:
+  - No changes made; migration intentionally uses idempotent `DROP COLUMN IF EXISTS` SQL to repair deployed database drift.
+- Command hardening: not applicable.
+- Performance improvements:
+  - No query loops or data-copy paths present.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing migration uses Django `RunSQL` with `reverse_sql=noop`.
+- Security improvements:
+  - Reviewed destructive SQL scope; it is limited to two documented obsolete columns on `license_licensedetailsmodel`.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, 1 operation.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0006_drop_obsolete_scheme_notification_columns.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this targeted drift-repair migration.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0009_licenseitemplan.py`
+
+- File path: `backend/apps/license/migrations/0009_licenseitemplan.py`
+- Module: License / Migrations / License Item Plan
+- Status: COMPLETED
+- Total LOC: 37
+- Lines reviewed: 37
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 5 import statements.
+- Validation improvements:
+  - No changes made; migration creates `LicenseItemPlan` with non-negative planned quantity/CIF validators and a one-to-one import-item relationship.
+- Command hardening: not applicable.
+- Performance improvements:
+  - Reviewed `license` index for planned item lookup; no additional index changes made.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing generated migration uses Django `CreateModel`, validators, indexes, and swappable auth dependency.
+- Security improvements:
+  - Reviewed audit FKs to `settings.AUTH_USER_MODEL` with `SET_NULL`.
+  - Reviewed cascading behavior from license/import item to utilization plan.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0009_licenseitemplan.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0009_licenseitemplan.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0009_licenseitemplan.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0009_licenseitemplan.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, 1 operation.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0009_licenseitemplan.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this generated migration.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py`
+
+- File path: `backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py`
+- Module: License / Migrations / Obsolete Split-Table Column Drift Repair
+- Status: COMPLETED
+- Total LOC: 77
+- Lines reviewed: 77
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 1 import statement.
+- Validation improvements:
+  - No changes made; migration intentionally uses idempotent `DROP COLUMN IF EXISTS` SQL for 18 hard-coded obsolete columns.
+- Command hardening: not applicable.
+- Performance improvements:
+  - No query loops or data-copy paths present.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing migration uses Django `RunSQL` with `reverse_sql=noop`.
+- Security improvements:
+  - Reviewed generated SQL source; column names come only from the static `_ORPHAN_COLUMNS` list, not user input.
+  - Reviewed destructive SQL scope; it is limited to documented parent-table columns already moved to split tables.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, 1 operation, 18 orphan columns.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0007_drop_obsolete_subtable_columns.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this targeted drift-repair migration.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py`
+
+- File path: `backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py`
+- Module: License / Migrations / Exporter Archive Field
+- Status: COMPLETED
+- Total LOC: 25
+- Lines reviewed: 25
+- Functions reviewed: 0
+- Classes reviewed: 1 (`Migration`)
+- Arguments reviewed: not applicable.
+- Imports reviewed: 2 import statements.
+- Validation improvements:
+  - No changes made; migration adds `archived_exporter_name` with an empty-string default and changes exporter delete behavior to `SET_NULL`.
+- Command hardening: not applicable.
+- Performance improvements:
+  - No query or index operations present.
+- Package replacements:
+  - No new dependency introduced.
+- Django built-in replacements:
+  - Existing generated migration uses Django `AddField` and `AlterField` operations.
+- Security improvements:
+  - Reviewed cascade behavior change from deleting dependent licenses to preserving licenses with nullable exporter history.
+- Dead code removed: none.
+- Duplicate logic removed: none.
+- Regression tests added: none; migration was verified without behavioral changes.
+- Migrations added: none.
+- Verification results:
+  - `.venv/bin/ruff check backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py --select F401,F821,F811,E741,F841,UP035,UP006,UP045,B904,B007` -> passed.
+  - `.venv/bin/ruff check backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py` -> passed.
+  - `.venv/bin/python -m py_compile backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py` -> passed.
+  - `.venv/bin/python -m compileall -q backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py` -> passed.
+  - `../.venv/bin/python` import verification with `DJANGO_SETTINGS_MODULE=lmanagement.settings` and `django.setup()` -> imported migration, 2 operations.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `git diff --check -- backend/apps/license/migrations/0004_licensedetailsmodel_archived_exporter_name_and_more.py` -> passed.
+  - Security tooling availability check: blocked because `.venv/bin` contains no `bandit`, `pip-audit`, `safety`, or `semgrep` executable.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - None for this generated migration.
+- Status: COMPLETED
+
+## 2026-07-16 - `backend/apps/license/templates/license/formset.html` Recheck
+
+- File path: `backend/apps/license/templates/license/formset.html`
+- Module: License / Legacy Django Templates / Formset Partial
+- Status: COMPLETED - REMOVED
+- Total LOC: 122
+- Lines reviewed: 122
+- Functions reviewed: 0
+- Classes reviewed: 0
+- Arguments reviewed: not applicable.
+- Imports reviewed: none.
+- Validation improvements:
+  - No runtime validation retained because the partial no longer has a live include or render path.
+  - Rechecked formset management-form rendering, hidden/visible field rendering, error rendering, empty-form template behavior, delete-button behavior, prefix branching, and table structure before removal.
+- Template dependency analysis:
+  - Recheck was triggered after `backend/apps/license/templates/license/item_list_edit.html` was verified dead and removed.
+  - Repository-wide source search found no remaining live usage outside audit docs/state for `license/formset.html`.
+- Package replacements:
+  - No dependency introduced.
+- Django built-in replacements:
+  - Removal preferred over refactoring because React is the primary frontend and the Django template partial was verified dead.
+- React built-in replacements:
+  - None; no React entry HTML touched.
+- Performance improvements:
+  - Removed unreachable legacy formset rendering and inline form-template markup.
+- Security improvements:
+  - Removed unreachable legacy formset markup and delete controls that depended on a now-deleted parent template.
+- Dead code removed:
+  - Deleted `backend/apps/license/templates/license/formset.html`.
+- Duplicate logic removed:
+  - Removed a dead formset partial that duplicated legacy inline formset rendering patterns.
+- Files split: none.
+- Files merged: none.
+- Scripts merged: none.
+- Tests added:
+  - None; deletion was covered by dependency analysis and framework checks.
+- Migrations added:
+  - None.
+- Verification results:
+  - Source dependency search -> no live source references outside audit docs/state.
+  - `.venv/bin/python -m pytest backend/apps/license/tests -q` -> passed, 300 passed, 2 skipped.
+  - `.venv/bin/ruff check docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python -m py_compile docs/audit/build_audit_state.py` -> passed.
+  - `.venv/bin/python backend/manage.py check` -> passed, no issues.
+  - `.venv/bin/python backend/manage.py makemigrations license --check --dry-run` -> passed, no changes detected; emitted a sandboxed Postgres connection warning only.
+  - `.venv/bin/python -m compileall -q backend/apps/license` -> passed.
+  - `git diff --check -- backend/apps/license/templates/license/formset.html docs/audit/build_audit_state.py docs/audit/phase-06-license-report.md` -> passed.
+- Blocked tools:
+  - `bandit`, `pip-audit`, `safety`, and `semgrep` unavailable in `.venv/bin`.
+- Remaining technical debt:
+  - Stale `license-item-update` links remain in blocked legacy templates and should be handled when those files are selected or rechecked.
+- Status: COMPLETED - REMOVED

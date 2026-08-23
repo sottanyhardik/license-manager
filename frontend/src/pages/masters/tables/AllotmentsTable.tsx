@@ -1,9 +1,13 @@
-import { toast } from "sonner";
 import { Inbox } from "lucide-react";
-import { EntityCard, DetailTable } from "../../../components/ui";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import api from "../../../api/axios";
-import { saveFilterState } from "../../../utils/filterPersistence";
+import EntityCard from "../../../components/primitives/EntityCard";
+import DetailTable from "../../../components/primitives/DetailTable";
 import { openPdfPreview } from "../../../utils/pdfPreview";
+import { saveFilterState } from "../../../utils/filterPersistence";
+import { openLicenseCopyPdf } from "../../../utils/licenseCopyPdf";
+import { formatTruthyIndianNumber, formatTruthyInr } from "../masterDisplayFormatters";
 
 interface AllotmentsTableProps {
     loading: boolean;
@@ -42,14 +46,14 @@ export default function AllotmentsTable({
                         ) : (
                             <div>
                                 {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
-                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
+                                    const fmtInr = (val) => formatTruthyInr(val);
+                                    const fmtQty = (val) => formatTruthyIndianNumber(val, { maximumFractionDigits: 3 });
                                     const detailRows = item.allotment_details || [];
                                     return (
                                         <EntityCard
                                             key={item.id}
                                             accent={item.is_boe ? 'success' : 'primary'}
-                                            title={item.invoice || <span style={{ fontStyle: 'italic', color: 'var(--text-tertiary)', fontWeight: 400 }}>No Invoice</span>}
+                                            title={item.invoice || <span className="italic font-normal text-muted-foreground/70">No Invoice</span>}
                                             headerChips={[
                                                 item.estimated_arrival_date && { icon: 'calendar3', label: item.estimated_arrival_date },
                                                 item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
@@ -63,6 +67,8 @@ export default function AllotmentsTable({
                                                 { label: 'Req Qty',      value: fmtQty(item.required_quantity) },
                                                 { label: 'Req Value',    value: fmtInr(item.required_value) },
                                                 { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
+                                                { label: 'Allotted Items', value: item.allotted_items_count ?? 0 },
+                                                { label: 'Allocated Licenses', value: item.allocated_licenses_count ?? 0 },
                                             ]}
                                             actions={[
                                                 canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
@@ -107,13 +113,25 @@ export default function AllotmentsTable({
                                                 <DetailTable
                                                     columns={[
                                                         { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: v => v ? <span style={{ color: 'var(--primary-color)' }}>{v}</span> : '—' },
+                                                            render: (v, row) => v && row.license_id ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openLicenseCopyPdf(row.license_id, v)}
+                                                                    className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
+                                                                    title="Open License Copy PDF"
+                                                                    aria-label={`Open License Copy PDF for ${v}`}
+                                                                >
+                                                                    {v}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-primary">{v || '—'}</span>
+                                                            ) },
                                                         { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
                                                         { key: 'product_description', label: 'Item',       muted: true },
                                                         { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
                                                             render: v => fmtQty(v) },
                                                         { key: 'cif_fc',              label: 'CIF (FC)',   align: 'right', nowrap: true,
-                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                                            render: v => formatTruthyIndianNumber(v, { maximumFractionDigits: 2 }) },
                                                         { key: 'cif_inr',             label: 'CIF (INR)',  align: 'right', nowrap: true, bold: true,
                                                             render: v => fmtInr(v) },
                                                     ]}
@@ -123,17 +141,47 @@ export default function AllotmentsTable({
                                             )}
                                         >
                                             {(item.item_name || item.dfia_list) && (
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-                                                    <div style={{ flex: 1, minWidth: 200 }}>
-                                                        <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Item</div>
-                                                        <div style={{ fontSize: 14.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-                                                            {item.item_name || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No item name</span>}
+                                                <div className="flex flex-wrap items-start gap-4">
+                                                    <div className="min-w-[200px] flex-1">
+                                                        <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Item</div>
+                                                        <div className="text-[14.5px] font-medium text-foreground">
+                                                            {item.item_name || <span className="italic text-muted-foreground/70">No item name</span>}
                                                         </div>
                                                     </div>
                                                     {item.dfia_list && (
-                                                        <div style={{ flex: 1, minWidth: 140 }}>
-                                                            <div style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Licenses</div>
-                                                            <div style={{ fontSize: 13.5, color: 'var(--primary-color)', fontWeight: 500 }}>{item.dfia_list}</div>
+                                                        <div className="min-w-[140px] flex-1">
+                                                            <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Licenses</div>
+                                                            <div className="text-[13.5px] font-medium text-primary">
+                                                                {(() => {
+                                                                    const licenseNumbers = item.dfia_list.split(', ').filter(Boolean);
+                                                                    const licenseMap = new Map();
+                                                                    (item.allotment_details || []).forEach(detail => {
+                                                                        if (detail.license_number) {
+                                                                            licenseMap.set(detail.license_number, detail.license_id);
+                                                                        }
+                                                                    });
+                                                                    return (
+                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                            {licenseNumbers.map((licNum) => {
+                                                                                const licenseId = licenseMap.get(licNum);
+                                                                                return (
+                                                                                    <button
+                                                                                        key={licNum}
+                                                                                        type="button"
+                                                                                        onClick={() => licenseId && openLicenseCopyPdf(licenseId, licNum)}
+                                                                                        disabled={!licenseId}
+                                                                                        className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer', !licenseId && 'opacity-50 cursor-not-allowed')}
+                                                                                        title="Open License Copy PDF"
+                                                                                        aria-label={`Open License Copy PDF for ${licNum}`}
+                                                                                    >
+                                                                                        {licNum}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>

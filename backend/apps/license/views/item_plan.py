@@ -136,6 +136,26 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             "bulk-upsert or via SionRulePlanningService. Direct PATCH is not allowed."
         )
 
+    def destroy(self, request, *args, **kwargs):
+        """Remove an unused line or supersede one with immutable debit links.
+
+        ``AllotmentItems.plan_line`` is a ledger identity.  Deleting a used
+        split asks Django to set the FK to NULL, which can collide with another
+        split of the same item/allotment under the legacy NULL uniqueness rule.
+        A superseded row is no longer returned or allocatable, while its audit
+        relation remains intact.
+        """
+        instance = self.get_object()
+        from apps.allotment.models import AllotmentItems
+
+        if AllotmentItems.objects.filter(plan_line=instance).exists():
+            from apps.license.services.plan_lifecycle import PlanLifecycleService
+
+            PlanLifecycleService.transition(instance, "supersede")
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=["post"], url_path="bulk-upsert")
     def bulk_upsert(self, request):
         """Replace one license's manual plan through the canonical writer."""

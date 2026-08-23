@@ -192,6 +192,36 @@ def test_bulk_replace_supersedes_used_split_lines_without_nulling_allotment_iden
 
 
 @pytest.mark.django_db
+def test_delete_used_plan_supersedes_instead_of_nulling_allotment_identity(
+    license_manager_client, planned_license,
+):
+    license_obj, item = planned_license
+    plan = LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=item,
+        planned_quantity=Decimal("10.000"),
+        unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("10.00"),
+    )
+    allotment = AllotmentModel.objects.create(
+        company=license_obj.exporter, required_quantity=Decimal("10.000"),
+    )
+    debit = AllotmentItems.objects.create(
+        allotment=allotment, item=item, plan_line=plan,
+        allocation_basis="PLAN", search_mode="PLAN", qty=Decimal("1.000"), cif_fc=Decimal("1.00"),
+    )
+
+    response = license_manager_client.delete(f"{PLANS_URL}{plan.pk}/")
+
+    assert response.status_code == 204
+    plan.refresh_from_db()
+    debit.refresh_from_db()
+    assert not plan.is_active
+    assert debit.plan_line_id == plan.id
+    assert license_manager_client.get(f"{PLANS_URL}{plan.pk}/").status_code == 404
+
+
+@pytest.mark.django_db
 def test_bulk_over_capacity_returns_persisted_valid_portion_and_shortage(license_manager_client, planned_license):
     license_obj, item = planned_license
     response = _bulk(license_manager_client, license_obj, (item, "100.001", "1.00", "100.01"))

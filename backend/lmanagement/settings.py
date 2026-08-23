@@ -1,9 +1,20 @@
 # FILE: lmanagement/settings.py
 import os
 import json
+import warnings
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
+
+# docxtpl imports docxcompose, whose current release still imports the
+# deprecated pkg_resources compatibility API.  Ignore only that known upstream
+# warning; all other deprecation warnings remain visible to operators.
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated as an API.*",
+    category=UserWarning,
+    module=r"docxcompose\.properties",
+)
 
 # ---------------------------------------------------------------------
 # Base Paths

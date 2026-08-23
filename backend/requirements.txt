@@ -23,6 +23,10 @@ pyzbar==0.1.9
 requests>=2.31.0
 psycopg==3.3.3
 docxtpl==0.20.2
+# docxcompose (used by docxtpl) still imports pkg_resources.  Setuptools 81
+# removes that compatibility API, so keep the last supported major range until
+# docxcompose releases a pkg_resources-free version.
+setuptools<81
 
 # numpy is used by apps.core.scripts.calculation.optimize_milk_distribution
 # (called from apps.license.models.get_glass_formers).

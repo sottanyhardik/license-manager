@@ -87,15 +87,24 @@ def reduce_high_rate_first(*, prior_sequence_cif, members, actual_balance_cif):
         )
         excess = max(prior + sum((r["new_planned_cif"] for r in rows), ZERO) - cap, ZERO)
     adjusted = prior + sum((r["new_planned_cif"] for r in rows), ZERO)
-    if adjusted > cap:
-        raise ValueError("Actual Balance CIF cap cannot be satisfied by active percentage members.")
+    # Persisted plans can predate a later BOE/allotment debit.  In that case
+    # the immutable historical/other-plan portion alone may exceed today's
+    # live balance and no percentage-child price reduction can close the gap.
+    # This is a reconciliation warning, not a reason for every read endpoint
+    # (licence detail, plan list, reports) to raise HTTP 500.
+    cap_unresolved = adjusted > cap
     for row in rows:
         row.setdefault("effective_unit_price", row["unit_rate"])
         row["adjustment_reason"] = "ACTUAL_BALANCE_CIF_CAP" if row["cif_cap_reduction_cif"] else None
     return {"candidate_new_planned_cif": candidate, "actual_balance_cif": cap,
             "cif_excess_before_adjustment": max(candidate-cap, ZERO),
             "adjusted_new_planned_cif": adjusted, "final_balance_cif": max(cap-adjusted, ZERO),
-            "members": rows, "strategy": "HIGHEST_RATE_FIRST"}
+            "members": rows, "strategy": "HIGHEST_RATE_FIRST",
+            "cap_unresolved": cap_unresolved,
+            "warning": (
+                "Actual balance is already exceeded by immutable historical or non-percentage plan usage."
+                if cap_unresolved else None
+            )}
 
 
 def solve_balancing_price_group(*, base_qty, members, group_available_cif, group_available_qty=None, group_target_cif=None):

@@ -22,6 +22,7 @@ from apps.core.models import (
     ItemNameModel,
     NotificationNumber,
     PortModel,
+    PurchaseStatus,
     SchemeCode,
     SionNormClassModel,
 )
@@ -142,6 +143,12 @@ class Command(BaseCommand):
         )
         port = _get_or_report_conflict(
             PortModel, {"code": "E2E"}, {"name": "E2E Browser Port"}, "port",
+        )
+        _get_or_report_conflict(
+            PurchaseStatus,
+            {"code": "E2"},
+            {"label": "E2E Browser Purchase Status", "is_active": True, "display_order": 1},
+            "purchase status",
         )
 
         license_obj, created = LicenseDetailsModel.objects.get_or_create(

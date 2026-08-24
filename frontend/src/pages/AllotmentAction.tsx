@@ -43,7 +43,8 @@ interface AllocationInitialization {
 }
 
 interface AvailableItem {
-    id: number;
+    id: number | string;
+    plan_line_id?: number;
     license_id?: number;
     license?: number;
     license_number: string;
@@ -111,6 +112,65 @@ function getAllocationErrorMessage(error: unknown): string {
     const item = data?.item_name;
     if (data?.code === "NO_PLANNED_BALANCE") return `Cannot allocate ${item || "this item"}: no planned quantity or value remains.`;
     return data?.message || data?.detail || data?.error || data?.errors?.[0]?.message || data?.errors?.[0]?.error || "The allocation could not be completed.";
+}
+
+type AllottedDetailGroup = Record<string, any> & {
+    allocationIds: Array<string | number>;
+    allocationCount: number;
+};
+
+function addDecimalStrings(left: unknown, right: unknown): string {
+    const parts = (value: unknown) => {
+        const text = String(value ?? "0").trim();
+        const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
+        return match ? { negative: match[1] === "-", whole: match[2], fraction: match[3] || "" } : { negative: false, whole: "0", fraction: "" };
+    };
+    const a = parts(left);
+    const b = parts(right);
+    const scale = Math.max(a.fraction.length, b.fraction.length);
+    const toUnits = ({ negative, whole, fraction }: ReturnType<typeof parts>) => {
+        const magnitude = BigInt(`${whole}${fraction.padEnd(scale, "0")}`);
+        return negative ? -magnitude : magnitude;
+    };
+    const sum = toUnits(a) + toUnits(b);
+    if (scale === 0) return sum.toString();
+    const negative = sum < 0n;
+    const digits = (negative ? -sum : sum).toString().padStart(scale + 1, "0");
+    return `${negative ? "-" : ""}${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+}
+
+/**
+ * The allocation ledger keeps an entry per canonical plan/source identity.
+ * The operator-facing table is easier to reconcile at the licence + serial
+ * level, so aggregate only its display projection.  Mutations still target
+ * the original ledger IDs exposed in `allocationIds`.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function aggregateAllottedDetails(details: Array<Record<string, any>>): AllottedDetailGroup[] {
+    const groups = new Map<string, AllottedDetailGroup>();
+    for (const detail of details) {
+        const licenseNumber = String(detail.license_number ?? "").trim();
+        const serialNumber = String(detail.serial_number ?? "").trim();
+        // Do not collapse incomplete identifiers: only a known licence/serial
+        // pair represents the same displayed source item.
+        const key = licenseNumber && serialNumber
+            ? `${licenseNumber}\u0000${serialNumber}`
+            : `allocation\u0000${detail.id}`;
+        const existing = groups.get(key);
+        if (existing) {
+            existing.qty = addDecimalStrings(existing.qty, detail.qty);
+            existing.cif_fc = addDecimalStrings(existing.cif_fc, detail.cif_fc);
+            existing.allocationIds.push(detail.id);
+            existing.allocationCount += 1;
+        } else {
+            groups.set(key, {
+                ...detail,
+                allocationIds: [detail.id],
+                allocationCount: 1,
+            });
+        }
+    }
+    return [...groups.values()];
 }
 
 export default function AllotmentAction({ allotmentId: propId, isModal = false, onClose }) {
@@ -246,6 +306,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         queryKey: ['allotments', id, 'info'],
         queryFn: () => api.get(`allotments/${id}/`).then(r => r.data),
         enabled: Boolean(id),
+        // Allocation edits explicitly invalidate this key.  Avoid refetching
+        // a stable header merely because the operator returns to this tab.
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
     });
 
     // The server is authoritative for route defaults.  In particular, a
@@ -260,6 +324,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         queryKey: ['allotment-allocation-initialization', id],
         queryFn: () => api.get(`allotment-actions/${id}/allocation-initialization/`).then(r => r.data),
         enabled: Boolean(id),
+        // Route defaults are immutable for the mounted allocation session;
+        // the candidate list remains the only post-mutation authority.
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
     });
 
     const itemFilterOptions = useMemo(() => {
@@ -269,6 +337,11 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         }
         return options;
     }, [isPlanMode, rawPlannedItemNames, availableItemNames, allotment]);
+
+    const allottedDetailGroups = useMemo(
+        () => aggregateAllottedDetails(allotment?.allotment_details || []),
+        [allotment?.allotment_details],
+    );
 
     // Do not infer a Plan default from target-item presence.  The backend
     // verifies the current plan identity and supplies the only valid default.
@@ -384,6 +457,23 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [filtersReady, availableLicensesData, filters.debit_based_on, pageSize]);
     const totalItems: number = availableLicensesData?.count ?? 0;
     const totalPages: number = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
+    // Candidate grouping and ID lookup are presentation-only, but allocation
+    // drafts change on every keystroke.  Keep that local input update from
+    // repeatedly regrouping the full server page or linearly searching it.
+    const availableItemsById = useMemo(
+        () => new Map(availableItems.map(item => [item.id, item])),
+        [availableItems],
+    );
+    const groupedAvailableItems = useMemo(() => {
+        const groups = new Map<string, AvailableItem[]>();
+        for (const item of availableItems) {
+            const key = String(item.license_number || item.license || "unknown");
+            const group = groups.get(key);
+            if (group) group.push(item);
+            else groups.set(key, [item]);
+        }
+        return [...groups.entries()];
+    }, [availableItems]);
 
     // Track unsaved changes
     useEffect(() => {
@@ -441,7 +531,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     // vs Cheese) this allocation was made against, so the
                     // backend can decrement THAT line's own remaining balance
                     // independently of its siblings (see allocate_items).
-                    ...(followsPlan ? { plan_line_id: payload.item.id } : {}),
+                    ...(followsPlan ? { plan_line_id: payload.item.plan_line_id ?? payload.item.id } : {}),
                     debit_based_on: filters.debit_based_on,
                     search_mode: filters.debit_based_on,
                     allocation_basis: followsPlan ? "PLAN" : "ACTUAL",
@@ -499,6 +589,18 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             const errorMsg = getAllocationErrorMessage(err);
             setError(errorMsg);
             toast.error(errorMsg);
+            const responseErrors = (err as { response?: { data?: { errors?: Array<{ code?: string }> } } }).response?.data?.errors || [];
+            // A stale candidate can race a completed allocation from another
+            // tab/operator (or an earlier request that has just committed).
+            // The server's exact plan-line ledger remains authoritative; once
+            // it reports exhaustion, replace the stale row instead of leaving
+            // an enabled Confirm button that can only fail again.
+            if (responseErrors.some(({ code }) => code === "NO_PLANNED_BALANCE" || code === "NO_PLANNED_QTY_BALANCE" || code === "NO_PLANNED_CIF_BALANCE")) {
+                void Promise.all([
+                    qc.invalidateQueries({ queryKey: ['allotments', id] }),
+                    refreshAvailableLicenses(),
+                ]);
+            }
         },
     });
 
@@ -570,7 +672,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [filters.debit_based_on, availableItems, calculateMaxAllocation]);
 
     const handleQuantityChange = (itemId, qty) => {
-        const item = availableItems.find(i => i.id === itemId);
+        const item = availableItemsById.get(itemId);
         const maximum = item && calculateMaxAllocation(item);
         if (!item || !maximum?.enabled) return;
 
@@ -600,7 +702,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     };
 
     const handleValueChange = (itemId, value) => {
-        const item = availableItems.find(i => i.id === itemId);
+        const item = availableItemsById.get(itemId);
         if (!item || !calculateMaxAllocation(item).enabled) return;
         setAllocationData(previous => ({
             ...previous,
@@ -903,13 +1005,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <h6 className="font-semibold text-foreground flex items-center gap-1.5">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
-                            <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-bold text-success">{allotment.allotment_details.length}</span>
+                            <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-bold text-success">{allottedDetailGroups.length}</span>
+                            {allottedDetailGroups.length !== allotment.allotment_details.length && (
+                                <span className="text-[11px] font-normal text-muted-foreground">merged from {allotment.allotment_details.length} allocations</span>
+                            )}
                         </h6>
                         <button
                             className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
                             onClick={() => {
                                     const headers = ['License', 'Serial', 'Description', 'HSN Code', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
-                                    const rows = allotment.allotment_details.map(detail => {
+                                    const rows = allottedDetailGroups.map(detail => {
                                         const transferInfo = [detail.current_owner, detail.file_transfer_status].filter(Boolean).join(' - ') || '-';
                                         return [
                                             detail.license_number,
@@ -924,7 +1029,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                             parseFloat(detail.cif_fc || 0).toFixed(2)
                                         ];
                                     });
-                                    if (allotment.allotment_details.length > 1) {
+                                    if (allottedDetailGroups.length > 1) {
                                         rows.push([
                                             '', '', '', '', '', '', '', 'Total DFIA allocation',
                                             parseInt(allotment.alloted_quantity || 0).toLocaleString(),
@@ -965,10 +1070,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tr>
                                 </thead>
                                 <tbody>
-                                {allotment.allotment_details.map((detail) => (
-                                    <tr key={detail.id} className="border-b border-border/40 transition-colors hover:bg-muted/30">
+                                {allottedDetailGroups.map((detail) => (
+                                    <tr key={detail.allocationIds.join("-")} className="border-b border-border/40 transition-colors hover:bg-muted/30">
                                         <td className="px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">{detail.license_number}</td>
-                                        <td className="px-3 py-1.5 text-[12.5px] whitespace-nowrap"><span className="font-medium">{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" /></td>
+                                        <td className="px-3 py-1.5 text-[12.5px] whitespace-nowrap"><span className="font-medium">{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" />{detail.allocationCount > 1 && <span className="ml-1 text-[10px] text-muted-foreground">×{detail.allocationCount}</span>}</td>
                                         <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.product_description}</td>
                                         <td className="px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground whitespace-nowrap">{detail.hs_code || '-'}</td>
                                         <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.exporter}</td>
@@ -995,23 +1100,29 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseInt(detail.qty || 0).toLocaleString()}</td>
                                         <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
                                         <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                                            <button
-                                                className="flex size-7 items-center justify-center rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/10 hover:border-destructive cursor-pointer transition-colors"
-                                                onClick={() => handleDeleteAllotment(detail.id)}
-                                                disabled={deleteAllocationMutation.isPending && deleteAllocationMutation.variables === detail.id}
-                                                title="Remove this allocation"
-                                            >
-                                                {deleteAllocationMutation.isPending && deleteAllocationMutation.variables === detail.id ? (
-                                                    <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                                ) : (
-                                                    <Trash2 className="size-4" aria-hidden="true" />
-                                                )}
-                                            </button>
+                                            <div className="flex justify-center gap-1">
+                                                {detail.allocationIds.map((allocationId) => (
+                                                    <button
+                                                        key={allocationId}
+                                                        className="flex size-7 items-center justify-center rounded border border-destructive/30 text-destructive/70 hover:bg-destructive/10 hover:border-destructive cursor-pointer transition-colors"
+                                                        onClick={() => handleDeleteAllotment(allocationId)}
+                                                        disabled={deleteAllocationMutation.isPending && deleteAllocationMutation.variables === allocationId}
+                                                        title={detail.allocationCount > 1 ? `Remove allocation ${allocationId}` : "Remove this allocation"}
+                                                        aria-label={detail.allocationCount > 1 ? `Remove allocation ${allocationId}` : "Remove this allocation"}
+                                                    >
+                                                        {deleteAllocationMutation.isPending && deleteAllocationMutation.variables === allocationId ? (
+                                                            <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                                                        ) : (
+                                                            <Trash2 className="size-4" aria-hidden="true" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
                                 </tbody>
-                                {allotment.allotment_details.length > 1 && <tfoot>
+                                {allottedDetailGroups.length > 1 && <tfoot>
                                     <tr className="bg-primary/5 border-t-2 border-primary/30">
                                         <th scope="row" colSpan={8} className="px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total DFIA allocation</th>
                                         <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Quantity">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
@@ -1078,18 +1189,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                     )}
 
                     <div className="allotment-candidate-queue max-h-[650px] overflow-y-auto pr-1">
-                        {(() => {
-                            // Group items by license
-                            const groupedByLicense: Record<string, AvailableItem[]> = {};
-                            availableItems.forEach(item => {
-                                const key = item.license_number || item.license || 'unknown';
-                                if (!groupedByLicense[key]) {
-                                    groupedByLicense[key] = [];
-                                }
-                                groupedByLicense[key].push(item);
-                            });
-
-                            return Object.entries(groupedByLicense).map(([licenseKey, groupItems]) => {
+                        {groupedAvailableItems.map(([licenseKey, groupItems]) => {
                                 const firstItem = groupItems[0];
                                 const licenseId = firstItem.license_id || firstItem.license;
 
@@ -1261,8 +1361,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                         </div>
                                     </div>
                                 );
-                            });
-                        })()}
+                            })}
                     </div>
 
                     {tableLoading && (

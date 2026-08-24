@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
-import AllotmentAction from "./AllotmentAction";
+import AllotmentAction, { aggregateAllottedDetails } from "./AllotmentAction";
 
 const navigate = vi.fn();
 
@@ -284,6 +284,36 @@ describe("AllotmentAction canonical paired Max", () => {
     });
 });
 
+describe("Allotted Items display aggregation", () => {
+    it("merges only matching licence and serial display rows with exact Qty and CIF totals", () => {
+        const groups = aggregateAllottedDetails([
+            { id: 41, license_number: "0311054264", serial_number: "3", qty: "13626.000", cif_fc: "9810.72" },
+            { id: 42, license_number: "0311054264", serial_number: "3", qty: "0.125", cif_fc: "0.08" },
+            { id: 43, license_number: "0311054264", serial_number: "4", qty: "1.000", cif_fc: "1.00" },
+        ]);
+
+        expect(groups).toHaveLength(2);
+        expect(groups[0]).toMatchObject({
+            license_number: "0311054264",
+            serial_number: "3",
+            qty: "13626.125",
+            cif_fc: "9810.80",
+            allocationIds: [41, 42],
+            allocationCount: 2,
+        });
+        expect(groups[1].allocationIds).toEqual([43]);
+    });
+
+    it("does not merge ledger entries with incomplete source identifiers", () => {
+        const groups = aggregateAllottedDetails([
+            { id: 51, license_number: "", serial_number: "", qty: "1.000", cif_fc: "1.00" },
+            { id: 52, license_number: "", serial_number: "", qty: "2.000", cif_fc: "2.00" },
+        ]);
+
+        expect(groups.map(group => group.allocationIds)).toEqual([[51], [52]]);
+    });
+});
+
 describe("AllotmentAction live candidate queue", () => {
     function queueCandidate(sequence: number) {
         return {
@@ -368,5 +398,30 @@ describe("AllotmentAction live candidate queue", () => {
         rejectPost({ response: { data: { message: "Server cap changed" } } });
         await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Server cap changed"));
         expect(screen.getAllByTitle("View license document")).toHaveLength(1);
+    });
+
+    it("refreshes the authoritative queue after an exhausted-plan rejection so a stale candidate is not left actionable", async () => {
+        let candidateRequests = 0;
+        mockedGet.mockImplementation((url: string) => {
+            if (url === "masters/notification-numbers/") return Promise.resolve({ data: { results: [] } });
+            if (url === "item-report/available-items/") return Promise.resolve({ data: [] });
+            if (url === "item-report/planned-item-names/") return Promise.resolve({ data: [{ id: 216, name: "ALUMINIUM FOIL" }] });
+            if (url === "allotments/9722/") return Promise.resolve({ data: allotment });
+            if (url === "allotment-actions/9722/allocation-initialization/") return Promise.resolve({ data: initialization });
+            if (url === "allotment-actions/9722/available-licenses/") {
+                candidateRequests += 1;
+                return Promise.resolve({ data: candidateRequests === 1 ? { count: 1, available_items: [availableItem(1, "ALUMINIUM FOIL")] } : { count: 0, available_items: [] } });
+            }
+            return Promise.reject(new Error(`Unexpected GET ${url}`));
+        });
+        mockedPost.mockRejectedValue({ response: { data: { errors: [{ code: "NO_PLANNED_BALANCE", error: "No planned balance" }] } } });
+
+        renderScreen();
+        await screen.findByPlaceholderText("Qty");
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+        await waitFor(() => expect(candidateRequests).toBeGreaterThanOrEqual(2));
+        expect(await screen.findByText("No applicable active plan")).toBeInTheDocument();
     });
 });

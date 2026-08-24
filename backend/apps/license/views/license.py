@@ -411,7 +411,15 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # quantity change, so summing persisted candidate CIF is incorrect.
         from apps.license.services.planning_usage_reconciliation import reconcile_license_plans
         reconciliation = reconcile_license_plans(instance.pk)
-        plan_rows = LicenseItemPlan.objects.filter(license=instance).values_list('id', 'planned_cif_fc')
+        # Replaced/superseded plans are an audit trail, not current planning
+        # capacity.  Match the active-plan predicate used by the plan list and
+        # reconciliation so historical rows can never inflate this summary.
+        plan_rows = LicenseItemPlan.objects.filter(
+            license=instance,
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        ).values_list('id', 'planned_cif_fc')
         new_plan_cif = sum((
             Decimal(str(reconciliation['plans'].get(plan_id, {}).get('adjusted_planned_cif', planned_cif or 0)))
             for plan_id, planned_cif in plan_rows

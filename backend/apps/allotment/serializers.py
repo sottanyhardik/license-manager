@@ -8,6 +8,26 @@ from apps.core.serializers.fields import IndianDateField
 from apps.license.serializers.license import PlanningOptionSerializer
 
 
+class ListProjectionDecimalField(serializers.DecimalField):
+    """Serialize a list annotation exactly like the legacy model property.
+
+    ``SerializerMethodField`` leaves Decimals in ``response.data`` whereas the
+    old ``DecimalField`` contract exposes decimal strings.  This field keeps
+    that contract while letting the optimized list queryset provide an
+    aggregate projection.
+    """
+
+    def __init__(self, *, annotation_name=None, fallback_attr, **kwargs):
+        self.annotation_name = annotation_name
+        self.fallback_attr = fallback_attr
+        super().__init__(read_only=True, **kwargs)
+
+    def get_attribute(self, instance):
+        if self.annotation_name and hasattr(instance, self.annotation_name):
+            return getattr(instance, self.annotation_name)
+        return getattr(instance, self.fallback_attr)
+
+
 class AllotmentItemSerializer(serializers.ModelSerializer):
     # Read-only fields from cached properties. allow_null=True on every chain
     # that walks self.item.license.* so an item or license that's been unset
@@ -134,11 +154,22 @@ class AllotmentSerializer(serializers.ModelSerializer):
     is_boe = serializers.SerializerMethodField(read_only=True)
 
     # Cached property fields
-    required_value = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
-    dfia_list = serializers.CharField(read_only=True, required=False)
-    balanced_quantity = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
-    alloted_quantity = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
-    allotted_value = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    required_value = ListProjectionDecimalField(
+        fallback_attr="required_value", max_digits=15, decimal_places=2
+    )
+    dfia_list = serializers.SerializerMethodField()
+    balanced_quantity = ListProjectionDecimalField(
+        annotation_name="_list_balanced_quantity", fallback_attr="balanced_quantity",
+        max_digits=15, decimal_places=2,
+    )
+    alloted_quantity = ListProjectionDecimalField(
+        annotation_name="_list_allotted_quantity", fallback_attr="alloted_quantity",
+        max_digits=15, decimal_places=2,
+    )
+    allotted_value = ListProjectionDecimalField(
+        annotation_name="_list_allotted_value", fallback_attr="allotted_value",
+        max_digits=15, decimal_places=2,
+    )
 
     # Foreign key display fields
     company_name = serializers.CharField(source='company.name', read_only=True, required=False)
@@ -163,10 +194,16 @@ class AllotmentSerializer(serializers.ModelSerializer):
         Calculate is_boe at runtime based on whether the allotment has a bill of entry.
         Returns True if allotment.bill_of_entry.exists(), else False.
         """
-        try:
-            return obj.bill_of_entry.exists()
-        except Exception:
-            return False
+        return bool(getattr(obj, "_list_is_boe", obj.is_boe))
+
+    def _prefetched_details(self, obj):
+        return getattr(obj, '_prefetched_objects_cache', {}).get('allotment_details')
+
+    def get_dfia_list(self, obj):
+        details = self._prefetched_details(obj)
+        if details is None:
+            return obj.dfia_list
+        return ', '.join(filter(None, (detail.license_number for detail in details)))
 
     def get_display_label(self, obj):
         """Generate display label: Company Name - Invoice - Required Qty"""
@@ -181,10 +218,9 @@ class AllotmentSerializer(serializers.ModelSerializer):
 
     def get_allotted_items_count(self, obj):
         """Count of items allocated to this allotment"""
-        try:
-            return obj.allotment_details.count()
-        except Exception:
-            return 0
+        if hasattr(obj, '_list_allotted_items_count'):
+            return obj._list_allotted_items_count
+        return obj.allotment_details.count()
 
     def get_allocated_licenses_count(self, obj):
         """Count of unique licenses that have items allocated to this allotment"""
@@ -193,7 +229,15 @@ class AllotmentSerializer(serializers.ModelSerializer):
 
             # Count unique licenses in allotment_details
             # Only count if there's still balanced quantity (otherwise fully allocated)
-            if obj.balanced_quantity and obj.balanced_quantity > DEC_0:
+            balanced_quantity = (
+                obj._list_balanced_quantity
+                if hasattr(obj, "_list_balanced_quantity")
+                else obj.balanced_quantity
+            )
+            if balanced_quantity and balanced_quantity > DEC_0:
+                annotated = getattr(obj, '_list_allocated_licenses_count', None)
+                if annotated is not None:
+                    return annotated
                 allocated_licenses = obj.allotment_details.values_list('item__license_id', flat=True).distinct()
                 return len(set(allocated_licenses))
             return 0
@@ -209,6 +253,24 @@ class AllotmentSerializer(serializers.ModelSerializer):
         """
         if not obj.planning_target_item_id:
             return None
+        target = obj.planning_target_item
+        cached_plans = getattr(target, "_prefetched_objects_cache", {}).get("plan_lines")
+        if cached_plans is not None:
+            sions = set()
+            for plan in cached_plans:
+                license_obj = plan.import_item.license
+                for export_item in license_obj.export_license.all():
+                    sions.add(
+                        export_item.norm_class.norm_class
+                        if export_item.norm_class_id
+                        else None
+                    )
+                    if len(sions) > 1:
+                        return None
+            return next(iter(sions)) if len(sions) == 1 else None
+
+        # Correct fallback for retrieve/standalone serializer use where the
+        # optimized list queryset has not supplied the relation graph.
         from apps.license.models import LicenseItemPlan
         sions = list(
             LicenseItemPlan.objects.filter(item_name_id=obj.planning_target_item_id)

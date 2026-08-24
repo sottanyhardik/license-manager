@@ -9,7 +9,7 @@ from django.core.management.base import CommandError
 
 from apps.allotment.models import AllotmentModel
 from apps.allotment.services.paired_allocation_max import calculate_paired_allocation_max
-from apps.core.models import NotificationNumber, PortModel, SchemeCode
+from apps.core.models import NotificationNumber, PortModel, PurchaseStatus, SchemeCode
 from apps.license.models import (
     LicenseDetailsModel, LicenseItemPlan, SionPlanningProfile, SionPlanningRule,
 )
@@ -39,6 +39,7 @@ def test_seed_browser_2509_creates_idempotent_canonical_fixture(monkeypatch):
     assert license_obj.scheme_code == SchemeCode.objects.get(code="E2E2509")
     assert license_obj.notification_number == NotificationNumber.objects.get(code="2509")
     assert license_obj.port == PortModel.objects.get(code="E2E")
+    assert PurchaseStatus.objects.filter(is_active=True).exists()
     plan = LicenseItemPlan.objects.get(license=license_obj, is_active=True)
     assert plan.planned_quantity == Decimal("234.000")
     assert plan.planned_cif_fc == Decimal("2064.12")

@@ -75,7 +75,7 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
                         <SortableHeader label="Allotted Qty" sortKey="allotted_qty" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
                         <SortableHeader label="Allotted CIF" sortKey="allotted_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
                         <SortableHeader label="Balance Qty" sortKey="balance_qty" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Balance CIF" sortKey="balance_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
+                        <SortableHeader label="Balance CIF" sortKey="effective_balance_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
                     </tr>
                 </thead>
                 <tbody>
@@ -98,7 +98,7 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
                             <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_qty)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_cif)}</td>
                             <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.balance_qty)}</td>
-                            <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(effectiveBalance(row))}</td>
+                            <td className="px-3 py-1.5 text-right font-medium tabular-nums" title={row.balance_cif_source === "LICENSE" ? "Licence-level CIF" : "Individual item CIF"}>{fmtNum(effectiveBalance(row))}</td>
                         </tr>
                     ))}
                 </tbody>

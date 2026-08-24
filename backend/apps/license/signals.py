@@ -113,6 +113,8 @@ def snapshot_replan_license_before_delete(sender, instance, **kwargs):
 def enqueue_replan_for_import_item_change(sender, instance, **kwargs):
     if kwargs.get("raw", False):
         return
+    if getattr(instance, "_inline_allocation_replan", False):
+        return
     source = sender._meta.label
     _enqueue_replan(getattr(instance, "_replan_old_license_id", None), "import_item_changed", source_model=source, source_pk=instance.pk)
     _enqueue_replan(getattr(instance, "_replan_deleted_license_id", None) or instance.license_id, "import_item_changed", source_model=source, source_pk=instance.pk)
@@ -122,6 +124,8 @@ def enqueue_replan_for_import_item_change(sender, instance, **kwargs):
 @receiver(post_delete, sender=AllotmentItems)
 def enqueue_replan_for_allotment_change(sender, instance, **kwargs):
     if kwargs.get("raw", False):
+        return
+    if getattr(instance, "_inline_allocation_replan", False):
         return
     source = sender._meta.label
     _enqueue_replan(getattr(instance, "_replan_old_license_id", None), "allotment_changed", source_model=source, source_pk=instance.pk)

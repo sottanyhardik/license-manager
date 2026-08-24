@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Any, Callable
 
 
-LEGACY = "LEGACY"
+LEGACY = "LICENSE"
 INDIVIDUAL_ITEM = "INDIVIDUAL_ITEM"
 
 
@@ -38,6 +38,7 @@ class EffectiveCifProjection:
     effective_mode: str
     legacy_row_balance: Decimal
     individual_item_balance: Decimal
+    license_balance_cif: Decimal
     effective_row_balance: Decimal
     balance_source: str
     footer_totals: dict[str, Decimal]
@@ -49,6 +50,7 @@ class EffectiveCifProjection:
             "effective_mode": self.effective_mode,
             "legacy_row_balance": self.legacy_row_balance,
             "individual_item_balance": self.individual_item_balance,
+            "license_balance_cif": self.license_balance_cif,
             "effective_row_balance": self.effective_row_balance,
             "balance_source": self.balance_source,
             "footer_totals": self.footer_totals,
@@ -77,6 +79,12 @@ def project_effective_item_cif(*, licence, item, legacy_row_balance: Decimal | A
         # always take the PK-backed live ledger branch above.
         individual = _decimal(getattr(item, "balance_cif_fc", 0))
 
+    # Resolve the licence balance once for diagnostics and false-mode output.
+    cached = getattr(licence, "_effective_cif_license_balance", None)
+    if cached is None:
+        cached = _decimal(licence.get_balance_cif)
+        setattr(licence, "_effective_cif_license_balance", cached)
+
     if mode == INDIVIDUAL_ITEM:
         effective = individual
         # A raw balance remains visible for audit/display.  Mutation callers
@@ -84,15 +92,22 @@ def project_effective_item_cif(*, licence, item, legacy_row_balance: Decimal | A
         legacy = _decimal(legacy_row_balance() if callable(legacy_row_balance) else legacy_row_balance)
         source = "IMPORT_ITEM_CIF"
     else:
+        # False/null retains the caller's established shared-pool expression.
+        # Candidate reads supply the condition-pool batch projection while
+        # mutations supply their existing live calculation.  Replacing that
+        # value with ``get_balance_cif`` here broke the legacy contract: a
+        # valid condition-pool candidate became non-actionable merely because
+        # a separate balance projection had not been materialized yet.
         legacy = _decimal(legacy_row_balance() if callable(legacy_row_balance) else legacy_row_balance)
         effective = legacy
-        source = "LEGACY"
+        source = "LICENSE"
 
     return EffectiveCifProjection(
         raw_override=raw_override,
         effective_mode=mode,
         legacy_row_balance=legacy,
         individual_item_balance=individual,
+        license_balance_cif=_decimal(cached),
         effective_row_balance=effective,
         balance_source=source,
         footer_totals={"effective_balance_cif": effective},

@@ -15,7 +15,12 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.models import CompanyModel, PortModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.models import (
+    LicenseDetailsModel,
+    LicenseExportItemModel,
+    LicenseImportItemsModel,
+    LicenseItemPlan,
+)
 
 User = get_user_model()
 
@@ -89,3 +94,40 @@ def test_license_detail_adds_grouped_plan_utilization_without_changing_import_li
     assert sugar_row["serials"] == [3, 13, 23]
     assert sugar_row["available_quantity"] == "30.000"
     assert sugar_row["has_plan"] is False
+
+
+@pytest.mark.django_db
+def test_operational_reconciliation_excludes_superseded_plan_rows(
+    viewer, license_with_split_serials,
+):
+    """Historical replaced plans must not create a false CIF overdraw."""
+    license_obj = license_with_split_serials
+    source = license_obj.import_license.order_by("pk").first()
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100.00"))
+    active = LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=source,
+        planned_quantity=Decimal("5.000"),
+        unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("5.00"),
+    )
+    stale = LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=source,
+        planned_quantity=Decimal("100.000"),
+        unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("100.00"),
+    )
+    stale.is_active = False
+    stale.save(update_fields=("is_active",))
+
+    response = _client_for_user(viewer).get(
+        reverse("license:licenses-detail", args=[license_obj.pk]),
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    reconciliation = response.data["operational_reconciliation"]
+    assert reconciliation["new_planned_cif"] == "5.00"
+    assert reconciliation["total_accounted_cif"] == "5.00"
+    assert reconciliation["overdrawn_cif"] == "0"
+    assert active.is_active is True

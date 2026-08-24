@@ -172,6 +172,24 @@ class TestAvailableValueFilterUsesLiveValue:
         # fixed filter must include it.
         assert stale_value_item.id in ids
 
+    def test_value_filter_reuses_the_authoritative_page_map_for_output(
+        self, allotment_client, allotment_obj, stale_value_item,
+    ):
+        """A live CIF filter must not re-run the same canonical bulk query
+        solely to serialize the already-selected page."""
+        with patch(
+            "apps.license.services.condition_pool.available_value_bulk_map",
+            side_effect=_mock_bulk_map(stale_value_item.id, LIVE_VALUE),
+        ) as available_value_map:
+            response = _get_available_licenses(
+                allotment_client, allotment_obj, available_value_gte="1000",
+            )
+
+        assert response.status_code == 200
+        assert available_value_map.call_count == 1
+        row = next(row for row in response.data["available_items"] if row["id"] == stale_value_item.id)
+        assert Decimal(row["authoritative_available_cif"]) == LIVE_VALUE
+
     def test_min_value_above_live_value_excludes_item(self, allotment_client, allotment_obj, stale_value_item):
         with patch(
             "apps.license.services.condition_pool.available_value_bulk_map",

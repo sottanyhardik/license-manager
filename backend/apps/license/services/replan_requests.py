@@ -81,7 +81,7 @@ def request_license_replan(*, license_id: int, reason: str, scope: str = License
         return request
 
 
-def mark_license_replan_source_changed(*, license_id: int, reason: str, source_model: str = "", source_pk: str | int | None = None) -> LicenseReplanRequest:
+def mark_license_replan_source_changed(*, license_id: int, reason: str, source_model: str = "", source_pk: str | int | None = None, dispatch: bool = True) -> LicenseReplanRequest:
     """Advance one source generation and create/coalesce a durable request.
 
     No planner is imported here: this is safe for signals and web requests.
@@ -103,6 +103,6 @@ def mark_license_replan_source_changed(*, license_id: int, reason: str, source_m
         if request.status == LicenseReplanRequest.STATUS_RETRY_PENDING:
             request.status, request.next_retry_at = LicenseReplanRequest.STATUS_PENDING, None
             request.save(update_fields=["status", "next_retry_at"])
-        if created or request.status == LicenseReplanRequest.STATUS_PENDING:
+        if dispatch and (created or request.status == LicenseReplanRequest.STATUS_PENDING):
             transaction.on_commit(lambda request_id=request.pk: _publish_after_commit(request_id))
         return request

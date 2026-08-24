@@ -470,6 +470,8 @@ class AllotmentActionViewSet(ViewSet):
         # computation for every remaining candidate, so running it before a
         # selective filter (e.g. license_status=active) needlessly recomputes
         # balances for licences that were always going to be excluded anyway.
+        value_filtered_candidates = None
+        value_filtered_map = None
         if available_value_gte or available_value_lte:
             min_value = None
             max_value = None
@@ -488,12 +490,18 @@ class AllotmentActionViewSet(ViewSet):
             from apps.license.services.condition_pool import available_value_bulk_map
             candidates = list(queryset)
             value_map = available_value_bulk_map(candidates)
-            matching_ids = [
-                item.id for item in candidates
+            # Do not turn this authoritative Python-side filter back into an
+            # ``id__in`` queryset.  That used to execute the primary joined
+            # query, all prefetches and the live-CIF batch a second time before
+            # serialisation.  The candidate instances are already ordered and
+            # fully hydrated, so retaining the matching page in memory keeps
+            # output identical while avoiding that duplicate work.
+            value_filtered_candidates = [
+                item for item in candidates
                 if (min_value is None or value_map.get(item.id, Decimal('0')) >= min_value)
                 and (max_value is None or value_map.get(item.id, Decimal('0')) <= max_value)
             ]
-            queryset = queryset.filter(id__in=matching_ids)
+            value_filtered_map = value_map
 
         # Pagination
         page = _safe_int(request.query_params.get('page'), default=1, minimum=1)
@@ -505,10 +513,20 @@ class AllotmentActionViewSet(ViewSet):
         # Materialize once — it's reused below (serializer + optional plan lookup);
         # re-slicing the queryset twice would re-run the query and risks the two
         # reads landing in a different order.
-        paginated_items = list(queryset[start:end])
-
-        # Get total count - use a faster approximate count for large result sets
-        total_count = queryset.count()
+        if value_filtered_candidates is not None:
+            total_count = len(value_filtered_candidates)
+            paginated_items = value_filtered_candidates[start:end]
+            # The page is a subset of the just-computed canonical map.  Passing
+            # this exact map to the serializer prevents a second live-CIF batch
+            # without ever using the display value for mutation authority.
+            available_value_map = {
+                item.id: value_filtered_map.get(item.id, Decimal('0.00'))
+                for item in paginated_items
+            }
+        else:
+            paginated_items = list(queryset[start:end])
+            total_count = queryset.count()
+            available_value_map = None
 
         # Batch this page's live available_value/balance_cif_fc ONCE across
         # every licence represented on the page (not once per item) — same
@@ -517,8 +535,9 @@ class AllotmentActionViewSet(ViewSet):
         # back to the per-item live property, re-running a licence's full
         # Balance CIF aggregate once per import item on that licence (a page
         # of 100 items across 100 different licences would multiply badly).
-        from apps.license.services.condition_pool import available_value_bulk_map
-        available_value_map = available_value_bulk_map(paginated_items)
+        if available_value_map is None:
+            from apps.license.services.condition_pool import available_value_bulk_map
+            available_value_map = available_value_bulk_map(paginated_items)
 
         # Same batching for the two other per-item SerializerMethodFields
         # that would otherwise run one query each per row on the page:
@@ -856,8 +875,38 @@ class AllotmentActionViewSet(ViewSet):
         start = (page - 1) * page_size
         end = start + page_size
         eligible_plans = [plan for plan in filtered_plans if plan.id in active_plan_id_set]
-        paginated_plans = eligible_plans[start:end]
-        total_count = len(eligible_plans)
+
+        # A plan is stored on the group's representative import row, but its
+        # capacity belongs to every physical source row in that same licence /
+        # HSN / normalized-description group.  Keep each source row addressable
+        # for the allocation write while letting them share the plan line's
+        # single live residual.
+        from apps.license.models import LicenseImportItemsModel
+        from apps.license.services.plan_grouping import plan_group_key
+        license_ids = {plan.import_item.license_id for plan in eligible_plans}
+        source_groups = {}
+        if license_ids:
+            sources = (
+                LicenseImportItemsModel.objects
+                .filter(license_id__in=license_ids, available_quantity__gt=0)
+                # This query only discovers physical-group membership.  The
+                # serialized representative is replaced below by the already
+                # hydrated plan import row, so no unrelated relation prefetch
+                # belongs on this fixed-cost lookup.
+                .select_related('hs_code')
+                .order_by('license__license_expiry_date', 'serial_number')
+            )
+            for source in sources:
+                source_groups.setdefault((source.license_id, plan_group_key(source)), []).append(source)
+
+        candidate_pairs = []
+        for plan in eligible_plans:
+            for source in source_groups.get((plan.import_item.license_id, plan_group_key(plan.import_item)), []):
+                if source.id == plan.import_item_id:
+                    source = plan.import_item
+                candidate_pairs.append((plan, source))
+        paginated_pairs = candidate_pairs[start:end]
+        total_count = len(candidate_pairs)
 
         # Serialize each row's underlying import item through the EXISTING
         # serializer — license/HS/description/exporter/condition/items_detail
@@ -868,7 +917,7 @@ class AllotmentActionViewSet(ViewSet):
         # working unchanged in Plan mode too; the new, honest
         # `planned_quantity`/`planned_cif_fc`/`planned_item_name` fields are
         # ALSO included for the new column and mode-aware labels.
-        import_items = [plan.import_item for plan in paginated_plans]
+        import_items = [source for _plan, source in paginated_pairs]
         from apps.license.services.condition_pool import available_value_bulk_map
         available_value_map = available_value_bulk_map(import_items)
         from apps.license.services.item_usage import billed_no_boe_bulk_map
@@ -892,7 +941,7 @@ class AllotmentActionViewSet(ViewSet):
         available_items_data = license_serializer.data
         requirement_qty = allotment.balanced_quantity if Decimal(str(allotment.required_quantity or 0)) > 0 else None
         requirement_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
-        for row, plan in zip(available_items_data, paginated_plans):
+        for row, (plan, source) in zip(available_items_data, paginated_pairs):
             # `id` must be unique PER ROW (two split rows share the same
             # underlying import item) — the frontend keys React lists and its
             # allocation-draft state off `id`, so this has to be the plan
@@ -906,8 +955,12 @@ class AllotmentActionViewSet(ViewSet):
             plan_status = plan_statuses[plan.id]
             remaining_qty = plan_status['remaining_quantity']
             remaining_cif = plan_status['remaining_cif_fc']
-            row['id'] = plan.id
-            row['import_item_id'] = plan.import_item_id
+            # Multiple group source rows can debit this same plan line.  The
+            # client draft key must therefore be unique per (plan, source),
+            # while `plan_line_id` remains the canonical shared-cap identity.
+            row['id'] = plan.id if source.id == plan.import_item_id else f'{plan.id}:{source.id}'
+            row['plan_line_id'] = plan.id
+            row['import_item_id'] = source.id
             row['planned_item_name'] = plan.item_name.name if plan.item_name_id else None
             row['planned_quantity'] = str(plan.planned_quantity)     # fixed original target
             row['planned_cif_fc'] = str(plan.planned_cif_fc)
@@ -916,6 +969,12 @@ class AllotmentActionViewSet(ViewSet):
             row['available_quantity'] = str(remaining_qty)           # aliased for the existing stat-bar/Max-allocation UI
             row['balance_cif_fc'] = str(remaining_cif)
             row['has_active_plan'] = True
+            # Keep Plan-mode's response shape identical to Actual mode.  The
+            # React stat bar reads these canonical names in both modes; only
+            # supplying the legacy *_qty aliases made the fixed plan display
+            # as 0 despite a non-zero remaining plan balance.
+            row['original_planned_quantity'] = str(plan.planned_quantity)
+            row['original_planned_cif_fc'] = str(plan.planned_cif_fc)
             row['remaining_planned_qty'] = str(remaining_qty)
             row['remaining_planned_cif'] = str(remaining_cif)
             row['original_planned_qty'] = str(plan.planned_quantity)
@@ -930,8 +989,8 @@ class AllotmentActionViewSet(ViewSet):
             row['reason_code'] = None if row['can_create_allotment'] else 'NO_PLANNED_BALANCE'
             row['message'] = None if row['can_create_allotment'] else f'No planned quantity or value is available for {row["planned_item_name"] or row["description"]}.'
             row.update(self._position_payload(
-                actual_qty=plan.import_item.available_quantity,
-                actual_cif=available_value_map.get(plan.import_item_id),
+                actual_qty=source.available_quantity,
+                actual_cif=available_value_map.get(source.id),
                 required_qty=requirement_qty,
                 required_cif=requirement_cif,
                 unit_price=allotment.unit_value_per_unit,
@@ -961,7 +1020,7 @@ class AllotmentActionViewSet(ViewSet):
             return True
 
         available_items_data = [row for row in available_items_data if _plan_candidate_is_usable(row)]
-        total_count = len(available_items_data) if total_count == len(paginated_plans) else total_count
+        total_count = len(available_items_data) if total_count == len(paginated_pairs) else total_count
 
         return Response({
             'allotment': allotment_data,
@@ -1081,6 +1140,8 @@ class AllotmentActionViewSet(ViewSet):
             return Response({'code': 'PLAN_MODE_REQUIRES_PLAN_BASIS', 'error': 'Plan mode requires the Plan allocation basis.'}, status=status.HTTP_400_BAD_REQUEST)
         created_items = []
         errors = []
+        touched_source_item_ids = set()
+        touched_license_ids = set()
 
         for allocation in allocations:
             if not isinstance(allocation, dict):
@@ -1158,12 +1219,25 @@ class AllotmentActionViewSet(ViewSet):
                     from apps.license.models import LicenseItemPlan
                     try:
                         locked_plan_line = LicenseItemPlan.objects.select_for_update().get(
-                            id=plan_line_id, import_item_id=item_id,
+                            id=plan_line_id,
                         )
                     except LicenseItemPlan.DoesNotExist:
                         errors.append({'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
                                        'error': 'No active plan is available for the selected item.',
                                        'max_qty': '0.000', 'max_cif': '0.00'})
+                        continue
+                    # A plan is stored on one representative source row, but
+                    # its cap is shared by every import row in that canonical
+                    # physical-product group.  Never accept a merely matching
+                    # licence/product name: membership comes only from the
+                    # shared plan-group identity.
+                    from apps.license.services.plan_grouping import group_ids_of
+                    if license_item.id not in set(group_ids_of(locked_plan_line.import_item)):
+                        errors.append({
+                            'item_id': item_id,
+                            'code': 'PLANNING_TARGET_MISMATCH',
+                            'error': 'The selected licence source row is outside this planning group.',
+                        })
                         continue
                     selected_target_id = allocation.get('planning_target_item_id') or request.data.get('planning_target_item_id')
                     if selected_target_id and str(locked_plan_line.item_name_id) != str(selected_target_id):
@@ -1363,6 +1437,7 @@ class AllotmentActionViewSet(ViewSet):
                     existing.search_mode = search_mode
                     existing.planning_target_item_id = locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None
                     existing.plan_line = locked_plan_line if allocation_basis == DebitBasis.PLAN else None
+                    existing._inline_allocation_replan = True
                     # A signal/database failure must roll back only this
                     # candidate write.  Without the savepoint the outer action
                     # transaction becomes broken and later serialisation turns
@@ -1373,7 +1448,7 @@ class AllotmentActionViewSet(ViewSet):
                 else:
                     # Create new allotment item
                     with transaction.atomic():
-                        allotment_item = AllotmentItems.objects.create(
+                        allotment_item = AllotmentItems(
                             allotment=allotment,
                             item=license_item,
                             qty=qty,
@@ -1385,6 +1460,8 @@ class AllotmentActionViewSet(ViewSet):
                             planning_target_item_id=locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None,
                             plan_line=locked_plan_line if allocation_basis == DebitBasis.PLAN else None,
                         )
+                        allotment_item._inline_allocation_replan = True
+                        allotment_item.save()
 
                 created_items.append({
                     'id': allotment_item.id,
@@ -1394,6 +1471,8 @@ class AllotmentActionViewSet(ViewSet):
                     'cif_fc': str(cif_fc),
                     'cif_inr': str(cif_inr)
                 })
+                touched_source_item_ids.add(license_item.id)
+                touched_license_ids.add(license_item.license_id)
                 remaining_requirement_qty = max(remaining_requirement_qty - qty, Decimal('0.000'))
                 remaining_requirement_cif = max(remaining_requirement_cif - cif_fc, Decimal('0.00'))
 
@@ -1420,6 +1499,19 @@ class AllotmentActionViewSet(ViewSet):
                 )
                 raise
 
+        # Refresh each source-row projection in this transaction before the
+        # response is built.  The model signal also schedules an on-commit
+        # refresh for writes outside this action, but relying on that deferred
+        # callback made an immediately-refetched allocation queue capable of
+        # showing a fully consumed Actual quantity.  This uses the established
+        # balance writer (not a second formula), so the response and next
+        # candidate request share one persisted source-row balance.
+        if touched_source_item_ids:
+            from apps.core.scripts.calculate_balance import update_balance_values
+            for source_item in LicenseImportItemsModel.objects.filter(id__in=touched_source_item_ids):
+                source_item._inline_allocation_replan = True
+                update_balance_values(source_item)
+
         # Refresh allotment to get updated balanced_quantity
         allotment.refresh_from_db()
 
@@ -1440,6 +1532,33 @@ class AllotmentActionViewSet(ViewSet):
                 'errors': errors,
                 'allotment': allotment_data,
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Allocation is an operator-facing financial mutation: update affected
+        # plans immediately after its transaction commits.  The durable request
+        # remains the single audit/lifecycle record; dispatch=False prevents
+        # this explicit inline path from also publishing a duplicate worker.
+        if touched_license_ids:
+            def _replan_allocated_licenses(license_ids=tuple(touched_license_ids)):
+                from apps.license.services.replan_requests import mark_license_replan_source_changed
+                from apps.license.tasks import replan_license_task
+
+                for license_id in license_ids:
+                    try:
+                        request = mark_license_replan_source_changed(
+                            license_id=license_id,
+                            reason="allotment_committed",
+                            source_model="allotment.AllotmentItems",
+                            source_pk=str(allotment.pk),
+                            dispatch=False,
+                        )
+                        replan_license_task.run(request.pk)
+                    except Exception:
+                        # The allocation is committed at this point.  Leave a
+                        # durable request for recovery without converting a
+                        # completed financial mutation into a false failure.
+                        logger.exception("Immediate replan failed after allotment commit", extra={"allotment_id": allotment.pk, "license_id": license_id})
+
+            transaction.on_commit(_replan_allocated_licenses)
 
         return Response({
             'success': len(created_items),
@@ -1474,15 +1593,44 @@ class AllotmentActionViewSet(ViewSet):
 
             license_number = allotment_item.item.license.license_number if allotment_item.item else "Unknown"
             qty = allotment_item.qty
+            license_id = allotment_item.item.license_id if allotment_item.item_id else None
 
             # Lock the parent import item for the duration of the delete so
             # this can't interleave with a concurrent allocate-items call
             # that's mid-way through its own plan-cap check on the same item.
+            source_item = None
             if allotment_item.item_id:
-                LicenseImportItemsModel.objects.select_for_update().get(id=allotment_item.item_id)
+                source_item = LicenseImportItemsModel.objects.select_for_update().get(id=allotment_item.item_id)
 
             # Delete the allotment item (signals will handle updating available quantity)
+            # The explicit inline replan below owns this mutation's planning
+            # lifecycle; suppress the generic asynchronous signal publication.
+            allotment_item._inline_allocation_replan = True
             allotment_item.delete()
+
+            if source_item is not None:
+                from apps.core.scripts.calculate_balance import update_balance_values
+                source_item._inline_allocation_replan = True
+                update_balance_values(source_item)
+
+            if license_id:
+                def _replan_deleted_allocation(affected_license_id=license_id, allotment_id=pk):
+                    from apps.license.services.replan_requests import mark_license_replan_source_changed
+                    from apps.license.tasks import replan_license_task
+
+                    try:
+                        request = mark_license_replan_source_changed(
+                            license_id=affected_license_id,
+                            reason="allotment_deleted",
+                            source_model="allotment.AllotmentItems",
+                            source_pk=str(allotment_id),
+                            dispatch=False,
+                        )
+                        replan_license_task.run(request.pk)
+                    except Exception:
+                        logger.exception("Immediate replan failed after allotment deletion", extra={"allotment_id": allotment_id, "license_id": affected_license_id})
+
+                transaction.on_commit(_replan_deleted_allocation)
 
             return Response({
                 'message': f'Successfully removed allocation of {qty} from {license_number}',

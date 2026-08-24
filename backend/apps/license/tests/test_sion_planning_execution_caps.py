@@ -189,3 +189,35 @@ def test_same_hsn_sources_cannot_borrow_individual_cif_in_standard_planning():
     assert by_source[dietary_fibre.pk]["planned_quantity"] == Decimal("1.000")
     assert by_source[sibling.pk]["planned_cif"] == Decimal("2.00")
     assert all(line["planned_cif"] <= Decimal("1.00") for line in [by_source[dietary_fibre.pk]])
+
+
+def test_standard_rule_does_not_pool_distinct_physical_products():
+    """A zero-available source cannot borrow another rule match's quantity."""
+    head = HeadSIONNormsModel.objects.create(name="Physical source isolation")
+    sion = SionNormClassModel.objects.create(head_norm=head, norm_class=f"G{head.pk}")
+    licence = LicenseDetailsModel.objects.create(license_number=f"PHYSICAL-GROUP-{head.pk}")
+    hsn = HSCodeModel.objects.create(hs_code="18031000", product_description="Cocoa")
+    exhausted = LicenseImportItemsModel.objects.create(
+        license=licence, serial_number=1, hs_code=hsn, description="Cocoa Paste",
+        quantity=Decimal("10.000"), available_quantity=Decimal("0.000"),
+    )
+    available = LicenseImportItemsModel.objects.create(
+        license=licence, serial_number=2, hs_code=hsn, description="Fruit Flavour Cocoa",
+        quantity=Decimal("7.000"), available_quantity=Decimal("7.000"),
+    )
+    target = ItemNameModel.objects.create(name=f"Fruit/Cocoa target {head.pk}")
+    SionPlanningRule.objects.create(
+        sion=sion, name="Fruit/Cocoa", import_item=target, priority=1,
+        expression={"field": "HSN", "comparator": "CONTAINS", "value": "1803"},
+        max_unit_price=Decimal("10.00"),
+    )
+
+    lines, _remaining, _metadata = SionPlanningExecutionService._compute_license(
+        licence, sion, preview=True, force_plan=True,
+        operational_balance_cif=Decimal("100.00"),
+    )
+
+    assert [(line["import_item"], line["planned_quantity"], line["planned_cif"] ) for line in lines] == [
+        (available.pk, Decimal("7.000"), Decimal("70.00")),
+    ]
+    assert all(line["import_item"] != exhausted.pk for line in lines)

@@ -108,7 +108,7 @@ export default function AdvancedFilter({
 
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
-        const label = humanize(fieldName);
+        const label = config.label || humanize(fieldName);
 
         // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
         const Col = ({ wide = false, children }) => <FilterField wide={wide}>{children}</FilterField>;

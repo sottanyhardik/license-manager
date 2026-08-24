@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import CompanyModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.license.services.planning_usage_reconciliation import reconcile_license_plans
 
 
 pytestmark = pytest.mark.django_db
@@ -110,3 +111,48 @@ def test_superuser_retains_cross_company_visibility():
     assert response.status_code == 200
     payload = response.data.get("results", response.data)
     assert {plan_a.id, plan_b.id}.issubset({row["id"] for row in payload})
+
+
+def test_plan_list_tolerates_inconsistent_historical_strategy_snapshots():
+    """A legacy snapshot discrepancy is diagnostic data, never a read API 500.
+
+    The persisted plan values remain authoritative.  Reconciliation selects
+    the smaller conflicting snapshot only as a fail-closed reporting ceiling.
+    """
+    company = _company("9000000031", "Historical strategy snapshots")
+    license_obj, first_item, first_plan = _license(company, "PLAN-LEGACY-SNAPSHOTS")
+    second_item = LicenseImportItemsModel.objects.create(
+        license=license_obj,
+        serial_number=2,
+        description="Second historical strategy source",
+        quantity=Decimal("10.000"),
+        available_quantity=Decimal("10.000"),
+    )
+    first_plan.allocation_provenance = {
+        "opening_operational_cif": "10.00",
+        "operational_planned_cif": "5.00",
+    }
+    first_plan.save(update_fields=("allocation_provenance",))
+    second_plan = LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=second_item,
+        planned_quantity=Decimal("5.000"),
+        unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("5.00"),
+        allocation_provenance={
+            "opening_operational_cif": "12.00",
+            "operational_planned_cif": "5.00",
+        },
+    )
+
+    reconciliation = reconcile_license_plans(license_obj.pk)
+    assert reconciliation["operational_snapshot_inconsistent"] is True
+    assert reconciliation["effective_balance_cif"] == Decimal("10.00")
+    assert first_plan.planned_cif_fc == Decimal("5.00")
+    assert second_plan.planned_cif_fc == Decimal("5.00")
+
+    response = _client(company).get(f"{BASE_URL}?license={license_obj.pk}")
+    assert response.status_code == 200, response.data
+    rows = response.data.get("results", response.data)
+    assert [row["id"] for row in rows] == [first_plan.id, second_plan.id]
+    assert [row["planned_cif_fc"] for row in rows] == ["5.00", "5.00"]

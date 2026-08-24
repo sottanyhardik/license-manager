@@ -444,8 +444,12 @@ def _update_balance_sync(item_id: int) -> None:
         item = LicenseImportItemsModel.objects.get(id=item_id)
         update_balance_values(item)
     except Exception:
-        # swallow exceptions to avoid failing DB writes
-        pass
+        # The allocation itself is already committed when this on-commit hook
+        # runs.  Keep that command durable, but never hide a failed projection
+        # refresh: a stale source-row quantity would be offered again by the
+        # candidate API and can mislead an operator.
+        import logging
+        logging.getLogger(__name__).exception("Failed to refresh allotment source-row balance", extra={"item_id": item_id})
 
 
 @receiver(post_save, sender=AllotmentItems, dispatch_uid="update_stock")

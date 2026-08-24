@@ -69,8 +69,10 @@ def compute_item_ledger_rows(license_obj, *, include_canonical: bool = False):
             )
             row.update({
                 "individual_item_cif_override": projection.raw_override,
+                "individual_item_cif": projection.raw_override is True,
                 "effective_cif_mode": projection.effective_mode,
                 "legacy_balance_cif": projection.legacy_row_balance,
+                "license_balance_cif": projection.license_balance_cif,
                 "individual_item_balance_cif": projection.individual_item_balance,
                 "effective_balance_cif": projection.effective_row_balance,
                 "balance_cif_source": projection.balance_source,
@@ -97,6 +99,13 @@ def compute_item_ledger_rows(license_obj, *, include_canonical: bool = False):
             # Both names are explicit API affordances for existing/new table
             # consumers; their values are backend Decimal totals.
             "balance_cif": total("balance_cif"),
-            "actual_effective_balance_cif": total("effective_balance_cif"),
+            # A licence-level balance is displayed on every row in shared
+            # mode, but is one ceiling and must never be multiplied in a
+            # table total.
+            "actual_effective_balance_cif": (
+                Decimal(str(license_obj.get_balance_cif))
+                if getattr(license_obj, "individual_item_cif_override", None) is not True
+                else total("effective_balance_cif")
+            ),
         },
     }

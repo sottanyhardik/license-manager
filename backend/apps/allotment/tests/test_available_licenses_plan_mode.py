@@ -146,6 +146,10 @@ class TestPlanModeSplitRows:
 
         assert one_row.status_code == full_page.status_code == 200
         assert len(full_page.data["available_items"]) == 8
+        # The status, availability and serializer maps are fixed batches.  A
+        # 16-query cold-request ceiling leaves authentication/metadata room
+        # while rejecting an additional per-plan-line relation lookup.
+        assert len(full_page_queries) <= 16
         # Batch loaders and relation prefetches make query volume independent
         # of page rows.  A small allowance covers serializer work only needed
         # when a populated page exposes a second related import item, while
@@ -182,6 +186,13 @@ class TestPlanModeSplitRows:
         assert Decimal(by_name["CHEESE - PLANMODE-TEST"]["available_quantity"]) == Decimal("70.000")
         assert Decimal(by_name["PKO - PLANMODE-TEST"]["planned_quantity"]) == Decimal("30.000")
         assert Decimal(by_name["CHEESE - PLANMODE-TEST"]["planned_quantity"]) == Decimal("70.000")
+        # The shared Actual/Plan stat bar consumes the canonical long names;
+        # Plan rows must therefore expose the exact same original and live
+        # plan values as their legacy aliases.
+        assert Decimal(by_name["PKO - PLANMODE-TEST"]["original_planned_quantity"]) == Decimal("30.000")
+        assert Decimal(by_name["PKO - PLANMODE-TEST"]["original_planned_cif_fc"]) == Decimal("54.00")
+        assert Decimal(by_name["PKO - PLANMODE-TEST"]["original_planned_qty"]) == Decimal("30.000")
+        assert Decimal(by_name["PKO - PLANMODE-TEST"]["original_planned_cif"]) == Decimal("54.00")
 
         # Row ids must be unique per split row (the LicenseItemPlan line's
         # own id), not the shared underlying import item id.
@@ -199,6 +210,24 @@ class TestPlanModeSplitRows:
         for row in resp.data["available_items"]:
             if row.get("import_item_id") == veg_oil_split["import_item"].id:
                 assert Decimal(row["available_quantity"]) != Decimal("100.000")
+
+    def test_plan_line_is_shared_across_all_source_rows_in_its_physical_group(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        representative = veg_oil_split["import_item"]
+        sibling = LicenseImportItemsModel.objects.create(
+            license=representative.license,
+            serial_number=15,
+            description=representative.description,
+            quantity=Decimal("25.000"),
+            available_quantity=Decimal("25.000"),
+        )
+        response = _get_available_licenses(allotment_client, allotment_obj, debit_based_on="plan")
+        assert response.status_code == 200, response.data
+        pko_rows = [row for row in response.data["available_items"] if row["planned_item_name"] == "PKO - PLANMODE-TEST"]
+        assert {row["import_item_id"] for row in pko_rows} == {representative.id, sibling.id}
+        assert {row["plan_line_id"] for row in pko_rows} == {veg_oil_split["pko_line"].id}
+        assert {Decimal(row["plan_position"]["remaining_qty"]) for row in pko_rows} == {Decimal("30.000")}
 
     def test_fully_consumed_plan_line_is_excluded(
         self, allotment_client, allotment_obj, veg_oil_split,

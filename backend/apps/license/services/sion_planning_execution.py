@@ -493,6 +493,26 @@ class SionPlanningExecutionService:
                 if item.pk not in claimed_source_item_ids
             ]
 
+        def physical_source_groups(items):
+            """Split rule matches into canonical physical planning groups.
+
+            A rule may match several distinct import products.  They share
+            rule priority and the licence CIF waterfall, but they must never
+            lend quantity to one another merely because one rule matched both.
+            This matches ``plan_grouping`` and the allocation-cap boundary:
+            only equal HSN, normalized description, and unit are one source
+            entitlement.
+            """
+            from apps.license.services.plan_grouping import plan_group_key
+
+            grouped = {}
+            for item in items:
+                grouped.setdefault(plan_group_key(item), []).append(item)
+            return [
+                sorted(group, key=lambda item: (item.serial_number or 0, item.pk))
+                for group in grouped.values()
+            ]
+
         def available_group_quantity(group):
             """Return the operationally available source quantity for a rule.
 
@@ -715,7 +735,16 @@ class SionPlanningExecutionService:
                 # Legacy STANDARD groups intentionally produce one row.  In
                 # explicit individual-CIF mode they must be emitted per source
                 # item so no row can consume another import item's ceiling.
-                standard_groups = ([item] for item in group) if remaining_item_cif else (group,)
+                # A STANDARD rule can match multiple products.  Plan each
+                # canonical physical product independently, not as one broad
+                # rule-match bucket.  Otherwise a zero-available Cocoa Paste
+                # row could visibly carry capacity that actually belongs to a
+                # different Fruit/COCOA source row.
+                standard_groups = (
+                    ([item] for item in group)
+                    if remaining_item_cif
+                    else physical_source_groups(group)
+                )
                 allocated = Decimal("0")
                 # Do not shadow the `source_group()` matcher below: a later
                 # strategy in this same planner invocation must still call

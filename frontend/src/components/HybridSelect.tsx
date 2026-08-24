@@ -13,6 +13,8 @@ interface HybridSelectProps {
     staticOptions?: SelectOption[] | null;
     className?: string;
     formatLabel?: ((item: Record<string, unknown>) => string) | null;
+    ariaLabel?: string;
+    inputId?: string;
 }
 
 /**
@@ -29,6 +31,8 @@ export default function HybridSelect({
     staticOptions = null,
     className = "",
     formatLabel: customFormatLabel = null,
+    ariaLabel,
+    inputId,
 }: HybridSelectProps) {
     const useAsync = Boolean(fieldMeta.endpoint || fieldMeta.fk_endpoint);
     const hasChoices = Boolean(staticOptions || fieldMeta.choices);
@@ -64,6 +68,8 @@ export default function HybridSelect({
                 formatLabel={formatLabel}
                 className={className}
                 loadOnMount={true}
+                ariaLabel={ariaLabel}
+                inputId={inputId}
             />
         );
     }
@@ -112,6 +118,8 @@ export default function HybridSelect({
                 placeholder={placeholder}
                 className={className}
                 classNamePrefix="react-select"
+                aria-label={ariaLabel}
+                inputId={inputId}
                 styles={{
                     control: (base) => ({
                         ...base,

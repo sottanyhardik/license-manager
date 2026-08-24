@@ -113,6 +113,10 @@ export interface LicenseOverviewItemRow {
      * intentional, not a bug — two different formulas coexist by design.
      */
     balance_cif: number;
+    individual_item_cif?: boolean;
+    license_balance_cif?: number;
+    individual_item_balance_cif?: number;
+    balance_cif_source?: "LICENSE" | "ITEM" | string;
     /** Canonical effective balance supplied by the backend selector. */
     effective_balance_cif?: number;
 }

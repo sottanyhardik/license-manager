@@ -150,4 +150,26 @@ describe("MasterList smoke", () => {
     expect(await screen.findByText("INV-ALLOT-3")).toBeInTheDocument();
     expect(screen.getByText("Crude Palm Oil")).toBeInTheDocument();
   });
+
+  it("exposes the established Company, Port, and BOE selectors on allotments", async () => {
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        ...META,
+        filter_config: {
+          company: { type: "fk", fk_endpoint: "/masters/companies/", label_field: "name" },
+          port: { type: "fk", fk_endpoint: "/masters/ports/", label_field: "name" },
+          is_boe: { type: "exact", label: "BOE" },
+        },
+      },
+    });
+
+    renderAt("allotments");
+
+    expect(await screen.findByText("Company")).toBeInTheDocument();
+    expect(screen.getByText("Port")).toBeInTheDocument();
+    expect(screen.getByText("BOE")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Yes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "No" })).toBeInTheDocument();
+  });
 });

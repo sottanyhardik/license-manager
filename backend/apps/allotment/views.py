@@ -52,6 +52,10 @@ AllotmentViewSet = MasterViewSet.create_viewset(
         "filter": {
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
+            # This is deliberately exposed as an exact boolean selector rather
+            # than inferred from allocation status.  The list endpoint already
+            # owns the `all` / `True` / `False` BOE contract.
+            "is_boe": {"type": "exact", "label": "BOE"},
             "is_allotted": {"type": "exact"},
         },
         "list_display": [
@@ -159,23 +163,77 @@ original_get_queryset = AllotmentViewSet.get_queryset
 
 def custom_get_queryset_with_defaults(self):
     """Override to apply default filters and performance optimizations"""
-    from django.db.models import Q
+    from decimal import Decimal
+    from django.db.models import Count, DecimalField, Exists, ExpressionWrapper, F, OuterRef, Prefetch, Q, Sum, Value
+    from django.db.models.functions import Coalesce, Greatest
 
-    qs = original_get_queryset(self)
+    # The generic advanced filter runs before this view's domain-specific BOE
+    # modes.  ``all`` and ``false_or_current`` are valid Allotments values,
+    # but not BooleanField values; hide them from the generic layer and apply
+    # their established semantics below.
+    raw_request = self.request._request
+    original_get = raw_request.GET
+    is_boe_mode = original_get.get("is_boe", "")
+    if is_boe_mode.lower() in {"all", "false_or_current"}:
+        filtered_get = original_get.copy()
+        filtered_get.pop("is_boe", None)
+        raw_request.GET = filtered_get
+    try:
+        qs = original_get_queryset(self)
+    finally:
+        raw_request.GET = original_get
 
     # Add select_related for FK fields to avoid N+1 queries
-    qs = qs.select_related('company', 'port', 'related_company')
+    qs = qs.select_related('company', 'port', 'related_company', 'planning_target_item')
+    decimal_output = DecimalField(max_digits=15, decimal_places=2)
+    # These are display projections only.  The allocation write path retains
+    # its canonical ledger validation; list serialization must not issue an
+    # aggregate query for every card.
+    from apps.allotment.models import AllotmentItems
+    from apps.bill_of_entry.models import BillOfEntryModel
+    from apps.license.models import LicenseItemPlan
 
-    # Prefetch related allotment_details and their nested relationships
+    qs = qs.annotate(
+        # Preserve the legacy serializer contract, which derives is_boe from
+        # the reverse relation rather than trusting the denormalized flag.
+        _list_is_boe=Exists(BillOfEntryModel.objects.filter(allotment=OuterRef("pk"))),
+        _list_allotted_quantity=Coalesce(Sum('allotment_details__qty'), Value(Decimal('0'), output_field=decimal_output), output_field=decimal_output),
+        _list_allotted_value=Coalesce(Sum('allotment_details__cif_fc'), Value(Decimal('0'), output_field=decimal_output), output_field=decimal_output),
+        _list_allotted_items_count=Count('allotment_details', distinct=True),
+        _list_allocated_licenses_count=Count('allotment_details__item__license', distinct=True),
+    ).annotate(
+        _list_balanced_quantity=Greatest(
+            ExpressionWrapper(F('required_quantity') - F('_list_allotted_quantity'), output_field=decimal_output),
+            Value(Decimal('0'), output_field=decimal_output),
+            output_field=decimal_output,
+        )
+    )
+
+    # Join all one-to-one/detail relations into the already-required detail
+    # batch.  Only plan lines remain a collection prefetch; splitting every
+    # scalar relation into its own batch was fixed-cost but unnecessarily
+    # expensive on each page.
+    detail_queryset = AllotmentItems.objects.select_related(
+        'item__hs_code',
+        'item__license__purchase_status',
+        'item__license__ownership__current_owner',
+        'item__license__balance',
+        'item__license__exporter',
+        'item__license__port',
+    ).prefetch_related(
+        Prefetch(
+            'item__utilization_plans',
+            queryset=LicenseItemPlan.objects.select_related('item_name'),
+        ),
+    )
     qs = qs.prefetch_related(
-        'allotment_details',
-        'allotment_details__item',
-        'allotment_details__item__hs_code',
-        'allotment_details__item__license',
-        'allotment_details__item__license__purchase_status',
-        'allotment_details__item__license__ownership__current_owner',
-        'allotment_details__item__utilization_plans',
-        'allotment_details__item__utilization_plans__item_name',
+        Prefetch('allotment_details', queryset=detail_queryset),
+        Prefetch(
+            'planning_target_item__plan_lines',
+            queryset=LicenseItemPlan.objects.select_related('import_item__license').prefetch_related(
+                'import_item__license__export_license__norm_class'
+            ),
+        ),
     )
 
     params = self.request.query_params

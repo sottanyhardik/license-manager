@@ -18,6 +18,7 @@ Run with:
 """
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -27,7 +28,6 @@ import pytest
 pytest.importorskip("selenium")
 
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -73,6 +73,28 @@ def _assert_no_console_errors(driver):
     assert not severe, (
         "browser console has SEVERE errors:\n  "
         + "\n  ".join(e.get("message", "")[:300] for e in severe)
+    )
+
+
+def _assert_successful_network_response(driver, endpoint_fragment):
+    """Assert Chrome observed a successful response for a UI-issued request."""
+    responses = []
+    for entry in driver.get_log("performance"):
+        try:
+            message = json.loads(entry["message"])["message"]
+        except (KeyError, TypeError, json.JSONDecodeError):
+            continue
+        if message.get("method") != "Network.responseReceived":
+            continue
+        response = message.get("params", {}).get("response", {})
+        if endpoint_fragment in response.get("url", ""):
+            responses.append(response)
+
+    assert responses, f"no browser network response was observed for {endpoint_fragment!r}"
+    failed = [response for response in responses if response.get("status") != 200]
+    assert not failed, (
+        f"{endpoint_fragment} did not complete successfully: "
+        + ", ".join(f"HTTP {response.get('status')} {response.get('url')}" for response in failed)
     )
 
 
@@ -227,7 +249,7 @@ def test_item_pivot_click_first_norm(logged_in_driver, frontend_url):
 # migration: this page would 500 if scheme_code/notification_number were
 # still NOT NULL on the parent table.
 # ---------------------------------------------------------------------------
-def test_license_create_dropdowns_populate(logged_in_driver, frontend_url):
+def test_license_create_dropdowns_populate(logged_in_driver, frontend_url, api_get):
     from selenium.webdriver.common.keys import Keys
 
     driver = logged_in_driver
@@ -244,52 +266,52 @@ def test_license_create_dropdowns_populate(logged_in_driver, frontend_url):
         lambda d: len(d.find_elements(By.CSS_SELECTOR, "div.react-select__control")) >= 4
     )
 
-    # Map each control to its preceding label so we can pick by name.
-    controls = driver.find_elements(By.CSS_SELECTOR, "div.react-select__control")
-    by_label = {}
-    for c in controls:
-        try:
-            lbl = c.find_element(By.XPATH, "./preceding::label[1]")
-            by_label[lbl.text.strip()] = c
-        except Exception:
-            pass
+    expected_min_options = (
+        ("Scheme Code", "field-scheme_code", None),
+        ("Notification Number", "field-notification_number", None),
+        ("Purchase Status", "field-purchase_status", "masters/purchase-statuses/"),
+    )
 
-    expected_min_options = {
-        "Scheme Code": 1,
-        "Notification Number": 1,
-        "Purchase Status": 1,
-    }
+    # IDs are generated from stable metadata keys.  This both prevents a
+    # duplicate-ID regression and makes the visible labels usable through the
+    # platform's native label association rather than DOM position.
+    ids = driver.execute_script(
+        "return Array.from(document.querySelectorAll('[id]')).map((node) => node.id);"
+    )
+    assert len(ids) == len(set(ids)), "the create form contains duplicate DOM IDs"
 
-    # Give the 5 simultaneous loadOnMount fetches a beat to land BEFORE
-    # interacting — otherwise ARROW_DOWN can open the menu while react-select
-    # is still in its initial "Loading…" state and our option assertion races
-    # the fetch.
-    import time as _t
-    _t.sleep(2)
+    for label_text, input_id, endpoint in expected_min_options:
+        inp = driver.find_element(By.ID, input_id)
+        label = driver.find_element(By.CSS_SELECTOR, f"label[for='{input_id}']")
+        assert label.text.strip() == label_text
+        assert inp.accessible_name == label_text
 
-    for label_text, min_count in expected_min_options.items():
-        control = by_label.get(label_text)
-        assert control is not None, f"no react-select control found for {label_text!r}"
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", control)
-        # Click the dropdown indicator (chevron) — this is the most reliable
-        # way to open a react-select menu in headless mode. ARROW_DOWN on the
-        # input requires focus to already be on the input, which isn't
-        # guaranteed when running after other tests in the same browser.
-            # Native pointer input is important here: invoking ``element.click``
-            # through JavaScript can bypass React Select's focus lifecycle in a
-            # production preview, leaving no menu mounted even though the API
-            # data loaded successfully.  The control is the public interaction
-            # surface; the chevron is only presentation.
-            try:
-                ActionChains(driver).move_to_element(control).click().perform()
-            except Exception:
-                inp = control.find_element(By.CSS_SELECTOR, "input")
-                driver.execute_script("arguments[0].focus();", inp)
-                inp.send_keys(Keys.ARROW_DOWN)
-        inp = control.find_element(By.CSS_SELECTOR, "input")
+        # Use the public keyboard interaction on the actual labelled input.
+        # react-select may portal its menu, so query its listbox globally and
+        # never rely on sibling/preceding visual DOM structure.
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", label)
+        label.click()
+        active_input = driver.switch_to.active_element
+        assert active_input.get_attribute("id") == input_id
+        if endpoint:
+            # This control deliberately requires a query.  Get one from the
+            # managed fixture's successful endpoint response, never from a
+            # production-specific code, label, ID, or assumed sort order.
+            response = api_get(f"{endpoint}?page_size=50")
+            assert response.status_code == 200, f"{label_text}: endpoint returned HTTP {response.status_code}"
+            records = response.json().get("results", response.json())
+            assert records, f"{label_text}: isolated test database contains no valid options"
+            query = next(
+                (str(record[field]).strip() for record in records for field in ("label", "code", "name") if record.get(field)),
+                None,
+            )
+            assert query, f"{label_text}: endpoint returned options without a searchable label"
+            active_input.send_keys(query)
+        else:
+            active_input.send_keys(Keys.ARROW_DOWN)
         try:
             _wait(driver, timeout=15).until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, ".react-select__option")) >= min_count
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "[role='listbox'] .react-select__option")) >= 1
             )
         except TimeoutException:
             try:
@@ -302,12 +324,21 @@ def test_license_create_dropdowns_populate(logged_in_driver, frontend_url):
                 f"{label_text}: dropdown showed no options within 15s. "
                 f"Menu content: {menu_text!r}"
             )
-        options = driver.find_elements(By.CSS_SELECTOR, ".react-select__option")
-        assert len(options) >= min_count, (
-            f"{label_text}: expected ≥{min_count} options, got {len(options)}"
-        )
-        # Close so the next iteration sees a fresh menu.
-        inp.send_keys(Keys.ESCAPE)
+        options = driver.find_elements(By.CSS_SELECTOR, "[role='listbox'] .react-select__option")
+        assert options, f"{label_text}: isolated test database contains no valid options"
+        if endpoint:
+            # Take the rendered result, rather than assuming any particular
+            # code, label, ID, or ordering in the isolated fixture data.
+            selected_label = options[0].text.strip()
+            assert selected_label, f"{label_text}: first rendered option has no accessible text"
+            options[0].click()
+            _wait(driver, timeout=10).until(
+                lambda d: selected_label in d.find_element(By.CSS_SELECTOR, ".react-select__single-value").text
+            )
+            _assert_successful_network_response(driver, "/api/masters/purchase-statuses/")
+        else:
+            # Close so the next iteration sees a fresh menu.
+            inp.send_keys(Keys.ESCAPE)
 
 
 # ---------------------------------------------------------------------------

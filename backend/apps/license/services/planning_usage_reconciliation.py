@@ -165,9 +165,17 @@ def apply_operational_cif_ceiling(rows, balance_cif):
         and (plan.allocation_provenance or {}).get("operational_planned_cif") is not None
     ]
     if strategy_openings:
-        if len(set(strategy_openings)) != 1:
-            raise ValueError("Strategy plan rows have inconsistent opening operational CIF snapshots.")
-        return strategy_openings[0]
+        # A strategy run normally writes one common opening snapshot to every
+        # child.  Some historical rows predate that invariant, however.  This
+        # service is used by read-only serializers, so an inconsistent legacy
+        # snapshot must not make the entire licence unviewable.  Do not rewrite
+        # a persisted plan or substitute a live balance (either would change
+        # the historical plan): use the smallest recorded opening as the
+        # deterministic, fail-closed reporting ceiling instead.
+        #
+        # Callers that need to surface the data-quality issue can inspect the
+        # reconciliation diagnostic returned by ``reconcile_license_plans``.
+        return min(strategy_openings)
 
     effective_balance = effective_planning_balance_cif(balance_cif)
     # A negative financial balance is an excess/manual-review condition, not
@@ -214,7 +222,12 @@ def reconcile_license_plans(license_id: int) -> dict:
     """Allocate family usage once across matching theoretical plan lines."""
     usage = aggregate_license_usage(license_id)
     plans = list(
-        LicenseItemPlan.objects.filter(license_id=license_id)
+        LicenseItemPlan.objects.filter(
+            license_id=license_id,
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        )
         .select_related("item_name", "import_item", "planning_rule")
         .order_by("id")
     )
@@ -348,6 +361,15 @@ def reconcile_license_plans(license_id: int) -> dict:
         quantity_capacity[plan.import_item_id] = max(available_qty - effective_qty, ZERO)
 
     license_obj = LicenseDetailsModel.objects.get(pk=license_id)
+    operational_snapshot_rows = [
+        plan for plan in plans
+        if (plan.allocation_provenance or {}).get("opening_operational_cif") is not None
+        and (plan.allocation_provenance or {}).get("operational_planned_cif") is not None
+    ]
+    operational_snapshots = {
+        Decimal(str(plan.allocation_provenance["opening_operational_cif"]))
+        for plan in operational_snapshot_rows
+    }
     effective_balance_cif = apply_operational_cif_ceiling(
         [(plan, by_plan_id[plan.id]) for plan in plans], license_obj.get_balance_cif,
     )
@@ -391,4 +413,5 @@ def reconcile_license_plans(license_id: int) -> dict:
         "unmapped_usage": usage["unmapped_usage"],
         "raw_balance_cif": license_obj.get_balance_cif,
         "effective_balance_cif": effective_balance_cif,
+        "operational_snapshot_inconsistent": len(operational_snapshots) > 1,
     }

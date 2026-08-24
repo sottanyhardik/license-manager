@@ -10,6 +10,7 @@ the plan line's rounded unit price.
 """
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -174,7 +175,7 @@ class TestPlanLineLedgerResidual:
         self, allotment_client, allotment_obj, veg_oil_split, caplog,
     ):
         with patch(
-            "apps.allotment.views_actions.AllotmentItems.objects.create",
+            "apps.allotment.views_actions.AllotmentItems.save",
             side_effect=RuntimeError("database implementation defect"),
         ):
             response = _allocate(
@@ -223,6 +224,125 @@ class TestPlanLineLedgerResidual:
         assert pko["remaining_quantity"] == Decimal("0")
         assert pko["remaining_cif_fc"] == Decimal("0.00")
         assert cheese["remaining_quantity"] == Decimal("60")
+
+    def test_plan_allocation_removes_only_its_exhausted_child_from_the_refreshed_queue(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        """A debit consumes its exact plan child without hiding a sibling
+        that retains real source-row quantity."""
+        response = _allocate(
+            allotment_client, allotment_obj, veg_oil_split["import_item"].id,
+            "40", "72.00", plan_line_id=veg_oil_split["pko_line"].id,
+        )
+        assert response.status_code == 201, response.data
+
+        veg_oil_split["import_item"].refresh_from_db()
+        assert veg_oil_split["import_item"].available_quantity == Decimal("60.00")
+        assert plan_line_status_for(veg_oil_split["pko_line"])["remaining_quantity"] == Decimal("0")
+
+        # The exhausted plan child is removed, but its sibling remains because
+        # it is a distinct persisted plan identity sharing the same source row.
+        queue = allotment_client.get(
+            f"/api/allotment-actions/{allotment_obj.id}/available-licenses/",
+            {"debit_based_on": "PLAN", "page_size": 20},
+        )
+        assert queue.status_code == 200
+        returned_ids = {row["id"] for row in queue.data["available_items"]}
+        assert veg_oil_split["pko_line"].id not in returned_ids
+        assert veg_oil_split["cheese_line"].id in returned_ids
+
+    def test_full_source_row_plan_debit_removes_the_candidate_after_refresh(
+        self, allotment_client, allotment_obj, veg_oil_split,
+    ):
+        """When a selected plan line owns all remaining source quantity, a
+        full debit must leave Actual Qty at zero and remove it from the next
+        PLAN candidate response."""
+        veg_oil_split["cheese_line"].delete()
+        pko = veg_oil_split["pko_line"]
+        pko.planned_quantity = Decimal("100")
+        pko.planned_cif_fc = Decimal("180.00")
+        pko.remaining_quantity = Decimal("100")
+        pko.remaining_cif_fc = Decimal("180.00")
+        pko.save(update_fields=["planned_quantity", "planned_cif_fc", "remaining_quantity", "remaining_cif_fc"])
+
+        response = _allocate(
+            allotment_client, allotment_obj, veg_oil_split["import_item"].id,
+            "100", "180.00", plan_line_id=pko.id,
+        )
+        assert response.status_code == 201, response.data
+
+        veg_oil_split["import_item"].refresh_from_db()
+        from apps.license.services.balance_calculator import ItemBalanceCalculator
+        assert ItemBalanceCalculator.calculate_available_quantity(veg_oil_split["import_item"]) == Decimal("0.00")
+        assert veg_oil_split["import_item"].available_quantity == Decimal("0.00")
+        assert plan_line_status_for(pko)["remaining_quantity"] == Decimal("0")
+
+        queue = allotment_client.get(
+            f"/api/allotment-actions/{allotment_obj.id}/available-licenses/",
+            {"debit_based_on": "PLAN", "page_size": 20},
+        )
+        assert queue.status_code == 200
+        assert pko.id not in {row["id"] for row in queue.data["available_items"]}
+
+    def test_committed_allocation_runs_one_inline_durable_replan(
+        self, allotment_client, allotment_obj, veg_oil_split, django_capture_on_commit_callbacks,
+    ):
+        """Allocation is the explicit synchronous exception to ordinary
+        signal-driven replan delivery: it records one durable request then
+        executes that exact request after commit."""
+        with patch(
+            "apps.license.services.replan_requests.mark_license_replan_source_changed",
+            return_value=SimpleNamespace(pk=321),
+        ) as mark_replan, patch(
+            "apps.license.tasks.replan_license_task.run",
+        ) as run_replan, django_capture_on_commit_callbacks(execute=True):
+            response = _allocate(
+                allotment_client, allotment_obj, veg_oil_split["import_item"].id,
+                "20", "36.00", plan_line_id=veg_oil_split["pko_line"].id,
+            )
+
+        assert response.status_code == 201, response.data
+        mark_replan.assert_called_once_with(
+            license_id=veg_oil_split["license"].id,
+            reason="allotment_committed",
+            source_model="allotment.AllotmentItems",
+            source_pk=str(allotment_obj.id),
+            dispatch=False,
+        )
+        run_replan.assert_called_once_with(321)
+
+    def test_deleting_an_allocation_runs_one_inline_durable_replan(
+        self, allotment_client, allotment_obj, veg_oil_split, django_capture_on_commit_callbacks,
+    ):
+        created = AllotmentItems.objects.create(
+            allotment=allotment_obj,
+            item=veg_oil_split["import_item"],
+            plan_line=veg_oil_split["pko_line"],
+            allocation_basis="PLAN",
+            search_mode="PLAN",
+            qty=Decimal("20.000"),
+            cif_fc=Decimal("36.00"),
+        )
+        with patch(
+            "apps.license.services.replan_requests.mark_license_replan_source_changed",
+            return_value=SimpleNamespace(pk=654),
+        ) as mark_replan, patch(
+            "apps.license.tasks.replan_license_task.run",
+        ) as run_replan, django_capture_on_commit_callbacks(execute=True):
+            response = allotment_client.delete(
+                f"/api/allotment-actions/{allotment_obj.id}/delete-item/{created.id}/",
+            )
+
+        assert response.status_code == 200, response.data
+        assert not AllotmentItems.objects.filter(pk=created.id).exists()
+        mark_replan.assert_called_once_with(
+            license_id=veg_oil_split["license"].id,
+            reason="allotment_deleted",
+            source_model="allotment.AllotmentItems",
+            source_pk=str(allotment_obj.id),
+            dispatch=False,
+        )
+        run_replan.assert_called_once_with(654)
 
     def test_allocating_from_cheese_after_pko_only_reduces_cheese(
         self, allotment_client, allotment_obj, veg_oil_split,

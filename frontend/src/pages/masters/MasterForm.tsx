@@ -525,6 +525,7 @@ export default function MasterForm({
                     onChange={(val) => handleChange(fieldName, val)}
                     isMulti={isMulti}
                     placeholder={`Select ${fieldName.replace(/_/g, " ")}`}
+                    inputId={fieldId}
                 />
             );
         }

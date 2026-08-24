@@ -32,6 +32,8 @@ from urllib.parse import urlparse
 
 import pytest
 import requests
+import psycopg
+from psycopg import sql
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -83,6 +85,40 @@ def _stop_process(process: subprocess.Popen | None) -> None:
         process.wait(timeout=5)
 
 
+def _disposable_database_connection_kwargs(db_name: str) -> dict:
+    """Return the administrative connection for one managed E2E database.
+
+    Managed mode is deliberately the owner of this database's lifecycle.  It
+    never uses the configured application database as an implicit fallback.
+    """
+    kwargs = {
+        "dbname": os.environ.get("LM_E2E_ADMIN_DB", "postgres"),
+        "user": os.environ.get("DB_USER", "lmanagement"),
+        "host": os.environ.get("DB_HOST", "localhost"),
+        "port": os.environ.get("DB_PORT", "5432"),
+    }
+    password = os.environ.get("DB_PASS")
+    if password:
+        kwargs["password"] = password
+    return kwargs
+
+
+def _create_disposable_database(db_name: str) -> None:
+    with psycopg.connect(**_disposable_database_connection_kwargs(db_name), autocommit=True) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
+
+
+def _destroy_disposable_database(db_name: str) -> None:
+    """Drop only the validated managed E2E database and its connections."""
+    if not db_name.startswith("test_"):
+        raise RuntimeError("Refusing to destroy a non-test managed E2E database.")
+    with psycopg.connect(**_disposable_database_connection_kwargs(db_name), autocommit=True) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid()", [db_name])
+            cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(db_name)))
+
+
 @pytest.fixture(scope="session")
 def e2e_runtime():
     """Start the isolated real-process stack when LM_E2E_MANAGED=1.
@@ -123,6 +159,7 @@ def e2e_runtime():
     python = os.environ.get("LM_E2E_PYTHON", sys.executable)
     processes: list[subprocess.Popen] = []
     try:
+        _create_disposable_database(db_name)
         subprocess.run([python, "manage.py", "migrate", "--noinput"], cwd=BACKEND_DIRECTORY, env=backend_env, check=True)
         backend = subprocess.Popen(
             [python, "manage.py", "runserver", f"127.0.0.1:{backend_port}", "--noreload"],
@@ -155,6 +192,7 @@ def e2e_runtime():
     finally:
         for process in reversed(processes):
             _stop_process(process)
+        _destroy_disposable_database(db_name)
 
 
 @pytest.fixture(scope="session")
@@ -228,6 +266,9 @@ def selenium_driver():
     opts.add_argument("--no-sandbox")
     # Silence Chrome's "DevTools listening" noise.
     opts.add_experimental_option("excludeSwitches", ["enable-logging"])
+    # Keep Chrome DevTools network events so browser regressions can assert
+    # that the UI-triggered API request actually completed successfully.
+    opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
     driver = webdriver.Chrome(options=opts)
     driver.set_page_load_timeout(30)

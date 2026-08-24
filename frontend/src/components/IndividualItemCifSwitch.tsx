@@ -66,7 +66,7 @@ export default function IndividualItemCifSwitch({ licenseId, override, canWrite,
                 <span className="text-sm font-medium">Individual Item CIF</span>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-                {checked ? "Using each import item’s CIF balance" : "Using existing balance behavior"}
+                {checked ? "Individual item CIF" : "Licence-level CIF"}
             </p>
         </div>
     );

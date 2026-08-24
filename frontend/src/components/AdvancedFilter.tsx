@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
+import { X } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
@@ -36,7 +36,6 @@ export default function AdvancedFilter({
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
     const [filterValues, setFilterValues] = useState({ ...defaultFilters, ...initialFiltersWithoutSearch });
-    const [showAdvanced, setShowAdvanced] = useState(false);
     const isInitialMount = useRef(true);
     const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
@@ -103,7 +102,6 @@ export default function AdvancedFilter({
     const primaryEntries = Object.entries(filterConfig).filter(([field]) => primaryFilterNames.includes(field));
     const secondaryEntries = Object.entries(filterConfig).filter(([field]) => !primaryFilterNames.includes(field));
     const activeEntries = Object.entries(filterValues).filter(([field, value]) => value !== "" && value !== null && value !== undefined && value !== "all" && String(value) !== String(defaultFilters[field] ?? ""));
-    const hasActiveSearch = Boolean(searchTerm.trim());
 
     // shared style token for react-select border
     const rsControl = (base) => ({ ...base, minHeight: "44px", borderColor: "var(--tb-border)" });
@@ -261,17 +259,13 @@ export default function AdvancedFilter({
                 );
             }
 
-            case "exclude_fk": {
-                // Metadata often already says "Exclude Exporter".  Avoid the
-                // awkward "Exclude exclude exporter" helper text.
-                const excludedSubject = label.replace(/^exclude\s+/i, "");
+            case "exclude_fk":
                 return (
                     <Col key={fieldName}>
                         <Label className="mb-1.5">{label}</Label>
-                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${excludedSubject.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
                     </Col>
                 );
-            }
 
             default:
                 return (
@@ -286,10 +280,10 @@ export default function AdvancedFilter({
     if (Object.keys(filterConfig).length === 0 && searchFields.length === 0) return null;
 
     return (
-        <div className="mb-4 space-y-3">
+        <div className="mb-4">
             {/* Search bar */}
             {searchFields.length > 0 && (
-                <div className="max-w-2xl">
+                <div className="mb-3">
                     <DebouncedSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
@@ -299,21 +293,8 @@ export default function AdvancedFilter({
                 </div>
             )}
 
-            {Object.keys(filterConfig).length > 0 && (
-                <FilterPanel activeCount={activeEntries.length} isUpdating={isUpdating} onClear={handleResetFilters} clearDisabled={activeEntries.length === 0 && !hasActiveSearch} collapsible defaultOpen={activeEntries.length > 0}>
-                    <FilterGrid>{primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid>
-                    {secondaryEntries.length > 0 && <>
-                        <div className="mt-4 border-t border-dashed border-border pt-3">
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setShowAdvanced((visible) => !visible)} aria-expanded={showAdvanced}>
-                                <SlidersHorizontal className="size-3.5" />
-                                {showAdvanced ? "Hide advanced filters" : `More filters (${secondaryEntries.length})`}
-                                {showAdvanced ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                            </Button>
-                        </div>
-                        {showAdvanced && <div className="mt-3"><FilterGrid>{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid></div>}
-                    </>}
-                </FilterPanel>
-            )}
+            {/* Compact primary toolbar with progressive disclosure. */}
+            {Object.keys(filterConfig).length > 0 && <FilterPanel activeCount={activeEntries.length} isUpdating={isUpdating} onClear={handleResetFilters} clearDisabled={activeEntries.length === 0 && !searchTerm}><FilterGrid>{primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid></FilterPanel>}
         </div>
     );
 }

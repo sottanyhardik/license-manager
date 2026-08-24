@@ -555,8 +555,14 @@ export default function MasterList() {
             if (value !== '' && value != null) params.set(key, String(value));
         });
         params.set('page', String(currentPage));
+        // Compare canonical query encodings.  Comparing the raw URL string
+        // (`%20`) with URLSearchParams output (`+`) can otherwise call
+        // replace() forever without changing any actual filter state.
+        params.sort();
         const nextSearch = params.toString();
-        if (nextSearch !== location.search.slice(1)) navigate({ search: nextSearch }, { replace: true });
+        const current = new URLSearchParams(location.search);
+        current.sort();
+        if (nextSearch !== current.toString()) navigate({ search: nextSearch }, { replace: true });
     }, [entityName, filterParams, currentPage, location.search, navigate]);
 
     const handlePageChange = (page) => {

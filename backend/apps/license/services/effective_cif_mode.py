@@ -30,8 +30,8 @@ def _decimal(value: Any) -> Decimal:
 class EffectiveCifProjection:
     """Auditable item CIF projection shared by read and mutation consumers.
 
-    ``legacy_row_balance`` is supplied by the existing consumer.  It is never
-    recomputed here: null and false therefore traverse the exact legacy path.
+    ``legacy_row_balance`` remains available for audit, while the false/null
+    branch displays the licence-wide CIF balance.
     """
 
     raw_override: bool | None
@@ -79,7 +79,7 @@ def project_effective_item_cif(*, licence, item, legacy_row_balance: Decimal | A
         # always take the PK-backed live ledger branch above.
         individual = _decimal(getattr(item, "balance_cif_fc", 0))
 
-    # Resolve the licence balance once for diagnostics and false-mode output.
+    # Resolve the licence balance once for diagnostics and shared-pool output.
     cached = getattr(licence, "_effective_cif_license_balance", None)
     if cached is None:
         cached = _decimal(licence.get_balance_cif)
@@ -92,14 +92,10 @@ def project_effective_item_cif(*, licence, item, legacy_row_balance: Decimal | A
         legacy = _decimal(legacy_row_balance() if callable(legacy_row_balance) else legacy_row_balance)
         source = "IMPORT_ITEM_CIF"
     else:
-        # False/null retains the caller's established shared-pool expression.
-        # Candidate reads supply the condition-pool batch projection while
-        # mutations supply their existing live calculation.  Replacing that
-        # value with ``get_balance_cif`` here broke the legacy contract: a
-        # valid condition-pool candidate became non-actionable merely because
-        # a separate balance projection had not been materialized yet.
+        # False/null uses the licence-wide balance CIF.  The item-level value
+        # is only shown when the explicit individual-item override is enabled.
         legacy = _decimal(legacy_row_balance() if callable(legacy_row_balance) else legacy_row_balance)
-        effective = legacy
+        effective = _decimal(cached)
         source = "LICENSE"
 
     return EffectiveCifProjection(

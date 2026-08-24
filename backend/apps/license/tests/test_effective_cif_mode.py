@@ -27,13 +27,8 @@ def test_truthy_non_boolean_values_remain_legacy_mode():
         ) == LEGACY
 
 
-def test_projection_preserves_the_supplied_legacy_value_for_null_and_false():
-    """The mode selector must not substitute a different balance formula.
-
-    Candidate reads deliberately pass the batched condition-pool balance and
-    mutation callers pass their established live calculation.  Both NULL and
-    False therefore retain that caller-owned shared-pool expression.
-    """
+def test_projection_uses_license_balance_for_null_and_false():
+    """The shared-pool mode displays the licence-wide balance CIF."""
     item = SimpleNamespace(balance_cif_fc=Decimal("11.25"))
     for raw_override in (None, False):
         licence = SimpleNamespace(individual_item_cif_override=raw_override, get_balance_cif=Decimal("47.50"))
@@ -43,7 +38,8 @@ def test_projection_preserves_the_supplied_legacy_value_for_null_and_false():
             legacy_row_balance=lambda: Decimal("-99.00"),
         )
         assert projection.effective_mode == LEGACY
-        assert projection.effective_row_balance == Decimal("-99.00")
+        assert projection.legacy_row_balance == Decimal("-99.00")
+        assert projection.effective_row_balance == Decimal("47.50")
         assert projection.license_balance_cif == Decimal("47.50")
         assert projection.balance_source == "LICENSE"
 

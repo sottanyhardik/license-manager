@@ -356,13 +356,18 @@ class SionPlanningExecutionService:
             CanonicalPlanningService, CompanyIsolationError,
         )
 
+        # SION planning is a balance-allocation calculation, not an
+        # operational use of a licence.  An expiry date must therefore never
+        # make an otherwise applicable SION licence ineligible to plan.  Keep
+        # inactive, non-expired licences excluded; the explicit expiry branch
+        # only relaxes planning eligibility and does not change any licence
+        # status, nor any BOE/allotment/trade eligibility rule.
+        today = timezone.localdate()
         base = LicenseDetailsModel.objects.filter(
             export_license__norm_class=sion,
-            flags__is_active=True,
-            flags__is_expired=False,
         ).filter(
-            Q(license_expiry_date__isnull=True)
-            | Q(license_expiry_date__gte=timezone.localdate()),
+            Q(flags__is_active=True)
+            | Q(license_expiry_date__lt=today),
         )
         if license_ids:
             ids = CanonicalPlanningService._strict_id_list(license_ids, "license_ids")

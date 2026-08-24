@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 
 interface PlanningOption {
-    plan_line_id: number;
+    planning_target_item_id: number | null;
     item_name: string;
     remaining_quantity?: string;
     remaining_cif_fc?: string;
@@ -44,7 +44,6 @@ interface AllocationInitialization {
 
 interface AvailableItem {
     id: number | string;
-    plan_line_id?: number;
     license_id?: number;
     license?: number;
     license_number: string;
@@ -82,7 +81,7 @@ interface AvailableItem {
     reason_code?: string | null;
     message?: string | null;
     actual_position?: { available_qty: string; balance_cif: string };
-    plan_position?: { exists: boolean; is_active: boolean; status: string; plan_line_id: number | null; remaining_qty: string; remaining_cif: string };
+    plan_position?: { exists: boolean; is_active: boolean; status: string; remaining_qty: string; remaining_cif: string };
     allotment_requirement?: { remaining_qty: string; remaining_cif: string };
     basis_options?: Record<"actual" | "plan", {
         enabled: boolean;
@@ -101,6 +100,7 @@ interface AvailableItem {
     // interface's existing fields already cover display; these two are only
     // needed for submission + the new "Planned Item Name" column.
     import_item_id?: number;
+    planning_target_item_id?: number | null;
     planned_item_name?: string;
     // Item-specific planning splits (DWP, SWP, PKO, etc.)
     // Only present when the item has planning relationships
@@ -521,22 +521,16 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             const actualItemId = filters.item_id || payload.item.items_detail?.[0]?.id;
             return api.post(`allotment-actions/${id}/allocate-items/`, {
                 allocations: [{
-                    // Plan mode's row id is the LicenseItemPlan line's own id
-                    // (unique per split row) — allocation always targets the
-                    // real underlying import item, via import_item_id when set.
                     item_id: payload.item.import_item_id ?? payload.item.id,
                     qty: payload.allocation.qty,
                     cif_fc: payload.allocation.cif_fc,
-                    // Plan mode only: names the specific plan line (e.g. PKO
-                    // vs Cheese) this allocation was made against, so the
-                    // backend can decrement THAT line's own remaining balance
-                    // independently of its siblings (see allocate_items).
-                    ...(followsPlan ? { plan_line_id: payload.item.plan_line_id ?? payload.item.id } : {}),
                     debit_based_on: filters.debit_based_on,
                     search_mode: filters.debit_based_on,
                     allocation_basis: followsPlan ? "PLAN" : "ACTUAL",
                     license_status: filters.license_status,
-                    ...(filters.debit_based_on === "PLAN" ? { planning_target_item_id: filters.item_id } : { actual_item_id: actualItemId }),
+                    ...(filters.debit_based_on === "PLAN" ? {
+                        planning_target_item_id: payload.item.planning_target_item_id ?? filters.item_id,
+                    } : { actual_item_id: actualItemId }),
                 }],
             }).then(r => r.data);
         },

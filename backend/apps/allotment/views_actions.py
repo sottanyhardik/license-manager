@@ -111,7 +111,6 @@ class AllotmentActionViewSet(ViewSet):
             'plan_position': {
                 'exists': bool(plan), 'is_active': plan_active,
                 'status': 'ACTIVE' if plan_active and plan_enabled else ('EXHAUSTED' if plan_active else 'NO_ACTIVE_PLAN'),
-                'plan_line_id': plan.id if plan else None,
                 'remaining_qty': str(plan_qty), 'remaining_cif': str(plan_cif),
             },
             'basis_options': {
@@ -942,7 +941,7 @@ class AllotmentActionViewSet(ViewSet):
         requirement_qty = allotment.balanced_quantity if Decimal(str(allotment.required_quantity or 0)) > 0 else None
         requirement_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
         for row, (plan, source) in zip(available_items_data, paginated_pairs):
-            # `id` must be unique PER ROW (two split rows share the same
+            # `id` is only a UI key (two split rows share the same
             # underlying import item) — the frontend keys React lists and its
             # allocation-draft state off `id`, so this has to be the plan
             # line's own id, not the import item's. `import_item_id` carries
@@ -958,9 +957,9 @@ class AllotmentActionViewSet(ViewSet):
             # Multiple group source rows can debit this same plan line.  The
             # client draft key must therefore be unique per (plan, source),
             # while `plan_line_id` remains the canonical shared-cap identity.
-            row['id'] = plan.id if source.id == plan.import_item_id else f'{plan.id}:{source.id}'
-            row['plan_line_id'] = plan.id
+            row['id'] = f'{source.id}:{plan.item_name_id or "unmapped"}:{plan.unit_price}'
             row['import_item_id'] = source.id
+            row['planning_target_item_id'] = plan.item_name_id
             row['planned_item_name'] = plan.item_name.name if plan.item_name_id else None
             row['planned_quantity'] = str(plan.planned_quantity)     # fixed original target
             row['planned_cif_fc'] = str(plan.planned_cif_fc)
@@ -1112,11 +1111,10 @@ class AllotmentActionViewSet(ViewSet):
             or first_allocation.get('search_mode')
             or first_allocation.get('debit_based_on')
         )
-        # Preserve the pre-dual-mode endpoint contract for integrations that
-        # have not yet sent identity/mode fields: a legacy plan_line_id is a
-        # Plan debit; every other legacy allocation is an Actual debit.  New
-        # clients must send explicit SearchMode and AllocationBasis.
-        legacy_basis = DebitBasis.PLAN if first_allocation.get('plan_line_id') else DebitBasis.ACTUAL
+        # A plan row is a disposable projection, never a public allocation
+        # identity.  Legacy clients may still send plan_line_id during a
+        # deployment, but it is ignored for both basis selection and limits.
+        legacy_basis = DebitBasis.ACTUAL
         search_mode = str(explicit_search_mode or legacy_basis).strip().upper()
         allocation_basis = str(
             request.data.get('allocation_basis')
@@ -1199,28 +1197,32 @@ class AllotmentActionViewSet(ViewSet):
                 # Lock and validate it before consulting raw licence capacity:
                 # raw availability is informational and can never revive a
                 # fully consumed (or absent) planned balance.
-                plan_line_id = allocation.get('plan_line_id')
                 locked_plan_line = None
-                if allocation_basis == DebitBasis.ACTUAL and plan_line_id:
-                    errors.append({
-                        'item_id': item_id,
-                        'code': 'ACTUAL_ITEM_MISMATCH',
-                        'error': 'Actual allocations must not include a Planning Target Item plan line.',
-                    })
-                    continue
-                if allocation_basis == DebitBasis.PLAN and not plan_line_id:
+                selected_target_id = allocation.get('planning_target_item_id') or request.data.get('planning_target_item_id')
+                if allocation_basis == DebitBasis.PLAN and not selected_target_id:
                     errors.append({
                         'item_id': item_id,
                         'code': 'PLANNING_TARGET_MISMATCH',
-                        'error': 'A Planning Target Item plan line is required for this allotment.',
+                        'error': 'A Planning Target Item is required for this allotment.',
                     })
                     continue
-                if allocation_basis == DebitBasis.PLAN and plan_line_id:
+                if allocation_basis == DebitBasis.PLAN:
                     from apps.license.models import LicenseItemPlan
                     try:
-                        locked_plan_line = LicenseItemPlan.objects.select_for_update().get(
-                            id=plan_line_id,
-                        )
+                        # Resolve the freshly rebuilt canonical projection from
+                        # stable business dimensions only.  A submitted legacy
+                        # plan_line_id is intentionally not consulted.
+                        candidates = LicenseItemPlan.objects.select_for_update().filter(
+                            license_id=license_item.license_id,
+                            item_name_id=selected_target_id,
+                            is_active=True, is_deleted=False, is_cancelled=False,
+                        ).order_by('id')
+                        from apps.license.services.plan_grouping import group_ids_of
+                        group_ids = set(group_ids_of(license_item))
+                        candidates = [line for line in candidates if line.import_item_id in group_ids]
+                        if len(candidates) != 1:
+                            raise LicenseItemPlan.DoesNotExist
+                        locked_plan_line = candidates[0]
                     except LicenseItemPlan.DoesNotExist:
                         errors.append({'item_id': item_id, 'code': 'NO_PLANNED_BALANCE',
                                        'error': 'No active plan is available for the selected item.',
@@ -1231,7 +1233,6 @@ class AllotmentActionViewSet(ViewSet):
                     # physical-product group.  Never accept a merely matching
                     # licence/product name: membership comes only from the
                     # shared plan-group identity.
-                    from apps.license.services.plan_grouping import group_ids_of
                     if license_item.id not in set(group_ids_of(locked_plan_line.import_item)):
                         errors.append({
                             'item_id': item_id,
@@ -1239,7 +1240,6 @@ class AllotmentActionViewSet(ViewSet):
                             'error': 'The selected licence source row is outside this planning group.',
                         })
                         continue
-                    selected_target_id = allocation.get('planning_target_item_id') or request.data.get('planning_target_item_id')
                     if selected_target_id and str(locked_plan_line.item_name_id) != str(selected_target_id):
                         errors.append({
                             'item_id': item_id,
@@ -1423,7 +1423,9 @@ class AllotmentActionViewSet(ViewSet):
                 # a Cheese debit into an existing PKO row would overwrite the
                 # FK and silently reassign historical usage.
                 if allocation_basis == DebitBasis.PLAN:
-                    existing_query = existing_query.filter(plan_line=locked_plan_line)
+                    existing_query = existing_query.filter(
+                        planning_target_item_id=locked_plan_line.item_name_id,
+                    )
                 else:
                     existing_query = existing_query.filter(plan_line__isnull=True)
                 existing = existing_query.first()
@@ -1436,7 +1438,10 @@ class AllotmentActionViewSet(ViewSet):
                     existing.allocation_basis = allocation_basis
                     existing.search_mode = search_mode
                     existing.planning_target_item_id = locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None
-                    existing.plan_line = locked_plan_line if allocation_basis == DebitBasis.PLAN else None
+                    # Do not write the legacy plan FK.  It is nullable solely
+                    # so historic data survives the staged schema migration.
+                    existing.plan_line = None
+                    existing.effective_unit_price = unit_price
                     existing._inline_allocation_replan = True
                     # A signal/database failure must roll back only this
                     # candidate write.  Without the savepoint the outer action
@@ -1458,7 +1463,8 @@ class AllotmentActionViewSet(ViewSet):
                             allocation_basis=allocation_basis,
                             search_mode=search_mode,
                             planning_target_item_id=locked_plan_line.item_name_id if allocation_basis == DebitBasis.PLAN else None,
-                            plan_line=locked_plan_line if allocation_basis == DebitBasis.PLAN else None,
+                            planning_sion_key='',
+                            effective_unit_price=unit_price,
                         )
                         allotment_item._inline_allocation_replan = True
                         allotment_item.save()
@@ -1533,32 +1539,22 @@ class AllotmentActionViewSet(ViewSet):
                 'allotment': allotment_data,
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Allocation is an operator-facing financial mutation: update affected
-        # plans immediately after its transaction commits.  The durable request
-        # remains the single audit/lifecycle record; dispatch=False prevents
-        # this explicit inline path from also publishing a duplicate worker.
+        # Rebuild before this outer transaction commits.  A financial debit
+        # must never become visible while its canonical projection is stale.
+        # The replan service serializes on the same licence row, so this is
+        # also the allocation/replan concurrency boundary.
         if touched_license_ids:
-            def _replan_allocated_licenses(license_ids=tuple(touched_license_ids)):
-                from apps.license.services.replan_requests import mark_license_replan_source_changed
-                from apps.license.tasks import replan_license_task
-
-                for license_id in license_ids:
-                    try:
-                        request = mark_license_replan_source_changed(
-                            license_id=license_id,
-                            reason="allotment_committed",
-                            source_model="allotment.AllotmentItems",
-                            source_pk=str(allotment.pk),
-                            dispatch=False,
-                        )
-                        replan_license_task.run(request.pk)
-                    except Exception:
-                        # The allocation is committed at this point.  Leave a
-                        # durable request for recovery without converting a
-                        # completed financial mutation into a false failure.
-                        logger.exception("Immediate replan failed after allotment commit", extra={"allotment_id": allotment.pk, "license_id": license_id})
-
-            transaction.on_commit(_replan_allocated_licenses)
+            from apps.license.services.replan_requests import mark_license_replan_source_changed
+            from apps.license.tasks import replan_license_task
+            for license_id in touched_license_ids:
+                replan_request = mark_license_replan_source_changed(
+                    license_id=license_id,
+                    reason="allotment_committed",
+                    source_model="allotment.AllotmentItems",
+                    source_pk=str(allotment.pk),
+                    dispatch=False,
+                )
+                replan_license_task.run(replan_request.pk)
 
         return Response({
             'success': len(created_items),
@@ -1614,23 +1610,16 @@ class AllotmentActionViewSet(ViewSet):
                 update_balance_values(source_item)
 
             if license_id:
-                def _replan_deleted_allocation(affected_license_id=license_id, allotment_id=pk):
-                    from apps.license.services.replan_requests import mark_license_replan_source_changed
-                    from apps.license.tasks import replan_license_task
-
-                    try:
-                        request = mark_license_replan_source_changed(
-                            license_id=affected_license_id,
-                            reason="allotment_deleted",
-                            source_model="allotment.AllotmentItems",
-                            source_pk=str(allotment_id),
-                            dispatch=False,
-                        )
-                        replan_license_task.run(request.pk)
-                    except Exception:
-                        logger.exception("Immediate replan failed after allotment deletion", extra={"allotment_id": allotment_id, "license_id": affected_license_id})
-
-                transaction.on_commit(_replan_deleted_allocation)
+                from apps.license.services.replan_requests import mark_license_replan_source_changed
+                from apps.license.tasks import replan_license_task
+                replan_request = mark_license_replan_source_changed(
+                    license_id=license_id,
+                    reason="allotment_deleted",
+                    source_model="allotment.AllotmentItems",
+                    source_pk=str(pk),
+                    dispatch=False,
+                )
+                replan_license_task.run(replan_request.pk)
 
             return Response({
                 'message': f'Successfully removed allocation of {qty} from {license_number}',

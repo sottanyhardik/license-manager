@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
@@ -109,9 +110,14 @@ def plan_line_status_for(plan_line) -> dict | None:
 
     from apps.allotment.models import AllotmentItems
 
+    # Transaction identity is source licence item + target, never a transient
+    # projected-row PK.  This remains valid when `save_plan_lines_for_license`
+    # deletes and recreates all plan rows.
+    from apps.license.services.plan_grouping import group_ids_of
     used = AllotmentItems.objects.filter(
         _ALLOTTED_FILTER,
-        plan_line_id=plan_line.pk,
+        item_id__in=group_ids_of(plan_line.import_item),
+        planning_target_item_id=plan_line.item_name_id,
         allocation_basis="PLAN",
     ).aggregate(
         q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
@@ -139,33 +145,7 @@ def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
         return {}
     from apps.allotment.models import AllotmentItems
 
-    used_by_line = {
-        row["plan_line_id"]: (row["q"] or DEC_000, row["v"] or DEC_0)
-        for row in AllotmentItems.objects.filter(
-            _ALLOTTED_FILTER,
-            allocation_basis="PLAN",
-            plan_line_id__in=ids,
-        ).values("plan_line_id").annotate(
-            q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
-            v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
-        )
-    }
-    statuses = {}
-    for line in plan_lines:
-        if not line.pk:
-            continue
-        original_qty = Decimal(str(line.planned_quantity or DEC_000))
-        original_cif = Decimal(str(line.planned_cif_fc or DEC_0))
-        used_qty, used_cif = used_by_line.get(line.pk, (DEC_000, DEC_0))
-        statuses[line.pk] = {
-            "original_quantity": original_qty,
-            "used_quantity": used_qty,
-            "remaining_quantity": max(DEC_000, original_qty - used_qty),
-            "original_cif_fc": original_cif,
-            "used_cif_fc": used_cif,
-            "remaining_cif_fc": max(DEC_0, original_cif - used_cif),
-        }
-    return statuses
+    return {line.pk: plan_line_status_for(line) for line in plan_lines if line.pk}
 
 
 def planned_totals_for(item_ids) -> tuple[Decimal, Decimal]:
@@ -206,6 +186,7 @@ def group_used_snapshot(item) -> tuple[Decimal, Decimal]:
     return live_allotted_qty_for(gids), live_allotted_value_for(gids)
 
 
+@transaction.atomic
 def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> list:
     """
     Full-replace: delete a license's existing `LicenseItemPlan` rows and
@@ -225,15 +206,17 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
     miss any such amendment made after a re-plan. A snapshot doesn't care
     how the live total changed, only that it did.
 
-    `remaining_quantity`/`remaining_cif_fc` — the live, independently-
-    draining balance `allocate_items` decrements when an allotment names
-    this specific line via `plan_line_id` (see views_actions.py) — default
-    to the freshly-planned amount for a brand-new line. A caller that wants
-    to PRESERVE an existing line's already-decremented balance across a
-    regenerate-and-replace cycle (e.g. `e132_auto_plan.py` re-emitting an
-    already-generated Vegetable Oil split unchanged) passes them explicitly.
+    Plan rows are disposable projections.  Allocation transactions are
+    intentionally not linked to them, so replacement always deletes *every*
+    old row for the licence (including inactive/cancelled rows) and creates
+    only the fresh canonical projection.
     """
-    from apps.license.models import LicenseItemPlan
+    from apps.license.models import LicenseDetailsModel, LicenseItemPlan
+
+    # This is the common persistence gateway for auto-plan and replans.  Lock
+    # the licence even when a caller supplied a previously-read instance;
+    # otherwise a direct caller could replace projections concurrently.
+    license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=license_obj.pk)
 
     lines = list(lines)  # Convert to list to be able to iterate multiple times and check length
 
@@ -247,33 +230,29 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
         return baseline_cache[item_id]
 
     if delete_existing:
-        # A PLAN-mode allotment holds the exact plan-line FK as its immutable
-        # debit identity. Deleting a used plan makes Django set that FK to
-        # NULL. If two split lines were used by the same allotment and import
-        # item, those SET NULL updates violate the partial uniqueness rule for
-        # legacy/unmapped allocations.
-        #
-        # Retain referenced lines as inactive historical versions. They remain
-        # available for audit and ledger links, while current-plan calculations
-        # exclude them. Unreferenced rows retain the previous delete behaviour.
-        from apps.allotment.models import AllotmentItems
+        # `plan_line` is a nullable, migration-compatibility FK with SET_NULL.
+        # It is never read as allocation authority.  Consequently no plan row
+        # may be retained merely because a historic transaction once pointed at
+        # it: plans are calculated projections, not business records.
+        LicenseItemPlan.objects.select_for_update().filter(license=license_obj).delete()
 
-        existing_plans = LicenseItemPlan.objects.select_for_update().filter(
-            license=license_obj,
-        )
-        referenced_plan_ids = list(
-            AllotmentItems.objects.filter(plan_line_id__in=existing_plans.values("pk"))
-            .values_list("plan_line_id", flat=True)
-            .distinct()
-        )
-        if referenced_plan_ids:
-            existing_plans.filter(pk__in=referenced_plan_ids).update(is_active=False)
-            existing_plans.exclude(pk__in=referenced_plan_ids).delete()
-        else:
-            existing_plans.delete()
-
-    created = []
+    # Planners can legitimately emit the same business line through more than
+    # one rule branch. Persist one canonical row, not an accidental versioned
+    # duplicate.  Rule/provenance are deliberately retained from the first
+    # deterministic producer; quantity and CIF are additive business facts.
+    consolidated = {}
     for ln in lines:
+        key = (
+            ln.get("import_item"), ln.get("item_name"),
+            str(ln.get("unit_price", 0) or 0),
+            ln.get("planning_rule_id"),
+        )
+        row = consolidated.setdefault(key, dict(ln))
+        if row is not ln:
+            row["planned_quantity"] = (row.get("planned_quantity", 0) or 0) + (ln.get("planned_quantity", 0) or 0)
+            row["planned_cif_fc"] = (row.get("planned_cif_fc", 0) or 0) + (ln.get("planned_cif_fc", 0) or 0)
+    created = []
+    for ln in consolidated.values():
         baseline_qty, baseline_val = _baseline(ln.get("import_item"))
         planned_quantity = ln.get("planned_quantity", 0) or 0
         planned_cif_fc = ln.get("planned_cif_fc", 0) or 0

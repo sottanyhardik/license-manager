@@ -271,6 +271,15 @@ class AllotmentItems(AuditModel):
         'license.LicenseItemPlan', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='allotment_allocations',
     )
+    # Durable PLAN-debit identity.  These are transaction facts and remain
+    # meaningful after every projected LicenseItemPlan row has been deleted.
+    # `plan_line` above is retained only for a rolling migration and must not
+    # be used by runtime validation, grouping, or reports.
+    planning_sion_key = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    effective_unit_price = models.DecimalField(
+        max_digits=15, decimal_places=2, default=DEC_0,
+        validators=[MinValueValidator(DEC_0)],
+    )
 
     # Allocation lifecycle (Phase A.1)
     status = models.CharField(
@@ -326,26 +335,24 @@ class AllotmentItems(AuditModel):
     class Meta:
         ordering = ["qty"]
         constraints = [
-            # PLAN debits are identified by their exact plan line.  A legacy
-            # PLAN debit may have no plan_line, so keeping the historical
-            # item/allotment uniqueness would reject every later mapped debit
-            # with an IntegrityError before signals can run.
             models.UniqueConstraint(
-                fields=["item", "allotment", "plan_line"],
-                name="allotment_unique_item_plan_line",
+                fields=["item", "allotment", "allocation_basis", "planning_target_item"],
+                condition=models.Q(planning_target_item__isnull=False),
+                name="allotment_unique_stable_plan_identity",
             ),
-            # Preserve the one-row invariant for actual and legacy-unmapped
-            # allocations. PostgreSQL treats NULLs as distinct in the
-            # three-column constraint above, hence this partial constraint.
             models.UniqueConstraint(
-                fields=["item", "allotment"],
-                condition=models.Q(plan_line__isnull=True),
+                fields=["item", "allotment", "allocation_basis"],
+                condition=models.Q(planning_target_item__isnull=True),
                 name="allotment_unique_item_without_plan_line",
             ),
         ]
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['allotment', 'status']),
+            models.Index(
+                fields=['allotment', 'item', 'allocation_basis', 'planning_target_item'],
+                name='allotment_stable_identity_idx',
+            ),
         ]
 
     def __str__(self):

@@ -783,11 +783,15 @@ export default function MasterList() {
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
+    const isLicenseWorkspace = entityName === "licenses" || entityName === "incentive-licenses";
+    const workspaceDescription = entityName === "licenses"
+        ? "Review license balances, planning, and utilization"
+        : "Review incentive balances, expiry, and utilization";
 
     return (
         <div className="min-h-screen bg-[--tb-body-bg]">
             {/* Tabler-style page header */}
-            <div className={cn("page-header", entityName === "licenses" && "mb-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm")}>
+            <div className={cn("page-header", isLicenseWorkspace && "mb-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm")}>
                 <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
@@ -801,9 +805,9 @@ export default function MasterList() {
                         {entityTitle}
                     </div>
                     <h1>{entityTitle}</h1>
-                    {entityName === "licenses" && (
+                    {isLicenseWorkspace && (
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">Licence workspace</span>
+                            <span className="font-medium text-foreground">{workspaceDescription}</span>
                             <span aria-hidden="true" className="text-border">•</span>
                             <span className="tabular-nums">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
                             {isRefreshing && <span role="status">Updating…</span>}

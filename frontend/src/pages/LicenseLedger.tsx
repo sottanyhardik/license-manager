@@ -438,7 +438,7 @@ export default function LicenseLedger() {
             <PageHeader
                 pretitle="Ledger"
                 title="License Ledger"
-                description="Track available balance for DFIA and Incentive licenses"
+                description="Review available balances across DFIA and Incentive licenses"
                 actions={<div className="flex gap-2">
                     <Button variant="outline" size="sm" disabled={exporting !== null || visibleLicenseCount === 0} onClick={() => runExport('pdf')}>
                         {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Preview PDF

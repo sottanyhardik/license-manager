@@ -396,6 +396,7 @@ class CanonicalPlanningService:
             )
 
             allocated_items = []
+            remaining_cif = ceiling
             for row in normalized:
                 provenance = dict(row["allocation_provenance"] or {})
                 theoretical_cif = quantize_cif(
@@ -405,9 +406,16 @@ class CanonicalPlanningService:
                 # operational CIF waterfall. Preserve that capped amount;
                 # recalculating from quantity × price would overwrite the
                 # intentional theoretical/operational separation.
-                planned_cif = quantize_cif(
+                requested_operational_cif = quantize_cif(
                     provenance.get("operational_planned_cif", theoretical_cif)
                 )
+                # Strategy rows can be emitted more than once for a merged
+                # source group.  The final persisted projection still has one
+                # licence-wide, current Actual Balance CIF ceiling.  Consume
+                # it deterministically here, before duplicate business lines
+                # are consolidated by the shared writer.
+                planned_cif = min(requested_operational_cif, remaining_cif)
+                remaining_cif = max(remaining_cif - planned_cif, DEC_0)
                 provenance.setdefault("theoretical_quantity", str(row["requested_quantity"]))
                 provenance["theoretical_cif"] = str(theoretical_cif)
                 provenance["operational_planned_cif"] = str(planned_cif)

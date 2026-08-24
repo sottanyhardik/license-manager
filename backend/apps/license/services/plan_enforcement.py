@@ -236,10 +236,10 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
         # it: plans are calculated projections, not business records.
         LicenseItemPlan.objects.select_for_update().filter(license=license_obj).delete()
 
-    # Planners can legitimately emit the same business line through more than
-    # one rule branch. Persist one canonical row, not an accidental versioned
-    # duplicate.  Rule/provenance are deliberately retained from the first
-    # deterministic producer; quantity and CIF are additive business facts.
+    # A calculated projection can encounter the same source/target/price line
+    # through more than one planner branch.  It is the *same ceiling*, not a
+    # second business entitlement: retain one deterministic canonical row and
+    # never double its quantity/CIF while consolidating duplicate output.
     consolidated = {}
     for ln in lines:
         key = (
@@ -247,10 +247,7 @@ def save_plan_lines_for_license(license_obj, lines, *, delete_existing=True) -> 
             str(ln.get("unit_price", 0) or 0),
             ln.get("planning_rule_id"),
         )
-        row = consolidated.setdefault(key, dict(ln))
-        if row is not ln:
-            row["planned_quantity"] = (row.get("planned_quantity", 0) or 0) + (ln.get("planned_quantity", 0) or 0)
-            row["planned_cif_fc"] = (row.get("planned_cif_fc", 0) or 0) + (ln.get("planned_cif_fc", 0) or 0)
+        consolidated.setdefault(key, dict(ln))
     created = []
     for ln in consolidated.values():
         baseline_qty, baseline_val = _baseline(ln.get("import_item"))

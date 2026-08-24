@@ -44,6 +44,11 @@ def consolidate_master_rows(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # PostgreSQL cannot alter constraints while deferred FK trigger events from
+    # the data backfill are pending.  Keep this deploy migration non-atomic so
+    # the backfill commits before the constraint replacement operations.
+    atomic = False
+
     dependencies = [("allotment", "0014_plan_line_allocation_identity")]
 
     operations = [

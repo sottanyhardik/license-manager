@@ -44,24 +44,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
     bulkUpsertItemPlans,
     deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
 } from "@/services/api/licenseApi";
-import { autoPlanLicense, planLicense } from "@/services/api/planningRuleApi";
+import { autoPlanLicense } from "@/services/api/planningRuleApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -516,11 +504,10 @@ function InlineEditor({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PlanningEditor({
-    licenseId, licenseNumber, balanceCif = 0, canWrite, onSaved,
+    licenseId, licenseNumber: _licenseNumber, balanceCif = 0, canWrite, onSaved,
 }: PlanningEditorProps) {
     const [loading, setLoading]           = useState(false);
     const [isPlanning, setIsPlanning]     = useState(false);
-    const [showForceConfirm, setShowForceConfirm] = useState(false);
 
     const [groups, setGroups]             = useState<Group[]>([]);
     const [savedGroups, setSavedGroups]   = useState<Group[]>([]);
@@ -870,34 +857,6 @@ export default function PlanningEditor({
 
     // ── Auto Plan ────────────────────────────────────────────────────────
 
-    const handlePlan = useCallback(async (mode: "NEW" | "ALL") => {
-        if (!licenseId || isPlanning) return;
-        setIsPlanning(true);
-        try {
-            const result = await planLicense(Number(licenseId), mode);
-            const siansExecuted = result?.total_results?.sions_executed || 0;
-            const linesWritten = result?.total_results?.total_lines_written || 0;
-
-            let message: string;
-            if (linesWritten === 0) {
-                message = "Planning already up to date. No new eligible items were found.";
-            } else if (mode === "ALL") {
-                message = `Force re-plan completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''} processed`;
-            } else {
-                message = `Planning completed: ${siansExecuted} SION${siansExecuted !== 1 ? 's' : ''}, ${linesWritten} line${linesWritten !== 1 ? 's' : ''} planned`;
-            }
-
-            toast.success(message);
-            await load();
-            onSaved?.();
-        } catch (error: unknown) {
-            toast.error(apiErrorMessage(error, "Failed to plan license"));
-        } finally {
-            setIsPlanning(false);
-            setShowForceConfirm(false);
-        }
-    }, [licenseId, isPlanning, load, onSaved]);
-
     const handleAutoPlan = useCallback(async () => {
         if (!licenseId || isPlanning) {
             return;
@@ -905,17 +864,18 @@ export default function PlanningEditor({
         setIsPlanning(true);
         try {
             const result = await autoPlanLicense(Number(licenseId));
-            toast.success(result.message || "Auto Plan completed.");
+            // The synchronous endpoint only resolves after the planner's
+            // transaction commits. Refresh this licence's canonical planning
+            // projection once, rather than polling a background status.
             await load();
             onSaved?.();
+            toast.success(result.message || "Auto Plan completed.");
         } catch (error: unknown) {
             toast.error(apiErrorMessage(error, "Failed to auto-plan license"));
         } finally {
             setIsPlanning(false);
         }
     }, [licenseId, isPlanning, load, onSaved]);
-
-    const handleForceReplan = () => setShowForceConfirm(true);
 
     // ── Derived totals ─────────────────────────────────────────────────────────
 
@@ -1007,59 +967,10 @@ export default function PlanningEditor({
                         ) : (
                             <Target className="size-3.5" aria-hidden="true" />
                         )}
-                        {isPlanning ? "Planning..." : "Auto Plan"}
+                        {isPlanning ? "Planning…" : "Auto Plan"}
                     </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="px-2"
-                                disabled={isPlanning}
-                            >
-                                <ChevronDown className="size-4" aria-hidden="true" />
-                                <span className="sr-only">Planning options</span>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem asChild>
-                                <button
-                                    type="button"
-                                    onClick={handleAutoPlan}
-                                    disabled={isPlanning}
-                                    className="w-full cursor-pointer"
-                                >
-                                    Auto Plan — New Only
-                                </button>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleForceReplan} disabled={isPlanning}>
-                                Force Re-plan
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
                 </div>
             </div>
-
-            <Dialog open={showForceConfirm} onOpenChange={setShowForceConfirm}>
-                <DialogContent>
-                    <DialogTitle>Re-plan this license?</DialogTitle>
-                    <DialogDescription className="py-4">
-                        Existing planning for license {licenseNumber} will be
-                        recalculated using the current saved planning rules.
-                    </DialogDescription>
-                    <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setShowForceConfirm(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => handlePlan("ALL")}
-                        >
-                            Force Re-plan
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* Backend reconciliation is the sole source for these values. */}
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">

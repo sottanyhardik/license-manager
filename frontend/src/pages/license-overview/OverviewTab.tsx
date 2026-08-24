@@ -137,7 +137,7 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                     </div>
 
                     <div className="mt-3">
-                        <LicenseMetricsGrid summary={summary.summary} />
+                        <LicenseMetricsGrid summary={summary.summary} licenseId={licenseId ?? ""} override={summary.individual_item_cif_override} canWrite={hasRole("LICENSE_MANAGER")} />
                     </div>
                 </>
             )}

@@ -110,6 +110,9 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
     importer = license_obj.exporter.name if license_obj.exporter_id else (license_obj.archived_exporter_name or None)
 
     return {
+        # Raw persisted override.  Consumers intentionally render both None
+        # and False as OFF; keeping the raw value preserves auditability.
+        "individual_item_cif_override": license_obj.individual_item_cif_override,
         "license_number": license_obj.license_number,
         "authorisation_number": license_obj.registration_number,
         "file_number": license_obj.file_number,

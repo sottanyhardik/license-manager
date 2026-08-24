@@ -18,7 +18,7 @@ const NAV_GROUPS = [
         icon: "file-earmark-text",
         items: [
             { path: "/licenses",           label: "Licenses",           icon: "file-earmark-text", roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"] },
-            { path: "/planning",           label: "Plan Norms",         icon: "diagram-3",          roles: ["LICENSE_MANAGER"] },
+            { path: "/planning",           label: "Auto Plan",          icon: "diagram-3",          roles: ["LICENSE_MANAGER"] },
             { path: "/incentive-licenses", label: "Incentive Licenses", icon: "award",              roles: ["INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"] },
             { path: "/license-ledger",     label: "License Ledger",     icon: "journal-text",       roles: ["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"] },
             { path: "/ledger-upload",      label: "Ledger Upload",      icon: "cloud-upload",       roles: ["LICENSE_MANAGER", "LEDGER_MANAGER"] },

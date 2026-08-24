@@ -14,25 +14,29 @@ from apps.core.constants import DEBIT
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    LicenseItemPlan, LicenseReplanRequest, SionPlanningRule,
+    LicenseItemPlan, SionPlanningRule,
 )
 
 
 pytestmark = pytest.mark.django_db
 
 
-def queue_then_execute(client, license_obj, *, sion_id, company_id):
-    """Queue through HTTP, then execute the same canonical durable worker."""
-    response = client.post(f"/api/licenses/{license_obj.pk}/auto-plan/")
-    assert response.status_code == 202, response.data
-    request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
-    assert request.license_id == license_obj.pk
-    assert request.status == LicenseReplanRequest.STATUS_PENDING
-    from apps.license.tasks import replan_license_task
-    result = replan_license_task.run(request.pk)
-    request.refresh_from_db()
-    assert request.status == LicenseReplanRequest.STATUS_SUCCEEDED
-    return result
+def execute_auto_plan(client, license_obj, *, sion_id, company_id):
+    """Execute the interactive Auto Plan contract and return its committed result.
+
+    The licence-specific endpoint is deliberately synchronous.  Durable
+    replan-request coverage belongs to the source-change/SION-wide endpoints;
+    this helper must not enqueue or manually invoke a worker after a request.
+    """
+    response = client.post(
+        f"/api/licenses/{license_obj.pk}/auto-plan/", {"force": True}, format="json",
+    )
+    assert response.status_code == 200, response.data
+    assert response.data["planning_state"] == "COMPLETED"
+    assert response.data["force"] is True
+    assert response.data["license_id"] == license_obj.pk
+    assert response.data["write_results"] >= 0
+    return response.data
 
 
 def test_strategy_source_match_expression_hsn_and_description():
@@ -159,7 +163,7 @@ class TestSplitByPercentageStrategy:
         assert split_rule.percentage_rows.count() == 2, "Expected 2 percentage rows in the split rule"
 
         # Call Auto Plan
-        result = queue_then_execute(
+        result = execute_auto_plan(
             setup["client"], license_obj, sion_id=setup["sion"].pk,
             company_id=setup["company"].pk,
         )
@@ -221,7 +225,7 @@ class TestSplitByPercentageStrategy:
             qty=Decimal("5000"), cif_fc=Decimal("50000"), cif_inr=Decimal("50000"),
         )
 
-        result = queue_then_execute(
+        result = execute_auto_plan(
             setup["client"], license_obj, sion_id=setup["sion"].pk,
             company_id=setup["company"].pk,
         )
@@ -284,7 +288,7 @@ class TestSplitByPercentageStrategy:
             quantity=Decimal("10000"), available_quantity=Decimal("10000"),
         )
 
-        queue_then_execute(
+        execute_auto_plan(
             setup["client"], license_obj, sion_id=setup["sion"].pk,
             company_id=setup["company"].pk,
         )
@@ -341,7 +345,7 @@ class TestSplitByPercentageStrategy:
         )
         oil_row.items.add(pko, olive)
 
-        result = queue_then_execute(
+        result = execute_auto_plan(
             setup["client"], license_obj, sion_id=setup["sion"].pk,
             company_id=setup["company"].pk,
         )

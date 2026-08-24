@@ -3,9 +3,13 @@ import { DollarSign, FileText, Layers, PieChart, Target, TrendingDown, Wallet } 
 import StatCard from "./StatCard";
 import { fmtNum } from "./licenseOverviewHelpers";
 import type { LicenseOverviewSummaryCounts } from "./types";
+import IndividualItemCifSwitch from "@/components/IndividualItemCifSwitch";
 
 interface LicenseMetricsGridProps {
     summary: LicenseOverviewSummaryCounts;
+    licenseId: string | number;
+    override?: boolean | null;
+    canWrite: boolean;
 }
 
 /**
@@ -17,7 +21,7 @@ interface LicenseMetricsGridProps {
  * column count independent per breakpoint while guaranteeing no horizontal
  * scroll: 1/row on mobile, 2/row on tablet, the full row on desktop.
  */
-export default function LicenseMetricsGrid({ summary }: LicenseMetricsGridProps) {
+export default function LicenseMetricsGrid({ summary, licenseId, override, canWrite }: LicenseMetricsGridProps) {
     return (
         <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -72,6 +76,7 @@ export default function LicenseMetricsGrid({ summary }: LicenseMetricsGridProps)
                     helper="Available to utilize"
                     accent="green"
                     highlighted
+                    footer={<IndividualItemCifSwitch licenseId={licenseId} override={override} canWrite={canWrite} className="mt-1 border-t border-border/50 pt-2" />}
                 />
             </div>
         </div>

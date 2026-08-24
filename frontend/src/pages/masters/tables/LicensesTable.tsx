@@ -37,6 +37,7 @@ import {
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 import api from "../../../api/axios";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,11 @@ import { saveFilterState } from "../../../utils/filterPersistence";
 import { selectLedgerDisplayRows } from "@/utils/ledgerDisplayRows";
 import LedgerTab from "./LedgerTab";
 import PlanningEditor from "@/components/planning/PlanningEditor";
+import LicenseOverviewContent from "@/pages/license-overview/LicenseOverviewContent";
+import IndividualItemCifSwitch from "@/components/IndividualItemCifSwitch";
+import { autoPlanLicense } from "@/services/api/planningRuleApi";
+import { licenseOverviewKeys } from "@/pages/license-overview/useLicenseOverviewSummary";
+import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -65,6 +71,7 @@ interface LicenseListItem {
     exporter_iec: string | null;
     get_norm_class: string | null;
     get_balance_cif: string | number | null;
+    individual_item_cif_override?: boolean | null;
     latest_transfer: string | null;
     purchase_status_label: string | null;
     purchase_status_code: string | null;
@@ -271,7 +278,8 @@ interface ActionPanelProps {
     onDownloadPdf: () => void;
     onDownloadExcel: () => void;
     onOpenOverview: () => void;
-    onPlanNorms: () => void;
+    onAutoPlan: () => void;
+    isPlanning: boolean;
     onFetchDGFT: () => void;
     onDelete: () => void;
 }
@@ -284,7 +292,8 @@ function ActionPanel({
     onDownloadPdf,
     onDownloadExcel,
     onOpenOverview,
-    onPlanNorms,
+    onAutoPlan,
+    isPlanning,
     onFetchDGFT,
     onDelete,
 }: ActionPanelProps) {
@@ -296,7 +305,7 @@ function ActionPanel({
             {/* Actions */}
             <div className="flex flex-col gap-0.5">
                 <ActionRow icon={BarChart3} label="License Overview" onClick={onOpenOverview} />
-                {canWrite && <ActionRow icon={Target} label="Plan Norms" onClick={onPlanNorms} />}
+                {canWrite && <ActionRow icon={isPlanning ? RefreshCw : Target} label={isPlanning ? "Planning…" : "Auto Plan"} onClick={onAutoPlan} disabled={isPlanning} spinning={isPlanning} />}
                 <ActionRow icon={FileText} label="Balance PDF" onClick={onDownloadPdf} />
                 <ActionRow icon={FileSpreadsheet} label="Balance Excel" onClick={onDownloadExcel} />
 
@@ -938,14 +947,14 @@ const LicenseRow = memo(function LicenseRow({
     isFetchingDGFT,
     onFetchDGFT,
 }: LicenseRowProps) {
+    const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<TabId>("overview");
     const [visited, setVisited] = useState<Set<TabId>>(new Set(["overview"]));
-    const [detail, setDetail] = useState<LicenseDetail | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-    const [ledger, setLedger] = useState<LedgerData | null>(null);
-    const [ledgerLoading, setLedgerLoading] = useState(false);
+    const [detail] = useState<LicenseDetail | null>(null);
+    const [detailLoading] = useState(false);
     const [ownershipData, setOwnershipData] = useState<OwnershipData | null>(null);
     const [ownershipLoading, setOwnershipLoading] = useState(false);
+    const [isPlanning, setIsPlanning] = useState(false);
 
     // Dynamic tabs — computed once detail and ledger are known.
     // Rules:
@@ -959,26 +968,14 @@ const LicenseRow = memo(function LicenseRow({
     const visibleTabs = useMemo<{ id: TabId; label: string }[]>(() => {
         const tabs: { id: TabId; label: string }[] = [];
         tabs.push({ id: "overview", label: "Overview" });
-        // "Balance" tab = the merged Ledger + legacy Balance view.
-        // Always present; shows empty state when no import items exist.
-        tabs.push({ id: "ledger", label: "Balance" });
-        // Plan — write permission required
-        if (canWrite) {
-            tabs.push({ id: "plan", label: "Plan" });
-        }
-        // Transactions — only when ledger fetch has completed and has rows.
-        // Root-cause fix: ledger is now fetched eagerly on expand (not lazily
-        // on tab click), so this gate resolves in ~1 s, not never.
-        if (ledger?.transactions && ledger.transactions.length > 0) {
-            tabs.push({ id: "transactions", label: "Transactions" });
-        }
+        if (canWrite) tabs.push({ id: "plan", label: "Planning" });
         // Documents — only when documents actually exist
         if (detail?.license_documents && detail.license_documents.length > 0) {
             tabs.push({ id: "documents", label: "Documents" });
         }
         tabs.push({ id: "history", label: "History" });
         return tabs;
-    }, [detail, ledger, canWrite]);
+    }, [detail, canWrite]);
 
     const isExpired = !!(
         item.license_expiry_date && parseIndianDate(item.license_expiry_date)! < new Date()
@@ -993,32 +990,6 @@ const LicenseRow = memo(function LicenseRow({
     //   Previously the ledger was only fetched when the user clicked "Transactions",
     //   which created a chicken-and-egg: the tab never appeared because the gate
     //   required data that was never fetched.
-    useEffect(() => {
-        if (!expanded) return;
-        let cancelled = false;
-
-        // Detail fetch
-        if (detail === null && !detailLoading) {
-            setDetailLoading(true);
-            api.get(`licenses/${item.id}/`)
-                .then(({ data }) => { if (!cancelled) setDetail(data); })
-                .catch(() => { if (!cancelled) toast.error("Failed to load license details"); })
-                .finally(() => { if (!cancelled) setDetailLoading(false); });
-        }
-
-        // Ledger fetch — eager so the Transactions tab can appear
-        if (ledger === null && !ledgerLoading) {
-            setLedgerLoading(true);
-            api.get(`license-ledger/${item.id}/ledger_detail/`)
-                .then(({ data }) => { if (!cancelled) setLedger(data); })
-                .catch(() => { /* Non-fatal: transactions tab stays hidden if no data */ })
-                .finally(() => { if (!cancelled) setLedgerLoading(false); });
-        }
-
-        return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [expanded, item.id]);
-
     const handleTabChange = useCallback((tab: string) => {
         const t = tab as TabId;
         setActiveTab(t);
@@ -1072,9 +1043,26 @@ const LicenseRow = memo(function LicenseRow({
         navigate(`/licenses/${item.id}/overview`);
     }, [navigate, item.id]);
 
-    const navigateToPlanning = useCallback(() => {
-        navigate(`/planning?license_id=${encodeURIComponent(String(item.id))}&origin=${encodeURIComponent("/licenses")}`);
-    }, [navigate, item.id]);
+    const handleAutoPlan = useCallback(async () => {
+        if (isPlanning) return;
+        setIsPlanning(true);
+        try {
+            const result = await autoPlanLicense(item.id);
+            const id = String(item.id);
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.summary(id) }),
+                queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.items(id) }),
+                queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.planning(id) }),
+                queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(id) }),
+                queryClient.invalidateQueries({ queryKey: ["entity-list", "licenses"] }),
+            ]);
+            toast.success(result.message || "Licence planning has completed.");
+        } catch {
+            toast.error("Failed to auto-plan licence.");
+        } finally {
+            setIsPlanning(false);
+        }
+    }, [isPlanning, item.id, queryClient]);
 
     // Both handlers below use the shared `openAuthedFile`/`openPdfPreview`
     // helpers (axios instance already attaches the auth header on every
@@ -1212,6 +1200,12 @@ const LicenseRow = memo(function LicenseRow({
                             <div className="mt-0.5 text-[22px] font-bold tabular-nums leading-none text-foreground">
                                 ${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
+                            <IndividualItemCifSwitch
+                                licenseId={item.id}
+                                override={item.individual_item_cif_override}
+                                canWrite={canWrite}
+                                className="mt-2 border-t border-border/50 pt-2"
+                            />
                         </div>
                     </div>
 
@@ -1261,27 +1255,9 @@ const LicenseRow = memo(function LicenseRow({
                                     >
                                         {visited.has(tab.id) && (
                                             <>
-                                                {tab.id === "overview" && (
-                                                    <OverviewTab item={item} detail={detail} />
-                                                )}
-                                                {tab.id === "ledger" && (
-                                                    /* "Balance" tab (merged Ledger + legacy Balance features) */
-                                                    <LedgerTab
-                                                        item={item as unknown as Parameters<typeof LedgerTab>[0]["item"]}
-                                                        detail={detail as unknown as Parameters<typeof LedgerTab>[0]["detail"]}
-                                                        loading={detailLoading}
-                                                    />
-                                                )}
+                                                {tab.id === "overview" && <LicenseOverviewContent licenseId={item.id} activeTab="items" mode="embedded" />}
                                                 {tab.id === "plan" && (
-                                                    <PlanningEditor
-                                                        licenseId={item.id}
-                                                        licenseNumber={item.license_number}
-                                                        balanceCif={Number(item.get_balance_cif || 0)}
-                                                        canWrite={canWrite}
-                                                    />
-                                                )}
-                                                {tab.id === "transactions" && (
-                                                    <TransactionsTab item={item} ledger={ledger} loading={ledgerLoading} />
+                                                    <LicenseOverviewContent licenseId={item.id} activeTab="planning" mode="embedded" />
                                                 )}
                                                 {tab.id === "documents" && (
                                                     <DocumentsTab item={item} detail={detail} loading={detailLoading} />
@@ -1305,7 +1281,8 @@ const LicenseRow = memo(function LicenseRow({
                             onDownloadPdf={handleDownloadPdf}
                             onDownloadExcel={handleDownloadExcel}
                             onOpenOverview={navigateToOverview}
-                            onPlanNorms={navigateToPlanning}
+                            onAutoPlan={handleAutoPlan}
+                            isPlanning={isPlanning}
                             onFetchDGFT={() => onFetchDGFT(item)}
                             onDelete={() => onDelete(item)}
                         />

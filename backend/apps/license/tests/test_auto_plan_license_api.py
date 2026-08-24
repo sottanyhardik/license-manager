@@ -40,12 +40,30 @@ def _assert_queued(response, license_obj, mode):
     return request
 
 
-def _queue_auto_plan(client, license_obj, mode="NEW"):
-    """Current API contract: one durable request per licence, no inline plan."""
+def _assert_auto_plan_completed(response, license_obj):
+    """The interactive licence endpoint returns only after planning commits."""
+    assert response.status_code == 200, response.data
+    assert response.data["license_id"] == license_obj.pk
+    assert response.data["license_number"] == license_obj.license_number
+    assert response.data["planning_state"] == "COMPLETED"
+    assert response.data["force"] is True
+    assert "replan_request_id" not in response.data
+    assert response.data["message"] == "Licence planning has completed."
+    # SION-wide/source-change replans remain durable, but the interactive
+    # endpoint must not create a second manual request in addition to its
+    # committed inline replacement.
+    assert not LicenseReplanRequest.objects.filter(
+        license=license_obj, reason="manual_auto_plan",
+    ).exists()
+    return response.data
+
+
+def _complete_auto_plan(client, license_obj):
+    """Call the synchronous, forced licence Auto Plan contract."""
     response = client.post(
-        f"/api/licenses/{license_obj.pk}/auto-plan/", {"mode": mode}, format="json",
+        f"/api/licenses/{license_obj.pk}/auto-plan/", {"force": True}, format="json",
     )
-    return _assert_queued(response, license_obj, mode)
+    return _assert_auto_plan_completed(response, license_obj)
 
 
 @pytest.fixture
@@ -275,7 +293,7 @@ def test_plan_license_all_mode_replans_existing(setup_planning_env):
 
 
 def test_plan_licenses_bulk_single_license(setup_planning_env):
-    """The replacement API queues one durable request for one licence."""
+    """The licence action synchronously commits one forced replacement."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-1", sion=env["sions"]["E1"]
@@ -284,12 +302,12 @@ def test_plan_licenses_bulk_single_license(setup_planning_env):
         license_obj, "080211", "Almond", "kg", Decimal("100")
     )
 
-    request = _queue_auto_plan(env["client"], license_obj)
-    assert request.status == LicenseReplanRequest.STATUS_PENDING
+    data = _complete_auto_plan(env["client"], license_obj)
+    assert data["write_results"] >= 0
 
 
 def test_plan_licenses_bulk_multiple_licenses_same_sion(setup_planning_env):
-    """Bulk callers fan out bounded queue requests rather than inline work."""
+    """Each explicit licence action commits independently without queuing."""
     env = setup_planning_env
     licenses = []
     for i in range(2):
@@ -301,13 +319,12 @@ def test_plan_licenses_bulk_multiple_licenses_same_sion(setup_planning_env):
         )
         licenses.append(lic)
 
-    requests = [_queue_auto_plan(env["client"], license) for license in licenses]
-    assert {request.license_id for request in requests} == {license.pk for license in licenses}
-    assert LicenseReplanRequest.objects.filter(pk__in=[request.pk for request in requests]).count() == 2
+    results = [_complete_auto_plan(env["client"], license) for license in licenses]
+    assert {result["license_id"] for result in results} == {license.pk for license in licenses}
 
 
 def test_plan_licenses_bulk_multiple_licenses_multiple_sions(setup_planning_env):
-    """Each licence queues independently; worker resolves all its SIONs."""
+    """Each action resolves and commits all SIONs for its own licence."""
     env = setup_planning_env
     # License 1: E1 only
     lic1 = _make_test_license(
@@ -337,9 +354,9 @@ def test_plan_licenses_bulk_multiple_licenses_multiple_sions(setup_planning_env)
         lic3, "080211", "Almond", "kg", Decimal("100")
     )
 
-    requests = [_queue_auto_plan(env["client"], license) for license in (lic1, lic2, lic3)]
-    assert {request.license_id for request in requests} == {lic1.pk, lic2.pk, lic3.pk}
-    # Multi-SION resolution belongs to the serialised worker, not HTTP.
+    results = [_complete_auto_plan(env["client"], license) for license in (lic1, lic2, lic3)]
+    assert {result["license_id"] for result in results} == {lic1.pk, lic2.pk, lic3.pk}
+    # The synchronous action resolves all configured SIONs before responding.
     assert LicenseExportItemModel.objects.filter(license=lic3).count() == 2
 
 
@@ -408,8 +425,8 @@ def test_plan_license_default_mode_is_new(setup_planning_env):
     _assert_queued(response, license_obj, "NEW")
 
 
-def test_plan_licenses_default_mode_is_new(setup_planning_env):
-    """The current durable endpoint defaults mode to NEW."""
+def test_plan_licenses_default_mode_is_forced(setup_planning_env):
+    """The licence action remains forced when the optional field is omitted."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-DEFAULT-MODE", sion=env["sions"]["E1"]
@@ -418,8 +435,11 @@ def test_plan_licenses_default_mode_is_new(setup_planning_env):
         license_obj, "080211", "Almond", "kg", Decimal("100")
     )
 
-    request = _queue_auto_plan(env["client"], license_obj)
-    assert request.reason == "manual_auto_plan"
+    response = env["client"].post(
+        f"/api/licenses/{license_obj.pk}/auto-plan/", {}, format="json",
+    )
+    data = _assert_auto_plan_completed(response, license_obj)
+    assert data["force"] is True
 
 
 def test_plan_license_response_structure(setup_planning_env):
@@ -443,7 +463,7 @@ def test_plan_license_response_structure(setup_planning_env):
 
 
 def test_plan_licenses_response_structure(setup_planning_env):
-    """Current response exposes durable state instead of fake completion."""
+    """Response represents the committed synchronous planning result."""
     env = setup_planning_env
     license_obj = _make_test_license(
         env["company"], "TEST-BULK-RESPONSE", sion=env["sions"]["E1"]
@@ -452,7 +472,11 @@ def test_plan_licenses_response_structure(setup_planning_env):
         license_obj, "080211", "Almond", "kg", Decimal("100")
     )
 
-    response = env["client"].post(f"/api/licenses/{license_obj.pk}/auto-plan/", {"mode": "NEW"}, format="json")
-    _assert_queued(response, license_obj, "NEW")
-    data = response.data
-    assert set(data) >= {"license_id", "license_number", "planning_state", "replan_request_id", "message"}
+    response = env["client"].post(
+        f"/api/licenses/{license_obj.pk}/auto-plan/", {"force": True}, format="json",
+    )
+    data = _assert_auto_plan_completed(response, license_obj)
+    assert set(data) >= {
+        "license_id", "license_number", "planning_state", "force",
+        "write_results", "rules_executed", "message",
+    }

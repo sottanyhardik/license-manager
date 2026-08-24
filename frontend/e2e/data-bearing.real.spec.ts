@@ -50,15 +50,19 @@ test.describe("isolated data-bearing operational workflows", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await page.goto("/licenses/2509/overview", { waitUntil: "networkidle" });
     await expect(page.getByText("3411008090", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("E2E ALUMINIUM FOIL 2509", { exact: true }).first()).toBeVisible();
+    // Import rows live in the explicit Items tab.  Do not let a hidden
+    // responsive copy of the row satisfy (or block) the data-bearing check.
+    await page.getByRole("tab", { name: "Items" }).click();
+    await expect(
+      page.locator("p:visible").filter({ hasText: /^E2E ALUMINIUM FOIL 2509$/ })
+    ).toBeVisible();
     await expectNoDocumentOverflow(page);
 
     await page.goto("/allotments/1/allocate", { waitUntil: "networkidle" });
     await expect(page.getByText(`Invoice #${primaryInvoice}`, { exact: false })).toBeVisible();
-    // The authoritative allotment description is retained as an active
-    // filter.  The redesigned compact toolbar exposes it as a removable chip
-    // instead of the former standalone text input.
-    await expect(page.getByText("Description: E2E ALUMINIUM FOIL 2509", { exact: true })).toBeVisible();
+    // The authoritative allotment description is retained as the active
+    // server filter; the compact toolbar renders it in the description input.
+    await expect(page.locator('input[value="E2E ALUMINIUM FOIL 2509"]')).toBeVisible();
     await expect(page.getByText("3411008090", { exact: true })).toBeVisible();
     await expectNoDocumentOverflow(page);
     await page.screenshot({ path: testInfo.outputPath("real-primary-allotment.png"), fullPage: true });
@@ -110,7 +114,7 @@ test.describe("isolated data-bearing operational workflows", () => {
     const debitBasis = page.locator("label:has-text('Debit Based On')").locator("..").locator("select");
     await debitBasis.selectOption("ACTUAL");
     await expect(page.getByText("ACTUAL BALANCE MODE", { exact: false })).toBeVisible();
-    await expect(page.getByText("Description: E2E ALUMINIUM FOIL 2509", { exact: true })).toBeVisible();
+    await expect(page.locator('input[value="E2E ALUMINIUM FOIL 2509"]')).toBeVisible();
     await expectNoDocumentOverflow(page);
   });
 

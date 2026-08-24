@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export type StatAccent = "blue" | "indigo" | "purple" | "orange" | "red" | "cyan" | "green";
@@ -77,6 +78,7 @@ export interface StatCardProps {
     accent: StatAccent;
     /** Balance CIF gets this: slightly larger value text + a stronger accent ring. */
     highlighted?: boolean;
+    footer?: ReactNode;
 }
 
 /**
@@ -85,7 +87,7 @@ export interface StatCardProps {
  * the bottom. Deliberately no gradients/neon: a soft color-tinted background
  * plus a subtle ring is the entire "glow" treatment.
  */
-export default function StatCard({ icon: Icon, title, value, helper, accent, highlighted = false }: StatCardProps) {
+export default function StatCard({ icon: Icon, title, value, helper, accent, highlighted = false, footer }: StatCardProps) {
     const styles = ACCENT_STYLES[accent];
     return (
         <div
@@ -110,6 +112,7 @@ export default function StatCard({ icon: Icon, title, value, helper, accent, hig
                 {value}
             </div>
             {helper && <div className="truncate text-[11px] text-muted-foreground" title={helper}>{helper}</div>}
+            {footer}
         </div>
     );
 }

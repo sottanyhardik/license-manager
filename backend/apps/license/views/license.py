@@ -19,6 +19,7 @@ from apps.core.views.master_view import MasterViewSet
 from apps.license.models import LicenseDetailsModel
 from apps.license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
     LicenseDocumentSerializer
+from apps.license.serializers.license import IndividualItemCifOverrideSerializer
 from apps.license.views.active_dfia_report import add_active_dfia_report_action
 from apps.license.views.license_report import add_license_report_action
 from apps.license.views.license_balance_ledger import add_license_balance_ledger_actions
@@ -240,6 +241,42 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
     search_fields = ['license_number', 'file_number', 'exporter__name']
     ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'exporter__name', 'license_number']
+
+    @action(detail=True, methods=['patch'], url_path='individual-item-cif-override')
+    def individual_item_cif_override(self, request, pk=None):
+        """Atomically opt a licence into (or out of) per-import-item CIF.
+
+        This deliberately accepts just one strictly typed field.  It uses the
+        normal ViewSet permission/object lookup path and queues the existing
+        durable replan mechanism only after a successful outer commit.
+        """
+        payload = IndividualItemCifOverrideSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        if set(request.data.keys()) != {"individual_item_cif_override"}:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Only individual_item_cif_override may be updated by this action.")
+
+        with transaction.atomic():
+            licence = LicenseDetailsModel.objects.select_for_update().get(pk=self.get_object().pk)
+            old_value = licence.individual_item_cif_override
+            new_value = payload.validated_data["individual_item_cif_override"]
+            if old_value != new_value:
+                licence.individual_item_cif_override = new_value
+                licence.modified_by = request.user
+                licence.save(update_fields=["individual_item_cif_override", "modified_by", "modified_on"])
+                from apps.license.services.replan_requests import mark_license_replan_source_changed
+                mark_license_replan_source_changed(
+                    license_id=licence.pk,
+                    reason="individual_item_cif_override_changed",
+                    source_model="license.LicenseDetailsModel",
+                    source_pk=licence.pk,
+                )
+
+        return Response({
+            "id": licence.pk,
+            "individual_item_cif_override": licence.individual_item_cif_override,
+            "old_individual_item_cif_override": old_value,
+        })
 
     def paginate_queryset(self, queryset):
         """
@@ -837,29 +874,51 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
 
     @action(detail=True, methods=['post'], url_path='auto-plan')
     def auto_plan(self, request, pk=None):
-        """Queue the canonical Auto Plan request for this licence.
+        """Synchronously and atomically replace this licence's generated plan.
 
-        Planning is intentionally executed only by the durable worker after
-        the source transaction commits.  Keeping this convenience endpoint
-        enqueue-only gives it the same locking, revision, retry and audit
-        semantics as the planning workspace endpoints.
+        This is deliberately the one interactive planning endpoint that is
+        synchronous.  The SION-wide and source-change replan routes keep
+        their durable-worker semantics; a user pressing Auto Plan needs an
+        authoritative committed result before the request returns.
         """
-        from apps.license.services.replan_requests import request_license_replan
-        license_obj = self.get_object()
-        durable_request = request_license_replan(
-            license_id=license_obj.pk,
-            reason="manual_auto_plan",
-            source_model="license.auto_plan",
-            source_pk=license_obj.pk,
-            dispatch=True,
-        )
+        # Keep the public field strict and backwards compatible.  Manual Auto
+        # Plan has historically been forced regardless of the supplied value;
+        # accepting ``false`` therefore does not turn this into a cache hit.
+        force = request.data.get("force", True)
+        if not isinstance(force, bool):
+            return Response(
+                {"force": ["Must be a boolean."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # get_object performs the viewset's existing object-level permission
+        # checks.  Re-fetch it under a row lock before resolving SIONs, so two
+        # simultaneous button clicks cannot interleave destructive REPLACE
+        # writes.  The nested planner transactions become savepoints and the
+        # whole operation rolls back on any unexpected failure.
+        requested_license = self.get_object()
+        from apps.license.services.sion_rule_engine import SionRulePlanningService
+        from apps.license.views.sion_planning_rule import SionPlanningRuleViewSet
+        with transaction.atomic():
+            license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=requested_license.pk)
+            _, sion_ids = SionPlanningRuleViewSet._resolve_sions_for_license(license_obj.pk)
+            results = [
+                SionRulePlanningService.plan_sion(
+                    sion_id,
+                    license_ids=[license_obj.pk],
+                    mode="ALL",
+                    force_plan=True,
+                )
+                for sion_id in sion_ids
+            ]
         return Response({
             "license_id": license_obj.pk,
             "license_number": license_obj.license_number,
-            "planning_state": "REPLAN_PENDING",
-            "replan_request_id": durable_request.pk,
-            "message": "Licence replanning has been queued.",
-        }, status=status.HTTP_202_ACCEPTED)
+            "planning_state": "COMPLETED",
+            "force": True,
+            "write_results": sum(len(result.get("write_results", [])) for result in results),
+            "rules_executed": [rule for result in results for rule in result.get("rules_executed", [])],
+            "message": "Licence planning has completed.",
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='merged-documents')
     def merged_documents(self, request, pk=None):

@@ -1,6 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import PlanningEditor from "./PlanningEditor";
+import { autoPlanLicense, type AutoPlanResponse } from "../../services/api/planningRuleApi";
 
 vi.mock("../../services/api/licenseApi", () => ({
     fetchLicense: vi.fn().mockResolvedValue({
@@ -133,5 +134,47 @@ describe("PlanningEditor reconciliation", () => {
         expect(parent.queryByText("Over Planned")).not.toBeInTheDocument();
         expect(parent.getByText("Planned")).toBeInTheDocument();
 
+    });
+
+    it("keeps Auto Plan disabled until the synchronous forced request completes", async () => {
+        let resolvePlan!: (value: AutoPlanResponse) => void;
+        vi.mocked(autoPlanLicense).mockReturnValueOnce(new Promise((resolve) => {
+            resolvePlan = resolve;
+        }) as ReturnType<typeof autoPlanLicense>);
+
+        render(<PlanningEditor licenseId={430} licenseNumber="SYNC" canWrite />);
+        const button = await screen.findByRole("button", { name: "Auto Plan" });
+        fireEvent.click(button);
+
+        expect(autoPlanLicense).toHaveBeenCalledTimes(1);
+        expect(autoPlanLicense).toHaveBeenCalledWith(430);
+        expect(button).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Planning…" })).toBeDisabled();
+
+        // A second click during the in-flight transaction is ignored.
+        fireEvent.click(button);
+        expect(autoPlanLicense).toHaveBeenCalledTimes(1);
+
+        resolvePlan({
+            license_id: 430,
+            license_number: "SYNC",
+            planning_state: "CURRENT",
+            message: "Auto Plan completed.",
+            result: {},
+        });
+        expect(await screen.findByRole("button", { name: "Auto Plan" })).toBeEnabled();
+    });
+
+    it("recovers the Auto Plan action after a synchronous failure", async () => {
+        vi.mocked(autoPlanLicense).mockRejectedValueOnce({
+            response: { data: { detail: "Planning transaction failed" } },
+        });
+        render(<PlanningEditor licenseId={431} licenseNumber="SYNC-ERROR" canWrite />);
+
+        const button = await screen.findByRole("button", { name: "Auto Plan" });
+        fireEvent.click(button);
+
+        expect(await screen.findByRole("button", { name: "Auto Plan" })).toBeEnabled();
+        expect(autoPlanLicense).toHaveBeenCalledWith(431);
     });
 });

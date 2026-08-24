@@ -194,19 +194,34 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         assert request.reason == "import_item_changed"
 
     @patch("apps.license.tasks.dispatch_replan_requests.delay")
-    def test_auto_plan_endpoint_queues_without_running_auto_plan_inline(self, delay):
-        """The legacy convenience route is enqueue-only, not a sync escape hatch."""
-        with patch("apps.license.services.sion_rule_engine.SionRulePlanningService.plan_sion") as planner:
-            with self.captureOnCommitCallbacks(execute=True):
-                response = self.client.post(f"/api/licenses/{self.license.pk}/auto-plan/", format="json")
+    def test_auto_plan_endpoint_runs_inline_without_queueing(self, delay):
+        """Interactive Auto Plan is committed inline; durable routes stay async."""
+        with patch(
+            "apps.license.views.sion_planning_rule.SionPlanningRuleViewSet._resolve_sions_for_license",
+            return_value=(self.license, [101]),
+        ), patch(
+            "apps.license.services.sion_rule_engine.SionRulePlanningService.plan_sion",
+            return_value={"write_results": [{"license_id": self.license.pk}], "rules_executed": [101]},
+        ) as planner:
+            response = self.client.post(
+                f"/api/licenses/{self.license.pk}/auto-plan/", {"force": True}, format="json",
+            )
 
-        assert response.status_code == 202, response.data
-        assert response.data["planning_state"] == "REPLAN_PENDING"
-        durable_request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_id"])
-        assert durable_request.license_id == self.license.pk
-        assert durable_request.reason == "manual_auto_plan"
-        planner.assert_not_called()
-        delay.assert_called_once_with([durable_request.pk])
+        assert response.status_code == 200, response.data
+        assert response.data == {
+            "license_id": self.license.pk,
+            "license_number": self.license.license_number,
+            "planning_state": "COMPLETED",
+            "force": True,
+            "write_results": 1,
+            "rules_executed": [101],
+            "message": "Licence planning has completed.",
+        }
+        planner.assert_called_once_with(101, license_ids=[self.license.pk], mode="ALL", force_plan=True)
+        assert not LicenseReplanRequest.objects.filter(
+            license=self.license, reason="manual_auto_plan",
+        ).exists()
+        delay.assert_not_called()
 
     @patch("apps.license.tasks.dispatch_replan_requests.delay")
     def test_plan_license_endpoint_queues_without_running_auto_plan_inline(self, delay):

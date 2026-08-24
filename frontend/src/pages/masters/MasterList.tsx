@@ -333,14 +333,25 @@ export default function MasterList() {
         // is always in API format. uiFilterParams derives the UI format for display.
         const urlParams = new URLSearchParams(location.search);
         const urlFilters: Record<string, string> = {};
+        let urlPage: number | null = null;
         for (const [key, value] of urlParams.entries()) {
+            // Pagination belongs to its own state. Keeping `page` in filters
+            // makes the URL synchronization effect turn numeric page 1 into
+            // string "1", producing a second React Query key/request for the
+            // same list on initial navigation.
+            if (key === "page") {
+                const parsed = Number.parseInt(value, 10);
+                urlPage = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+                continue;
+            }
+            if (key === "page_size") continue;
             urlFilters[key] = value;
         }
 
         const hasUrlFilters = Object.keys(urlFilters).length > 0;
         if (hasUrlFilters) {
             setFilterParams(urlFilters);
-            setCurrentPage(1);
+            setCurrentPage(urlPage ?? 1);
             setPageSize(25);
             backendDefaultsApplied.current = true;
         } else {
@@ -378,6 +389,16 @@ export default function MasterList() {
         // licence-number lookup.  Send it through the exact backend filter so
         // multiple supplied licences use OR semantics; normal text remains the
         // existing general `search` behaviour.
+        if (entityName === 'licenses' && typeof params.search === 'string') {
+            // A full numeric licence number is an identity lookup, not a
+            // fuzzy search.  Sending it through the dedicated filter keeps
+            // `/licenses?search=0310835340` scoped to that one licence.
+            const licenceNumber = params.search.trim();
+            if (/^\d{10}$/.test(licenceNumber)) {
+                params.license_number = licenceNumber;
+                delete params.search;
+            }
+        }
         if (entityName === 'allotments' && typeof params.search === 'string') {
             const licences = [...new Set(params.search.split(',').map(value => value.trim()).filter(Boolean))];
             if (licences.length > 0 && licences.every(value => /^\d+$/.test(value))) {
@@ -523,7 +544,12 @@ export default function MasterList() {
     }, []);
 
     useEffect(() => {
-        if (entityName !== 'allotments') return;
+        // Keep every list's current search and filters in the URL.  The old
+        // allotments-only synchronizer dropped `search` as soon as a user
+        // paged or changed a filter on Licences, BOEs, Trades, or another
+        // master list, leaving the visible search box disconnected from the
+        // query.  All entities now use the same round-trippable state.
+        if (!entityName) return;
         const params = new URLSearchParams();
         Object.entries(filterParams).forEach(([key, value]) => {
             if (value !== '' && value != null) params.set(key, String(value));

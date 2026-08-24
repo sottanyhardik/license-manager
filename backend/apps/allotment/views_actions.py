@@ -27,6 +27,7 @@ from apps.core.utils.exceptions import api_error, _safe_int
 from apps.allotment.serializers import AllotmentSerializer
 from apps.license.models import LicenseImportItemsModel
 from apps.license.serializers import LicenseImportItemSerializer
+from apps.license.services.effective_cif_mode import effective_source_row_cif_available
 
 logger = logging.getLogger(__name__)
 
@@ -566,7 +567,17 @@ class AllotmentActionViewSet(ViewSet):
             status = plan_status_map.get(item.id)
             row['has_plan'] = status is not None
             row['raw_available_qty'] = str(item.available_quantity or Decimal('0.000'))
-            row['raw_available_cif'] = str(available_value_map.get(item.id) or Decimal('0.00'))
+            # The individual-CIF branch is keyed solely by this persisted
+            # import row.  The supplied map is intentionally preserved as the
+            # exact legacy expression for NULL/False licences.
+            effective_actual_cif = effective_source_row_cif_available(
+                licence=item.license,
+                item=item,
+                legacy_available=lambda item_id=item.id: available_value_map.get(item_id) or Decimal('0.00'),
+            )
+            row['raw_available_cif'] = str(effective_actual_cif)
+            row['source_row_id'] = item.pk
+            row['authoritative_available_cif'] = str(effective_actual_cif)
             if status is not None:
                 row['original_planned_quantity'] = str(status['original_quantity'])
                 row['used_planned_quantity'] = str(status['used_quantity'])
@@ -610,7 +621,7 @@ class AllotmentActionViewSet(ViewSet):
             )
             row.update(self._position_payload(
                 actual_qty=item.available_quantity,
-                actual_cif=available_value_map.get(item.id),
+                actual_cif=effective_actual_cif,
                 required_qty=requirement_qty,
                 required_cif=requirement_cif,
                 unit_price=allotment.unit_value_per_unit,
@@ -1278,7 +1289,15 @@ class AllotmentActionViewSet(ViewSet):
                 # merely non-zero (treating "non-zero" as "freshly
                 # processed"), which let genuinely stale values through
                 # un-checked and wrongly rejected valid allocations.
-                available_cif = Decimal(str(license_item.available_value_calculated or 0))
+                # Preserve the existing live condition-pool calculation for
+                # NULL/False.  In explicit individual mode, use only this
+                # import row's ledger balance: no HSN/product/SION grouping
+                # can borrow a sibling row's CIF.
+                available_cif = effective_source_row_cif_available(
+                    licence=license_item.license,
+                    item=license_item,
+                    legacy_available=lambda: Decimal(str(license_item.available_value_calculated or 0)),
+                )
 
                 if available_cif < cif_fc:
                     errors.append({

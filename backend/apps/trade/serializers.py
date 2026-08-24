@@ -8,6 +8,11 @@ from rest_framework import serializers
 from .models import (
     LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment, q2
 )
+from apps.license.services.effective_cif_mode import (
+    INDIVIDUAL_ITEM,
+    effective_source_row_cif_available,
+    resolve_effective_cif_mode,
+)
 
 
 def _payment_total(instance):
@@ -56,6 +61,8 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     sr_number_label = serializers.SerializerMethodField()
     condition_type = serializers.CharField(source='sr_number.condition_type', read_only=True, allow_blank=True, default='')
     computed_amount = serializers.SerializerMethodField()
+    source_row_id = serializers.IntegerField(source='sr_number_id', read_only=True)
+    authoritative_available_cif = serializers.SerializerMethodField()
 
     def to_internal_value(self, data):
         """Remove empty string fields to prevent overwriting existing values with zeros"""
@@ -79,8 +86,54 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'sr_number', 'sr_number_label', 'condition_type', 'description', 'hsn_code', 'mode',
             'qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr',
-            'fob_inr', 'pct', 'amount_inr', 'computed_amount'
+            'fob_inr', 'pct', 'amount_inr', 'computed_amount',
+            'source_row_id', 'authoritative_available_cif',
         )
+
+    def get_authoritative_available_cif(self, obj):
+        item = obj.sr_number
+        # The legacy list value is additive display metadata and is already
+        # present on the line's selected import row.  Calling the canonical
+        # selector for this branch would still build its individual-row audit
+        # projection before selecting legacy mode, causing two ledger queries
+        # per rendered line.  Individual-CIF mode continues through the
+        # canonical source-row calculation below; write validation always does
+        # so as well.  This read-only fast path therefore cannot authorise a
+        # mutation or alter the null/false legacy calculation.
+        if resolve_effective_cif_mode(item.license) != INDIVIDUAL_ITEM:
+            return str(Decimal(str(item.available_value or 0)))
+        return str(effective_source_row_cif_available(
+            licence=item.license,
+            item=item,
+            # Additive list metadata must not turn the historic trade list
+            # into an N+1 ledger calculation.  The legacy branch exposes the
+            # already-selected/stored value; authoritative mutation checks
+            # below still use the canonical live path when individual mode is
+            # explicitly enabled.
+            legacy_available=lambda: Decimal(str(item.available_value or 0)),
+        ))
+
+    def validate(self, attrs):
+        item = attrs.get('sr_number') or getattr(self.instance, 'sr_number', None)
+        requested_cif = attrs.get('cif_fc')
+        if (
+            item is not None
+            and requested_cif is not None
+            and resolve_effective_cif_mode(item.license) == INDIVIDUAL_ITEM
+        ):
+            ceiling = effective_source_row_cif_available(
+                licence=item.license,
+                item=item,
+                legacy_available=lambda: Decimal(str(item.available_value_calculated or 0)),
+            )
+            # A persisted line's current value remains available during edit.
+            if self.instance is not None:
+                ceiling += Decimal(str(self.instance.cif_fc or 0))
+            if requested_cif > ceiling:
+                raise serializers.ValidationError({
+                    'cif_fc': f'CIF exceeds available source-row CIF {ceiling}.',
+                })
+        return attrs
 
     def get_sr_number_label(self, obj):
         """Return license number and SR number, using prefetch cache where possible."""

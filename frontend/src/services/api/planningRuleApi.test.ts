@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import api from "@/api/axios";
-import { fetchRuleAllocationStrategy, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, updateRuleAllocationStrategy } from "./planningRuleApi";
+import { autoPlanLicense, fetchRuleAllocationStrategy, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, updateRuleAllocationStrategy } from "./planningRuleApi";
 
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn(), patch: vi.fn(), post: vi.fn() } }));
 
@@ -26,6 +26,12 @@ describe("SION planning request payloads", () => {
             mode: "ALL",
             license_ids: [10, 20],
         });
+    });
+
+    it("executes a forced synchronous Auto Plan request", async () => {
+        await autoPlanLicense(430);
+
+        expect(api.post).toHaveBeenCalledWith("licenses/430/auto-plan/", { force: true });
     });
 
     it("normalizes missing and historical leaf expressions for safe rendering", async () => {

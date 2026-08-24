@@ -388,7 +388,7 @@ class SionPlanningExecutionService:
     @classmethod
     def _compute_license_new_architecture(
         cls, license_obj, sion, strategy_rules, *, preview, force_plan=False,
-        operational_balance_cif=None,
+        operational_balance_cif=None, individual_item_cif_ceiling=None,
     ):
         """Build a priority-waterfall strategy plan from saved configuration."""
         from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
@@ -438,6 +438,12 @@ class SionPlanningExecutionService:
             else total_cif
         ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         remaining_waterfall_cif = planning_cif_ceiling
+        # This snapshot is deliberately supplied by ``plan_sion`` rather
+        # than reading the model property per row.  It is the same live
+        # per-import-item balance used by the canonical balance projection,
+        # and is only populated for the explicit opt-in mode.  Keeping None
+        # for NULL/False means those modes retain the exact old planner path.
+        remaining_item_cif = dict(individual_item_cif_ceiling or {})
         # Snapshot all legitimate inputs once.  Actual usage is loaded before
         # any strategy runs and is retained in provenance for reconciliation;
         # it is never inferred from an old generated plan.
@@ -523,6 +529,21 @@ class SionPlanningExecutionService:
                     Decimal("0.001"), rounding=ROUND_DOWN,
                 )
                 allocated_quantity = min(allocated_quantity, affordable_quantity)
+            item_cif_before = None
+            if remaining_item_cif and price > 0:
+                # Every emitted row has one authoritative source import item.
+                # Callers which can match several sources split into separate
+                # rows in individual mode; this prevents a rich item from
+                # lending its ceiling to a poorer sibling.
+                source_item_id = group[0].pk
+                item_cif_before = max(
+                    Decimal(str(remaining_item_cif.get(source_item_id, Decimal("0")))),
+                    Decimal("0"),
+                )
+                allocated_quantity = min(
+                    allocated_quantity,
+                    (item_cif_before / price).quantize(Decimal("0.001"), rounding=ROUND_DOWN),
+                )
             allocated_quantity = allocated_quantity.quantize(Decimal("0.001"), rounding=ROUND_DOWN)
             if allocated_quantity <= 0 and not emit_zero:
                 return Decimal("0")
@@ -552,6 +573,13 @@ class SionPlanningExecutionService:
                 "operational_planned_cif": str(allocated_cif),
                 "cif_status": "CAPPED" if allocated_cif < new_planned_cif else "FULLY_FUNDED",
             }
+            if item_cif_before is not None:
+                source_item_id = group[0].pk
+                remaining_item_cif[source_item_id] = max(item_cif_before - allocated_cif, Decimal("0"))
+                provenance.update({
+                    "individual_item_cif_ceiling": str(item_cif_before),
+                    "remaining_individual_item_cif": str(remaining_item_cif[source_item_id]),
+                })
             all_lines.append({
                 "import_item": group[0].pk,
                 "item_name": item_name.pk,
@@ -684,9 +712,32 @@ class SionPlanningExecutionService:
                         continue
                     item_name = OutputItemResolver.resolve_or_create(rule)
 
-                allocated = add_line(rule, item_name, group, quantity, rule.max_unit_price, {
-                    "strategy": "STANDARD", "quantity_source": "available_import_group_quantity",
-                })
+                # Legacy STANDARD groups intentionally produce one row.  In
+                # explicit individual-CIF mode they must be emitted per source
+                # item so no row can consume another import item's ceiling.
+                standard_groups = ([item] for item in group) if remaining_item_cif else (group,)
+                allocated = Decimal("0")
+                # Do not shadow the `source_group()` matcher below: a later
+                # strategy in this same planner invocation must still call
+                # that function (the synchronous endpoint exposed this when
+                # STANDARD preceded SPLIT_BY_UNIT_VALUE).
+                for source_item_group in standard_groups:
+                    source_quantity = sum((
+                        Decimal(str(
+                            item.available_quantity
+                            if item.available_quantity is not None
+                            else (item.quantity or 0)
+                        ))
+                        for item in source_item_group
+                    ), Decimal("0")).quantize(Decimal("0.001"), rounding=ROUND_DOWN)
+                    allocated += add_line(
+                        rule, item_name, source_item_group, source_quantity,
+                        rule.max_unit_price,
+                        {
+                            "strategy": "STANDARD",
+                            "quantity_source": "available_import_group_quantity",
+                        },
+                    )
                 if allocated > 0:
                     claimed_source_item_ids.update(item.pk for item in group)
                 waterfall_diagnostics.append({
@@ -854,8 +905,7 @@ class SionPlanningExecutionService:
                     remaining_capacity = max(nominal - actual_by_target.get(row.import_item_id, Decimal("0")), Decimal("0"))
                     final_quantity = solved_member["remaining_qty"]
                     generated_quantity_total += final_quantity
-                    generated += bool(add_line(rule, row.import_item, matched_by_row[row.pk], final_quantity,
-                                              solved_member["effective_unit_price"], {
+                    line_provenance = {
                         "strategy": "SPLIT_BY_PERCENT",
                         "percentage": str(row.percentage),
                         "total_planning_quantity": str(total_planning_quantity),
@@ -896,7 +946,47 @@ class SionPlanningExecutionService:
                             str(row.max_quantity) if row.max_quantity is not None else None
                         ),
                         "quantity_source": "available_import_group_quantity",
-                    }, emit_zero=True))
+                    }
+                    if remaining_item_cif:
+                        # The rule may intentionally match a group by HSN or
+                        # description, but its financial entitlement is never
+                        # a group entitlement in individual-CIF mode. Split
+                        # the target quantity back onto the persisted source
+                        # rows before applying `add_line`; that method then
+                        # consumes the PK-keyed CIF ceiling for each source.
+                        # This prevents the first matching row from absorbing
+                        # a sibling's planned CIF merely because both share an
+                        # HSN.
+                        source_balances = [
+                            (source, available_group_quantity([source]))
+                            for source in matched_source
+                        ]
+                        source_total = sum((value for _source, value in source_balances), Decimal("0"))
+                        assigned_source_quantity = Decimal("0")
+                        for source_index, (source, source_quantity) in enumerate(source_balances):
+                            if source_total <= 0:
+                                break
+                            source_final_quantity = (
+                                final_quantity - assigned_source_quantity
+                                if source_index == len(source_balances) - 1
+                                else (final_quantity * source_quantity / source_total).quantize(
+                                    Decimal("0.001"), rounding=ROUND_DOWN,
+                                )
+                            )
+                            assigned_source_quantity += source_final_quantity
+                            generated += bool(add_line(
+                                rule, row.import_item, [source], source_final_quantity,
+                                solved_member["effective_unit_price"], {
+                                    **line_provenance,
+                                    "source_quantity_share": str(source_quantity),
+                                    "source_quantity_share_total": str(source_total),
+                                },
+                            ))
+                    else:
+                        generated += bool(add_line(
+                            rule, row.import_item, matched_by_row[row.pk], final_quantity,
+                            solved_member["effective_unit_price"], line_provenance, emit_zero=True,
+                        ))
                     diagnostics.append({
                         "rule_id": rule.pk, "row_id": row.pk, "item_name": row.import_item.name,
                         "raw_nominal_quantity": str(raw_nominal),
@@ -958,7 +1048,10 @@ class SionPlanningExecutionService:
         }
 
     @classmethod
-    def _compute_license(cls, license_obj, sion, *, preview, force_plan=False, operational_balance_cif=None):
+    def _compute_license(
+        cls, license_obj, sion, *, preview, force_plan=False,
+        operational_balance_cif=None, individual_item_cif_ceiling=None,
+    ):
         """Compute planned lines using database-driven rules and generic planner.
 
         Args:
@@ -978,6 +1071,7 @@ class SionPlanningExecutionService:
             return cls._compute_license_new_architecture(
                 license_obj, sion, active_rules, preview=preview, force_plan=force_plan,
                 operational_balance_cif=operational_balance_cif,
+                individual_item_cif_ceiling=individual_item_cif_ceiling,
             )
 
         # No active rules is a configuration error, not a reason to revive a
@@ -1352,6 +1446,28 @@ class SionPlanningExecutionService:
             licenses, live_balances = cls._eligible_licenses(
                 sion, license_ids, company_id=company_id, force_plan=force_plan,
             )
+            # Read the canonical per-item CIF balances once for this planning
+            # batch.  Do not build this snapshot at all for NULL/False: those
+            # modes must execute their unchanged legacy availability path.
+            from apps.license.services.effective_cif_mode import (
+                INDIVIDUAL_ITEM, resolve_effective_cif_mode,
+            )
+            individual_license_ids = [
+                row.pk for row in licenses
+                if resolve_effective_cif_mode(row) == INDIVIDUAL_ITEM
+            ]
+            individual_item_cif_by_license = {}
+            if individual_license_ids:
+                from apps.license.models import LicenseImportItemsModel
+                from apps.license.services.balance_calculator import ItemBalanceCalculator
+                # This map is deliberately keyed by the physical import-row
+                # PK. `available_value`/balance snapshots are legacy shared
+                # pool projections and must never be used as an item ceiling.
+                individual_item_cif_by_license = {license_id: {} for license_id in individual_license_ids}
+                for item in LicenseImportItemsModel.objects.filter(license_id__in=individual_license_ids).order_by("pk"):
+                    individual_item_cif_by_license[item.license_id][item.pk] = max(
+                        Decimal(str(ItemBalanceCalculator.calculate_item_balance(item))), Decimal("0"),
+                    )
             for license_obj in licenses:
                 from apps.license.services.planning_tolerances import effective_planning_balance_cif
                 raw_balance_cif = cls._decimal(live_balances[license_obj.pk])
@@ -1386,6 +1502,7 @@ class SionPlanningExecutionService:
                 lines, remaining, planning_metadata = cls._compute_license(
                     license_obj, sion, preview=not persist, force_plan=force_plan,
                     operational_balance_cif=new_plan_cif_ceiling,
+                    individual_item_cif_ceiling=individual_item_cif_by_license.get(license_obj.pk),
                 )
                 canonical_lines = [{
                     "import_item_id": row["import_item"],

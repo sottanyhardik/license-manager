@@ -4,6 +4,11 @@ from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.core.constants import DEBIT
+from apps.license.services.effective_cif_mode import (
+    INDIVIDUAL_ITEM,
+    effective_source_row_cif_available,
+    resolve_effective_cif_mode,
+)
 
 
 class RowDetailsSerializer(serializers.ModelSerializer):
@@ -39,6 +44,16 @@ class RowDetailsSerializer(serializers.ModelSerializer):
     item_serial_number = serializers.IntegerField(source='sr_number.serial_number', read_only=True)
     condition_type = serializers.CharField(source='sr_number.condition_type', read_only=True)
     purchase_status = serializers.SerializerMethodField()
+    source_row_id = serializers.IntegerField(source='sr_number_id', read_only=True)
+    authoritative_available_cif = serializers.SerializerMethodField()
+
+    def get_authoritative_available_cif(self, obj):
+        item = obj.sr_number
+        return str(effective_source_row_cif_available(
+            licence=item.license,
+            item=item,
+            legacy_available=lambda: Decimal(str(item.available_value_calculated or 0)),
+        ))
 
     def get_purchase_status(self, obj):
         """Get purchase status code safely"""
@@ -68,6 +83,31 @@ class RowDetailsSerializer(serializers.ModelSerializer):
         # Planning target metadata belongs to the BOE header.  RowDetails
         # stopped storing these fields in migration 0009; adding them to this
         # nested payload makes Django reject a PDF-imported BOE at save time.
+        item = attrs.get('sr_number') or getattr(self.instance, 'sr_number', None)
+        requested_cif = attrs.get('cif_fc')
+        if (
+            item is not None
+            and requested_cif is not None
+            and resolve_effective_cif_mode(item.license) == INDIVIDUAL_ITEM
+        ):
+            # This guard is intentionally opt-in: legacy licences retain the
+            # historical BOE validation path.  For individual mode, the
+            # ceiling is the live ledger balance for this exact source row.
+            # An edit gets its currently persisted debit back before comparing.
+            ceiling = effective_source_row_cif_available(
+                licence=item.license,
+                item=item,
+                legacy_available=lambda: Decimal(str(item.available_value_calculated or 0)),
+            )
+            if self.instance is not None:
+                ceiling += Decimal(str(self.instance.cif_fc or 0))
+            if requested_cif > ceiling:
+                raise serializers.ValidationError({
+                    'cif_fc': (
+                        f'CIF {requested_cif} exceeds the available CIF {ceiling} '
+                        f'for import source row {item.pk}.'
+                    )
+                })
         return attrs
 
     class Meta:
@@ -87,6 +127,8 @@ class RowDetailsSerializer(serializers.ModelSerializer):
             'item_serial_number',
             'condition_type',
             'purchase_status',
+            'source_row_id',
+            'authoritative_available_cif',
         ]
         read_only_fields = ['is_frozen', 'is_dispute']
 

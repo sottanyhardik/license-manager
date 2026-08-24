@@ -28,6 +28,8 @@ export interface LicenseOverviewSummaryCounts {
 
 export interface LicenseOverviewSummary {
     balance_cif?: string | number | null;
+    /** `true` opts into per-import-item CIF ceilings; null/false are legacy. */
+    individual_item_cif_override?: boolean | null;
     license_number: string | null;
     /** = `LicenseDetailsModel.registration_number` — no field literally
      * named "authorisation number" exists on the backend. */
@@ -111,6 +113,24 @@ export interface LicenseOverviewItemRow {
      * intentional, not a bug — two different formulas coexist by design.
      */
     balance_cif: number;
+    /** Canonical effective balance supplied by the backend selector. */
+    effective_balance_cif?: number;
+}
+
+export interface LicenseOverviewItemFooterTotals {
+    total_cif?: number;
+    debited_cif?: number;
+    allotted_cif?: number;
+    planned_cif?: number;
+    actual_effective_balance_cif?: number;
+    balance_cif?: number;
+    plan_remaining_cif?: number;
+    [key: string]: number | undefined;
+}
+
+export interface LicenseOverviewItemsResponse {
+    rows: LicenseOverviewItemRow[];
+    footer_totals?: LicenseOverviewItemFooterTotals;
 }
 
 // ─── GET licenses/<id>/overview-invoice-ledger/ — Invoice Ledger tab ──────

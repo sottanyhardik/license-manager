@@ -10,7 +10,10 @@
 export function getDefaultFilters(entityName: string): Record<string, string> {
   switch (entityName) {
     case "allotments":
-      return { type: "AT", is_boe: "False", is_allotted: "True" };
+      // The list contract uses the explicit `all` sentinel to opt out of the
+      // server's default allotted-only filter.  This keeps the default list
+      // complete while preserving the non-BOE AT scope.
+      return { type: "AT", is_boe: "False", is_allotted: "all" };
     case "bill-of-entries":
       return { is_invoice: "False" };
     case "incentive-licenses":

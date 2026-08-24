@@ -70,6 +70,24 @@ class SafeDateTimeField(serializers.DateTimeField):
         return super().to_representation(value)
 
 
+class StrictNullableBooleanField(serializers.Field):
+    """JSON-only nullable bool: do not silently coerce strings or numbers."""
+
+    default_error_messages = {"invalid": "Expected a JSON boolean or null."}
+
+    def to_internal_value(self, data):
+        if data is None or type(data) is bool:
+            return data
+        self.fail("invalid")
+
+    def to_representation(self, value):
+        return value if value is None else bool(value)
+
+
+class IndividualItemCifOverrideSerializer(serializers.Serializer):
+    individual_item_cif_override = StrictNullableBooleanField(allow_null=True)
+
+
 class PlanningOptionSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for planning options returned in import item details.

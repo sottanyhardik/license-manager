@@ -35,9 +35,11 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
     };
 
     const rows = useMemo(
-        () => sortRows(data ?? [], sort, (row, key) => row[key] as string | number | null),
+        () => sortRows(data?.rows ?? [], sort, (row, key) => row[key] as string | number | null),
         [data, sort]
     );
+    const footerTotals = data?.footer_totals;
+    const effectiveBalance = (row: LicenseOverviewItemRow) => row.effective_balance_cif ?? row.balance_cif;
 
     if (!isActive) return null;
 
@@ -96,10 +98,24 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
                             <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_qty)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_cif)}</td>
                             <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.balance_qty)}</td>
-                            <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.balance_cif)}</td>
+                            <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(effectiveBalance(row))}</td>
                         </tr>
                     ))}
                 </tbody>
+                {footerTotals && (
+                    <tfoot className="border-t-2 border-border bg-muted/40 text-[13px] font-semibold">
+                        <tr>
+                            <td colSpan={4} className="px-3 py-2">Total</td>
+                            <td data-column-id="total-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.total_cif ?? 0)}</td>
+                            <td />
+                            <td data-column-id="debited-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.debited_cif ?? 0)}</td>
+                            <td />
+                            <td data-column-id="allotted-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.allotted_cif ?? 0)}</td>
+                            <td />
+                            <td data-column-id="effective-balance-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.actual_effective_balance_cif ?? footerTotals.balance_cif ?? 0)}</td>
+                        </tr>
+                    </tfoot>
+                )}
             </table>
         </div>
     );

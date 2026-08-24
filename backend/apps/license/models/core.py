@@ -89,6 +89,11 @@ def license_path(instance, filename):
 # License Header
 # -----------------------------
 class LicenseDetailsModel(AuditModel):
+    # ``None`` deliberately remains the historical behaviour.  This is an
+    # opt-in only control: False is also historical/shared behaviour while
+    # True makes the import-item CIF ceiling authoritative.
+    individual_item_cif_override = models.BooleanField(null=True, blank=True, default=None)
+
     # Monotonic planning generations.  Source-changing signals increment the
     # first field; a worker only advances the applied field after it has
     # successfully built a plan for that exact generation.

@@ -59,7 +59,11 @@ def add_license_overview_actions(viewset_class):
         from apps.license.services.license_overview_items import compute_item_ledger_rows
 
         license_obj = self.get_object()
-        data = compute_item_ledger_rows(license_obj)
+        # The historical bare-array response remains byte-for-byte compatible
+        # unless a consumer explicitly opts into the additive projection.
+        # This avoids changing null/false legacy API types or ordering.
+        include_canonical = request.query_params.get("include_canonical") == "1"
+        data = compute_item_ledger_rows(license_obj, include_canonical=include_canonical)
         return Response(_json_safe(data))
 
     @action(detail=True, methods=['get'], url_path='overview-invoice-ledger')

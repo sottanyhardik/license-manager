@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactElement } from "react";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layout/AdminLayout";
@@ -50,7 +50,8 @@ const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 /** Old `/licenses/:id/balance` bookmarks/links redirect to the new Overview page — explicit absolute target (built from the route's own `:id` param) rather than a relative `Navigate` path, so the destination is unambiguous. */
 function RedirectToLicenseOverview() {
     const { id } = useParams<{ id: string }>();
-    return <Navigate to={`/licenses/${id}/overview`} replace />;
+    const location = useLocation();
+    return <Navigate to={`/licenses/${id}/overview${location.search}`} replace />;
 }
 
 const REPORT_ROUTES: [string, ReactElement][] = [

@@ -194,14 +194,18 @@ export type AutoPlanResponse = {
     license_id: number;
     license_number: string;
     planning_state: "CURRENT";
-    replan_request_id: number;
     message: string;
     result: { write_results?: number; sion_ids?: number[] };
 };
 
+/**
+ * Execute a forced canonical Auto Plan for one licence.  This is deliberately
+ * the only browser entry point: the server remains authoritative and resolves
+ * only after its transaction has committed.
+ */
 export async function autoPlanLicense(licenseId: number): Promise<AutoPlanResponse> {
     try {
-        const response = await api.post<AutoPlanResponse>(`licenses/${licenseId}/auto-plan/`);
+        const response = await api.post<AutoPlanResponse>(`licenses/${licenseId}/auto-plan/`, { force: true });
         return response.data;
     } catch (error) {
         console.error('[autoPlanLicense] Error:', error);

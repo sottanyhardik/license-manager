@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useCallback, useContext, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText, Loader2, Target } from "lucide-react";
 
@@ -7,12 +9,14 @@ import api from "@/api/axios";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import PermissionGate from "@/components/PermissionGate";
+import { AuthContext } from "@/context/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { openPdfPreview } from "@/utils/pdfPreview";
-import { openAuthedFile } from "@/utils/documentDownload";
+import { openAuthedFile, openDocument } from "@/utils/documentDownload";
 
 import { extractApiError } from "./licenseOverviewHelpers";
-import { useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
+import { licenseOverviewKeys, useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
+import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
 import OverviewTab from "./OverviewTab";
 import BoesTab from "./BoesTab";
 import AllotmentsTab from "./AllotmentsTab";
@@ -20,8 +24,10 @@ import PlanningEditor from "@/components/planning/PlanningEditor";
 import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
 import ReplanStatus from "./ReplanStatus";
+import { autoPlanLicense } from "@/services/api/planningRuleApi";
 
 type TabId = "overview" | "boes" | "allotments" | "planning" | "items" | "invoice-ledger";
+type LicenseDocument = { id: number; type: string; file: string };
 
 const TABS: { id: TabId; label: string }[] = [
     { id: "overview", label: "Overview" },
@@ -53,18 +59,64 @@ const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
  */
 export default function LicenseOverviewPage() {
     const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
-    const location = useLocation();
+    const queryClient = useQueryClient();
+    const { hasRole } = useContext(AuthContext);
     const [searchParams, setSearchParams] = useSearchParams();
+    const [isAutoPlanning, setIsAutoPlanning] = useState(false);
 
     const rawTab = searchParams.get("tab");
-    const activeTab: TabId = TAB_IDS.has(rawTab ?? "") ? (rawTab as TabId) : "overview";
+    // `plan` was used by legacy deep links. Keep it as an input alias while
+    // rendering the one authoritative Planning tab/editor.
+    const normalizedTab = rawTab === "plan" ? "planning" : rawTab;
+    const activeTab: TabId = TAB_IDS.has(normalizedTab ?? "") ? (normalizedTab as TabId) : "overview";
 
     const { data: summary } = useLicenseOverviewSummary(id, true);
+    // There is no documents-only endpoint. Reuse the exact retrieve response
+    // already consumed by the Balance item matrix under the same query key.
+    const detailsQuery = useQuery({
+        queryKey: ["license-balance-customs-ledger", String(id ?? "")],
+        queryFn: async () => (await api.get(`licenses/${id}/`)).data as { license_documents?: LicenseDocument[] },
+        enabled: Boolean(id),
+    });
+    const documents = detailsQuery.data?.license_documents ?? [];
+    const licenceCopies = documents.filter((document) => document.type === "LICENSE COPY" && Boolean(document.file));
+    const transferLetters = documents.filter((document) => document.type === "TRANSFER LETTER" && Boolean(document.file));
+
+    const openStoredDocument = useCallback(async (document: LicenseDocument) => {
+        try {
+            await openDocument(document.file);
+        } catch (err) {
+            toast.error(extractApiError(err, "Unable to open this document. Please try again."));
+        }
+    }, []);
 
     const [downloadingPdf, setDownloadingPdf] = useState(false);
     const [downloadingExcel, setDownloadingExcel] = useState(false);
     const [showHiddenBoe, setShowHiddenBoe] = useState(false);
+
+    const refreshPlanningDependents = useCallback(() => {
+        if (!id) return;
+        // The editor reloads its own persisted plan. Refresh every cached
+        // overview projection that canonically incorporates those plans.
+        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.summary(id) });
+        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.items(id) });
+        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.planning(id) });
+        void queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(id) });
+    }, [id, queryClient]);
+
+    const handleAutoPlan = useCallback(async () => {
+        if (!id || isAutoPlanning) return;
+        setIsAutoPlanning(true);
+        try {
+            const result = await autoPlanLicense(Number(id));
+            refreshPlanningDependents();
+            toast.success(result.message || "Licence planning has completed.");
+        } catch (err) {
+            toast.error(extractApiError(err, "Failed to auto-plan licence."));
+        } finally {
+            setIsAutoPlanning(false);
+        }
+    }, [id, isAutoPlanning, refreshPlanningDependents]);
 
     const handleTabChange = useCallback(
         (value: string) => {
@@ -116,10 +168,21 @@ export default function LicenseOverviewPage() {
                 actions={
                     <>
                         <PermissionGate role="LICENSE_MANAGER" anyRole={undefined}>
-                            <Button size="sm" onClick={() => id && navigate(`/planning?license_id=${encodeURIComponent(id)}&origin=${encodeURIComponent(`/licenses/${id}/overview${location.search}`)}`)}>
-                                <Target className="size-4" />Plan Norms
+                            <Button size="sm" onClick={() => void handleAutoPlan()} disabled={isAutoPlanning}>
+                                {isAutoPlanning ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
+                                {isAutoPlanning ? "Planning…" : "Auto Plan"}
                             </Button>
                         </PermissionGate>
+                        {!detailsQuery.isLoading && licenceCopies.map((document, index) => (
+                            <Button key={document.id} size="sm" variant="outline" onClick={() => void openStoredDocument(document)}>
+                                {licenceCopies.length === 1 ? "View Licence Copy" : `View Licence Copy ${index + 1}`}
+                            </Button>
+                        ))}
+                        {!detailsQuery.isLoading && transferLetters.map((document, index) => (
+                            <Button key={document.id} size="sm" variant="outline" onClick={() => void openStoredDocument(document)}>
+                                {transferLetters.length === 1 ? "View TL" : `View TL ${index + 1}`}
+                            </Button>
+                        ))}
                         <Button size="sm" variant="outline" onClick={handleDownloadPdf} disabled={downloadingPdf}>
                             {downloadingPdf ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
                             Download PDF
@@ -161,7 +224,8 @@ export default function LicenseOverviewPage() {
                             licenseId={parseInt(id, 10)}
                             licenseNumber={summary?.license_number || ""}
                             balanceCif={summary?.balance_cif ? parseFloat(String(summary.balance_cif)) : 0}
-                            canWrite={true}
+                            canWrite={hasRole("LICENSE_MANAGER")}
+                            onSaved={refreshPlanningDependents}
                         />
                     )}
                 </TabsContent>

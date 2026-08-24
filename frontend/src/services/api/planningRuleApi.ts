@@ -167,8 +167,8 @@ export async function testSionPlanningRule(id: number, licenseIds?: number[]) {
     const payload = licenseIds?.length ? { license_ids: licenseIds } : {};
     return (await api.post(`sion-planning-rules/${id}/test/`, payload)).data;
 }
-export async function planSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[]) {
-    return (await api.post("sion-planning-rules/plan-sion/", planningPayload(sionId, mode, licenseIds))).data;
+export async function planSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[], expiryScope?: "EXPIRED" | "EXPIRING_SOON") {
+    return (await api.post("sion-planning-rules/plan-sion/", { ...planningPayload(sionId, mode, licenseIds), ...(expiryScope ? { expiry_scope: expiryScope } : {}) })).data;
 }
 export async function previewSavedSionRules(sionId: number, mode: SionPlanningMode = "NEW", licenseIds?: number[]): Promise<SionPlanningPreview> {
     return (await api.post("sion-planning-rules/preview-sion/", planningPayload(sionId, mode, licenseIds))).data;

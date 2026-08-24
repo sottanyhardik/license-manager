@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -35,6 +36,7 @@ class SionPlanRequestSerializer(serializers.Serializer):
     """
 
     sion_id = serializers.IntegerField(required=True, min_value=1)
+    expiry_scope = serializers.ChoiceField(choices=("EXPIRED", "EXPIRING_SOON"), required=False)
     license_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         required=False,
@@ -574,6 +576,14 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             # arithmetic.  It preserves the established "plan this SION"
             # UI while leaving all Auto Plan work to the queue.
             queryset = queryset.filter(export_license__norm_class_id=identifiers["sion_id"]).distinct()
+        expiry_scope = identifiers.get("expiry_scope")
+        if expiry_scope == "EXPIRED":
+            queryset = queryset.filter(license_expiry_date__lt=date.today())
+        elif expiry_scope == "EXPIRING_SOON":
+            queryset = queryset.filter(
+                license_expiry_date__gte=date.today(),
+                license_expiry_date__lte=date.today() + timedelta(days=30),
+            )
         licenses = list(queryset.only("pk"))
         if requested_ids and len(licenses) != len(set(requested_ids)):
             return Response({"code": "LICENSE_NOT_FOUND", "detail": "One or more licenses are unavailable."}, status=status.HTTP_404_NOT_FOUND)
@@ -582,7 +592,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         requests = [
             request_license_replan(
                 license_id=license_obj.pk,
-                reason="manual_plan_sion",
+                reason=f"manual_plan_sion_{(expiry_scope or 'all').lower()}",
                 scope=LicenseReplanRequest.SCOPE_SION,
                 sion_id=identifiers["sion_id"],
                 source_model="sion_planning_rule.plan_sion",

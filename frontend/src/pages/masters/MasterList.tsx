@@ -784,14 +784,21 @@ export default function MasterList() {
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
     const isLicenseWorkspace = entityName === "licenses" || entityName === "incentive-licenses";
-    const workspaceDescription = entityName === "licenses"
-        ? "Review license balances, planning, and utilization"
-        : "Review incentive balances, expiry, and utilization";
+    const entityDescriptions: Record<string, string> = {
+        licenses: "Review license balances, planning, and utilization",
+        allotments: "Manage allocations and track license usage",
+        "incentive-licenses": "Review incentive balances, expiry, and utilization",
+        "bill-of-entries": "Manage import entries, invoices, and product details",
+        trades: "Manage linked purchase and sale transactions",
+    };
+    const workspaceDescription = entityName
+        ? (entityDescriptions[entityName] || `Manage ${entityTitle?.toLowerCase()} records`)
+        : "Manage records and operational data";
 
     return (
         <div className="min-h-screen bg-[--tb-body-bg]">
             {/* Tabler-style page header */}
-            <div className={cn("page-header", isLicenseWorkspace && "mb-3 rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm")}>
+            <div className={cn("page-header", isLicenseWorkspace && "mb-3")}>
                 <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
@@ -805,14 +812,12 @@ export default function MasterList() {
                         {entityTitle}
                     </div>
                     <h1>{entityTitle}</h1>
-                    {isLicenseWorkspace && (
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">{workspaceDescription}</span>
-                            <span aria-hidden="true" className="text-border">•</span>
-                            <span className="tabular-nums">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
-                            {isRefreshing && <span role="status">Updating…</span>}
-                        </div>
-                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{workspaceDescription}</span>
+                        <span aria-hidden="true" className="text-border">•</span>
+                        <span className="tabular-nums">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
+                        {isRefreshing && <span role="status">Updating…</span>}
+                    </div>
                 </div>
                 <div className="page-actions">
                     <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">

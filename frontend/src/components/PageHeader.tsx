@@ -14,11 +14,8 @@ interface PageHeaderProps {
  * Tailwind/shadcn page header. API-compatible with the legacy PageHeader
  * (pretitle / title / description / actions) for drop-in migration.
  *
- * Design: Clean, enterprise-grade header with clear visual hierarchy:
- * - pretitle: all-caps category label (gray, 11px)
- * - title: prominent h1 (24px bold)
- * - description: muted context (13px)
- * - actions: right-aligned CTA group
+ * Design: a single, calm page-summary surface that keeps navigation, context,
+ * and next actions together without competing with the working content below.
  */
 export default function PageHeader({
     pretitle,
@@ -32,7 +29,7 @@ export default function PageHeader({
         <div
             className={cn(
                 "app-page-header mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3",
-                "border-b border-border/60 pb-4",
+                "rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm sm:px-5",
                 className
             )}
         >
@@ -44,12 +41,12 @@ export default function PageHeader({
                     </div>
                 )}
                 {title && (
-                    <h1 className="text-[1.375rem] font-bold leading-tight tracking-tight text-foreground">
+                    <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-[1.625rem]">
                         {title}
                     </h1>
                 )}
                 {description && (
-                    <p className="mt-1 text-[12.5px] leading-snug text-muted-foreground">
+                    <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
                         {description}
                     </p>
                 )}

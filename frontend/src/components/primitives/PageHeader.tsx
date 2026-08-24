@@ -9,10 +9,10 @@ export default function PageHeader({
     children?: React.ReactNode; className?: string;
 }) {
     return (
-        <div className={cn("page-header", className)}>
+        <div className={cn("page-header rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm sm:px-5", className)}>
             <div className="min-w-0 flex-1">
                 {pretitle && <div className="page-pretitle">{pretitle}</div>}
-                {title && <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">{title}</h1>}
+                {title && <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-[1.625rem]">{title}</h1>}
                 {description && <p className="mt-1 text-[13px] text-muted-foreground">{description}</p>}
                 {children}
             </div>

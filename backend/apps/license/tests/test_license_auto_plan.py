@@ -101,3 +101,15 @@ def test_auto_plan_rejects_missing_license_and_requires_existing_permission(mana
     unauthorised = APIClient()
     unauthorised.force_authenticate(user)
     assert unauthorised.post(f"/api/licenses/{license_obj.pk}/auto-plan/", format="json").status_code == 403
+
+
+def test_auto_plan_finds_an_expired_license_despite_the_list_default_filter(manager_client):
+    client, company = manager_client
+    license_obj = make_license(company, "TEST-AUTO-EXPIRED")
+    license_obj.license_expiry_date = date.today() - timedelta(days=1)
+    license_obj.save(update_fields=["license_expiry_date"])
+
+    response, planner, _delay = _post_with_canonical_planner(client, license_obj)
+
+    assert response.status_code == 200, response.data
+    planner.assert_called_once_with(430, license_ids=[license_obj.pk], mode="ALL", force_plan=True)

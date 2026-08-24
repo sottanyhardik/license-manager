@@ -109,6 +109,26 @@ class LicenseAdvancedFiltersLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, T
         ids = {row["id"] for row in response.data["results"]}
         self.assertIn(license_obj.id, ids)
 
+    def test_license_status_filter_offers_all_active_and_expired(self):
+        company = self.make_company()
+        active_license = self.make_license(company)
+        active_license.license_expiry_date = date.today() + timedelta(days=10)
+        active_license.save(update_fields=["license_expiry_date"])
+        expired_license = self.make_license(company)
+        expired_license.license_expiry_date = date.today() - timedelta(days=1)
+        expired_license.save(update_fields=["license_expiry_date"])
+
+        def result_ids(status):
+            response = self.client.get("/api/licenses/", {"is_expired": status, "page_size": 200})
+            self.assertEqual(response.status_code, 200, response.data)
+            return {row["id"] for row in response.data["results"]}
+
+        self.assertTrue({active_license.id, expired_license.id}.issubset(result_ids("all")))
+        self.assertIn(active_license.id, result_ids("false"))
+        self.assertNotIn(expired_license.id, result_ids("false"))
+        self.assertIn(expired_license.id, result_ids("true"))
+        self.assertNotIn(active_license.id, result_ids("true"))
+
     def test_balance_range_filter_uses_live_balance_not_stale_cache(self):
         company = self.make_company()
 

@@ -116,12 +116,20 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "license_date": {"type": "date_range"},
             "license_expiry_date": {"type": "date_range"},
             "balance__balance_cif": {"type": "range"},
-            "flags__is_expired": {"type": "exact"},
+            "is_expired": {
+                "type": "button_group",
+                "label": "License Status",
+                "choices": [
+                    {"value": "all", "label": "All Licenses"},
+                    {"value": "False", "label": "Active"},
+                    {"value": "True", "label": "Expired"},
+                ],
+            },
             "flags__is_null": {"type": "exact"},
             "is_planned": {"type": "exact"},
         },
         "default_filters": {
-            "flags__is_expired": "False",
+            "is_expired": "False",
             "flags__is_null": "False",
         },
         "list_display": [

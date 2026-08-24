@@ -132,7 +132,8 @@ class AllotmentItemSerializer(serializers.ModelSerializer):
         validators = []
         fields = [
             'id', 'item', 'allotment', 'cif_inr', 'cif_fc', 'qty', 'is_boe',
-            'search_mode', 'allocation_basis', 'planning_target_item', 'plan_line',
+            'search_mode', 'allocation_basis', 'planning_target_item', 'planning_sion_key',
+            'effective_unit_price',
             'serial_number', 'ledger', 'product_description', 'hs_code', 'license_number', 'license_id',
             'license_date', 'exporter', 'license_expiry', 'registration_number',
             'registration_date', 'notification_number', 'file_number', 'port_code',

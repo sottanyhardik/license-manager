@@ -94,7 +94,7 @@ class PlanningOptionSerializer(serializers.ModelSerializer):
     Used by LicenseImportItemSerializer.planning_options to display all plan lines
     for a given import item without fetching the full LicenseItemPlanSerializer.
     """
-    plan_line_id = serializers.IntegerField(source='id', read_only=True)
+    planning_target_item_id = serializers.IntegerField(source='item_name_id', read_only=True, allow_null=True)
     item_name = serializers.CharField(source='item_name.name', read_only=True, allow_null=True)
     planned_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
     remaining_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
@@ -104,7 +104,7 @@ class PlanningOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenseItemPlan
         fields = [
-            'plan_line_id', 'item_name', 'planned_quantity', 'remaining_quantity',
+            'planning_target_item_id', 'item_name', 'planned_quantity', 'remaining_quantity',
             'planned_cif_fc', 'remaining_cif_fc'
         ]
 

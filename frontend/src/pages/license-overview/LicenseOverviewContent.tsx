@@ -15,7 +15,7 @@ export default function LicenseOverviewContent({ licenseId, activeTab, mode }: {
     const summary = useLicenseOverviewSummary(licenseId, activeTab === "overview" || activeTab === "planning");
 
     if (activeTab === "planning") {
-        return <PlanningEditor licenseId={Number(licenseId)} licenseNumber={summary.data?.license_number || ""} balanceCif={summary.data?.balance_cif ? Number(summary.data.balance_cif) : 0} canWrite={hasRole("LICENSE_MANAGER")} />;
+        return <PlanningEditor licenseId={licenseId} licenseNumber={summary.data?.license_number || ""} balanceCif={summary.data?.balance_cif ? Number(summary.data.balance_cif) : 0} canWrite={hasRole("LICENSE_MANAGER")} />;
     }
 
     if (activeTab === "items") {

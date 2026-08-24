@@ -221,7 +221,7 @@ export default function LicenseOverviewPage() {
                 <TabsContent value="planning" className="mt-3">
                     {id && (
                         <PlanningEditor
-                            licenseId={parseInt(id, 10)}
+                            licenseId={id}
                             licenseNumber={summary?.license_number || ""}
                             balanceCif={summary?.balance_cif ? parseFloat(String(summary.balance_cif)) : 0}
                             canWrite={hasRole("LICENSE_MANAGER")}

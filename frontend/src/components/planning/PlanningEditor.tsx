@@ -192,7 +192,9 @@ interface Group {
 type PlanStatus = "not_planned" | "partial" | "completed" | "over" | "blocked";
 
 export interface PlanningEditorProps {
-    licenseId: number;
+    // A route may contain a licence number rather than its database PK. Keep
+    // this identifier as text so leading zeroes are not discarded.
+    licenseId: string | number;
     licenseNumber: string;
     balanceCif?: number;
     canWrite: boolean;

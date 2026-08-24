@@ -559,7 +559,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # a licence or relax any operational workflow's validation.
         skip_default_filters = self.action in [
             'retrieve', 'update', 'partial_update', 'destroy', 'nested_items',
-            'item_usage', 'balance_pdf', 'balance_excel', 'auto_plan',
+            'item_usage', 'balance_ledger', 'balance_pdf', 'balance_excel', 'auto_plan',
             'overview_summary', 'overview_boes', 'overview_allotments',
             'overview_items', 'overview_invoice_ledger', 'plan_utilization',
         ]

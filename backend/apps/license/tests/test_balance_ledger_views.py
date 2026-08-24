@@ -139,6 +139,23 @@ class BalanceLedgerGetTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(data["license"]["license_number"], license_obj.license_number)
         self.assertGreaterEqual(len(data["financial_ledger"]["rows"]), 2)  # opening + final at minimum
 
+    def test_returns_balance_ledger_for_expired_license(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        license_obj.license_expiry_date = datetime.now().date() - timedelta(days=1)
+        license_obj.save(update_fields=["license_expiry_date"])
+        license_obj.flags.is_active = False
+        license_obj.flags.is_expired = True
+        license_obj.flags.save()
+
+        resp = self.client.get(f"/api/licenses/{license_obj.id}/balance-ledger/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["license"]["license_number"], license_obj.license_number)
+        license_obj.refresh_from_db()
+        self.assertTrue(license_obj.flags.is_expired)
+        self.assertFalse(license_obj.flags.is_active)
+
     def test_api_returns_matching_purchase_once_balance_without_mismatch(self):
         from apps.license.models import LicenseExportItemModel
         from apps.trade.models import LicenseTrade, LicenseTradeLine

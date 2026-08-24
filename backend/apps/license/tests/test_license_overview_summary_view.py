@@ -7,13 +7,14 @@ Asserts response shape + fixture-accurate values, and pins a fixed
 (low) query count via `assertNumQueries`.
 """
 from decimal import Decimal
+from datetime import date, timedelta
 
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.models import PortModel
-from apps.license.models import LicenseImportItemsModel, LicenseItemPlan
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
 from apps.license.tests.test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
 
 
@@ -135,6 +136,29 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
 
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertEqual(resp.data["status"], "Expired")
+
+    def test_expired_license_999_is_retrievable_without_reactivation(self):
+        """Overview detail routes must not inherit the active-list filter."""
+        company = self.make_company()
+        license_obj = LicenseDetailsModel.objects.create(
+            pk=999,
+            exporter=company,
+            license_number="0511007564",
+            license_date=date.today() - timedelta(days=90),
+            license_expiry_date=date.today() - timedelta(days=1),
+        )
+        license_obj.flags.is_active = False
+        license_obj.flags.is_expired = True
+        license_obj.flags.save()
+
+        resp = self.client.get("/api/licenses/999/overview-summary/")
+
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["license_number"], "0511007564")
+        self.assertEqual(resp.data["status"], "Expired")
+        license_obj.refresh_from_db()
+        self.assertLess(license_obj.license_expiry_date, date.today())
+        self.assertFalse(license_obj.flags.is_active)
 
     def test_port_code_and_name_reflect_the_license_s_port(self):
         company = self.make_company()

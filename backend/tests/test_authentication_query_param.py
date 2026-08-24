@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts.models import RevokedAccessToken
 from apps.core.authentication import JWTAuthenticationFromQueryParam
 
 
@@ -75,3 +76,16 @@ def test_query_param_jwt_is_ignored_for_non_get_download_paths(test_user):
     )
 
     assert JWTAuthenticationFromQueryParam().authenticate(request) is None
+
+
+@pytest.mark.django_db
+def test_revoked_access_token_is_rejected(test_user):
+    token = RefreshToken.for_user(test_user).access_token
+    RevokedAccessToken.objects.create(jti=token["jti"], expires_at=token.current_time)
+    request = APIRequestFactory().get(
+        "/api/license-actions/1/download-ledger/",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    with pytest.raises(Exception, match="revoked"):
+        JWTAuthenticationFromQueryParam().authenticate(request)

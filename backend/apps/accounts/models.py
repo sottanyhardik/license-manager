@@ -122,3 +122,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_admin(self):
         """Return True if the user is an admin."""
         return self.is_superuser
+
+
+class RevokedAccessToken(models.Model):
+    """Server-side deny-list for compromised, otherwise stateless access JWTs."""
+    jti = models.CharField(max_length=255, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        indexes = [models.Index(fields=["expires_at"])]

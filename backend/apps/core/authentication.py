@@ -63,3 +63,13 @@ class JWTAuthenticationFromQueryParam(JWTAuthentication):
                 logger.warning("JWT authentication failed: %s", e)
 
         return None
+
+    def get_validated_token(self, raw_token):
+        token = super().get_validated_token(raw_token)
+        # SimpleJWT can blacklist refresh tokens, but access JWTs are
+        # stateless by default.  Check the small explicit deny-list so an
+        # accidentally exposed bearer token can be revoked immediately.
+        from apps.accounts.models import RevokedAccessToken
+        if RevokedAccessToken.objects.filter(jti=token.get("jti")).exists():
+            raise InvalidToken({"detail": "Token has been revoked."})
+        return token

@@ -151,7 +151,8 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "purchase_status",
             "condition_sheet",
         ],
-        "ordering": ["-license_expiry_date", "license_number"],
+        # Put the licence closest to expiry first, then keep the order stable.
+        "ordering": ["license_expiry_date", "license_number"],
         "nested_field_defs": license_nested_field_defs,
         "nested_list_display": {
             "export_license": ["norm_class_label", "fob_inr", "cif_fc", "cif_inr"],

@@ -25,10 +25,10 @@ class TestBillOfEntryAPI:
         assert response.status_code == status.HTTP_200_OK
         assert 'results' in response.data or isinstance(response.data, list)
 
-    def test_non_invoice_boes_are_ordered_by_date_ascending(
+    def test_non_invoice_boes_are_ordered_by_date_descending(
         self, authenticated_client, test_bill_of_entry
     ):
-        """The latest BOE date should appear last in the non-invoice list."""
+        """The latest BOE date should appear first in the non-invoice list."""
         older_date = test_bill_of_entry.bill_of_entry_date - timedelta(days=1)
         test_bill_of_entry.bill_of_entry_date = older_date
         test_bill_of_entry.save(update_fields=["bill_of_entry_date"])
@@ -47,7 +47,7 @@ class TestBillOfEntryAPI:
         assert response.status_code == status.HTTP_200_OK
         results = response.data["results"]
         result_ids = [row["id"] for row in results]
-        assert result_ids.index(test_bill_of_entry.id) < result_ids.index(newer_boe.id)
+        assert result_ids.index(newer_boe.id) < result_ids.index(test_bill_of_entry.id)
 
     def test_retrieve_boe(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/{id}/"""

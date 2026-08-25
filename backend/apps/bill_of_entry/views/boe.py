@@ -111,6 +111,7 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
     """BOE ViewSet with custom filtering, invoice tracking, and business operations."""
 
     permission_classes = [BillOfEntryPermission]
+    ordering = ["-bill_of_entry_date", "-bill_of_entry_number"]
     filterset_class = BOEFilterSet
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
     search_fields = [

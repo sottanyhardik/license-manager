@@ -134,6 +134,16 @@ describe("MasterForm smoke", () => {
     expect(await screen.findByText("Companies list")).toBeInTheDocument();
   });
 
+  it("keeps the manual BOE form available when metadata has no form fields", async () => {
+    (api.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: {} });
+    renderAt("/masters/bill-of-entries/create");
+
+    expect(await screen.findByText(/New\s+Bill Of Entries/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/bill of entry number/i)).toBeInTheDocument();
+    expect(screen.getByText(/^company$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/invoice no/i)).toBeInTheDocument();
+  });
+
   it("loads and updates an existing generic master record", async () => {
     const user = userEvent.setup();
     (api.get as ReturnType<typeof vi.fn>)

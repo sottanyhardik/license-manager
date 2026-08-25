@@ -28,6 +28,36 @@ import { useMasterFormData } from "./hooks/useMasterFormData";
 import { useMasterFormCalculations } from "./hooks/useMasterFormCalculations";
 import { useMasterFormSubmit } from "./hooks/useMasterFormSubmit";
 
+// Keep manual BOE entry available if a metadata response is incomplete. PDF
+// import is a convenience that prefills these fields; it must never be the
+// only way to create a bill of entry.
+const BOE_MANUAL_FORM_FIELDS = [
+    "bill_of_entry_number", "bill_of_entry_date", "port", "allotment",
+    "company", "exchange_rate", "product_name", "planning_target_item",
+    "invoice_no", "invoice_date", "appraisement", "ooc_date", "cha", "comments",
+];
+
+const BOE_MANUAL_FIELD_META: Record<string, Record<string, any>> = {
+    company: { type: "fk", fk_endpoint: "/masters/companies/", label_field: "name" },
+    port: { type: "fk", fk_endpoint: "/masters/ports/", label_field: "name" },
+    allotment: { type: "m2m", fk_endpoint: "/allotments/?is_boe=false", label_field: "display_label" },
+    planning_target_item: { type: "fk", fk_endpoint: "/masters/item-names/?is_active=true", label_field: "name" },
+    bill_of_entry_date: { type: "date" },
+    invoice_date: { type: "date" },
+    appraisement: { type: "date" },
+    ooc_date: { type: "date" },
+    exchange_rate: { type: "number" },
+};
+
+const BOE_MANUAL_NESTED_FIELD_DEFS = {
+    item_details: [
+        { name: "sr_number", type: "fk", label: "License Item", fk_endpoint: "/license-items/", label_field: "description", display_field: "item_description" },
+        { name: "cif_inr", type: "number", label: "CIF (INR)" },
+        { name: "cif_fc", type: "number", label: "CIF (FC)" },
+        { name: "qty", type: "number", label: "Quantity" },
+    ],
+};
+
 /**
  * Generic Master Form for Create/Edit
  *
@@ -477,9 +507,20 @@ export default function MasterForm({
         'incentive-licenses': 'var(--tb-warning)',
     };
     const entityColor = entityColorMap[entityName as string] || 'var(--tb-brand)';
+    const manualBoeFallback = entityName === 'bill-of-entries' && !isEdit;
+    const effectiveFormFields = metadata.form_fields?.length
+        ? metadata.form_fields
+        : manualBoeFallback ? BOE_MANUAL_FORM_FIELDS : [];
+    const effectiveFieldMeta = {
+        ...(manualBoeFallback ? BOE_MANUAL_FIELD_META : {}),
+        ...(metadata.field_meta || {}),
+    };
+    const effectiveNestedFieldDefs = Object.keys(metadata.nested_field_defs || {}).length > 0
+        ? metadata.nested_field_defs
+        : manualBoeFallback ? BOE_MANUAL_NESTED_FIELD_DEFS : {};
 
     const renderField = (fieldName: string, fieldId?: string) => {
-        const fieldMeta = metadata.field_meta?.[fieldName] || {};
+        const fieldMeta = effectiveFieldMeta[fieldName] || {};
 
         // For m2m fields, default to empty array instead of empty string
         let value = formData[fieldName];
@@ -831,14 +872,14 @@ export default function MasterForm({
                     <form onSubmit={handleSubmit} encType="multipart/form-data">
                         {/* Regular Fields */}
                         {(() => {
-                            const activeFields = (metadata.form_fields || []).filter((f: string) => !metadata.nested_field_defs?.[f]);
+                            const activeFields = effectiveFormFields.filter((f: string) => !effectiveNestedFieldDefs?.[f]);
 
                             const renderOneField = (field: string, colClass?: string) => {
                                 const isTextarea = !colClass && (field.includes("address") || field.includes("description") ||
                                     field.includes("note") || field.includes("comment") ||
                                     field.includes("condition") || field.includes("restriction"));
                                 const bsToTw = (c: string | undefined) => { if (!c) return isTextarea ? "col-span-full" : ""; const m = c.match(/col(?:-md)?-(\d+)/); if (!m) return ""; const n = parseInt(m[1]); return n >= 12 ? "col-span-full" : n >= 8 ? "sm:col-span-2 md:col-span-3" : n >= 6 ? "sm:col-span-1 md:col-span-2" : n >= 4 ? "" : n >= 3 ? "" : ""; }; const col = bsToTw(colClass);
-                                const fieldMeta = metadata.field_meta?.[field] || {};
+                                const fieldMeta = effectiveFieldMeta[field] || {};
                                 const label = fieldMeta.label || field.replace(/_/g, " ");
                                 const helpText = fieldMeta.help_text;
                                 const fieldError = fieldErrors[field];
@@ -923,11 +964,11 @@ export default function MasterForm({
                         })()}
 
                         {/* Nested Fields */}
-                        {entityName !== 'allotments' && Object.entries(metadata.nested_field_defs || {}).length > 0 && (
+                        {entityName !== 'allotments' && Object.entries(effectiveNestedFieldDefs).length > 0 && (
                             <div className="mt-4">
                                 <div style={{ height: 2, background: `linear-gradient(90deg, ${entityColor} 0%, transparent 100%)`, marginBottom: 20, borderRadius: 1 }}></div>
                                 {(entityName === 'licenses' || entityName === 'trades') ? (() => {
-                                    const allNestedEntries = Object.entries(metadata.nested_field_defs || {});
+                                    const allNestedEntries = Object.entries(effectiveNestedFieldDefs);
                                     // For trades, filter tabs based on license_type
                                     const nestedEntries = entityName === 'trades'
                                         ? allNestedEntries.filter(([key]) => {
@@ -1008,7 +1049,7 @@ export default function MasterForm({
                                             </div>
                                         </>
                                     );
-                                })() : Object.entries(metadata.nested_field_defs || {}).map(([nestedKey, nestedDef]) => (
+                                })() : Object.entries(effectiveNestedFieldDefs).map(([nestedKey, nestedDef]) => (
                                     <NestedFieldArray
                                         key={nestedKey}
                                         label={nestedKey.replace(/_/g, " ")}

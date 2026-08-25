@@ -584,7 +584,70 @@ sudo_cmd chmod -R 775 "$SERVER_PATH/backend/media" 2>/dev/null || true
 sudo_cmd chmod -R 755 "$SERVER_PATH/frontend/dist" 2>/dev/null || true
 
 echo_info "Restarting application services..."
-sudo_cmd supervisorctl restart license-manager
+# A previous manual start or failed restart can leave a Gunicorn master outside
+# Supervisor. It keeps port 8000 open, then every Supervisor retry fails with
+# "Address already in use" while appearing RUNNING for its brief start window.
+# Stop the managed process first, clear only this application's stale Gunicorn
+# processes, and refuse to proceed if another process still owns the port.
+sudo_cmd supervisorctl stop license-manager 2>/dev/null || true
+
+GUNICORN_PIDS="$(pgrep -f '[g]unicorn.*lmanagement\.wsgi:application' || true)"
+if [ -n "$GUNICORN_PIDS" ]; then
+    echo_warn "Stopping stale Gunicorn process(es): ${GUNICORN_PIDS//$'\n'/, }"
+    kill $GUNICORN_PIDS 2>/dev/null || true
+    for _attempt in {1..10}; do
+        sleep 1
+        GUNICORN_PIDS="$(pgrep -f '[g]unicorn.*lmanagement\.wsgi:application' || true)"
+        [ -z "$GUNICORN_PIDS" ] && break
+    done
+fi
+if [ -n "$GUNICORN_PIDS" ]; then
+    echo_warn "Force-stopping stale Gunicorn process(es): ${GUNICORN_PIDS//$'\n'/, }"
+    kill -KILL $GUNICORN_PIDS 2>/dev/null || true
+    sleep 1
+fi
+
+if sudo_cmd ss -ltnp | grep -q ':8000'; then
+    echo_err "Port 8000 remains occupied after Gunicorn cleanup. Refusing to start a competing application process."
+    sudo_cmd ss -ltnp | grep ':8000' || true
+    exit 1
+fi
+
+sudo_cmd supervisorctl start license-manager
+APP_STATUS=""
+for _attempt in {1..20}; do
+    sleep 1
+    APP_STATUS="$(sudo_cmd supervisorctl status license-manager || true)"
+    if [[ "$APP_STATUS" == *"RUNNING"* ]]; then
+        break
+    fi
+done
+if [[ "$APP_STATUS" != *"RUNNING"* ]]; then
+    echo_err "license-manager did not reach RUNNING state."
+    echo "$APP_STATUS"
+    sudo_cmd tail -80 /var/log/lmanagement.log 2>/dev/null || true
+    exit 1
+fi
+
+# The Supervisor configuration starts one master plus three workers. Checking
+# this catches a master that bound successfully but failed to boot workers.
+GUNICORN_PROCESS_COUNT="$(pgrep -fc '[g]unicorn.*lmanagement\.wsgi:application' || true)"
+if [ "$GUNICORN_PROCESS_COUNT" -lt 4 ]; then
+    echo_err "Gunicorn started without all expected workers (found $GUNICORN_PROCESS_COUNT; expected at least 4)."
+    sudo_cmd tail -80 /var/log/lmanagement.log 2>/dev/null || true
+    exit 1
+fi
+
+LOCAL_HEALTH_STATUS="$(curl --silent --show-error --connect-timeout 5 --max-time 15 \
+    --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8000/api/health/ 2>/dev/null || echo 000)"
+case "$LOCAL_HEALTH_STATUS" in
+    200|301|302|307|308) echo_ok "Local application health endpoint reachable (HTTP $LOCAL_HEALTH_STATUS)" ;;
+    *)
+        echo_err "Local application health endpoint failed (HTTP $LOCAL_HEALTH_STATUS)."
+        sudo_cmd tail -80 /var/log/lmanagement.log 2>/dev/null || true
+        exit 1
+        ;;
+esac
 
 echo_info "Restarting Celery..."
 sudo_cmd supervisorctl stop license-manager-celery 2>/dev/null || true

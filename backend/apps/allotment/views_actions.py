@@ -1121,15 +1121,6 @@ class AllotmentActionViewSet(ViewSet):
             or first_allocation.get('allocation_basis')
             or (search_mode if explicit_search_mode else legacy_basis)
         ).strip().upper()
-        # The available-items License Status filter is part of the allocation
-        # intent as well: an explicit "all" permits the user to debit an
-        # expired licence surfaced by that filter.  Legacy callers retain the
-        # historical safety default and are still rejected for expiry.
-        requested_license_status = str(
-            request.data.get('license_status')
-            or first_allocation.get('license_status')
-            or 'active'
-        ).strip().lower()
         if search_mode not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
             return Response({'code': 'INVALID_DEBIT_BASIS', 'error': 'Invalid debit basis.'}, status=status.HTTP_400_BAD_REQUEST)
         if allocation_basis not in (DebitBasis.PLAN, DebitBasis.ACTUAL):
@@ -1278,21 +1269,6 @@ class AllotmentActionViewSet(ViewSet):
                                        'error': 'Requested allotment exceeds the remaining planned balance.',
                                        'max_qty': str(remaining_plan_qty), 'max_cif': str(remaining_plan_cif)})
                         continue
-
-                # Reject allocations against an already-expired license. Computed
-                # directly off license_expiry_date (the same comparison the
-                # license_status=active/expired filters above use) rather than
-                # the cached LicenseFlags.is_expired column, so this can't be
-                # fooled by a stale flag between nightly recalculation runs.
-                from django.utils import timezone
-                license_expiry_date = license_item.license.license_expiry_date
-                if (requested_license_status != 'all'
-                        and license_expiry_date and license_expiry_date < timezone.now().date()):
-                    errors.append({
-                        'item_id': item_id,
-                        'error': f'License has expired on {license_expiry_date}. Cannot allocate against an expired license.'
-                    })
-                    continue
 
                 # Legacy allocations without a unit price have independent
                 # CIF accounting.  Where a canonical price exists, Qty and

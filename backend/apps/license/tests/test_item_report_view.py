@@ -184,24 +184,24 @@ def test_item_report_balance_cif_is_live_not_stale_stored_value(report_viewer_cl
 
 
 @pytest.mark.django_db
-def test_item_report_available_quantity_is_total_less_boe_debit_not_stored_operational_balance(
+def test_item_report_available_quantity_uses_live_net_trade_balance(
     report_viewer_client, item_report_masters, monkeypatch,
 ):
-    """Paired trades must not hide the Customs Ledger's remaining quantity."""
+    """The report uses the live operational map, never the stored column."""
     licence = _make_license("ITEM-REPORT-ACTUAL-AVAILABLE", item_report_masters["parle"])
     item = _make_import_item(
         licence,
         item_report_masters["hs_code"],
         quantity=Decimal("100.000"),
-        # Represents an operational field reduced by a direct linked sale.
+        # A deliberately stale persisted column must never leak into report output.
         available_quantity=Decimal("0.000"),
     )
 
     from apps.license.services.balance_calculator import ItemBalanceCalculator
     monkeypatch.setattr(
         ItemBalanceCalculator,
-        "calculate_debited_quantity_for_items",
-        staticmethod(lambda item_ids: {item.id: Decimal("40.000")}),
+        "calculate_available_quantity_for_items",
+        staticmethod(lambda items: {item.id: Decimal("60.000")}),
     )
 
     response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})

@@ -27,7 +27,7 @@ interface CustomsLedgerTableProps {
 }
 
 const HEADERS = [
-    "Sr", "Date", "Type", "Doc Number", "BOE Number", "BOE Date", "Company", "Item",
+    "Sr", "Date", "Type", "Doc Number", "BOE Number", "BOE Date", "Company", "Item", "Licence SR No.",
     "Qty", "CIF USD", "Credit", "Debit", "Running Balance", "Status", "Remarks", "Actions",
 ];
 
@@ -416,6 +416,7 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                                     <td className="whitespace-nowrap px-3 py-2">{fmtDate(row.boe_date)}</td>
                                     <td className="px-3 py-2">{row.company ?? "—"}</td>
                                     <td className="px-3 py-2">{row.item_name ?? "—"}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">{row.license_sr_no ?? "—"}</td>
                                     <td className="px-3 py-2 text-right">{fmtNum(row.qty)}</td>
                                     <td className="px-3 py-2 text-right">{fmtNum(row.cif_usd)}</td>
                                     <td className="px-3 py-2 text-right">{fmtNum(row.credit)}</td>

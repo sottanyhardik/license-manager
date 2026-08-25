@@ -166,6 +166,8 @@ export interface CustomsLedgerRow {
     boe_date: string | null;
     company: string | null;
     item_name: string | null;
+    /** Source import-item serial number on the licence (BOE rows only). */
+    license_sr_no?: number | null;
     invoice_numbers: string[];
     qty: number | null;
     cif_usd: number | null;

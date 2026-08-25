@@ -868,6 +868,10 @@ class LicenseBalanceLedgerBuilder:
                 'boe_date': boe.bill_of_entry_date if boe else None,
                 'company': boe.company.name if (boe and boe.company) else '-',
                 'item_name': item_display_name(row.sr_number, fallback=(boe.product_name if boe else '')),
+                # RowDetails is attached to the authoritative import source
+                # row, so this is the actual licence SR number (never an
+                # inferred product/BOE sequence).
+                'license_sr_no': row.sr_number.serial_number if row.sr_number_id else None,
                 'invoice_numbers': [],
                 'qty': row.qty, 'cif_usd': row.cif_fc, 'cif_inr': row.cif_inr,
                 'credit': DEC_0, 'debit': debit, 'running_balance': running,

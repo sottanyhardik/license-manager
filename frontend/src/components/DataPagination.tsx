@@ -9,6 +9,7 @@ export default function DataPagination({
     onPageChange,
     onPageSizeChange,
     totalItems,
+    showPageSize = true,
 }: {
     currentPage?: number;
     totalPages?: number;
@@ -18,6 +19,7 @@ export default function DataPagination({
     onPageChange: (page: number) => void;
     onPageSizeChange: (size: number) => void;
     totalItems?: number;
+    showPageSize?: boolean;
 }) {
     const pageSizeOptions = [10, 25, 50, 100, 200];
 
@@ -49,7 +51,7 @@ export default function DataPagination({
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-1 pt-3 mt-3">
             {/* Left: page size selector + count */}
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
+                {showPageSize && <div className="flex items-center gap-1.5">
                     <span className="text-[12px] text-muted-foreground">Show</span>
                     <select
                         className="h-7 rounded-md border border-input bg-card px-2 text-[12px] outline-none focus-visible:border-ring cursor-pointer"
@@ -60,7 +62,7 @@ export default function DataPagination({
                         {pageSizeOptions.map(size => <option key={size} value={size}>{size}</option>)}
                     </select>
                     <span className="text-[12px] text-muted-foreground">per page</span>
-                </div>
+                </div>}
                 {totalItems != null && (
                     <span className="hidden text-[12px] text-muted-foreground sm:inline-block">
                         {startItem}–{endItem} of {totalItems.toLocaleString()}

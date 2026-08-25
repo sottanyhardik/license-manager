@@ -143,7 +143,6 @@ describe("AllotmentAction canonical paired Max", () => {
         expect(mockedPost).toHaveBeenCalledWith("allotment-actions/9722/allocate-items/", {
             allocations: [expect.objectContaining({
                 item_id: 1,
-                plan_line_id: 1,
                 qty: "234",
                 cif_fc: "2064.12",
                 debit_based_on: "PLAN",
@@ -193,7 +192,7 @@ describe("AllotmentAction canonical paired Max", () => {
         await waitFor(() => expect(screen.getByTestId("planning-target")).toHaveTextContent(""));
         await waitFor(() => expect(mockedGet).toHaveBeenCalledWith(
             "allotment-actions/9722/available-licenses/",
-            expect.objectContaining({ params: expect.objectContaining({ page: 1, page_size: 10 }) }),
+            expect.objectContaining({ params: expect.objectContaining({ page: 1, page_size: 25 }) }),
         ));
         const planCalls = mockedGet.mock.calls.filter(([url]) => url === "allotment-actions/9722/available-licenses/");
         const lastParams = planCalls[planCalls.length - 1]?.[1]?.params as Record<string, unknown>;

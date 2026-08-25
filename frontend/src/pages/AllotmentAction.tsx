@@ -17,6 +17,7 @@ import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, ChevronDown,
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
+import DataPagination from "@/components/DataPagination";
 
 interface PlanningOption {
     planning_target_item_id: number | null;
@@ -229,9 +230,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const [currentPage, setCurrentPage] = useState(1);
     // The candidate area is a working queue, not an unbounded search-result
     // table.  The server remains responsible for eligibility and ordering;
-    // asking it for ten rows gives a completed row an immediate successor on
-    // the next invalidation without client-side balance calculations.
-    const pageSize = 10;
+    // Keep a substantial working queue on screen so operators rarely need to
+    // paginate while allocating, while retaining server-side pagination for
+    // large result sets.
+    const pageSize = 25;
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -428,6 +430,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         data: availableLicensesData,
         isLoading: initialLoading,
         isFetching: tableLoading,
+        refetch: refetchAvailableLicenses,
     } = useQuery({
         queryKey: ['allotment-available-licenses', id, filters.debit_based_on, allotment?.planning_target_item ?? null, allotment?.planning_target_sion ?? null, apiParams],
         // React Query aborts an obsolete query when its key changes.  Passing
@@ -457,6 +460,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     }, [filtersReady, availableLicensesData, filters.debit_based_on, pageSize]);
     const totalItems: number = availableLicensesData?.count ?? 0;
     const totalPages: number = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
+
+    // Confirming or deleting can shrink the final page.  Never leave the
+    // operator on an empty, now-out-of-range page after its fresh response.
+    useEffect(() => {
+        if (totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
     // Candidate grouping and ID lookup are presentation-only, but allocation
     // drafts change on every keystroke.  Keep that local input update from
     // repeatedly regrouping the full server page or linearly searching it.
@@ -504,12 +515,17 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         qc.invalidateQueries({ queryKey: ['allotments', id] });
     };
 
-    // Keep the existing query key intact: its filters, debounce values and
-    // current page are part of that key.  Invalidating this prefix therefore
-    // reloads the exact grid the user is looking at, rather than resetting it.
+    // Refresh the exact currently visible query after a mutation.  Broad cache
+    // invalidation alone can leave a cancelled request stale until another
+    // render; explicitly refetching makes the new balances/items appear as
+    // soon as the confirm/delete request completes.
     const refreshAvailableLicenses = async () => {
         await qc.cancelQueries({ queryKey: ['allotment-available-licenses', id] });
-        await qc.invalidateQueries({ queryKey: ['allotment-available-licenses', id] });
+        await qc.invalidateQueries({
+            queryKey: ['allotment-available-licenses', id],
+            refetchType: 'none',
+        });
+        await refetchAvailableLicenses();
     };
 
     const allocateMutation = useMutation({
@@ -1375,64 +1391,17 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
-                            <div className="text-muted-foreground text-[14.5px]">
-                                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
-                            </div>
-                            <nav aria-label="Pagination">
-                                <ul className="flex items-center gap-1">
-                                    <li>
-                                        <button
-                                            className="inline-flex h-8 items-center rounded-l-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
-                                            onClick={() => setCurrentPage(prev => prev - 1)}
-                                            disabled={currentPage === 1}
-                                        >
-                                            Previous
-                                        </button>
-                                    </li>
-                                    {[...Array(totalPages)].map((_, idx) => {
-                                        const pageNum = idx + 1;
-                                        // Show first, last, current, and pages around current
-                                        if (
-                                            pageNum === 1 ||
-                                            pageNum === totalPages ||
-                                            (pageNum >= currentPage - 2 && pageNum <= currentPage + 2)
-                                        ) {
-                                            return (
-                                                <li key={pageNum}>
-                                                    <button
-                                                        className={cn(
-                                                            "inline-flex h-8 min-w-[32px] items-center justify-center rounded border px-2 text-sm font-medium transition-colors",
-                                                            currentPage === pageNum
-                                                                ? "bg-gradient-to-br from-primary to-primary/70 border-transparent text-primary-foreground"
-                                                                : "border-border bg-card text-foreground hover:bg-muted"
-                                                        )}
-                                                        onClick={() => setCurrentPage(pageNum)}
-                                                    >
-                                                        {pageNum}
-                                                    </button>
-                                                </li>
-                                            );
-                                        } else if (
-                                            pageNum === currentPage - 3 ||
-                                            pageNum === currentPage + 3
-                                        ) {
-                                            return <li key={pageNum}><span className="inline-flex h-8 items-center px-1 text-sm text-muted-foreground">…</span></li>;
-                                        }
-                                        return null;
-                                    })}
-                                    <li>
-                                        <button
-                                            className="inline-flex h-8 items-center rounded-r-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
-                                            onClick={() => setCurrentPage(prev => prev + 1)}
-                                            disabled={currentPage === totalPages}
-                                        >
-                                            Next
-                                        </button>
-                                    </li>
-                                </ul>
-                            </nav>
-                        </div>
+                        <DataPagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            pageSize={pageSize}
+                            totalItems={totalItems}
+                            hasPrevious={currentPage > 1}
+                            hasNext={currentPage < totalPages}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={() => undefined}
+                            showPageSize={false}
+                        />
                     )}
                 </div>
             </div>

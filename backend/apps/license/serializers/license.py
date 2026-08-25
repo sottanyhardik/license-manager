@@ -191,6 +191,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     available_quantity = serializers.SerializerMethodField(read_only=True)
     available_value = serializers.SerializerMethodField(read_only=True)
     debited_quantity = serializers.SerializerMethodField(read_only=True)
+    boe_debited_quantity = serializers.SerializerMethodField(read_only=True)
     debited_value = serializers.SerializerMethodField(read_only=True)
     allotted_quantity = serializers.SerializerMethodField(read_only=True)
     allotted_value = serializers.SerializerMethodField(read_only=True)
@@ -216,7 +217,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
                   'old_quantity', 'unit', 'cif_fc', 'cif_inr', 'available_quantity', 'available_value',
-                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'debited_value', 'planned_quantity',
+                  'allotted_quantity', 'allotted_value', 'debited_quantity', 'boe_debited_quantity', 'debited_value', 'planned_quantity',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
                   'is_restricted', 'condition_type', 'billed_no_boe', 'planning_options']
@@ -301,6 +302,19 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     # allotment, trade line, or licence item is saved.
     def get_debited_quantity(self, obj):
         return float(obj.debited_quantity or 0)
+
+    def get_boe_debited_quantity(self, obj):
+        """Raw BOE quantity only; excludes direct SALE consumption.
+
+        ``debited_quantity`` is the net-consumed quantity used for
+        availability, so it includes an unlinked direct sale.  Presenting it
+        under a "BOE Debited" heading is misleading in the customs ledger.
+        """
+        debit_map = self.context.get('boe_debited_quantity_map')
+        if debit_map is None:
+            from apps.license.services.balance_calculator import ItemBalanceCalculator
+            debit_map = ItemBalanceCalculator.calculate_debited_quantity_for_items([obj.id])
+        return float(debit_map.get(obj.id, 0))
 
     def get_debited_value(self, obj):
         return float(obj.debited_value or 0)
@@ -843,6 +857,11 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             from apps.license.services.plan_reporting import plan_map_for_import_items
             item_ids = [item.id for item in instance.import_license.all()]
             self.context['plan_map'] = plan_map_for_import_items(item_ids) if item_ids else {}
+
+        if not is_list_view and 'boe_debited_quantity_map' not in self.context:
+            from apps.license.services.balance_calculator import ItemBalanceCalculator
+            item_ids = [item.id for item in instance.import_license.all()]
+            self.context['boe_debited_quantity_map'] = ItemBalanceCalculator.calculate_debited_quantity_for_items(item_ids)
 
         # Same batching for the nested import items' live available_value /
         # balance_cif_fc (see `LicenseImportItemSerializer.get_available_value`)

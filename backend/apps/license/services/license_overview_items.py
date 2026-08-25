@@ -3,7 +3,11 @@ License Overview — per-item ledger rows (`GET .../overview-items/`).
 
 IMPORTANT — this module computes a NEW, display-only balance formula:
 
-    balance_qty = total_qty - debited_qty - allotted_qty
+    # ``available_quantity`` is the live, authoritative physical balance. It
+    # applies the same direct-sale accounting and zero floor as the allocation
+    # engine, so the overview must not expose an impossible negative quantity
+    # when historical debit rows exceed the source item's original quantity.
+    balance_qty = item.available_quantity or DEC_000
     balance_cif = total_cif - debited_cif - allotted_cif
 
 using each `LicenseImportItemsModel` row's own stored
@@ -40,7 +44,9 @@ def compute_item_ledger_rows(license_obj, *, include_canonical: bool = False):
         allotted_qty = item.allotted_quantity or DEC_000
         allotted_cif = item.allotted_value or DEC_0
 
-        balance_qty = total_qty - debited_qty - allotted_qty
+        # Keep the overview aligned with the live allocation engine: direct
+        # sales are included and a physical item can never display below zero.
+        balance_qty = item.available_quantity or DEC_000
         balance_cif = total_cif - debited_cif - allotted_cif
 
         row = {

@@ -33,9 +33,10 @@ class LicenseOverviewItemsViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
             debited_value=Decimal("500.00"),
             allotted_quantity=Decimal("50.000"),
             allotted_value=Decimal("250.00"),
+            available_quantity=Decimal("850.000"),
         )
 
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(4):
             resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-items/")
 
         self.assertEqual(resp.status_code, 200, resp.data)
@@ -53,11 +54,12 @@ class LicenseOverviewItemsViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(row["balance_qty"], 850.0)
         self.assertEqual(row["balance_cif"], 4250.0)
 
-    def test_zero_cif_item_yields_negative_balance_not_blank(self):
+    def test_zero_cif_item_keeps_quantity_balance_at_zero(self):
         """
         Spec case: `item.cif_fc == Decimal('0.00')` (unset) — `balance_cif`
         must come out as `0 - debited - allotted` (here: a negative
-        number), never blank/None. Deliberately distinct from
+        number), never blank/None. The quantity balance stays at the live
+        zero-floor used by allocation. Deliberately distinct from
         `apps/core/scripts/calculate_balance.py`'s license-level
         `available_value` — the two are allowed to differ.
         """
@@ -82,6 +84,7 @@ class LicenseOverviewItemsViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertIsNotNone(row["balance_cif"])
         self.assertEqual(row["balance_cif"], -300.0)
         self.assertEqual(row["total_cif"], 0.0)
+        self.assertEqual(row["balance_qty"], 0.0)
 
     def test_denies_authenticated_user_with_no_roles(self):
         company = self.make_company()

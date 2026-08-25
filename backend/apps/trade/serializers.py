@@ -116,10 +116,19 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         item = attrs.get('sr_number') or getattr(self.instance, 'sr_number', None)
         requested_cif = attrs.get('cif_fc')
+        # A paired purchase/sale is one commercial transfer: the counterpart
+        # is created atomically by the parent serializer and retains the same
+        # negotiated CIF.  It must not be rejected merely because a source
+        # row's operational availability has already been consumed.  This is
+        # deliberately limited to the explicit paired-create contract;
+        # standalone trades continue to use the source-row ceiling below.
+        raw_auto_pair = getattr(self.root, 'initial_data', {}).get('auto_create_paired', False)
+        auto_pairing = raw_auto_pair is True or str(raw_auto_pair).strip().lower() in {'1', 'true', 'yes', 'on'}
         if (
             item is not None
             and requested_cif is not None
             and resolve_effective_cif_mode(item.license) == INDIVIDUAL_ITEM
+            and not auto_pairing
         ):
             ceiling = effective_source_row_cif_available(
                 licence=item.license,

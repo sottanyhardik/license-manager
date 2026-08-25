@@ -133,13 +133,17 @@ def _apply_database_filters(filters, authorization_company_id):
     incentive = IncentiveLicense.objects.filter(id__in=incentive_ids).distinct()
 
     if filters.company_id is not None:
-        # A License Ledger company is the BUYER on a qualifying external
-        # purchase.  Sale ownership, exporter and counterparty relationships
-        # are deliberately excluded: they describe different company roles.
+        # A ledger company owns a purchase when it is the buyer and a sale
+        # when it is the seller.  Do not use exporter/counterparty relations:
+        # those are license metadata or the other side of a transaction.
         company_trades = LicenseTrade.objects.filter(
-            direction=LicenseTrade.DIR_PURCHASE,
-            linked_trade__isnull=True,
-            to_company_id=filters.company_id,
+            Q(
+                direction=LicenseTrade.DIR_PURCHASE,
+                to_company_id=filters.company_id,
+            ) | Q(
+                direction=LicenseTrade.DIR_SALE,
+                from_company_id=filters.company_id,
+            ),
         )
         dfia = dfia.filter(id__in=company_trades.filter(license_type="DFIA").values("lines__sr_number__license_id"))
         incentive = incentive.filter(id__in=company_trades.filter(license_type="INCENTIVE").values("incentive_lines__incentive_license_id"))
@@ -211,7 +215,10 @@ def build_filtered_license_ledger_data(params, *, authorization_company_id=None,
         }}
 
     licenses = [CanonicalLedgerService.build_canonical_ledger_dataset(
-        license_id, license_type, first_purchase_date=first_dates.get((license_type, license_id)),
+        license_id,
+        license_type,
+        first_purchase_date=first_dates.get((license_type, license_id)),
+        company_id=filters.company_id,
     ) for license_id, license_type in refs]
     if filters.min_balance is not None:
         # The collection's eligibility filter is Financial Available Balance,

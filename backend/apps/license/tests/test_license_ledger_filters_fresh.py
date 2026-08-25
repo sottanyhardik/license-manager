@@ -184,10 +184,10 @@ class FreshLicenseLedgerFilterTests(SimpleTestCase):
 
 
 @pytest.mark.django_db
-def test_company_filter_uses_purchase_buyer_not_sale_or_exporter(
+def test_company_filter_includes_company_purchases_and_sales(
     test_company, test_company_2, test_license, test_port,
 ):
-    """Mixed company roles cannot admit a licence owned by another buyer."""
+    """A company may qualify a ledger through a purchase or a sale it owns."""
     wrong_item = test_license.import_license.first()
     LicenseTradeLine.objects.create(
         trade=LicenseTrade.objects.create(
@@ -197,7 +197,7 @@ def test_company_filter_uses_purchase_buyer_not_sale_or_exporter(
         ),
         sr_number=wrong_item, amount_inr=Decimal("100"), cif_fc=Decimal("100"),
     )
-    # The selected company is exporter and SALE owner, but is not the buyer.
+    # The selected company owns this sale even though it is not the buyer.
     LicenseTradeLine.objects.create(
         trade=LicenseTrade.objects.create(
             direction=LicenseTrade.DIR_SALE, license_type="DFIA",
@@ -224,7 +224,7 @@ def test_company_filter_uses_purchase_buyer_not_sale_or_exporter(
         ),
         sr_number=correct_item, amount_inr=Decimal("100"), cif_fc=Decimal("100"),
     )
-    # Reverse mixed relationship: sale/exporter is another company.
+    # The selected company owns this purchase even though it is not the seller.
     LicenseTradeLine.objects.create(
         trade=LicenseTrade.objects.create(
             direction=LicenseTrade.DIR_SALE, license_type="DFIA",
@@ -239,7 +239,16 @@ def test_company_filter_uses_purchase_buyer_not_sale_or_exporter(
     )
     returned_ids = set(dfia.values_list("id", flat=True))
     assert correct_license.id in returned_ids
-    assert test_license.id not in returned_ids
+    assert test_license.id in returned_ids
+
+    ledgers = build_filtered_license_ledger_data({
+        "buying_company_id": str(test_company.id),
+    })["licenses"]
+    selected_ledger = next(row for row in ledgers if row["license_id"] == test_license.id)
+    assert selected_ledger["display_transactions"]
+    assert {
+        row["company_id"] for row in selected_ledger["display_transactions"]
+    } == {test_company.id}
 
 
 @pytest.mark.django_db

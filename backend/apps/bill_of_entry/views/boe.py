@@ -78,7 +78,7 @@ BOE_VIEWSET_CONFIG = {
         "cha",
         "comments",
     ],
-    "ordering": ["-bill_of_entry_date", "bill_of_entry_number"],
+    "ordering": ["bill_of_entry_date", "bill_of_entry_number"],
     "nested_field_defs": BOE_NESTED_FIELD_DEFS,
     "nested_list_display": {
         "item_details": [

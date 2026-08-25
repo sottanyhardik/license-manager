@@ -2,11 +2,14 @@
 API Tests for Bill of Entry Endpoints
 """
 from io import BytesIO
+from datetime import timedelta
 
 import openpyxl
 import pytest
 from django.urls import reverse
 from rest_framework import status
+
+from apps.bill_of_entry.models import BillOfEntryModel
 
 
 @pytest.mark.api
@@ -21,6 +24,30 @@ class TestBillOfEntryAPI:
 
         assert response.status_code == status.HTTP_200_OK
         assert 'results' in response.data or isinstance(response.data, list)
+
+    def test_non_invoice_boes_are_ordered_by_date_ascending(
+        self, authenticated_client, test_bill_of_entry
+    ):
+        """The latest BOE date should appear last in the non-invoice list."""
+        older_date = test_bill_of_entry.bill_of_entry_date - timedelta(days=1)
+        test_bill_of_entry.bill_of_entry_date = older_date
+        test_bill_of_entry.save(update_fields=["bill_of_entry_date"])
+        newer_boe = BillOfEntryModel.objects.create(
+            company=test_bill_of_entry.company,
+            bill_of_entry_number="NEWER-BOE",
+            bill_of_entry_date=older_date + timedelta(days=1),
+            port=test_bill_of_entry.port,
+            exchange_rate=test_bill_of_entry.exchange_rate,
+            product_name="Newer Test Product",
+        )
+
+        url = reverse("bill_of_entry:bill-of-entries-list")
+        response = authenticated_client.get(url, {"is_invoice": "False", "page": 1})
+
+        assert response.status_code == status.HTTP_200_OK
+        results = response.data["results"]
+        result_ids = [row["id"] for row in results]
+        assert result_ids.index(test_bill_of_entry.id) < result_ids.index(newer_boe.id)
 
     def test_retrieve_boe(self, authenticated_client, test_bill_of_entry):
         """Test GET /bill-of-entries/{id}/"""

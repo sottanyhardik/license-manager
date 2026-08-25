@@ -300,6 +300,19 @@ class ItemReportView(APIView):
         # without issuing a second DB round-trip.
         item_list = list(items)
 
+        # The Item Report's "Available Quantity" is the Customs Ledger's
+        # "Actual Available" figure: Total Quantity minus BOE-debited
+        # quantity.  Do not reuse the persisted `available_quantity` field
+        # here: it is an operational availability measure and also subtracts
+        # direct SALE/allotment consumption.  A paired sale/purchase can
+        # therefore make it zero even while the item still has a positive
+        # BOE-only customs balance.  Batch the canonical BOE map so every
+        # report row follows the same formula as the licence overview.
+        from apps.license.services.balance_calculator import ItemBalanceCalculator
+        boe_debited_quantity_by_item = ItemBalanceCalculator.calculate_debited_quantity_for_items(
+            [item.id for item in item_list]
+        )
+
         # Utilization plan per item: read ONLY from persisted LicenseItemPlan.
         # No fallback to norm planning in read paths.
         # Pre-compute for ALL unique licenses in one pass.
@@ -392,7 +405,9 @@ class ItemReportView(APIView):
             # so the column is never blank when a sensible value exists.
             quantity = float(item.quantity or 0)
             cif_fc = float(item.cif_fc or 0)
-            available_quantity = float(item.available_quantity or 0)
+            boe_debited_quantity = boe_debited_quantity_by_item.get(item.id, Decimal('0'))
+            actual_available_quantity = max(Decimal('0'), Decimal(str(item.quantity or 0)) - boe_debited_quantity)
+            available_quantity = float(actual_available_quantity)
             if quantity > 0 and cif_fc > 0:
                 unit_price = cif_fc / quantity
             elif available_quantity > 0:

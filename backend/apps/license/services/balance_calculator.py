@@ -1859,7 +1859,17 @@ class ItemBalanceCalculator:
             sr_number_id=OuterRef('sr_number_id'),
             transaction_type=DEBIT,
         ))
-        rows = LicenseTradeLine.objects.filter(trade__direction=LicenseTrade.DIR_SALE)
+        # A linked PURCHASE/SALE pair is a transfer, not final consumption:
+        # its purchase restores the exact quantity carried by its sale.  The
+        # pair therefore has a net zero effect on the source item's physical
+        # availability.  Direct, unpaired sales still consume quantity.
+        # ``linked_trade`` covers legacy manually-linked pairs; ``counterpart``
+        # covers the atomic paired-copy workflow.
+        rows = LicenseTradeLine.objects.filter(
+            trade__direction=LicenseTrade.DIR_SALE,
+            trade__counterpart__isnull=True,
+            trade__linked_trade__isnull=True,
+        )
         if import_item is not None:
             rows = rows.filter(sr_number=import_item)
         elif item_ids is not None:
@@ -1921,7 +1931,9 @@ class ItemBalanceCalculator:
         (NEVER `old_quantity` — see `apps.core.scripts.calculate_balance.
         calculate_available_quantity`'s docstring for why that legacy
         substitution was removed) − BOE Debited − Outstanding (BOE-unlinked)
-        Allotted − direct SALE quantity.  A SALE line with a BOE is excluded
+        Allotted − unpaired direct SALE quantity.  A linked purchase/sale
+        pair nets to zero and is excluded from the direct-sale term. A SALE
+        line with a BOE is excluded
         from the final term because its BOE is already the physical debit.
         The allotted term reuses `LicenseBalanceCalculator.
         get_outstanding_allotment_totals` — the same Balance Engine
@@ -1988,8 +2000,8 @@ class ItemBalanceCalculator:
     def calculate_available_quantity_for_items(items) -> dict:
         """
         Batched sibling of `calculate_available_quantity` — same formula
-        (`quantity - BOE debited - outstanding AT-type allotted - direct SALE
-        quantity`, floored at 0),
+        (`quantity - BOE debited - outstanding AT-type allotted - unpaired
+        direct SALE quantity`, floored at 0),
         for MANY import items, possibly spanning MANY licenses, in a fixed
         small number of queries. Composes
         `calculate_debited_quantity_for_items` and `LicenseBalanceCalculator.

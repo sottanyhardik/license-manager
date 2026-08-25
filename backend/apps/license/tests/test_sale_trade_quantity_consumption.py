@@ -81,6 +81,19 @@ class SaleTradeQuantityConsumptionTests(TestCase):
 
         self.assertEqual(ItemBalanceCalculator.calculate_available_quantity(self.item), Decimal('50.000'))
 
+    def test_linked_purchase_sale_pair_has_no_net_quantity_consumption(self):
+        purchase = LicenseTrade.objects.create(
+            direction=LicenseTrade.DIR_PURCHASE, from_company=self.company,
+        )
+        sale = self._sale()
+        sale.counterpart = purchase
+        sale.save(update_fields=['counterpart'])
+        purchase.counterpart = sale
+        purchase.save(update_fields=['counterpart'])
+        self._line(sale, '30.000')
+
+        self.assertEqual(ItemBalanceCalculator.calculate_available_quantity(self.item), Decimal('100.000'))
+
     def test_later_boe_association_replaces_not_duplicates_direct_sale_debit(self):
         trade = self._sale()
         self._line(trade, '30.000')

@@ -184,6 +184,33 @@ def test_item_report_balance_cif_is_live_not_stale_stored_value(report_viewer_cl
 
 
 @pytest.mark.django_db
+def test_item_report_available_quantity_is_total_less_boe_debit_not_stored_operational_balance(
+    report_viewer_client, item_report_masters, monkeypatch,
+):
+    """Paired trades must not hide the Customs Ledger's remaining quantity."""
+    licence = _make_license("ITEM-REPORT-ACTUAL-AVAILABLE", item_report_masters["parle"])
+    item = _make_import_item(
+        licence,
+        item_report_masters["hs_code"],
+        quantity=Decimal("100.000"),
+        # Represents an operational field reduced by a direct linked sale.
+        available_quantity=Decimal("0.000"),
+    )
+
+    from apps.license.services.balance_calculator import ItemBalanceCalculator
+    monkeypatch.setattr(
+        ItemBalanceCalculator,
+        "calculate_debited_quantity_for_items",
+        staticmethod(lambda item_ids: {item.id: Decimal("40.000")}),
+    )
+
+    response = report_viewer_client.get(REPORT_URL, {"min_balance": 0})
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()["items"]}
+    assert rows[item.id]["available_quantity"] == 60.0
+
+
+@pytest.mark.django_db
 def test_item_report_filters_is_restricted_combined_with_item_names(report_viewer_client, item_report_masters):
     lic = _make_license("ITEM-REPORT-RESTRICT", item_report_masters["parle"])
     restricted = _make_import_item(
@@ -247,7 +274,7 @@ def test_item_report_unit_price_from_cif_fc_with_available_balance_fallback(
     report_viewer_client, item_report_masters
 ):
     """Unit Price = cif_fc / quantity when a usable cif_fc exists; falls back
-    to available_balance / available_quantity only when it doesn't (e.g. an
+    to available_balance / actual available quantity only when it doesn't (e.g. an
     older/incomplete record with cif_fc still at its zero default)."""
     lic = _make_license("ITEM-REPORT-UNITPRICE", item_report_masters["parle"])
     with_cif = _make_import_item(
@@ -267,8 +294,10 @@ def test_item_report_unit_price_from_cif_fc_with_available_balance_fallback(
 
     # 250.00 / 100 = 2.50 — uses cif_fc, ignores available_balance entirely.
     assert rows[with_cif.id]["unit_price"] == pytest.approx(2.5)
-    # cif_fc is 0 (unusable) — falls back to 40.00 / 20 = 2.00.
-    assert rows[without_cif.id]["unit_price"] == pytest.approx(2.0)
+    # cif_fc is 0 (unusable) — falls back to 40.00 / 100 = 0.40.  The
+    # report's quantity is the customs figure (Total − BOE Debited), not
+    # the stale operational available_quantity column.
+    assert rows[without_cif.id]["unit_price"] == pytest.approx(0.4)
 
 
 @pytest.mark.django_db
@@ -434,7 +463,7 @@ def test_item_report_excel_export_merges_shared_description_rows(
     assert ws.cell(row=2, column=desc_col).value == "refined cane sugar"
     assert ws.cell(row=2, column=hsn_col).value == item_report_masters["hs_code"].hs_code
     # Available Quantity summed across all 3 merged serials.
-    assert ws.cell(row=2, column=avail_qty_col).value == pytest.approx(55.0)
+    assert ws.cell(row=2, column=avail_qty_col).value == pytest.approx(300.0)
     # Plan Qty/CIF aggregated across the group (only the representative had
     # a LicenseItemPlan row; the merge must not lose or double-count it).
     assert ws.cell(row=2, column=qty_col).value == pytest.approx(15.0)
@@ -502,7 +531,7 @@ def test_item_report_excel_export_single_sheet_with_totals_row(report_viewer_cli
     total_row = ws.max_row
     assert ws.cell(row=total_row, column=1).value == "TOTAL"
     assert ws.cell(row=total_row, column=1).font.bold is True
-    assert ws.cell(row=total_row, column=12).value == pytest.approx(70.0)   # Available Quantity: 50 + 20
+    assert ws.cell(row=total_row, column=12).value == pytest.approx(200.0)  # Actual Available: 100 + 100
     assert ws.cell(row=total_row, column=14).value == pytest.approx(800.0)  # Available Balance: 500 + 300
     assert ws.cell(row=total_row, column=15).value == pytest.approx(5.0)    # Plan Qty
     assert ws.cell(row=total_row, column=16).value == pytest.approx(5.0)    # Plan CIF

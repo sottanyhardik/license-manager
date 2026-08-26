@@ -129,7 +129,11 @@ describe("groupLinkedTrades", () => {
     expect(get).toHaveBeenCalledWith(
       "trades/",
       expect.objectContaining({
-        params: { page: 1, page_size: 25 },
+        params: {
+          page: 1,
+          page_size: 25,
+          ordering: "-invoice_date,-invoice_number,-created_on",
+        },
         signal: expect.any(AbortSignal),
       }),
     );

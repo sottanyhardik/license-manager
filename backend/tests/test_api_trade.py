@@ -2,6 +2,7 @@
 API Tests for Trade Endpoints
 """
 import pytest
+from datetime import timedelta
 from django.urls import reverse
 from rest_framework import status
 
@@ -56,6 +57,25 @@ class TestTradeAPI:
         response = authenticated_client.get(url, {'from_company': test_trade.from_company.id})
         
         assert response.status_code == status.HTTP_200_OK
+
+    def test_list_trades_enforces_descending_invoice_order(self, authenticated_client, test_trade):
+        """The register remains newest-first even with a conflicting query parameter."""
+        newest = type(test_trade).objects.create(
+            direction=test_trade.direction,
+            license_type=test_trade.license_type,
+            from_company=test_trade.from_company,
+            to_company=test_trade.to_company,
+            invoice_number='ZZZ-NEWEST',
+            invoice_date=test_trade.invoice_date + timedelta(days=1),
+        )
+
+        response = authenticated_client.get(
+            reverse('trade:trade-list'),
+            {'ordering': 'invoice_date'},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['results'][0]['id'] == newest.id
 
 
 @pytest.mark.api

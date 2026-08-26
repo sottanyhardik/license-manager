@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run All (Celery + React; backend launchd)" type="CompoundRunConfigurationType">
+    <toRun name="Django: debug runserver (8001)" type="Python.DjangoServer" />
     <toRun name="Celery: worker" type="PythonConfigurationType" />
     <toRun name="Celery: beat" type="PythonConfigurationType" />
     <toRun name="React: Vite dev" type="js.build_tools.npm" />

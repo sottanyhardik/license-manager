@@ -51,7 +51,9 @@ function matchesSearch(row: LicenseOverviewBoeRow, term: string): boolean {
 export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
     const { data, isLoading, isError, error } = useLicenseOverviewBoes(licenseId, isActive);
     const [search, setSearch] = useState("");
-    const [sort, setSort] = useState<SortState<SortKey>>({ key: null, direction: "asc" });
+    // Latest BOE first is the business default. Users can still reverse it
+    // or choose another column through the sortable table headers.
+    const [sort, setSort] = useState<SortState<SortKey>>({ key: "bill_of_entry_date", direction: "desc" });
 
     const handleSort = (key: SortKey) => {
         setSort((prev) => ({

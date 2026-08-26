@@ -132,9 +132,28 @@ describe("groupLinkedTrades", () => {
         params: {
           page: 1,
           page_size: 25,
-          ordering: "-invoice_date,-invoice_number,-created_on",
+          ordering: "-invoice_date",
         },
         signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("forces newest invoice date first even when a saved ordering exists", async () => {
+    sessionStorage.setItem("filterState_trades", JSON.stringify({
+      filters: { ordering: "invoice_date" },
+      pagination: { currentPage: 1, pageSize: 25 },
+      savedAt: Date.now(),
+    }));
+    const get = api.get as unknown as ReturnType<typeof vi.fn>;
+    get.mockClear();
+    renderTrades();
+
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    expect(get).toHaveBeenLastCalledWith(
+      "trades/",
+      expect.objectContaining({
+        params: expect.objectContaining({ ordering: "-invoice_date" }),
       }),
     );
   });

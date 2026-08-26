@@ -219,6 +219,8 @@ class MasterViewSet(viewsets.ModelViewSet):
                 - list_display: visible table columns (can include __ lookups)
                 - form_fields: editable fields in form
                 - ordering: list of sortable fields
+                - ordering_fields: explicit list of fields accepted from the
+                  ``ordering`` query parameter (use unsigned field names)
                 - nested_field_defs: dict describing nested export/import fields (optional)
                 - field_meta: dict describing special UI metadata for fields (optional)
         """
@@ -256,7 +258,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             "filter_config": filter_config,
             "list_display": config.get("list_display", safe_fields),
             "form_fields": config.get("form_fields", safe_fields),
-            "ordering_fields": config.get("ordering", safe_fields),
+            "ordering_fields": config.get("ordering_fields", config.get("ordering", safe_fields)),
             "model_name": model.__name__,
             "nested_field_defs": config.get("nested_field_defs", {}),
             "nested_list_display": config.get("nested_list_display", {}),

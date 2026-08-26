@@ -16,7 +16,7 @@ describe("getDefaultFilters", () => {
 
   it("trades default to newest invoice date first", () => {
     expect(getDefaultFilters("trades")).toEqual({
-      ordering: "-invoice_date,-invoice_number,-created_on",
+      ordering: "-invoice_date",
     });
   });
 

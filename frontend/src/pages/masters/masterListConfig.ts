@@ -16,6 +16,11 @@ export function getDefaultFilters(entityName: string): Record<string, string> {
       return { type: "AT", is_boe: "False", is_allotted: "all" };
     case "bill-of-entries":
       return { is_invoice: "False" };
+    case "trades":
+      // A bill/invoice list is operationally reviewed newest first.  Make the
+      // request explicit rather than relying on model/API default ordering,
+      // which can be superseded by a persisted filter or a proxy endpoint.
+      return { ordering: "-invoice_date,-invoice_number,-created_on" };
     case "incentive-licenses":
       // Empty string = "All" (shows both sold and unsold).
       return { sold_status: "" };

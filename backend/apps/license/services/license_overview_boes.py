@@ -95,6 +95,9 @@ def list_boe_rows(license_obj) -> List[Dict[str, Any]]:
     boes = (
         BillOfEntryModel.objects.filter(id__in=by_boe_id.keys())
         .select_related("company", "port")
+        # Make the Overview contract explicit instead of relying on the
+        # model's Meta ordering: the most recent BOE must lead the list.
+        .order_by("-bill_of_entry_date", "-id")
     )
 
     rows: List[Dict[str, Any]] = []

@@ -52,6 +52,27 @@ class LicenseOverviewBoesViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(row["status"], "Pending")
         self.assertNotIn("duty_saved", row)
 
+    def test_orders_boes_by_newest_bill_date_first(self):
+        company = self.make_company()
+        license_obj = self.make_license(company)
+        item = self.make_item(license_obj, 1)
+        older = self.make_boe(company, number="BOE-OLDER")
+        newer = self.make_boe(company, number="BOE-NEWER")
+        older.bill_of_entry_date = datetime(2026, 1, 1).date()
+        newer.bill_of_entry_date = datetime(2026, 2, 1).date()
+        older.save(update_fields=["bill_of_entry_date"])
+        newer.save(update_fields=["bill_of_entry_date"])
+        self.make_debit_row(older, item, cif_fc=Decimal("100.00"))
+        self.make_debit_row(newer, item, cif_fc=Decimal("100.00"))
+
+        response = self.client.get(f"/api/licenses/{license_obj.id}/overview-boes/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(
+            [row["bill_of_entry_number"] for row in response.data],
+            ["BOE-NEWER", "BOE-OLDER"],
+        )
+
     def test_frozen_and_dispute_flags_drive_status(self):
         company = self.make_company()
         license_obj = self.make_license(company)

@@ -406,6 +406,12 @@ export default function MasterList() {
                 delete params.search;
             }
         }
+        // Trades must always open with the most recent bill/invoice first.
+        // In particular, do not let a legacy saved filter restore an older
+        // ascending order when the user opens /trades?page=1.
+        if (entityName === 'trades') {
+            params.ordering = '-invoice_date';
+        }
         return params;
     }, [currentPage, pageSize, filterParams, entityName]);
 

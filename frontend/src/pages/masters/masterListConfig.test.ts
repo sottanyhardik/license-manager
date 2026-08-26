@@ -14,6 +14,12 @@ describe("getDefaultFilters", () => {
     expect(getDefaultFilters("bill-of-entries")).toEqual({ is_invoice: "False" });
   });
 
+  it("trades default to newest invoice date first", () => {
+    expect(getDefaultFilters("trades")).toEqual({
+      ordering: "-invoice_date",
+    });
+  });
+
   it("incentive-licenses default to all sold statuses", () => {
     expect(getDefaultFilters("incentive-licenses")).toEqual({ sold_status: "" });
   });

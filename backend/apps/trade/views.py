@@ -258,7 +258,11 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                 ]
             }
         },
-        "ordering": ["-invoice_date", "-invoice_number", "-created_on"]
+        "ordering": ["-invoice_date"],
+        # DRF validates query parameters without their leading sort direction.
+        # Keep the accepted fields unsigned so
+        # ?ordering=-invoice_date is honoured.
+        "ordering_fields": ["invoice_date"],
     }
 )
 
@@ -268,6 +272,19 @@ LicenseTradeViewSet.permission_classes = [TradePermission]
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    enforced_list_ordering = ("-invoice_date",)
+
+    def filter_queryset(self, queryset):
+        """Keep the operational trade register in newest-invoice order.
+
+        The list is consumed as a bill/invoice register, so client-supplied
+        ordering must not move older invoices ahead of newer ones.
+        """
+        queryset = super().filter_queryset(queryset)
+        if self.action == "list":
+            return queryset.order_by(*self.enforced_list_ordering)
+        return queryset
+
     def get_permissions(self):
         if self.action == 'generate_transfer_letter':
             from apps.accounts.permissions import TransferLetterPermission

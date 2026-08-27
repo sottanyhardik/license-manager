@@ -426,10 +426,23 @@ python manage.py collectstatic --no-input -v 0
 echo_ok "Static files collected"
 
 # ── 4. Frontend build ────────────────────────────────────────
+# The smallest production server has 2 GB RAM.  Gunicorn and the concurrent
+# Celery pool can leave too little memory for Vite, causing the kernel to kill
+# the build.  Ensure a persistent 2 GB swap file before using Node.
+if ! swapon --show --noheadings 2>/dev/null | grep -q .; then
+    echo_info "No swap detected — creating persistent 2 GB deployment swap..."
+    if ! sudo_cmd test -f /swapfile; then
+        sudo_cmd fallocate -l 2G /swapfile
+        sudo_cmd chmod 600 /swapfile
+        sudo_cmd mkswap /swapfile
+    fi
+    sudo_cmd swapon /swapfile
+    sudo_cmd sh -c "grep -qE '^/swapfile[[:space:]]' /etc/fstab || printf '%s\\n' '/swapfile none swap sw 0 0' >> /etc/fstab"
+fi
 echo_info "Building frontend..."
 cd "$SERVER_PATH/frontend"
 npm install --silent
-npm run build
+NODE_OPTIONS="--max-old-space-size=1024" npm run build
 echo_ok "Frontend built"
 
 # ── 5. Nginx config — HTTP phase (needed only when cert doesn't exist) ──

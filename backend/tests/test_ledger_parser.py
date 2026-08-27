@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -8,6 +9,10 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.license.views.ledger_upload import LedgerUploadView
+from apps.license.tasks import process_single_license_task
+from apps.bill_of_entry.models import BillOfEntryModel
+from apps.core.models import PortModel
+from scripts.parse_ledger import bulk_get_or_create_boe_details
 
 # Committed ICEGATE-format sample exports. These live in the repo (rather than a
 # developer-local ``ledgers/`` directory) so the suite is hermetic and runs on a
@@ -96,3 +101,52 @@ def test_ledger_upload_bearer_auth_does_not_require_csrf_token(test_user):
     assert response.data == {
         "error": "No files uploaded. Please upload at least one CSV file."
     }
+
+
+def test_async_ledger_upload_dispatches_the_registered_worker_task(monkeypatch):
+    """Async uploads must not import the removed legacy task name."""
+    path = LEDGER_FIXTURE_DIR / "L1.csv"
+    uploaded_file = SimpleUploadedFile("L1.csv", path.read_bytes(), content_type="text/csv")
+    dispatched = []
+
+    class TaskResult:
+        id = "ledger-task-1"
+
+    def dispatch(*, args, queue):
+        dispatched.append((args, queue))
+        return TaskResult()
+
+    monkeypatch.setattr(process_single_license_task, "apply_async", dispatch)
+
+    response = LedgerUploadView()._handle_async([uploaded_file], 50 * 1024 * 1024)
+
+    assert response.status_code == status.HTTP_202_ACCEPTED
+    assert len(dispatched) == 2
+    assert all(queue == "celery" for _, queue in dispatched)
+
+
+@pytest.mark.django_db
+def test_ledger_boe_upsert_updates_port_for_matching_number_and_date():
+    old_port = PortModel.objects.create(code="INOLD1")
+    uploaded_port = PortModel.objects.create(code="INNEW1")
+    boe = BillOfEntryModel.objects.create(
+        bill_of_entry_number="1234567",
+        bill_of_entry_date=date(2026, 8, 27),
+        port=old_port,
+    )
+
+    result = bulk_get_or_create_boe_details(
+        [{
+            "be_number": "1234567",
+            "be_date": date(2026, 8, 27),
+            "port": uploaded_port.code,
+        }],
+        {uploaded_port.code: uploaded_port},
+    )
+
+    boe.refresh_from_db()
+    assert BillOfEntryModel.objects.filter(
+        bill_of_entry_number="1234567", bill_of_entry_date=date(2026, 8, 27)
+    ).count() == 1
+    assert boe.port_id == uploaded_port.id
+    assert result["1234567"].pk == boe.pk

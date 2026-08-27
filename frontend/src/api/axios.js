@@ -168,9 +168,14 @@ api.interceptors.response.use(
         }
 
         const status = error.response.status;
+        // Multipart POSTs are not safely replayable without server-side
+        // idempotency. A response can be lost after its financial writes
+        // committed, so retrying here risks a duplicate ledger import.
+        const method = String(original?.method || 'get').toLowerCase();
+        const replaySafe = ['get', 'head', 'options'].includes(method) || original?.retrySafe === true;
 
-        // 401 - Unauthorized: attempt token refresh once
-        if (status === 401 && !original?._retry && !String(original?.url || "").includes("auth/refresh/")) {
+        // 401 - refresh once, but replay only an explicitly safe request.
+        if (status === 401 && replaySafe && !original?._retry && !String(original?.url || "").includes("auth/refresh/")) {
             original._retry = true;
             try {
                 const token = await refreshAccessToken();
@@ -195,7 +200,7 @@ api.interceptors.response.use(
         }
 
         // 500+ - Server error with up to 2 retries (exponential backoff)
-        if (status >= 500) {
+        if (status >= 500 && replaySafe) {
             original._retryCount = (original._retryCount || 0) + 1;
             if (original._retryCount <= 2) {
                 await new Promise(resolve => setTimeout(resolve, 1000 * original._retryCount));

@@ -290,6 +290,9 @@ const LedgerUpload = () => {
     const [asyncError, setAsyncError] = useState<string | null>(null);
     const [asyncUploading, setAsyncUploading] = useState(false);
     const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
+    // State does not change synchronously, so it cannot by itself protect two
+    // click events arriving in the same render frame.
+    const uploadInFlightRef = useRef(false);
 
     const resetFileInput = useCallback(() => {
         if (fileInputRef.current) {
@@ -317,7 +320,8 @@ const LedgerUpload = () => {
     });
 
     const handleAsyncUpload = async () => {
-        if (files.length === 0) return;
+        if (files.length === 0 || uploadInFlightRef.current) return;
+        uploadInFlightRef.current = true;
         setAsyncError(null);
         setAsyncUploading(true);
 
@@ -335,9 +339,13 @@ const LedgerUpload = () => {
                 const formData = new FormData();
                 batch.forEach((file) => formData.append("ledger", file));
                 formData.append("async", "true");
+                const operationId = crypto.randomUUID();
 
                 const response = await api.post("upload-ledger/", formData, {
-                    headers: { "Content-Type": "multipart/form-data" },
+                    headers: {
+                        "Content-Type": "multipart/form-data",
+                        "X-Upload-Operation-Id": operationId,
+                    },
                 });
 
                 allFileTasks.push(...normalizeLedgerFileTasks(response.data?.file_tasks));
@@ -358,12 +366,19 @@ const LedgerUpload = () => {
         } finally {
             setAsyncUploading(false);
             setBatchProgress(null);
+            uploadInFlightRef.current = false;
         }
     };
 
     const handleUpload = () => {
+        if (uploadInFlightRef.current) return;
         if (useAsyncMode) void handleAsyncUpload();
-        else originalHandleUpload();
+        else {
+            uploadInFlightRef.current = true;
+            void originalHandleUpload().finally(() => {
+                uploadInFlightRef.current = false;
+            });
+        }
     };
 
     const busy = uploading || asyncUploading;

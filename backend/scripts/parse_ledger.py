@@ -244,7 +244,14 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
             to_update.append(existing_boe)
 
     with transaction.atomic():
-        BillOfEntryModel.objects.bulk_create(to_create)
+        # Licence blocks are processed by independent Celery workers.  Two
+        # blocks can legitimately reference one previously unseen BOE, so the
+        # earlier existence query cannot guarantee that the row remains absent
+        # at insert time.  The database uniqueness rule is the authority here:
+        # ignore only that concurrent insert race, then fetch the canonical row
+        # below.  Required fields have already been validated by the parser;
+        # this is not used to hide validation errors or bypass model logic.
+        BillOfEntryModel.objects.bulk_create(to_create, ignore_conflicts=True)
         BillOfEntryModel.objects.bulk_update(to_update, ['port'])
 
     result = BillOfEntryModel.objects.filter(

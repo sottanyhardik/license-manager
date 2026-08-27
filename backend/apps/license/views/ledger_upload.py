@@ -110,8 +110,7 @@ class LedgerUploadView(APIView):
 
     def _handle_async(self, files, max_file_size):
         """Parse each file and dispatch one Celery task per license (parallel processing)."""
-        from apps.license.tasks import process_single_license
-        from scripts.parse_ledger import parse_license_data
+        from apps.license.tasks import process_single_license_task
 
         file_tasks = []
         errors = []
@@ -135,7 +134,9 @@ class LedgerUploadView(APIView):
                 tasks = []
                 for dict_data in dict_list:
                     serialized = self._serialize_for_celery(dict_data)
-                    task = process_single_license.apply_async(args=[serialized], queue='ledger')
+                    # Use the standard worker queue.  A dedicated ``ledger`` queue
+                    # strands accepted uploads unless every worker subscribes to it.
+                    task = process_single_license_task.apply_async(args=[serialized], queue='celery')
                     tasks.append({'task_id': task.id, 'license': dict_data.get('lic_no', 'Unknown')})
 
                 file_tasks.append({

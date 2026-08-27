@@ -24,6 +24,27 @@ def _transient(exc: Exception) -> bool:
     return isinstance(exc, (OperationalError, DatabaseError, TimeoutError, ConnectionError))
 
 
+@shared_task(
+    bind=True,
+    name="license.process_single_license",
+    queue="celery",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def process_single_license_task(self, dict_data: dict) -> dict:
+    """Create or update one licence parsed from an uploaded ledger file."""
+    from scripts.parse_ledger import create_object
+
+    license_no = dict_data.get("lic_no", "Unknown")
+    logger.info("Processing uploaded ledger licence %s (task=%s)", license_no, self.request.id)
+    license_number = create_object(dict_data)
+    return {
+        "status": "SUCCESS",
+        "license_number": license_number,
+        "lic_no": license_no,
+    }
+
+
 @shared_task(name="planning.dispatch_replan_requests", queue=QUEUE, acks_late=True, reject_on_worker_lost=True)
 def dispatch_replan_requests(request_ids: list[int]):
     """Fan out one serialisable request identifier per licence task."""

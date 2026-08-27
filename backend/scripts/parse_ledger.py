@@ -191,8 +191,8 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
     """Bulk create Bill of Entry records.
 
     Dedup is by (bill_of_entry_number, bill_of_entry_date) — matching the unique
-    constraint on the model. If a BOE with the same number+date already exists
-    with a different port, the existing record wins; we do not create a duplicate.
+    constraint on the model. The ledger is authoritative for a matching BOE's
+    port, so re-uploading it corrects an outdated port without creating a duplicate.
     """
     # Skip debit rows with missing be_number or port — can't create/find a BOE without them
     type_debit_list = [
@@ -221,15 +221,17 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
         bill_of_entry_date__in=[k[1] for k in unique_bill_entries.keys()],
     )
 
-    existing_set = set(
-        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d'))
+    existing_by_key = {
+        (be.bill_of_entry_number, be.bill_of_entry_date.strftime('%Y-%m-%d')): be
         for be in existing
-    )
+    }
 
     to_create = []
+    to_update = []
     for (be_number, be_date), item in unique_bill_entries.items():
-        if (be_number, be_date) not in existing_set:
-            port_model = existing_ports[item["port"]]
+        port_model = existing_ports[item["port"]]
+        existing_boe = existing_by_key.get((be_number, be_date))
+        if existing_boe is None:
             to_create.append(
                 BillOfEntryModel(
                     bill_of_entry_number=be_number,
@@ -237,9 +239,13 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
                     port_id=port_model.id,
                 )
             )
+        elif existing_boe.port_id != port_model.id:
+            existing_boe.port_id = port_model.id
+            to_update.append(existing_boe)
 
     with transaction.atomic():
         BillOfEntryModel.objects.bulk_create(to_create)
+        BillOfEntryModel.objects.bulk_update(to_update, ['port'])
 
     result = BillOfEntryModel.objects.filter(
         bill_of_entry_number__in=[k[0] for k in unique_bill_entries.keys()],

@@ -650,11 +650,29 @@ case "$LOCAL_HEALTH_STATUS" in
 esac
 
 echo_info "Restarting Celery..."
+# Keep the worker definition under deployment control.  Ledger uploads enqueue
+# one independent task per licence, so four prefork children process those
+# licences concurrently while keeping database pressure bounded.  Beat remains
+# embedded for compatibility with the existing production scheduling setup.
+sudo_cmd tee /etc/supervisor/conf.d/license-manager-celery.conf >/dev/null <<'CELERY_SUPERVISOR'
+[program:license-manager-celery]
+command=/home/django/license-manager/venv/bin/celery -A lmanagement worker --beat -Q celery,ledger -l info --concurrency=4 --max-tasks-per-child=100
+directory=/home/django/license-manager/backend
+user=django
+autostart=true
+autorestart=true
+redirect_stderr=true
+stdout_logfile=/home/django/license-manager/logs/celery.log
+stderr_logfile=/home/django/license-manager/logs/celery_err.log
+stopwaitsecs=600
+stopasgroup=true
+killasgroup=true
+CELERY_SUPERVISOR
+sudo_cmd supervisorctl reread
+sudo_cmd supervisorctl update
 sudo_cmd supervisorctl stop license-manager-celery 2>/dev/null || true
 sudo_cmd pkill -9 -f "celery" 2>/dev/null || true
 sleep 2
-cd "$SERVER_PATH/backend" && source "$SERVER_PATH/venv/bin/activate"
-celery -A lmanagement purge -f 2>/dev/null || true
 sudo_cmd supervisorctl start license-manager-celery
 
 # ── 9. Summary ───────────────────────────────────────────────

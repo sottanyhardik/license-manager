@@ -144,6 +144,12 @@ MDS_ENABLED="${MDS_ENABLED:-false}"
 MDS_BASE_URL="${MDS_BASE_URL:-}"
 MDS_TOKEN="${MDS_TOKEN:-}"
 
+# A deploy can fail transiently while a service, DNS record, or TLS proxy is
+# converging.  Retrying the complete, idempotent deploy is more reliable than
+# leaving a server half-updated for an operator to repair by hand.  Set this to
+# 1 to opt out, or raise it for an unusually slow host.
+DEPLOY_ATTEMPTS="${DEPLOY_ATTEMPTS:-2}"
+
 # ── Secure media (opt-in) ────────────────────────────────────
 # SECURE_MEDIA=true closes the public /media/ exposure: uploads are served only
 # via the authenticated /api/media/<path> view + nginx X-Accel-Redirect. It writes
@@ -156,6 +162,9 @@ MDS_TOKEN="${MDS_TOKEN:-}"
 SECURE_MEDIA="${SECURE_MEDIA:-false}"
 validate_bool "MDS_ENABLED" "$MDS_ENABLED"
 validate_bool "SECURE_MEDIA" "$SECURE_MEDIA"
+case "$DEPLOY_ATTEMPTS" in
+    ''|*[!0-9]*|0) die "DEPLOY_ATTEMPTS must be a positive integer (got '$DEPLOY_ATTEMPTS')" ;;
+esac
 validate_env_line_value "MDS_BASE_URL" "$MDS_BASE_URL"
 validate_env_line_value "MDS_TOKEN" "$MDS_TOKEN"
 if [ -n "$MDS_BASE_URL" ]; then
@@ -690,6 +699,31 @@ ENDSSH
     wait_for_health "$SERVER_DOMAIN" || return 1
 }
 
+diagnose_server_failure() {
+    local SERVER_IP=$1
+    get_server_meta "$SERVER_IP"
+
+    print_warn "Collecting safe diagnostics from $SERVER_IP..."
+    # Do not make diagnostics a second source of failure.  These checks make a
+    # persistent failure actionable without exposing deployment secrets.
+    ssh_cmd 'printf "\n--- remote recovery diagnostics ---\n"; supervisorctl status license-manager license-manager-celery 2>&1 || true; ss -ltnp 2>/dev/null | grep ":8000" || true; nginx -t 2>&1 || true; curl --silent --show-error --connect-timeout 3 --max-time 8 -o /dev/null -w "local health: HTTP %{http_code}\\n" http://127.0.0.1:8000/api/health/ || true; tail -40 /var/log/lmanagement.log 2>/dev/null || true' || true
+}
+
+deploy_with_recovery() {
+    local SERVER_IP=$1 attempt
+    for ((attempt = 1; attempt <= DEPLOY_ATTEMPTS; attempt++)); do
+        if deploy_to_server "$SERVER_IP"; then
+            return 0
+        fi
+        if [ "$attempt" -lt "$DEPLOY_ATTEMPTS" ]; then
+            print_warn "Deploy attempt $attempt/$DEPLOY_ATTEMPTS failed for $SERVER_IP; retrying automatic repair in 5s..."
+            sleep 5
+        fi
+    done
+    diagnose_server_failure "$SERVER_IP"
+    return 1
+}
+
 # ── Run deployment ───────────────────────────────────────────
 printf -v SERVERS_DISPLAY '%s ' "${SERVERS[@]}"
 SERVERS_DISPLAY="${SERVERS_DISPLAY% }"
@@ -700,7 +734,7 @@ FAILED=()
 SUCCESS=0
 
 for IP in "${SERVERS[@]}"; do
-    if deploy_to_server "$IP"; then
+    if deploy_with_recovery "$IP"; then
         ((SUCCESS += 1))
         get_server_meta "$IP"
         print_success "Deployed: $IP → https://$SERVER_DOMAIN"

@@ -420,6 +420,9 @@ try:
         "x-csrftoken",
         "Authorization",
         "authorization",
+        # Correlates one explicit ledger-upload attempt across the browser,
+        # API and worker logs. It is intentionally a non-sensitive UUID.
+        "x-upload-operation-id",
     ]
 except ImportError:
     # fallback - minimal safe set
@@ -431,6 +434,7 @@ except ImportError:
         "origin",
         "user-agent",
         "x-csrftoken",
+        "x-upload-operation-id",
         "x-requested-with",
     ]
 

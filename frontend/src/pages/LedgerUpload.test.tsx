@@ -147,7 +147,12 @@ describe("LedgerUpload", () => {
             expect(mockedApiPost).toHaveBeenCalledWith(
                 "upload-ledger/",
                 expect.any(FormData),
-                { headers: { "Content-Type": "multipart/form-data" } },
+                {
+                    headers: {
+                        "Content-Type": "multipart/form-data",
+                        "X-Upload-Operation-Id": expect.any(String),
+                    },
+                },
             );
         });
 

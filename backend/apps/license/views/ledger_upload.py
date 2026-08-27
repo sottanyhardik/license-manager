@@ -4,6 +4,8 @@ Ledger upload API endpoint for processing DFIA license ledger files.
 import csv
 import io
 import logging
+import time
+import uuid
 
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -33,20 +35,31 @@ class LedgerUploadView(APIView):
     throttle_classes = [UploadRateThrottle]
 
     def post(self, request):
+        operation_id = request.headers.get('X-Upload-Operation-Id') or str(uuid.uuid4())
+        started = time.perf_counter()
         files = request.FILES.getlist('ledger')
 
         if not files:
-            return Response(
+            response = Response(
                 {'error': 'No files uploaded. Please upload at least one CSV file.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+            response['X-Upload-Operation-Id'] = operation_id
+            return response
 
         use_async = request.data.get('async', 'false').lower() == 'true'
         MAX_FILE_SIZE = 50 * 1024 * 1024
 
         if use_async:
-            return self._handle_async(files, MAX_FILE_SIZE)
-        return self._handle_sync(files, MAX_FILE_SIZE)
+            response = self._handle_async(files, MAX_FILE_SIZE)
+        else:
+            response = self._handle_sync(files, MAX_FILE_SIZE)
+        response['X-Upload-Operation-Id'] = operation_id
+        logger.info(
+            'ledger_upload_completed operation_id=%s async=%s files=%d elapsed_ms=%.1f status=%s',
+            operation_id, use_async, len(files), (time.perf_counter() - started) * 1000, response.status_code,
+        )
+        return response
 
     @staticmethod
     def _is_htm(filename):
@@ -58,10 +71,9 @@ class LedgerUploadView(APIView):
 
     def _read_raw(self, uploaded_file):
         """Read uploaded file bytes."""
-        content = b''
-        for chunk in uploaded_file.chunks(chunk_size=1024 * 1024):
-            content += chunk
-        return content
+        # Repeated ``bytes += chunk`` copies the complete prefix on every
+        # iteration. Joining once preserves bytes/decoding semantics.
+        return b''.join(uploaded_file.chunks(chunk_size=1024 * 1024))
 
     def _decode_file(self, uploaded_file):
         """Read, decode and pre-process an uploaded CSV file."""

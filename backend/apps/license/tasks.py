@@ -110,7 +110,23 @@ def replan_license_task(self, request_id: int):
             else:
                 if request.sion_id is not None:
                     raise ValueError("LICENSE scope must not include sion_id")
-                _, sion_ids = SionPlanningRuleViewSet._resolve_sions_for_license(request.license_id)
+                try:
+                    _, sion_ids = SionPlanningRuleViewSet._resolve_sions_for_license(request.license_id)
+                except Exception as exc:
+                    # Ledger-only licences are financially valid but have no
+                    # planning domain.  Treat exactly the canonical resolver's
+                    # NO_SION_NORMS outcome as a successful no-op; all other
+                    # planning errors retain the existing failure semantics.
+                    if getattr(exc, "code", None) != "NO_SION_NORMS":
+                        raise
+                    summary = {"planning_not_applicable": True, "sion_ids": [], "write_results": 0, "rules_executed": [], "failures": []}
+                    request.status, request.completed_at = LicenseReplanRequest.STATUS_SUCCEEDED, timezone.now()
+                    request.planned_revision, request.result = request.started_source_revision, summary
+                    request.last_error = request.last_error_code = request.last_error_message = ""
+                    request.save(update_fields=["status", "completed_at", "planned_revision", "result", "last_error", "last_error_code", "last_error_message"])
+                    type(license_obj).objects.filter(pk=license_obj.pk).update(planning_applied_revision=request.started_source_revision)
+                    logger.info("license_replan_not_applicable request=%s license=%s", request.pk, request.license_id)
+                    return {"status": request.status, "request_id": request_id, **summary}
             results = []
             failures = []
             for sion_id in sion_ids:

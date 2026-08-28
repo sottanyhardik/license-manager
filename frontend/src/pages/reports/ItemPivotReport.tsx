@@ -721,7 +721,7 @@ export default function ItemPivotReport() {
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
                                     <Card>
                                         <CardHeader
-                                            className="flex-row items-center justify-between gap-4 text-primary-foreground"
+                                            className="sticky top-0 z-30 flex-row items-center justify-between gap-4 text-primary-foreground shadow-sm"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
                                                 <h5 className="mb-0 flex items-center gap-2 font-semibold">
@@ -750,7 +750,7 @@ export default function ItemPivotReport() {
                                             <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container">
                                                 <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '960px'}}>
-                                                    <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
+                                                    <thead style={{position: 'sticky', top: 74, zIndex: 20}}>
                                                     <tr className="table-light">
                                                         <th ref={makeFrozenColRef(groupKey, 'srNo')} scope="col" className="text-center" style={{
                                                             position: 'sticky',

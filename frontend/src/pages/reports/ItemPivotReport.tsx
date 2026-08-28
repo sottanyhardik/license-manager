@@ -208,12 +208,12 @@ function NotificationLicenseSummary({ group }: { group: any }) {
 function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, selectedItem, exceptionOnly }: { groups: any[]; onCondition: (license: any) => void; onTransfer: (license: any) => void; onReplan: (license: any) => void; onIssue: (license: any) => void; selectedItem?: string | null; exceptionOnly?: boolean }) {
     const fixed = ['SR NO', 'DFIA NO', 'EXPIRY DT', 'EXPORTER', 'TOTAL CIF', 'DEBITED CIF', 'ALLOTTED CIF', 'PLANNED CIF', 'BALANCE CIF', 'ISSUES'];
     return <div className="space-y-5">
-        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`}>
-            <CardHeader className="sticky top-0 z-30 flex-row items-center justify-between text-primary-foreground shadow-sm" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
+        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`} data-item-pivot-sticky-stack>
+            <CardHeader data-item-pivot-notification className="sticky top-0 z-30 flex-row items-center justify-between text-primary-foreground shadow-sm" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                 <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
                 <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
             </CardHeader>
-            <CardContent className="p-0"><div className="overflow-x-auto"><table className="w-max min-w-full border-collapse text-sm"><thead className="sticky top-[74px] z-20 bg-muted"><tr>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
+            <CardContent className="p-0"><div className="overflow-x-auto"><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted"><tr data-item-pivot-header-tier>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr data-item-pivot-header-tier>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
                 <tbody>{visibleLicenses.map((license, index) => {
                     const pivotCells = group.item_groups.flatMap((item, itemIndex) => {
                         const cell = license.items?.[item.key];
@@ -269,6 +269,41 @@ export default function ItemPivotReport() {
     // Utilization planning panel (same component the licenses page uses).
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
+
+    // The horizontal table scroller must remain the scrolling ancestor for
+    // columns, while the page scrolls vertically in #main-content.  Measure
+    // the notification banner and each real header row, then pin the cells
+    // (not a cloned table or spacer) at cumulative offsets.  This avoids the
+    // browser treating a multi-row <thead> as independently sticky tiers.
+    useLayoutEffect(() => {
+        const main = document.getElementById('main-content');
+        const stacks = Array.from(document.querySelectorAll<HTMLElement>('[data-item-pivot-sticky-stack]'));
+        if (!main || stacks.length === 0) return;
+
+        const sync = () => stacks.forEach((stack) => {
+            const banner = stack.querySelector<HTMLElement>('[data-item-pivot-notification]');
+            const rows = Array.from(stack.querySelectorAll<HTMLTableRowElement>('[data-item-pivot-header-tier]'));
+            if (!banner || rows.length === 0) return;
+            let top = banner.getBoundingClientRect().height;
+            banner.style.top = '0px';
+            rows.forEach((row, index) => {
+                row.querySelectorAll<HTMLElement>('th').forEach((cell) => {
+                    cell.style.position = 'sticky';
+                    cell.style.top = `${top}px`;
+                    cell.style.zIndex = String(25 - index);
+                    // An opaque background prevents licence rows from
+                    // bleeding through a tier while it is pinned.
+                    cell.style.backgroundColor = index === 0 ? '#f8fafc' : '#e2e8f0';
+                });
+                top += row.getBoundingClientRect().height;
+            });
+        });
+        const observer = new ResizeObserver(sync);
+        observer.observe(main);
+        stacks.forEach(stack => stack.querySelectorAll<HTMLElement>('[data-item-pivot-notification], [data-item-pivot-header-tier]').forEach(el => observer.observe(el)));
+        sync();
+        return () => observer.disconnect();
+    }, [reportData, activeNotification]);
 
     // AbortController ref — cancels the previous in-flight loadReport request
     // when a new one starts, preventing stale responses from overwriting fresh data.

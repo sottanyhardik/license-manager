@@ -172,7 +172,7 @@ function PivotTotalCells({ group }: { group: any }) {
     })}</>;
 }
 
-function FioriSummary({ summary, groups, grandTotal, onException, showCards = true, showGrandTotal = true }: { summary: any; groups: any[]; grandTotal: any; onException: (item: any, group?: any) => void; showCards?: boolean; showGrandTotal?: boolean }) {
+function FioriSummary({ summary, groups, grandTotal, onException }: { summary: any; groups: any[]; grandTotal: any; onException: (item: any, group?: any) => void }) {
     // The backend owns the row order.  Prefixing the visible item label makes
     // that active SION-rule priority auditable without re-sorting in React.
     const withPriorityLabel = (group: any) => ({
@@ -191,29 +191,19 @@ function FioriSummary({ summary, groups, grandTotal, onException, showCards = tr
         ['Final Balance CIF', summary?.final_balance_cif, 2, 'text-green-700'], ['Coverage %', summary?.planning_coverage_percent, 2, 'text-green-700'],
     ];
     const Section = ({ title, group, strong = false }: { title: string; group: any; strong?: boolean }) => <Card className={cn("mt-4 rounded-md shadow-none", strong && "border-2 border-primary")}><CardHeader className={cn("border-b py-3", strong ? "bg-primary text-primary-foreground" : "bg-muted/40")}><div><h2 className="text-base font-semibold">{title}</h2><p className="text-xs opacity-80">{group?.license_count ?? 0} Licences · canonical item and SION reconciliation</p></div></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="min-w-[1120px] w-full border-collapse text-xs"><thead className="sticky top-0 z-10 bg-muted"><tr><th rowSpan={2} className="border p-2 text-left">ITEM</th><th rowSpan={2} className="border p-2">SION</th><th rowSpan={2} className="border p-2">HSN CODES</th><th rowSpan={2} className="border p-2">LICENCES</th><th colSpan={7} className="border p-2 text-center">QUANTITY POSITION</th><th colSpan={5} className="border p-2 text-center">CIF POSITION</th><th rowSpan={2} className="border p-2">EXCEPTIONS</th><th rowSpan={2} className="border p-2">STATUS</th></tr><tr>{['TOTAL QTY','BOE QTY','ALLOTTED QTY','USED QTY','AVAILABLE QTY','PLANNED QTY','BALANCE QTY','USED CIF','AVAILABLE CIF','PLANNED CIF','BALANCE CIF','AVG PRICE'].map(name => <th key={name} className="border p-2 text-right whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{(group?.item_summary || []).map((item: any) => <tr key={`${item.canonical_item_id}:${item.sion}`} className="hover:bg-muted/30"><td className="border p-2 font-semibold">{item.item_name}</td><td className="border p-2 text-center">{item.sion}</td><td className="border p-2">{item.hsn_codes?.join(', ') || '—'}</td><td className="border p-2 text-right">{item.license_count}</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(item[key], 3)}</td>)}{['actual_used_cif','available_cif','planned_cif','balance_cif','average_unit_price'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{(key === 'available_cif' || key === 'balance_cif') && item[key] == null ? '—' : pivotNumber(item[key], 2)}</td>)}<td className="border p-2 text-center">{item.exception_count || '—'}</td><td className="border p-2">{item.exception_count ? <button type="button" onClick={() => onException(item, group)}><Badge variant="destructive">{item.status}</Badge></button> : <Badge variant="secondary">{item.status}</Badge>}</td></tr>)}<tr className="bg-muted font-bold"><td colSpan={4} className="border p-2">SUBTOTAL</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(group?.item_summary_totals?.[key], 3)}</td>)}{['actual_used_cif','available_cif','planned_cif','balance_cif','weighted_average_unit_price'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(group?.item_summary_totals?.[key], 2)}</td>)}<td colSpan={2} className="border p-2" /></tr></tbody></table></div></CardContent></Card>;
-    return <>{showCards && <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">{cards.map(([label, value, digits, color]) => <Card key={String(label)} className="rounded-md shadow-none"><CardContent className="p-3"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><div className={cn('mt-1 text-sm font-bold tabular-nums', color as string)}>{pivotNumber(value, digits as number)}</div></CardContent></Card>)}</div>}{groups.map(group => <Section key={`${group.notification_number}:${group.purchase_status?.name}`} title={`Item Summary — Notification ${group.notification_number} · ${group.purchase_status?.name || 'UNASSIGNED'}`} group={group} />)}{showGrandTotal && grandTotal && <Section title="TOTAL SUMMARY — ALL NOTIFICATIONS" group={grandTotal} strong />}</>;
-}
-
-function NotificationLicenseSummary({ group }: { group: any }) {
-    const cards = [
-        ['Licences', group?.license_count, 0], ['Total CIF', group?.totals?.total_cif, 2],
-        ['Debited CIF', group?.totals?.debited_cif, 2], ['Allotted CIF', group?.totals?.allotted_cif, 2],
-        ['Planned CIF', group?.totals?.planned_cif, 2], ['Balance CIF', group?.totals?.balance_cif, 2],
-        ['Licences with issues', group?.issue_license_count, 0],
-    ];
-    return <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">{cards.map(([label, value, digits]) => <Card key={String(label)} className="rounded-md shadow-none"><CardContent className="p-3"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><div className="mt-1 text-sm font-bold tabular-nums">{pivotNumber(value, digits as number)}</div></CardContent></Card>)}</div>;
+    return <><div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">{cards.map(([label, value, digits, color]) => <Card key={String(label)} className="rounded-md shadow-none"><CardContent className="p-3"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><div className={cn('mt-1 text-sm font-bold tabular-nums', color as string)}>{pivotNumber(value, digits as number)}</div></CardContent></Card>)}</div>{groups.map(group => <Section key={`${group.notification_number}:${group.purchase_status?.name}`} title={`Notification Number: ${group.notification_number} · ${group.purchase_status?.name || 'UNASSIGNED'}`} group={group} />)}<Section title="TOTAL SUMMARY — ALL NOTIFICATIONS" group={grandTotal} strong /></>;
 }
 
 /** Backend-owned canonical pivot DTO.  This component formats only. */
 function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, selectedItem, exceptionOnly }: { groups: any[]; onCondition: (license: any) => void; onTransfer: (license: any) => void; onReplan: (license: any) => void; onIssue: (license: any) => void; selectedItem?: string | null; exceptionOnly?: boolean }) {
     const fixed = ['SR NO', 'DFIA NO', 'EXPIRY DT', 'EXPORTER', 'TOTAL CIF', 'DEBITED CIF', 'ALLOTTED CIF', 'PLANNED CIF', 'BALANCE CIF', 'ISSUES'];
     return <div className="space-y-5">
-        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`} data-item-pivot-sticky-stack>
-            <CardHeader data-item-pivot-notification className="sticky top-0 z-30 flex-row items-center justify-between text-primary-foreground shadow-sm" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
+        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`}>
+            <CardHeader className="flex-row items-center justify-between text-primary-foreground" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                 <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
                 <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
             </CardHeader>
-            <CardContent className="p-0"><div className="overflow-x-auto" data-item-pivot-scroll-container><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted"><tr data-item-pivot-header-tier>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr data-item-pivot-header-tier>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
+            <CardContent className="p-0"><div className="overflow-x-auto"><table className="w-max min-w-full border-collapse text-sm"><thead className="sticky top-0 z-20 bg-muted"><tr>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
                 <tbody>{visibleLicenses.map((license, index) => {
                     const pivotCells = group.item_groups.flatMap((item, itemIndex) => {
                         const cell = license.items?.[item.key];
@@ -234,7 +224,6 @@ export default function ItemPivotReport() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [reportView, setReportView] = useState<'summary' | 'matrix'>(searchParams.get('view') === 'license-matrix' ? 'matrix' : 'summary');
-    const [activeNotification, setActiveNotification] = useState<string>('total');
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
@@ -269,63 +258,6 @@ export default function ItemPivotReport() {
     // Utilization planning panel (same component the licenses page uses).
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
-
-    // The horizontal table scroller must remain the scrolling ancestor for
-    // columns, while the page scrolls vertically in #main-content.  Measure
-    // the navigation, notification banner, and each real header row, then pin
-    // the cells (not a cloned table or spacer) at cumulative offsets.  This
-    // avoids the browser treating a multi-row <thead> as independently sticky
-    // tiers, and keeps the stack correct when either banner wraps on mobile.
-    useLayoutEffect(() => {
-        const navigation = document.querySelector<HTMLElement>('.top-nav');
-        const stacks = Array.from(document.querySelectorAll<HTMLElement>('[data-item-pivot-sticky-stack]'));
-        if (!navigation || stacks.length === 0) return;
-
-        const sync = () => stacks.forEach((stack) => {
-            const banner = stack.querySelector<HTMLElement>('[data-item-pivot-notification]');
-            const rows = Array.from(stack.querySelectorAll<HTMLTableRowElement>('[data-item-pivot-header-tier]'));
-            if (!banner || rows.length === 0) return;
-            const navigationHeight = navigation.getBoundingClientRect().height;
-            const bannerHeight = banner.getBoundingClientRect().height;
-            const scrollContainer = stack.querySelector<HTMLElement>('[data-item-pivot-scroll-container]');
-            const scrollerTop = scrollContainer?.getBoundingClientRect().top ?? 0;
-            let top = navigationHeight + bannerHeight - scrollerTop;
-            stack.style.setProperty('--item-pivot-navigation-height', `${navigationHeight}px`);
-            stack.style.setProperty('--item-pivot-notification-height', `${bannerHeight}px`);
-            banner.style.top = `${navigationHeight}px`;
-            rows.forEach((row, index) => {
-                row.querySelectorAll<HTMLElement>('th').forEach((cell) => {
-                    cell.style.position = 'sticky';
-                    cell.style.top = `${top}px`;
-                    cell.style.zIndex = String(40 - index);
-                    // An opaque background prevents licence rows from
-                    // bleeding through a tier while it is pinned.
-                    cell.style.backgroundColor = index === 0 ? '#f8fafc' : '#e2e8f0';
-                });
-                top += row.getBoundingClientRect().height;
-            });
-        });
-        const observer = new ResizeObserver(sync);
-        observer.observe(navigation);
-        stacks.forEach(stack => stack.querySelectorAll<HTMLElement>('[data-item-pivot-notification], [data-item-pivot-header-tier]').forEach(el => observer.observe(el)));
-        window.addEventListener('scroll', sync, true);
-        sync();
-        return () => { observer.disconnect(); window.removeEventListener('scroll', sync, true); };
-    }, [reportData, activeNotification]);
-
-    // Any overflow ancestor becomes the sticky containing block.  This page
-    // uses the document for vertical scrolling, so allow this report's wide
-    // table to use that same scrollport rather than trapping its headers in a
-    // horizontal-only inner scroller.
-    useLayoutEffect(() => {
-        const main = document.getElementById('main-content');
-        if (!main) return;
-        const previousOverflowX = main.style.overflowX;
-        const previousOverflowY = main.style.overflowY;
-        main.style.overflowX = 'visible';
-        main.style.overflowY = 'visible';
-        return () => { main.style.overflowX = previousOverflowX; main.style.overflowY = previousOverflowY; };
-    }, []);
 
     // AbortController ref — cancels the previous in-flight loadReport request
     // when a new one starts, preventing stale responses from overwriting fresh data.
@@ -401,7 +333,6 @@ export default function ItemPivotReport() {
             // Only commit state if this request was not superseded
             if (!controller.signal.aborted) {
                 setReportData(response.data);
-                setActiveNotification('total');
             }
         } catch (error) {
             // Axios names aborted requests 'CanceledError'; ignore them silently
@@ -728,7 +659,7 @@ export default function ItemPivotReport() {
                     )}
 
                     {!loading && activeNormTab && Array.isArray(reportData?.groups) && (
-                        reportData.groups.length ? <>{/* Total first; each notification keeps its concise license, matrix, and item views together. */}<div className="mb-4 flex flex-wrap gap-1 border-b pb-2"><Button variant={activeNotification === 'total' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification('total')}>Total Summary</Button>{reportData.groups.map((group: any) => { const tabId = `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}`; return <Button key={tabId} variant={activeNotification === tabId ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification(tabId)}>Notification {group.notification_number}</Button>; })}</div>{activeNotification === 'total' ? <FioriSummary summary={reportData.global_summary || reportData.summary} groups={[]} grandTotal={reportData.grand_total} onException={handleSummaryException} /> : reportData.groups.filter((group: any) => `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}` === activeNotification).map((group: any) => <div key={activeNotification} className="space-y-4"><NotificationLicenseSummary group={group} /><CanonicalPivot groups={[group]} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} /><FioriSummary summary={{}} groups={[group]} grandTotal={null} onException={handleSummaryException} showCards={false} showGrandTotal={false} /></div>)}{searchParams.get('exceptions_only') && <Button className="mt-3" variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</> : (
+                        reportData.groups.length ? <><div className="mb-3 flex gap-1 border-b"><Button variant={reportView === 'summary' ? 'default' : 'ghost'} size="sm" onClick={() => setReportView('summary')}>Item Summary</Button><Button variant={reportView === 'matrix' ? 'default' : 'ghost'} size="sm" onClick={() => setReportView('matrix')}>Licence Matrix</Button>{searchParams.get('exceptions_only') && <Button variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</div>{reportView === 'summary' ? <FioriSummary summary={reportData.global_summary || reportData.summary} groups={reportData.notification_groups || reportData.groups} grandTotal={reportData.grand_total} onException={handleSummaryException} /> : <CanonicalPivot groups={reportData.groups} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} />}</> : (
                             <div className="rounded-xl border border-border bg-card py-12 text-center text-muted-foreground">No licences match the selected filters.</div>
                         )
                     )}
@@ -776,9 +707,9 @@ export default function ItemPivotReport() {
                                 const balanceLeft = `${frozenOffsets.balance}px`;
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
-                                    <Card data-item-pivot-sticky-stack>
-                                        <CardHeader data-item-pivot-notification
-                                            className="sticky top-0 z-30 flex-row items-center justify-between gap-4 text-primary-foreground shadow-sm"
+                                    <Card>
+                                        <CardHeader
+                                            className="flex-row items-center justify-between gap-4 text-primary-foreground"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
                                                 <h5 className="mb-0 flex items-center gap-2 font-semibold">
@@ -804,11 +735,11 @@ export default function ItemPivotReport() {
                                             <span className="chip chip-neutral">{licenses.length}</span>
                                         </CardHeader>
                                         <CardContent className="p-0">
-                                            <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container" data-item-pivot-scroll-container>
+                                            <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container">
                                                 <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '960px'}}>
-                                                    <thead>
-                                                    <tr data-item-pivot-header-tier className="table-light">
+                                                    <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
+                                                    <tr className="table-light">
                                                         <th ref={makeFrozenColRef(groupKey, 'srNo')} scope="col" className="text-center" style={{
                                                             position: 'sticky',
                                                             left: 0,
@@ -878,7 +809,7 @@ export default function ItemPivotReport() {
                                                             );
                                                         })}
                                                     </tr>
-                                                    <tr data-item-pivot-header-tier className="table-secondary">
+                                                    <tr className="table-secondary">
                                                         <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: 0,

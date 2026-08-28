@@ -64,10 +64,10 @@ run_deploy >"$TMP/output" 2>&1
 [[ $(sed -n '6p' "$TMP/events") == curl ]]
 ! grep -Fq 'not-a-real-secret' "$TMP/output"
 
-# One transient remote-stage failure is repaired automatically by rerunning the
-# idempotent deployment for that server.
+# A real remote-stage failure must leave a non-zero deploy result. The script
+# continues to report the remaining configured servers then returns failure.
 rm -f "$TMP/events" "$TMP/ssh-args"
-(
+if (
   cd "$TMP/repo"
   env PATH="$TMP/bin:$PATH" \
     DEPLOY_TEST_EVENTS="$TMP/events" \
@@ -75,9 +75,10 @@ rm -f "$TMP/events" "$TMP/ssh-args"
     DEPLOY_PASSWORD='not-a-real-secret' \
     MOCK_SSH_FAILURE_EVENT=3 \
     bash "$SCRIPT" </dev/null
-) >"$TMP/recovery-output" 2>&1
-grep -Fq 'retrying automatic repair' "$TMP/recovery-output"
-[[ $(grep -c '^ssh$' "$TMP/events") -eq 4 ]]
-! grep -Fq 'not-a-real-secret' "$TMP/recovery-output"
+) >"$TMP/failure-output" 2>&1; then
+  echo 'expected mocked remote deployment failure' >&2
+  exit 1
+fi
+! grep -Fq 'not-a-real-secret' "$TMP/failure-output"
 
 echo 'auto-deploy zero-argument mock contract: passed'

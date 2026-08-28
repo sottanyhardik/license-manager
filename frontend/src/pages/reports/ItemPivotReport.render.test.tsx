@@ -394,10 +394,7 @@ describe("ItemPivotReport — Compact Scroll Mode", () => {
 
         const thead = srNoHeader.closest("thead") as HTMLElement;
         expect(thead).not.toBeNull();
-        // The notification header is frozen at the viewport top, so the
-        // matrix header remains sticky directly below it rather than covering
-        // the notification context.
-        expect(thead).toHaveStyle({ position: "sticky", top: "74px" });
+        expect(thead).toHaveStyle({ position: "sticky", top: "0px" });
 
         // Both header rows — the license-identity row AND the per-item
         // sub-column row (HSN/Description/Qty/.../Plan Qty) — must live

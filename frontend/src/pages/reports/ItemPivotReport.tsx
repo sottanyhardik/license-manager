@@ -213,7 +213,7 @@ function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, se
                 <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
                 <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
             </CardHeader>
-            <CardContent className="p-0"><div className="overflow-x-auto"><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted"><tr data-item-pivot-header-tier>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr data-item-pivot-header-tier>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
+            <CardContent className="p-0"><div className="overflow-x-auto" data-item-pivot-scroll-container><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted"><tr data-item-pivot-header-tier>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={10} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr data-item-pivot-header-tier>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','DEBITED QTY','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
                 <tbody>{visibleLicenses.map((license, index) => {
                     const pivotCells = group.item_groups.flatMap((item, itemIndex) => {
                         const cell = license.items?.[item.key];
@@ -272,25 +272,32 @@ export default function ItemPivotReport() {
 
     // The horizontal table scroller must remain the scrolling ancestor for
     // columns, while the page scrolls vertically in #main-content.  Measure
-    // the notification banner and each real header row, then pin the cells
-    // (not a cloned table or spacer) at cumulative offsets.  This avoids the
-    // browser treating a multi-row <thead> as independently sticky tiers.
+    // the navigation, notification banner, and each real header row, then pin
+    // the cells (not a cloned table or spacer) at cumulative offsets.  This
+    // avoids the browser treating a multi-row <thead> as independently sticky
+    // tiers, and keeps the stack correct when either banner wraps on mobile.
     useLayoutEffect(() => {
-        const main = document.getElementById('main-content');
+        const navigation = document.querySelector<HTMLElement>('.top-nav');
         const stacks = Array.from(document.querySelectorAll<HTMLElement>('[data-item-pivot-sticky-stack]'));
-        if (!main || stacks.length === 0) return;
+        if (!navigation || stacks.length === 0) return;
 
         const sync = () => stacks.forEach((stack) => {
             const banner = stack.querySelector<HTMLElement>('[data-item-pivot-notification]');
             const rows = Array.from(stack.querySelectorAll<HTMLTableRowElement>('[data-item-pivot-header-tier]'));
             if (!banner || rows.length === 0) return;
-            let top = banner.getBoundingClientRect().height;
-            banner.style.top = '0px';
+            const navigationHeight = navigation.getBoundingClientRect().height;
+            const bannerHeight = banner.getBoundingClientRect().height;
+            const scrollContainer = stack.querySelector<HTMLElement>('[data-item-pivot-scroll-container]');
+            const scrollerTop = scrollContainer?.getBoundingClientRect().top ?? 0;
+            let top = navigationHeight + bannerHeight - scrollerTop;
+            stack.style.setProperty('--item-pivot-navigation-height', `${navigationHeight}px`);
+            stack.style.setProperty('--item-pivot-notification-height', `${bannerHeight}px`);
+            banner.style.top = `${navigationHeight}px`;
             rows.forEach((row, index) => {
                 row.querySelectorAll<HTMLElement>('th').forEach((cell) => {
                     cell.style.position = 'sticky';
                     cell.style.top = `${top}px`;
-                    cell.style.zIndex = String(25 - index);
+                    cell.style.zIndex = String(40 - index);
                     // An opaque background prevents licence rows from
                     // bleeding through a tier while it is pinned.
                     cell.style.backgroundColor = index === 0 ? '#f8fafc' : '#e2e8f0';
@@ -299,11 +306,26 @@ export default function ItemPivotReport() {
             });
         });
         const observer = new ResizeObserver(sync);
-        observer.observe(main);
+        observer.observe(navigation);
         stacks.forEach(stack => stack.querySelectorAll<HTMLElement>('[data-item-pivot-notification], [data-item-pivot-header-tier]').forEach(el => observer.observe(el)));
+        window.addEventListener('scroll', sync, true);
         sync();
-        return () => observer.disconnect();
+        return () => { observer.disconnect(); window.removeEventListener('scroll', sync, true); };
     }, [reportData, activeNotification]);
+
+    // Any overflow ancestor becomes the sticky containing block.  This page
+    // uses the document for vertical scrolling, so allow this report's wide
+    // table to use that same scrollport rather than trapping its headers in a
+    // horizontal-only inner scroller.
+    useLayoutEffect(() => {
+        const main = document.getElementById('main-content');
+        if (!main) return;
+        const previousOverflowX = main.style.overflowX;
+        const previousOverflowY = main.style.overflowY;
+        main.style.overflowX = 'visible';
+        main.style.overflowY = 'visible';
+        return () => { main.style.overflowX = previousOverflowX; main.style.overflowY = previousOverflowY; };
+    }, []);
 
     // AbortController ref — cancels the previous in-flight loadReport request
     // when a new one starts, preventing stale responses from overwriting fresh data.
@@ -754,8 +776,8 @@ export default function ItemPivotReport() {
                                 const balanceLeft = `${frozenOffsets.balance}px`;
                                 return (
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
-                                    <Card>
-                                        <CardHeader
+                                    <Card data-item-pivot-sticky-stack>
+                                        <CardHeader data-item-pivot-notification
                                             className="sticky top-0 z-30 flex-row items-center justify-between gap-4 text-primary-foreground shadow-sm"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
                                             <div>
@@ -782,11 +804,11 @@ export default function ItemPivotReport() {
                                             <span className="chip chip-neutral">{licenses.length}</span>
                                         </CardHeader>
                                         <CardContent className="p-0">
-                                            <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container">
+                                            <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container" data-item-pivot-scroll-container>
                                                 <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '960px'}}>
-                                                    <thead style={{position: 'sticky', top: 74, zIndex: 20}}>
-                                                    <tr className="table-light">
+                                                    <thead>
+                                                    <tr data-item-pivot-header-tier className="table-light">
                                                         <th ref={makeFrozenColRef(groupKey, 'srNo')} scope="col" className="text-center" style={{
                                                             position: 'sticky',
                                                             left: 0,
@@ -856,7 +878,7 @@ export default function ItemPivotReport() {
                                                             );
                                                         })}
                                                     </tr>
-                                                    <tr className="table-secondary">
+                                                    <tr data-item-pivot-header-tier className="table-secondary">
                                                         <th scope="col" style={{
                                                             position: 'sticky',
                                                             left: 0,

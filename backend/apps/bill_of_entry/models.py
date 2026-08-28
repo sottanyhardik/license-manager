@@ -232,7 +232,7 @@ class BillOfEntryModel(AuditModel):
     admin_search_fields = ["bill_of_entry_number"]
 
     class Meta:
-        unique_together = ("bill_of_entry_number", "bill_of_entry_date")
+        unique_together = ("bill_of_entry_number", "bill_of_entry_date", "port")
         ordering = ("-bill_of_entry_date",)
         verbose_name = "Bill of Entry"
         verbose_name_plural = "Bills of Entry"

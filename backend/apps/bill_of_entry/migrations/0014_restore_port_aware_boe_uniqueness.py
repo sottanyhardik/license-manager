@@ -1,4 +1,4 @@
-"""Keep the port-aware BOE uniqueness constraint used by the application."""
+"""Restore port-aware BOE identity without changing production BOE data."""
 
 from django.db import migrations
 
@@ -15,13 +15,7 @@ def _unique_columns(schema_editor, model):
     return {tuple(details.get("columns") or ()) for details in constraints.values() if details.get("unique")}
 
 
-def repair_constraint(apps, schema_editor):
-    """Do not collapse valid BOEs which share a number/date across ports.
-
-    The API's create path identifies a BOE by number, date, and port.  Removing
-    the port from the unique constraint makes such records impossible to store
-    and causes existing production data to block deployment.
-    """
+def restore_port_aware_constraint(apps, schema_editor):
     model = apps.get_model("bill_of_entry", "BillOfEntryModel")
     constraints = _unique_columns(schema_editor, model)
     if LEGACY_COLUMNS in constraints and OLD_COLUMNS not in constraints:
@@ -29,6 +23,16 @@ def repair_constraint(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("bill_of_entry", "0012_repair_boe_number_date_unique_constraint")]
+    dependencies = [("bill_of_entry", "0013_repair_boe_number_date_unique_constraint_columns")]
 
-    operations = [migrations.RunPython(repair_constraint, migrations.RunPython.noop)]
+    operations = [
+        migrations.SeparateDatabaseAndState(
+            database_operations=[migrations.RunPython(restore_port_aware_constraint, migrations.RunPython.noop)],
+            state_operations=[
+                migrations.AlterUniqueTogether(
+                    name="billofentrymodel",
+                    unique_together={OLD_FIELDS},
+                ),
+            ],
+        ),
+    ]

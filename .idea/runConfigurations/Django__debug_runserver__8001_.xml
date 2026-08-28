@@ -18,7 +18,7 @@
     <option name="DEBUG_JUST_MY_CODE" value="true" />
     <option name="RUN_TOOL" value="" />
     <option name="launchJavascriptDebuger" value="false" />
-    <option name="port" value="8001" />
+    <option name="port" value="8000" />
     <option name="host" value="127.0.0.1" />
     <option name="additionalOptions" value="" />
     <option name="browserUrl" value="" />

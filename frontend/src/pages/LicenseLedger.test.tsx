@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
-import { downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "../services/licenseLedgerExport";
+import { createLicenseLedgerPackage, downloadCustomLedgerPdf, downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "../services/licenseLedgerExport";
 import { getFinancialYearRange } from "../utils/dateRangePresets";
 import LicenseLedger from "./LicenseLedger";
 import { normalizeLicenseWiseData } from "./licenseLedgerData";
@@ -11,10 +11,21 @@ const navigate = vi.fn();
 vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));
 vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
 vi.mock("../services/licenseLedgerExport", () => ({
-    previewLicenseLedgerPdf: vi.fn(), downloadLicenseLedgerExcel: vi.fn(),
+    previewLicenseLedgerPdf: vi.fn(), downloadLicenseLedgerExcel: vi.fn(), createLicenseLedgerPackage: vi.fn(), downloadLicenseLedgerPackage: vi.fn(), downloadCustomLedgerPdf: vi.fn(), relativeApiUrl: (url: string) => url.replace(/^\/api\//, ""), retryLicenseLedgerPackage: vi.fn(),
     licenseLedgerExportError: (_error: unknown, fallback: string) => fallback,
 }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+vi.mock("../services/licenseLedgerPackageDownloads", () => ({
+    choosePackageDirectory: vi.fn(async () => ({
+        name: "chosen-folder",
+        getDirectoryHandle: vi.fn(async (name: string) => ({ name, getDirectoryHandle: vi.fn(), getFileHandle: vi.fn() })),
+    })),
+    loadDownloadState: vi.fn(async () => null),
+    SequentialPackageDownloadManager: class {
+        onChange?: (state: unknown) => void; onError?: (item: unknown, error: Error) => void;
+        constructor(private state: unknown) {} snapshot() { return this.state; } enqueue() {} authorizeDirectory = async () => true;
+    },
+}));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("../components/AsyncSelectField", () => ({
     default: ({ ariaLabel, value, onChange }: { ariaLabel: string; value: string | number | null; onChange: (value: unknown) => void }) => (
         <select aria-label={ariaLabel} value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}>
@@ -26,6 +37,8 @@ vi.mock("../components/AsyncSelectField", () => ({
 const mockedApiGet = vi.mocked(api.get);
 const mockedPreviewPdf = vi.mocked(previewLicenseLedgerPdf);
 const mockedDownloadExcel = vi.mocked(downloadLicenseLedgerExcel);
+const mockedCreatePackage = vi.mocked(createLicenseLedgerPackage);
+const mockedDownloadCustomLedger = vi.mocked(downloadCustomLedgerPdf);
 
 const ledgerData = { licenses: [{
     license_id: 2436, license_number: "LIC-2436", license_date: "2026-04-01",
@@ -46,6 +59,7 @@ function queryFor(prefix: string): URLSearchParams {
 describe("LicenseLedger fresh filters", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockedCreatePackage.mockResolvedValue({ job_id: "job-test", status: "queued", total: 2, queued: 2, running: 0, completed: 0, failed: 0, percentage: 0, status_url: "/api/license-ledger/download-package/job-test/", download_url: null });
         mockedApiGet.mockImplementation((url: string) => {
             if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: ledgerData });
             if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
@@ -148,6 +162,36 @@ describe("LicenseLedger fresh filters", () => {
         fireEvent.click(await screen.findByRole("button", { name: /view ledger for LIC-2436/i }));
         expect(navigate).toHaveBeenCalledWith("/license-ledger/2436/766");
         expect(normalizeLicenseWiseData({ licenses: [null, { license_id: "", companies: [] }] })).toEqual({ licenses: [] });
+    });
+
+    it("selects all visible hierarchical rows by default and starts one asynchronous package job", async () => {
+        mockedApiGet.mockImplementation((url: string) => {
+            if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: {
+                licenses: [], company_groups: [{ company_id: 766, company_name: "LABDHI", sion_groups: [{
+                    sion_norm: "E1", label: "E1", license_count: 2, total_purchase_bill_inr: 0, total_sale_bill_inr: 0, total_profit_loss_inr: 0,
+                    licenses: [
+                        { license_id: 2522, license_number: "0311051359", license_type: "DFIA", license_date: "2026-01-01", first_purchase_date: "", current_balance: 0, purchase_bill_inr: 0, sale_bill_inr: 0, profit_loss_inr: 0, has_purchase_bill: true },
+                        { license_id: 2523, license_number: "LIC-2523", license_type: "DFIA", license_date: "2026-01-02", first_purchase_date: "", current_balance: 0, purchase_bill_inr: 0, sale_bill_inr: 0, profit_loss_inr: 0, has_purchase_bill: true },
+                    ],
+                }] }],
+            } });
+            if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
+            return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+        render(<LicenseLedger />);
+        await screen.findByText("0311051359");
+        expect(screen.getByRole("button", { name: "Choose Destination Folder & Start" })).toBeEnabled();
+        fireEvent.click(screen.getByRole("button", { name: "Choose Destination Folder & Start" }));
+        await waitFor(() => expect(mockedCreatePackage).toHaveBeenCalledWith(["2522", "2523"], expect.any(String), expect.any(String)));
+        expect(mockedCreatePackage).toHaveBeenCalledTimes(1);
+        // Downloading is a blob action: it must not navigate, clear the visible
+        // selection, or cause the ledger filters/data to be replaced.
+        expect(navigate).not.toHaveBeenCalled();
+        expect(screen.getByRole("button", { name: "Choose Destination Folder & Start" })).toBeEnabled();
+        expect(screen.getByText("0311051359", { exact: true })).toBeInTheDocument();
+
+        fireEvent.click(screen.getAllByRole("button", { name: "Custom Ledger PDF" })[0]);
+        await waitFor(() => expect(mockedDownloadCustomLedger).toHaveBeenCalledWith("2522"));
     });
 
     it("renders the canonical company → SION → license hierarchy without changing financial values", async () => {

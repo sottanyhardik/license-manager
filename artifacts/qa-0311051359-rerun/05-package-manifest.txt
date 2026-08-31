@@ -1,0 +1,215 @@
+Package Manifest — 0311051359
+Field
+
+Value
+
+Field
+
+Value
+
+Licence number
+
+0311051359
+
+Licence ID
+
+2522
+
+Package ID
+
+local-20260828051451-2522
+
+Package status
+
+completed
+
+Generated
+
+28-Aug-2026 05:14:51 UTC
+
+Requested by
+
+hardik
+
+Environment
+
+local
+
+Native PDF result
+
+PASS
+
+Package Files
+Filename
+
+Document type
+
+Pages
+
+File size
+
+Result
+
+01-custom-ledger.pdf
+
+native generated customs ledger
+
+4
+
+52,956 bytes
+
+included
+
+02-financial-ledger.pdf
+
+native generated financial ledger
+
+1
+
+46,234 bytes
+
+included
+
+03-main-purchase-invoices.pdf
+
+direct original purchase invoice bundle
+
+2
+
+183,449 bytes
+
+included
+
+04-final-party-sales-invoices.pdf
+
+native system-generated sales invoice bundle
+
+1
+
+1,721 bytes
+
+included
+
+05-package-manifest.pdf
+
+native generated package manifest
+
+1
+
+4,380 bytes
+
+included
+
+Ledger and Reconciliation
+Metric
+
+Value
+
+Total CIF
+
+126,173.64
+
+Actual debited CIF
+
+125,977.16
+
+Actual balance CIF
+
+196.48
+
+Quantity reconciliation
+
+Canonical ledger values included
+
+CIF reconciliation
+
+Canonical ledger values included
+
+Financial reconciliation
+
+Canonical financial ledger included
+
+Purchase Document Decisions
+Purchase transaction
+
+Invoice ID
+
+Invoice number
+
+Document ID
+
+Result / reason
+
+374
+
+—
+
+GST/26-27/006
+
+—
+
+EXCLUDED
+
+372
+
+—
+
+KASL252657
+
+372:trade/purchase_invoice
+s/WhatsApp_Image_2026-0
+5-06_at_15.33.05.jpeg
+
+included: 1 source page(s)
+
+Final-Party Sales Invoice Decisions
+Invoice ID
+
+Invoice number
+
+Trade ID
+
+Classification
+
+Canonical evidence
+
+Result / reason
+
+373
+
+GST/26-27/006
+
+373
+
+INTERLINKED
+
+CANONICAL_TRANS
+ACTION_GRAPH_INT
+ERLINK
+
+EXCLUDED
+
+351
+
+LGL/2026-27/0003
+
+351
+
+UNKNOWN
+
+—
+
+UNRESOLVED
+
+Warnings and Errors
+Type
+Warning
+
+Detail
+Sales trade 351: final-party classification missing
+
+Licence 0311051359 · Package manifest
+
+Page 1
+
+

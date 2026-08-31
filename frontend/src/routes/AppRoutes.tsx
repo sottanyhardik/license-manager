@@ -43,6 +43,9 @@ const ReconciliationIssues = lazyLoadWithRetry(() => import("../pages/Reconcilia
 const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
 const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
+const LicenseLedgerPackageReadiness = lazyLoadWithRetry(() => import("../pages/LicenseLedgerPackageReadiness"));
+const LicenseDownloadRequests = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequests"));
+const LicenseDownloadRequestDetail = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequestDetail"));
 const LicenseOverviewPage = lazy(() => import("../pages/license-overview/LicenseOverviewPage"));
 const LicensePlanningWorkspace = lazy(() => import("../pages/planning/LicensePlanningWorkspace"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
@@ -233,6 +236,21 @@ export default function AppRoutes() {
                 <Route path="/license-ledger" element={
                     <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
                         <AdminLayout><LicenseLedger /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/license-ledger/download-requests" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                        <AdminLayout><LicenseDownloadRequests /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/license-ledger/download-requests/:requestId" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                        <AdminLayout><LicenseDownloadRequestDetail /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/license-ledger/package-readiness/:jobId" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "LEDGER_MANAGER"]}>
+                        <AdminLayout><LicenseLedgerPackageReadiness /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger/:licenseId/:itemId" element={

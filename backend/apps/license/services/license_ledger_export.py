@@ -51,9 +51,14 @@ def enrich_invoice_documents(canonical_data: dict, *, user, base_url="") -> dict
                 result, trade=trade, user=user, base_url=base_url,
             )
             cache[cache_key] = result
-        row["invoice_number"] = result.invoice_number
+        # A document resolver describes an optional uploaded copy; it is not
+        # the source of the system transaction invoice number.  Never let an
+        # absent copy overwrite the canonical Trade.invoice_number selected by
+        # CanonicalLedgerService.
+        canonical_number = row.get("invoice_number") or result.invoice_number
+        row["invoice_number"] = canonical_number
         row["invoice_document"] = {
-            "invoice_number": result.invoice_number,
+            "invoice_number": canonical_number,
             "document_exists": result.document_exists,
             "signed": result.signed,
             "status": result.status,
@@ -72,6 +77,33 @@ def build_license_ledger_data(query_params=None, *, company_id=None, license_ref
     # collection length.
     data["scope"] = "detail" if license_ref is not None else "list"
     return data
+
+
+def generate_license_ledger_statement_pdf(
+    *,
+    query_params=None,
+    user=None,
+    base_url="",
+    company_id=None,
+    license_ref=None,
+    canonical_data=None,
+):
+    """Generate the one canonical Financial License Ledger Statement PDF.
+
+    All statement callers use this orchestration point.  Callers which have
+    already materialised an authorized canonical dataset (for example a
+    package builder) may pass it through ``canonical_data``; doing so avoids a
+    second query without creating another calculation or rendering path.
+    ``canonical_data`` must be the output shape of
+    :func:`build_license_ledger_data` (at minimum its ``licenses`` collection).
+    """
+    if canonical_data is None:
+        canonical_data = build_license_ledger_data(
+            query_params, company_id=company_id, license_ref=license_ref,
+        )
+    if user is not None:
+        enrich_invoice_documents(canonical_data, user=user, base_url=base_url)
+    return render_license_ledger(canonical_data, "pdf")
 
 
 def render_license_ledger(canonical_data: dict, file_format: str):

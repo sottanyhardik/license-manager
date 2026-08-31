@@ -1,0 +1,7 @@
+Package Manifest — 0311051359
+Generated: 2026-08-28T05:03:01.236951+00:00
+Requested by: hardik
+Included: custom ledger, financial ledger, purchase-invoice copy report, final-party sales-invoice
+copy report.
+
+

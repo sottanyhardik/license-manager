@@ -1,0 +1,9 @@
+Main Purchase Invoice Copy
+Licence transaction: 372
+Invoice number: KASL252657
+Invoice date: 2026-02-21
+Purchase party: KHYATI GLOBAL VENTURES LIMITED
+Source record ID: 372
+Source page count: 1
+
+

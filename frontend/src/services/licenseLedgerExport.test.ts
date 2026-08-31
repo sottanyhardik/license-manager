@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
-import { downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "./licenseLedgerExport";
+import { createLicenseLedgerPackage, downloadCustomLedgerPdf, downloadLicenseLedgerExcel, previewLicenseLedgerPdf } from "./licenseLedgerExport";
 
-vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
+vi.mock("../api/axios", () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 
 const mockedGet = vi.mocked(api.get);
+const mockedPost = vi.mocked(api.post);
 
 describe("shared License Ledger export client", () => {
     beforeEach(() => {
@@ -49,5 +50,29 @@ describe("shared License Ledger export client", () => {
         vi.spyOn(window, "open").mockReturnValue(null);
         await expect(previewLicenseLedgerPdf({})).rejects.toThrow(/blocked/i);
         expect(mockedGet).not.toHaveBeenCalled();
+    });
+
+    it("creates an asynchronous package job from selected licence IDs", async () => {
+        mockedPost.mockResolvedValue({
+            data: { job_id: "job-key", status: "queued", total: 2 },
+        });
+        await createLicenseLedgerPackage([2436, "2437"]);
+
+        expect(mockedPost).toHaveBeenCalledTimes(1);
+        expect(mockedPost).toHaveBeenCalledWith("license-ledger/download-package/", { license_ids: [2436, "2437"] });
+    });
+
+    it("uses the licence record ID, not its display number, for the custom-ledger endpoint", async () => {
+        mockedGet.mockResolvedValue({
+            data: new Blob(["%PDF"], { type: "application/pdf" }),
+            headers: { "content-disposition": 'attachment; filename="0311051359-customs-ledger.pdf"' },
+        });
+        const anchor = document.createElement("a");
+        vi.spyOn(document, "createElement").mockReturnValue(anchor);
+
+        await downloadCustomLedgerPdf(2522);
+
+        expect(mockedGet).toHaveBeenCalledWith("license-ledger/2522/custom-ledger-pdf/?license_type=DFIA", { responseType: "blob" });
+        expect(anchor.download).toBe("0311051359-customs-ledger.pdf");
     });
 });

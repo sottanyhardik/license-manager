@@ -7,6 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image
+from xml.sax.saxutils import escape
 
 
 def num_to_words_indian(amount):
@@ -201,13 +202,19 @@ def generate_bill_of_supply_pdf(trade, include_signature=True, canonical_total_i
         if trade.to_pan:
             to_addr.append(f'PAN/IT No        : {trade.to_pan}')
 
+    # ``LicenseTrade.invoice_number`` is the canonical system invoice number
+    # used by the normal download endpoint.  Keep it text (slashes/leading
+    # zeroes are meaningful) and make missing system data explicit instead of
+    # emitting the renderer's visual dash placeholder.
+    invoice_number = str(trade.invoice_number or '').strip() or 'Invoice number missing in system record'
+    invoice_number = escape(invoice_number)
     # Format invoice date
     invoice_date_str = trade.invoice_date.strftime('%d-%b-%y') if trade.invoice_date else ''
 
     header_data = [
         [
             Paragraph('<br/>'.join(from_addr), styles['Normal']),
-            Paragraph(f'<b>Invoice No.</b><br/>{trade.invoice_number or ""}', styles['Normal']),
+            Paragraph(f'<b>Invoice Number</b><br/>{invoice_number}', styles['Normal']),
             Paragraph(f'<b>Dated</b><br/>{invoice_date_str}', styles['Normal'])
         ],
         [

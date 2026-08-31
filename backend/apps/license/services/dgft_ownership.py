@@ -8,10 +8,11 @@ import os
 import time
 
 import requests
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-DGFT_URL = "https://www.dgft.gov.in/CP/webHP"
+DGFT_URL = settings.DGFT_OWNERSHIP_URL
 REQUEST_TIMEOUT_SECONDS = 30
 MAX_ATTEMPTS = 4
 BASE_RETRY_DELAY_SECONDS = 5

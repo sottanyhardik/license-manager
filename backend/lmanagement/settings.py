@@ -21,12 +21,16 @@ warnings.filterwarnings(
 # ---------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env file if present (production servers place it at BASE_DIR/.env)
+# Load local environment files if present.  ``.env_dgft`` is deliberately
+# separate because DGFT session cookies and CSRF values are short-lived
+# browser credentials, not general application configuration.
 try:
     from dotenv import load_dotenv
-    _env_path = BASE_DIR / ".env"
-    if _env_path.exists():
-        load_dotenv(_env_path, override=False)  # env vars already set take precedence
+    for _env_path in (BASE_DIR / ".env", BASE_DIR / ".env_dgft"):
+        if _env_path.exists():
+            # Values supplied by the process (for example, production secret
+            # storage) always take precedence over local files.
+            load_dotenv(_env_path, override=False)
 except ImportError:
     pass  # python-dotenv not installed — rely on process environment
 
@@ -41,6 +45,19 @@ SECRET_KEY = os.getenv(
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"   # PRODUCTION DEFAULT: False
 DEPLOYMENT_ENV = os.getenv("DJANGO_ENVIRONMENT", "development").lower()
 IS_PRODUCTION = DEPLOYMENT_ENV in {"production", "prod"}
+
+# DGFT scrip-ownership lookup.  Values are loaded from ``.env_dgft`` locally
+# (or normal process environment in deployed environments).  The session and
+# CSRF token expire; operators must refresh them from an authenticated DGFT
+# browser session when a lookup is rejected.
+DGFT_OWNERSHIP_URL = os.getenv("DGFT_OWNERSHIP_URL", "https://www.dgft.gov.in/CP/webHP")
+DGFT_SCRIP_NUMBER = os.getenv("DGFT_SCRIP_NUMBER", "")
+DGFT_SCRIP_ISSUE_DATE = os.getenv("DGFT_SCRIP_ISSUE_DATE", "")
+DGFT_IEC_NUMBER = os.getenv("DGFT_IEC_NUMBER", "")
+DGFT_APP_ID = os.getenv("DGFT_APP_ID", "")
+DGFT_SESSION_ID = os.getenv("DGFT_SESSION_ID", "")
+DGFT_CSRF_TOKEN = os.getenv("DGFT_CSRF_TOKEN", "")
+DGFT_AWSALB = os.getenv("DGFT_AWSALB", "")
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost"  # production: set ALLOWED_HOSTS env var with real domains
@@ -338,6 +355,11 @@ CELERY_TASK_ROUTES = {
     "planning.dispatch_replan_requests": {"queue": "celery"},
     "planning.replan_license": {"queue": "celery"},
     "planning.recover_pending_replan_requests": {"queue": "celery"},
+    "license.enqueue_license_ledger_package": {"queue": "celery"},
+    "license.build_license_ledger_package_item": {"queue": "celery"},
+    "license.finalize_license_ledger_package": {"queue": "celery"},
+    "license.recover_license_ledger_package_jobs": {"queue": "celery"},
+    "license.cleanup_expired_ledger_packages": {"queue": "celery"},
 }
 CELERY_TASK_ANNOTATIONS = {
     "planning.replan_license": {
@@ -345,6 +367,18 @@ CELERY_TASK_ANNOTATIONS = {
         "reject_on_worker_lost": True,
         "soft_time_limit": int(os.getenv("LICENSE_REPLAN_SOFT_TIME_LIMIT", "240")),
         "time_limit": int(os.getenv("LICENSE_REPLAN_TIME_LIMIT", "300")),
+    },
+    "license.build_license_ledger_package_item": {
+        "acks_late": True,
+        "reject_on_worker_lost": True,
+        "soft_time_limit": int(os.getenv("LICENSE_PACKAGE_ITEM_SOFT_TIME_LIMIT", "240")),
+        "time_limit": int(os.getenv("LICENSE_PACKAGE_ITEM_TIME_LIMIT", "300")),
+    },
+    "license.finalize_license_ledger_package": {
+        "acks_late": True,
+        "reject_on_worker_lost": True,
+        "soft_time_limit": int(os.getenv("LICENSE_PACKAGE_ARCHIVE_SOFT_TIME_LIMIT", "300")),
+        "time_limit": int(os.getenv("LICENSE_PACKAGE_ARCHIVE_TIME_LIMIT", "360")),
     },
 }
 CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1"))
@@ -420,6 +454,11 @@ try:
         "x-csrftoken",
         "Authorization",
         "authorization",
+        # Package creation uses this non-secret key to turn a double click
+        # into one durable Celery job. It must be allowed by CORS preflight
+        # before the browser can issue the POST.
+        "Idempotency-Key",
+        "idempotency-key",
         # Correlates one explicit ledger-upload attempt across the browser,
         # API and worker logs. It is intentionally a non-sensitive UUID.
         "x-upload-operation-id",
@@ -434,12 +473,13 @@ except ImportError:
         "origin",
         "user-agent",
         "x-csrftoken",
+        "idempotency-key",
         "x-upload-operation-id",
         "x-requested-with",
     ]
 
 # Optional: expose headers to browser
-CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken", "Authorization"]
+CORS_EXPOSE_HEADERS = ["Content-Type", "Content-Disposition", "X-CSRFToken", "Authorization"]
 
 # CSRF trusted origins for Django's CSRF checks (if you use session auth)
 _csrf_extra = [

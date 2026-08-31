@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
 import {
-    downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
+    createLicenseLedgerPackage, downloadCustomLedgerPdf, downloadLicenseLedgerExcel, downloadLicenseLedgerPackage, licenseLedgerExportError, previewLicenseLedgerPdf, relativeApiUrl, retryLicenseLedgerPackage, type LicenseLedgerPackageJob,
 } from '../services/licenseLedgerExport';
+import { choosePackageDirectory, loadDownloadState, SequentialPackageDownloadManager, type DownloadState, type PackageLicence } from '../services/licenseLedgerPackageDownloads';
 import PageHeader from '@/components/PageHeader';
 import EmptyState from '@/components/EmptyState';
 import AsyncSelectField from '../components/AsyncSelectField';
@@ -121,9 +122,17 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
 function LicenseWiseLedger({
     data,
     navigate,
+    selectedLicenseIds,
+    onToggleLicense,
+    onDownloadLicense,
+    onDownloadCustomLedger,
 }: {
     data: LicenseWiseData;
     navigate: ReturnType<typeof useNavigate>;
+    selectedLicenseIds: Set<string>;
+    onToggleLicense: (licenseId: string) => void;
+    onDownloadLicense: (licenseId: string) => void;
+    onDownloadCustomLedger: (licenseId: string) => void;
 }) {
     const { licenses, company_groups = [], grand_total } = normalizeLicenseWiseData(data);
     const fmt = (v: number) => `₹${formatIndianNumber(v, 2)}`;
@@ -149,6 +158,7 @@ function LicenseWiseLedger({
                                     <div className="overflow-x-auto">
                                         <table className="w-full min-w-[900px] border-collapse text-xs">
                                             <thead><tr className="border-y bg-primary/5 text-left">
+                                                <th className="px-3 py-2"><span className="sr-only">Select</span></th>
                                                 <th className="px-3 py-2">License Number</th><th className="px-3 py-2">Type</th>
                                                 <th className="px-3 py-2">Date</th><th className="px-3 py-2">1st Purchase Date</th>
                                                 <th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Purchase (₹)</th>
@@ -156,6 +166,7 @@ function LicenseWiseLedger({
                                             </tr></thead>
                                             <tbody>{sion.licenses.map((license) => (
                                                 <tr key={license.license_id} className={cn("border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive")}>
+                                                    <td className="px-3 py-2"><input type="checkbox" checked={selectedLicenseIds.has(String(license.license_id))} onChange={() => onToggleLicense(String(license.license_id))} aria-label={`Select licence ${license.license_number}`} /></td>
                                                     <td className="px-3 py-2 font-semibold">{license.license_number}{!license.has_purchase_bill && <span className="ml-2 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">NO PURCHASE BILL</span>}</td><td className="px-3 py-2">{license.license_type}</td>
                                                     <td className="px-3 py-2">{license.license_date}</td><td className="px-3 py-2">{license.first_purchase_date}</td>
                                                     <td className="px-3 py-2 text-right tabular-nums">{formatIndianNumber(license.current_balance, 2)}</td>
@@ -170,6 +181,8 @@ function LicenseWiseLedger({
                                                         >
                                                             View Ledger
                                                         </button>
+                                                        <button type="button" className="ml-2 font-semibold text-primary hover:underline" onClick={() => onDownloadLicense(String(license.license_id))}>Download Package</button>
+                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-2 font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>Custom Ledger PDF</button>}
                                                     </td>
                                                 </tr>
                                             ))}</tbody>
@@ -212,6 +225,9 @@ function LicenseWiseLedger({
                 <div key={lic.license_id} className="mb-6 overflow-hidden rounded-md border border-border">
                     {/* ── License header bar ─────────────────────────── */}
                     <div className="flex flex-wrap items-center gap-5 bg-primary px-4 py-2.5">
+                        <label className="flex size-6 cursor-pointer items-center justify-center rounded bg-white/15" title={`Select ${lic.license_number}`}>
+                            <input type="checkbox" className="size-4" checked={selectedLicenseIds.has(String(lic.license_id))} onChange={() => onToggleLicense(String(lic.license_id))} aria-label={`Select licence ${lic.license_number}`} />
+                        </label>
                         <span className="flex items-center gap-1.5 text-[15px] font-bold text-primary-foreground">
                             <FileText className="size-4 shrink-0" aria-hidden="true" />
                             <span className="ml-1">{lic.license_number}</span>
@@ -236,6 +252,12 @@ function LicenseWiseLedger({
                                 <BookOpen className="size-4" aria-hidden="true" />View Ledger
                             </button>
                         )}
+                        <button type="button" className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25" onClick={() => onDownloadLicense(String(lic.license_id))}>
+                            <FileSpreadsheet className="size-4" aria-hidden="true" />Download Package
+                        </button>
+                        {lic.license_type === 'DFIA' && <button type="button" className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25" onClick={() => onDownloadCustomLedger(String(lic.license_id))}>
+                            <FileText className="size-4" aria-hidden="true" />Custom Ledger PDF
+                        </button>}
                     </div>
 
                     {/* ── Companies table ────────────────────────────── */}
@@ -350,10 +372,44 @@ export default function LicenseLedger() {
     const [companyWiseData, setCompanyWiseData] = useState<LicenseWiseData | null>(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
     const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
+    const [selectedLicenseIds, setSelectedLicenseIds] = useState<Set<string>>(() => new Set());
+    const [packageDownloading, setPackageDownloading] = useState(false);
+    const [packageJob, setPackageJob] = useState<LicenseLedgerPackageJob | null>(null);
+    const [downloadState, setDownloadState] = useState<DownloadState | null>(null);
+    const [packageFolder, setPackageFolder] = useState<{ selected: string; job: string } | null>(null);
     const [filters, setFilters] = useState<LicenseLedgerFilters>(() => defaultLicenseLedgerFilters());
     const requestVersion = useRef(0);
+    const managerRef = useRef<SequentialPackageDownloadManager | null>(null);
     const params = buildLicenseLedgerParams(filters);
     const paramsKey = params.toString();
+
+    useEffect(() => {
+        if (!packageJob?.status_url || ["completed", "partial_failed", "failed"].includes(packageJob.status)) return;
+        const timer = window.setTimeout(async () => {
+            try { setPackageJob((await api.get(relativeApiUrl(packageJob.status_url))).data); } catch { /* retain last safe status */ }
+        }, 1500);
+        return () => window.clearTimeout(timer);
+    }, [packageJob]);
+
+    // Resume a server job after a refresh without retaining credentials in the
+    // browser database. Directory handles are browser permission objects only.
+    useEffect(() => {
+        void loadDownloadState().then(async state => {
+            if (!state?.jobId) return;
+            if (state.selectedDirectoryName && state.jobDirectoryName) setPackageFolder({ selected: state.selectedDirectoryName, job: state.jobDirectoryName });
+            if (state.directory?.queryPermission) state.directoryAuthorized = await state.directory.queryPermission({ mode: 'readwrite' }) === 'granted';
+            const manager = new SequentialPackageDownloadManager(state);
+            manager.onChange = setDownloadState;
+            manager.onError = (_item, error) => toast.error(error.message);
+            managerRef.current = manager; setDownloadState(manager.snapshot());
+            try { setPackageJob((await api.get(`license-ledger/download-package/${state.jobId}/`)).data); } catch { /* job may be expired */ }
+        }).catch(() => { /* IndexedDB is optional */ });
+        return () => { managerRef.current = null; };
+    }, []);
+
+    useEffect(() => {
+        if (packageJob?.licences?.length) managerRef.current?.enqueue(packageJob.licences as PackageLicence[]);
+    }, [packageJob]);
 
     useEffect(() => {
         const version = ++requestVersion.current;
@@ -392,7 +448,15 @@ export default function LicenseLedger() {
                     };
                 }),
             } : rawLedger;
-            setCompanyWiseData(normalizeLicenseWiseData(enrichedLedger));
+            const normalized = normalizeLicenseWiseData(enrichedLedger);
+            setCompanyWiseData(normalized);
+            // Bulk package download is the primary ledger workflow.  Start
+            // with every currently visible licence selected; changing a
+            // filter intentionally creates a new visible selection.
+            const visible = normalized.company_groups?.length
+                ? normalized.company_groups.flatMap(company => company.sion_groups.flatMap(group => group.licenses))
+                : normalized.licenses;
+            setSelectedLicenseIds(new Set(visible.map(license => String(license.license_id))));
             setSummary(summaryResponse.data);
         }).catch(error => {
             if (version !== requestVersion.current) return;
@@ -426,8 +490,58 @@ export default function LicenseLedger() {
         }
     };
 
+    const downloadPackage = async (licenseIds: string[]) => {
+        if (!licenseIds.length || packageDownloading) return;
+        setPackageDownloading(true);
+        try {
+            // This runs inside the original click gesture.  Package work is
+            // never submitted until Chromium grants a writable destination and
+            // the deterministic job subfolder has been created.
+            let directory;
+            try { directory = await choosePackageDirectory(); } catch (error) {
+                if (error instanceof DOMException && error.name === 'AbortError') return;
+                throw error;
+            }
+            if (!directory) throw new Error('No destination folder was selected. Use an explicit individual download or final ZIP fallback.');
+            const shortJobKey = (globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 8) ?? Math.random().toString(16).slice(2, 10));
+            const utcTimestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+            const clientJobKey = `${utcTimestamp}_${shortJobKey}`;
+            const selectedName = directory.name ?? 'selected-folder';
+            directory = await directory.getDirectoryHandle(`license-ledger-${utcTimestamp}-${shortJobKey}`, { create: true });
+            const jobFolderName = directory.name ?? `license-ledger-${utcTimestamp}-${shortJobKey}`;
+            setPackageFolder({ selected: selectedName, job: jobFolderName });
+            // State updates are asynchronous. Yield one paint so the chosen
+            // directory is visibly confirmed before any server work begins.
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            const idempotencyKey = clientJobKey;
+            const job = await createLicenseLedgerPackage(licenseIds, idempotencyKey, clientJobKey);
+            if (!job?.job_id || !job.status_url || typeof job.total !== 'number') {
+                throw new Error('The package server has not loaded the asynchronous job endpoint. Restart the backend and try again.');
+            }
+            const manager = new SequentialPackageDownloadManager({ jobId: job.job_id, directory, queued: [], downloading: null, downloaded: [], failed: [], expected: {}, directoryAuthorized: true, selectedDirectoryName: selectedName, jobDirectoryName: jobFolderName });
+            manager.onChange = setDownloadState;
+            manager.onError = (item, error) => toast.error(`${item.licence_number}: ${error.message}`);
+            managerRef.current = manager; setDownloadState(manager.snapshot());
+            setPackageJob(job);
+            toast.success(`Package queued for ${job.total ?? licenseIds.length} licence${(job.total ?? licenseIds.length) === 1 ? '' : 's'}.`);
+        } catch (error) {
+            toast.error(licenseLedgerExportError(error, 'Unable to generate the licence package. Please try again.'));
+        } finally {
+            setPackageDownloading(false);
+        }
+    };
+    const toggleLicense = (licenseId: string) => setSelectedLicenseIds(previous => {
+        const next = new Set(previous);
+        if (next.has(licenseId)) next.delete(licenseId); else next.add(licenseId);
+        return next;
+    });
+
     const normalizedLedger = normalizeLicenseWiseData(companyWiseData);
-    const visibleLicenses = normalizedLedger.licenses;
+    // The active API normally returns the company/SION hierarchy. Flatten it
+    // here so bulk selection means every row the user can actually see.
+    const visibleLicenses = normalizedLedger.company_groups?.length
+        ? normalizedLedger.company_groups.flatMap(company => company.sion_groups.flatMap(group => group.licenses))
+        : normalizedLedger.licenses;
     const visibleLicenseCount = normalizedLedger.company_groups?.reduce(
         (count, company) => count + company.sion_groups.reduce((subtotal, group) => subtotal + group.licenses.length, 0), 0,
     ) ?? visibleLicenses.length;
@@ -439,7 +553,42 @@ export default function LicenseLedger() {
                 pretitle="Ledger"
                 title="License Ledger"
                 description="Review available balances across DFIA and Incentive licenses"
-                actions={<div className="flex gap-2">
+                actions={<div className="flex flex-wrap gap-2">
+                    <Button asChild variant="outline" size="sm"><a href="/license-ledger/download-requests">License Downloads</a></Button>
+                    <Button variant="outline" size="sm" disabled={visibleLicenses.length === 0} onClick={() => setSelectedLicenseIds(previous => {
+                        const next = new Set(previous);
+                        const visibleIds = visibleLicenses.map(license => String(license.license_id));
+                        const allSelected = visibleIds.every(id => next.has(id));
+                        visibleIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
+                        return next;
+                    })}>{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear Visible' : 'Select Visible'}</Button>
+                    <Button size="sm" disabled={packageDownloading || selectedLicenseIds.size === 0} onClick={() => downloadPackage([...selectedLicenseIds])}>
+                        {packageDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Choose Destination Folder & Start
+                    </Button>
+                    {/* The old transient package-progress block has been superseded
+                        by the persistent Download Requests screens. */}
+                    {false && packageJob && <div className="text-xs text-muted-foreground" role="status">
+                        <div>Total: {packageJob.total} · Queued: {packageJob.queued} · Processing: {packageJob.running} · Ready to download: {Math.max(0, packageJob.completed - (downloadState?.downloaded.length ?? 0))} · Downloading: {downloadState?.downloading ? 1 : 0} · Downloaded: {downloadState?.downloaded.length ?? 0} · Failed: {packageJob.failed + (downloadState?.failed.length ?? 0)}</div>
+                        {packageFolder && <div className="font-medium text-foreground">Selected folder: {packageFolder.selected}<br />Package folder: {packageFolder.job}</div>}
+                        {packageJob.status} — {packageJob.completed} / {packageJob.total}
+                        <div className="mt-1 h-1 w-24 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${packageJob.percentage}%` }} /></div>
+                        {packageJob.download_url && <Button size="sm" onClick={() => downloadLicenseLedgerPackage(packageJob.download_url!)}>Download all ZIP</Button>}
+                        <Button size="sm" variant="outline" onClick={() => navigate(`/license-ledger/package-readiness/${packageJob.job_id}`)}>Data Readiness</Button>
+                        {downloadState?.directory && downloadState.directoryAuthorized === false && <Button size="sm" variant="outline" onClick={async () => {
+                            if (!await managerRef.current?.authorizeDirectory()) toast.error('Folder access was not granted.');
+                        }}>Reconnect Folder</Button>}
+                        {packageJob.failed > 0 && <Button size="sm" variant="outline" onClick={async () => setPackageJob(await retryLicenseLedgerPackage(packageJob.job_id))}>Retry failed</Button>}
+                        {packageJob.licences?.map(item => <div key={item.id} className="mt-1 flex items-start gap-2">
+                            <div><span>{downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? `Saved: ${packageFolder?.selected ?? downloadState?.selectedDirectoryName ?? 'selected-folder'}/${packageFolder?.job ?? downloadState?.jobDirectoryName ?? 'license-ledger-package'}/${item.licence_number}.pdf` : `${item.licence_number}: ${downloadState?.downloading === String(item.license_id ?? item.id) ? 'Downloading' : ["server_ready", "completed"].includes(item.status) ? 'Server ready' : item.status === 'running' ? 'Generating' : item.status === 'failed' ? `Failed — ${item.error ?? 'Unable to generate PDF.'}` : 'Queued'}`}</span>
+                            {item.audit && <div className="text-[11px] text-muted-foreground">
+                                <div>Purchase invoices: {item.audit.expected_purchase_invoices ?? '—'} / {item.audit.included_purchase_invoices ?? '—'} · Final-party sales invoices: {item.audit.expected_final_party_sales_invoices ?? '—'} / {item.audit.included_final_party_sales_invoices ?? '—'} · Interlinked sales excluded: {item.audit.excluded_interlinked_sales_invoices ?? '—'}</div>
+                                <div>PDF pages: {item.audit.expected_pdf_pages ?? '—'} / {item.audit.actual_pdf_pages ?? '—'} · Server validation: {item.audit.server_validation ?? '—'} · Local save validation: {downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? 'passed' : 'pending'}</div>
+                                {item.audit.final_party_sales_invoice_numbers?.length ? <div>Final-party sales invoices included: {item.audit.final_party_sales_invoice_numbers.join(', ')}</div> : null}
+                                {item.audit.excluded_interlinked_sale_ids?.length ? <div>Interlinked sales excluded: {item.audit.excluded_interlinked_sale_ids.map(id => `Sale ${id}`).join(', ')}</div> : null}
+                            </div>}</div>
+                            {["server_ready", "completed"].includes(item.status) && item.download_url && !downloadState?.downloaded.includes(String(item.license_id ?? item.id)) && <Button size="sm" variant="outline" onClick={() => managerRef.current?.enqueue([item as PackageLicence])}>Download PDF</Button>}
+                        </div>)}
+                    </div>}
                     <Button variant="outline" size="sm" disabled={exporting !== null || visibleLicenseCount === 0} onClick={() => runExport('pdf')}>
                         {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Preview PDF
                     </Button>
@@ -652,6 +801,13 @@ export default function LicenseLedger() {
                         <LicenseWiseLedger
                             data={companyWiseData}
                             navigate={navigate}
+                            selectedLicenseIds={selectedLicenseIds}
+                            onToggleLicense={toggleLicense}
+                            onDownloadLicense={(licenseId) => downloadPackage([licenseId])}
+                            onDownloadCustomLedger={async (licenseId) => {
+                                try { await downloadCustomLedgerPdf(licenseId); toast.success('Custom Ledger PDF download started.'); }
+                                catch (error) { toast.error(licenseLedgerExportError(error, 'Unable to generate the Custom Ledger PDF.')); }
+                            }}
                         />
                     ) : (
                         <EmptyState

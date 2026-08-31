@@ -1,0 +1,262 @@
+Customs Ledger • Licence 0311051359
+
+
+
+
+                                                                 Customs Ledger — Item Detail: 0311051359
+                                      Licence date         10-Feb-2026                   Expiry date           10-Feb-2027                      Status                 NILESH SIR LOT 4
+
+                                      Notification         025/2023                      Licence holder        DELICIEUX VENTURES               Total CIF              126,173.64
+
+                                      Actual debited CIF   125,977.16                    Actual balance CIF    196.48                           CIF reconciliation     PASS
+
+
+
+ Item-wise Import Summary
+    SR              Product / item                         HSN            Unit   Original qty          BOE debited       Available qty    Original CIF          Debited CIF     Balance CIF
+                                                                                                           qty
+
+   1      SUGAR                                      17019990            kg      39,077.28          0.00                39,077.00        126,173.64           0.00             126,173.64
+
+   2      LIQUID GLUCOSE                             17022010            kg      13,025.76          0.00                13,025.00        0.00                 0.00             196.48
+
+   3      FRUIT JUICE                                20091100            kg      0.01               0.00                0.00             0.00                 0.00             196.48
+
+   4      WPC, FRUIT/COCOA                           35022000            kg      6,512.88           0.00                6,512.00         0.00                 0.00             196.48
+
+   5      CITRIC ACID / TARTARIC ACID                29181400            kg      1,953.86           0.00                1,953.00         0.00                 0.00             196.48
+
+   6      ESSENTIAL OIL                              33011200            kg      325.64             0.00                325.00           0.00                 0.00             196.48
+
+   7      FOOD COLOUR                                32041981            kg      6.51               0.00                6.00             0.00                 0.00             196.48
+
+   8      CARDAMOM, FRUIT JUICE, FOOD                09083110            kg      65.13              0.00                65.00            0.00                 0.00             196.48
+          FLAVOUR
+
+   9      EMULSIFIER                                 39139090            kg      65.13              0.00                65.00            0.00                 0.00             196.48
+
+   10     OTHER CONFECTIONERY                        08029900            kg      3,256.44           0.00                3,256.00         0.00                 0.00             196.48
+          INGREDIENTS
+
+   11     PP                                         39021000            kg      3,642.84           0.00                3,642.00         0.00                 0.00             196.48
+
+   12     SUGAR                                      17019990            kg      56,546.19          0.00                56,546.00        0.00                 0.00             196.48
+
+   13     LIQUID GLUCOSE                             17022010            kg      18,848.73          0.00                18,848.00        0.00                 0.00             196.48
+
+   14     FRUIT JUICE                                20091100            kg      0.01               0.00                0.00             0.00                 0.00             196.48
+
+   15     WPC, FRUIT/COCOA                           35022000            kg      9,424.37           8,600.00            824.00           0.00                 125,977.16       196.48
+
+   16     CITRIC ACID / TARTARIC ACID                29181400            kg      2,827.31           0.00                2,827.00         0.00                 0.00             196.48
+
+   17     ESSENTIAL OIL                              33011200            kg      471.22             0.00                471.00           0.00                 0.00             196.48
+
+   18     FOOD COLOUR                                32041981            kg      9.42               0.00                9.00             0.00                 0.00             196.48
+
+   19     CARDAMOM, FRUIT JUICE, FOOD                09083110            kg      94.24              0.00                94.00            0.00                 0.00             196.48
+          FLAVOUR
+
+   20     EMULSIFIER                                 39139090            kg      94.24              0.00                94.00            0.00                 0.00             196.48
+
+   21     OTHER CONFECTIONERY                        08029900            kg      4,712.18           0.00                4,712.00         0.00                 0.00             196.48
+          INGREDIENTS
+
+   22     PP                                         39021000            kg      5,271.32           0.00                5,271.00         0.00                 0.00             196.48
+
+
+
+ Posted BOE Debit History
+
+
+
+                                                                                                                                                                                              Page 1
+Customs Ledger • Licence 0311051359
+
+
+
+
+ SR 1 — SUGAR (Refined Cane Sugar)
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 2 — LIQUID GLUCOSE (Liquid Glucose)
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 3 — FRUIT JUICE (Fruit - Juice (HSN 2009))
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 4 — WPC, FRUIT/COCOA (Milk & Milk Products-Milk solids)
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 5 — CITRIC ACID / TARTARIC ACID (Food Grade - Citric Acid)
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 6 — ESSENTIAL OIL (Essential Oils (HS Code3301))
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 7 — FOOD COLOUR (Food Colours:-Sunset Yellow)
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+ SR 8 — CARDAMOM, FRUIT JUICE, FOOD FLAVOUR (Food Flavours - Fruit Flavour Edible Grade)
+       BOE no.          BOE date          Port       Importer / company                    BOE item       Qty       CIF   Audit ID
+
+   No posted BOE      —               —          —                        —                           —         —         —
+   debit history
+
+
+
+
+                                                                                                                                     Page 2
+Customs Ledger • Licence 0311051359
+
+
+
+
+ SR 9 — EMULSIFIER (Emulsifier/ Stabilizer / Glazing Agent/ Binders /Thickeners (item as per PFA Act 1955) Xanthan Gum)
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+ SR 10 — OTHER CONFECTIONERY INGREDIENTS (Other Confectionery Ingredients- Fruits & nut products, (HSN 0802))
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+ SR 11 — PP (Packing Material -Polypropylene Film Grade, Aluminium Foil)
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+ SR 12 — SUGAR (Refined Cane Sugar)
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+ SR 13 — LIQUID GLUCOSE (Liquid Glucose)
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+ SR 14 — FRUIT JUICE (Fruit - Juice (HSN 2009))
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+ SR 15 — WPC, FRUIT/COCOA (Milk & Milk Products-Milk solids)
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   8625390            11-Apr-2026     NHAVA SHEVA    ABHISHEK TRADELINKS      WPC                                         8,600.00   125,977.16   275463
+                                      SEA (INNSA1)
+
+
+ SR 16 — CITRIC ACID / TARTARIC ACID (Food Grade - Citric Acid)
+       BOE no.          BOE date           Port          Importer / company                 BOE item                          Qty         CIF      Audit ID
+
+   No posted BOE      —               —              —                        —                                           —          —            —
+   debit history
+
+
+
+
+                                                                                                                                                              Page 3
+Customs Ledger • Licence 0311051359
+
+
+
+
+ SR 17 — ESSENTIAL OIL (Essential Oils (HS Code3301))
+       BOE no.          BOE date           Port              Importer / company                       BOE item                      Qty           CIF      Audit ID
+
+   No posted BOE      —               —                  —                           —                                          —            —             —
+   debit history
+
+
+ SR 18 — FOOD COLOUR (Food Colours:-Sunset Yellow)
+       BOE no.          BOE date           Port              Importer / company                       BOE item                      Qty           CIF      Audit ID
+
+   No posted BOE      —               —                  —                           —                                          —            —             —
+   debit history
+
+
+ SR 19 — CARDAMOM, FRUIT JUICE, FOOD FLAVOUR (Food Flavours - Fruit Flavour Edible Grade)
+       BOE no.          BOE date           Port              Importer / company                       BOE item                      Qty           CIF      Audit ID
+
+   No posted BOE      —               —                  —                           —                                          —            —             —
+   debit history
+
+
+ SR 20 — EMULSIFIER (Emulsifier/ Stabilizer / Glazing Agent/ Binders /Thickeners (item as per PFA Act 1955) Xanthan Gum)
+       BOE no.          BOE date           Port              Importer / company                       BOE item                      Qty           CIF      Audit ID
+
+   No posted BOE      —               —                  —                           —                                          —            —             —
+   debit history
+
+
+ SR 21 — OTHER CONFECTIONERY INGREDIENTS (Other Confectionery Ingredients- Fruits & nut products, (HSN 0802))
+       BOE no.          BOE date           Port              Importer / company                       BOE item                      Qty           CIF      Audit ID
+
+   No posted BOE      —               —                  —                           —                                          —            —             —
+   debit history
+
+
+ SR 22 — PP (Packing Material -Polypropylene Film Grade, Aluminium Foil)
+       BOE no.          BOE date           Port              Importer / company                       BOE item                      Qty           CIF      Audit ID
+
+   No posted BOE      —               —                  —                           —                                          —            —             —
+   debit history
+
+
+
+ Final Quantity and CIF Totals
+                                                          Unit                    Original quantity          Debited quantity         Available quantity
+
+                                                  kg                        166,230.71                 8,600.00                 157,622.00
+
+
+ CIF totals — Total: 126,173.64; Net actual debited: 125,977.16; Actual balance: 196.48.
+
+
+
+
+                                                                                                                                                                      Page 4
+

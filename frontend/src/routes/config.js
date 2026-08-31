@@ -112,8 +112,8 @@ export const masterEntities = [
 // Report entities configuration
 export const reportEntities = [
     {
-        path: "/reports/download-license",
-        label: "Download License",
+        path: "/license-ledger/download-requests",
+        label: "License Downloads",
         icon: "file-earmark-excel",
     },
     {

@@ -125,6 +125,10 @@ class CanonicalLedgerService:
                     {
                         'date': date,
                         'id': int (transaction ID; 0 for the synthetic OPENING row),
+                        'source_type': str,  # 'trade.LicenseTrade' for a real transaction
+                        'source_id': int,    # stable source record identity
+                        'invoice_id': int,   # canonical invoice-header identity (LicenseTrade)
+                        'invoice_number': str,  # canonical text value; never document filename
                         'type': str,  # OPENING, PURCHASE, SALE,
                                       # COMMISSION_PURCHASE, COMMISSION_SALE
                         'company_id': int or None,
@@ -361,6 +365,13 @@ class CanonicalLedgerService:
             dataset['transactions'].append({
                 'date': txn_date,
                 'id': txn_id,
+                # A ledger transaction is a projection of one LicenseTrade.
+                # Keep the source and canonical invoice identity explicit so
+                # downstream exports never have to infer it from a party,
+                # date, document filename, or display label.
+                'source_type': 'trade.LicenseTrade',
+                'source_id': txn_id,
+                'invoice_id': txn_id,
                 'invoice_number': txn_data.get('invoice_number') or '',
                 'type': txn_type,
                 'company_id': company_id,
@@ -919,7 +930,7 @@ def _get_license_object(license_id: int, license_type: str):
             return (
                 LicenseDetailsModel.objects
                 .select_related('exporter', 'port')
-                .prefetch_related('import_license__items__sion_norm_class')
+                .prefetch_related('export_license__norm_class')
                 .get(id=license_id)
             )
         elif license_type in ['INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS']:
@@ -987,19 +998,19 @@ def _extract_license_metadata(license_obj) -> Dict[str, Any]:
 def _extract_license_sion_norms(license_obj, license_type: str) -> str:
     """Return the licence-level SION metadata in deterministic order.
 
-    SION belongs to DFIA licence items, not financial transactions.  The
-    licence query prefetches this relationship, so this traversal performs no
-    query and does not depend on whether an item has already been traded.
+    SION belongs to the DFIA licence's export items, not its import items or
+    financial transactions. The licence query prefetches this relationship,
+    so the ledger stays query-efficient and reflects the same SION master
+    source used by licence export-item maintenance.
     """
     if license_type != 'DFIA':
         return ''
     norms: List[str] = []
-    for import_item in license_obj.import_license.all():
-        for item in import_item.items.all():
-            norm_class = getattr(item, 'sion_norm_class', None)
-            norm = (getattr(norm_class, 'norm_class', '') or '').strip() if norm_class else ''
-            if norm and norm not in norms:
-                norms.append(norm)
+    for export_item in license_obj.export_license.all():
+        norm_class = getattr(export_item, 'norm_class', None)
+        norm = (getattr(norm_class, 'norm_class', '') or '').strip() if norm_class else ''
+        if norm and norm not in norms:
+            norms.append(norm)
     return ', '.join(norms)
 
 
@@ -1118,6 +1129,14 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
         transactions.append({
             'date': txn_date,
             'id': trade.id,
+            # LicenseTrade is both the financial transaction and the
+            # canonical invoice header in the current schema.  PURCHASE has
+            # an optional supplier-upload copy; SALE has a generated
+            # TradeInvoiceDocument version, but neither is the invoice-number
+            # authority.  That authority remains this header's string field.
+            'source_type': 'trade.LicenseTrade',
+            'source_id': trade.id,
+            'invoice_id': trade.id,
             'invoice_number': trade.invoice_number or '',
             'type': txn_type,
             'company_id': company_id,

@@ -1,0 +1,93 @@
+                                                                             FINANCIAL TRADE LEDGER
+                                                                                    License Summary · Purchase and Sale Bills in INR
+
+
+    LABDHI GLOBAL LLP
+    SION: A3627, E1 · License Count: 1
+  License Number           Type            Date          1st Purchase Date   SION Norms               Balance ($)              Purchase (INR)              Sale (INR)                  P/L (INR)
+
+  0311051359               DFIA            10-Feb-2026   21-Feb-2026         E1, A3627                               196.48              21,65,736.00                   21,83,718.00                 17,982.00
+
+  Total — SION A3627, E1                                                                                               0.00              21,65,736.00                   21,83,718.00                 17,982.00
+
+
+                                                                                    Balance ($)               Purchase (INR)                  Sale (INR)                       P/L (INR)
+
+  COMPANY TOTAL — LABDHI GLOBAL LLP                                                                    0.00                    21,65,736.00                     21,83,718.00                         17,982.00
+
+
+
+
+    VISION GURUKRUPA BUILDCON LLP
+    SION: A3627, E1 · License Count: 1
+  License Number           Type            Date          1st Purchase Date   SION Norms               Balance ($)              Purchase (INR)              Sale (INR)                  P/L (INR)
+
+  0311051359               DFIA            10-Feb-2026   21-Feb-2026         E1, A3627                               196.48               2,44,203.00                   21,65,736.00               19,21,533.00
+
+  Total — SION A3627, E1                                                                                             196.48               2,44,203.00                   21,65,736.00               19,21,533.00
+
+
+                                                                                    Balance ($)               Purchase (INR)                  Sale (INR)                       P/L (INR)
+
+  COMPANY TOTAL — VISION GURUKRUPA BUILDCON LLP                                                      196.48                     2,44,203.00                     21,65,736.00                       19,21,533.00
+
+
+
+
+                                                                Licenses            Balance ($)                Purchase (INR)                     Sale (INR)                           P/L (INR)
+
+  GRAND TOTAL                                                                   2                    196.48                      24,09,939.00                           43,49,454.00                     19,39,515.00
+
+
+
+
+License Manager · Financial Trade Ledger                                                                                                                                                                                Page 1
+                                                                              LICENSE LEDGER STATEMENT
+                                                                                                               [ DFIA ]
+
+
+                          License Number            0311051359                             License Date          10-Feb-2026                                 Expiry Date             10-Feb-2027
+
+                          Exporter                  DELICIEUX VENTURES                     Total Value           2,52,150.80                                 Balance ($)             196.48
+
+                          1st Purchase Date 21-Feb-2026                                    SION Norms            E1, A3627                                   Purchase Bill           YES
+
+                          Purchase (INR)            24,09,939.00                           Sale (INR)            43,49,454.00                                P/L (INR)               19,39,515.00
+
+
+
+    LABDHI GLOBAL LLP
+  Date           Particulars               Invoice Number          Type       Items              Credit ($)            Debit ($)            Purchase (INR)           Sale (INR)              Balance ($)            P/L (INR)
+
+                 ABHISHEK                  LGL/2026-27/0003
+  15-Apr-2026                                                      SALE       WPC, FRUIT/COCOA                     -          1,25,977.16                        -            21,83,718.00                                                 -
+                 TRADELINKS                SIGNED
+
+                 VISION GURUKRUPA          GST/26-27/006
+  06-May-2026                                                      PURCHASE   SUGAR                      1,25,977.16                    -            21,65,736.00                        -                                                 -
+                 BUILDCON LLP              Copy unavailable
+
+   LICENSE TOTAL — 0311051359 · LABDHI GLOBAL LLP                                                        1,25,977.16          1,25,977.16            21,65,736.00             21,83,718.00                   0.00                 17,982.00
+
+
+
+
+    VISION GURUKRUPA BUILDCON LLP
+  Date           Particulars               Invoice Number          Type       Items              Credit ($)            Debit ($)            Purchase (INR)           Sale (INR)              Balance ($)            P/L (INR)
+
+                 KHYATI GLOBAL             KASL252657
+  21-Feb-2026                                                      PURCHASE   SUGAR                      1,26,173.64                    -             2,44,203.00                        -                                                 -
+                 VENTURES LIMITED          UNSIGNED
+
+
+                                           GST/26-27/006
+  15-Apr-2026    LABDHI GLOBAL LLP                                 SALE       SUGAR                                -          1,25,977.16                        -            21,65,736.00                                                 -
+                                           UNSIGNED
+
+   LICENSE TOTAL — 0311051359 · VISION GURUKRUPA BUILDCON LLP                                            1,26,173.64          1,25,977.16             2,44,203.00             21,65,736.00                 196.48               19,21,533.00
+
+
+
+
+License Manager · Financial Trade Ledger                                                                                                                                                                                                       Page 2
+

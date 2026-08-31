@@ -1,12 +1,12 @@
-"""Keep the port-aware BOE uniqueness constraint used by the application."""
+"""Complete the BOE uniqueness repair for databases exposing ``port_id``."""
 
 from django.db import migrations
 
 
 OLD_COLUMNS = ("bill_of_entry_number", "bill_of_entry_date", "port_id")
-LEGACY_COLUMNS = ("bill_of_entry_number", "bill_of_entry_date")
+NEW_COLUMNS = ("bill_of_entry_number", "bill_of_entry_date")
 OLD_FIELDS = ("bill_of_entry_number", "bill_of_entry_date", "port")
-LEGACY_FIELDS = ("bill_of_entry_number", "bill_of_entry_date")
+NEW_FIELDS = ("bill_of_entry_number", "bill_of_entry_date")
 
 
 def _unique_columns(schema_editor, model):
@@ -16,16 +16,10 @@ def _unique_columns(schema_editor, model):
 
 
 def repair_constraint(apps, schema_editor):
-    """Do not collapse valid BOEs which share a number/date across ports.
-
-    The API's create path identifies a BOE by number, date, and port.  Removing
-    the port from the unique constraint makes such records impossible to store
-    and causes existing production data to block deployment.
-    """
     model = apps.get_model("bill_of_entry", "BillOfEntryModel")
     constraints = _unique_columns(schema_editor, model)
-    if LEGACY_COLUMNS in constraints and OLD_COLUMNS not in constraints:
-        schema_editor.alter_unique_together(model, {LEGACY_FIELDS}, {OLD_FIELDS})
+    if OLD_COLUMNS in constraints and NEW_COLUMNS not in constraints:
+        schema_editor.alter_unique_together(model, {OLD_FIELDS}, {NEW_FIELDS})
 
 
 class Migration(migrations.Migration):

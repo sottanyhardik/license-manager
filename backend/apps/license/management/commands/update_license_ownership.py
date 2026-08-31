@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 
 import requests
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
@@ -45,21 +46,24 @@ SERVER_IP_FALLBACKS = {
 # DGFT credentials are intentionally environment-only.  Session and CSRF values
 # are browser-session credentials and must never be committed as fallbacks.
 def get_dgft_ownership_credentials():
-    """Read the current DGFT ownership credentials without retaining defaults.
+    """Read DGFT credentials from the process or the loaded Django settings.
 
     ``fetch_scrip_ownership`` validates these values and returns its established
-    safe failure result when one is missing. Reading them at call time keeps
-    configuration in one explicit, environment-backed boundary.
+    safe failure result when one is missing.  ``settings`` contains values
+    loaded from ``.env_dgft`` during Django startup; checking it as a fallback
+    also supports workers whose environment has been sanitized after startup.
     """
-    def optional_env(name):
-        value = os.getenv(name)
+    def optional_value(value):
         return value.strip() if value and value.strip() else None
 
+    def credential(name):
+        return optional_value(os.getenv(name)) or optional_value(getattr(settings, name, ""))
+
     return (
-        optional_env("DGFT_APP_ID"),
-        optional_env("DGFT_SESSION_ID"),
-        optional_env("DGFT_CSRF_TOKEN"),
-        optional_env("DGFT_AWSALB"),
+        credential("DGFT_APP_ID"),
+        credential("DGFT_SESSION_ID"),
+        credential("DGFT_CSRF_TOKEN"),
+        credential("DGFT_AWSALB"),
     )
 
 # Proxy configuration - set via DGFT_PROXY environment variable

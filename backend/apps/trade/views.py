@@ -3,6 +3,7 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from django.http import HttpResponse
 from django.db.models import Prefetch
 
 from apps.accounts.permissions import TradePermission
@@ -272,6 +273,72 @@ LicenseTradeViewSet.permission_classes = [TradePermission]
 
 # Add custom actions to TradeViewSet
 class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
+    @action(detail=False, methods=['get'], url_path='sales-classification-review')
+    def sales_classification_review(self, request):
+        """Review payload is deliberately explicit; UNKNOWN is never inferred."""
+        from .services.sale_classification_review import review_rows
+        return Response({'results': list(review_rows())})
+
+    @action(detail=False, methods=['get'], url_path='sales-classification-review/export')
+    def export_sales_classification_review(self, request):
+        import csv
+        from .services.sale_classification_review import review_rows
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="unknown-sales-classification.csv"'
+        fields = ['sale_id', 'licence_id', 'licence_number', 'invoice_number', 'seller', 'buyer', 'relationship_summary', 'decision', 'reason', 'provenance', 'finalized_status']
+        writer = csv.DictWriter(response, fieldnames=fields, extrasaction='ignore'); writer.writeheader()
+        writer.writerows(review_rows())
+        return response
+
+    @action(detail=False, methods=['post'], url_path='sales-classification-review/import')
+    def import_sales_classification_review(self, request):
+        from .services.sale_classification_review import import_rows
+        upload = request.FILES.get('file')
+        if not upload:
+            return Response({'error': 'CSV file is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            count = import_rows(upload, request.user)
+        except (ValueError, UnicodeDecodeError) as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'applied': count})
+
+    @action(detail=True, methods=['post'], url_path='sales-classification-review')
+    def decide_sales_classification(self, request, pk=None):
+        from .services.sale_classification_review import apply_decision
+        try:
+            trade, licences = apply_decision(sale_id=pk, decision=str(request.data.get('decision') or '').strip(),
+                reason=str(request.data.get('reason') or '').strip(), provenance=str(request.data.get('provenance') or '').strip(), user=request.user)
+        except LicenseTrade.DoesNotExist:
+            return Response({'error': 'Sale not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'sale_id': trade.pk, 'status': trade.final_party_status, 'affected_licence_ids': licences})
+
+    @action(detail=True, methods=['post'], url_path='resolve-final-party')
+    def resolve_final_party(self, request, pk=None):
+        """Authorised, auditable resolution for graph-incomplete SALE records."""
+        trade = self.get_object()
+        if trade.direction != LicenseTrade.DIR_SALE:
+            return Response({'error': 'Only SALE trades can be resolved.'}, status=status.HTTP_400_BAD_REQUEST)
+        resolution_note = str(request.data.get('resolution_note') or '').strip()
+        final_party_id = request.data.get('final_party_id')
+        if not resolution_note:
+            return Response({'error': 'resolution_note is required for an auditable resolution.'}, status=status.HTTP_400_BAD_REQUEST)
+        if final_party_id is None:
+            trade.final_party_status = LicenseTrade.FINAL_PARTY_UNKNOWN
+            trade.final_party = None
+            trade.final_party_classification_provenance = 'AUTHORISED_RESOLUTION_UNKNOWN'
+        else:
+            if str(final_party_id) != str(trade.to_company_id):
+                return Response({'error': 'Final party must match the canonical system invoice buyer.'}, status=status.HTTP_400_BAD_REQUEST)
+            trade.final_party_status = LicenseTrade.FINAL_PARTY_FINAL
+            trade.final_party_id = final_party_id
+            trade.final_party_classification_provenance = 'AUTHORISED_RESOLUTION'
+        trade.final_party_resolution_note = resolution_note
+        trade.full_clean()
+        trade.save(update_fields=['final_party_status', 'final_party', 'final_party_classification_provenance', 'final_party_resolution_note', 'updated_on'])
+        return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
+
     enforced_list_ordering = ("-invoice_date",)
 
     def filter_queryset(self, queryset):

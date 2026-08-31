@@ -33,7 +33,7 @@ const unusedVarsConfig = {
 }
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'playwright-report', 'test-results']),
   {
     files: ['jest.config.js'],
     languageOptions: {

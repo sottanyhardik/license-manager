@@ -1,0 +1,298 @@
+Bill of Supply
+VISION GURUKRUPA BUILDCON LLP
+Ground Floor, 41, A-1, Yashodham Hill Top Residents, Gen A K. Vaidya Marg
+Near Oberoi Mall, Goregaon East, Mumbai, Mumbai Suburban, Maharashtra,
+400063
+GSTIN/UIN: 27AAZFV9505C1ZM
+State Name : Maharashtra, Code : 27
+
+Invoice
+Number
+GST/26-27/006
+
+Dated
+15-Apr-26
+
+Rate %
+
+Amount
+
+Buyer (Bill to)
+LABDHI GLOBAL LLP
+2,Floor-1, Plot-119, Manjulabai Jethabai Building, Dadi Seth Agiary Lane
+Naviwadi Chirabazr, Kalbadevi, Mumbai, Mumbai, Maharashtra, 400002
+GSTIN/UIN : 27AAMFL9142N1ZL
+PAN/IT No : AAMFL9142N
+Sl
+No.
+
+Description of Goods
+
+HSN/SA
+C
+
+CIF FC
+
+1
+
+0311051359 - 10-02-2026
+INNSA1
+
+49070000
+
+125,977.16
+
+Less :
+
+Roundin
+g Off
+
+Total
+
+EXC RT
+
+94.20
+
+CIF INR
+
+11,867,048.47
+
+18.250
+
+2,165,736.00
+
+0.00
+
+125,977.16
+
+11,867,048.47
+
+Rs. 2,165,736.00
+E. & O.E
+
+Amount Chargeable (in words)
+INR Twenty One Lakh Sixty Five Thousand Seven Hundred Thirty Six Only
+Company's PAN : AAZFV9505C
+Declaration
+We declare that this invoice shows the actual price of the goods described
+and that all particulars are true and correct.
+Authorised Signatory
+This is a Computer Generated Invoice
+
+Bill of Supply
+LABDHI GLOBAL LLP
+2,Floor-1, Plot-119, Manjulabai Jethabai Building, Dadi Seth Agiary Lane
+Naviwadi Chirabazr, Kalbadevi, Mumbai, Mumbai, Maharashtra, 400002
+GSTIN/UIN: 27AAMFL9142N1ZL
+State Name : Maharashtra, Code : 27
+
+Invoice
+Number
+LGL/2026-27/0
+003
+
+Dated
+15-Apr-26
+
+Rate %
+
+Amount
+
+Buyer (Bill to)
+ABHISHEK TRADELINKS
+216/2,VAN KUNJ, R.A.K.
+ROAD,,WADALA,MUMBAI,MAHARASHTRA
+GSTIN/UIN : 27AANPS9993B1ZY
+PAN/IT No : AANPS9993B
+Sl
+No.
+
+Description of Goods
+
+HSN/SA
+C
+
+1
+
+3411007532 - 20-02-2026
+INNSA1
+
+49070000
+
+6,152.37
+
+93.80
+
+577,092.60
+
+18.480
+
+106,647.00
+
+2
+
+3411007533 - 20-02-2026
+INNSA1
+
+49070000
+
+8,276.41
+
+93.80
+
+776,327.00
+
+18.480
+
+143,465.00
+
+3
+
+0311051368 - 10-02-2026
+INNSA1
+
+49070000
+
+11,279.35
+
+93.80
+
+1,058,003.00
+
+18.480
+
+195,519.00
+
+4
+
+0311051202 - 04-02-2026
+INNSA1
+
+49070000
+
+31,567.54
+
+93.80
+
+2,961,035.00
+
+18.480
+
+547,199.00
+
+5
+
+0311052365 - 16-03-2026
+INNSA1
+
+49070000
+
+72,070.66
+
+93.80
+
+6,760,228.00
+
+18.480
+
+1,249,290.00
+
+6
+
+0311052001 - 04-03-2026
+INNSA1
+
+49070000
+
+89,722.11
+
+93.80
+
+8,415,934.00
+
+18.480
+
+1,555,265.00
+
+7
+
+0311052376 - 16-03-2026
+INNSA1
+
+49070000
+
+105,762.23
+
+93.80
+
+9,920,497.00
+
+18.480
+
+1,833,308.00
+
+8
+
+0311051359 - 10-02-2026
+INNSA1
+
+49070000
+
+125,977.16
+
+93.80
+
+11,816,658.00
+
+18.480
+
+2,183,718.00
+
+9
+
+0311051362 - 10-02-2026
+INNSA1
+
+49070000
+
+32,592.93
+
+93.80
+
+3,057,216.83
+
+18.480
+
+564,974.00
+
+Less :
+
+Roundin
+g Off
+Total
+
+CIF FC
+
+EXC RT
+
+CIF INR
+
+0.00
+483,400.76
+
+45,342,991.43
+
+Rs. 8,379,385.00
+E. & O.E
+
+Amount Chargeable (in words)
+INR Eighty Three Lakh Seventy Nine Thousand Three Hundred Eighty Five Only
+BOE: 8625390
+Company's PAN : AAMFL9142N
+Declaration
+We declare that this invoice shows the actual price of the goods described
+and that all particulars are true and correct.
+Authorised Signatory
+This is a Computer Generated Invoice
+
+

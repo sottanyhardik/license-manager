@@ -95,6 +95,18 @@ app.conf.beat_schedule = {
         "args": (),
         "options": {"expires": 240},
     },
+    "cleanup-expired-license-ledger-packages-daily": {
+        "task": "license.cleanup_expired_ledger_packages",
+        "schedule": crontab(minute=20, hour=2),
+        "args": (),
+        "options": {"expires": 3600},
+    },
+    "recover-license-ledger-package-jobs-every-5-min": {
+        "task": "license.recover_license_ledger_package_jobs",
+        "schedule": crontab(minute="*/5"),
+        "args": (),
+        "options": {"expires": 240},
+    },
 }
 
 # ---------------------------------------------------------------------------

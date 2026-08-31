@@ -23,6 +23,7 @@ instance/
 local_settings.py
 .env
 .env.*
+.env_dgft
 *.env
 .envrc
 

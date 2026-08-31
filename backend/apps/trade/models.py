@@ -255,6 +255,42 @@ class LicenseTrade(AuditModel):
     copied_from_type = models.CharField(max_length=20, blank=True, default='', editable=False)
     source_document_number = models.CharField(max_length=128, blank=True, default='', editable=False)
 
+    # A sale's final purchaser is a business fact, not something reports may
+    # infer from ordering, amount, or the absence of a paired trade.  UNKNOWN
+    # is deliberately the migration default for historical records until an
+    # authorised user classifies them.  INTERMEDIATE is used for an explicitly
+    # paired/copied transfer branch; FINAL must name the final purchaser.
+    FINAL_PARTY_UNKNOWN = "UNKNOWN"
+    FINAL_PARTY_FINAL = "FINAL_PARTY"
+    FINAL_PARTY_INTERMEDIATE = "INTERLINKED"
+    # This is an affirmative, audited finding that this sale has no qualifying
+    # terminal-party invoice.  It is deliberately distinct from UNKNOWN.
+    FINAL_PARTY_NOT_APPLICABLE = "NOT_APPLICABLE"
+    FINAL_PARTY_CHOICES = (
+        (FINAL_PARTY_UNKNOWN, "Final party not classified"),
+        (FINAL_PARTY_FINAL, "Final purchasing party"),
+        (FINAL_PARTY_INTERMEDIATE, "Interlinked or intermediate party"),
+        (FINAL_PARTY_NOT_APPLICABLE, "No qualifying final-party sale"),
+    )
+    final_party_status = models.CharField(
+        max_length=16, choices=FINAL_PARTY_CHOICES,
+        default=FINAL_PARTY_UNKNOWN, db_index=True,
+        help_text="Explicit final-party classification for SALE invoice packaging.",
+    )
+    final_party = models.ForeignKey(
+        CompanyModel, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="final_party_sale_trades",
+        help_text="Explicit final purchasing party for a FINAL sale.",
+    )
+    final_party_resolution_note = models.TextField(
+        blank=True, default='',
+        help_text="Auditable business reference used to classify the sale branch.",
+    )
+    final_party_classification_provenance = models.CharField(
+        max_length=64, blank=True, default='',
+        help_text="Stable canonical-graph or authorised-resolution provenance for this classification.",
+    )
+
     class Meta:
         ordering = ["-invoice_date", "-invoice_number", "-created_on"]
         indexes = [
@@ -281,10 +317,33 @@ class LicenseTrade(AuditModel):
                 condition=Q(direction='SALE') & ~Q(invoice_number=""),
                 name="uniq_sale_buyer_invoice_nonblank",
             ),
+            models.CheckConstraint(
+                name="chk_final_party_classification_valid",
+                condition=(
+                    Q(direction="SALE", final_party_status="FINAL_PARTY", final_party__isnull=False, final_party_classification_provenance__gt="")
+                    | Q(direction="SALE", final_party_status__in=["UNKNOWN", "INTERLINKED", "NOT_APPLICABLE"], final_party__isnull=True)
+                    | Q(~Q(direction="SALE"), final_party_status="UNKNOWN", final_party__isnull=True)
+                ),
+            ),
         ]
 
     def __str__(self) -> str:
         return f"Trade[{self.id}] {self.direction} Inv:{self.invoice_number or '-'}"
+
+    def clean(self):
+        super().clean()
+        if self.direction != self.DIR_SALE:
+            if self.final_party_status != self.FINAL_PARTY_UNKNOWN or self.final_party_id:
+                raise ValidationError({
+                    "final_party_status": "Final-party classification is valid only for SALE trades."
+                })
+            return
+        if self.final_party_status == self.FINAL_PARTY_FINAL and not self.final_party_id:
+            raise ValidationError({"final_party": "A final purchaser is required for a FINAL sale."})
+        if self.final_party_status == self.FINAL_PARTY_FINAL and not self.final_party_classification_provenance:
+            raise ValidationError({"final_party_classification_provenance": "Classification provenance is required for a FINAL_PARTY sale."})
+        if self.final_party_status != self.FINAL_PARTY_FINAL and self.final_party_id:
+            raise ValidationError({"final_party": "Set a final purchaser only when status is FINAL."})
 
 
     # ------ computed fields / helpers ------
@@ -412,6 +471,22 @@ class LicenseTrade(AuditModel):
         super().save(*args, **kwargs)
         # keep totals consistent even if header saved first
         self.recompute_totals()
+
+
+class SaleClassificationDecision(models.Model):
+    """Append-only authorised business decision for a canonical sale invoice."""
+    DECISIONS = ((LicenseTrade.FINAL_PARTY_FINAL, "Final party"), (LicenseTrade.FINAL_PARTY_INTERMEDIATE, "Interlinked"), (LicenseTrade.FINAL_PARTY_NOT_APPLICABLE, "Not applicable"))
+    trade = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name="classification_decisions")
+    decision = models.CharField(max_length=16, choices=DECISIONS)
+    reason = models.TextField()
+    provenance = models.CharField(max_length=255)
+    licence_ids = models.JSONField(default=list, blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name="sale_classification_decisions")
+    decided_at = models.DateTimeField(auto_now_add=True)
+    class Meta: ordering = ("-decided_at", "-pk")
+    def save(self, *args, **kwargs):
+        if self.pk: raise ValidationError("Sale classification decisions are immutable; record a superseding decision.")
+        return super().save(*args, **kwargs)
 
 
 # -----------------------------------------------------------------------------

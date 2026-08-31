@@ -46,6 +46,18 @@ class InvoiceDocumentService:
     SALE_GENERATED = "SALE_GENERATED"
 
     @staticmethod
+    def get_persisted_sale_document(trade: LicenseTrade):
+        """Return the canonical latest immutable sale PDF without rendering it.
+
+        Package workers use this same domain service as the authenticated
+        invoice view, but must fail closed rather than silently creating a new
+        invoice while assembling an audit package.
+        """
+        if trade.direction != LicenseTrade.DIR_SALE:
+            raise ValueError("Sale document resolution requires a SALE trade")
+        return TradeInvoiceDocument.objects.filter(trade=trade).order_by("-generated_on", "-id").first()
+
+    @staticmethod
     def resolve_purchase_document(trade: LicenseTrade) -> InvoiceDocumentResult:
         if trade.direction != LicenseTrade.DIR_PURCHASE:
             raise ValueError("Purchase document resolution requires a PURCHASE trade")

@@ -1,11 +1,17 @@
 """Extraction reconciliation for the presentation-only Financial Ledger PDF."""
 from datetime import date
 from decimal import Decimal
+import re
 from unittest.mock import patch
 
 from pypdf import PdfReader
 
-from apps.license.services.exporters.financial_ledger_pdf_renderer import render_financial_ledger_pdf
+from apps.license.services.exporters.financial_ledger_pdf_renderer import (
+    DETAIL_AMOUNT_WIDTHS,
+    DETAIL_DESCRIPTION_WIDTHS,
+    PRINTABLE_WIDTH,
+    render_financial_ledger_pdf,
+)
 
 
 def _license():
@@ -46,7 +52,9 @@ def _license():
 
 
 def _extract(data):
-    return "\n".join(page.extract_text() or "" for page in PdfReader(render_financial_ledger_pdf(data)).pages)
+    return re.sub(r"\s+", " ", "\n".join(
+        page.extract_text() or "" for page in PdfReader(render_financial_ledger_pdf(data)).pages
+    ))
 
 
 def test_list_pdf_extracts_canonical_financial_summary_verbatim():
@@ -149,6 +157,64 @@ def test_pdf_renderer_performs_no_database_query():
     with patch("django.db.backends.utils.CursorWrapper.execute", side_effect=AssertionError("PDF queried DB")):
         pdf = render_financial_ledger_pdf({"scope": "detail", "licenses": [_license()], "summary": {}})
     assert pdf.getvalue().startswith(b"%PDF")
+
+
+def test_every_rendered_page_is_a4_portrait_not_a_fallback_size():
+    """The statement contract is A4 portrait for both detail and list pages."""
+    reader = PdfReader(render_financial_ledger_pdf({"scope": "detail", "licenses": [_license()], "summary": {}}))
+    assert reader.pages
+    for page in reader.pages:
+        assert abs(float(page.mediabox.width) - 595.28) <= 1
+        assert abs(float(page.mediabox.height) - 841.89) <= 1
+
+
+def test_0311055282_portrait_layout_keeps_complete_canonical_totals_inside_the_print_frame():
+    """Regression: no formatted amount may be forced through the right border."""
+    data = _license()
+    data["license_number"] = "0311055282"  # leading zero is part of the identifier.
+    purchases = Decimal("799999.96")
+    sales = (Decimal("650000.00"), Decimal("6900.39"), Decimal("48597.90"))
+    sale_bills = (Decimal("1519243.00"), Decimal("64924.00"), Decimal("457245.00"))
+    data["display_transactions"][0].update(purchase_amount=purchases, purchase_bill_amount=Decimal("1700076.00"))
+    data["display_transactions"][1].update(sale_amount=sales[0], sale_bill_amount=sale_bills[0], profit_loss_inr=Decimal("341336.00"))
+    for index in (1, 2):
+        row = dict(data["display_transactions"][1])
+        row.update(id=502 + index, sale_amount=sales[index], sale_bill_amount=sale_bills[index], profit_loss_inr=None)
+        data["display_transactions"].append(row)
+    data["summary"].update(total_purchase=purchases, current_balance=Decimal("94501.67"),
+                           total_purchase_bill_inr=Decimal("1700076.00"), total_sale_bill_inr=sum(sale_bills),
+                           total_profit_loss=Decimal("341336.00"))
+    data["company_groups"][0].update(purchase_total=Decimal("1700076.00"), sale_total=sum(sale_bills),
+                                      purchase_value=purchases, sale_value=sum(sales), current_balance=Decimal("94501.67"),
+                                      profit_loss=Decimal("341336.00"))
+
+    pdf = render_financial_ledger_pdf({"scope": "detail", "licenses": [data], "summary": {}})
+    reader = PdfReader(pdf)
+    assert len(reader.pages) == 1  # no blank, duplicate, or summary-only page.
+    for page in reader.pages:
+        assert abs(float(page.mediabox.width) - 595.28) <= 1
+        assert abs(float(page.mediabox.height) - 841.89) <= 1
+
+    # Every renderer table is explicitly constrained to the same 10 mm frame;
+    # the two detailed tables avoid an eleven-column numeric overflow.
+    assert sum(DETAIL_DESCRIPTION_WIDTHS) <= PRINTABLE_WIDTH
+    assert sum(DETAIL_AMOUNT_WIDTHS) <= PRINTABLE_WIDTH
+    text = _extract({"scope": "detail", "licenses": [data], "summary": {}})
+    for expected in ("0311055282", "7,99,999.96", "7,05,498.29", "17,00,076.00",
+                     "20,41,412.00", "94,501.67", "3,41,336.00"):
+        assert expected in text
+    assert "3,41,336.0 " not in text
+
+
+def test_long_exporter_is_retained_without_adjacent_summary_text_collision():
+    license_data = _license()
+    license_data["exporter_name"] = "QUARTERFOLD PRINTABILITIES PRIVATE LIMITED"
+    text = _extract({"scope": "detail", "licenses": [license_data], "summary": {}})
+    # Paragraph cells retain every word when wrapping onto multiple measured
+    # lines; the Total Value label/value stays independently represented.
+    assert "QUARTERFOLD PRINTABILITIES PRIVATE LIMITED" in text
+    assert "Total Value" in text
+    assert "1,92,806.27" in text
 
 
 def test_no_purchase_bill_uses_approved_status_and_hyphen_empty_values():

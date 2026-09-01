@@ -81,4 +81,24 @@ describe("tradeFormHelpers", () => {
             }),
         );
     });
+
+    it("does not submit hidden DFIA rows with an Incentive trade", () => {
+        expect(
+            buildTradeJsonPayload(
+                {
+                    direction: "SALE",
+                    license_type: "INCENTIVE",
+                    boes: [],
+                    invoice_date: "01-09-2026",
+                    lines: [{ sr_number: null, amount_inr: 0 }],
+                    incentive_lines: [{ incentive_license: { id: 8 }, license_value: 909129 }],
+                    payments: [],
+                },
+                false,
+            ),
+        ).toEqual(expect.objectContaining({
+            lines: [],
+            incentive_lines: [{ incentive_license: 8, license_value: 909129 }],
+        }));
+    });
 });

@@ -547,13 +547,18 @@ export default function TradeForm() {
             }
         });
 
-        // Validate lines
-        if (formData.lines.length === 0 && formData.incentive_lines.length === 0) {
-            errors.lines = ['At least one trade line or incentive line must be added'];
+        const isIncentiveTrade = formData.license_type === "INCENTIVE";
+        const activeLines = isIncentiveTrade ? formData.incentive_lines : formData.lines;
+
+        // A trade uses one line model only: DFIA uses SR-number lines, while an
+        // Incentive trade uses incentive-license lines. Hidden rows from the
+        // other type must not be treated as required input.
+        if (activeLines.length === 0) {
+            errors[isIncentiveTrade ? 'incentive_lines' : 'lines'] = ['At least one trade line must be added'];
         }
 
-        // Validate trade lines
-        if (formData.lines.length > 0) {
+        // SR numbers belong only to DFIA trade lines.
+        if (!isIncentiveTrade && formData.lines.length > 0) {
             const lineSchema = {
                 sr_number: { rules: [ValidationRules.REQUIRED], label: 'License Item' },
                 amount_inr: { rules: [ValidationRules.REQUIRED, ValidationRules.NON_NEGATIVE], label: 'Amount (INR)' }
@@ -675,11 +680,15 @@ export default function TradeForm() {
                 formDataObj.append('purchase_invoice_copy', formData.purchase_invoice_copy);
 
                 // Add lines as JSON string (clean up empty id fields and extract sr_number ID)
-                const cleanedLines = formData.lines.map(cleanTradeLine);
+                const cleanedLines = formData.license_type === "INCENTIVE"
+                    ? []
+                    : formData.lines.map(cleanTradeLine);
                 formDataObj.append('lines', JSON.stringify(cleanedLines));
 
                 // Add incentive_lines as JSON string (clean up empty id fields)
-                const cleanedIncentiveLines = formData.incentive_lines.map(cleanIncentiveLine);
+                const cleanedIncentiveLines = formData.license_type === "INCENTIVE"
+                    ? formData.incentive_lines.map(cleanIncentiveLine)
+                    : [];
                 formDataObj.append('incentive_lines', JSON.stringify(cleanedIncentiveLines));
 
                 // Add payments as JSON string (clean up empty id fields)

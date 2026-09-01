@@ -42,6 +42,7 @@ export function cleanTradePayment(payment: Record<string, any>) {
 }
 
 export function buildTradeJsonPayload(formData: Record<string, any>, autoCreatePaired: boolean) {
+    const isIncentiveTrade = formData.license_type === "INCENTIVE";
     return {
         direction: formData.direction,
         license_type: formData.license_type,
@@ -59,8 +60,10 @@ export function buildTradeJsonPayload(formData: Record<string, any>, autoCreateP
         to_gst: formData.to_gst || "",
         to_addr_line_1: formData.to_addr_line_1 || "",
         to_addr_line_2: formData.to_addr_line_2 || "",
-        lines: (formData.lines || []).map(cleanTradeLine),
-        incentive_lines: (formData.incentive_lines || []).map(cleanIncentiveLine),
+        // The two license types use different line models. Exclude inactive
+        // (possibly hidden) rows so their required fields are never validated.
+        lines: isIncentiveTrade ? [] : (formData.lines || []).map(cleanTradeLine),
+        incentive_lines: isIncentiveTrade ? (formData.incentive_lines || []).map(cleanIncentiveLine) : [],
         payments: (formData.payments || []).map(cleanTradePayment),
         auto_create_paired: autoCreatePaired,
     };

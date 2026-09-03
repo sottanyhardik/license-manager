@@ -687,6 +687,14 @@ class MasterViewSet(viewsets.ModelViewSet):
                 # Get filtered queryset (applies all filters, search, ordering)
                 queryset = self.filter_queryset(self.get_queryset())
 
+                # A licence export uses the normal compact/list serializer
+                # representation.  Its viewset can opt into this hook to
+                # provide a single batch of live balances for every exported
+                # row, rather than recalculating nested detail data per row.
+                prepare_export_context = getattr(self, 'prepare_export_context', None)
+                if callable(prepare_export_context):
+                    prepare_export_context(queryset)
+
                 # Get display columns
                 columns = getattr(self, "list_display", [])
                 model_name = getattr(self, "model_name", "Export")

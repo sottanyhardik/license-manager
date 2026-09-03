@@ -311,7 +311,24 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # get_balance_cif`'s docstring; the list view must show the
             # SAME "Balance CIF" as everywhere else in the app.
             context['live_balance_map'] = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(page_ids)
+
+        # The generic MasterViewSet export action serializes each object while
+        # building the workbook.  Supply the one batch-calculated map prepared
+        # by that action so the exported Balance CIF is live and does not
+        # recalculate it once per licence.
+        export_balance_map = getattr(self, '_live_balance_export_map', None)
+        if export_balance_map is not None:
+            context['live_balance_map'] = export_balance_map
         return context
+
+    def prepare_export_context(self, queryset):
+        """Prepare live list values once for the generic XLSX/PDF exporter."""
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        license_ids = list(queryset.values_list('id', flat=True))
+        self._live_balance_export_map = (
+            LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids)
+        )
 
     def list(self, request, *args, **kwargs):
         """Override list to add dynamic purchase_status default to metadata"""

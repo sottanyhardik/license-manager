@@ -820,7 +820,7 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         request = self.context.get('request')
         is_list_view = request and hasattr(request, 'parser_context') and \
                        request.parser_context.get('view') and \
-                       request.parser_context['view'].action == 'list'
+                       request.parser_context['view'].action in ('list', 'export_data')
 
         if is_list_view:
             # Remove nested serializers for list view to improve performance

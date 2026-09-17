@@ -97,6 +97,23 @@ class TestCanonicalAllocationScenarios:
         assert allocate(api, target, item.pk, "123.456", "1234.56").status_code == 201
         assert AllotmentItems.objects.get().qty == Decimal("123.456")
 
+    def test_06a_explicit_actual_mode_allows_source_row_without_item_name(self, api, company):
+        """Direct API callers identify an Actual allocation by source row."""
+        item, target = source(company, "06A"), allotment(company)
+        response = api.post(
+            f"/api/allotment-actions/{target.pk}/allocate-items/",
+            {"allocations": [{
+                "item_id": item.pk,
+                "qty": "100.000",
+                "cif_fc": "1000.00",
+                "debit_based_on": "ACTUAL",
+                "search_mode": "ACTUAL",
+                "allocation_basis": "ACTUAL",
+            }]},
+            format="json",
+        )
+        assert response.status_code == 201, response.data
+
     def test_07_cross_company_actual_capacity_is_validated_not_rejected_by_owner(self, api, company):
         other = CompanyModel.objects.create(iec="8080808080", name="Other Co")
         assert allocate(api, allotment(company), source(other, "07").pk, "100").status_code == 201

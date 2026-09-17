@@ -1175,8 +1175,15 @@ class AllotmentActionViewSet(ViewSet):
                 license_item = LicenseImportItemsModel.objects.select_for_update().get(id=item_id)
 
                 if search_mode == DebitBasis.ACTUAL and explicit_search_mode:
+                    # ``item_id`` is the canonical source-row identity for an
+                    # Actual allocation.  Browser clients may additionally
+                    # send ``actual_item_id`` to bind a selected ItemName to
+                    # that row, but integrations that allocate directly do
+                    # not need a redundant ItemName identifier.  Validate it
+                    # when supplied; only a supplied, unrelated value is a
+                    # mismatch.
                     actual_item_id = allocation.get('actual_item_id') or request.data.get('actual_item_id')
-                    if not actual_item_id or not license_item.items.filter(id=actual_item_id).exists():
+                    if actual_item_id and not license_item.items.filter(id=actual_item_id).exists():
                         errors.append({
                             'item_id': item_id,
                             'code': 'ACTUAL_ITEM_MISMATCH',

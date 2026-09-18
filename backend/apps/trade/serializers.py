@@ -552,9 +552,13 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                     boe.save(update_fields=['invoice_no', 'invoice_date'])
 
         # Stamp invoice_no/invoice_date on all BOEs currently linked to this trade
-        from .services.trade_service import stamp_boe_invoice_from_trade
+        from .services.trade_service import stamp_boe_invoice_from_trade, sync_to_counterpart
         for boe in instance.boes.all():
             stamp_boe_invoice_from_trade(instance, boe)
+
+        # Sync changes to counterpart trade if it exists
+        if instance.counterpart_id:
+            sync_to_counterpart(instance.id)
 
         return instance
 

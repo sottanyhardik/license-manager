@@ -81,7 +81,14 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
 
         # Coerce numeric fields to strings for DecimalField compatibility when force-saving
         # Force-save assumes data is correct (PURCHASE/SALE values mirror each other)
+        # Auto-enable for paired trades to handle numeric format variations
         force_save = getattr(self.root, 'initial_data', {}).get('_force_save', False)
+
+        # Auto-enable for paired trades: if the trade has a counterpart, enable numeric coercion
+        instance = self.instance or getattr(self.root, 'instance', None)
+        if instance and hasattr(instance, 'counterpart_id') and instance.counterpart_id:
+            force_save = True
+
         if force_save:
             decimal_fields = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
             for field in decimal_fields:
@@ -126,7 +133,14 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         # Check for force-save mode - skip CIF validation when enabled
         # Force-save assumes data is correct (e.g., PURCHASE/SALE values mirror each other)
+        # Auto-enable force-save for paired trades (PURCHASE↔SALE) to skip CIF validation
         force_save = getattr(self.root, 'initial_data', {}).get('_force_save', False)
+
+        # Auto-enable for paired trades: if the trade has a counterpart, skip CIF validation
+        instance = self.instance or getattr(self.root, 'instance', None)
+        if instance and hasattr(instance, 'counterpart_id') and instance.counterpart_id:
+            force_save = True
+
         if force_save:
             return attrs
 
@@ -527,7 +541,10 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Sync nested lines if provided (DFIA)
         # Allow lenient error handling when force-save is enabled
         # Force-save assumes data is correct (PURCHASE/SALE values mirror each other)
+        # Auto-enable for paired trades (PURCHASE↔SALE) to skip validation
         force_save = getattr(self.initial_data, '_force_save', False)
+        if instance.counterpart_id:
+            force_save = True
 
         if lines_data is not None:
             try:

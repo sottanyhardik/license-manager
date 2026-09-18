@@ -132,30 +132,30 @@ export const ConfirmDialog = ({
             {/* Panel */}
             <div
                 ref={dialogRef}
-                className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_56px_rgba(0,0,0,0.18),0_8px_16px_rgba(0,0,0,0.10)]"
+                className="w-full max-w-[420px] overflow-hidden rounded-lg border border-border bg-card shadow-lg"
                 style={{ animation: "tb-panel-enter 160ms var(--tb-ease) both" }}
             >
                 {/* Body */}
-                <div className="flex items-start gap-4 px-6 pb-5 pt-6">
+                <div className="flex items-start gap-4 px-6 py-6">
                     {/* Severity icon */}
                     <span className={cn(
-                        "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                        "flex size-11 shrink-0 items-center justify-center rounded-lg",
                         cfg.iconCls
                     )}>
-                        <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+                        <Icon className="size-6" strokeWidth={1.75} aria-hidden="true" />
                     </span>
 
                     {/* Text */}
                     <div className="min-w-0 flex-1">
                         <h5
                             id="confirm-dialog-title"
-                            className="mb-1.5 text-[15px] font-semibold leading-tight tracking-tight text-foreground"
+                            className="mb-2 text-base font-semibold leading-tight tracking-tight text-foreground"
                         >
                             {title}
                         </h5>
                         <p
                             id="confirm-dialog-message"
-                            className="text-[13.5px] leading-relaxed text-muted-foreground"
+                            className="text-sm leading-relaxed text-muted-foreground"
                         >
                             {message}
                         </p>
@@ -163,13 +163,13 @@ export const ConfirmDialog = ({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-2 border-t border-border/60 bg-muted/30 px-6 py-4">
+                <div className="flex items-center justify-end gap-3 border-t border-border/60 bg-muted/30 px-6 py-5">
                     {showCancelButton && (
                         <button
                             type="button"
                             onClick={onCancel}
                             className={cn(
-                                "inline-flex h-9 min-w-[88px] items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer",
+                                "inline-flex h-10 min-w-[88px] items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer",
                                 cancelButtonClassName
                             )}
                         >
@@ -181,7 +181,7 @@ export const ConfirmDialog = ({
                         type="button"
                         onClick={onConfirm}
                         className={cn(
-                            "inline-flex h-9 min-w-[88px] items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer",
+                            "inline-flex h-10 min-w-[88px] items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer",
                             confirmButtonClassName || cfg.confirmCls
                         )}
                     >

@@ -92,17 +92,17 @@ export default function StatCard({
             onClick={onClick}
             className={cn(
                 // Base card — clean, no left border
-                "app-stat-card relative flex w-full items-center overflow-hidden rounded-xl border border-border/70 bg-card text-left",
-                compact ? "gap-3 px-3.5 py-3" : "gap-3.5 px-4 py-3.5",
+                "app-stat-card relative flex w-full items-center overflow-hidden rounded-lg border border-border/60 bg-card text-left",
+                compact ? "gap-3 px-3.5 py-3" : "gap-4 px-5 py-4",
                 // Subtle gradient wash at top via pseudo-element
                 "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-16 before:bg-gradient-to-b before:to-transparent",
                 t.glow,
                 // Shadow + ring system
-                "shadow-[0_1px_3px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)]",
+                "shadow-sm",
                 "transition-all duration-200",
                 interactive && [
                     "cursor-pointer",
-                    "hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)]",
+                    "hover:shadow-md hover:border-border/80",
                     "hover:-translate-y-px",
                     "hover:ring-2 hover:ring-offset-0",
                     t.ring,

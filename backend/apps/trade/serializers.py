@@ -65,7 +65,7 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     authoritative_available_cif = serializers.SerializerMethodField()
 
     def to_internal_value(self, data):
-        """Remove empty string fields and coerce numeric fields for force-save compatibility"""
+        """Remove empty string fields and coerce numeric fields for paired trades with force-save"""
         # Create a copy to avoid modifying the original data
         data = data.copy() if hasattr(data, 'copy') else dict(data)
 
@@ -79,12 +79,18 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
             if field in data and data[field] == '':
                 del data[field]
 
-        # Coerce numeric fields to strings for DecimalField compatibility (force-save)
-        decimal_fields = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
-        for field in decimal_fields:
-            if field in data and data[field] is not None:
-                if not isinstance(data[field], str):
-                    data[field] = str(data[field])
+        # Coerce numeric fields to strings for DecimalField compatibility
+        # Only when force-save is enabled for paired trades
+        force_save = getattr(self.root, 'initial_data', {}).get('_force_save', False)
+        instance = self.instance or getattr(self.root, 'instance', None)
+        has_counterpart = instance and hasattr(instance, 'counterpart_id') and instance.counterpart_id
+
+        if force_save and has_counterpart:
+            decimal_fields = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
+            for field in decimal_fields:
+                if field in data and data[field] is not None:
+                    if not isinstance(data[field], str):
+                        data[field] = str(data[field])
 
         return super().to_internal_value(data)
 
@@ -121,10 +127,17 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         ))
 
     def validate(self, attrs):
-        # Check for force-save mode - skip CIF validation if force-save is enabled
+        # Check for force-save mode - only skip validation if trade has a counterpart
         force_save = getattr(self.root, 'initial_data', {}).get('_force_save', False)
         if force_save:
-            return attrs
+            # Force-save only allowed for paired trades (with counterpart)
+            instance = self.instance or getattr(self.root, 'instance', None)
+            if instance and hasattr(instance, 'counterpart_id') and instance.counterpart_id:
+                return attrs
+            elif force_save:
+                raise serializers.ValidationError(
+                    'Force-save is only allowed for trades with a linked Purchase/Sale counterpart.'
+                )
 
         item = attrs.get('sr_number') or getattr(self.instance, 'sr_number', None)
         requested_cif = attrs.get('cif_fc')
@@ -516,7 +529,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         instance.snapshot_parties()
 
         # Sync nested lines if provided (DFIA)
-        # Allow line sync even if there are validation errors when force-saving
+        # Allow lenient error handling only for paired trades with force-save
+        force_save = getattr(self.initial_data, '_force_save', False)
+        has_counterpart = instance.counterpart_id if hasattr(instance, 'counterpart_id') else False
+        allow_lenient = force_save and has_counterpart
+
         if lines_data is not None:
             try:
                 _sync_nested(
@@ -527,8 +544,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                     treat_empty_list_as_delete=False
                 )
             except Exception as e:
-                # Check if force-save is enabled - if so, log but continue
-                if not getattr(self.initial_data, '_force_save', False):
+                if not allow_lenient:
                     raise
 
         # Sync nested incentive lines if provided (RODTEP/ROSTL/MEIS)
@@ -542,7 +558,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                     treat_empty_list_as_delete=False
                 )
             except Exception as e:
-                if not getattr(self.initial_data, '_force_save', False):
+                if not allow_lenient:
                     raise
 
         # Sync nested payments if provided
@@ -556,7 +572,7 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
                     treat_empty_list_as_delete=False
                 )
             except Exception as e:
-                if not getattr(self.initial_data, '_force_save', False):
+                if not allow_lenient:
                     raise
 
         # Recompute totals

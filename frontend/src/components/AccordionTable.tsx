@@ -243,11 +243,11 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
         };
 
         return (
-            <div className="mb-3">
-                <h6 className="text-primary mb-2">
-                    <Icon name={getIcon()} className="mr-2 size-4" />
+            <div className="mb-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Icon name={getIcon()} className="size-4" aria-hidden="true" />
                     {fieldKey.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                </h6>
+                </div>
                 <div className="table-responsive">
                     <table className="table table-sm">
                         <thead>
@@ -459,10 +459,10 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                             title={isEditableField ? 'Click to edit' : ''}
                                         >
                                             {isCurrentlyEditing ? (
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex items-center gap-2">
                                                     <input
                                                         type="text"
-                                                        className="flex h-8 rounded-md border border-input bg-card px-2 py-1 text-sm outline-none focus-visible:border-ring"
+                                                        className="flex h-9 rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
                                                         value={editValue}
                                                         onChange={(e) => setEditValue(e.target.value)}
                                                         onKeyDown={(e) => handleKeyDown(e, item, col)}
@@ -507,7 +507,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                     );
                                 })}
                                 <td>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-2">
                                         {customActions.map((action, idx) => {
                                             if (action.showIf && !action.showIf(item)) {
                                                 return null;
@@ -515,7 +515,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                                             return (
                                                 <button
                                                     key={idx}
-                                                    className={action.className || "inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"}
+                                                    className={action.className || "inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"}
                                                     onClick={() => action.onClick(item)}
                                                     title={action.label}
                                                 >
@@ -538,7 +538,7 @@ export default function AccordionTable({data, columns, loading, onDelete, basePa
                             {/* Nested Row (Expanded) */}
                             {isExpanded && (
                                 <tr className="border-0">
-                                    <td colSpan={columns.length + 2} className="border-0 bg-muted/30 p-4">
+                                    <td colSpan={columns.length + 2} className="border-0 bg-muted/20 p-5">
                                         {loadingNested[item.id] ? (
                                             <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
                                                 <Loader2 className="size-4 animate-spin text-primary" />

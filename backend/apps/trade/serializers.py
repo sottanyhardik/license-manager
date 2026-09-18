@@ -65,7 +65,7 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     authoritative_available_cif = serializers.SerializerMethodField()
 
     def to_internal_value(self, data):
-        """Remove empty string fields and coerce numeric fields for force-save"""
+        """Remove empty string fields and coerce numeric fields for DecimalField compatibility"""
         # Create a copy to avoid modifying the original data
         data = data.copy() if hasattr(data, 'copy') else dict(data)
 
@@ -79,22 +79,14 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
             if field in data and data[field] == '':
                 del data[field]
 
-        # Coerce numeric fields to strings for DecimalField compatibility when force-saving
-        # Force-save assumes data is correct (PURCHASE/SALE values mirror each other)
-        # Auto-enable for paired trades to handle numeric format variations
-        force_save = getattr(self.root, 'initial_data', {}).get('_force_save', False)
-
-        # Auto-enable for paired trades: if the trade has a counterpart, enable numeric coercion
-        instance = self.instance or getattr(self.root, 'instance', None)
-        if instance and hasattr(instance, 'counterpart_id') and instance.counterpart_id:
-            force_save = True
-
-        if force_save:
-            decimal_fields = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
-            for field in decimal_fields:
-                if field in data and data[field] is not None:
-                    if not isinstance(data[field], str):
-                        data[field] = str(data[field])
+        # ALWAYS coerce numeric fields to strings for DecimalField compatibility
+        # This handles unquoted numbers in JSON (e.g., "qty_kg":208300.58)
+        # and ensures DecimalField can parse them correctly
+        decimal_fields = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
+        for field in decimal_fields:
+            if field in data and data[field] is not None:
+                if not isinstance(data[field], str):
+                    data[field] = str(data[field])
 
         return super().to_internal_value(data)
 
@@ -611,8 +603,15 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             stamp_boe_invoice_from_trade(instance, boe)
 
         # Sync changes to counterpart trade if it exists
+        # Wrap in try-except to prevent sync errors from failing the main update
         if instance.counterpart_id:
-            sync_to_counterpart(instance.id)
+            try:
+                sync_to_counterpart(instance.id)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to sync to counterpart for trade {instance.id}: {e}")
+                # Don't re-raise - the main trade update succeeded, only sync failed
 
         return instance
 

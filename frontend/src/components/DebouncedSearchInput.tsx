@@ -30,12 +30,12 @@ export default function DebouncedSearchInput({
 
     return (
         <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-muted-foreground">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
                 <Search className="size-4" />
             </span>
             <input
                 type="text"
-                className={`flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 pl-8 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${className}`}
+                className={`flex h-10 w-full rounded-lg border border-input bg-card px-3 py-2 pl-9 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${className}`}
                 placeholder={placeholder}
                 value={localValue}
                 onChange={(e) => setLocalValue(e.target.value)}
@@ -45,15 +45,15 @@ export default function DebouncedSearchInput({
                 <button
                     type="button"
                     onClick={() => { setLocalValue(""); onChange(""); }}
-                    className="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground hover:text-foreground"
+                    className="absolute inset-y-0 right-0 flex w-9 cursor-pointer items-center justify-center border-0 bg-transparent text-muted-foreground hover:text-foreground"
                     style={{ zIndex: 10 }}
                 >
-                    <X className="size-3.5" />
+                    <X className="size-4" />
                 </button>
             )}
             {showPendingIndicator && isPending && (
-                <span className="pointer-events-none absolute inset-y-0 right-8 flex items-center">
-                    <Loader2 className="size-3.5 animate-spin text-primary" />
+                <span className="pointer-events-none absolute inset-y-0 right-9 flex items-center">
+                    <Loader2 className="size-4 animate-spin text-primary" />
                 </span>
             )}
         </div>

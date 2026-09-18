@@ -18,29 +18,29 @@ export default function EmptyState({ icon: Icon, title, description, action, cla
         <div
             className={cn(
                 "flex flex-col items-center text-center",
-                isPage ? "px-8 py-20" : "px-6 py-12",
+                isPage ? "px-8 py-24" : "px-6 py-14",
                 className
             )}
         >
             {/* Icon container with subtle ring */}
             <span
                 className={cn(
-                    "mb-4 inline-flex items-center justify-center rounded-2xl border border-border/60 bg-muted/60",
-                    isPage ? "size-16" : "size-11"
+                    "mb-5 inline-flex items-center justify-center rounded-xl border border-border/60 bg-muted/50",
+                    isPage ? "size-18" : "size-12"
                 )}
             >
                 <Icon
                     className={cn(
-                        "text-muted-foreground/50",
-                        isPage ? "size-8" : "size-5"
+                        "text-muted-foreground/60",
+                        isPage ? "size-9" : "size-5"
                     )}
                     strokeWidth={1.5}
                 />
             </span>
             <p
                 className={cn(
-                    "font-semibold text-foreground",
-                    isPage ? "text-base" : "text-sm"
+                    "font-bold text-foreground",
+                    isPage ? "text-lg" : "text-base"
                 )}
             >
                 {title}
@@ -48,14 +48,14 @@ export default function EmptyState({ icon: Icon, title, description, action, cla
             {description && (
                 <p
                     className={cn(
-                        "mt-1.5 max-w-xs leading-relaxed text-muted-foreground",
+                        "mt-2 max-w-sm leading-relaxed text-muted-foreground",
                         isPage ? "text-sm" : "text-xs"
                     )}
                 >
                     {description}
                 </p>
             )}
-            {action && <div className="mt-5">{action}</div>}
+            {action && <div className="mt-6">{action}</div>}
         </div>
     );
 }

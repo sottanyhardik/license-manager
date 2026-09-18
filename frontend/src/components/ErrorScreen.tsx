@@ -46,25 +46,25 @@ export default function ErrorScreen({
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             >
                 <div
-                    className={`mx-auto mb-4 flex size-13 items-center justify-center rounded-2xl border ${TONE_CLASSES[tone]}`}
+                    className={`mx-auto mb-5 flex size-14 items-center justify-center rounded-lg border ${TONE_CLASSES[tone]}`}
                 >
-                    <Icon className="size-6" />
+                    <Icon className="size-7" />
                 </div>
 
                 {code && (
-                    <div className="mb-1 text-6xl font-bold leading-none tracking-tighter text-border">
+                    <div className="mb-3 text-6xl font-bold leading-none tracking-tighter text-border">
                         {code}
                     </div>
                 )}
 
-                <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
                     {title}
                 </h1>
-                <p className="mx-auto mt-2 mb-7 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                <p className="mx-auto mt-2 mb-8 max-w-sm text-sm leading-relaxed text-muted-foreground">
                     {description}
                 </p>
 
-                <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <div className="flex flex-wrap items-center justify-center gap-3">
                     {secondary}
                     <Button asChild>
                         <Link to={action.to}>

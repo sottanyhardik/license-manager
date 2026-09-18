@@ -94,11 +94,11 @@ function SectionBox({ icon: Icon, label, tone = "primary", children }: SectionBo
     const tc = TONE_CLASSES[tone] ?? TONE_CLASSES.primary;
     return (
         <div className={cn(
-            "rounded-md border border-border border-l-[3px] bg-card p-4",
+            "rounded-lg border border-border border-l-4 bg-card p-4",
             tc.wrapper,
         )}>
             <div className={cn(
-                "mb-3 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]",
+                "mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider",
                 tc.label,
             )}>
                 {Icon && <Icon className="size-3.5" aria-hidden="true" />}

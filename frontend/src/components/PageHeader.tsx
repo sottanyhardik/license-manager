@@ -28,25 +28,25 @@ export default function PageHeader({
     return (
         <div
             className={cn(
-                "app-page-header mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3",
-                "rounded-xl border border-border/70 bg-card px-4 py-3 shadow-sm sm:px-5",
+                "app-page-header mb-6 flex flex-wrap items-center justify-between gap-x-5 gap-y-4",
+                "rounded-lg border border-border/60 bg-card px-5 py-4 shadow-sm sm:px-6 sm:py-5",
                 className
             )}
         >
             {/* Left: Breadcrumb + title + description */}
             <div className="min-w-0 flex-1">
                 {pretitle && (
-                    <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         {pretitle}
                     </div>
                 )}
                 {title && (
-                    <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-[1.625rem]">
+                    <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-[1.625rem] lg:text-3xl">
                         {title}
                     </h1>
                 )}
                 {description && (
-                    <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                         {description}
                     </p>
                 )}
@@ -55,7 +55,7 @@ export default function PageHeader({
 
             {/* Right: Actions */}
             {actions && (
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
                     {actions}
                 </div>
             )}

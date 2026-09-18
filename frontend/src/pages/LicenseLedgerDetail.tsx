@@ -129,7 +129,7 @@ function LedgerSummaryCards({ summary }: { summary: LedgerSummary | undefined })
     return (
         <div
             data-testid="ledger-summary-cards"
-            className="grid grid-cols-1 gap-2 px-3 pt-3 sm:grid-cols-2 xl:grid-cols-4"
+            className="grid grid-cols-1 gap-3 px-4 pt-4 sm:grid-cols-2 xl:grid-cols-4"
         >
             <StatCard
                 compact

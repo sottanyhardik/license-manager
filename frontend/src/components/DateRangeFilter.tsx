@@ -46,15 +46,15 @@ export default function DateRangeFilter({
     const hasValue = Boolean(fromValue || toValue);
 
     return (
-        <div className={cn("space-y-2", className)}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground">
+        <div className={cn("space-y-3", className)}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                     {Icon && <Icon className="size-4" aria-hidden />}
                     {label}
-                    {hint && <span className="text-[11.5px] font-normal">{hint}</span>}
+                    {hint && <span className="text-xs font-normal">{hint}</span>}
                 </div>
                 {(presets?.length || onClear) && (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-2">
                         {presets?.map((preset) => {
                             const PresetIcon = preset.icon;
                             return (
@@ -89,15 +89,15 @@ export default function DateRangeFilter({
                     </div>
                 )}
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                    <Label htmlFor={fromId} className="mb-1.5 block text-[12px] font-normal text-muted-foreground">
+                    <Label htmlFor={fromId} className="mb-2 block text-xs font-medium text-muted-foreground">
                         From
                     </Label>
                     <Input id={fromId} type="date" value={fromValue} onChange={(e) => onFromChange(e.target.value)} />
                 </div>
                 <div>
-                    <Label htmlFor={toId} className="mb-1.5 block text-[12px] font-normal text-muted-foreground">
+                    <Label htmlFor={toId} className="mb-2 block text-xs font-medium text-muted-foreground">
                         To
                     </Label>
                     <Input id={toId} type="date" value={toValue} onChange={(e) => onToChange(e.target.value)} />

@@ -65,7 +65,7 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     authoritative_available_cif = serializers.SerializerMethodField()
 
     def to_internal_value(self, data):
-        """Remove empty string fields to prevent overwriting existing values with zeros"""
+        """Remove empty string fields and coerce numeric fields for force-save compatibility"""
         # Create a copy to avoid modifying the original data
         data = data.copy() if hasattr(data, 'copy') else dict(data)
 
@@ -78,6 +78,13 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         for field in fields_to_check:
             if field in data and data[field] == '':
                 del data[field]
+
+        # Coerce numeric fields to strings for DecimalField compatibility (force-save)
+        decimal_fields = ['qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr', 'fob_inr', 'pct', 'amount_inr']
+        for field in decimal_fields:
+            if field in data and data[field] is not None:
+                if not isinstance(data[field], str):
+                    data[field] = str(data[field])
 
         return super().to_internal_value(data)
 
@@ -114,6 +121,11 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         ))
 
     def validate(self, attrs):
+        # Check for force-save mode - skip CIF validation if force-save is enabled
+        force_save = getattr(self.root, 'initial_data', {}).get('_force_save', False)
+        if force_save:
+            return attrs
+
         item = attrs.get('sr_number') or getattr(self.instance, 'sr_number', None)
         requested_cif = attrs.get('cif_fc')
         # A paired purchase/sale is one commercial transfer: the counterpart
@@ -504,34 +516,48 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         instance.snapshot_parties()
 
         # Sync nested lines if provided (DFIA)
+        # Allow line sync even if there are validation errors when force-saving
         if lines_data is not None:
-            _sync_nested(
-                instance,
-                LicenseTradeLine,
-                lines_data,
-                fk_field='trade',
-                treat_empty_list_as_delete=False
-            )
+            try:
+                _sync_nested(
+                    instance,
+                    LicenseTradeLine,
+                    lines_data,
+                    fk_field='trade',
+                    treat_empty_list_as_delete=False
+                )
+            except Exception as e:
+                # Check if force-save is enabled - if so, log but continue
+                if not getattr(self.initial_data, '_force_save', False):
+                    raise
 
         # Sync nested incentive lines if provided (RODTEP/ROSTL/MEIS)
         if incentive_lines_data is not None:
-            _sync_nested(
-                instance,
-                IncentiveTradeLine,
-                incentive_lines_data,
-                fk_field='trade',
-                treat_empty_list_as_delete=False
-            )
+            try:
+                _sync_nested(
+                    instance,
+                    IncentiveTradeLine,
+                    incentive_lines_data,
+                    fk_field='trade',
+                    treat_empty_list_as_delete=False
+                )
+            except Exception as e:
+                if not getattr(self.initial_data, '_force_save', False):
+                    raise
 
         # Sync nested payments if provided
         if payments_data is not None:
-            _sync_nested(
-                instance,
-                LicenseTradePayment,
-                payments_data,
-                fk_field='trade',
-                treat_empty_list_as_delete=False
-            )
+            try:
+                _sync_nested(
+                    instance,
+                    LicenseTradePayment,
+                    payments_data,
+                    fk_field='trade',
+                    treat_empty_list_as_delete=False
+                )
+            except Exception as e:
+                if not getattr(self.initial_data, '_force_save', False):
+                    raise
 
         # Recompute totals
         instance.recompute_totals()

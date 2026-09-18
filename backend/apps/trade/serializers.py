@@ -485,6 +485,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             elif trade.direction == LicenseTrade.DIR_PURCHASE:
                 copy_purchase_to_sale(trade.pk, getattr(self.context.get('request'), 'user', None))
 
+        # Auto-sync to counterpart if it exists (created via copy or paired earlier)
+        if trade.counterpart_id:
+            from .services.trade_service import sync_to_counterpart
+            sync_to_counterpart(trade.id)
+
         return trade
 
     @transaction.atomic

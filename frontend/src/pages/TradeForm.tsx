@@ -1400,7 +1400,7 @@ export default function TradeForm() {
                                                     className="flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring  text-right"
                                                     value={line.rate_inr_per_kg || ""}
                                                     onChange={(e) => handleLineChange(index, 'rate_inr_per_kg', parseFloat(e.target.value) || 0)}
-                                                    step="0.01"
+                                                    step="0.001"
                                                 />
                                             </td>
                                         </>

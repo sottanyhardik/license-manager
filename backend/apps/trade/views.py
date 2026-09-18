@@ -154,7 +154,7 @@ LicenseTradeViewSet = MasterViewSet.create_viewset(
                         "name": "rate_inr_per_kg",
                         "type": "number",
                         "label": "Rate (INR/KG)",
-                        "step": "0.01"
+                        "step": "0.001"
                     },
                     {
                         "name": "cif_fc",

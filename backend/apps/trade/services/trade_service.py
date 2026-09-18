@@ -339,8 +339,20 @@ def sync_to_counterpart(trade_id: int, user=None):
             'license_type', 'incentive_license', 'invoice_date', 'remarks', 'modified_on'
         ])
 
-        # Sync trade lines: delete old ones and recreate from source
+        # Sync trade lines: clear counterpart links, delete old ones, recreate from source
+        # First, break the counterpart_line links to prevent CASCADE deletion of source lines
+        counterpart_lines = list(LicenseTradeLine.objects.filter(trade=counterpart))
+        for line in source.lines.all():
+            line.counterpart_line = None
+            line.save(update_fields=['counterpart_line'])
+
+        # Now safe to delete the old counterpart lines
+        for old_line in counterpart_lines:
+            old_line.counterpart_line = None
+            old_line.save(update_fields=['counterpart_line'])
         LicenseTradeLine.objects.filter(trade=counterpart).delete()
+
+        # Recreate counterpart lines from source
         for line in source.lines.all():
             clone = LicenseTradeLine.objects.create(
                 trade=counterpart, sr_number=line.sr_number, description=line.description,

@@ -53,7 +53,7 @@ export const FormField = ({
 
     return (
         <div className={className}>
-            <Label htmlFor={id} className={cn("mb-1.5", required && "required")}>
+            <Label htmlFor={id} className={cn("mb-2 text-sm font-medium", required && "required")}>
                 {label}
             </Label>
             <Input
@@ -66,7 +66,7 @@ export const FormField = ({
                 {...props}
             />
             {error && (
-                <p id={errorId} className="mt-0.5 text-[11.5px] text-destructive" role="alert">
+                <p id={errorId} className="mt-1 text-xs text-destructive" role="alert">
                     {error}
                 </p>
             )}
@@ -99,7 +99,7 @@ export const FormTextArea = ({
 
     return (
         <div className={className}>
-            <Label htmlFor={id} className={cn("mb-1.5", required && "required")}>
+            <Label htmlFor={id} className={cn("mb-2 text-sm font-medium", required && "required")}>
                 {label}
             </Label>
             <Textarea
@@ -112,7 +112,7 @@ export const FormTextArea = ({
                 {...props}
             />
             {error && (
-                <p id={errorId} className="mt-0.5 text-[11.5px] text-destructive" role="alert">
+                <p id={errorId} className="mt-1 text-xs text-destructive" role="alert">
                     {error}
                 </p>
             )}
@@ -147,7 +147,7 @@ export const FormSelect = ({
 
     return (
         <div className={className}>
-            <Label htmlFor={id} className={cn("mb-1.5", required && "required")}>
+            <Label htmlFor={id} className={cn("mb-2 text-sm font-medium", required && "required")}>
                 {label}
             </Label>
             <select
@@ -156,7 +156,7 @@ export const FormSelect = ({
                 aria-invalid={!!error}
                 aria-required={required}
                 aria-describedby={error ? errorId : undefined}
-                className="flex h-9 w-full cursor-pointer rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50"
                 {...props}
             >
                 {options.map((opt, idx) => (
@@ -166,7 +166,7 @@ export const FormSelect = ({
                 ))}
             </select>
             {error && (
-                <p id={errorId} className="mt-0.5 text-[11.5px] text-destructive" role="alert">
+                <p id={errorId} className="mt-1 text-xs text-destructive" role="alert">
                     {error}
                 </p>
             )}

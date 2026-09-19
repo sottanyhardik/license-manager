@@ -55,8 +55,8 @@ export default function NestedFieldArray({
     // Some nested collections represent existing ledger/allocation rows.  In
     // those screens their source rows must not be added or deleted; individual
     // non-read-only fields (such as planning_target_item) can still be edited.
-    const allowAdd = !fields.some((field) => field.allow_add === false);
-    const allowRemove = !fields.some((field) => field.allow_remove === false);
+    const allowAdd = !Array.isArray(fields) || !fields.some((field) => field.allow_add === false);
+    const allowRemove = !Array.isArray(fields) || !fields.some((field) => field.allow_remove === false);
 
     // Use centralized date parser from utility
     const parseDate = (dateString) => {
@@ -71,20 +71,22 @@ export default function NestedFieldArray({
 
     const handleAdd = () => {
         const newItem = {};
-        fields.forEach(field => {
-            // Use default value if specified
-            if (field.default !== undefined) {
-                newItem[field.name] = field.default;
-            }
-            // For number/decimal fields without defaults, use null instead of empty string
-            else if (field.type === "number") {
-                newItem[field.name] = null;
-            }
-            // For other fields, use empty string
-            else {
-                newItem[field.name] = "";
-            }
-        });
+        if (Array.isArray(fields)) {
+            fields.forEach(field => {
+                // Use default value if specified
+                if (field.default !== undefined) {
+                    newItem[field.name] = field.default;
+                }
+                // For number/decimal fields without defaults, use null instead of empty string
+                else if (field.type === "number") {
+                    newItem[field.name] = null;
+                }
+                // For other fields, use empty string
+                else {
+                    newItem[field.name] = "";
+                }
+            });
+        }
         onChange([...value, newItem]);
     };
 
@@ -723,7 +725,7 @@ export default function NestedFieldArray({
                                 )}
 
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
-                                    {fields
+                                    {Array.isArray(fields) && fields
                                         .filter(f => f.name !== "id" && f.name !== "is_frozen")
                                         .map((field) => {
                                             const isTextarea = field.type === "textarea" ||

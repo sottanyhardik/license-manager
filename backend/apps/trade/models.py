@@ -534,7 +534,7 @@ class LicenseTradeLine(models.Model):
 
     # QTY mode fields
     qty_kg = models.DecimalField(max_digits=20, decimal_places=4, default=Decimal("0"))
-    rate_inr_per_kg = models.DecimalField(max_digits=20, decimal_places=2, default=Decimal("0"))
+    rate_inr_per_kg = models.DecimalField(max_digits=20, decimal_places=3, default=Decimal("0"))
 
     # Amount modes (base amounts)
     cif_fc = models.DecimalField(max_digits=20, decimal_places=2, default=Decimal("0.00"))

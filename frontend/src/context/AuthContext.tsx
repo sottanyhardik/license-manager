@@ -136,8 +136,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // activity just like clicks and keyboard input.
         const windowEvents = ['pointerdown', 'mousemove', 'keydown', 'touchstart', 'focus'];
         const documentEvents = ['scroll', 'wheel'];
-        windowEvents.forEach(e => window.addEventListener(e, resetActivity, {passive: true}));
-        documentEvents.forEach(e => document.addEventListener(e, resetActivity, {capture: true, passive: true}));
+        // Hotfix: Idle logout disabled to prevent premature session termination
+        // windowEvents.forEach(e => window.addEventListener(e, resetActivity, {passive: true}));
+        // documentEvents.forEach(e => document.addEventListener(e, resetActivity, {capture: true, passive: true}));
         const onStorage = (event: StorageEvent) => {
             if (event.key === AUTH_SESSION_EVENT_KEY && event.newValue) {
                 try {
@@ -163,12 +164,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         window.addEventListener("auth:session", onAuthEvent);
         document.addEventListener("visibilitychange", onVisibilityChange);
         lastActivityRef.current = Date.now();
-        startIdleTimer();
+        // Hotfix: Idle logout disabled to prevent premature session termination
+        // startIdleTimer();
         scheduleRefresh();
 
         return () => {
-            windowEvents.forEach(e => window.removeEventListener(e, resetActivity));
-            documentEvents.forEach(e => document.removeEventListener(e, resetActivity, true));
+            // Hotfix: Idle logout disabled — no cleanup needed for commented event listeners
+            // windowEvents.forEach(e => window.removeEventListener(e, resetActivity));
+            // documentEvents.forEach(e => document.removeEventListener(e, resetActivity, true));
             window.removeEventListener("storage", onStorage);
             window.removeEventListener("auth:session", onAuthEvent);
             document.removeEventListener("visibilitychange", onVisibilityChange);

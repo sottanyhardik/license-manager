@@ -310,6 +310,79 @@ def _copy_to_counterpart(source_id: int, *, source_direction: str, user=None):
         return source, destination, True
 
 
+def sync_to_counterpart(trade_id: int, user=None):
+    """Sync trade data to its counterpart (linked Purchase/Sale).
+
+    Updates the counterpart trade header and all lines to match the source trade.
+    This is used when manually editing a trade that has a linked counterpart.
+    """
+    from apps.trade.models import LicenseTrade, LicenseTradeLine, IncentiveTradeLine
+
+    with transaction.atomic():
+        source = (LicenseTrade.objects.select_for_update(of=('self',))
+                  .select_related('counterpart')
+                  .prefetch_related('lines', 'incentive_lines')
+                  .get(pk=trade_id))
+
+        if not source.counterpart_id:
+            return source, None, False
+
+        counterpart = source.counterpart
+
+        # Update counterpart header (keeps direction and invoice number from counterpart)
+        counterpart.license_type = source.license_type
+        counterpart.incentive_license = source.incentive_license
+        counterpart.invoice_date = source.invoice_date
+        counterpart.remarks = source.remarks
+        counterpart.modified_on = timezone.now()
+        counterpart.save(update_fields=[
+            'license_type', 'incentive_license', 'invoice_date', 'remarks', 'modified_on'
+        ])
+
+        # Sync trade lines: clear counterpart links, delete old ones, recreate from source
+        # First, break the counterpart_line links to prevent CASCADE deletion of source lines
+        counterpart_lines = list(LicenseTradeLine.objects.filter(trade=counterpart))
+        for line in source.lines.all():
+            line.counterpart_line = None
+            line.save(update_fields=['counterpart_line'])
+
+        # Now safe to delete the old counterpart lines
+        for old_line in counterpart_lines:
+            old_line.counterpart_line = None
+            old_line.save(update_fields=['counterpart_line'])
+        LicenseTradeLine.objects.filter(trade=counterpart).delete()
+
+        # Recreate counterpart lines from source
+        for line in source.lines.all():
+            clone = LicenseTradeLine.objects.create(
+                trade=counterpart, sr_number=line.sr_number, description=line.description,
+                hsn_code=line.hsn_code, mode=line.mode, qty_kg=line.qty_kg,
+                rate_inr_per_kg=line.rate_inr_per_kg, cif_fc=line.cif_fc,
+                exc_rate=line.exc_rate, cif_inr=line.cif_inr, fob_inr=line.fob_inr,
+                pct=line.pct, amount_inr=line.amount_inr,
+                transaction_pair_uuid=source.transaction_pair_uuid,
+            )
+            line.counterpart_line = clone
+            line.save(update_fields=['counterpart_line'])
+            clone.counterpart_line = line
+            clone.save(update_fields=['counterpart_line'])
+
+        # Sync incentive lines
+        IncentiveTradeLine.objects.filter(trade=counterpart).delete()
+        for line in source.incentive_lines.all():
+            IncentiveTradeLine.objects.create(
+                trade=counterpart, incentive_license=line.incentive_license,
+                license_value=line.license_value, rate_pct=line.rate_pct,
+                amount_inr=line.amount_inr,
+            )
+
+        # Recompute totals for both trades
+        counterpart.recompute_totals()
+        source.recompute_totals()
+
+        return source, counterpart, True
+
+
 # ---------------------------------------------------------------------------
 # BOE invoice stamping
 # ---------------------------------------------------------------------------

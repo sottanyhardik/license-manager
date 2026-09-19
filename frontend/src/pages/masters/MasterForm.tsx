@@ -996,7 +996,7 @@ export default function MasterForm({
                                                 {nestedEntries.map(([nestedKey]) => {
                                                     const count = (formData[nestedKey] || []).length;
                                                     const isActive = activeTab === nestedKey;
-                                                    const hasErrors = (fieldErrors[nestedKey] || []).some(Boolean);
+                                                    const hasErrors = Array.isArray(fieldErrors[nestedKey]) && fieldErrors[nestedKey].some(Boolean);
                                                     const label = tabLabels[nestedKey] || nestedKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
                                                     return (
                                                         <li key={nestedKey} role="presentation">
@@ -1040,7 +1040,7 @@ export default function MasterForm({
                                                         fieldKey={nestedKey}
                                                         onFetchImports={handleFetchImports}
                                                         updatedFields={updatedFields}
-                                                        errors={fieldErrors[nestedKey] || []}
+                                                        errors={Array.isArray(fieldErrors[nestedKey]) ? fieldErrors[nestedKey] : []}
                                                         entityName={entityName}
                                                         formData={formData}
                                                         itemConditionsBySerial={itemConditionsBySerial}
@@ -1059,7 +1059,7 @@ export default function MasterForm({
                                         fieldKey={nestedKey}
                                         onFetchImports={entityName === "licenses" ? handleFetchImports : undefined}
                                         updatedFields={updatedFields}
-                                        errors={fieldErrors[nestedKey] || []}
+                                        errors={Array.isArray(fieldErrors[nestedKey]) ? fieldErrors[nestedKey] : []}
                                         entityName={entityName}
                                         formData={formData}
                                         itemConditionsBySerial={itemConditionsBySerial}

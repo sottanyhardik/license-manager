@@ -116,10 +116,10 @@ export default function MasterList() {
         'incentive-licenses': ['INCENTIVE_LICENSE_MANAGER'],
     };
     // For known business entities: check the mapped write roles.
-    // For masters (companies, ports, HS codes, etc.): superusers only.
+    // Master data is maintained by superusers and trusted user administrators.
     const canWrite = entityName in ENTITY_WRITE_ROLES
         ? hasAnyRole(ENTITY_WRITE_ROLES[entityName])
-        : isSuperAdmin();
+        : isSuperAdmin() || hasRole('USER_MANAGER');
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
     const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');

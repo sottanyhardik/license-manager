@@ -9,6 +9,7 @@ import api from "../../api/axios";
 import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
 import { AlertCircle, Calculator, Hash, Inbox, Lock, Plus, Table, Trash2, Wand2 } from "lucide-react";
 import { formatInr } from "./masterDisplayFormatters";
+import { openDocument } from "../../utils/documentDownload";
 
 /**
  * NestedFieldArray Component
@@ -472,7 +473,11 @@ export default function NestedFieldArray({
                     {fieldValue && typeof fieldValue === 'string' && (
                         <div className="mt-1">
                             <small className="text-muted">
-                                Current: <a href={fieldValue} target="_blank" rel="noopener noreferrer">View file</a>
+                                Current: <button
+                                    type="button"
+                                    className="text-primary underline"
+                                    onClick={() => { void openDocument(fieldValue); }}
+                                >View file</button>
                             </small>
                         </div>
                     )}

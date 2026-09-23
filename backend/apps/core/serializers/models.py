@@ -31,9 +31,9 @@ class CompanySerializer(AuditSerializerMixin):
     superusers) have a real business need to see banking/PAN/GST data.
     `to_representation` trims `SENSITIVE_FIELDS` out of the payload for
     every other role, without changing the response for the roles that do
-    need them. Write access is superuser-only already (see
-    `CompanyPermission.required_roles_for_write`), so this only affects
-    reads.
+    need them. Company writes are separately restricted to USER_MANAGER and
+    superusers (see `CompanyPermission.required_roles_for_write`), so this
+    serializer logic only affects reads.
     """
 
     SENSITIVE_FIELDS = (

@@ -885,10 +885,29 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         `?show_hidden=true` matches the on-screen "show hidden BOE" toggle —
         see `LicenseBalanceLedgerBuilder.build_customs_ledger`'s docstring.
         """
-        from apps.license.services.exporters.license_balance_pdf import build_balance_pdf_response
         license_obj = self.get_object()
         show_hidden = request.query_params.get('show_hidden', '').lower() in ('1', 'true', 'yes')
-        return build_balance_pdf_response(license_obj, request, show_hidden=show_hidden)
+        from apps.license.services.exporters.license_balance_pdf import build_balance_pdf_response
+
+        try:
+            return build_balance_pdf_response(license_obj, request, show_hidden=show_hidden)
+        except Exception:
+            logger.exception(
+                "Balance PDF generation failed",
+                extra={
+                    "license_id": license_obj.id,
+                    "license_number": license_obj.license_number,
+                    "user_id": getattr(request.user, "id", None),
+                    "operation": "balance_pdf_generation",
+                },
+            )
+            return Response(
+                {
+                    "code": "balance_pdf_generation_failed",
+                    "detail": "Unable to generate Balance PDF. Please try again.",
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @action(detail=False, methods=['post'], url_path='bulk-balance-excel')
     def bulk_balance_excel(self, request):

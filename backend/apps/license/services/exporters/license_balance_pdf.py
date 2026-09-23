@@ -13,6 +13,8 @@ from decimal import Decimal
 from apps.license.services.license_balance_ledger_builder import (
     boe_invoice_allocation_map,
     boe_external_invoice_map,
+    boe_row_invoice_numbers,
+    split_invoice_numbers,
 )
 
 
@@ -1303,7 +1305,7 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
 
     # Create response
     response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="{license_obj.license_number}-balance.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="Balance_{license_obj.license_number}.pdf"'
     response.write(pdf)
 
     return response

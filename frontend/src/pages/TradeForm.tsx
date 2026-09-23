@@ -12,6 +12,7 @@ import * as validateFormUtil from "../utils/formValidation";
 import { ValidationRules } from "../utils/formValidation";
 import TransferLetterModal from "../components/TransferLetterModal";
 import {navigateToList} from "../utils/navigationUtils";
+import { openDocument } from "../utils/documentDownload";
 import {useBackButton} from "../hooks/useBackButton";
 import TradeConfigCard from "./TradeConfigCard";
 import { buildTradeJsonPayload, cleanIncentiveLine, cleanTradeLine, cleanTradePayment, formatTradeDateForApi, getEntityId } from "./tradeFormHelpers";
@@ -1126,15 +1127,18 @@ export default function TradeForm() {
                             {/* Show existing file if editing and file exists */}
                             {isEdit && formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
                                 <div className="mt-2">
-                                    <a
-                                        href={formData.purchase_invoice_copy}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            void openDocument(formData.purchase_invoice_copy).catch(() => {
+                                                toast.error("Unable to open the original invoice copy.");
+                                            });
+                                        }}
                                         className="flex items-center gap-1.5 rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground cursor-pointer hover:bg-primary/90"
                                     >
                                         <FileText className="size-4" aria-hidden="true" />
                                         View Current Invoice Copy
-                                    </a>
+                                    </button>
                                     <button
                                         type="button"
                                         className="ml-2 flex items-center gap-1.5 rounded border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive cursor-pointer hover:bg-destructive/20"
@@ -1606,10 +1610,18 @@ export default function TradeForm() {
                                         <FileText className="size-4" aria-hidden="true" />Purchase Invoice
                                     </button>
                                     {formData.purchase_invoice_copy && typeof formData.purchase_invoice_copy === 'string' && (
-                                        <a className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
-                                            href={formData.purchase_invoice_copy} target="_blank" rel="noopener noreferrer" title="Open the original uploaded invoice copy">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                void openDocument(formData.purchase_invoice_copy).catch(() => {
+                                                    toast.error("Unable to open the original invoice copy.");
+                                                });
+                                            }}
+                                            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground no-underline cursor-pointer hover:bg-muted"
+                                            title="Open the original uploaded invoice copy"
+                                        >
                                             <FileText className="size-4" aria-hidden="true" />Original Copy
-                                        </a>
+                                        </button>
                                     )}
                                 </div>
                             )}

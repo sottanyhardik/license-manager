@@ -26,6 +26,10 @@ describe("toProtectedMediaPath", () => {
     expect(toProtectedMediaPath("/media/foo/bar.pdf")).toBe("/media/foo/bar.pdf");
   });
 
+  it("maps transfer-letter templates to the authenticated media endpoint", () => {
+    expect(toProtectedMediaPath("/media/tl/BDG_TLN.docx")).toBe("/media/tl/BDG_TLN.docx");
+  });
+
   it("prefixes a bare relative path", () => {
     expect(toProtectedMediaPath("foo/bar.pdf")).toBe("/media/foo/bar.pdf");
   });

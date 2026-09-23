@@ -299,12 +299,12 @@ export default function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 <Route path="/masters/:entity/create" element={
-                    <ProtectedRoute requireSuperuser>
+                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/masters/:entity/:id/edit" element={
-                    <ProtectedRoute requireSuperuser>
+                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />

@@ -41,7 +41,7 @@ class StandardPagination(PageNumberPagination):
 
 
 class MasterDataPermission(permissions.BasePermission):
-    """Authenticated users may read master data; only superusers may write it."""
+    """Authenticated users may read master data; trusted administrators may write it."""
 
     def has_permission(self, request, view):
         user = getattr(request, "user", None)
@@ -49,7 +49,7 @@ class MasterDataPermission(permissions.BasePermission):
             return False
         if request.method in permissions.SAFE_METHODS:
             return True
-        return user.is_superuser
+        return user.is_superuser or user.has_any_role(['USER_MANAGER'])
 
 
 class CaseInsensitiveSearchFilter(filters.SearchFilter):

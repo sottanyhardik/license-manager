@@ -42,7 +42,7 @@ class MasterDataAuthorizationTests(TestCase):
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
         return client
 
-    def test_authenticated_non_superuser_can_read_but_not_create_master_data(self):
+    def test_authenticated_user_without_admin_role_can_read_but_not_create_master_data(self):
         # Uses PortModel (still gated by the blanket MasterDataPermission)
         # rather than CompanyModel — companies carry banking/PAN/GST fields
         # and are scoped by CompanyPermission instead; see
@@ -68,6 +68,25 @@ class MasterDataAuthorizationTests(TestCase):
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(PortModel.objects.filter(name="Blocked Port").exists())
+
+    def test_user_manager_can_update_master_data(self):
+        port = PortModel.objects.create(code=str(uuid.uuid4().int)[:6], name="Original Port")
+        user = User.objects.create_user(
+            username="master-user-manager",
+            email="master-user-manager@example.com",
+            password="ManagerP@ssw0rd123",
+        )
+        user.groups.add(Group.objects.get_or_create(name="USER_MANAGER")[0])
+
+        response = self._authenticated_client(user).patch(
+            f"/api/masters/ports/{port.id}/",
+            {"name": "Updated Port"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        port.refresh_from_db()
+        self.assertEqual(port.name, "Updated Port")
 
     def test_other_master_data_entities_remain_unaffected_by_company_scoping(self):
         # HS codes and item names (unlike companies) carry no banking/PAN/GST
@@ -163,13 +182,13 @@ class CompanyPermissionAuthorizationTests(TestCase):
 
     def test_user_with_unrelated_role_cannot_read_company_data(self):
         CompanyModel.objects.create(iec=str(uuid.uuid4().int)[:10], name="Unrelated-Blocked Co")
-        client = self._client_with_roles("user-manager-user", roles=["USER_MANAGER"])
+        client = self._client_with_roles("ledger-manager-user", roles=["LEDGER_MANAGER"])
 
         list_response = client.get("/api/masters/companies/")
 
         self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_role_scoped_user_still_cannot_write_company_data(self):
+    def test_business_manager_still_cannot_write_company_data(self):
         client = self._client_with_roles("trade-manager-user", roles=["TRADE_MANAGER"])
 
         response = client.post(
@@ -180,6 +199,25 @@ class CompanyPermissionAuthorizationTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(CompanyModel.objects.filter(name="Should Not Be Created").exists())
+
+    def test_user_manager_can_update_company_data(self):
+        company = CompanyModel.objects.create(
+            iec=str(uuid.uuid4().int)[:10],
+            name="Original Company",
+            bank_account_number="1111222233",
+        )
+        client = self._client_with_roles("company-user-manager", roles=["USER_MANAGER"])
+
+        response = client.patch(
+            f"/api/masters/companies/{company.id}/",
+            {"name": "Updated Company", "bank_account_number": "999900001111"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        company.refresh_from_db()
+        self.assertEqual(company.name, "Updated Company")
+        self.assertEqual(company.bank_account_number, "999900001111")
 
     def test_report_viewer_role_no_longer_receives_banking_fields_in_response(self):
         # SEC-02 follow-up: REPORT_VIEWER (along with the other 8 roles in
@@ -377,11 +415,13 @@ class CompanyPermissionAuthorizationTests(TestCase):
                     else {row["id"] for row in list_response.json()}
                 self.assertTrue(expected_ids.issubset(returned_ids))
 
-    def test_every_documented_legitimate_role_is_still_blocked_from_writing(self):
-        # required_roles_for_write is empty, so write access must stay
-        # superuser-only for every one of the read-authorized roles too —
-        # confirms the fix did not accidentally grant write access anywhere.
-        for role_name in CompanyPermission.required_roles_for_read:
+    def test_non_administrator_read_roles_are_blocked_from_writing(self):
+        # Read-only business roles remain unable to alter sensitive company
+        # master data; USER_MANAGER is the sole delegated write role.
+        for role_name in (
+            set(CompanyPermission.required_roles_for_read)
+            - set(CompanyPermission.required_roles_for_write)
+        ):
             with self.subTest(role=role_name):
                 client = self._client_with_roles(
                     f"writer-{role_name.lower()}", roles=[role_name]

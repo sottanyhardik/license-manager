@@ -202,11 +202,12 @@ class CompanyPermission(BaseRolePermission):
     existing legitimate lookup (dropdowns, filters, the masters admin page)
     working exactly as before for the roles that already use it.
 
-    Write access remains superuser-only, matching the existing behavior for
-    every other master-data entity.
+    Write access is granted to trusted user administrators, consistently with
+    the other master-data entities.
     """
 
     required_roles_for_read = [
+        'USER_MANAGER',
         'LICENSE_MANAGER', 'LICENSE_VIEWER',
         'TRADE_MANAGER', 'TRADE_VIEWER',
         'BOE_MANAGER', 'BOE_VIEWER',
@@ -216,9 +217,9 @@ class CompanyPermission(BaseRolePermission):
         'ACCOUNT_ACCESS',
         'TL_GENERATE',
     ]
-    required_roles_for_write = []
+    required_roles_for_write = ['USER_MANAGER']
 
-    # SEC-02: of the roles above, only these four have a legitimate business
+    # SEC-02: of the roles above, only these five have a legitimate business
     # need to see banking/PAN/GST data (they manage the money/compliance side
     # of licenses, trade invoicing, and BOE/accounts work). Every other role
     # in `required_roles_for_read` can still read companies for id/name/
@@ -228,6 +229,7 @@ class CompanyPermission(BaseRolePermission):
     # `apps/core/serializers/models.py`, which is the single enforcement
     # point for this narrowing.
     full_access_roles_for_sensitive_fields = [
+        'USER_MANAGER',
         'LICENSE_MANAGER',
         'TRADE_MANAGER',
         'BOE_MANAGER',

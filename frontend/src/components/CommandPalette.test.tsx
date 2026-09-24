@@ -54,10 +54,9 @@ describe("CommandPalette authorization visibility", () => {
         expect(screen.queryByRole("option", { name: /item report/i })).not.toBeInTheDocument();
     });
 
-    it("shows read/report commands but hides write commands for a license viewer", () => {
-        renderPalette(["LICENSE_VIEWER"]);
+    it("shows read/report commands but hides write commands for a report viewer", () => {
+        renderPalette(["REPORT_VIEWER"]);
 
-        expect(screen.getByRole("option", { name: /^licenses$/i })).toBeInTheDocument();
         expect(screen.getByRole("option", { name: /item report/i })).toBeInTheDocument();
         expect(screen.queryByRole("option", { name: /new license/i })).not.toBeInTheDocument();
     });

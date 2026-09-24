@@ -329,15 +329,58 @@ fi
 # ── 1. Pull latest code ──────────────────────────────────────
 echo_info "Pulling latest code from ${BRANCH}..."
 cd "$SERVER_PATH"
-git stash push --include-untracked
+
+# Save stash ID to verify we applied it back
+STASH_ID=""
+STASH_COUNT_BEFORE=$(git stash list | wc -l)
+git stash push --include-untracked --message "auto-deploy-$(date +%s)"
+STASH_COUNT_AFTER=$(git stash list | wc -l)
+if [ "$STASH_COUNT_AFTER" -gt "$STASH_COUNT_BEFORE" ]; then
+    STASH_ID=$(git stash list | head -1 | cut -d: -f1)
+    echo_info "Local changes stashed: $STASH_ID"
+fi
+
 # Keep prior hashed frontend bundles.  Open browser tabs can still reference a
 # lazy chunk from the preceding release; Vite's `emptyOutDir: false` can retain
 # those chunks only if git clean does not delete the build directory first.
-git clean -fd -e frontend/dist/
-git fetch --all --prune
-git checkout "$BRANCH" || git checkout -b "$BRANCH" "origin/$BRANCH"
-git pull --ff-only origin "$BRANCH"
-echo_ok "Code updated to latest ${BRANCH}"
+git clean -fd -e frontend/dist/ -e venv/ -e node_modules/
+
+# Ensure we're not in detached HEAD state
+CURRENT_HEAD=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_HEAD" = "HEAD" ]; then
+    echo_warn "Currently in detached HEAD state, checking out $BRANCH..."
+    git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH"
+fi
+
+# Fetch latest from remote
+git fetch --all --prune || { echo_err "git fetch failed"; exit 1; }
+
+# Switch to target branch if not already on it
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "$BRANCH" ]; then
+    git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH" || {
+        echo_err "Failed to checkout $BRANCH"
+        [ -n "$STASH_ID" ] && git stash pop "$STASH_ID" 2>/dev/null || true
+        exit 1
+    }
+fi
+
+# Pull with fast-forward only
+if ! git pull --ff-only origin "$BRANCH"; then
+    echo_err "git pull --ff-only failed (non-fast-forward changes detected)"
+    [ -n "$STASH_ID" ] && git stash pop "$STASH_ID" 2>/dev/null || true
+    exit 1
+fi
+
+# Try to reapply local changes if they were stashed
+if [ -n "$STASH_ID" ]; then
+    if git stash pop "$STASH_ID" 2>/dev/null; then
+        echo_ok "Local stashed changes reapplied"
+    else
+        echo_warn "Could not reapply stashed changes ($STASH_ID) — they remain in stash"
+    fi
+fi
+
+echo_ok "Code updated to latest ${BRANCH} ($(git rev-parse --short HEAD))"
 
 # ── 2. Backend: dependencies + migrations ───────────────────
 echo_info "Installing Python dependencies..."

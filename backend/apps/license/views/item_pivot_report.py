@@ -1663,7 +1663,9 @@ class ItemPivotReportView(APIView):
                 fixed = ["SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF", "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF"]
                 fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "DEBITED QTY", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
                 for group_index, group in enumerate(report_data["groups"], 1):
-                    sheet = workbook.create_sheet(title=f"{(group['notification_number'] or 'Pivot')[:24]}-{group_index}")
+                    notification_num = group['notification_number'] or 'Pivot'
+                    safe_notification = notification_num[:24].replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace(':', '-').replace('[', '-').replace(']', '-')
+                    sheet = workbook.create_sheet(title=f"{safe_notification}-{group_index}")
                     sheet.append([f"Notification Number: {group['notification_number']}", group["purchase_status"]["name"], f"{group['license_count']} Licences"])
                     sheet.append(fixed + [field for item in group["item_groups"] for field in fields])
                     for index, license_row in enumerate(group["licenses"], 1):

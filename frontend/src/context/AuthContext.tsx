@@ -16,8 +16,12 @@ export const AuthContext = createContext<AuthContextValue>({
 });
 
 // ─── Session config ───────────────────────────────────────────────────────────
-// A session expires only after five continuous minutes without meaningful use.
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+// A session expires only after 30 continuous minutes without meaningful use.
+// This allows users to read documents, think through decisions, or handle
+// slow connections without being logged out mid-session. Access token is
+// automatically refreshed before expiry (30 min), so logout timing is
+// independent of JWT lifetime.
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const ACTIVITY_THROTTLE_MS = 1000;
 const REFRESH_EARLY_MS = 5 * 60 * 1000;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,6 +61,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const logoutInProgressRef = useRef(false);
+    const logoutRef = useRef<(reason?: string) => Promise<void>>();
 
     const clearTimers = () => {
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -90,21 +95,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
-    // Reset the idle clock whenever the user interacts with the page
+    // Keep logout stable in ref so it can be used by activity handlers without
+    // causing the event listeners to be constantly removed/re-added.
+    useEffect(() => {
+        logoutRef.current = logout;
+    }, [logout]);
+
+    // Reset the idle clock whenever the user interacts with the page.
+    // Uses logoutRef to avoid recreating this function when logout changes.
     const resetActivity = useCallback(() => {
         const now = Date.now();
         if (now - lastActivityWriteRef.current < ACTIVITY_THROTTLE_MS) return;
         lastActivityWriteRef.current = now;
         lastActivityRef.current = now;
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-        idleTimerRef.current = setTimeout(() => logout('idle'), IDLE_TIMEOUT_MS);
-    }, [logout]);
+        idleTimerRef.current = setTimeout(() => logoutRef.current?.('idle'), IDLE_TIMEOUT_MS);
+    }, []);
 
     const startIdleTimer = useCallback(() => {
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
         const remaining = Math.max(IDLE_TIMEOUT_MS - (Date.now() - lastActivityRef.current), 0);
-        idleTimerRef.current = setTimeout(() => logout('idle'), remaining);
-    }, [logout]);
+        idleTimerRef.current = setTimeout(() => logoutRef.current?.('idle'), remaining);
+    }, []);
 
     const scheduleRefresh = useCallback(() => {
         if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);

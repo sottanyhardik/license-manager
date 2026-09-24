@@ -279,13 +279,13 @@ describe('AuthProvider / AuthContext', () => {
     expect(localStorage.getItem('user')).toBeNull()
   })
 
-  it('logs out only after five continuous minutes without activity', async () => {
+  it('logs out only after thirty continuous minutes without activity', async () => {
     vi.useFakeTimers()
     const { result } = renderHook(() => useContext(AuthContext), { wrapper })
     await act(async () => { await vi.runAllTimersAsync() })
     act(() => { result.current.loginSuccess(MOCK_LOGIN_RESPONSE) })
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60 * 1000 - 1) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(30 * 60 * 1000 - 1) })
     expect(result.current.user).toEqual(MOCK_USER)
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(result.current.user).toBeNull()
@@ -296,11 +296,11 @@ describe('AuthProvider / AuthContext', () => {
     const { result } = renderHook(() => useContext(AuthContext), { wrapper })
     await act(async () => { await vi.runAllTimersAsync() })
     act(() => { result.current.loginSuccess(MOCK_LOGIN_RESPONSE) })
-    await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60 * 1000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000) })
     act(() => window.dispatchEvent(new Event('pointerdown')))
-    await act(async () => { await vi.advanceTimersByTimeAsync(3 * 60 * 1000 + 1) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 1) })
     expect(result.current.user).toEqual(MOCK_USER)
-    await act(async () => { await vi.advanceTimersByTimeAsync(2 * 60 * 1000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000) })
     expect(result.current.user).toBeNull()
   })
 

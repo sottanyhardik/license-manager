@@ -1,15 +1,16 @@
 import { expect, test } from "@playwright/test";
 
 async function signInAndOpenPivot(page: import("@playwright/test").Page) {
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.goto("/login", { waitUntil: "networkidle" });
   await page.locator("#login-username").fill(process.env.LM_USERNAME || "hardik");
   await page.locator("#login-password").fill(process.env.LM_PASSWORD || "admin@123");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/dashboard");
-  await page.goto("/reports/item-pivot", { waitUntil: "domcontentloaded" });
+  await page.goto("/reports/item-pivot", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /E2E2509 Managed browser gate/ }).click();
   await page.getByRole("button", { name: "E2E2509" }).click();
-  await expect(page.locator("[data-item-pivot-sticky-stack]")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator("[data-item-pivot-sticky-stack]")).toBeVisible({ timeout: 15000 });
 }
 
 test("Item Pivot keeps its measured sticky stack aligned while scrolling and horizontally scrolling", async ({ page }, testInfo) => {

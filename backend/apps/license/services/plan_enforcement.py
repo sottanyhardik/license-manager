@@ -138,14 +138,50 @@ def plan_line_status_for(plan_line) -> dict | None:
 
 
 def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
-    """Bulk equivalent of :func:`plan_line_status_for` for plan-mode rows."""
+    """Bulk equivalent of :func:`plan_line_status_for` for plan-mode rows.
+
+    Candidate grids routinely contain many plan lines.  Do not delegate to
+    the singleton helper here: that performs a group lookup and aggregate for
+    each line, turning one page into an N+1 query pattern.
+    """
     plan_lines = list(plan_lines)
     ids = [line.pk for line in plan_lines if getattr(line, "pk", None)]
     if not ids:
         return {}
     from apps.allotment.models import AllotmentItems
+    from apps.license.models import LicenseImportItemsModel
+    from apps.license.services.plan_grouping import plan_group_key
 
-    return {line.pk: plan_line_status_for(line) for line in plan_lines if line.pk}
+    license_ids = {line.import_item.license_id for line in plan_lines if line.pk}
+    sources = list(LicenseImportItemsModel.objects.filter(license_id__in=license_ids)
+                   .select_related("hs_code").prefetch_related("items"))
+    groups = {}
+    for source in sources:
+        groups.setdefault((source.license_id, plan_group_key(source)), []).append(source.id)
+    item_ids = [source.id for source in sources]
+    target_ids = {line.item_name_id for line in plan_lines}
+    debits = AllotmentItems.objects.filter(
+        _ALLOTTED_FILTER, allocation_basis="PLAN", item_id__in=item_ids,
+        planning_target_item_id__in=target_ids,
+    ).values("item_id", "planning_target_item_id").annotate(
+        q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
+        v=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )
+    debit_map = {(row["item_id"], row["planning_target_item_id"]): (row["q"] or DEC_000, row["v"] or DEC_0) for row in debits}
+    result = {}
+    for line in plan_lines:
+        if not line.pk:
+            continue
+        group_ids = groups.get((line.import_item.license_id, plan_group_key(line.import_item)), [])
+        used_qty = sum((debit_map.get((item_id, line.item_name_id), (DEC_000, DEC_0))[0] for item_id in group_ids), DEC_000)
+        used_cif = sum((debit_map.get((item_id, line.item_name_id), (DEC_000, DEC_0))[1] for item_id in group_ids), DEC_0)
+        original_qty = Decimal(str(line.planned_quantity or DEC_000))
+        original_cif = Decimal(str(line.planned_cif_fc or DEC_0))
+        result[line.pk] = {"original_quantity": original_qty, "used_quantity": used_qty,
+                           "remaining_quantity": max(DEC_000, original_qty - used_qty),
+                           "original_cif_fc": original_cif, "used_cif_fc": used_cif,
+                           "remaining_cif_fc": max(DEC_0, original_cif - used_cif)}
+    return result
 
 
 def planned_totals_for(item_ids) -> tuple[Decimal, Decimal]:

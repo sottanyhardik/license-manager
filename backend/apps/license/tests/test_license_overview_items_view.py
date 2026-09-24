@@ -9,6 +9,8 @@ Mirrors the fixture style of `test_balance_ledger_views.py`'s
 from decimal import Decimal
 
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 from rest_framework.test import APIClient
 
 from apps.license.models import LicenseImportItemsModel
@@ -36,8 +38,13 @@ class LicenseOverviewItemsViewTests(LicenseBalanceLedgerFixtureMixin, TestCase):
             available_quantity=Decimal("850.000"),
         )
 
-        with self.assertNumQueries(4):
+        # The endpoint has no per-item lookup.  Query planning can fold one
+        # relation into the licence fetch, so require the budget rather than
+        # a historical exact count.
+        with CaptureQueriesContext(connection) as queries:
             resp = self.client.get(f"/api/licenses/{license_obj.id}/overview-items/")
+
+        self.assertLessEqual(len(queries), 4)
 
         self.assertEqual(resp.status_code, 200, resp.data)
         rows = resp.data

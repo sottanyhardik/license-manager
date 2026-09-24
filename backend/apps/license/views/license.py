@@ -579,6 +579,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'item_usage', 'balance_ledger', 'balance_pdf', 'balance_excel', 'auto_plan',
             'overview_summary', 'overview_boes', 'overview_allotments',
             'overview_items', 'overview_invoice_ledger', 'plan_utilization',
+            # Validity must report an expired or inactive licence's current
+            # state.  Object permissions still apply after lookup.
+            'check_validity',
         ]
 
         if skip_default_filters:

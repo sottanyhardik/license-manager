@@ -7,8 +7,8 @@ async function signInAndOpenPivot(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/dashboard");
   await page.goto("/reports/item-pivot", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "A3627 Glass Vials / Phials /" }).click();
-  await page.getByRole("button", { name: /Notification 025\/2023/ }).click();
+  await page.getByRole("button", { name: /E2E2509 Managed browser gate/ }).click();
+  await page.getByRole("button", { name: "E2E2509" }).click();
   await expect(page.locator("[data-item-pivot-sticky-stack]")).toBeVisible();
 }
 

@@ -71,7 +71,8 @@ def mixed_hsn_same_desc_license(db):
 
 def _allocate(client, allotment, item, plan_line, qty, cif_fc):
     return client.post(f"/api/allotment-actions/{allotment.id}/allocate-items/", {
-        "allocations": [{"item_id": item.id, "plan_line_id": plan_line.id, "qty": str(qty), "cif_fc": str(cif_fc)}],
+        "allocations": [{"item_id": item.id, "planning_target_item_id": plan_line.item_name_id,
+                         "allocation_basis": "PLAN", "search_mode": "PLAN", "qty": str(qty), "cif_fc": str(cif_fc)}],
     }, format="json")
 
 

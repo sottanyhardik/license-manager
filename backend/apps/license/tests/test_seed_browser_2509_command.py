@@ -11,7 +11,8 @@ from apps.allotment.models import AllotmentModel
 from apps.allotment.services.paired_allocation_max import calculate_paired_allocation_max
 from apps.core.models import NotificationNumber, PortModel, PurchaseStatus, SchemeCode
 from apps.license.models import (
-    LicenseDetailsModel, LicenseItemPlan, SionPlanningProfile, SionPlanningRule,
+    LicenseDetailsModel, LicenseItemPlan, LicenseReplanRequest, SionPlanningProfile,
+    SionPlanningRule,
 )
 
 
@@ -34,8 +35,16 @@ def test_seed_browser_2509_creates_idempotent_canonical_fixture(monkeypatch):
     call_command("seed_browser_2509")
 
     license_obj = LicenseDetailsModel.objects.get(pk=2509, license_number="3411008090")
-    assert license_obj.planning_source_revision == license_obj.planning_applied_revision == 1
-    assert license_obj.replan_requests.count() == 0
+    assert license_obj.planning_source_revision == license_obj.planning_applied_revision
+    assert not license_obj.replan_requests.filter(
+        status__in=[
+            LicenseReplanRequest.STATUS_PENDING,
+            LicenseReplanRequest.STATUS_QUEUED,
+            LicenseReplanRequest.STATUS_RUNNING,
+            LicenseReplanRequest.STATUS_RETRY_PENDING,
+        ]
+    ).exists()
+    assert license_obj.replan_requests.order_by("-pk").first().status == LicenseReplanRequest.STATUS_SUCCEEDED
     assert license_obj.scheme_code == SchemeCode.objects.get(code="E2E2509")
     assert license_obj.notification_number == NotificationNumber.objects.get(code="2509")
     assert license_obj.port == PortModel.objects.get(code="E2E")

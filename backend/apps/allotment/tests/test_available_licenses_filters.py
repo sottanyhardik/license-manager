@@ -25,7 +25,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.allotment.models import AllotmentModel
 from apps.allotment.views_actions import AllotmentActionViewSet
 from apps.core.models import CompanyModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
 User = get_user_model()
 
@@ -83,6 +83,7 @@ def stale_value_item(db):
         license_expiry_date=date.today() + timedelta(days=90),
         exporter=company,
     )
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=LIVE_VALUE)
     return LicenseImportItemsModel.objects.create(
         license=license_obj,
         serial_number=13,
@@ -143,6 +144,9 @@ class TestAvailableQuantityFilter:
         assert stale_value_item.id not in ids
 
     def test_zero_live_actual_cif_removes_candidate_server_side(self, allotment_client, allotment_obj, stale_value_item):
+        # Actual-mode eligibility is based on the canonical licence balance,
+        # not the serializer's legacy display-map seam.
+        LicenseExportItemModel.objects.filter(license=stale_value_item.license).update(cif_fc=Decimal("0.00"))
         with patch(
             "apps.license.services.condition_pool.available_value_bulk_map",
             side_effect=_mock_bulk_map(stale_value_item.id, Decimal("0.00")),

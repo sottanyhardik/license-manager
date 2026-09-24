@@ -28,7 +28,7 @@ from rest_framework.test import APIClient
 
 from apps.bill_of_entry.models import BillOfEntryModel
 from apps.core.models import CompanyModel, PortModel
-from apps.license.models import LicenseDetailsModel, LicenseDocumentModel
+from apps.license.models import LicenseDetailsModel, LicenseDocumentModel, LicensePurchase
 from apps.trade.models import LicenseTrade
 
 pytestmark = pytest.mark.django_db
@@ -185,9 +185,39 @@ class TestTradeDocumentAccess:
         _assert_get_status(client, f"/api/media/{rel}", 200)
 
 
+class TestAdditionalBusinessDocumentAccess:
+    def test_license_purchase_invoice_requires_license_read_access(self, dev_media):
+        license_obj = LicenseDetailsModel.objects.create(license_number="0510088888")
+        rel = _write(dev_media, "license_purchases/invoices/private.pdf")
+        LicensePurchase.objects.create(license=license_obj, invoice_copy=rel)
+
+        blocked = _client_for(_make_user("purchase_invoice_blocked"))
+        allowed = _client_for(_make_user("purchase_invoice_allowed", roles=["LICENSE_VIEWER"]))
+
+        _assert_get_status(blocked, f"/api/media/{rel}", 404)
+        _assert_get_status(allowed, f"/api/media/{rel}", 200)
+
+    def test_company_signature_requires_company_read_access(self, dev_media):
+        rel = _write(dev_media, "companies/IEC000888/signature.png", content=b"signature")
+        company = CompanyModel.objects.create(iec="IEC000888", name="Private Company")
+        CompanyModel.objects.filter(pk=company.pk).update(signature=rel)
+
+        blocked = _client_for(_make_user("company_asset_blocked"))
+        allowed = _client_for(_make_user("company_asset_allowed", roles=["LICENSE_VIEWER"]))
+
+        _assert_get_status(blocked, f"/api/media/{rel}", 404)
+        _assert_get_status(allowed, f"/api/media/{rel}", 200)
+
+    def test_orphaned_additional_business_document_is_blocked(self, dev_media):
+        rel = _write(dev_media, "license_purchases/invoices/orphan.pdf")
+        client = _client_for(_make_user("purchase_invoice_orphan", roles=["LICENSE_VIEWER"]))
+
+        _assert_get_status(client, f"/api/media/{rel}", 404)
+
+
 class TestUnaffectedAndOrphanPaths:
     def test_prefix_outside_business_docs_keeps_authenticated_only_access(self, dev_media):
-        # e.g. company branding assets — out of scope for this fix, must
+        # e.g. non-company application assets — out of scope for this fix, must
         # keep the original "any authenticated user" behavior unchanged.
         rel = _write(dev_media, "entity_logos/logo.png", content=b"\x89PNG\r\n")
         user = _make_user("no_roles_at_all", roles=[])

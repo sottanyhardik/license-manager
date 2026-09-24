@@ -26,7 +26,7 @@ class _Ids:
         return list(self.values)
 
 
-def _dataset(license_id, license_type, first_purchase_date=None):
+def _dataset(license_id, license_type, first_purchase_date=None, company_id=None):
     balances = {1: Decimal("5000"), 2: Decimal("3000"), 3: Decimal("1000")}
     return {
         "license_id": license_id,

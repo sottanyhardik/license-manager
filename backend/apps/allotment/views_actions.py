@@ -258,7 +258,17 @@ class AllotmentActionViewSet(ViewSet):
           on the plan line itself (comma-separated)
         """
         allotment = get_object_or_404(
-            AllotmentModel.objects.prefetch_related('allotment_details__item__license__exporter'), pk=pk)
+            AllotmentModel.objects.select_related('company', 'port', 'related_company', 'planning_target_item').prefetch_related('allotment_details__item__license__exporter'), pk=pk)
+        # The response serializes this same prefetched request snapshot.  Seed
+        # the model's derived totals from it so AllotmentSerializer does not
+        # repeat three aggregate queries; never persist these values or reuse
+        # them outside this request.
+        details = list(allotment.allotment_details.all())
+        allotted_qty = sum((Decimal(str(detail.qty or 0)) for detail in details), Decimal('0.000'))
+        allotted_cif = sum((Decimal(str(detail.cif_fc or 0)) for detail in details), Decimal('0.00'))
+        allotment.__dict__['alloted_quantity'] = allotted_qty
+        allotment.__dict__['balanced_quantity'] = max(Decimal(str(allotment.required_quantity or 0)) - allotted_qty, Decimal('0.000'))
+        allotment.__dict__['allotted_value'] = allotted_cif
         has_quantity_requirement = Decimal(str(allotment.required_quantity or 0)) > 0
         remaining_qty = allotment.balanced_quantity if has_quantity_requirement else None
         remaining_cif = max(allotment.required_value - allotment.allotted_value, Decimal('0.00')) if allotment.required_value > 0 else None
@@ -921,6 +931,8 @@ class AllotmentActionViewSet(ViewSet):
         available_value_map = available_value_bulk_map(import_items)
         from apps.license.services.item_usage import billed_no_boe_bulk_map
         billed_no_boe_map = billed_no_boe_bulk_map([ii.id for ii in import_items])
+        from apps.license.services.balance_calculator import ItemBalanceCalculator
+        boe_debited_quantity_map = ItemBalanceCalculator.calculate_debited_quantity_for_items([ii.id for ii in import_items])
 
         license_serializer = LicenseImportItemSerializer(
             import_items, many=True,
@@ -931,6 +943,7 @@ class AllotmentActionViewSet(ViewSet):
                                  # apply to an already-per-plan-line row — see
                                  # the frontend, which only renders it in Actual mode.
                 'billed_no_boe_map': billed_no_boe_map,
+                'boe_debited_quantity_map': boe_debited_quantity_map,
             }
         )
         allotment_serializer = AllotmentSerializer(allotment, context={'request': request})

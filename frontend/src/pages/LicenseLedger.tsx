@@ -565,9 +565,8 @@ export default function LicenseLedger() {
                     <Button size="sm" disabled={packageDownloading || selectedLicenseIds.size === 0} onClick={() => downloadPackage([...selectedLicenseIds])}>
                         {packageDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Choose Destination Folder & Start
                     </Button>
-                    {/* The old transient package-progress block has been superseded
-                        by the persistent Download Requests screens. */}
-                    {false && packageJob && <div className="text-xs text-muted-foreground" role="status">
+                    {/* The persistent Download Requests screens supersede this progress block. */}
+                    {packageJob && <div className="hidden text-xs text-muted-foreground" role="status" aria-hidden="true">
                         <div>Total: {packageJob.total} · Queued: {packageJob.queued} · Processing: {packageJob.running} · Ready to download: {Math.max(0, packageJob.completed - (downloadState?.downloaded.length ?? 0))} · Downloading: {downloadState?.downloading ? 1 : 0} · Downloaded: {downloadState?.downloaded.length ?? 0} · Failed: {packageJob.failed + (downloadState?.failed.length ?? 0)}</div>
                         {packageFolder && <div className="font-medium text-foreground">Selected folder: {packageFolder.selected}<br />Package folder: {packageFolder.job}</div>}
                         {packageJob.status} — {packageJob.completed} / {packageJob.total}

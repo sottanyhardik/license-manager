@@ -112,7 +112,7 @@ export async function downloadMergedLicenseLedgerPackage(licenseIds: Array<strin
     const response = await api.post("license-ledger/download-package-pdf/", { license_ids: licenseIds }, { responseType: "blob" });
     const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: "application/pdf" });
     const disposition = String(response.headers?.["content-disposition"] ?? "");
-    const matched = /filename\*?=(?:UTF-8''|\")?([^\";]+)/i.exec(disposition);
+    const matched = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
     const url = URL.createObjectURL(blob);
     try {
         const link = document.createElement("a"); link.href = url; link.download = matched?.[1] ? decodeURIComponent(matched[1]) : `${licenseIds[0]}.pdf`;

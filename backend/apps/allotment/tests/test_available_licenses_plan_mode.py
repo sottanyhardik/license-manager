@@ -3,13 +3,14 @@ Tests for the Allotment "available-licenses" action's Plan mode
 (`debit_based_on=plan`) — backend/apps/allotment/views_actions.py's
 `_available_licenses_plan_mode`.
 
-Plan mode switches the grid to one row per `LicenseItemPlan` line instead of
-per `LicenseImportItemsModel` row, so an import item split across multiple
-planned items (e.g. E132 Auto-Plan's Vegetable Oil -> PKO + Cheese) shows as
-separate rows, each with only its own planned quantity/value — never the
-parent import item's full amount. Actual mode (the default) must remain
-byte-for-byte unchanged; see test_available_licenses_filters.py for that
-existing coverage, which this file does not duplicate.
+Plan mode returns one stable candidate per source/target business identity.
+An import item split across multiple planned items (e.g. E132 Auto-Plan's
+Vegetable Oil -> PKO + Cheese) therefore produces separate candidates with
+their own planned quantity/value — never the parent import item's full amount.
+The candidate ``id`` is a client draft key, not a ``LicenseItemPlan`` primary
+key; callers submit ``item_id`` and ``planning_target_item_id``. Actual mode
+(the default) must remain byte-for-byte unchanged; see
+test_available_licenses_filters.py for that existing coverage.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -24,7 +25,7 @@ from rest_framework.test import APIClient
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.models import CompanyModel, ItemNameModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 
 User = get_user_model()
 
@@ -88,6 +89,7 @@ def veg_oil_split(db, item_names):
         quantity=Decimal("100.000"),
         available_quantity=Decimal("100.000"),
     )
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("1000000.00"))
     pko_line = LicenseItemPlan.objects.create(
         license=license_obj, import_item=import_item, item_name=item_names["PKO - PLANMODE-TEST"],
         planned_quantity=Decimal("30.000"), unit_price=Decimal("1.80"), planned_cif_fc=Decimal("54.00"),
@@ -194,11 +196,14 @@ class TestPlanModeSplitRows:
         assert Decimal(by_name["PKO - PLANMODE-TEST"]["original_planned_qty"]) == Decimal("30.000")
         assert Decimal(by_name["PKO - PLANMODE-TEST"]["original_planned_cif"]) == Decimal("54.00")
 
-        # Row ids must be unique per split row (the LicenseItemPlan line's
-        # own id), not the shared underlying import item id.
+        # Candidate ids are unique UI draft keys.  The stable public identity
+        # used for allocation is the source import item plus target item, not
+        # an internal ``LicenseItemPlan`` projection primary key.
         assert split_rows[0]["id"] != split_rows[1]["id"]
-        assert {split_rows[0]["id"], split_rows[1]["id"]} == {
-            veg_oil_split["pko_line"].id, veg_oil_split["cheese_line"].id,
+        assert {row["import_item_id"] for row in split_rows} == {veg_oil_split["import_item"].id}
+        assert {row["planning_target_item_id"] for row in split_rows} == {
+            veg_oil_split["pko_line"].item_name_id,
+            veg_oil_split["cheese_line"].item_name_id,
         }
 
     def test_plan_mode_never_shows_full_100kg_on_either_split_row(
@@ -226,7 +231,11 @@ class TestPlanModeSplitRows:
         assert response.status_code == 200, response.data
         pko_rows = [row for row in response.data["available_items"] if row["planned_item_name"] == "PKO - PLANMODE-TEST"]
         assert {row["import_item_id"] for row in pko_rows} == {representative.id, sibling.id}
-        assert {row["plan_line_id"] for row in pko_rows} == {veg_oil_split["pko_line"].id}
+        # The public PLAN identity is a canonical target, shared across the
+        # grouped source rows.  ``plan_line_id`` is no longer response API.
+        assert {row["planning_target_item_id"] for row in pko_rows} == {
+            veg_oil_split["pko_line"].item_name_id,
+        }
         assert {Decimal(row["plan_position"]["remaining_qty"]) for row in pko_rows} == {Decimal("30.000")}
 
     def test_fully_consumed_plan_line_is_excluded(
@@ -240,14 +249,15 @@ class TestPlanModeSplitRows:
             item=veg_oil_split["import_item"],
             plan_line=veg_oil_split["pko_line"],
             allocation_basis="PLAN",
+            planning_target_item=veg_oil_split["pko_line"].item_name,
             qty=Decimal("30.000"),
             cif_fc=Decimal("54.00"),
         )
 
         resp = _get_available_licenses(allotment_client, allotment_obj, debit_based_on="plan")
-        by_id = {r["id"]: r for r in resp.data["available_items"]}
-        assert veg_oil_split["pko_line"].id not in by_id
-        assert veg_oil_split["cheese_line"].id in by_id
+        target_ids = {r["planning_target_item_id"] for r in resp.data["available_items"]}
+        assert veg_oil_split["pko_line"].item_name_id not in target_ids
+        assert veg_oil_split["cheese_line"].item_name_id in target_ids
 
 
 @pytest.mark.django_db
@@ -275,8 +285,9 @@ class TestPlannedItemNameFilter:
         assert resp.status_code == 200
         rows = resp.data["available_items"]
         assert all(r["planned_item_name"] == "PKO - PLANMODE-TEST" for r in rows)
-        assert any(r["id"] == veg_oil_split["pko_line"].id for r in rows)
-        assert not any(r["id"] == veg_oil_split["cheese_line"].id for r in rows)
+        assert {r["planning_target_item_id"] for r in rows} == {
+            veg_oil_split["pko_line"].item_name_id,
+        }
 
     def test_filter_is_ignored_in_actual_mode(self, allotment_client, allotment_obj, veg_oil_split, item_names):
         # Backward compatibility: the new filter must not affect Actual mode.
@@ -303,9 +314,9 @@ class TestPlanModeRangeFilters:
         resp = _get_available_licenses(
             allotment_client, allotment_obj, debit_based_on="plan", available_quantity_gte="50",
         )
-        ids = [r["id"] for r in resp.data["available_items"]]
-        assert veg_oil_split["pko_line"].id not in ids   # 30kg < 50
-        assert veg_oil_split["cheese_line"].id in ids    # 70kg >= 50
+        target_ids = {r["planning_target_item_id"] for r in resp.data["available_items"]}
+        assert veg_oil_split["pko_line"].item_name_id not in target_ids   # 30kg < 50
+        assert veg_oil_split["cheese_line"].item_name_id in target_ids    # 70kg >= 50
 
     def test_max_value_below_cheese_share_excludes_cheese_but_keeps_pko(
         self, allotment_client, allotment_obj, veg_oil_split,
@@ -313,9 +324,9 @@ class TestPlanModeRangeFilters:
         resp = _get_available_licenses(
             allotment_client, allotment_obj, debit_based_on="plan", available_value_lte="100",
         )
-        ids = [r["id"] for r in resp.data["available_items"]]
-        assert veg_oil_split["pko_line"].id in ids        # $54 <= $100
-        assert veg_oil_split["cheese_line"].id not in ids  # $385 > $100
+        target_ids = {r["planning_target_item_id"] for r in resp.data["available_items"]}
+        assert veg_oil_split["pko_line"].item_name_id in target_ids        # $54 <= $100
+        assert veg_oil_split["cheese_line"].item_name_id not in target_ids  # $385 > $100
 
     def test_malformed_range_param_is_ignored_not_500(self, allotment_client, allotment_obj, veg_oil_split):
         resp = _get_available_licenses(
@@ -334,6 +345,6 @@ class TestPlanModeRangeFilters:
         response = _get_available_licenses(
             allotment_client, allotment_obj, debit_based_on="PLAN", available_quantity_gte="25",
         )
-        ids = {row["id"] for row in response.data["available_items"]}
-        assert veg_oil_split["pko_line"].id not in ids
-        assert veg_oil_split["cheese_line"].id not in ids
+        target_ids = {row["planning_target_item_id"] for row in response.data["available_items"]}
+        assert veg_oil_split["pko_line"].item_name_id not in target_ids
+        assert veg_oil_split["cheese_line"].item_name_id not in target_ids

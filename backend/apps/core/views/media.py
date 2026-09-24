@@ -23,12 +23,14 @@ the activation runbook in ``docs/08-security.md``.
 import os
 
 from django.conf import settings
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import (
     BillOfEntryPermission,
+    CompanyPermission,
     LicensePermission,
     TradePermission,
 )
@@ -46,9 +48,11 @@ def _required_read_roles(rel_path):
     - ``licenses/...``          -> ``LicenseDocumentModel`` (licence copy / TL / other)
     - ``boe_copies/...``        -> ``BillOfEntryModel`` (ICEGATE BOE PDF)
     - ``trade/...``             -> ``LicenseTrade`` (purchase invoice copy)
+    - ``license_purchases/...`` -> ``LicensePurchase`` (invoice copy)
+    - ``companies/...``         -> ``CompanyModel`` (logo/signature/stamp)
 
     Returns ``None`` when ``rel_path`` doesn't fall under one of those
-    prefixes (e.g. company branding assets) — those keep the original
+    prefixes (e.g. unrelated application assets) — those keep the original
     "any authenticated user" behavior, unchanged by this check. Returns an
     empty list (nobody but a superuser passes) when the prefix is one of the
     protected ones above but no owning row references this exact path — e.g.
@@ -75,6 +79,22 @@ def _required_read_roles(rel_path):
         if not LicenseTrade.objects.filter(purchase_invoice_copy=rel_path).exists():
             return []
         return TradePermission.required_roles_for_read
+
+    if rel_path.startswith("license_purchases/"):
+        from apps.license.models import LicensePurchase
+
+        if not LicensePurchase.objects.filter(invoice_copy=rel_path).exists():
+            return []
+        return LicensePermission.required_roles_for_read
+
+    if rel_path.startswith("companies/"):
+        from apps.core.models import CompanyModel
+
+        if not CompanyModel.objects.filter(
+            Q(logo=rel_path) | Q(signature=rel_path) | Q(stamp=rel_path)
+        ).exists():
+            return []
+        return CompanyPermission.required_roles_for_read
 
     return None
 

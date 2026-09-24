@@ -104,7 +104,7 @@ test.describe("trades request lifecycle and visual performance", () => {
     await expect(page.getByText("PERF-PURCHASE-502")).toBeVisible();
     const coldLoadMs = Date.now() - startedAt;
 
-    expect(tradesRequests).toEqual(["GET /api/trades/?page=1&page_size=25"]);
+    expect(tradesRequests).toEqual(["GET /api/trades/?page=1&page_size=25&ordering=-invoice_date"]);
     await expectNoDocumentOverflow(page);
     await expectNoBasicSemanticViolations(page);
     await expectNoSeriousOrCriticalAxeViolations(page, "main");
@@ -117,8 +117,8 @@ test.describe("trades request lifecycle and visual performance", () => {
     await expect(page.getByText("PERF-SALE-501")).toBeVisible();
     const warmLoadMs = Date.now() - warmStartedAt;
     expect(tradesRequests).toEqual([
-      "GET /api/trades/?page=1&page_size=25",
-      "GET /api/trades/?page=1&page_size=25",
+      "GET /api/trades/?page=1&page_size=25&ordering=-invoice_date",
+      "GET /api/trades/?page=1&page_size=25&ordering=-invoice_date",
     ]);
     expect(coldLoadMs).toBeGreaterThanOrEqual(0);
     expect(warmLoadMs).toBeGreaterThanOrEqual(0);

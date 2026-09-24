@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+const realBackendEnabled = process.env.LM_REAL_E2E === "1";
+const licence = "3411008090";
 
-test("Custom Ledger action downloads one native PDF without navigating away", async ({ page }) => {
+test("Custom Ledger action downloads one deterministic native PDF without navigating away", async ({ page }) => {
+  test.skip(!realBackendEnabled, "Requires the isolated seeded browser harness.");
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error" && !message.text().includes("favicon")) errors.push(message.text()); });
@@ -12,11 +15,11 @@ test("Custom Ledger action downloads one native PDF without navigating away", as
   await page.waitForURL("**/dashboard");
   await page.goto("/license-ledger", { waitUntil: "networkidle" });
   const licenceNumbers = page.getByText("License Numbers", { exact: true }).locator("..").locator("input");
-  await page.locator("#ledger-purchase-from").fill("");
-  await page.locator("#ledger-purchase-to").fill("");
-  await licenceNumbers.fill("0311051359");
+  await licenceNumbers.fill(licence);
   await licenceNumbers.press("Enter");
-  const licenceRow = page.getByText("0311051359", { exact: true }).first().locator("xpath=ancestor::tr[1]");
+  await page.waitForLoadState("networkidle");
+  await page.getByText("Loading license-wise ledger").waitFor({ state: "hidden", timeout: 15000 });
+  const licenceRow = page.getByText(licence, { exact: true }).first().locator("xpath=ancestor::tr[1]");
   await expect(licenceRow).toBeVisible();
   const action = licenceRow.getByRole("button", { name: "Custom Ledger PDF" });
   await expect(action).toBeVisible();
@@ -29,8 +32,8 @@ test("Custom Ledger action downloads one native PDF without navigating away", as
   expect(pdfResponses).toHaveLength(1);
   expect(pdfResponses[0].headers()["content-type"]).toContain("application/pdf");
   expect(page.url()).toContain("/license-ledger");
-  expect(download.suggestedFilename()).toBe("0311051359-customs-ledger.pdf");
+  expect(download.suggestedFilename()).toBe(`${licence}-customs-ledger.pdf`);
   mkdirSync("../artifacts", { recursive: true });
-  await download.saveAs("../artifacts/0311051359-customs-ledger.pdf");
+  await download.saveAs(`../artifacts/${licence}-customs-ledger.pdf`);
   expect(errors).toEqual([]);
 });

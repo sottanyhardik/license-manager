@@ -3,10 +3,10 @@ Tests for plan-line balance tracking in `AllotmentActionViewSet.allocate_items`
 (backend/apps/allotment/views_actions.py).
 
 Business rule: once Auto-Plan generates a Vegetable Oil PKO/Cheese split,
-those planned quantities become FIXED commitments.  Each Plan debit retains
-its exact `plan_line_id`, and residual capacity is derived from that ledger
-identity.  No mutable plan counter may be decremented or reconstructed using
-the plan line's rounded unit price.
+those planned quantities become fixed commitments.  PLAN allocation names the
+stable target-item identity; the server resolves its current plan projection
+and derives residual capacity from the allocation ledger.  No mutable plan
+counter may be decremented or reconstructed using a rounded unit price.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -104,7 +104,14 @@ def _allocate(client, allotment_obj, item_id, qty, cif_fc, plan_line_id=None):
     url = f"/api/allotment-actions/{allotment_obj.id}/allocate-items/"
     entry = {"item_id": item_id, "qty": str(qty), "cif_fc": str(cif_fc)}
     if plan_line_id is not None:
-        entry["plan_line_id"] = plan_line_id
+        # The fixture lookup only obtains the stable public target identity.
+        # A retired ``plan_line_id`` request field is deliberately not sent.
+        plan_line = LicenseItemPlan.objects.get(pk=plan_line_id)
+        entry.update({
+            "planning_target_item_id": plan_line.item_name_id,
+            "allocation_basis": "PLAN",
+            "search_mode": "PLAN",
+        })
     return client.post(url, {"allocations": [entry]}, format="json")
 
 
@@ -167,7 +174,7 @@ class TestPlanLineLedgerResidual:
         assert response.status_code == 201, response.data
         rows = AllotmentItems.objects.filter(allotment=allotment_obj, item=item)
         assert rows.count() == 2
-        mapped = rows.get(plan_line=line)
+        mapped = rows.get(planning_target_item=line.item_name)
         assert mapped.qty == Decimal("20.000")
         assert mapped.cif_fc == Decimal("36.00")
 
@@ -247,9 +254,9 @@ class TestPlanLineLedgerResidual:
             {"debit_based_on": "PLAN", "page_size": 20},
         )
         assert queue.status_code == 200
-        returned_ids = {row["id"] for row in queue.data["available_items"]}
-        assert veg_oil_split["pko_line"].id not in returned_ids
-        assert veg_oil_split["cheese_line"].id in returned_ids
+        returned_targets = {row["planning_target_item_id"] for row in queue.data["available_items"]}
+        assert veg_oil_split["pko_line"].item_name_id not in returned_targets
+        assert veg_oil_split["cheese_line"].item_name_id in returned_targets
 
     def test_full_source_row_plan_debit_removes_the_candidate_after_refresh(
         self, allotment_client, allotment_obj, veg_oil_split,
@@ -403,10 +410,13 @@ class TestPlanLineLedgerResidual:
     def test_stale_plan_line_id_is_rejected_without_raw_availability_fallback(
         self, allotment_client, allotment_obj, veg_oil_split,
     ):
-        nonexistent_id = veg_oil_split["cheese_line"].id + 999999
-        resp = _allocate(
-            allotment_client, allotment_obj, veg_oil_split["import_item"].id,
-            "5", "9.00", plan_line_id=nonexistent_id,
+        # A nonexistent legacy projection id cannot influence resolution; a
+        # target without a current plan is rejected instead.
+        resp = allotment_client.post(
+            f"/api/allotment-actions/{allotment_obj.id}/allocate-items/",
+            {"allocations": [{"item_id": veg_oil_split["import_item"].id, "qty": "5", "cif_fc": "9.00",
+                              "planning_target_item_id": veg_oil_split["cheese_line"].item_name_id + 999999,
+                              "allocation_basis": "PLAN", "search_mode": "PLAN"}]}, format="json",
         )
         assert resp.status_code == 400, resp.data
         assert resp.data["success"] == 0

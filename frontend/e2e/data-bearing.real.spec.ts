@@ -53,9 +53,7 @@ test.describe("isolated data-bearing operational workflows", () => {
     // Import rows live in the explicit Items tab.  Do not let a hidden
     // responsive copy of the row satisfy (or block) the data-bearing check.
     await page.getByRole("tab", { name: "Items" }).click();
-    await expect(
-      page.locator("p:visible").filter({ hasText: /^E2E ALUMINIUM FOIL 2509$/ })
-    ).toBeVisible();
+    await expect(page.getByRole("cell", { name: "E2E ALUMINIUM FOIL 2509", exact: true })).toBeVisible();
     await expectNoDocumentOverflow(page);
 
     await page.goto("/allotments/1/allocate", { waitUntil: "networkidle" });

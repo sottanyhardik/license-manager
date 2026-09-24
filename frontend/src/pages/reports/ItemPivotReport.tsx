@@ -807,7 +807,7 @@ export default function ItemPivotReport() {
                                             <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container" data-item-pivot-scroll-container>
                                                 <table className="table table-hover table-sm table-bordered mb-0"
                                                        style={{tableLayout: 'auto', minWidth: '960px'}}>
-                                                    <thead>
+                                                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                                                     <tr data-item-pivot-header-tier className="table-light">
                                                         <th ref={makeFrozenColRef(groupKey, 'srNo')} scope="col" className="text-center" style={{
                                                             position: 'sticky',

@@ -534,7 +534,12 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Allow lenient error handling when force-save is enabled
         # Force-save assumes data is correct (PURCHASE/SALE values mirror each other)
         # Auto-enable for paired trades (PURCHASE↔SALE) to skip validation
-        force_save = getattr(self.initial_data, '_force_save', False)
+        # ``update`` is also used by internal service callers, which may
+        # instantiate this serializer without binding request data first.
+        # DRF only creates ``initial_data`` for bound serializers, so read it
+        # from the instance defensively rather than raising before the BOE
+        # stamping guard can run.
+        force_save = getattr(self, "initial_data", {}).get("_force_save", False)
         if instance.counterpart_id:
             force_save = True
 

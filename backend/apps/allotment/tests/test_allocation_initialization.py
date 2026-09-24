@@ -113,8 +113,8 @@ class TestAllocationInitialization:
         AllotmentItems.objects.create(
             allotment=allotment,
             item=plan.import_item,
-            plan_line=plan,
             allocation_basis="PLAN",
+            planning_target_item=target,
             qty=plan.planned_quantity,
             cif_fc=plan.planned_cif_fc,
         )

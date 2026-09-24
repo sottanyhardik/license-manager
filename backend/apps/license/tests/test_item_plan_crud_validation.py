@@ -141,10 +141,10 @@ def test_bulk_upsert_returns_structured_400_for_unknown_item_name(license_manage
 
 
 @pytest.mark.django_db
-def test_bulk_replace_supersedes_used_split_lines_without_nulling_allotment_identity(
+def test_bulk_replace_removes_used_split_projections_without_losing_durable_allotment_identity(
     license_manager_client, planned_license,
 ):
-    """A re-plan must not SET NULL two used splits onto one legacy identity."""
+    """A re-plan replaces projections while PLAN debits retain their target facts."""
     license_obj, item = planned_license
     first_name = ItemNameModel.objects.create(name="Historical split one")
     second_name = ItemNameModel.objects.create(name="Historical split two")
@@ -163,24 +163,25 @@ def test_bulk_replace_supersedes_used_split_lines_without_nulling_allotment_iden
     )
     first_debit = AllotmentItems.objects.create(
         allotment=allotment, item=item, plan_line=first_plan,
+        planning_target_item=first_name,
         allocation_basis="PLAN", search_mode="PLAN", qty=Decimal("10.000"), cif_fc=Decimal("10.00"),
     )
     second_debit = AllotmentItems.objects.create(
         allotment=allotment, item=item, plan_line=second_plan,
+        planning_target_item=second_name,
         allocation_basis="PLAN", search_mode="PLAN", qty=Decimal("20.000"), cif_fc=Decimal("20.00"),
     )
 
     response = _bulk(license_manager_client, license_obj, (item, "10.000", "1.00", "10.00"))
 
     assert response.status_code == 200, response.data
-    first_plan.refresh_from_db()
-    second_plan.refresh_from_db()
     first_debit.refresh_from_db()
     second_debit.refresh_from_db()
-    assert not first_plan.is_active
-    assert not second_plan.is_active
-    assert first_debit.plan_line_id == first_plan.id
-    assert second_debit.plan_line_id == second_plan.id
+    assert not LicenseItemPlan.objects.filter(pk__in=[first_plan.pk, second_plan.pk]).exists()
+    assert first_debit.plan_line_id is None
+    assert second_debit.plan_line_id is None
+    assert first_debit.planning_target_item_id == first_name.id
+    assert second_debit.planning_target_item_id == second_name.id
     active_plans = LicenseItemPlan.objects.filter(license=license_obj, is_active=True)
     assert active_plans.count() == 1
     assert active_plans.get().planned_quantity == Decimal("10.000")

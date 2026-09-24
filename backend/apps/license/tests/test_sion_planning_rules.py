@@ -1038,7 +1038,7 @@ def test_plan_sion_uses_only_saved_active_rules_and_queues_a_durable_request(rul
     assert response.data["planning_state"] == "REPLAN_PENDING"
     request = LicenseReplanRequest.objects.get(pk=response.data["replan_request_ids"][0])
     assert request.license_id == license_obj.pk
-    assert request.reason == "manual_plan_sion"
+    assert request.reason == "manual_plan_sion_all"
     assert request.source_model == "sion_planning_rule.plan_sion"
     assert request.source_pk == str(sion.pk)
     # The HTTP handler must never persist a generated plan. Canonical rule

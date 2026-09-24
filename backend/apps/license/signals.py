@@ -116,8 +116,14 @@ def enqueue_replan_for_import_item_change(sender, instance, **kwargs):
     if getattr(instance, "_inline_allocation_replan", False):
         return
     source = sender._meta.label
-    _enqueue_replan(getattr(instance, "_replan_old_license_id", None), "import_item_changed", source_model=source, source_pk=instance.pk)
-    _enqueue_replan(getattr(instance, "_replan_deleted_license_id", None) or instance.license_id, "import_item_changed", source_model=source, source_pk=instance.pk)
+    old_license_id = getattr(instance, "_replan_old_license_id", None)
+    current_license_id = getattr(instance, "_replan_deleted_license_id", None) or instance.license_id
+    # An ordinary update has the same old and current owner.  It is one source
+    # mutation and must advance the generation once; only a reassignment needs
+    # to invalidate both licences.
+    if old_license_id and old_license_id != current_license_id:
+        _enqueue_replan(old_license_id, "import_item_changed", source_model=source, source_pk=instance.pk)
+    _enqueue_replan(current_license_id, "import_item_changed", source_model=source, source_pk=instance.pk)
 
 
 @receiver(post_save, sender=AllotmentItems)

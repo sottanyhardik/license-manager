@@ -79,4 +79,4 @@ if [[ "$ready" != "1" ]]; then
 fi
 
 LM_REAL_E2E=1 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$FRONTEND_PORT" \
-  npx playwright test e2e/data-bearing.real.spec.ts "$@"
+  npx playwright test "$@"

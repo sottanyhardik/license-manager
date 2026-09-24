@@ -38,7 +38,7 @@ from apps.license.models import (
     SionPlanningProfile,
     SionPlanningRule,
 )
-from apps.trade.models import LicenseTrade
+from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 
 LICENSE_ID = 2509
@@ -76,6 +76,28 @@ def _get_or_report_conflict(model, lookup: dict, defaults: dict, label: str):
 
 class Command(BaseCommand):
     help = "Seed the isolated canonical browser scenario for licence 2509."
+
+    def _drain_replans(self, license_id: int) -> None:
+        """Apply seed-time source mutations after the graph transaction commits."""
+        from apps.license.tasks import replan_license_task
+        active = (
+            LicenseReplanRequest.STATUS_PENDING,
+            LicenseReplanRequest.STATUS_QUEUED,
+            LicenseReplanRequest.STATUS_RETRY_PENDING,
+        )
+        for _ in range(8):
+            request = LicenseReplanRequest.objects.filter(
+                license_id=license_id, status__in=active,
+            ).order_by("pk").first()
+            if request is None:
+                return
+            result = replan_license_task.run(request.pk)
+            if result.get("status") not in {
+                LicenseReplanRequest.STATUS_SUCCEEDED,
+                LicenseReplanRequest.STATUS_SUPERSEDED,
+            }:
+                raise CommandError(f"Seed replan {request.pk} did not complete: {result}")
+        raise CommandError(f"Seed replans for licence {license_id} did not settle.")
 
     def _require_disposable_database(self) -> None:
         db_name = str(connection.settings_dict.get("NAME") or "")
@@ -254,6 +276,10 @@ class Command(BaseCommand):
             },
         )
         import_item.items.set([item_name])
+        LicenseBalance.objects.update_or_create(
+            license=license_obj,
+            defaults={"balance_cif": MAX_CIF},
+        )
         LicenseItemPlan.objects.filter(import_item=import_item).delete()
         LicenseItemPlan.objects.create(
             import_item=import_item,
@@ -353,6 +379,24 @@ class Command(BaseCommand):
             },
         )
         purchase_trade.boes.set([boe])
+        purchase_line, created = LicenseTradeLine.objects.get_or_create(
+            trade=purchase_trade, sr_number=import_item,
+            defaults={
+                "description": import_item.description,
+                "mode": LicenseTradeLine.MODE_QTY,
+                "qty_kg": Decimal("1.0000"),
+                "rate_inr_per_kg": Decimal("89283.10"),
+                "cif_inr": Decimal("89283.10"),
+            },
+        )
+        if not created and purchase_line.amount_inr == 0:
+            purchase_line.amount_inr = Decimal("89283.10")
+            purchase_line.save(update_fields=["amount_inr"])
+        self.stdout.write(f"  → Purchase trade {purchase_trade.id} (type={purchase_trade.license_type}) with line {purchase_line.id}, amount={purchase_line.amount_inr}")
+
+        # Verify trade was created correctly
+        assert purchase_trade.license_type == "DFIA", f"Purchase trade has wrong type: {purchase_trade.license_type}"
+
         sale_trade, _ = LicenseTrade.objects.update_or_create(
             direction=LicenseTrade.DIR_SALE,
             to_company=counterparty,
@@ -367,6 +411,20 @@ class Command(BaseCommand):
             },
         )
         sale_trade.boes.set([boe])
+        sale_line, created = LicenseTradeLine.objects.get_or_create(
+            trade=sale_trade, sr_number=import_item,
+            defaults={
+                "description": import_item.description,
+                "mode": LicenseTradeLine.MODE_QTY,
+                "qty_kg": Decimal("1.0000"),
+                "rate_inr_per_kg": Decimal("80359.10"),
+                "cif_inr": Decimal("80359.10"),
+            },
+        )
+        if not created and sale_line.amount_inr == 0:
+            sale_line.amount_inr = Decimal("80359.10")
+            sale_line.save(update_fields=["amount_inr"])
+        self.stdout.write(f"  → Sale trade {sale_trade.id} with line {sale_line.id}, amount={sale_line.amount_inr}")
 
         # Twelve independently eligible positions make the browser test prove
         # the real server-backed 10-item queue and its 11th-item refill.
@@ -437,14 +495,22 @@ class Command(BaseCommand):
                 remaining_cif_fc=QUEUE_POSITION_CIF,
                 allocation_provenance={"source": "managed_browser_seed"},
             )
-        # Signals may have queued a request while the graph was built.  The
-        # seed represents an already persisted current plan, so clear only
-        # this licence's seed-time work and make the revisions equal.
-        LicenseReplanRequest.objects.filter(license=license_obj).delete()
-        LicenseDetailsModel.objects.filter(pk=license_obj.pk).update(
-            planning_source_revision=1,
-            planning_applied_revision=1,
-        )
+        # Source writes can register post-commit callbacks.  Drain durable
+        # work only after those callbacks have completed, using the real worker
+        # so source/applied generations and the completed audit agree.
+        transaction.on_commit(lambda license_id=license_obj.pk: self._drain_replans(license_id))
+
+        # Verify the license can be found by the ledger query
+        trades = LicenseTrade.objects.filter(license_type="DFIA")
+        license_ids = trades.values_list("lines__sr_number__license_id", flat=True).distinct()
+        if license_obj.pk in license_ids:
+            self.stdout.write(self.style.SUCCESS("✓ License found in ledger query"))
+        else:
+            self.stdout.write(self.style.WARNING(f"✗ License {license_obj.pk} NOT found in ledger query"))
+            self.stdout.write(f"  Found license IDs: {list(license_ids)}")
+            self.stdout.write(f"  Total DFIA trades: {trades.count()}")
+            for trade in trades:
+                self.stdout.write(f"    Trade {trade.id}: {trade.direction} {trade.invoice_number}, lines={trade.lines.count()}")
 
         self.stdout.write(self.style.SUCCESS(
             f"Seeded licence {LICENSE_NUMBER} (id={license_obj.pk}), allotment={allotment.pk}, "

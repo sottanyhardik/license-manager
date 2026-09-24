@@ -16,7 +16,7 @@ export async function downloadUrl(url: string, filename: string): Promise<void> 
     const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: "application/pdf" });
     if (!blob.size) throw new Error("The server returned an empty download.");
     const disposition = String(response.headers?.["content-disposition"] ?? "");
-    const matched = /filename\*?=(?:UTF-8''|\")?([^\";]+)/i.exec(disposition);
+    const matched = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
     const objectUrl = URL.createObjectURL(blob);
     try {
         const link = document.createElement("a");

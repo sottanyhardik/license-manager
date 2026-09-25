@@ -27,6 +27,7 @@ import TradesListView from "./TradesListView";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
+import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
@@ -789,7 +790,6 @@ export default function MasterList() {
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
-    const isLicenseWorkspace = entityName === "licenses" || entityName === "incentive-licenses";
     const entityDescriptions: Record<string, string> = {
         licenses: "Review license balances, planning, and utilization",
         allotments: "Manage allocations and track license usage",
@@ -802,99 +802,103 @@ export default function MasterList() {
         : "Manage records and operational data";
 
     return (
-        <div className="min-h-screen bg-[--tb-body-bg]">
-            {/* Tabler-style page header */}
-            <div className={cn("page-header", isLicenseWorkspace && "mb-3")}>
-                <div className="min-w-0">
-                    <div className="page-pretitle">
+        <div className="min-h-screen bg-background">
+            {/* Unified PageHeader for all master entities */}
+            <PageHeader
+                pretitle={
+                    <>
                         <a
                             href="/"
                             onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            className="text-inherit no-underline"
+                            className="text-inherit no-underline hover:underline"
                         >
                             Home
                         </a>
                         <span className="mx-1.5 opacity-50">/</span>
-                        {entityTitle}
-                    </div>
-                    <h1>{entityTitle}</h1>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span>{entityTitle}</span>
+                    </>
+                }
+                title={entityTitle}
+                description={
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                         <span className="font-medium text-foreground">{workspaceDescription}</span>
                         <span aria-hidden="true" className="text-border">•</span>
-                        <span className="tabular-nums">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
-                        {isRefreshing && <span role="status">Updating…</span>}
+                        <span className="tabular-nums text-muted-foreground">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
+                        {isRefreshing && <span role="status" className="text-muted-foreground">Updating…</span>}
                     </div>
-                </div>
-                <div className="page-actions">
-                    <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">
-                        <FileSpreadsheet className="size-3.5" />
-                        Excel
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} title="Export to PDF" disabled={pdfLoading}>
-                        {pdfLoading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
-                        {pdfLoading ? "Generating…" : "PDF"}
-                    </Button>
-                    {entityName === 'bill-of-entries' && (
-                        <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel">
+                }
+                actions={
+                    <>
+                        <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">
                             <FileSpreadsheet className="size-3.5" />
-                            Port Excel
+                            <span className="hidden sm:inline">Excel</span>
                         </Button>
-                    )}
-                    {entityName === 'bill-of-entries' && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            title="Update all empty product names in entire database"
-                            disabled={bulkActionLoading}
-                            onClick={async () => {
-                                const confirmed = await confirmDangerousAction(
-                                    'Bulk Update Product Names',
-                                    'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
-                                );
-                                if (!confirmed) return;
-                                setBulkActionLoading(true); setError("");
-                                try {
-                                    const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
-                                    if (response.data.success) {
-                                        toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
-                                        invalidateList();
-                                    } else {
-                                        setError('Failed to update product names');
+                        <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} title="Export to PDF" disabled={pdfLoading}>
+                            {pdfLoading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            <span className="hidden sm:inline">{pdfLoading ? "Generating…" : "PDF"}</span>
+                        </Button>
+                        {entityName === 'bill-of-entries' && (
+                            <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel">
+                                <FileSpreadsheet className="size-3.5" />
+                                <span className="hidden sm:inline">Port Excel</span>
+                            </Button>
+                        )}
+                        {entityName === 'bill-of-entries' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                title="Update all empty product names in entire database"
+                                disabled={bulkActionLoading}
+                                onClick={async () => {
+                                    const confirmed = await confirmDangerousAction(
+                                        'Bulk Update Product Names',
+                                        'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
+                                    );
+                                    if (!confirmed) return;
+                                    setBulkActionLoading(true); setError("");
+                                    try {
+                                        const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
+                                        if (response.data.success) {
+                                            toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
+                                            invalidateList();
+                                        } else {
+                                            setError('Failed to update product names');
+                                        }
+                                    } catch (err) {
+                                        setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+                                        toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+                                    } finally {
+                                        setBulkActionLoading(false);
                                     }
-                                } catch (err) {
-                                    setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
-                                    toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
-                                } finally {
-                                    setBulkActionLoading(false);
-                                }
-                            }}
-                        >
-                            <RefreshCw className="size-3.5" />
-                            Fetch All Products
-                        </Button>
-                    )}
-                    {canWrite && (
-                        <Button asChild size="sm">
-                            <Link
-                                to={entityName === 'licenses' ? '/licenses/create' :
-                                    entityName === 'allotments' ? '/allotments/create' :
-                                    entityName === 'trades' ? '/trades/create' :
-                                    `/masters/${entityName}/create`}
-                                onClick={() => {
-                                    saveFilterState(entityName, {
-                                        filters: filterParams,
-                                        pagination: { currentPage, pageSize },
-                                        search: ''
-                                    });
                                 }}
                             >
-                                <Plus className="size-3.5" />
-                                Add New
-                            </Link>
-                        </Button>
-                    )}
-                </div>
-            </div>
+                                <RefreshCw className="size-3.5" />
+                                <span className="hidden sm:inline">Fetch All</span>
+                            </Button>
+                        )}
+                        {canWrite && (
+                            <Button asChild size="sm">
+                                <Link
+                                    to={entityName === 'licenses' ? '/licenses/create' :
+                                        entityName === 'allotments' ? '/allotments/create' :
+                                        entityName === 'trades' ? '/trades/create' :
+                                        `/masters/${entityName}/create`}
+                                    onClick={() => {
+                                        saveFilterState(entityName, {
+                                            filters: filterParams,
+                                            pagination: { currentPage, pageSize },
+                                            search: ''
+                                        });
+                                    }}
+                                >
+                                    <Plus className="size-3.5" />
+                                    <span className="hidden sm:inline">Add New</span>
+                                </Link>
+                            </Button>
+                        )}
+                    </>
+                }
+            />
 
             {/* Error Display */}
             {error && (

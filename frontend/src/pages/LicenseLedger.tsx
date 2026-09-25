@@ -553,48 +553,87 @@ export default function LicenseLedger() {
                 pretitle="Ledger"
                 title="License Ledger"
                 description="Review available balances across DFIA and Incentive licenses"
-                actions={<div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline" size="sm"><a href="/license-ledger/download-requests">License Downloads</a></Button>
-                    <Button variant="outline" size="sm" disabled={visibleLicenses.length === 0} onClick={() => setSelectedLicenseIds(previous => {
-                        const next = new Set(previous);
-                        const visibleIds = visibleLicenses.map(license => String(license.license_id));
-                        const allSelected = visibleIds.every(id => next.has(id));
-                        visibleIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
-                        return next;
-                    })}>{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear Visible' : 'Select Visible'}</Button>
-                    <Button size="sm" disabled={packageDownloading || selectedLicenseIds.size === 0} onClick={() => downloadPackage([...selectedLicenseIds])}>
-                        {packageDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Choose Destination Folder & Start
-                    </Button>
-                    {/* The persistent Download Requests screens supersede this progress block. */}
-                    {packageJob && <div className="hidden text-xs text-muted-foreground" role="status" aria-hidden="true">
-                        <div>Total: {packageJob.total} · Queued: {packageJob.queued} · Processing: {packageJob.running} · Ready to download: {Math.max(0, packageJob.completed - (downloadState?.downloaded.length ?? 0))} · Downloading: {downloadState?.downloading ? 1 : 0} · Downloaded: {downloadState?.downloaded.length ?? 0} · Failed: {packageJob.failed + (downloadState?.failed.length ?? 0)}</div>
-                        {packageFolder && <div className="font-medium text-foreground">Selected folder: {packageFolder.selected}<br />Package folder: {packageFolder.job}</div>}
-                        {packageJob.status} — {packageJob.completed} / {packageJob.total}
-                        <div className="mt-1 h-1 w-24 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${packageJob.percentage}%` }} /></div>
-                        {packageJob.download_url && <Button size="sm" onClick={() => downloadLicenseLedgerPackage(packageJob.download_url!)}>Download all ZIP</Button>}
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/license-ledger/package-readiness/${packageJob.job_id}`)}>Data Readiness</Button>
-                        {downloadState?.directory && downloadState.directoryAuthorized === false && <Button size="sm" variant="outline" onClick={async () => {
-                            if (!await managerRef.current?.authorizeDirectory()) toast.error('Folder access was not granted.');
-                        }}>Reconnect Folder</Button>}
-                        {packageJob.failed > 0 && <Button size="sm" variant="outline" onClick={async () => setPackageJob(await retryLicenseLedgerPackage(packageJob.job_id))}>Retry failed</Button>}
-                        {packageJob.licences?.map(item => <div key={item.id} className="mt-1 flex items-start gap-2">
-                            <div><span>{downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? `Saved: ${packageFolder?.selected ?? downloadState?.selectedDirectoryName ?? 'selected-folder'}/${packageFolder?.job ?? downloadState?.jobDirectoryName ?? 'license-ledger-package'}/${item.licence_number}.pdf` : `${item.licence_number}: ${downloadState?.downloading === String(item.license_id ?? item.id) ? 'Downloading' : ["server_ready", "completed"].includes(item.status) ? 'Server ready' : item.status === 'running' ? 'Generating' : item.status === 'failed' ? `Failed — ${item.error ?? 'Unable to generate PDF.'}` : 'Queued'}`}</span>
-                            {item.audit && <div className="text-[11px] text-muted-foreground">
-                                <div>Purchase invoices: {item.audit.expected_purchase_invoices ?? '—'} / {item.audit.included_purchase_invoices ?? '—'} · Final-party sales invoices: {item.audit.expected_final_party_sales_invoices ?? '—'} / {item.audit.included_final_party_sales_invoices ?? '—'} · Interlinked sales excluded: {item.audit.excluded_interlinked_sales_invoices ?? '—'}</div>
-                                <div>PDF pages: {item.audit.expected_pdf_pages ?? '—'} / {item.audit.actual_pdf_pages ?? '—'} · Server validation: {item.audit.server_validation ?? '—'} · Local save validation: {downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? 'passed' : 'pending'}</div>
-                                {item.audit.final_party_sales_invoice_numbers?.length ? <div>Final-party sales invoices included: {item.audit.final_party_sales_invoice_numbers.join(', ')}</div> : null}
-                                {item.audit.excluded_interlinked_sale_ids?.length ? <div>Interlinked sales excluded: {item.audit.excluded_interlinked_sale_ids.map(id => `Sale ${id}`).join(', ')}</div> : null}
-                            </div>}</div>
-                            {["server_ready", "completed"].includes(item.status) && item.download_url && !downloadState?.downloaded.includes(String(item.license_id ?? item.id)) && <Button size="sm" variant="outline" onClick={() => managerRef.current?.enqueue([item as PackageLicence])}>Download PDF</Button>}
-                        </div>)}
-                    </div>}
-                    <Button variant="outline" size="sm" disabled={exporting !== null || visibleLicenseCount === 0} onClick={() => runExport('pdf')}>
-                        {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Preview PDF
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={exporting !== null || visibleLicenseCount === 0} onClick={() => runExport('xlsx')}>
-                        {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}Download Excel
-                    </Button>
-                </div>}
+                actions={
+                    <>
+                        <Button asChild variant="outline" size="sm" title="View download requests">
+                            <a href="/license-ledger/download-requests">
+                                <span className="hidden sm:inline">License Downloads</span>
+                                <span className="sm:hidden">Downloads</span>
+                            </a>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={visibleLicenses.length === 0}
+                            onClick={() => setSelectedLicenseIds(previous => {
+                                const next = new Set(previous);
+                                const visibleIds = visibleLicenses.map(license => String(license.license_id));
+                                const allSelected = visibleIds.every(id => next.has(id));
+                                visibleIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
+                                return next;
+                            })}
+                            title={visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Deselect all visible licenses' : 'Select all visible licenses'}
+                        >
+                            <span className="hidden sm:inline">{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear Visible' : 'Select Visible'}</span>
+                            <span className="sm:hidden">{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear' : 'Select'}</span>
+                        </Button>
+                        <Button
+                            size="sm"
+                            disabled={packageDownloading || selectedLicenseIds.size === 0}
+                            onClick={() => downloadPackage([...selectedLicenseIds])}
+                            title="Choose destination folder and start package download"
+                        >
+                            {packageDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            <span className="hidden sm:inline">Choose Folder & Start</span>
+                            <span className="sm:hidden">Download</span>
+                        </Button>
+                        {/* The persistent Download Requests screens supersede this progress block. */}
+                        {packageJob && <div className="hidden text-xs text-muted-foreground" role="status" aria-hidden="true">
+                            <div>Total: {packageJob.total} · Queued: {packageJob.queued} · Processing: {packageJob.running} · Ready to download: {Math.max(0, packageJob.completed - (downloadState?.downloaded.length ?? 0))} · Downloading: {downloadState?.downloading ? 1 : 0} · Downloaded: {downloadState?.downloaded.length ?? 0} · Failed: {packageJob.failed + (downloadState?.failed.length ?? 0)}</div>
+                            {packageFolder && <div className="font-medium text-foreground">Selected folder: {packageFolder.selected}<br />Package folder: {packageFolder.job}</div>}
+                            {packageJob.status} — {packageJob.completed} / {packageJob.total}
+                            <div className="mt-1 h-1 w-24 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${packageJob.percentage}%` }} /></div>
+                            {packageJob.download_url && <Button size="sm" onClick={() => downloadLicenseLedgerPackage(packageJob.download_url!)}>Download all ZIP</Button>}
+                            <Button size="sm" variant="outline" onClick={() => navigate(`/license-ledger/package-readiness/${packageJob.job_id}`)}>Data Readiness</Button>
+                            {downloadState?.directory && downloadState.directoryAuthorized === false && <Button size="sm" variant="outline" onClick={async () => {
+                                if (!await managerRef.current?.authorizeDirectory()) toast.error('Folder access was not granted.');
+                            }}>Reconnect Folder</Button>}
+                            {packageJob.failed > 0 && <Button size="sm" variant="outline" onClick={async () => setPackageJob(await retryLicenseLedgerPackage(packageJob.job_id))}>Retry failed</Button>}
+                            {packageJob.licences?.map(item => <div key={item.id} className="mt-1 flex items-start gap-2">
+                                <div><span>{downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? `Saved: ${packageFolder?.selected ?? downloadState?.selectedDirectoryName ?? 'selected-folder'}/${packageFolder?.job ?? downloadState?.jobDirectoryName ?? 'license-ledger-package'}/${item.licence_number}.pdf` : `${item.licence_number}: ${downloadState?.downloading === String(item.license_id ?? item.id) ? 'Downloading' : ["server_ready", "completed"].includes(item.status) ? 'Server ready' : item.status === 'running' ? 'Generating' : item.status === 'failed' ? `Failed — ${item.error ?? 'Unable to generate PDF.'}` : 'Queued'}`}</span>
+                                {item.audit && <div className="text-[11px] text-muted-foreground">
+                                    <div>Purchase invoices: {item.audit.expected_purchase_invoices ?? '—'} / {item.audit.included_purchase_invoices ?? '—'} · Final-party sales invoices: {item.audit.expected_final_party_sales_invoices ?? '—'} / {item.audit.included_final_party_sales_invoices ?? '—'} · Interlinked sales excluded: {item.audit.excluded_interlinked_sales_invoices ?? '—'}</div>
+                                    <div>PDF pages: {item.audit.expected_pdf_pages ?? '—'} / {item.audit.actual_pdf_pages ?? '—'} · Server validation: {item.audit.server_validation ?? '—'} · Local save validation: {downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? 'passed' : 'pending'}</div>
+                                    {item.audit.final_party_sales_invoice_numbers?.length ? <div>Final-party sales invoices included: {item.audit.final_party_sales_invoice_numbers.join(', ')}</div> : null}
+                                    {item.audit.excluded_interlinked_sale_ids?.length ? <div>Interlinked sales excluded: {item.audit.excluded_interlinked_sale_ids.map(id => `Sale ${id}`).join(', ')}</div> : null}
+                                </div>}</div>
+                                {["server_ready", "completed"].includes(item.status) && item.download_url && !downloadState?.downloaded.includes(String(item.license_id ?? item.id)) && <Button size="sm" variant="outline" onClick={() => managerRef.current?.enqueue([item as PackageLicence])}>Download PDF</Button>}
+                            </div>)}
+                        </div>}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={exporting !== null || visibleLicenseCount === 0}
+                            onClick={() => runExport('pdf')}
+                            title="Preview as PDF"
+                        >
+                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            <span className="hidden sm:inline">Preview PDF</span>
+                            <span className="sm:hidden">Preview</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={exporting !== null || visibleLicenseCount === 0}
+                            onClick={() => runExport('xlsx')}
+                            title="Download as Excel"
+                        >
+                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                            <span className="hidden sm:inline">Download Excel</span>
+                            <span className="sm:hidden">Excel</span>
+                        </Button>
+                    </>
+                }
             />
 
             <Card className="mb-4">

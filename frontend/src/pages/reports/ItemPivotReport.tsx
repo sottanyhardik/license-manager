@@ -11,6 +11,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
@@ -579,72 +580,77 @@ export default function ItemPivotReport() {
 
     return (
         <div className="min-h-screen bg-background">
-            {/* Tabler-style page header — sticky like ItemReport */}
-            <div className="page-header sticky top-0 z-10 border-b border-border bg-background/95 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
-                <div className="min-w-0">
-                    <div className="page-pretitle">
-                        <a
-                            href="/"
-                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            style={{ color: 'inherit', textDecoration: 'none' }}
-                        >
-                            Home
-                        </a>
-                        <span className="mx-1.5 opacity-50">/</span>
-                        Reports
-                        <span className="mx-1.5 opacity-50">/</span>
-                        Item Pivot Report
-                    </div>
-                    <h1>Item Pivot Report</h1>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        {reportData && (
+            {/* Sticky PageHeader wrapper for large report */}
+            <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+                <PageHeader
+                    pretitle={
+                        <>
+                            <a
+                                href="/"
+                                onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                                className="text-inherit no-underline hover:underline"
+                            >
+                                Home
+                            </a>
+                            <span className="mx-1.5 opacity-50">/</span>
+                            <span>Reports</span>
+                            <span className="mx-1.5 opacity-50">/</span>
+                            <span>Item Pivot Report</span>
+                        </>
+                    }
+                    title="Item Pivot Report"
+                    description={
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                            {reportData && (
+                                <span className="inline-flex items-center gap-1">
+                                    <CalendarDays className="size-3.5" aria-hidden="true" />
+                                    {reportData.report_date}
+                                </span>
+                            )}
                             <span className="inline-flex items-center gap-1">
-                                <CalendarDays className="size-3.5" aria-hidden="true" />
-                                {reportData.report_date}
+                                <Tag className="size-3.5" aria-hidden="true" />
+                                Active Norm:
+                                <span className="font-semibold text-foreground">{activeNormTab || 'None'}</span>
                             </span>
-                        )}
-                        <span className="inline-flex items-center gap-1">
-                            <Tag className="size-3.5" aria-hidden="true" />
-                            Active Norm:
-                            <span className="font-semibold text-foreground">{activeNormTab || 'None'}</span>
-                        </span>
-                        {reportData && (
-                            <>
-                                <span className="inline-flex items-center gap-1">
-                                    <Bell className="size-3.5" aria-hidden="true" />
-                                    {getTotalNotificationCount()} Notifications
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                    <FileText className="size-3.5" aria-hidden="true" />
-                                    {getTotalLicenseCount()} Licenses
-                                </span>
-                            </>
-                        )}
-                    </div>
-                </div>
-                <div className="page-actions flex flex-col gap-2 sm:flex-row">
-                    <Button variant="ghost" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)} className="w-full sm:w-auto">
-                        <Filter className="size-4" />
-                        <span className="hidden sm:inline">{filtersCollapsed ? 'Show' : 'Hide'} Filters</span>
-                        <span className="sm:hidden">{filtersCollapsed ? 'Show' : 'Hide'}</span>
-                        {hasActiveFilters && <Badge className="ml-1">Active</Badge>}
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleUpdateBalance}
-                        title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
-                        className="w-full sm:w-auto"
-                    >
-                        <RefreshCw className="size-3.5" />
-                        <span className="hidden sm:inline">Update Balance</span>
-                        <span className="sm:hidden">Update</span>
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading} className="w-full sm:w-auto">
-                        {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-                        {downloading ? <span className="hidden sm:inline">Generating…</span> : <><span className="hidden sm:inline">Excel</span><span className="sm:hidden">Export</span></>}
-                    </Button>
-                </div>
+                            {reportData && (
+                                <>
+                                    <span className="inline-flex items-center gap-1">
+                                        <Bell className="size-3.5" aria-hidden="true" />
+                                        {getTotalNotificationCount()} Notifications
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <FileText className="size-3.5" aria-hidden="true" />
+                                        {getTotalLicenseCount()} Licenses
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    }
+                    actions={
+                        <>
+                            <Button variant="ghost" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)} title={`${filtersCollapsed ? 'Show' : 'Hide'} filters`}>
+                                <Filter className="size-4" />
+                                <span className="hidden sm:inline">{filtersCollapsed ? 'Show' : 'Hide'} Filters</span>
+                                {hasActiveFilters && <Badge variant="secondary" className="ml-1">Active</Badge>}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleUpdateBalance}
+                                title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
+                            >
+                                <RefreshCw className="size-3.5" />
+                                <span className="hidden sm:inline">Update Balance</span>
+                                <span className="sm:hidden">Update</span>
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading} title="Export to Excel">
+                                {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                                <span className="hidden sm:inline">{downloading ? "Generating…" : "Excel"}</span>
+                                <span className="sm:hidden">{downloading ? "…" : "Export"}</span>
+                            </Button>
+                        </>
+                    }
+                />
             </div>
 
             {/* Filters Section */}

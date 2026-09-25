@@ -283,16 +283,13 @@ deploy_to_server() {
         "$DB_NAME" "$DB_USER" "$MDS_ENABLED" "$MDS_BASE_URL" "$MDS_TOKEN" "$SECURE_MEDIA"
 
     ssh_cmd "$remote_cmd" << 'ENDSSH'
-set -Eeuo pipefail
+set -Euo pipefail
 IFS=$'\n\t'
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 echo_ok()   { echo -e "${GREEN}  ✅ $1${NC}"; }
 echo_info() { echo -e "${BLUE}  → $1${NC}"; }
 echo_warn() { echo -e "${YELLOW}  ⚠️  $1${NC}"; }
 echo_err()  { echo -e "${RED}  ❌ $1${NC}"; }
-
-# Enhanced error handling with context
-trap 'echo ""; echo_err "DEPLOYMENT FAILED"; echo_err "Last command exit code: $?"; echo_err "Executing: $BASH_COMMAND"; exit 1' ERR
 sudo_cmd()  { printf '%s\n' "$DEPLOY_PASSWORD" | sudo -S "$@"; }
 read_env_value() {
     local file="$1" key="$2" value

@@ -60,8 +60,8 @@ export default function ItemPivotFilters({
 
     return (
         <div className="mb-4 max-w-[1400px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-                <h5 className="mb-0 flex items-center gap-2 text-[15px] font-semibold">
+            <div className="flex flex-col items-start justify-between gap-2 border-b border-border px-3 py-3 sm:flex-row sm:items-center sm:gap-0 sm:px-4">
+                <h5 className="mb-0 flex items-center gap-2 text-sm font-semibold sm:text-[15px]">
                     <SlidersHorizontal className="size-4" aria-hidden="true" />
                     Filters
                 </h5>
@@ -72,12 +72,13 @@ export default function ItemPivotFilters({
                         onClick={handleClearFilters}
                     >
                         <XCircle className="size-4" aria-hidden="true" />
-                        Clear Filters
+                        <span className="hidden sm:inline">Clear Filters</span>
+                        <span className="sm:hidden">Clear</span>
                     </button>
                 )}
             </div>
-            <div style={{ padding: "14px 16px" }}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="px-3 py-3 sm:px-4 sm:py-4">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4 lg:gap-4">
                     <div>
                         <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={minBalanceId}>
                             <DollarSign className="size-4" aria-hidden="true" />
@@ -190,27 +191,29 @@ export default function ItemPivotFilters({
                 </div>
 
                 {activeFiltersVisible && (
-                    <div className="mt-3">
-                        <div className="alert alert-info mb-0 flex items-center justify-between py-2">
-                            <div>
-                                <Filter className="size-4" aria-hidden="true" />
-                                <strong>Active Filters:</strong>
+                    <div className="mt-2 sm:mt-3">
+                        <div className="alert alert-info mb-0 flex flex-wrap items-center gap-1 py-2 sm:gap-1.5">
+                            <div className="flex items-center gap-1">
+                                <Filter className="size-3.5 sm:size-4" aria-hidden="true" />
+                                <strong className="text-xs sm:text-sm">Active Filters:</strong>
+                            </div>
+                            <div className="flex flex-wrap gap-1 sm:gap-1.5">
                                 {!isDefaultPurchaseStatus && (
-                                    <span className="chip chip-primary ml-2">
+                                    <span className="chip chip-primary text-xs">
                                         Purchase: {purchaseStatus.length > 0 ? purchaseStatus.join(", ") : "none"}
                                     </span>
                                 )}
-                                {minBalance !== 200 && <span className="chip chip-primary ml-2">Min Balance: Rs.{minBalance}</span>}
+                                {minBalance !== 200 && <span className="chip chip-primary text-xs">Min Balance: Rs.{minBalance}</span>}
                                 {licenseStatus !== "active" && (
-                                    <span className="badge bg-primary ml-2">Status: {licenseStatus.replace("_", " ")}</span>
+                                    <span className="badge bg-primary text-xs">Status: {licenseStatus.replace("_", " ")}</span>
                                 )}
-                                {expiryDateFrom && <span className="chip chip-primary ml-2">Expiry From: {expiryDateFrom}</span>}
-                                {expiryDateTo && <span className="chip chip-primary ml-2">Expiry To: {expiryDateTo}</span>}
+                                {expiryDateFrom && <span className="chip chip-primary text-xs">Expiry From: {expiryDateFrom}</span>}
+                                {expiryDateTo && <span className="chip chip-primary text-xs">Expiry To: {expiryDateTo}</span>}
                                 {selectedCompanies.length > 0 && (
-                                    <span className="badge bg-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>
+                                    <span className="badge bg-primary text-xs">Incl. Companies: {selectedCompanies.length}</span>
                                 )}
                                 {excludeCompanies.length > 0 && (
-                                    <span className="chip chip-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>
+                                    <span className="chip chip-primary text-xs">Excl. Companies: {excludeCompanies.length}</span>
                                 )}
                             </div>
                         </div>

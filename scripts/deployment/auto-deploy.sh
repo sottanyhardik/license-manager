@@ -256,6 +256,12 @@ deploy_to_server() {
 
     print_header "🚀 Deploying to $SERVER_IP ($SERVER_DOMAIN)"
 
+    # Record deployment attempt for debugging
+    local DEPLOY_START=$(date '+%Y-%m-%d %H:%M:%S')
+    print_info "Deployment started: $DEPLOY_START"
+    print_info "Target branch: $BRANCH"
+    print_info "Target commit: will be determined after fetch"
+
     # ── Upload server-specific .env ──────────────────────────
     local ENV_NAME
     ENV_NAME=$(get_server_name "$SERVER_IP")
@@ -284,6 +290,9 @@ echo_ok()   { echo -e "${GREEN}  ✅ $1${NC}"; }
 echo_info() { echo -e "${BLUE}  → $1${NC}"; }
 echo_warn() { echo -e "${YELLOW}  ⚠️  $1${NC}"; }
 echo_err()  { echo -e "${RED}  ❌ $1${NC}"; }
+
+# Enhanced error handling with context
+trap 'echo ""; echo_err "DEPLOYMENT FAILED"; echo_err "Last command exit code: $?"; echo_err "Executing: $BASH_COMMAND"; exit 1' ERR
 sudo_cmd()  { printf '%s\n' "$DEPLOY_PASSWORD" | sudo -S "$@"; }
 read_env_value() {
     local file="$1" key="$2" value
@@ -329,16 +338,21 @@ fi
 # ── 1. Pull latest code ──────────────────────────────────────
 echo_info "Pulling latest code from ${BRANCH}..."
 cd "$SERVER_PATH"
+echo_info "Working directory: $(pwd)"
+echo_info "Current branch: $(git rev-parse --abbrev-ref HEAD)"
+echo_info "Current HEAD: $(git rev-parse --short HEAD)"
 
 # Save stash ID to verify we applied it back
 STASH_ID=""
 STASH_COUNT_BEFORE=$(git stash list | wc -l)
-git stash push --include-untracked --message "auto-deploy-$(date +%s)"
+echo_info "Stashing local changes (stash count before: $STASH_COUNT_BEFORE)..."
+git stash push --include-untracked --message "auto-deploy-$(date +%s)" || { echo_err "git stash failed"; exit 1; }
 STASH_COUNT_AFTER=$(git stash list | wc -l)
 if [ "$STASH_COUNT_AFTER" -gt "$STASH_COUNT_BEFORE" ]; then
     STASH_ID=$(git stash list | head -1 | cut -d: -f1)
     echo_info "Local changes stashed: $STASH_ID"
 fi
+echo_ok "Stash successful"
 
 # Keep prior hashed frontend bundles.  Open browser tabs can still reference a
 # lazy chunk from the preceding release; Vite's `emptyOutDir: false` can retain
@@ -353,23 +367,39 @@ if [ "$CURRENT_HEAD" = "HEAD" ]; then
 fi
 
 # Fetch latest from remote
-git fetch --all --prune || { echo_err "git fetch failed"; exit 1; }
+echo_info "Fetching latest from remote..."
+git fetch --all --prune 2>&1 | tail -5 || { echo_err "git fetch failed"; exit 1; }
+echo_ok "Git fetch successful"
+
+# Show what we're tracking
+echo_info "Remote master: $(git rev-parse origin/master 2>/dev/null || echo 'unknown')"
+echo_info "Local master: $(git rev-parse master 2>/dev/null || echo 'unknown')"
 
 # Switch to target branch if not already on it
-if [ "$(git rev-parse --abbrev-ref HEAD)" != "$BRANCH" ]; then
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo_info "Current branch: $CURRENT_BRANCH, target: $BRANCH"
+if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+    echo_info "Switching to $BRANCH..."
     git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH" || {
         echo_err "Failed to checkout $BRANCH"
         [ -n "$STASH_ID" ] && git stash pop "$STASH_ID" 2>/dev/null || true
         exit 1
     }
+    echo_ok "Switched to $BRANCH"
 fi
 
 # Pull with fast-forward only
-if ! git pull --ff-only origin "$BRANCH"; then
+echo_info "Pulling with --ff-only..."
+if ! git pull --ff-only origin "$BRANCH" 2>&1; then
     echo_err "git pull --ff-only failed (non-fast-forward changes detected)"
+    echo_info "Attempting status check..."
+    git status || true
+    git log --oneline -3 || true
     [ -n "$STASH_ID" ] && git stash pop "$STASH_ID" 2>/dev/null || true
     exit 1
 fi
+echo_ok "Git pull successful"
+echo_info "Final HEAD: $(git rev-parse --short HEAD)"
 
 # Try to reapply local changes if they were stashed
 if [ -n "$STASH_ID" ]; then

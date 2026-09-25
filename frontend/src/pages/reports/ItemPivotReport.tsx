@@ -579,8 +579,8 @@ export default function ItemPivotReport() {
 
     return (
         <div className="min-h-screen bg-background">
-            {/* Tabler-style page header */}
-            <div className="page-header">
+            {/* Tabler-style page header — sticky like ItemReport */}
+            <div className="page-header sticky top-0 z-10 border-b border-border bg-background/95 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
                 <div className="min-w-0">
                     <div className="page-pretitle">
                         <a
@@ -622,10 +622,11 @@ export default function ItemPivotReport() {
                         )}
                     </div>
                 </div>
-                <div className="page-actions">
-                    <Button variant="ghost" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)}>
+                <div className="page-actions flex flex-col gap-2 sm:flex-row">
+                    <Button variant="ghost" size="sm" onClick={() => setFiltersCollapsed(!filtersCollapsed)} className="w-full sm:w-auto">
                         <Filter className="size-4" />
-                        {filtersCollapsed ? 'Show' : 'Hide'} Filters
+                        <span className="hidden sm:inline">{filtersCollapsed ? 'Show' : 'Hide'} Filters</span>
+                        <span className="sm:hidden">{filtersCollapsed ? 'Show' : 'Hide'}</span>
                         {hasActiveFilters && <Badge className="ml-1">Active</Badge>}
                     </Button>
                     <Button
@@ -633,13 +634,15 @@ export default function ItemPivotReport() {
                         size="sm"
                         onClick={handleUpdateBalance}
                         title="Update balance_cif, is_active, is_expired, and restrictions. Runs in background."
+                        className="w-full sm:w-auto"
                     >
                         <RefreshCw className="size-3.5" />
-                        Update Balance
+                        <span className="hidden sm:inline">Update Balance</span>
+                        <span className="sm:hidden">Update</span>
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading}>
+                    <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading} className="w-full sm:w-auto">
                         {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-                        {downloading ? 'Generating…' : 'Excel'}
+                        {downloading ? <span className="hidden sm:inline">Generating…</span> : <><span className="hidden sm:inline">Excel</span><span className="sm:hidden">Export</span></>}
                     </Button>
                 </div>
             </div>
@@ -673,25 +676,25 @@ export default function ItemPivotReport() {
             <div>
                     {/* Empty state: norms exist but none selected */}
                     {!activeNormTab && !loading && availableNorms.length > 0 && (
-                        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-center">
-                            <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10">
-                                <Tag className="size-8 text-primary" />
+                        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-8 text-center sm:gap-4 sm:py-12 md:py-16">
+                            <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 sm:size-14 md:size-16">
+                                <Tag className="size-6 text-primary sm:size-7 md:size-8" />
                             </div>
                             <div>
-                                <p className="text-base font-bold text-foreground">Select a Norm to View Report</p>
-                                <p className="mt-1 text-[12.5px] text-muted-foreground">Click any norm card above to load license data for that SION norm class</p>
+                                <p className="text-sm font-bold text-foreground sm:text-base">Select a Norm to View Report</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground sm:mt-1 sm:text-[12.5px]">Click any norm card above to load license data for that SION norm class</p>
                             </div>
                             {availableNorms.length > 0 && (
                                 <div className="flex flex-wrap justify-center gap-1.5 mt-1">
                                     {availableNorms.slice(0, 5).map((n) => (
                                         <button key={n.norm_class || n} type="button"
                                             onClick={() => { setReportData(null); setActiveNormTab(n.norm_class || n); }}
-                                            className="rounded-lg px-3 py-1 text-xs font-bold transition-colors hover:opacity-90"
+                                            className="rounded-lg px-2.5 py-1 text-xs font-bold transition-colors hover:opacity-90 sm:px-3"
                                             style={{ background: ['E1','E5','E126','E132'].includes(n.norm_class || n) ? 'var(--tb-success-soft)' : 'var(--tb-brand-50)', color: ['E1','E5','E126','E132'].includes(n.norm_class || n) ? 'var(--tb-success-text)' : 'var(--tb-brand)', border: '1px solid' }}>
                                             {n.norm_class || n}
                                         </button>
                                     ))}
-                                    {availableNorms.length > 5 && <span className="self-center text-[11px] text-muted-foreground">+{availableNorms.length - 5} more</span>}
+                                    {availableNorms.length > 5 && <span className="self-center text-[10px] text-muted-foreground sm:text-[11px]">+{availableNorms.length - 5} more</span>}
                                 </div>
                             )}
                         </div>
@@ -699,24 +702,24 @@ export default function ItemPivotReport() {
 
                     {/* Loading state */}
                     {loading && activeNormTab && (
-                        <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-14 text-center shadow-sm">
-                            <div className="flex size-14 items-center justify-center rounded-full bg-primary/10">
-                                <Loader2 className="size-7 animate-spin text-primary" />
+                        <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-8 text-center shadow-sm sm:py-10 md:py-14">
+                            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 sm:size-13 md:size-14">
+                                <Loader2 className="size-6 animate-spin text-primary sm:size-6.5 md:size-7" />
                             </div>
                             <div>
-                                <p className="font-semibold text-foreground">Loading {activeNormTab} Report…</p>
-                                <p className="mt-0.5 text-[12.5px] text-muted-foreground">Fetching license data for this norm</p>
+                                <p className="text-sm font-semibold text-foreground sm:text-base">Loading {activeNormTab} Report…</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground sm:text-[12.5px]">Fetching license data for this norm</p>
                             </div>
                         </div>
                     )}
 
                     {/* No data message after loading */}
                     {!loading && activeNormTab && reportData?.licenses_by_norm_notification && (!reportData?.licenses_by_norm_notification?.[activeNormTab] || Object.keys(reportData?.licenses_by_norm_notification?.[activeNormTab] || {}).length === 0) && (
-                        <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-12 text-center shadow-sm">
-                            <Inbox className="size-10 opacity-20" aria-hidden="true" />
+                        <div className="mb-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card py-8 text-center shadow-sm sm:py-10 md:py-12">
+                            <Inbox className="size-8 opacity-20 sm:size-9 md:size-10" aria-hidden="true" />
                             <div>
-                                <p className="font-semibold text-foreground">No licenses found for <span className="text-primary">{activeNormTab}</span></p>
-                                <p className="mt-0.5 text-[12.5px] text-muted-foreground">Try adjusting your filters — e.g. increase minimum balance or change purchase status.</p>
+                                <p className="text-sm font-semibold text-foreground sm:text-base">No licenses found for <span className="text-primary">{activeNormTab}</span></p>
+                                <p className="mt-0.5 text-xs text-muted-foreground sm:text-[12.5px]">Try adjusting your filters — e.g. increase minimum balance or change purchase status.</p>
                             </div>
                             {hasActiveFilters && (
                                 <Button variant="outline" size="sm" onClick={handleClearFilters}>
@@ -729,7 +732,7 @@ export default function ItemPivotReport() {
 
                     {!loading && activeNormTab && Array.isArray(reportData?.groups) && (
                         reportData.groups.length ? <>{/* Total first; each notification keeps its concise license, matrix, and item views together. */}<div className="mb-4 flex flex-wrap gap-1 border-b pb-2"><Button variant={activeNotification === 'total' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification('total')}>Total Summary</Button>{reportData.groups.map((group: any) => { const tabId = `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}`; return <Button key={tabId} variant={activeNotification === tabId ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification(tabId)}>Notification {group.notification_number}</Button>; })}</div>{activeNotification === 'total' ? <FioriSummary summary={reportData.global_summary || reportData.summary} groups={[]} grandTotal={reportData.grand_total} onException={handleSummaryException} /> : reportData.groups.filter((group: any) => `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}` === activeNotification).map((group: any) => <div key={activeNotification} className="space-y-4"><NotificationLicenseSummary group={group} /><CanonicalPivot groups={[group]} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} /><FioriSummary summary={{}} groups={[group]} grandTotal={null} onException={handleSummaryException} showCards={false} showGrandTotal={false} /></div>)}{searchParams.get('exceptions_only') && <Button className="mt-3" variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</> : (
-                            <div className="rounded-xl border border-border bg-card py-12 text-center text-muted-foreground">No licences match the selected filters.</div>
+                            <div className="rounded-xl border border-border bg-card py-8 text-center text-muted-foreground sm:py-10 md:py-12">No licences match the selected filters.</div>
                         )
                     )}
 
@@ -778,21 +781,21 @@ export default function ItemPivotReport() {
                                 <div key={`${activeNormTab}-${groupKey}`} className="mb-4">
                                     <Card data-item-pivot-sticky-stack>
                                         <CardHeader data-item-pivot-notification
-                                            className="sticky top-0 z-30 flex-row items-center justify-between gap-4 text-primary-foreground shadow-sm"
+                                            className="sticky top-0 z-30 flex flex-col gap-3 text-primary-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between"
                                             style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
-                                            <div>
-                                                <h5 className="mb-0 flex items-center gap-2 font-semibold">
-                                                    <Bell className="size-4" aria-hidden="true" />
-                                                    Notification Number: {notification}
+                                            <div className="min-w-0 flex-1">
+                                                <h5 className="mb-1 flex flex-wrap items-center gap-2 font-semibold">
+                                                    <Bell className="size-4 shrink-0" aria-hidden="true" />
+                                                    <span className="truncate">Notification {notification}</span>
                                                     {notification === 'Unknown' && (
-                                                        <span className="chip chip-warning ml-2"
+                                                        <span className="chip chip-warning ml-0"
                                                               title="Notification number is blank or missing">
-                                                            <TriangleAlert className="size-4" aria-hidden="true" />
-                                                            Missing
+                                                            <TriangleAlert className="size-3.5" aria-hidden="true" />
+                                                            <span className="hidden xs:inline">Missing</span>
                                                         </span>
                                                     )}
                                                     {psLabel && (
-                                                        <span className="chip chip-info ml-2" title="Purchase status">
+                                                        <span className="chip chip-info ml-0 whitespace-nowrap" title="Purchase status">
                                                             {psLabel}
                                                         </span>
                                                     )}
@@ -801,7 +804,7 @@ export default function ItemPivotReport() {
                                                     {licenses.length} License{licenses.length !== 1 ? 's' : ''}
                                                 </small>
                                             </div>
-                                            <span className="chip chip-neutral">{licenses.length}</span>
+                                            <span className="chip chip-neutral shrink-0">{licenses.length}</span>
                                         </CardHeader>
                                         <CardContent className="p-0">
                                             <div className="overflow-x-auto" onScroll={handlePivotTableScroll(groupKey)} data-testid="pivot-scroll-container" data-item-pivot-scroll-container>

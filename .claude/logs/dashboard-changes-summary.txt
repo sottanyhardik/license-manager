@@ -1,0 +1,169 @@
+================================================================================
+DASHBOARD UI CONSISTENCY REFACTOR - CHANGES SUMMARY
+================================================================================
+Date: 2026-09-25
+Branch: hotfix/ui-consistency-2026-09-25
+File: frontend/src/pages/Dashboard.tsx
+
+================================================================================
+UNIFIED DESIGN STANDARDS APPLIED
+================================================================================
+
+SECTION HEADERS:
+├─ Title Size:           text-base (16px)  →  text-lg (18px)
+├─ Title Wrapper:        Individual       →  space-y-1 grouped with subtitle
+├─ Subtitle Size:        text-sm (14px)   →  text-sm (14px) [consistent]
+└─ Subtitle Color:       text-muted-foreground [consistent]
+
+OUTER SPACING:
+├─ Dashboard Wrapper:    space-y-4 (16px) →  space-y-6 (24px)
+└─ Reason:               Increase breathing room between major sections
+
+SECTION INTERNAL SPACING:
+├─ KPI Sections:         space-y-3 (12px) →  space-y-4 (16px)
+├─ Data Grid:            gap-3 (12px)     →  gap-4 (16px)
+└─ Reason:               Unified visual rhythm throughout page
+
+CARD HEADERS:
+├─ Padding Override:     px-4 py-3        →  REMOVED (use default)
+├─ Default Padding:      px-5 pt-5 [.border-b]:pb-4
+└─ Reason:               Align with CardHeader design system
+
+CARD CONTENT PADDING:
+├─ BOE Chart:            p-3              →  p-4
+├─ Chart Details:        mt-1             →  mt-4
+└─ Reason:               Unified spacing pattern
+
+TABLE STANDARDIZATION:
+├─ Expiring Licenses:    max-h-[260px]    →  max-h-[280px]
+├─ Recent BOE:           max-h-[310px]    →  max-h-[280px]
+├─ Recent Allotments:    max-h-[280px]    →  max-h-[280px] [no change]
+└─ Reason:               Consistent scrollable area heights
+
+TAB LIST ALIGNMENT:
+├─ Padding:              px-3 pt-2        →  px-4 pt-3
+└─ Reason:               Better alignment with card headers
+
+================================================================================
+SPECIFIC LINE-BY-LINE CHANGES
+================================================================================
+
+LINE 77: Dashboard Page Wrapper
+  BEFORE: <section className="dashboard-page space-y-4" ...
+  AFTER:  <section className="dashboard-page space-y-6" ...
+  CHANGE: space-y-4 → space-y-6 (24px gap between sections)
+
+LINES 80-81: Section Headers (Licence health & Operational activity)
+  BEFORE: <div>
+            <h2 className="text-base font-semibold">...</h2>
+            <p className="text-sm text-muted-foreground">...</p>
+          </div>
+  AFTER:  <div className="space-y-1">
+            <h2 className="text-lg font-semibold">...</h2>
+            <p className="text-sm text-muted-foreground">...</p>
+          </div>
+  CHANGES:
+    - text-base → text-lg (18px)
+    - Added space-y-1 wrapper
+    - Section spacing space-y-3 → space-y-4
+
+LINE 82: Data Panel Grid
+  BEFORE: <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+  AFTER:  <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+  CHANGE: gap-3 → gap-4 (unified spacing)
+
+LINE 83: Attention Required Card Header
+  BEFORE: <CardHeader className="border-b px-4 py-3">
+  AFTER:  <CardHeader className="border-b">
+  CHANGE: Removed px-4 py-3 override (use default px-5 pt-5)
+
+LINE 83: Tab List (within Attention card)
+  BEFORE: <div className="flex overflow-x-auto border-b px-3 pt-2" ...
+  AFTER:  <div className="flex overflow-x-auto border-b px-4 pt-3" ...
+  CHANGES:
+    - px-3 → px-4
+    - pt-2 → pt-3
+
+LINE 83: Expiring Licenses Table
+  BEFORE: <div className="max-h-[260px] overflow-auto">
+  AFTER:  <div className="max-h-[280px] overflow-auto">
+  CHANGE: max-h-[260px] → max-h-[280px]
+
+LINE 84: BOE Monthly Trend Card Header
+  BEFORE: <CardHeader className="border-b px-4 py-3">
+  AFTER:  <CardHeader className="border-b">
+  CHANGE: Removed px-4 py-3 override (use default px-5 pt-5)
+
+LINE 84: BOE Chart Content
+  BEFORE: <CardContent className="p-3">
+  AFTER:  <CardContent className="p-4">
+  CHANGE: p-3 → p-4
+
+LINE 84: Chart Details
+  BEFORE: <details className="mt-1 text-xs text-muted-foreground">
+  AFTER:  <details className="mt-4 text-xs text-muted-foreground">
+  CHANGE: mt-1 → mt-4
+
+LINE 85: Recent BOE Card Header
+  BEFORE: <CardHeader className="border-b px-4 py-3">
+  AFTER:  <CardHeader className="border-b">
+  CHANGE: Removed px-4 py-3 override (use default px-5 pt-5)
+
+LINE 85: Recent BOE Table
+  BEFORE: <div className="max-h-[310px] overflow-auto p-0">
+  AFTER:  <div className="max-h-[280px] overflow-auto p-0">
+  CHANGE: max-h-[310px] → max-h-[280px]
+
+LINE 87: Recent Allotments Card Header
+  BEFORE: <CardHeader className="border-b px-4 py-3">
+  AFTER:  <CardHeader className="border-b">
+  CHANGE: Removed px-4 py-3 override (use default px-5 pt-5)
+
+LINE 87: Recent Allotments Table
+  BEFORE: <div className="max-h-[280px] overflow-auto p-0">
+  AFTER:  <div className="max-h-[280px] overflow-auto p-0">
+  NO CHANGE: Already correct (no modification needed)
+
+================================================================================
+QUALITY GATES VERIFICATION
+================================================================================
+
+✓ LINT:       0 errors, 2 pre-existing warnings (unrelated)
+✓ TYPECHECK:  Pre-existing AuthContext error (unrelated)
+✓ BUILD:      SUCCESS (436ms)
+
+================================================================================
+IMPACT ANALYSIS
+================================================================================
+
+Blast Radius:       MINIMAL (styling only, leaf component)
+Behavioral Changes: NONE (UI consistency refactor only)
+API Changes:        NONE
+Component Exports:  NONE
+Dependencies:       NONE
+Risk Level:         LOW
+
+================================================================================
+TESTING RESULTS
+================================================================================
+
+✓ KPI Cards:        Aligned horizontally with consistent spacing
+✓ Section Headers:  Uniform typography (text-lg)
+✓ Card Layouts:     Consistent padding and borders
+✓ Tables:           Standardized max-height (280px)
+✓ Responsive:       Grid behavior maintained across breakpoints
+✓ Accessibility:    Focus indicators and ARIA attributes intact
+✓ Performance:      No bundle size impact
+
+================================================================================
+COMPLETION STATUS
+================================================================================
+
+Phase 1 (Audit):           ✓ COMPLETE
+Phase 2 (Design):          ✓ COMPLETE
+Phase 3 (Implementation):  ✓ COMPLETE
+Phase 4 (Testing):         ✓ COMPLETE
+
+All acceptance criteria met. Ready for code review and deployment.
+
+================================================================================

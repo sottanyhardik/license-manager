@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const logoutInProgressRef = useRef(false);
-    const logoutRef = useRef<(reason?: string) => Promise<void>>();
+    const logoutRef = useRef<((reason?: string) => Promise<void>) | null>(null);
 
     const clearTimers = () => {
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);

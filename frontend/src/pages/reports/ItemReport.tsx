@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import api from "../../api/axios";
 import { toast } from "sonner";
@@ -7,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, FileSpreadsheet, Inbox, Loader2, Package, Tag } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import DataPagination from "@/components/DataPagination";
+import PageHeader from "@/components/PageHeader";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { useItemReportFilters } from "./itemReport/useItemReportFilters";
 import { useItemReportData } from "./itemReport/useItemReportData";
 import ItemReportFilters from "./itemReport/ItemReportFilters";
@@ -17,8 +18,6 @@ import { buildItemReportPath } from "./reportPaths";
 
 
 export default function ItemReport() {
-    const navigate = useNavigate();
-
     const {
         selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies,
         isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications,
@@ -124,44 +123,33 @@ export default function ItemReport() {
 
     return (
         <div className="min-h-screen bg-background">
-            <div className="page-header sticky top-0 z-10 border-b border-border bg-background/95 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
-                <div className="min-w-0">
-                    <div className="page-pretitle">
-                        <a
-                            href="/"
-                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            style={{ color: 'inherit', textDecoration: 'none' }}
-                        >
-                            Home
-                        </a>
-                        <span className="mx-1.5 opacity-50">/</span>
-                        Reports
-                        <span className="mx-1.5 opacity-50">/</span>
-                        Item Report
-                    </div>
-                    <h1>Item Report</h1>
-                    {reportData && (
-                        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                            <CalendarDays className="size-3.5" aria-hidden="true" />
-                            {reportData.report_date}
-                            <span className="mx-2 opacity-50">•</span>
-                            <Package className="size-3.5" aria-hidden="true" />
-                            {reportData.total_items} items
+            <PageHeader
+                pretitle="Reports"
+                title="Item Report"
+                description={
+                    reportData ? (
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <span>{reportData.report_date}</span>
+                            <span className="text-muted-foreground">•</span>
+                            <Package className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <span>{reportData.total_items} items</span>
                         </div>
-                    )}
-                </div>
-                <div className="page-actions">
+                    ) : undefined
+                }
+                actions={
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleExport(filters)}
                         disabled={downloading || !hasQuery}
                     >
-                        {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
-                        {downloading ? 'Generating…' : 'Excel'}
+                        {downloading ? <Loader2 className="size-3.5 animate-spin shrink-0" /> : <FileSpreadsheet className="size-3.5 shrink-0" />}
+                        <span className="hidden sm:inline">{downloading ? 'Generating…' : 'Export Excel'}</span>
+                        <span className="sm:hidden">{downloading ? '…' : 'Export'}</span>
                     </Button>
-                </div>
-            </div>
+                }
+            />
 
             <ItemReportFilters
                 isPending={isPending}
@@ -199,6 +187,46 @@ export default function ItemReport() {
                 itemNameOptions={itemNameOptions}
                 selectedItemNames={selectedItemNames}
                 onItemNameChange={handleItemNameChange}
+            />
+
+            {/* Active Filters Display */}
+            <ItemReportActiveFiltersDisplay
+                filters={{
+                    selectedItemNames,
+                    minBalance,
+                    minAvailQty,
+                    licenseStatus,
+                    selectedCompanies,
+                    excludeCompanies,
+                    isRestricted,
+                    purchaseStatus,
+                    productDescSearch,
+                    hsnCodeSearch,
+                    selectedNorms,
+                    selectedNotifications,
+                    expiryDateFrom,
+                    expiryDateTo,
+                }}
+                onRemoveFilter={(key) => {
+                    switch (key) {
+                        case 'selectedItemNames': handleItemNameChange(null); break;
+                        case 'minBalance': setMinBalance(200); break;
+                        case 'minAvailQty': setMinAvailQty(0); break;
+                        case 'licenseStatus': setLicenseStatus('active'); break;
+                        case 'selectedCompanies': handleCompanyChange(null); break;
+                        case 'excludeCompanies': handleExcludeCompanyChange(null); break;
+                        case 'isRestricted': setIsRestricted('all'); break;
+                        case 'purchaseStatus': handlePurchaseStatusChange(purchaseStatusOptions.map(o => o.value)); break;
+                        case 'productDescSearch': setProductDescSearch(''); break;
+                        case 'hsnCodeSearch': setHsnCodeSearch(''); break;
+                        case 'selectedNorms': handleNormsChange(null); break;
+                        case 'selectedNotifications': handleNotificationsChange(null); break;
+                        case 'expiryDateFrom': setExpiryDateFrom(''); break;
+                        case 'expiryDateTo': setExpiryDateTo(''); break;
+                    }
+                }}
+                onClearAll={handleClearFilters}
+                purchaseStatusOptions={purchaseStatusOptions}
             />
 
             {/* Sticky Totals Bar */}
@@ -277,6 +305,181 @@ export default function ItemReport() {
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+/**
+ * ItemReportActiveFiltersDisplay — shows all active filters with individual remove buttons
+ */
+function ItemReportActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+    purchaseStatusOptions,
+}: {
+    filters: {
+        selectedItemNames: unknown[];
+        minBalance: number;
+        minAvailQty: number;
+        licenseStatus: string;
+        selectedCompanies: unknown[];
+        excludeCompanies: unknown[];
+        isRestricted: string;
+        purchaseStatus: string[];
+        productDescSearch: string;
+        hsnCodeSearch: string;
+        selectedNorms: string[];
+        selectedNotifications: string[];
+        expiryDateFrom: string;
+        expiryDateTo: string;
+    };
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+    purchaseStatusOptions: { value: string; label: string }[];
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // Item Names
+        if (filters.selectedItemNames.length > 0) {
+            items.push({
+                key: 'selectedItemNames',
+                label: 'Item Names',
+                value: `${filters.selectedItemNames.length} selected`,
+            });
+        }
+
+        // Min Balance
+        if (filters.minBalance !== 200) {
+            items.push({
+                key: 'minBalance',
+                label: 'Min Balance (CIF)',
+                value: `₹${filters.minBalance}`,
+            });
+        }
+
+        // Min Avail Qty
+        if (filters.minAvailQty !== 0) {
+            items.push({
+                key: 'minAvailQty',
+                label: 'Min Available Qty',
+                value: filters.minAvailQty.toString(),
+            });
+        }
+
+        // License Status
+        if (filters.licenseStatus !== 'active') {
+            items.push({
+                key: 'licenseStatus',
+                label: 'License Status',
+                value: filters.licenseStatus,
+            });
+        }
+
+        // Companies
+        if (filters.selectedCompanies.length > 0) {
+            items.push({
+                key: 'selectedCompanies',
+                label: 'Companies',
+                value: `${filters.selectedCompanies.length} selected`,
+            });
+        }
+
+        // Exclude Companies
+        if (filters.excludeCompanies.length > 0) {
+            items.push({
+                key: 'excludeCompanies',
+                label: 'Exclude Companies',
+                value: `${filters.excludeCompanies.length} excluded`,
+            });
+        }
+
+        // Restricted
+        if (filters.isRestricted !== 'all') {
+            items.push({
+                key: 'isRestricted',
+                label: 'Restricted Items',
+                value: filters.isRestricted === 'true' ? 'Yes' : 'No',
+            });
+        }
+
+        // Purchase Status
+        const defaultPurchaseStatus = purchaseStatusOptions.map(o => o.value);
+        const isDefaultPurchaseStatus = filters.purchaseStatus.length === defaultPurchaseStatus.length &&
+            filters.purchaseStatus.every(ps => defaultPurchaseStatus.includes(ps));
+        if (!isDefaultPurchaseStatus && filters.purchaseStatus.length > 0) {
+            items.push({
+                key: 'purchaseStatus',
+                label: 'Purchase Status',
+                value: `${filters.purchaseStatus.length} selected`,
+            });
+        }
+
+        // Product Description Search
+        if (filters.productDescSearch) {
+            items.push({
+                key: 'productDescSearch',
+                label: 'Product Description',
+                value: `"${filters.productDescSearch}"`,
+            });
+        }
+
+        // HSN Code Search
+        if (filters.hsnCodeSearch) {
+            items.push({
+                key: 'hsnCodeSearch',
+                label: 'HSN Code',
+                value: `"${filters.hsnCodeSearch}"`,
+            });
+        }
+
+        // Norms
+        if (filters.selectedNorms.length > 0) {
+            items.push({
+                key: 'selectedNorms',
+                label: 'SION Norms',
+                value: `${filters.selectedNorms.length} selected`,
+            });
+        }
+
+        // Notifications
+        if (filters.selectedNotifications.length > 0) {
+            items.push({
+                key: 'selectedNotifications',
+                label: 'Notifications',
+                value: `${filters.selectedNotifications.length} selected`,
+            });
+        }
+
+        // Expiry Date Range
+        if (filters.expiryDateFrom || filters.expiryDateTo) {
+            const dateRange = [
+                filters.expiryDateFrom || '—',
+                filters.expiryDateTo || '—',
+            ].join(' to ');
+            items.push({
+                key: 'expiryDateRange',
+                label: 'Expiry Date Range',
+                value: dateRange,
+            });
+        }
+
+        return items;
+    }, [filters, purchaseStatusOptions]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={true}
+            />
         </div>
     );
 }

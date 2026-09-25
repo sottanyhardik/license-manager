@@ -3,6 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronRight, Eye, Loader2,
 import { toast } from "sonner";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/api/axios";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { Button as UiButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -291,6 +292,24 @@ export default function LicensePlanningWorkspace() {
                 <section aria-label="Rule workspace" className="grid min-h-[210px] overflow-hidden rounded-lg border bg-card lg:h-[calc(100dvh-14.5rem)] lg:grid-cols-[minmax(320px,38%)_minmax(0,62%)]">
                     <div className="border-b lg:border-b-0 lg:border-r">
                         <div className="flex flex-wrap items-center gap-2 border-b p-3"><div className="relative min-w-[180px] flex-1"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><input aria-label="Search rules" value={ruleSearch} onChange={(event) => setRuleSearch(event.target.value)} placeholder="Search rules…" className="h-9 w-full rounded-md border bg-background pl-8 pr-2 text-sm" /></div><select aria-label="Filter strategy" value={strategyFilter} onChange={(e) => setStrategyFilter(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-xs"><option value="all">All strategies</option><option value="STANDARD">Single Item</option><option value="SPLIT_BY_PERCENT">Split by %</option><option value="SPLIT_BY_UNIT_VALUE">Unit Value</option></select><select aria-label="Filter status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-xs"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select><span className="text-xs text-muted-foreground">{filteredRules.length} results</span></div>
+                        <LicensePlanningWorkspaceActiveFiltersDisplay
+                            ruleSearch={ruleSearch}
+                            strategyFilter={strategyFilter}
+                            statusFilter={statusFilter}
+                            normSearch={normSearch}
+                            onRemoveFilter={(key) => {
+                                if (key === 'ruleSearch') setRuleSearch("");
+                                if (key === 'strategyFilter') setStrategyFilter("all");
+                                if (key === 'statusFilter') setStatusFilter("all");
+                                if (key === 'normSearch') setNormSearch("");
+                            }}
+                            onClearAll={() => {
+                                setRuleSearch("");
+                                setStrategyFilter("all");
+                                setStatusFilter("all");
+                                setNormSearch("");
+                            }}
+                        />
                         <div className="max-h-[560px] overflow-auto"><table className="min-w-[640px] w-full text-sm"><thead className="sticky top-0 bg-muted/80 text-left text-xs text-muted-foreground"><tr><th className="w-12 px-3 py-2">Priority</th><th className="px-2 py-2">Rule Name / Match Logic</th><th className="px-2 py-2">Strategy</th><th className="px-2 py-2">Max Price</th><th className="px-2 py-2">Status</th><th className="w-12 py-2"></th></tr></thead><tbody>{filteredRules.map((rule) => {
                             const index = rules.findIndex((item) => item.id === rule.id); const selected = selectedRuleId === rule.id;
                             const counts = matchLogicCounts(rule.expression); const allocationCount = rule.percentage_rows?.length ?? rule.unit_value_rows?.length ?? 0;
@@ -347,4 +366,92 @@ export default function LicensePlanningWorkspace() {
         <ConfirmDialog show={confirmForceAll} title={`Force re-plan ${sionLabel}?`} message={`This will reprocess all eligible current DFIA entries for ${sionLabel} using the latest saved planning rules.`} severity="danger" confirmText="Force All" onConfirm={() => planSion("ALL")} onCancel={() => setConfirmForceAll(false)} />
         <ConfirmDialog show={!!confirmDeleteRule} title="Delete planning rule?" message={`Delete ${confirmDeleteRule?.name ?? "this rule"}? This cannot be undone.`} severity="danger" confirmText={busy === "delete" ? "Deleting…" : "Delete"} onConfirm={deleteRule} onCancel={() => setConfirmDeleteRule(null)} />
     </div>;
+}
+
+/**
+ * LicensePlanningWorkspaceActiveFiltersDisplay — shows all active filters with individual remove buttons
+ */
+function LicensePlanningWorkspaceActiveFiltersDisplay({
+    ruleSearch,
+    strategyFilter,
+    statusFilter,
+    normSearch,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    ruleSearch: string;
+    strategyFilter: string;
+    statusFilter: string;
+    normSearch: string;
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // Rule Search
+        if (ruleSearch.trim()) {
+            items.push({
+                key: 'ruleSearch',
+                label: 'Rule Search',
+                value: `"${ruleSearch}"`,
+            });
+        }
+
+        // Strategy Filter
+        if (strategyFilter !== "all") {
+            const strategyLabels: Record<string, string> = {
+                "STANDARD": "Single Item",
+                "SPLIT_BY_PERCENT": "Split by %",
+                "SPLIT_BY_UNIT_VALUE": "Unit Value",
+            };
+            items.push({
+                key: 'strategyFilter',
+                label: 'Strategy',
+                value: strategyLabels[strategyFilter] || strategyFilter,
+            });
+        }
+
+        // Status Filter
+        if (statusFilter !== "all") {
+            const statusLabels: Record<string, string> = {
+                "active": "Active",
+                "inactive": "Inactive",
+            };
+            items.push({
+                key: 'statusFilter',
+                label: 'Status',
+                value: statusLabels[statusFilter] || statusFilter,
+            });
+        }
+
+        // Norm Search
+        if (normSearch.trim()) {
+            items.push({
+                key: 'normSearch',
+                label: 'Norm Search',
+                value: `"${normSearch}"`,
+            });
+        }
+
+        return items;
+    }, [ruleSearch, strategyFilter, statusFilter, normSearch]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="border-b">
+            <div className="px-3 py-2">
+                <ActiveFilters
+                    filters={activeFilters}
+                    onRemove={onRemoveFilter}
+                    onClearAll={onClearAll}
+                    showCount={true}
+                    compact={true}
+                />
+            </div>
+        </div>
+    );
 }

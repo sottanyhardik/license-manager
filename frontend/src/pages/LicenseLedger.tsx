@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 import api from '../api/axios';
@@ -12,6 +12,7 @@ import EmptyState from '@/components/EmptyState';
 import AsyncSelectField from '../components/AsyncSelectField';
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import DateRangeFilter from '@/components/DateRangeFilter';
+import ActiveFilters, { type ActiveFilterItem } from '@/components/ActiveFilters';
 import { getCurrentFinancialYearRange, getPreviousFinancialYearRange } from '../utils/dateRangePresets';
 import { buildLicenseLedgerParams, defaultLicenseLedgerFilters, type LicenseLedgerFilters } from './licenseLedgerFilters';
 import { normalizeLicenseWiseData, type LicenseWiseData } from './licenseLedgerData';
@@ -230,54 +231,64 @@ function LicenseWiseLedger({
     return (
         <div className="p-2">
             {licenses.map((lic) => (
-                <div key={lic.license_id} className="mb-6 overflow-hidden rounded-md border border-border">
+                <div key={lic.license_id} className="mb-4 overflow-hidden rounded-md border border-border">
                     {/* ── License header bar ─────────────────────────── */}
-                    <div className="flex flex-wrap items-center gap-5 bg-primary px-4 py-2.5">
+                    <div className="flex flex-wrap items-center gap-2 bg-primary px-3 py-1.5 text-[12px]">
                         <label className="flex size-6 cursor-pointer items-center justify-center rounded bg-white/15" title={`Select ${lic.license_number}`}>
                             <input type="checkbox" className="size-4" checked={selectedLicenseIds.has(String(lic.license_id))} onChange={() => onToggleLicense(String(lic.license_id))} aria-label={`Select licence ${lic.license_number}`} />
                         </label>
-                        <span className="flex items-center gap-1.5 text-[15px] font-bold text-primary-foreground">
-                            <FileText className="size-4 shrink-0" aria-hidden="true" />
-                            <span className="ml-1">{lic.license_number}</span>
+                        <span className="flex items-center gap-1 font-bold text-primary-foreground">
+                            <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+                            {lic.license_number}
                         </span>
-                        <span className="flex items-center gap-1.5 text-[12.5px] text-primary-foreground/70">
-                            <Calendar className="size-4 shrink-0" aria-hidden="true" />
-                            <span className="ml-1">{lic.license_date}</span>
+                        <span className="flex items-center gap-1 text-primary-foreground/70">
+                            <Calendar className="size-3.5 shrink-0" aria-hidden="true" />
+                            <span className="text-[11px]">{lic.license_date}</span>
                         </span>
-                        <span className={cn(
-                            "rounded-md px-2 py-0.5 text-[11px] font-bold text-white",
-                            lic.license_type === 'DFIA' ? "bg-info/70" : "bg-white/20",
-                        )}>
+                        <Badge variant={lic.license_type === 'DFIA' ? 'default' : 'secondary'} className="py-0 text-[9px]">
                             {lic.license_type}
-                        </span>
+                        </Badge>
                         {lic.companies[0]?.company_id != null && (
                             <button
                                 type="button"
                                 onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}`)}
                                 aria-label={`View ledger for ${lic.license_number}`}
-                                className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25"
+                                className="ml-auto flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
                             >
-                                <BookOpen className="size-4" aria-hidden="true" />View Ledger
+                                <BookOpen className="size-3.5" aria-hidden="true" />
+                                <span className="hidden sm:inline">View</span>
                             </button>
                         )}
-                        <button type="button" className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25" onClick={() => onDownloadLicense(String(lic.license_id))}>
-                            <FileSpreadsheet className="size-4" aria-hidden="true" />Download Package
+                        <button
+                            type="button"
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                            onClick={() => onDownloadLicense(String(lic.license_id))}
+                            aria-label="Download license package"
+                        >
+                            <FileSpreadsheet className="size-3.5" aria-hidden="true" />
+                            <span className="hidden sm:inline">Package</span>
                         </button>
-                        {lic.license_type === 'DFIA' && <button type="button" className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25" onClick={() => onDownloadCustomLedger(String(lic.license_id))}>
-                            <FileText className="size-4" aria-hidden="true" />Custom Ledger PDF
+                        {lic.license_type === 'DFIA' && <button
+                            type="button"
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                            onClick={() => onDownloadCustomLedger(String(lic.license_id))}
+                            aria-label="Download custom ledger PDF"
+                        >
+                            <FileText className="size-3.5" aria-hidden="true" />
+                            <span className="hidden sm:inline">PDF</span>
                         </button>}
                     </div>
 
                     {/* ── Companies table ────────────────────────────── */}
                     <div className="overflow-x-auto" role="region" aria-label={`Companies for ${lic.license_number}`} tabIndex={0}>
-                    <table className="min-w-[680px] w-full border-collapse text-[12.5px]">
+                    <table className="w-full border-collapse text-[12px]">
                         <thead>
                             <tr className="border-b-2 border-border bg-muted/50">
-                                <th scope="col" className="w-[30%] px-3 py-[7px] text-left font-bold text-foreground">Company</th>
-                                <th scope="col" className="w-[15%] px-3 py-[7px] text-left font-bold text-foreground">Type</th>
-                                <th scope="col" className="w-[15%] px-3 py-[7px] text-left font-bold text-foreground">Date</th>
-                                <th scope="col" className="w-[20%] px-3 py-[7px] text-right font-bold text-success">Purchase (₹)</th>
-                                <th scope="col" className="w-[20%] px-3 py-[7px] text-right font-bold text-destructive">Sale (₹)</th>
+                                <th scope="col" className="px-2.5 py-1 text-left font-bold text-foreground">Company</th>
+                                <th scope="col" className="hidden px-2.5 py-1 text-left font-bold text-foreground sm:table-cell">Type</th>
+                                <th scope="col" className="hidden px-2.5 py-1 text-left font-bold text-foreground lg:table-cell">Date</th>
+                                <th scope="col" className="px-2.5 py-1 text-right font-bold text-success">Purchase</th>
+                                <th scope="col" className="px-2.5 py-1 text-right font-bold text-destructive">Sale</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -288,10 +299,10 @@ function LicenseWiseLedger({
                                         ci > 0 ? "border-t-2 border-border" : "",
                                         ci % 2 === 0 ? "bg-primary/5" : "bg-muted/40",
                                     )}>
-                                        <td colSpan={5} className="px-3 py-[5px] text-[0.82rem] font-bold text-foreground">
-                                            <span className="flex items-center gap-1.5">
-                                                <Building2 className="size-4 shrink-0" aria-hidden="true" />
-                                                <span className="ml-1">{company.company_name}</span>
+                                        <td colSpan={5} className="px-2.5 py-1 text-[11px] font-bold text-foreground">
+                                            <span className="flex items-center gap-1">
+                                                <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
+                                                {company.company_name}
                                             </span>
                                         </td>
                                     </tr>
@@ -299,48 +310,50 @@ function LicenseWiseLedger({
                                     {/* Purchase rows */}
                                     {company.purchases.map((row) => (
                                         <tr key={`p-${row.trade_id}`} className="border-b border-success/20 bg-success/[0.06]">
-                                            <td className="px-3 py-[4px] pl-6">
-                                                <span className="flex items-center gap-1.5 text-foreground">
-                                                    <ArrowDownCircle className="size-4 shrink-0" aria-hidden="true" /><span className="ml-1">Purchase</span>
+                                            <td className="px-2.5 py-1 pl-5">
+                                                <span className="flex items-center gap-1 text-foreground">
+                                                    <ArrowDownCircle className="size-3 shrink-0" aria-hidden="true" />
+                                                    <span className="text-[11px]">Purchase</span>
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{lic.license_type}</td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{row.invoice_date}</td>
-                                            <td className="px-3 py-[4px] text-right font-semibold text-success">{fmt(row.amount)}</td>
-                                            <td className="px-3 py-[4px]" />
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground sm:table-cell">{lic.license_type}</td>
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground lg:table-cell">{row.invoice_date}</td>
+                                            <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-success">{fmt(row.amount)}</td>
+                                            <td className="px-2.5 py-1" />
                                         </tr>
                                     ))}
 
                                     {/* Sale rows */}
                                     {company.sales.map((row) => (
                                         <tr key={`s-${row.trade_id}`} className="border-b border-destructive/20 bg-destructive/[0.06]">
-                                            <td className="px-3 py-[4px] pl-6">
-                                                <span className="flex items-center gap-1.5 text-foreground">
-                                                    <ArrowUpCircle className="size-4 shrink-0" aria-hidden="true" /><span className="ml-1">Sale</span>
+                                            <td className="px-2.5 py-1 pl-5">
+                                                <span className="flex items-center gap-1 text-foreground">
+                                                    <ArrowUpCircle className="size-3 shrink-0" aria-hidden="true" />
+                                                    <span className="text-[11px]">Sale</span>
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{lic.license_type}</td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{row.invoice_date}</td>
-                                            <td className="px-3 py-[4px]" />
-                                            <td className="px-3 py-[4px] text-right font-semibold text-destructive">{fmt(row.amount)}</td>
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground sm:table-cell">{lic.license_type}</td>
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground lg:table-cell">{row.invoice_date}</td>
+                                            <td className="px-2.5 py-1" />
+                                            <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-destructive">{fmt(row.amount)}</td>
                                         </tr>
                                     ))}
 
                                     {/* Company total row */}
                                     <tr className="bg-primary font-bold text-primary-foreground">
-                                        <td colSpan={3} className="px-3 py-[5px] text-right text-[12px]">
-                                            Total — {company.company_name}
+                                        <td colSpan={3} className="px-2.5 py-1 text-right text-[11px]">
+                                            Total
                                         </td>
-                                        <td className="px-3 py-[5px] text-right text-emerald-300">
+                                        <td className="px-2.5 py-1 text-right text-[11px] text-emerald-300">
                                             {fmt(company.purchase_total)}
                                         </td>
-                                        <td className="px-3 py-[5px] text-right text-red-300">
+                                        <td className="px-2.5 py-1 text-right text-[11px] text-red-300">
                                             {fmt(company.sale_total)}
                                             <span className={cn(
-                                                "ml-2 text-[11px]",
+                                                "ml-1 text-[9px]",
                                                 company.profit_loss >= 0 ? "text-emerald-300" : "text-red-300",
                                             )}>
-                                                P/L: {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}
+                                                {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}
                                             </span>
                                         </td>
                                     </tr>
@@ -589,9 +602,9 @@ export default function LicenseLedger() {
                             size="sm"
                             disabled={packageDownloading || selectedLicenseIds.size === 0}
                             onClick={() => downloadPackage([...selectedLicenseIds])}
-                            title="Choose destination folder and start package download"
+                            aria-label="Choose destination folder and start package download"
                         >
-                            {packageDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            {packageDownloading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Choose Folder & Start</span>
                             <span className="sm:hidden">Download</span>
                         </Button>
@@ -624,8 +637,9 @@ export default function LicenseLedger() {
                             disabled={exporting !== null || visibleLicenseCount === 0}
                             onClick={() => runExport('pdf')}
                             title="Preview as PDF"
+                            aria-label="Preview license ledger as PDF"
                         >
-                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Preview PDF</span>
                             <span className="sm:hidden">Preview</span>
                         </Button>
@@ -635,8 +649,9 @@ export default function LicenseLedger() {
                             disabled={exporting !== null || visibleLicenseCount === 0}
                             onClick={() => runExport('xlsx')}
                             title="Download as Excel"
+                            aria-label="Download license ledger as Excel"
                         >
-                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Download Excel</span>
                             <span className="sm:hidden">Excel</span>
                         </Button>
@@ -721,8 +736,8 @@ export default function LicenseLedger() {
 
                     <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                         <div>
-                            <label htmlFor="ledger-search-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Search</label>
-                            <DebouncedSearchInput id="ledger-search-filter" value={filters.search} onChange={(value: string) => updateFilter('search', value)}
+                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Search</label>
+                            <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
                                 placeholder="License # or exporter..." />
                         </div>
                         <div className="flex items-center gap-2 pt-7">
@@ -775,6 +790,13 @@ export default function LicenseLedger() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* ── Active Filters Display ──────────────────────────── */}
+            <LicenseLedgerActiveFiltersDisplay
+                filters={filters}
+                onRemoveFilter={(key) => updateFilter(key as keyof LicenseLedgerFilters, defaultLicenseLedgerFilters()[key as keyof LicenseLedgerFilters])}
+                onClearAll={clearAllFilters}
+            />
 
             {/* ── Summary cards ──────────────────────────────────── */}
             {summary && (
@@ -871,5 +893,186 @@ export default function LicenseLedger() {
                 </CardContent>
             </Card>
         </>
+    );
+}
+
+/**
+ * ActiveFilters display component for LicenseLedger
+ * Shows all currently applied filters with individual remove buttons
+ */
+function LicenseLedgerActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    filters: LicenseLedgerFilters;
+    onRemoveFilter: (key: keyof LicenseLedgerFilters) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+        const defaults = defaultLicenseLedgerFilters();
+
+        // Helper to check if value differs from default
+        const isActive = (key: keyof LicenseLedgerFilters) => {
+            const value = filters[key];
+            const defaultValue = defaults[key];
+
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'boolean') return value !== false;
+            if (typeof value === 'object') return value !== null;
+            return value !== defaultValue && value !== '' && value !== null && value !== undefined;
+        };
+
+        // Company filter
+        if (isActive('company')) {
+            items.push({
+                key: 'company',
+                label: 'Company',
+                value: String(filters.company),
+            });
+        }
+
+        // Min Balance filter
+        if (isActive('minBalance')) {
+            items.push({
+                key: 'minBalance',
+                label: 'Min Balance',
+                value: `₹${filters.minBalance}`,
+            });
+        }
+
+        // License Type filter
+        if (filters.licenseType && filters.licenseType !== 'ALL') {
+            items.push({
+                key: 'licenseType',
+                label: 'License Type',
+                value: filters.licenseType,
+            });
+        }
+
+        // Norm filter (DFIA only)
+        if (isActive('norm')) {
+            items.push({
+                key: 'norm',
+                label: 'Norm',
+                value: String(filters.norm),
+            });
+        }
+
+        // Purchase Status filter (DFIA only)
+        if (isActive('purchaseStatus')) {
+            items.push({
+                key: 'purchaseStatus',
+                label: 'Purchase Status',
+                value: String(filters.purchaseStatus),
+            });
+        }
+
+        // Sort filter (if not default)
+        if (filters.ordering && filters.ordering !== '-license_date') {
+            const sortLabels: Record<string, string> = {
+                '-license_date': 'Latest',
+                'license_date': 'Oldest',
+                '-balance_value': 'High Balance',
+                'balance_value': 'Low Balance',
+            };
+            items.push({
+                key: 'ordering',
+                label: 'Sort',
+                value: sortLabels[filters.ordering] || filters.ordering,
+            });
+        }
+
+        // Search filter
+        if (isActive('search')) {
+            items.push({
+                key: 'search',
+                label: 'Search',
+                value: `"${filters.search}"`,
+            });
+        }
+
+        // Active Only filter
+        if (filters.activeOnly === true) {
+            items.push({
+                key: 'activeOnly',
+                label: 'Active Only',
+                value: 'Yes',
+            });
+        }
+
+        // Include License Numbers
+        if (isActive('licenseNumbers')) {
+            const count = filters.licenseNumbers?.split(',').filter(n => n.trim()).length || 0;
+            items.push({
+                key: 'licenseNumbers',
+                label: 'Include Licenses',
+                value: `${count} license${count !== 1 ? 's' : ''}`,
+            });
+        }
+
+        // Exclude License Numbers
+        if (isActive('excludeLicenseNumbers')) {
+            const count = filters.excludeLicenseNumbers?.split(',').filter(n => n.trim()).length || 0;
+            items.push({
+                key: 'excludeLicenseNumbers',
+                label: 'Exclude Licenses',
+                value: `${count} license${count !== 1 ? 's' : ''}`,
+            });
+        }
+
+        // Purchase Bill Status
+        if (filters.purchaseBill && filters.purchaseBill !== 'ALL') {
+            const billLabels: Record<string, string> = {
+                'WITH_PURCHASE_BILL': 'With Bill',
+                'NO_PURCHASE_BILL': 'No Bill',
+            };
+            items.push({
+                key: 'purchaseBill',
+                label: 'Purchase Bill Status',
+                value: billLabels[filters.purchaseBill] || filters.purchaseBill,
+            });
+        }
+
+        // Purchase Date Range
+        if (filters.purchaseDateFrom || filters.purchaseDateTo) {
+            const dateRange = [
+                filters.purchaseDateFrom || '—',
+                filters.purchaseDateTo || '—',
+            ].join(' to ');
+            items.push({
+                key: 'purchaseDateRange',
+                label: 'Purchase Date Range',
+                value: dateRange,
+            });
+        }
+
+        return items;
+    }, [filters]);
+
+    // Don't display if no active filters
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={(key) => {
+                    if (key === 'purchaseDateRange') {
+                        // Special handling for date range
+                        onRemoveFilter('purchaseDateFrom');
+                        onRemoveFilter('purchaseDateTo');
+                    } else {
+                        onRemoveFilter(key as keyof LicenseLedgerFilters);
+                    }
+                }}
+                onClearAll={onClearAll}
+                showCount={true}
+                compact={false}
+            />
+        </div>
     );
 }

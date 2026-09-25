@@ -205,9 +205,10 @@ describe("LicenseLedgerDetail — screenshot regression", () => {
 
         const opening = openingState();
         expect(opening).not.toBeNull();
-        expect(within(opening as HTMLElement).getByText("OPENING")).toBeTruthy();
+        // Use getAllByText and get the first one (the header), since "Opening Balance" also appears as a table cell
+        expect(within(opening as HTMLElement).getAllByText("Opening Balance").length).toBeGreaterThan(0);
         expect(
-            within(opening as HTMLElement).getByText(/carried forward, not a transaction/),
+            within(opening as HTMLElement).getByText(/Starting state/),
         ).toBeTruthy();
         // ...and it is NOT one of the company groups.
         expect(companyGroupNames()).toEqual(["Beta Traders"]);

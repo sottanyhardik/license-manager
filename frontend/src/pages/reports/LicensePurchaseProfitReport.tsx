@@ -12,6 +12,7 @@ import {
     FileText, Inbox, Loader2, Receipt, RotateCcw, Search, SlidersHorizontal, Tag, TrendingUpDown, TriangleAlert, Wallet,
 } from "lucide-react";
 import AsyncSelectField from "@/components/AsyncSelectField";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import StatCard from "@/components/StatCard";
 import { formatIndianCompact, formatIndianNumber } from "@/utils/numberFormatter";
 import { formatDate } from "@/utils/dateFormatter";
@@ -339,6 +340,29 @@ export default function LicensePurchaseProfitReport() {
                 </CardContent>
             </Card>
 
+            {/* Active Filters Display */}
+            <LicensePurchaseProfitReportActiveFiltersDisplay
+                filters={{
+                    fromDate,
+                    toDate,
+                    norm,
+                    licenseNumber,
+                    excludeLicenseNumber,
+                    exporter,
+                }}
+                onRemoveFilter={(key) => {
+                    switch (key) {
+                        case 'fromDate': setFromDate(''); break;
+                        case 'toDate': setToDate(''); break;
+                        case 'norm': setNorm('All'); break;
+                        case 'licenseNumber': setLicenseNumber(''); break;
+                        case 'excludeLicenseNumber': setExcludeLicenseNumber([]); break;
+                        case 'exporter': handleExporterChange(null); break;
+                    }
+                }}
+                onClearAll={handleClearFilters}
+            />
+
             {/* Report body */}
             {!canApply && (
                 <Card>
@@ -573,6 +597,103 @@ export default function LicensePurchaseProfitReport() {
                     />
                 </>
             )}
+        </div>
+    );
+}
+
+/**
+ * LicensePurchaseProfitReportActiveFiltersDisplay — shows all active filters with individual remove buttons
+ */
+function LicensePurchaseProfitReportActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    filters: {
+        fromDate: string;
+        toDate: string;
+        norm: string;
+        licenseNumber: string;
+        excludeLicenseNumber: string[];
+        exporter: unknown;
+    };
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // From Date
+        if (filters.fromDate) {
+            items.push({
+                key: 'fromDate',
+                label: 'From Date',
+                value: filters.fromDate,
+            });
+        }
+
+        // To Date
+        if (filters.toDate) {
+            items.push({
+                key: 'toDate',
+                label: 'To Date',
+                value: filters.toDate,
+            });
+        }
+
+        // Norm
+        if (filters.norm && filters.norm !== 'All') {
+            items.push({
+                key: 'norm',
+                label: 'Norm',
+                value: filters.norm,
+            });
+        }
+
+        // License Number
+        if (filters.licenseNumber) {
+            items.push({
+                key: 'licenseNumber',
+                label: 'License Number',
+                value: `"${filters.licenseNumber}"`,
+            });
+        }
+
+        // Exclude License Numbers
+        if (filters.excludeLicenseNumber.length > 0) {
+            items.push({
+                key: 'excludeLicenseNumber',
+                label: 'Exclude License Numbers',
+                value: `${filters.excludeLicenseNumber.length} excluded`,
+            });
+        }
+
+        // Exporter
+        if (filters.exporter) {
+            items.push({
+                key: 'exporter',
+                label: 'Exporter',
+                value: typeof filters.exporter === 'object' && filters.exporter !== null && 'name' in filters.exporter
+                    ? String((filters.exporter as any).name)
+                    : 'Selected',
+            });
+        }
+
+        return items;
+    }, [filters]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-6">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={true}
+            />
         </div>
     );
 }

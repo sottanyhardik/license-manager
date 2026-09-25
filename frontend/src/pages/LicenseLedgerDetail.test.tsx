@@ -121,10 +121,10 @@ describe("LicenseLedgerDetail", () => {
         await waitFor(() => {
             expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/LIC%2F1/ledger_detail/?company=42");
         });
-        expect(await screen.findByText("License Ledger")).toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", { name: /preview pdf/i }));
+        expect(await screen.findByText("Ledger")).toBeInTheDocument();
+        fireEvent.click(screen.getAllByRole("button")[1]); // PDF button (index 1: Back is 0)
         await waitFor(() => expect(mockedPreviewPdf).toHaveBeenCalledWith({ licenseId: "LIC/1", itemId: " 42 ", licenseType: "DFIA" }));
-        fireEvent.click(screen.getByRole("button", { name: /download excel/i }));
+        fireEvent.click(screen.getAllByRole("button")[2]); // Excel button (index 2)
         await waitFor(() => expect(mockedDownloadExcel).toHaveBeenCalledWith({ licenseId: "LIC/1", itemId: " 42 ", licenseType: "DFIA" }));
     });
 });

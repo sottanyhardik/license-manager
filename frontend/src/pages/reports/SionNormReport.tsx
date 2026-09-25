@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "sonner";
 import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { buildSionReportPath, formatReportNumber, getSionReportGroups, normalizeBooleanFilter } from "./sionNormReportUtils";
 
 type SionNormReportProps = {
@@ -306,6 +307,24 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
             {/* Filters */}
             <Card className="mb-4"><CardContent className="pt-5"><FilterRadios /></CardContent></Card>
 
+            {/* Active Filters Display */}
+            <SionNormReportActiveFiltersDisplay
+                filters={filters}
+                onRemoveFilter={(key) => {
+                    switch (key) {
+                        case 'is_expired': handleFilterChange('is_expired', 'False'); break;
+                        case 'is_null': handleFilterChange('is_null', 'False'); break;
+                    }
+                }}
+                onClearAll={() => {
+                    setFilters((prev) => ({
+                        ...prev,
+                        is_expired: 'False',
+                        is_null: 'False',
+                    }));
+                }}
+            />
+
             {/* Summary cards */}
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[
@@ -368,5 +387,57 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
                 </CardContent>
             </Card>
         </>
+    );
+}
+
+/**
+ * SionNormReportActiveFiltersDisplay — shows all active filters with individual remove buttons
+ */
+function SionNormReportActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    filters: SionReportFilters;
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // Active / Expired filter
+        if (filters.is_expired === 'True') {
+            items.push({
+                key: 'is_expired',
+                label: 'Status',
+                value: 'Expired',
+            });
+        }
+
+        // Balance CIF filter
+        if (filters.is_null === 'True') {
+            items.push({
+                key: 'is_null',
+                label: 'Balance CIF',
+                value: '< 200',
+            });
+        }
+
+        return items;
+    }, [filters]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={true}
+            />
+        </div>
     );
 }

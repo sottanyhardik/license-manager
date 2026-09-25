@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
     ScanBarcode, Funnel, FileSpreadsheet, Loader2, Info,
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { MAX_DAYS, MIN_DAYS, normalizeDownloadDays, parseLicenseNumbers } from "./downloadLicenseHelpers";
 
 const DEFAULT_DAYS = 365;
@@ -226,6 +227,20 @@ export default function DownloadLicense() {
                             </p>
                         </div>
 
+                        {/* Active Filters Display */}
+                        <DownloadLicenseActiveFiltersDisplay
+                            licenseStatus={licenseStatus}
+                            days={days}
+                            onRemoveFilter={(key) => {
+                                if (key === 'licenseStatus') setLicenseStatus('active');
+                                if (key === 'days') setDays(DEFAULT_DAYS);
+                            }}
+                            onClearAll={() => {
+                                setLicenseStatus('active');
+                                setDays(DEFAULT_DAYS);
+                            }}
+                        />
+
                         <Button className="mt-auto w-full" onClick={handleDownload} disabled={loading}>
                             {loading ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
                             {loading ? "Generating…" : "Download Excel"}
@@ -252,5 +267,60 @@ export default function DownloadLicense() {
                 </Card>
             </div>
         </>
+    );
+}
+
+/**
+ * DownloadLicenseActiveFiltersDisplay — shows active status and days filters
+ */
+function DownloadLicenseActiveFiltersDisplay({
+    licenseStatus,
+    days,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    licenseStatus: LicenseStatus;
+    days: number;
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // License Status
+        if (licenseStatus !== 'active') {
+            const statusLabel = STATUS_OPTIONS.find(o => o.value === licenseStatus)?.label || licenseStatus;
+            items.push({
+                key: 'licenseStatus',
+                label: 'License Status',
+                value: statusLabel,
+            });
+        }
+
+        // Days filter
+        if (days !== DEFAULT_DAYS) {
+            items.push({
+                key: 'days',
+                label: licenseStatus === 'expiring' ? 'Expiring within' : 'Look-back period',
+                value: `${days} days`,
+            });
+        }
+
+        return items;
+    }, [licenseStatus, days]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={true}
+            />
+        </div>
     );
 }

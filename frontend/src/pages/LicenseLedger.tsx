@@ -77,7 +77,7 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
                         )}
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1200px] border-collapse text-xs">
+                        <table className="w-full border-collapse text-xs">
                             <thead className="sticky top-0 z-10">
                                 <tr className="border-b bg-muted/70 text-left text-muted-foreground">
                                     <th className="px-3 py-2 font-semibold">Company</th><th className="px-3 py-2 font-semibold">SION</th>
@@ -156,7 +156,7 @@ function LicenseWiseLedger({
                                         <span className={cn("text-xs font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[900px] border-collapse text-xs">
+                                        <table className="w-full border-collapse text-xs">
                                             <thead><tr className="border-y bg-primary/5 text-left">
                                                 <th className="px-3 py-2"><span className="sr-only">Select</span></th>
                                                 <th className="px-3 py-2">License Number</th><th className="px-3 py-2">Type</th>

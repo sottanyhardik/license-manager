@@ -155,6 +155,7 @@ def e2e_runtime():
         "CORS_ALLOWED_ORIGINS": frontend_url,
         "CSRF_TRUSTED_ORIGINS": frontend_url,
         "PYTHONUNBUFFERED": "1",
+        "ACCESS_TOKEN_MINUTES": "180",  # 3 hours for E2E tests (default 30 min)
     })
     python = os.environ.get("LM_E2E_PYTHON", sys.executable)
     processes: list[subprocess.Popen] = []
@@ -237,10 +238,38 @@ def auth_headers(jwt_token: str) -> dict:
 
 
 @pytest.fixture(scope="session")
-def api_get(backend_url: str, auth_headers: dict):
+def api_get(backend_url: str, auth_headers: dict, e2e_credentials: dict):
+    """API GET fixture with automatic token refresh on expiration."""
+    token_cache = {"token": auth_headers.get("Authorization", "").replace("Bearer ", "")}
+
+    def _refresh_token():
+        """Refresh expired JWT token."""
+        r = requests.post(
+            f"{backend_url}/api/auth/login/",
+            json=e2e_credentials,
+            timeout=10,
+        )
+        if r.status_code == 200:
+            token_cache["token"] = r.json()["access"]
+            return token_cache["token"]
+        return None
+
     def _get(path: str, **kwargs):
         url = path if path.startswith("http") else f"{backend_url}/api/{path.lstrip('/')}"
-        return requests.get(url, headers=auth_headers, timeout=30, **kwargs)
+        headers = dict(auth_headers)
+        headers["Authorization"] = f"Bearer {token_cache['token']}"
+
+        response = requests.get(url, headers=headers, timeout=30, **kwargs)
+
+        # If token expired, refresh and retry once
+        if response.status_code == 401:
+            new_token = _refresh_token()
+            if new_token:
+                headers["Authorization"] = f"Bearer {new_token}"
+                response = requests.get(url, headers=headers, timeout=30, **kwargs)
+
+        return response
+
     return _get
 
 

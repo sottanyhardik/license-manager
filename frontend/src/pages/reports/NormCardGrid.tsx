@@ -21,9 +21,9 @@ export default function NormCardGrid({ availableNorms, activeNormTab, setActiveN
     const normCards = normalizeNormCards(availableNorms);
 
     return (
-            <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="mb-4 md:mb-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+                <div className="flex flex-col gap-2 border-b border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
                         <Tag className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available Norms</span>
@@ -33,15 +33,15 @@ export default function NormCardGrid({ availableNorms, activeNormTab, setActiveN
                             </span>
                         )}
                     </div>
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground sm:text-[11px]">
                         <RefreshCw className="size-3" aria-hidden="true" />E1, E5, E126, E132 are conversion norms
                     </span>
                 </div>
 
                 {/* Norm grid */}
-                <div className="p-4">
+                <div className="p-3 sm:p-4">
                     {normCards.length > 0 ? (
-                        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                        <div className="grid gap-2 sm:gap-3 md:gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                             {normCards.map(({ normClass, description, isConversionNorm }) => {
                                 const isActive = activeNormTab === normClass;
                                 const activeBg = isConversionNorm ? 'var(--tb-success)' : 'var(--tb-brand)';

@@ -707,11 +707,11 @@ export default function MasterForm({
     return (
         <div className={cn("min-h-screen bg-background", isLicenseForm && "license-form-workspace")}>
             {/* Compact Header */}
-            <div className={cn("mb-4 flex items-center justify-between", isLicenseForm && "sticky top-0 z-20 -mx-1 border-b border-border/70 bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90")}>
-                <div>
-                    <h4 className="mb-0 font-bold text-foreground">
-                        <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
-                        {isEdit ? 'Edit' : 'New'} {entityTitle}
+            <div className={cn("mb-6 flex items-center justify-between gap-4", isLicenseForm && "sticky top-0 z-20 -mx-1 border-b border-border/70 bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90")}>
+                <div className="flex-1">
+                    <h2 className="mb-1 flex items-center gap-2 font-semibold text-base text-foreground leading-snug">
+                        <EntityIcon className="size-5 shrink-0" style={{ color: entityColor }} aria-hidden="true" />
+                        <span>{isEdit ? 'Edit' : 'New'} {entityTitle}</span>
                         {/* Clickable BOE number → opens saved BOE copy PDF */}
                         {entityName === 'bill-of-entries' && isEdit && formData.bill_of_entry_number && (() => {
                             const pdfUrl = formData.boe_pdf_copy
@@ -720,21 +720,21 @@ export default function MasterForm({
                             return pdfUrl ? (
                                 <a
                                     onClick={() => openDocument(pdfUrl)}
-                                    className="ml-2 inline-flex items-center gap-1 text-[13.5px] font-semibold text-primary no-underline cursor-pointer hover:underline"
+                                    className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-primary no-underline cursor-pointer hover:underline"
                                     title="View BOE copy PDF"
                                 >
-                                    <FileText className="size-4" aria-hidden="true" />
+                                    <FileText className="size-3.5" aria-hidden="true" />
                                     {formData.bill_of_entry_number}
-                                    <ExternalLink className="size-4" aria-hidden="true" />
+                                    <ExternalLink className="size-3.5" aria-hidden="true" />
                                 </a>
                             ) : (
-                                <span className="ml-2 text-[13.5px] font-medium text-muted-foreground">
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">
                                     {formData.bill_of_entry_number}
                                 </span>
                             );
                         })()}
-                    </h4>
-                    <small className="text-muted-foreground">{isEdit ? 'Update existing record' : 'Create a new record'}</small>
+                    </h2>
+                    <p className="text-xs text-muted-foreground">{isEdit ? 'Update existing record' : 'Create a new record'}</p>
                 </div>
                 <Button
                     type="button"
@@ -744,24 +744,26 @@ export default function MasterForm({
                         if (isModal && onClose) { onClose(); return; }
                         navigateToList(navigate, entityName, { preserveFilters: true });
                     }}
+                    className="shrink-0"
                 >
-                    <ArrowLeft className="size-4" />Back to List
+                    <ArrowLeft className="size-4" aria-hidden="true" />
+                    <span>Back</span>
                 </Button>
             </div>
 
-            <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", isLicenseForm && "border-border/70 shadow-none")}>
-                <div className={cn("border-b border-border/70 px-6 py-4", isLicenseForm && "px-4 py-3 sm:px-5")}>
-                    <div className="flex items-center justify-between">
-                        <h6 className="mb-0 font-semibold">
-                            <EntityIcon className="size-5 mr-2" style={{ color: entityColor }} />
+            <div className={cn("overflow-hidden rounded-lg border border-border bg-card shadow-0", isLicenseForm && "border-border/70 shadow-0")}>
+                <div className={cn("border-b border-border/70 px-6 py-4", isLicenseForm && "px-4 py-3 sm:px-6")}>
+                    <div className="flex items-center justify-between gap-3">
+                        <h3 className="mb-0 flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <EntityIcon className="size-4 shrink-0" style={{ color: entityColor }} aria-hidden="true" />
                             {entityTitle} Details
-                        </h6>
+                        </h3>
                         {entityName === 'trades' && formData.direction && (
                             <TradeMetaBadges direction={formData.direction} licenseType={formData.license_type} />
                         )}
                     </div>
                 </div>
-                <div className={cn("p-6", isLicenseForm && "p-4 sm:p-5")}>
+                <div className={cn("space-y-6 p-6", isLicenseForm && "space-y-4 p-4 sm:p-6")}>
                     {error && (
                         <Alert variant="destructive" className="mb-4">
                             <TriangleAlert className="size-4" />
@@ -887,19 +889,19 @@ export default function MasterForm({
                                 const fieldId = `field-${field}`;
                                 return (
                                     <div key={field} className={col}>
-                                        <label htmlFor={fieldId} className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                                        <label htmlFor={fieldId} className="mb-1.5 block text-xs font-medium text-muted-foreground">
                                             {label}{fieldMeta.required && <span className="ml-1 text-destructive">*</span>}
                                         </label>
                                         {renderField(field, fieldId)}
                                         {hasError && (
-                                            <div className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                                                <AlertCircle className="size-4" aria-hidden="true" />
-                                                {Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}
+                                            <div className="mt-1.5 flex items-start gap-1 text-xs text-destructive">
+                                                <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                                                <span>{Array.isArray(fieldError) ? fieldError.join(', ') : fieldError}</span>
                                             </div>
                                         )}
                                         {helpText && !hasError && (
-                                            <small className="mt-1 block text-[0.73rem] text-muted-foreground">
-                                                <Info className="size-4" aria-hidden="true" />{helpText}
+                                            <small className="mt-1 block text-xs text-muted-foreground">
+                                                {helpText}
                                             </small>
                                         )}
                                     </div>
@@ -912,7 +914,7 @@ export default function MasterForm({
                                 const remainingFields = activeFields.filter((f: string) => !sectionedFields.has(f));
 
                                 return (
-                                    <div className="flex flex-col gap-3">
+                                    <div className="space-y-6">
                                         {sections.map((section: any) => {
                                             const visibleFields = section.fields.filter((f: string) => activeFields.includes(f));
                                             if (visibleFields.length === 0) return null;
@@ -921,33 +923,31 @@ export default function MasterForm({
                                                     key={section.title}
                                                     aria-labelledby={`section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
                                                     className={cn(
-                                                        "rounded-md bg-muted/60 px-5 py-4",
-                                                        isLicenseForm && "rounded-lg border border-border/60 bg-card px-3 py-3 shadow-none sm:px-4"
+                                                        "space-y-3 rounded-md border border-border/50 bg-muted/40 px-4 py-4",
+                                                        isLicenseForm && "space-y-3 rounded-lg bg-card px-4 py-3 sm:px-4"
                                                     )}
-                                                    style={isLicenseForm ? undefined : { borderLeft: `3px solid ${section.color}` }}
                                                 >
                                                     <div
                                                         id={`section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
-                                                        className={cn(
-                                                            "mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em]",
-                                                            isLicenseForm && "mb-2.5 text-primary"
-                                                        )}
+                                                        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                                                         style={isLicenseForm ? undefined : { color: section.color }}
                                                     >
-                                                        <span className="inline-flex items-center gap-1.5"><FileText className="size-3.5 opacity-70" aria-hidden="true" />{section.title}</span>
+                                                        <FileText className="size-4 shrink-0 opacity-60" aria-hidden="true" />
+                                                        <span>{section.title}</span>
                                                     </div>
-                                                    <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3", isLicenseForm && "gap-x-3 gap-y-2.5")}>
+                                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                                                         {visibleFields.map((f: string) => renderOneField(f, section.cols?.[f]))}
                                                     </div>
                                                 </section>
                                             );
                                         })}
                                         {remainingFields.length > 0 && (
-                                            <section className={cn("rounded-md border-l-[3px] border-l-border bg-muted/60 px-5 py-4", isLicenseForm && "rounded-lg border border-border/60 bg-card px-3 py-3 sm:px-4")}>
-                                                <div className="mb-3.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-                                                    <MoreHorizontal className="size-4" aria-hidden="true" /> Other Fields
+                                            <section className="space-y-3 rounded-md border border-border/50 bg-muted/40 px-4 py-4">
+                                                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                    <MoreHorizontal className="size-4 shrink-0" aria-hidden="true" />
+                                                    <span>Other Fields</span>
                                                 </div>
-                                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                                                     {remainingFields.map((f: string) => renderOneField(f))}
                                                 </div>
                                             </section>
@@ -957,7 +957,7 @@ export default function MasterForm({
                             }
 
                             return (
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                                     {activeFields.map((f: string) => renderOneField(f))}
                                 </div>
                             );
@@ -1069,15 +1069,14 @@ export default function MasterForm({
                         )}
 
                         {/* Action Buttons */}
-                        <div className={cn("mt-4 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(15,23,42,0.06)] backdrop-blur sm:-mx-5 sm:px-5")}>
+                        <div className={cn("mt-6 flex flex-wrap items-center gap-3 border-t border-border/70 pt-4", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(26,58,82,0.06)] backdrop-blur sm:-mx-6 sm:px-6")}>
                             <Button
                                 type="submit"
                                 size="lg"
                                 disabled={saving}
-                                style={{ background: entityColor, border: "none", color: "#fff" }}
                             >
-                                {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                                {saving ? "Saving…" : isEdit ? "Update" : "Create"}
+                                {saving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
+                                <span>{saving ? "Saving…" : isEdit ? "Update" : "Create"}</span>
                             </Button>
 
                             {entityName === "licenses" && isEdit && (
@@ -1088,7 +1087,8 @@ export default function MasterForm({
                                     onClick={() => { setSavedLicenseId(id); setShowBalanceModal(true); }}
                                     disabled={saving}
                                 >
-                                    <Eye className="size-4" />View Balance
+                                    <Eye className="size-4" aria-hidden="true" />
+                                    <span>View Balance</span>
                                 </Button>
                             )}
 
@@ -1100,7 +1100,8 @@ export default function MasterForm({
                                     onClick={() => navigate(`/licenses/${id}/balance`)}
                                     disabled={saving}
                                 >
-                                    <BarChart3 className="size-4" />Balance Workspace
+                                    <BarChart3 className="size-4" aria-hidden="true" />
+                                    <span>Balance Workspace</span>
                                 </Button>
                             )}
 
@@ -1114,7 +1115,8 @@ export default function MasterForm({
                                 }}
                                 disabled={saving}
                             >
-                                <X className="size-4" />Cancel
+                                <X className="size-4" aria-hidden="true" />
+                                <span>Cancel</span>
                             </Button>
                         </div>
                     </form>

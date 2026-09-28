@@ -262,9 +262,9 @@ export default function Dashboard() {
     }, [navigate]);
 
     const headerActions = (
-        <div className="dashboard-page-actions flex flex-wrap items-center justify-end gap-2">
+        <div className="dashboard-page-actions flex flex-wrap items-center justify-end gap-3">
             <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => void fetchDashboardData(true)}
                 disabled={refreshing || loading}
@@ -280,7 +280,7 @@ export default function Dashboard() {
             </Button>
             {canCreateAllotments && (
                 <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => navigate("/allotments/create")}
                 >
@@ -290,6 +290,7 @@ export default function Dashboard() {
             )}
             {canCreateBOE && (
                 <Button
+                    variant="default"
                     size="sm"
                     onClick={() => navigate("/bill-of-entries/create")}
                 >
@@ -302,7 +303,7 @@ export default function Dashboard() {
 
     return (
         <section
-            className="dashboard-page space-y-6"
+            className="dashboard-page space-y-8"
             aria-label="Dashboard overview"
             aria-busy={loading}
         >
@@ -327,16 +328,18 @@ export default function Dashboard() {
             {/* ── Error State ─────────────────────────────────────────── */}
             {error && (
                 <div
-                    className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-200"
                     role="alert"
                 >
-                    <AlertTriangle className="size-4" />
-                    Some dashboard data may be unavailable.
-                    {lastUpdated && " The last successful result is still shown."}
+                    <AlertTriangle className="size-4 shrink-0" />
+                    <span className="flex-1">
+                        Some dashboard data may be unavailable.
+                        {lastUpdated && " The last successful result is still shown."}
+                    </span>
                     <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
-                        className="ml-auto"
+                        className="ml-auto shrink-0"
                         onClick={() => void fetchDashboardData(true)}
                     >
                         <RotateCcw className="size-3.5" />
@@ -350,26 +353,26 @@ export default function Dashboard() {
                 ════════════════════════════════════════════════════════ */}
             {canSeeLicenses && (
                 <section
-                    className="space-y-3"
+                    className="space-y-4"
                     aria-labelledby="urgent-alerts-title"
                 >
                     <div className="space-y-1">
                         <h2
                             id="urgent-alerts-title"
-                            className="text-sm font-semibold uppercase tracking-wider text-muted-foreground"
+                            className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
                         >
                             Urgent alerts
                         </h2>
                     </div>
 
                     {loading ? (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {Array.from({ length: 3 }, (_, index) => (
                                 <SkeletonAlertCard key={index} />
                             ))}
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {/* Expiring < 7 days */}
                             <AlertCard
                                 icon={AlertTriangle}
@@ -425,24 +428,24 @@ export default function Dashboard() {
             {/* ════════════════════════════════════════════════════════
                 PHASE 2: KPI SNAPSHOT (Yellow/Green zone)
                 ════════════════════════════════════════════════════════ */}
-            <section className="space-y-3" aria-labelledby="snapshot-title">
+            <section className="space-y-4" aria-labelledby="snapshot-title">
                 <div className="space-y-1">
                     <h2
                         id="snapshot-title"
-                        className="text-sm font-semibold uppercase tracking-wider text-muted-foreground"
+                        className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
                     >
                         Snapshot
                     </h2>
                 </div>
 
                 {loading ? (
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                         {Array.from({ length: 4 }, (_, index) => (
                             <SkeletonStat key={index} />
                         ))}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                         {canSeeLicenses && (
                             <>
                                 <StatCard
@@ -501,20 +504,20 @@ export default function Dashboard() {
                 PHASE 2: EXPIRING SOON TABLE (Full width, scannable)
                 ════════════════════════════════════════════════════════ */}
             {canSeeLicenses && expiringLicenses.length > 0 && (
-                <Card className="overflow-hidden">
-                    <CardHeader className="border-b pb-3">
-                        <div className="flex items-center justify-between">
+                <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
+                    <CardHeader className="border-b border-slate-200 pb-3 dark:border-slate-800">
+                        <div className="flex items-center justify-between gap-3">
                             <div>
-                                <h3 className="text-sm font-semibold">
+                                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                     Expiring soon
                                 </h3>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
                                     Next {EXPIRY_WINDOW_DAYS} days (
                                     {expiringLicenses.length} records)
                                 </p>
                             </div>
                             <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={goExpiringSoon}
                             >
@@ -524,8 +527,8 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent className="max-h-[400px] overflow-auto p-0">
                         <table className="w-full text-sm">
-                            <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
-                                <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
+                                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
                                     <th className="px-4 py-2.5">License</th>
                                     <th className="px-4 py-2.5">Expiry</th>
                                     <th className="px-4 py-2.5 text-right">
@@ -548,25 +551,25 @@ export default function Dashboard() {
                                     return (
                                         <tr
                                             key={lic.license_number}
-                                            className="border-t border-border/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:bg-accent/60"
+                                            className="border-t border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900/50 dark:focus-visible:bg-slate-900"
                                             {...rowNav(() =>
                                                 navigate(
                                                     `/licenses?search=${lic.license_number}`
                                                 )
                                             )}
                                         >
-                                            <td className="px-4 py-2.5 text-sm font-medium text-primary">
+                                            <td className="px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400">
                                                 {lic.license_number}
                                             </td>
-                                            <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                            <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
                                                 {displayDate(
                                                     lic.license_expiry_date
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums">
+                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums text-slate-900 dark:text-slate-100">
                                                 {displayMoney(lic.balance_cif)}
                                             </td>
-                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums">
+                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums text-slate-900 dark:text-slate-100">
                                                 {days <= 0
                                                     ? "Expired"
                                                     : `${days}d`}
@@ -593,23 +596,23 @@ export default function Dashboard() {
                 PHASE 2: ACTIVITY GRID (Recent BOE + Allotments)
                 ════════════════════════════════════════════════════════ */}
             {(canSeeBOE || canSeeAllotments) && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {/* Recent BOE Entries */}
                     {canSeeBOE && (
-                        <Card className="overflow-hidden">
-                            <CardHeader className="border-b pb-3">
-                                <div className="flex items-center justify-between">
+                        <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
+                            <CardHeader className="border-b border-slate-200 pb-3 dark:border-slate-800">
+                                <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="text-sm font-semibold">
+                                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                             Recent BOE entries
                                         </h3>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
                                             Latest{" "}
                                             {stats.boe.recent.length} records
                                         </p>
                                     </div>
                                     <Button
-                                        variant="outline"
+                                        variant="secondary"
                                         size="sm"
                                         onClick={() =>
                                             navigate("/bill-of-entries")
@@ -622,8 +625,8 @@ export default function Dashboard() {
                             <CardContent className="max-h-[300px] overflow-auto p-0">
                                 {stats.boe.recent.length ? (
                                     <table className="w-full text-sm">
-                                        <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
-                                            <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
+                                            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
                                                 <th className="px-4 py-2.5">
                                                     BOE #
                                                 </th>
@@ -639,24 +642,24 @@ export default function Dashboard() {
                                             {stats.boe.recent.map((boe) => (
                                                 <tr
                                                     key={boe.id}
-                                                    className="border-t border-border/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:bg-accent/60"
+                                                    className="border-t border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900/50 dark:focus-visible:bg-slate-900"
                                                     {...rowNav(() =>
                                                         navigate(
                                                             `/bill-of-entries/${boe.id}/edit`
                                                         )
                                                     )}
                                                 >
-                                                    <td className="px-4 py-2.5 text-sm font-medium text-primary">
+                                                    <td className="px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400">
                                                         {boe.bill_of_entry_number ||
                                                             "—"}
                                                     </td>
-                                                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                                    <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
                                                         {displayDate(
                                                             boe.bill_of_entry_date
                                                         )}
                                                     </td>
                                                     <td
-                                                        className="max-w-[170px] truncate px-4 py-2.5 text-xs"
+                                                        className="max-w-[170px] truncate px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100"
                                                         title={
                                                             boe.company_name ??
                                                             undefined
@@ -682,21 +685,21 @@ export default function Dashboard() {
 
                     {/* Recent Allotments */}
                     {canSeeAllotments && (
-                        <Card className="overflow-hidden">
-                            <CardHeader className="border-b pb-3">
-                                <div className="flex items-center justify-between">
+                        <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
+                            <CardHeader className="border-b border-slate-200 pb-3 dark:border-slate-800">
+                                <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <h3 className="text-sm font-semibold">
+                                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                             Recent allotments
                                         </h3>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
                                             Latest{" "}
                                             {stats.allotments.recent.length}{" "}
                                             records
                                         </p>
                                     </div>
                                     <Button
-                                        variant="outline"
+                                        variant="secondary"
                                         size="sm"
                                         onClick={() =>
                                             navigate("/allotments")
@@ -709,8 +712,8 @@ export default function Dashboard() {
                             <CardContent className="max-h-[300px] overflow-auto p-0">
                                 {stats.allotments.recent.length ? (
                                     <table className="w-full text-sm">
-                                        <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
-                                            <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
+                                            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
                                                 <th className="px-4 py-2.5">
                                                     Date
                                                 </th>
@@ -730,21 +733,21 @@ export default function Dashboard() {
                                                 (allotment) => (
                                                     <tr
                                                         key={allotment.id}
-                                                        className="border-t border-border/60 hover:bg-accent/40 focus-visible:outline-none focus-visible:bg-accent/60"
+                                                        className="border-t border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900/50 dark:focus-visible:bg-slate-900"
                                                         {...rowNav(() =>
                                                             navigate(
                                                                 `/allotments/${allotment.id}/allocate`
                                                             )
                                                         )}
                                                     >
-                                                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">
+                                                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
                                                             {displayDate(
                                                                 allotment.modified_on ||
                                                                     allotment.created_at
                                                             )}
                                                         </td>
                                                         <td
-                                                            className="max-w-[200px] truncate px-4 py-2.5 text-sm"
+                                                            className="max-w-[200px] truncate px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100"
                                                             title={
                                                                 allotment.item_name ??
                                                                 undefined
@@ -753,12 +756,12 @@ export default function Dashboard() {
                                                             {allotment.item_name ||
                                                                 "—"}
                                                         </td>
-                                                        <td className="px-4 py-2.5 text-right text-sm tabular-nums">
+                                                        <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-900 dark:text-slate-100">
                                                             {displayQuantity(
                                                                 allotment.required_quantity
                                                             )}
                                                         </td>
-                                                        <td className="px-4 py-2.5 text-right text-sm tabular-nums">
+                                                        <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-900 dark:text-slate-100">
                                                             {displayMoney(
                                                                 allotment.cif_fc
                                                             )}

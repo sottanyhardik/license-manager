@@ -5,6 +5,7 @@ Moved from backend/data_script/fetch_ownership.py.
 
 import logging
 import os
+import random
 import time
 
 import requests
@@ -18,22 +19,33 @@ MAX_ATTEMPTS = 4
 BASE_RETRY_DELAY_SECONDS = 5
 
 DGFT_HEADERS = {
-    "Accept": "*/*",
-    "Accept-Language": "en-GB,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+    "Cache-Control": "max-age=0",
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
     "Referer": "https://www.dgft.gov.in/CP/?opt=adnavce-authorisation",
     "Origin": "https://www.dgft.gov.in",
     "X-Requested-With": "XMLHttpRequest",
     "DNT": "1",
     "Priority": "u=1, i",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Dest": "empty",
-    "Sec-CH-UA": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-    "Sec-CH-UA-Platform": '"macOS"',
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-CH-UA": '"Google Chrome";v="153", "Chromium";v="153", "Not_A Brand";v="8"',
     "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
 }
+
+# Rotate User-Agent to avoid bot detection
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+]
 
 
 def _clean_optional(value: str | None) -> str | None:
@@ -112,16 +124,28 @@ def fetch_scrip_ownership(
 
     logger.debug("Fetching scrip ownership for %s issued %s (IEC: %s)", required_values["scrip_number"], required_values["scrip_issue_date"], required_values["iec_number"])
 
+    # Use session for persistent cookie handling and better bot detection evasion
+    session = requests.Session()
+
     for attempt in range(MAX_ATTEMPTS):
         try:
-            response = requests.post(
+            # Rotate User-Agent to avoid bot detection on retries
+            headers = DGFT_HEADERS.copy()
+            headers["User-Agent"] = random.choice(USER_AGENTS)
+            session.headers.update(headers)
+
+            # Add slight delay to appear human (not immediate bot)
+            if attempt > 0:
+                time.sleep(random.uniform(0.5, 2.0))
+
+            response = session.post(
                 DGFT_URL,
                 params=params,
                 cookies=cookies,
-                headers=DGFT_HEADERS,
                 data=data,
                 proxies=proxies,
                 timeout=REQUEST_TIMEOUT_SECONDS,
+                allow_redirects=True,
             )
             if response.status_code == 429:
                 wait = 2**attempt * BASE_RETRY_DELAY_SECONDS  # 5s, 10s, 20s, 40s

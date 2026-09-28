@@ -826,12 +826,12 @@ export default function MasterList() {
                 }
                 title={entityTitle}
                 description={
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                    <>
                         <span className="font-medium text-foreground">{workspaceDescription}</span>
                         <span aria-hidden="true" className="text-border">•</span>
                         <span className="tabular-nums text-muted-foreground">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
                         {isRefreshing && <span role="status" className="text-muted-foreground">Updating…</span>}
-                    </div>
+                    </>
                 }
                 actions={
                     <>

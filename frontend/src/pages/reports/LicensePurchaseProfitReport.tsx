@@ -275,8 +275,8 @@ export default function LicensePurchaseProfitReport() {
                         </Button>
                     </div>
                 </div>
-                <CardContent className="p-4">
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                <CardContent className="px-4 py-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div>
                             <FilterLabel htmlFor={fromDateId} icon={CalendarRange}>From Date</FilterLabel>
                             <Input id={fromDateId} type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -291,7 +291,7 @@ export default function LicensePurchaseProfitReport() {
                             <FilterLabel htmlFor={normId} icon={Tag}>Norm</FilterLabel>
                             <select
                                 id={normId}
-                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                                className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                 value={norm}
                                 onChange={(e) => setNorm(e.target.value)}
                             >
@@ -328,7 +328,7 @@ export default function LicensePurchaseProfitReport() {
                             />
                         </div>
 
-                        <div className="md:col-span-3 xl:col-span-5">
+                        <div className="sm:col-span-2 lg:col-span-4">
                             <FilterLabel htmlFor={excludeLicenseNumberId} icon={FileText}>Exclude License Number</FilterLabel>
                             <ExcludeLicenseNumberInput
                                 id={excludeLicenseNumberId}
@@ -516,11 +516,11 @@ export default function LicensePurchaseProfitReport() {
                                         className="h-8 w-48 pl-8"
                                     />
                                 </div>
-                                <Button variant="outline" size="sm" onClick={exportExcel} disabled={downloading}>
+                                <Button variant="default" size="sm" onClick={exportExcel} disabled={downloading}>
                                     {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                                     Excel
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={exportPdf} disabled={downloading}>
+                                <Button variant="default" size="sm" onClick={exportPdf} disabled={downloading}>
                                     {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
                                     PDF
                                 </Button>

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { Box, Stack, Typography, useTheme } from "@mui/material";
 
 interface PageHeaderProps {
     pretitle?: React.ReactNode;
@@ -11,7 +11,7 @@ interface PageHeaderProps {
 }
 
 /**
- * Tailwind/shadcn page header. API-compatible with the legacy PageHeader
+ * MUI page header. API-compatible with the legacy PageHeader
  * (pretitle / title / description / actions) for drop-in migration.
  *
  * Design: a single, calm page-summary surface that keeps navigation, context,
@@ -25,40 +25,87 @@ export default function PageHeader({
     children,
     className,
 }: PageHeaderProps) {
+    const muiTheme = useTheme();
+
     return (
-        <div
-            className={cn(
-                "app-page-header mb-6 flex flex-wrap items-center justify-between gap-x-5 gap-y-4",
-                "rounded-lg border border-border/60 bg-card px-5 py-4 shadow-sm sm:px-6 sm:py-5",
-                className
-            )}
+        <Box
+            className={`app-page-header ${className || ""}`}
+            sx={{
+                mb: 3,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: { xs: 2, sm: 2.5 },
+                borderRadius: 1,
+                border: `1px solid ${muiTheme.palette.divider}`,
+                backgroundColor: muiTheme.palette.background.paper,
+                p: { xs: 2.5, sm: 3 },
+                boxShadow: muiTheme.shadows[1],
+            }}
         >
             {/* Left: Breadcrumb + title + description */}
-            <div className="min-w-0 flex-1">
+            <Box sx={{ minWidth: 0, flex: 1 }}>
                 {pretitle && (
-                    <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            mb: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.75,
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            color: muiTheme.palette.text.secondary,
+                        }}
+                    >
                         {pretitle}
-                    </div>
+                    </Typography>
                 )}
                 {title && (
-                    <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-[1.625rem] lg:text-3xl">
+                    <Typography
+                        component="h1"
+                        variant="h4"
+                        sx={{
+                            fontWeight: 700,
+                            lineHeight: 1.2,
+                            letterSpacing: "-0.01em",
+                            mb: description ? 1 : 0,
+                        }}
+                    >
                         {title}
-                    </h1>
+                    </Typography>
                 )}
                 {description && (
-                    <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    <Typography
+                        variant="body2"
+                        color="textSecondary"
+                        sx={{
+                            mt: 1,
+                            lineHeight: 1.6,
+                        }}
+                    >
                         {description}
-                    </div>
+                    </Typography>
                 )}
                 {children}
-            </div>
+            </Box>
 
             {/* Right: Actions */}
             {actions && (
-                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
+                <Stack
+                    direction="row"
+                    spacing={{ xs: 1, sm: 1.5 }}
+                    sx={{
+                        flexShrink: 0,
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                    }}
+                >
                     {actions}
-                </div>
+                </Stack>
             )}
-        </div>
+        </Box>
     );
 }

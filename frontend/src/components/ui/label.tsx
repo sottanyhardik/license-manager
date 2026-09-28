@@ -1,24 +1,44 @@
 import * as React from "react";
-import * as LabelPrimitive from "@radix-ui/react-label";
+import { FormLabel as MuiFormLabel, FormLabelProps as MuiFormLabelProps } from "@mui/material";
 
-import { cn } from "@/lib/utils";
-
-function Label({
-    className,
-    ...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
-    return (
-        <LabelPrimitive.Root
-            data-slot="label"
-            className={cn(
-                "flex items-center gap-2 text-sm font-medium leading-none select-none",
-                "group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50",
-                "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
-                className
-            )}
-            {...props}
-        />
-    );
+interface LabelProps extends MuiFormLabelProps {
+    required?: boolean;
 }
+
+/**
+ * Label component wrapper around MUI FormLabel
+ * Provides consistent label styling across the application
+ */
+const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
+    ({ className, required, children, ...props }, ref) => {
+        return (
+            <MuiFormLabel
+                ref={ref}
+                component="label"
+                className={className}
+                data-slot="label"
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    marginBottom: '4px',
+                    userSelect: 'none',
+                    '&.Mui-disabled': {
+                        pointerEvents: 'none',
+                        opacity: 0.5,
+                    }
+                }}
+                {...props}
+            >
+                {children}
+                {required && <span sx={{ color: 'error.main' }}>*</span>}
+            </MuiFormLabel>
+        );
+    }
+);
+
+Label.displayName = 'Label';
 
 export { Label };

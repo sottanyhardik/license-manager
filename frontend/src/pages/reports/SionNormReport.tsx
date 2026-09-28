@@ -246,7 +246,7 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
 
     // Radio filter group
     const FilterRadios = () => (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <fieldset>
                 <legend className="mb-1.5 text-xs font-medium text-muted-foreground">Active / Expired</legend>
                 <div className="flex gap-4">

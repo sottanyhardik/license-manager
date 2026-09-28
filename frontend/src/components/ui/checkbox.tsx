@@ -1,31 +1,44 @@
 import * as React from "react";
-import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
-import { CheckIcon } from "lucide-react";
+import { Checkbox as MuiCheckbox, CheckboxProps as MuiCheckboxProps } from "@mui/material";
 
-import { cn } from "@/lib/utils";
-
-function Checkbox({
-    className,
-    ...props
-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
-    return (
-        <CheckboxPrimitive.Root
-            data-slot="checkbox"
-            className={cn(
-                "peer size-4 shrink-0 rounded-md border border-input shadow-sm outline-none transition-all",
-                "hover:border-input/80 hover:shadow",
-                "focus-visible:ring-[3px] focus-visible:ring-ring/40",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                "data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:hover:border-primary/90",
-                className
-            )}
-            {...props}
-        >
-            <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
-                <CheckIcon className="size-3.5" />
-            </CheckboxPrimitive.Indicator>
-        </CheckboxPrimitive.Root>
-    );
+interface CheckboxProps extends Omit<MuiCheckboxProps, 'onChange'> {
+    checked?: boolean | 'indeterminate';
+    onCheckedChange?: (checked: boolean | 'indeterminate') => void;
+    onChange?: (event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => void;
 }
+
+/**
+ * Checkbox component wrapper around MUI Checkbox
+ * Maps shadcn onCheckedChange to MUI onChange
+ * Provides consistent checkbox styling across the application
+ */
+const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
+    ({ className, checked, onCheckedChange, onChange, ...props }, ref) => {
+        const handleChange = React.useCallback(
+            (event: React.ChangeEvent<HTMLInputElement>, newChecked: boolean) => {
+                if (onCheckedChange) {
+                    onCheckedChange(newChecked);
+                }
+                if (onChange) {
+                    onChange(event, newChecked);
+                }
+            },
+            [onCheckedChange, onChange]
+        );
+
+        return (
+            <MuiCheckbox
+                ref={ref}
+                checked={checked}
+                onChange={handleChange}
+                data-slot="checkbox"
+                className={className}
+                {...props}
+            />
+        );
+    }
+);
+
+Checkbox.displayName = 'Checkbox';
 
 export { Checkbox };

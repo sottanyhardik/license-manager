@@ -24,6 +24,7 @@ import PlanningEditor from "@/components/planning/PlanningEditor";
 import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
 import ReplanStatus from "./ReplanStatus";
+import RestrictionSummary from "./RestrictionSummary";
 import { autoPlanLicense } from "@/services/api/planningRuleApi";
 
 type TabId = "overview" | "boes" | "allotments" | "planning" | "items" | "invoice-ledger";
@@ -194,6 +195,8 @@ export default function LicenseOverviewPage() {
                     </>
                 }
             />
+
+            {id && <RestrictionSummary licenseId={id} />}
 
             {id && <ReplanStatus licenseId={id} />}
 

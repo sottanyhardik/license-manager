@@ -20,6 +20,7 @@ import {openPdfPreview} from "../../utils/pdfPreview";
 import {openLicenseCopyPdf} from "../../utils/licenseCopyPdf";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
+import LicenseRestrictionDrawer from "./LicenseRestrictionDrawer";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
@@ -150,6 +151,10 @@ export default function MasterList() {
     // Utilization planning panel state
     const [showPlanModal, setShowPlanModal] = useState(false);
     const [planLicense, setPlanLicense] = useState(null); // { id, number, balance }
+
+    // License restriction drawer state
+    const [showRestrictionDrawer, setShowRestrictionDrawer] = useState(false);
+    const [restrictionLicense, _setRestrictionLicense] = useState<{ id: number; number: string } | null>(null);
 
     // Transfer Letter Modal state (for BOE)
     const [showTransferLetterModal, setShowTransferLetterModal] = useState(false);
@@ -1585,6 +1590,26 @@ export default function MasterList() {
                     licenseId={planLicense?.id}
                     licenseNumber={planLicense?.number}
                     balanceCif={planLicense?.balance || 0}
+                />
+            )}
+
+            {/* License Restriction Drawer */}
+            {entityName === 'licenses' && (
+                <LicenseRestrictionDrawer
+                    licenseId={restrictionLicense?.id}
+                    licenseNumber={restrictionLicense?.number}
+                    open={showRestrictionDrawer}
+                    onOpenChange={setShowRestrictionDrawer}
+                    onViewDetails={() => {
+                        if (restrictionLicense?.id) {
+                            navigate(`/licenses/${restrictionLicense.id}/overview`);
+                        }
+                    }}
+                    onEdit={() => {
+                        if (restrictionLicense?.id) {
+                            navigate(`/licenses/${restrictionLicense.id}/edit`);
+                        }
+                    }}
                 />
             )}
 

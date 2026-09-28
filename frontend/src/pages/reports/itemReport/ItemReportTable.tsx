@@ -73,61 +73,65 @@ export default function ItemReportTable({
         <Card>
             <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                    <table className="table table-hover table-sm mb-0"
-                           style={{tableLayout: 'auto', minWidth: '1600px'}}>
-                        <thead style={{position: 'sticky', top: 0, zIndex: 10}}>
-                        <tr className="table-light">
-                            <th scope="col" className="text-center" style={{
+                    <table className="mb-0"
+                           style={{tableLayout: 'auto', minWidth: '1600px', fontSize: '0.875rem'}}>
+                        <thead style={{position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db'}}>
+                        <tr style={{height: '36px'}}>
+                            <th scope="col" className="text-center text-xs font-semibold" style={{
                                 position: 'sticky',
                                 left: 0,
                                 zIndex: 11,
-                                backgroundColor: 'var(--tb-sunken)',
-                                minWidth: '60px'
+                                backgroundColor: '#f3f4f6',
+                                minWidth: '60px',
+                                padding: '0.5rem 0.75rem'
                             }}>Sr No
                             </th>
-                            <th scope="col" style={{
+                            <th scope="col" className="text-xs font-semibold" style={{
                                 position: 'sticky',
                                 left: '60px',
                                 zIndex: 11,
-                                backgroundColor: 'var(--tb-sunken)',
-                                minWidth: '150px'
+                                backgroundColor: '#f3f4f6',
+                                minWidth: '150px',
+                                padding: '0.5rem 0.75rem'
                             }}>License No
                             </th>
-                            <th scope="col" style={{minWidth: '120px'}}>License Date
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '120px', padding: '0.5rem 0.75rem'}}>License Date
                             </th>
-                            <th scope="col" style={{
+                            <th scope="col" className="text-xs font-semibold" style={{
                                 position: 'sticky',
                                 left: '210px',
                                 zIndex: 11,
-                                backgroundColor: 'var(--tb-sunken)',
-                                minWidth: '140px'
+                                backgroundColor: '#f3f4f6',
+                                minWidth: '140px',
+                                padding: '0.5rem 0.75rem'
                             }}>License Expiry Date
                             </th>
-                            <th scope="col" style={{minWidth: '120px'}}>Ledger Date</th>
-                            <th scope="col" style={{minWidth: '200px'}}>Exporter Name</th>
-                            <th scope="col" style={{minWidth: '100px'}}>Serial Number</th>
-                            <th scope="col" className="text-center" style={{minWidth: '90px'}}>Condition</th>
-                            <th scope="col" style={{minWidth: '100px'}}>HSN Code</th>
-                            <th scope="col" style={{minWidth: '250px'}}>Product Description</th>
-                            <th scope="col" style={{minWidth: '200px'}}>Item Name</th>
-                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Available Quantity</th>
-                            <th scope="col" className="text-right" style={{minWidth: '110px'}}>Unit Price</th>
-                            <th scope="col" className="text-right" style={{minWidth: '140px'}}>Available Balance</th>
-                            <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan Qty</th>
-                            <th scope="col" className="text-right" style={{minWidth: '120px'}}>Plan CIF</th>
-                            <th scope="col" className="text-right" style={{
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '120px', padding: '0.5rem 0.75rem'}}>Ledger Date</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '200px', padding: '0.5rem 0.75rem'}}>Exporter Name</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '100px', padding: '0.5rem 0.75rem'}}>Serial Number</th>
+                            <th scope="col" className="text-center text-xs font-semibold" style={{minWidth: '90px', padding: '0.5rem 0.75rem'}}>Condition</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '100px', padding: '0.5rem 0.75rem'}}>HSN Code</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '250px', padding: '0.5rem 0.75rem'}}>Product Description</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '200px', padding: '0.5rem 0.75rem'}}>Item Name</th>
+                            <th scope="col" className="text-right text-xs font-semibold" style={{minWidth: '140px', padding: '0.5rem 0.75rem'}}>Available Quantity</th>
+                            <th scope="col" className="text-right text-xs font-semibold" style={{minWidth: '110px', padding: '0.5rem 0.75rem'}}>Unit Price</th>
+                            <th scope="col" className="text-right text-xs font-semibold" style={{minWidth: '140px', padding: '0.5rem 0.75rem'}}>Available Balance</th>
+                            <th scope="col" className="text-right text-xs font-semibold" style={{minWidth: '120px', padding: '0.5rem 0.75rem'}}>Plan Qty</th>
+                            <th scope="col" className="text-right text-xs font-semibold" style={{minWidth: '120px', padding: '0.5rem 0.75rem'}}>Plan CIF</th>
+                            <th scope="col" className="text-right text-xs font-semibold" style={{
                                 position: 'sticky',
                                 left: '350px',
                                 zIndex: 11,
-                                backgroundColor: 'var(--tb-sunken)',
+                                backgroundColor: '#f3f4f6',
                                 minWidth: '140px',
+                                padding: '0.5rem 0.75rem',
                                 boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
-                                borderRight: '2px solid var(--tb-border)'
+                                borderRight: '2px solid #d1d5db'
                             }}>Balance CIF</th>
-                            <th scope="col" className="text-center" style={{minWidth: '120px'}}>Is Restricted</th>
-                            <th scope="col" style={{minWidth: '200px'}}>Notes</th>
-                            <th scope="col" style={{minWidth: '200px'}}>Condition Sheet</th>
-                            <th scope="col" style={{minWidth: '250px'}}>Transfer Status</th>
+                            <th scope="col" className="text-center text-xs font-semibold" style={{minWidth: '120px', padding: '0.5rem 0.75rem'}}>Is Restricted</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '200px', padding: '0.5rem 0.75rem'}}>Notes</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '200px', padding: '0.5rem 0.75rem'}}>Condition Sheet</th>
+                            <th scope="col" className="text-xs font-semibold" style={{minWidth: '250px', padding: '0.5rem 0.75rem'}}>Transfer Status</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -141,9 +145,11 @@ export default function ItemReportTable({
 
                                 return (
                                     <tr key={item.id} style={{
-                                        borderBottom: itemIdx === licenseItems.length - 1 ? '2px solid var(--tb-border)' : '',
+                                        height: '36px',
+                                        borderBottom: itemIdx === licenseItems.length - 1 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
                                         verticalAlign: 'middle'
-                                    }}>
+                                    }}
+                                    className="hover:bg-blue-50/50">
                                         {isFirstRow && (
                                             <>
                                                 <td className="text-center" rowSpan={rowSpan}
@@ -152,16 +158,18 @@ export default function ItemReportTable({
                                                         left: 0,
                                                         zIndex: 9,
                                                         verticalAlign: 'middle',
-                                                        backgroundColor: 'var(--tb-sunken)',
-                                                        fontWeight: '500'
+                                                        backgroundColor: '#f3f4f6',
+                                                        fontWeight: '500',
+                                                        padding: '0.5rem 0.75rem'
                                                     }}>{srNo - itemIdx}</td>
                                                 <td rowSpan={rowSpan} style={{
                                                     position: 'sticky',
                                                     left: '60px',
                                                     zIndex: 9,
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)',
-                                                    fontWeight: '600'
+                                                    backgroundColor: '#f3f4f6',
+                                                    fontWeight: '600',
+                                                    padding: '0.5rem 0.75rem'
                                                 }}>
                                                     <div
                                                         className="flex items-center justify-between">
@@ -183,31 +191,35 @@ export default function ItemReportTable({
                                                 </td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: '#f3f4f6',
+                                                    padding: '0.5rem 0.75rem'
                                                 }}>{formatDate(firstItem.license_date)}</td>
                                                 <td rowSpan={rowSpan} style={{
                                                     position: 'sticky',
                                                     left: '210px',
                                                     zIndex: 9,
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: '#f3f4f6',
+                                                    padding: '0.5rem 0.75rem'
                                                 }}>{formatDate(firstItem.license_expiry_date)}</td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: '#f3f4f6',
+                                                    padding: '0.5rem 0.75rem'
                                                 }}>{formatDate(firstItem.ledger_date)}</td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: '#f3f4f6',
+                                                    padding: '0.5rem 0.75rem'
                                                 }}>{firstItem.exporter_name || '-'}</td>
                                             </>
                                         )}
-                                        <td style={{verticalAlign: 'middle'}}>{item.serial_number}</td>
-                                        <td className="text-center" style={{verticalAlign: 'middle'}}>
+                                        <td style={{verticalAlign: 'middle', padding: '0.5rem 0.75rem'}}>{item.serial_number}</td>
+                                        <td className="text-center" style={{verticalAlign: 'middle', padding: '0.5rem 0.75rem'}}>
                                             <ConditionBadge type={item.condition_type} size="xs" />
                                         </td>
-                                        <td style={{verticalAlign: 'middle'}}>{item.hs_code || '-'}</td>
-                                        <td style={{verticalAlign: 'middle'}}>{item.product_description || '-'}</td>
+                                        <td style={{verticalAlign: 'middle', padding: '0.5rem 0.75rem'}}>{item.hs_code || '-'}</td>
+                                        <td style={{verticalAlign: 'middle', padding: '0.5rem 0.75rem'}}>{item.product_description || '-'}</td>
                                         <td>
                                             {itemNameMode === 'editable' ? (
                                                 <Select
@@ -256,14 +268,14 @@ export default function ItemReportTable({
                                                     left: '350px',
                                                     zIndex: 9,
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)',
+                                                    backgroundColor: '#f3f4f6',
                                                     boxShadow: '3px 0 8px rgba(0,0,0,0.15)',
                                                     borderRight: '2px solid var(--tb-border)'
                                                 }}>{formatCif(firstItem.balance_cif)}</td>
                                                 <td className="text-center" rowSpan={rowSpan}
                                                     style={{
                                                         verticalAlign: 'middle',
-                                                        backgroundColor: 'var(--tb-sunken)'
+                                                        backgroundColor: '#f3f4f6'
                                                     }}>
                                                     {/* Restriction is derived from condition_type (licence's
                                                         condition sheet) — read-only display. */}
@@ -275,7 +287,7 @@ export default function ItemReportTable({
                                                 </td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: '#f3f4f6'
                                                 }}>
                                                     {editingCell?.itemId === firstItem.id && editingCell?.field === 'notes' ? (
                                                         <div className="flex gap-1">
@@ -312,7 +324,7 @@ export default function ItemReportTable({
                                                 </td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)'
+                                                    backgroundColor: '#f3f4f6'
                                                 }}>
                                                     {editingCell?.itemId === firstItem.id && editingCell?.field === 'condition_sheet' ? (
                                                         <div className="flex gap-1">
@@ -349,7 +361,7 @@ export default function ItemReportTable({
                                                 </td>
                                                 <td rowSpan={rowSpan} style={{
                                                     verticalAlign: 'middle',
-                                                    backgroundColor: 'var(--tb-sunken)',
+                                                    backgroundColor: '#f3f4f6',
                                                     fontSize: 13.5,
                                                     lineHeight: '1.4'
                                                 }}>

@@ -144,8 +144,8 @@ export default function UserForm() {
 
     return (
         <div className="mx-auto max-w-4xl pb-20">
-            <div className="mb-5 border-b border-border pb-4">
-                <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={() => navigate("/admin/users")}>
+            <div className="mb-6 border-b border-border pb-6">
+                <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate("/admin/users")}>
                     <ArrowLeft className="size-4" />
                     Back to users
                 </Button>
@@ -160,36 +160,36 @@ export default function UserForm() {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
                 {/* Account details */}
-                <Card>
-                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Account details</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2">
+                <Card className="shadow-[var(--tb-shadow-1)]">
+                    <CardHeader className="flex-row items-center gap-2 border-b border-border py-3 px-6"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Account details</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-4 pt-6 pb-6 px-6 sm:grid-cols-2">
                         <div>
-                            <Label className="mb-1.5 required" htmlFor="username">Username</Label>
+                            <Label className="mb-2 required" htmlFor="username">Username</Label>
                             <Input id="username" name="username" value={form.username} onChange={handleChange}
-                                   required autoComplete="off" aria-invalid={!!fieldErrors.username} />
+                                   required autoComplete="off" aria-invalid={!!fieldErrors.username} className="h-10 rounded-lg" />
                             <FieldError name="username" />
                         </div>
                         <div>
-                            <Label className="mb-1.5" htmlFor="email">Email</Label>
+                            <Label className="mb-2" htmlFor="email">Email</Label>
                             <Input id="email" type="email" name="email" value={form.email} onChange={handleChange}
-                                   autoComplete="off" aria-invalid={!!fieldErrors.email} />
+                                   autoComplete="off" aria-invalid={!!fieldErrors.email} className="h-10 rounded-lg" />
                             <FieldError name="email" />
                         </div>
                         <div>
-                            <Label className="mb-1.5" htmlFor="first_name">First Name</Label>
-                            <Input id="first_name" name="first_name" value={form.first_name} onChange={handleChange} />
+                            <Label className="mb-2" htmlFor="first_name">First Name</Label>
+                            <Input id="first_name" name="first_name" value={form.first_name} onChange={handleChange} className="h-10 rounded-lg" />
                         </div>
                         <div>
-                            <Label className="mb-1.5" htmlFor="last_name">Last Name</Label>
-                            <Input id="last_name" name="last_name" value={form.last_name} onChange={handleChange} />
+                            <Label className="mb-2" htmlFor="last_name">Last Name</Label>
+                            <Input id="last_name" name="last_name" value={form.last_name} onChange={handleChange} className="h-10 rounded-lg" />
                         </div>
                         {!isEdit && (
                             <div>
-                                <Label className="mb-1.5" htmlFor="password">Password</Label>
+                                <Label className="mb-2" htmlFor="password">Password</Label>
                                 <Input id="password" type="password" name="password" value={form.password}
-                                       onChange={handleChange} autoComplete="new-password" aria-invalid={!!fieldErrors.password} />
+                                       onChange={handleChange} autoComplete="new-password" aria-invalid={!!fieldErrors.password} className="h-10 rounded-lg" />
                                 <FieldError name="password" />
                             </div>
                         )}
@@ -197,9 +197,9 @@ export default function UserForm() {
                 </Card>
 
                 {/* Access flags */}
-                <Card>
-                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Access flags</CardTitle></CardHeader>
-                    <CardContent className="flex flex-wrap gap-x-8 gap-y-3 pt-4">
+                <Card className="shadow-[var(--tb-shadow-1)]">
+                    <CardHeader className="flex-row items-center gap-2 border-b border-border py-3 px-6"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Access flags</CardTitle></CardHeader>
+                    <CardContent className="flex flex-wrap gap-x-8 gap-y-3 pt-6 pb-6 px-6">
                         <label className="flex cursor-pointer items-center gap-2.5 text-sm">
                             <Switch checked={form.is_active} onCheckedChange={(c) => setFlag("is_active", c)} />
                             Active
@@ -218,9 +218,9 @@ export default function UserForm() {
                 </Card>
 
                 {/* Roles */}
-                <Card>
-                    <CardHeader className="flex-row items-center gap-2 border-b py-3"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Roles</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 gap-2 pt-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Card className="shadow-[var(--tb-shadow-1)]">
+                    <CardHeader className="flex-row items-center gap-2 border-b border-border py-3 px-6"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" /><CardTitle className="text-sm">Roles</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-3 pt-6 pb-6 px-6 sm:grid-cols-2 lg:grid-cols-3">
                         {availableRoles.map((code) => {
                             const checked = form.roles.includes(code);
                             return (

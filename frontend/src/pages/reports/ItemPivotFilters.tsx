@@ -77,16 +77,16 @@ export default function ItemPivotFilters({
                     </button>
                 )}
             </div>
-            <div className="px-3 py-3 sm:px-4 sm:py-4">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4 lg:gap-4">
+            <div className="px-4 py-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                        <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={minBalanceId}>
-                            <DollarSign className="size-4" aria-hidden="true" />
+                        <label className="form-label mb-1 flex items-center gap-1 text-xs font-semibold" htmlFor={minBalanceId}>
+                            <DollarSign className="size-3.5" aria-hidden="true" />
                             Minimum Balance (CIF)
                         </label>
                         <select
                             id={minBalanceId}
-                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                            className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                             value={minBalance}
                             onChange={(e) => setMinBalance(normalizeMinBalance(e.target.value, minBalance))}
                         >
@@ -98,12 +98,12 @@ export default function ItemPivotFilters({
 
                     <div>
                         <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={licenseStatusId}>
-                            <CalendarCheck className="size-4" aria-hidden="true" />
+                            <CalendarCheck className="size-3.5" aria-hidden="true" />
                             License Status
                         </label>
                         <select
                             id={licenseStatusId}
-                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                            className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                             value={licenseStatus}
                             onChange={(e) => setLicenseStatus(e.target.value)}
                         >
@@ -116,7 +116,7 @@ export default function ItemPivotFilters({
 
                     <div>
                         <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={purchaseStatusId}>
-                            <ShoppingCart className="size-4" aria-hidden="true" />
+                            <ShoppingCart className="size-3.5" aria-hidden="true" />
                             Purchase Status
                         </label>
                         <Select
@@ -132,7 +132,7 @@ export default function ItemPivotFilters({
                             closeMenuOnScroll
                             styles={{
                                 menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                                control: (base) => ({ ...base, minHeight: "38px" }),
+                                control: (base) => ({ ...base, minHeight: "40px" }),
                             }}
                         />
                     </div>
@@ -152,11 +152,11 @@ export default function ItemPivotFilters({
                     </div>
 
                     <div>
-                        <div className="form-label mb-2 flex items-center gap-2 font-bold">
+                        <div className="form-label mb-1 flex items-center gap-1 text-xs font-semibold">
                             <Building2 className="size-4" aria-hidden="true" />
                             Include Companies
                         </div>
-                        <div style={{ minHeight: "38px" }}>
+                        <div style={{ minHeight: "40px" }}>
                             <AsyncSelectField
                                 endpoint="masters/companies/"
                                 labelField="name"
@@ -171,11 +171,11 @@ export default function ItemPivotFilters({
                     </div>
 
                     <div>
-                        <div className="form-label mb-2 flex items-center gap-2 font-bold">
+                        <div className="form-label mb-1 flex items-center gap-1 text-xs font-semibold">
                             <MinusCircle className="size-4" aria-hidden="true" />
                             Exclude Companies
                         </div>
-                        <div style={{ minHeight: "38px" }}>
+                        <div style={{ minHeight: "40px" }}>
                             <AsyncSelectField
                                 endpoint="masters/companies/"
                                 labelField="name"
@@ -191,29 +191,29 @@ export default function ItemPivotFilters({
                 </div>
 
                 {activeFiltersVisible && (
-                    <div className="mt-2 sm:mt-3">
-                        <div className="alert alert-info mb-0 flex flex-wrap items-center gap-1 py-2 sm:gap-1.5">
-                            <div className="flex items-center gap-1">
-                                <Filter className="size-3.5 sm:size-4" aria-hidden="true" />
-                                <strong className="text-xs sm:text-sm">Active Filters:</strong>
+                    <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                                <Filter className="size-4 text-blue-600" aria-hidden="true" />
+                                <span className="text-xs font-semibold text-blue-900">Active Filters:</span>
                             </div>
-                            <div className="flex flex-wrap gap-1 sm:gap-1.5">
+                            <div className="flex flex-wrap gap-1.5">
                                 {!isDefaultPurchaseStatus && (
-                                    <span className="chip chip-primary text-xs">
-                                        Purchase: {purchaseStatus.length > 0 ? purchaseStatus.join(", ") : "none"}
+                                    <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs">
+                                        <span>Purchase: {purchaseStatus.length > 0 ? purchaseStatus.join(", ") : "none"}</span>
                                     </span>
                                 )}
-                                {minBalance !== 200 && <span className="chip chip-primary text-xs">Min Balance: Rs.{minBalance}</span>}
+                                {minBalance !== 200 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Min Balance: Rs.{minBalance}</span></span>}
                                 {licenseStatus !== "active" && (
-                                    <span className="badge bg-primary text-xs">Status: {licenseStatus.replace("_", " ")}</span>
+                                    <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Status: {licenseStatus.replace("_", " ")}</span></span>
                                 )}
-                                {expiryDateFrom && <span className="chip chip-primary text-xs">Expiry From: {expiryDateFrom}</span>}
-                                {expiryDateTo && <span className="chip chip-primary text-xs">Expiry To: {expiryDateTo}</span>}
+                                {expiryDateFrom && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Expiry From: {expiryDateFrom}</span></span>}
+                                {expiryDateTo && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Expiry To: {expiryDateTo}</span></span>}
                                 {selectedCompanies.length > 0 && (
-                                    <span className="badge bg-primary text-xs">Incl. Companies: {selectedCompanies.length}</span>
+                                    <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Incl. Companies: {selectedCompanies.length}</span></span>
                                 )}
                                 {excludeCompanies.length > 0 && (
-                                    <span className="chip chip-primary text-xs">Excl. Companies: {excludeCompanies.length}</span>
+                                    <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Excl. Companies: {excludeCompanies.length}</span></span>
                                 )}
                             </div>
                         </div>

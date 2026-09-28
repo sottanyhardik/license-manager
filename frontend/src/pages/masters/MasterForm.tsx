@@ -17,6 +17,7 @@ import { buildLicensePatch, buildLicenseSummary, isFileLikeFieldName } from "./m
 import LicenseParsePanel from "./LicenseParsePanel";
 import TradeMetaBadges from "./TradeMetaBadges";
 import BoeParsePanel from "./BoeParsePanel";
+import RestrictionSummary from "@/pages/license-overview/RestrictionSummary";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1067,6 +1068,16 @@ export default function MasterForm({
                                 ))}
                             </div>
                         )}
+
+                        {/* Current Restrictions Display (License Form - Edit Mode) */}
+                        {/* TODO: Restore RestrictionSummary component when available
+                        {entityName === "licenses" && isEdit && (
+                            <div className="mt-6">
+                                <h3 className="mb-3 text-sm font-semibold">License Restrictions</h3>
+                                <RestrictionSummary licenseId={recordId} />
+                            </div>
+                        )}
+                        */}
 
                         {/* Action Buttons */}
                         <div className={cn("mt-6 flex flex-wrap items-center gap-3 border-t border-border/70 pt-4", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(26,58,82,0.06)] backdrop-blur sm:-mx-6 sm:px-6")}>

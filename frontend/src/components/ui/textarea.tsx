@@ -1,22 +1,32 @@
 import * as React from "react";
+import { TextField as MuiTextField, TextFieldProps as MuiTextFieldProps } from "@mui/material";
 
-import { cn } from "@/lib/utils";
-
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-    return (
-        <textarea
-            data-slot="textarea"
-            className={cn(
-                "flex min-h-16 w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm transition-[color,box-shadow] outline-none",
-                "placeholder:text-muted-foreground",
-                "focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[3px]",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                "aria-invalid:border-destructive aria-invalid:ring-destructive/30",
-                className
-            )}
-            {...props}
-        />
-    );
+interface TextareaProps extends Omit<MuiTextFieldProps, 'variant' | 'multiline'> {
+    rows?: number;
 }
+
+/**
+ * Textarea component wrapper around MUI TextField with multiline
+ * Provides consistent textarea styling across the application
+ */
+const Textarea = React.forwardRef<HTMLDivElement, TextareaProps>(
+    ({ className, rows = 4, size = "small", ...props }, ref) => {
+        return (
+            <MuiTextField
+                ref={ref}
+                variant="outlined"
+                size={size}
+                fullWidth={true}
+                multiline
+                rows={rows}
+                className={className}
+                data-slot="textarea"
+                {...props}
+            />
+        );
+    }
+);
+
+Textarea.displayName = 'Textarea';
 
 export { Textarea };

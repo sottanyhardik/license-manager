@@ -106,8 +106,8 @@ export default function ItemReportFilters({
                             </Button>
                         )}
                     </div>
-                    <div style={{ padding: '12px 14px' }}>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
+                    <div className="px-4 py-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={minBalanceId}>
                                     <DollarSign className="size-3.5" aria-hidden="true" />
@@ -115,7 +115,7 @@ export default function ItemReportFilters({
                                 </label>
                                 <select
                                     id={minBalanceId}
-                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                     value={minBalance}
                                     onChange={(e) => onMinBalanceChange(normalizeReportNumber(e.target.value, minBalance))}
                                 >
@@ -135,7 +135,7 @@ export default function ItemReportFilters({
                                 </label>
                                 <select
                                     id={minAvailQtyId}
-                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                     value={minAvailQty}
                                     onChange={(e) => onMinAvailQtyChange(normalizeReportNumber(e.target.value, minAvailQty))}
                                 >
@@ -155,7 +155,7 @@ export default function ItemReportFilters({
                                 </label>
                                 <select
                                     id={licenseStatusId}
-                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                     value={licenseStatus}
                                     onChange={(e) => onLicenseStatusChange(e.target.value)}
                                 >
@@ -185,7 +185,7 @@ export default function ItemReportFilters({
                                     <Building2 className="size-3.5" aria-hidden="true" />
                                     Include
                                 </label>
-                                <div style={{minHeight: '32px'}}>
+                                <div style={{minHeight: '40px'}}>
                                     <AsyncSelectField
                                         endpoint="masters/companies/"
                                         labelField="name"
@@ -204,7 +204,7 @@ export default function ItemReportFilters({
                                     <MinusCircle className="size-3.5" aria-hidden="true" />
                                     Exclude
                                 </label>
-                                <div style={{minHeight: '32px'}}>
+                                <div style={{minHeight: '40px'}}>
                                     <AsyncSelectField
                                         endpoint="masters/companies/"
                                         labelField="name"
@@ -227,7 +227,7 @@ export default function ItemReportFilters({
                                 </label>
                                 <select
                                     id={restrictedId}
-                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                     value={isRestricted}
                                     onChange={(e) => onIsRestrictedChange(e.target.value)}
                                 >
@@ -298,7 +298,7 @@ export default function ItemReportFilters({
                                 <input
                                     id={productDescriptionId}
                                     type="text"
-                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                     placeholder="Search..."
                                     value={productDescSearch}
                                     onChange={(e) => onProductDescSearchChange(e.target.value)}
@@ -312,7 +312,7 @@ export default function ItemReportFilters({
                                 <input
                                     id={hsnCodeId}
                                     type="text"
-                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
                                     placeholder="Search..."
                                     value={hsnCodeSearch}
                                     onChange={(e) => onHsnCodeSearchChange(e.target.value)}
@@ -345,23 +345,24 @@ export default function ItemReportFilters({
                         </div>
 
                         {hasActiveFilters && (
-                            <div className="mt-2.5">
-                                <div
-                                    className="alert alert-info flex justify-between items-center py-1.5 px-3 mb-0 text-xs">
-                                    <div>
-                                        <Filter className="size-4" aria-hidden="true" />
-                                        <strong>Active Filters:</strong>
-                                        {minBalance !== 200 && <span className="chip chip-primary ml-2">Min Balance: ₹{minBalance}</span>}
-                                        {minAvailQty !== 0 && <span className="chip chip-primary ml-2">Min Qty: {minAvailQty}</span>}
-                                        {licenseStatus !== 'active' && <span className="badge bg-primary ml-2">Status: {licenseStatus.replace(/_/g, ' ')}</span>}
-                                        {selectedCompanies.length > 0 && <span className="chip chip-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
-                                        {excludeCompanies.length > 0 && <span className="chip chip-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
-                                        {isRestricted !== 'all' && <span className="chip chip-primary ml-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}
-                                        {purchaseStatus.length > 0 && purchaseStatus.length < purchaseStatusOptions.length && <span className="chip chip-primary ml-2">Purchase Status: {purchaseStatus.length}</span>}
-                                        {selectedItemNames.length > 0 && <span className="chip chip-primary ml-2">Item Names: {selectedItemNames.length}</span>}
-                                        {productDescSearch !== '' && <span className="chip chip-primary ml-2">Product Desc: "{productDescSearch}"</span>}
-                                        {hsnCodeSearch !== '' && <span className="chip chip-primary ml-2">HSN Code: "{hsnCodeSearch}"</span>}
-                                        {selectedNorms.length > 0 && <span className="chip chip-primary ml-2">Norms: {selectedNorms.length}</span>}
+                            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <Filter className="size-4 text-blue-600" aria-hidden="true" />
+                                        <span className="text-xs font-semibold text-blue-900">Active Filters:</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {minBalance !== 200 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Min Balance: ₹{minBalance}</span></span>}
+                                        {minAvailQty !== 0 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Min Qty: {minAvailQty}</span></span>}
+                                        {licenseStatus !== 'active' && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Status: {licenseStatus.replace(/_/g, ' ')}</span></span>}
+                                        {selectedCompanies.length > 0 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Incl. Companies: {selectedCompanies.length}</span></span>}
+                                        {excludeCompanies.length > 0 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Excl. Companies: {excludeCompanies.length}</span></span>}
+                                        {isRestricted !== 'all' && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span></span>}
+                                        {purchaseStatus.length > 0 && purchaseStatus.length < purchaseStatusOptions.length && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Purchase Status: {purchaseStatus.length}</span></span>}
+                                        {selectedItemNames.length > 0 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Item Names: {selectedItemNames.length}</span></span>}
+                                        {productDescSearch !== '' && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Product Desc: "{productDescSearch}"</span></span>}
+                                        {hsnCodeSearch !== '' && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>HSN Code: "{hsnCodeSearch}"</span></span>}
+                                        {selectedNorms.length > 0 && <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2.5 py-1 text-xs"><span>Norms: {selectedNorms.length}</span></span>}
                                     </div>
                                 </div>
                             </div>

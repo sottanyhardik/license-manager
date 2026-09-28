@@ -94,7 +94,7 @@ function SectionBox({ icon: Icon, label, tone = "primary", children }: SectionBo
     const tc = TONE_CLASSES[tone] ?? TONE_CLASSES.primary;
     return (
         <div className={cn(
-            "rounded-lg border border-border border-l-4 bg-card p-4",
+            "rounded-lg border border-border bg-card p-4 shadow-[var(--tb-shadow-1)]",
             tc.wrapper,
         )}>
             <div className={cn(

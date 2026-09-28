@@ -1,59 +1,82 @@
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
-
+import {
+    Alert as MuiAlert,
+    AlertTitle as MuiAlertTitle,
+    AlertProps as MuiAlertProps,
+} from "@mui/material";
 import { cn } from "@/lib/utils";
 
-const alertVariants = cva(
-    "relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7 grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] items-start gap-y-0.5",
-    {
-        variants: {
-            variant: {
-                default: "bg-card text-foreground [&>svg]:text-foreground border-border",
-                destructive:
-                    "border-destructive/50 text-destructive [&>svg]:text-destructive bg-destructive/10 dark:border-destructive dark:bg-destructive/20",
-                warning:
-                    "border-warning/50 text-warning [&>svg]:text-warning bg-warning/10 dark:border-warning dark:bg-warning/20",
-            },
-        },
-        defaultVariants: {
-            variant: "default",
-        },
+type AlertVariant = "default" | "destructive" | "warning" | "success" | "info";
+
+interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
+    variant?: AlertVariant;
+}
+
+// Map our variant names to MUI Alert severity
+const variantMap: Record<AlertVariant, MuiAlertProps["severity"]> = {
+    default: "info",
+    destructive: "error",
+    warning: "warning",
+    success: "success",
+    info: "info",
+};
+
+const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
+    ({ className, variant = "default", children, ...props }, ref: React.Ref<HTMLDivElement>) => {
+        const severity = variantMap[variant] || "info";
+        return (
+            <MuiAlert
+                ref={ref}
+                data-slot="alert"
+                role="alert"
+                severity={severity}
+                className={cn("w-full", className)}
+                sx={{
+                    borderRadius: "var(--tb-r-lg, 8px)",
+                    padding: "12px 16px",
+                    fontSize: "0.875rem",
+                    "& .MuiAlert-icon": {
+                        marginRight: "12px",
+                    },
+                    "& .MuiAlertTitle-root": {
+                        marginBottom: "4px",
+                    },
+                }}
+                {...(props as any)}
+            >
+                {children}
+            </MuiAlert>
+        );
     }
 );
+Alert.displayName = "Alert";
 
-function Alert({
-    className,
-    variant,
-    ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
-    return (
-        <div
-            data-slot="alert"
-            role="alert"
-            className={cn(alertVariants({ variant }), className)}
-            {...props}
-        />
-    );
-}
-
-function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
-    return (
-        <div
+const AlertTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+    ({ className, ...props }, ref) => (
+        <MuiAlertTitle
+            ref={ref}
             data-slot="alert-title"
-            className={cn("col-start-2 font-medium leading-none tracking-tight", className)}
+            className={cn("font-medium leading-none tracking-tight", className)}
+            sx={{
+                marginBottom: "4px",
+                fontWeight: 600,
+            }}
             {...props}
         />
-    );
-}
+    )
+);
+AlertTitle.displayName = "AlertTitle";
 
-function AlertDescription({ className, ...props }: React.ComponentProps<"div">) {
-    return (
+const AlertDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+    ({ className, ...props }, ref) => (
         <div
+            ref={ref}
             data-slot="alert-description"
-            className={cn("col-start-2 grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed", className)}
+            className={cn("grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed", className)}
             {...props}
         />
-    );
-}
+    )
+);
+AlertDescription.displayName = "AlertDescription";
 
 export { Alert, AlertTitle, AlertDescription };

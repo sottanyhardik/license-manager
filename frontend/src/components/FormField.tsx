@@ -1,9 +1,8 @@
 /**
  * Reusable form field primitives.
  *
- * Uses shadcn Input/Textarea + Label components instead of the old TW_INPUT
- * hardcoded string, ensuring all updates to shadcn components propagate here
- * automatically and eliminating the duplicate class string.
+ * Uses MUI TextField, FormControl, and FormHelperText components
+ * for Material Design form styling while maintaining accessibility.
  *
  * All fields:
  *  - Link <label> to <input> via htmlFor/id (WCAG 1.3.1)
@@ -11,11 +10,15 @@
  *  - Show inline error messages tied to the field via aria-describedby
  */
 import React, { useId } from "react";
-import { TriangleAlert } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { AlertCircle } from "lucide-react";
+import {
+  TextField as MuiTextField,
+  FormControl,
+  FormHelperText,
+  Select as MuiSelect,
+  MenuItem,
+  Box,
+} from "@mui/material";
 import { getFieldError } from "../utils/formErrors";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
@@ -52,25 +55,33 @@ export const FormField = ({
     const error = getFieldError(fieldErrors, name);
 
     return (
-        <div className={className}>
-            <Label htmlFor={id} className={cn("mb-2 text-sm font-medium", required && "required")}>
-                {label}
-            </Label>
-            <Input
+        <Box className={className}>
+            <MuiTextField
                 id={id}
-                type={type}
                 name={name}
+                label={label}
+                type={type}
+                fullWidth
+                size="small"
+                variant="outlined"
+                required={required}
+                error={!!error}
                 aria-invalid={!!error}
                 aria-required={required}
                 aria-describedby={error ? errorId : undefined}
+                slotProps={{
+                    input: {
+                        ...((props as any).slotProps?.input || {}),
+                    },
+                }}
                 {...props}
             />
             {error && (
-                <p id={errorId} className="mt-1 text-xs text-destructive" role="alert">
+                <FormHelperText id={errorId} error role="alert">
                     {error}
-                </p>
+                </FormHelperText>
             )}
-        </div>
+        </Box>
     );
 };
 
@@ -98,25 +109,34 @@ export const FormTextArea = ({
     const error = getFieldError(fieldErrors, name);
 
     return (
-        <div className={className}>
-            <Label htmlFor={id} className={cn("mb-2 text-sm font-medium", required && "required")}>
-                {label}
-            </Label>
-            <Textarea
+        <Box className={className}>
+            <MuiTextField
                 id={id}
                 name={name}
-                rows={rows}
+                label={label}
+                fullWidth
+                size="small"
+                variant="outlined"
+                multiline
+                rows={rows as number}
+                required={required}
+                error={!!error}
                 aria-invalid={!!error}
                 aria-required={required}
                 aria-describedby={error ? errorId : undefined}
+                slotProps={{
+                    input: {
+                        ...((props as any).slotProps?.input || {}),
+                    },
+                }}
                 {...props}
             />
             {error && (
-                <p id={errorId} className="mt-1 text-xs text-destructive" role="alert">
+                <FormHelperText id={errorId} error role="alert">
                     {error}
-                </p>
+                </FormHelperText>
             )}
-        </div>
+        </Box>
     );
 };
 
@@ -146,31 +166,30 @@ export const FormSelect = ({
     const error = getFieldError(fieldErrors, name);
 
     return (
-        <div className={className}>
-            <Label htmlFor={id} className={cn("mb-2 text-sm font-medium", required && "required")}>
-                {label}
-            </Label>
-            <select
-                id={id}
-                name={name}
-                aria-invalid={!!error}
-                aria-required={required}
-                aria-describedby={error ? errorId : undefined}
-                className="flex h-10 w-full cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50"
-                {...props}
-            >
-                {options.map((opt, idx) => (
-                    <option key={idx} value={opt.value}>
-                        {opt.label}
-                    </option>
-                ))}
-            </select>
-            {error && (
-                <p id={errorId} className="mt-1 text-xs text-destructive" role="alert">
-                    {error}
-                </p>
-            )}
-        </div>
+        <Box className={className}>
+            <FormControl fullWidth size="small" error={!!error} required={required}>
+                <MuiSelect
+                    id={id}
+                    name={name}
+                    label={label}
+                    aria-invalid={!!error}
+                    aria-required={required}
+                    aria-describedby={error ? errorId : undefined}
+                    {...props}
+                >
+                    {options.map((opt, idx) => (
+                        <MenuItem key={idx} value={opt.value}>
+                            {opt.label}
+                        </MenuItem>
+                    ))}
+                </MuiSelect>
+                {error && (
+                    <FormHelperText id={errorId} role="alert">
+                        {error}
+                    </FormHelperText>
+                )}
+            </FormControl>
+        </Box>
     );
 };
 
@@ -187,16 +206,36 @@ export const NonFieldErrors = ({
     const formattedErrors = formatFunction ? formatFunction(errors) : errors.join(" | ");
 
     return (
-        <div
-            className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
+        <Box
+            sx={{
+                mb: 2,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 1,
+                padding: "8px 12px",
+                borderRadius: "4px",
+                border: "1px solid #f44336",
+                backgroundColor: "rgba(244, 67, 54, 0.1)",
+                color: "#f44336",
+                fontSize: "0.875rem",
+            }}
             role="alert"
         >
-            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <AlertCircle
+                style={{
+                    marginTop: "2px",
+                    width: 16,
+                    height: 16,
+                    flexShrink: 0,
+                    display: "flex",
+                }}
+                aria-hidden="true"
+            />
             <div>
-                <strong className="font-semibold">Error: </strong>
-                <span className="font-medium">{formattedErrors}</span>
+                <strong style={{ fontWeight: 600 }}>Error: </strong>
+                <span style={{ fontWeight: 500 }}>{formattedErrors}</span>
             </div>
-        </div>
+        </Box>
     );
 };
 

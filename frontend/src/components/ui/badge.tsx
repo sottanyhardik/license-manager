@@ -1,50 +1,72 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
+import { Chip as MuiChip, ChipProps as MuiChipProps } from "@mui/material";
 
-import { cn } from "@/lib/utils";
+export type BadgeVariant = "default" | "secondary" | "destructive" | "success" | "warning" | "info" | "outline";
 
-const badgeVariants = cva(
-    "inline-flex items-center justify-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 transition-colors overflow-hidden",
-    {
-        variants: {
-            variant: {
-                default:
-                    "border-transparent bg-primary/10 text-primary",
-                secondary:
-                    "border-transparent bg-secondary text-secondary-foreground",
-                destructive:
-                    "border-transparent bg-destructive/10 text-destructive",
-                success:
-                    "border-transparent bg-success/10 text-success",
-                warning:
-                    "border-transparent bg-warning/10 text-warning",
-                info:
-                    "border-transparent bg-info/10 text-info",
-                outline: "text-foreground border-border",
-            },
-        },
-        defaultVariants: {
-            variant: "default",
-        },
+interface BadgeProps extends Omit<MuiChipProps, 'variant' | 'label'> {
+    variant?: BadgeVariant;
+    label?: React.ReactNode;
+    children?: React.ReactNode;
+}
+
+/**
+ * Badge component wrapper around MUI Chip
+ * Maps shadcn-style variants to MUI color/variant combinations
+ */
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+    ({ className, variant = "default", color = "default", label, children, ...props }, ref) => {
+        // Map badge variant to MUI color
+        let muiColor: MuiChipProps['color'] = 'default';
+        let muiVariant: MuiChipProps['variant'] = 'filled';
+
+        switch (variant) {
+            case "default":
+                muiColor = 'primary';
+                muiVariant = 'filled';
+                break;
+            case "secondary":
+                muiColor = 'default';
+                muiVariant = 'filled';
+                break;
+            case "destructive":
+                muiColor = 'error';
+                muiVariant = 'filled';
+                break;
+            case "success":
+                muiColor = 'success';
+                muiVariant = 'filled';
+                break;
+            case "warning":
+                muiColor = 'warning';
+                muiVariant = 'filled';
+                break;
+            case "info":
+                muiColor = 'info';
+                muiVariant = 'filled';
+                break;
+            case "outline":
+                muiVariant = 'outlined';
+                break;
+        }
+
+        // Support both label prop and children for flexibility
+        const chipLabel = label ?? children;
+
+        return (
+            <MuiChip
+                ref={ref}
+                label={chipLabel}
+                color={muiColor}
+                variant={muiVariant}
+                data-slot="badge"
+                className={className}
+                size="small"
+                {...props}
+            />
+        );
     }
 );
 
-function Badge({
-    className,
-    variant,
-    asChild = false,
-    ...props
-}: React.ComponentProps<"span"> &
-    VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-    const Comp = asChild ? Slot : "span";
-    return (
-        <Comp
-            data-slot="badge"
-            className={cn(badgeVariants({ variant }), className)}
-            {...props}
-        />
-    );
-}
+Badge.displayName = 'Badge';
 
-export { Badge, badgeVariants };
+export { Badge };

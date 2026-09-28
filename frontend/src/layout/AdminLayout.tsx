@@ -1,5 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useTheme as useMuiTheme } from "@mui/material/styles";
+import { Box, Stack, Container, Button } from "@mui/material";
 import { usePageTitle } from "../hooks/usePageTitle";
 import TopNav from "../components/TopNav";
 import TaskFAB from "../components/TaskFAB";
@@ -14,6 +16,7 @@ const QUICK_ACTIONS = [
 
 export default function AdminLayout({ children }) {
     const navigate = useNavigate();
+    const muiTheme = useMuiTheme();
     const [isInIframe] = useState(() => {
         if (typeof window === "undefined") return false;
         try { return window.self !== window.top; } catch { return true; }
@@ -21,15 +24,38 @@ export default function AdminLayout({ children }) {
     usePageTitle();
 
     return (
-        <div className="app-shell app-shell--admin flex min-h-screen flex-col bg-background">
+        <Box
+            component="div"
+            className="app-shell app-shell--admin"
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                minHeight: "100vh",
+                backgroundColor: muiTheme.palette.background.default,
+            }}
+        >
             {!isInIframe && <TopNav />}
 
-            <main id="main-content" className="app-shell__main flex-1 overflow-y-auto" tabIndex={-1}>
-                <div
-                    className={[
-                        "app-shell__content app-shell__content--admin page-enter mx-auto w-full max-w-[100%]",
-                        isInIframe ? "px-5 py-4" : "container-fluid",
-                    ].join(" ")}
+            <Box
+                component="main"
+                id="main-content"
+                tabIndex={-1}
+                sx={{
+                    flex: 1,
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                }}
+            >
+                <Container
+                    maxWidth={false}
+                    className="app-shell__content app-shell__content--admin page-enter"
+                    sx={{
+                        width: "100%",
+                        px: isInIframe ? 2.5 : { xs: 2, sm: 3 },
+                        py: isInIframe ? 2 : { xs: 2, sm: 3 },
+                        flex: 1,
+                    }}
                 >
                     {/* ARIA live region for form validation announcements */}
                     <div
@@ -37,47 +63,74 @@ export default function AdminLayout({ children }) {
                         role="status"
                         aria-live="polite"
                         aria-atomic="true"
-                        className="visually-hidden"
+                        style={{ display: "none" }}
                     />
                     {children}
-                </div>
-            </main>
+                </Container>
+            </Box>
 
             {!isInIframe && (
-                <footer
-                    className="app-shell__quick-actions sticky bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-sm"
+                <Box
+                    component="footer"
+                    className="app-shell__quick-actions"
                     aria-label="Quick actions"
-                    style={{ height: 44 }}
+                    sx={{
+                        position: "sticky",
+                        bottom: 0,
+                        zIndex: 40,
+                        borderTop: `1px solid ${muiTheme.palette.divider}`,
+                        backgroundColor: muiTheme.palette.background.paper,
+                        backdropFilter: "blur(4px)",
+                        height: 44,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        px: 2,
+                    }}
                 >
-                    <div className="flex h-full items-center justify-between px-4">
-                        {/* Quick-create actions */}
-                        <div className="flex items-center gap-1.5">
-                            {QUICK_ACTIONS.map(a => (
-                                <button
-                                    key={a.to}
-                                    type="button"
-                                    onClick={() => navigate(a.to)}
-                                    className={[
-                                        "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-all duration-150 shadow-sm",
-                                        a.primary
-                                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow active:scale-[0.97]"
-                                            : "border border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground hover:shadow",
-                                    ].join(" ")}
-                                >
-                                    <Icon name={a.icon} className="size-4" aria-hidden="true" />
-                                    <span className="footer-action-label">{a.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                        {/* Subtle meta text */}
-                        <span className="hidden text-[10.5px] text-muted-foreground/40 sm:block">
-                            License Manager
-                        </span>
-                    </div>
-                </footer>
+                    {/* Quick-create actions */}
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        {QUICK_ACTIONS.map(a => (
+                            <Button
+                                key={a.to}
+                                type="button"
+                                onClick={() => navigate(a.to)}
+                                variant={a.primary ? "contained" : "outlined"}
+                                color={a.primary ? "primary" : "inherit"}
+                                size="small"
+                                startIcon={<Icon name={a.icon} className="size-4" aria-hidden="true" />}
+                                sx={{
+                                    textTransform: "none",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    height: 32,
+                                    px: 1.5,
+                                    transition: "all 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+                                    "&:active": {
+                                        transform: "scale(0.97)",
+                                    },
+                                }}
+                                className="footer-action-label"
+                            >
+                                {a.label}
+                            </Button>
+                        ))}
+                    </Stack>
+
+                    {/* Subtle meta text */}
+                    <Box
+                        sx={{
+                            display: { xs: "none", sm: "block" },
+                            fontSize: "0.65rem",
+                            color: muiTheme.palette.text.disabled,
+                        }}
+                    >
+                        License Manager
+                    </Box>
+                </Box>
             )}
 
             {!isInIframe && <TaskFAB bottomOffset={44} />}
-        </div>
+        </Box>
     );
 }

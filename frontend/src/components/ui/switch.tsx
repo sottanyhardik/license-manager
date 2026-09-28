@@ -1,33 +1,44 @@
 import * as React from "react";
-import * as SwitchPrimitive from "@radix-ui/react-switch";
+import { Switch as MuiSwitch, SwitchProps as MuiSwitchProps } from "@mui/material";
 
-import { cn } from "@/lib/utils";
-
-function Switch({
-    className,
-    ...props
-}: React.ComponentProps<typeof SwitchPrimitive.Root>) {
-    return (
-        <SwitchPrimitive.Root
-            data-slot="switch"
-            className={cn(
-                "peer inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-sm transition-all outline-none",
-                "hover:shadow",
-                "focus-visible:ring-[3px] focus-visible:ring-ring/40",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                "data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
-                className
-            )}
-            {...props}
-        >
-            <SwitchPrimitive.Thumb
-                className={cn(
-                    "pointer-events-none block size-4 rounded-full bg-white shadow-sm ring-0 transition-transform",
-                    "data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0.5"
-                )}
-            />
-        </SwitchPrimitive.Root>
-    );
+interface SwitchProps extends Omit<MuiSwitchProps, 'onChange'> {
+    checked?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
+    onChange?: (event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => void;
 }
+
+/**
+ * Switch component wrapper around MUI Switch
+ * Maps shadcn onCheckedChange to MUI onChange
+ * Provides consistent switch/toggle styling across the application
+ */
+const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
+    ({ className, checked, onCheckedChange, onChange, ...props }, ref) => {
+        const handleChange = React.useCallback(
+            (event: React.ChangeEvent<HTMLInputElement>, newChecked: boolean) => {
+                if (onCheckedChange) {
+                    onCheckedChange(newChecked);
+                }
+                if (onChange) {
+                    onChange(event, newChecked);
+                }
+            },
+            [onCheckedChange, onChange]
+        );
+
+        return (
+            <MuiSwitch
+                ref={ref}
+                checked={checked}
+                onChange={handleChange}
+                data-slot="switch"
+                className={className}
+                {...props}
+            />
+        );
+    }
+);
+
+Switch.displayName = 'Switch';
 
 export { Switch };

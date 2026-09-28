@@ -700,7 +700,7 @@ export default function ItemPivotReport() {
                                 <span className="hidden sm:inline">Update Balance</span>
                                 <span className="sm:hidden">Update</span>
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleExport} disabled={downloading} title="Export to Excel">
+                            <Button variant="default" size="sm" onClick={handleExport} disabled={downloading} title="Export to Excel">
                                 {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                                 <span className="hidden sm:inline">{downloading ? "Generating…" : "Excel"}</span>
                                 <span className="sm:hidden">{downloading ? "…" : "Export"}</span>

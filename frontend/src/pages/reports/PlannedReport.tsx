@@ -52,7 +52,7 @@ export default function PlannedReport() {
                 }
                 actions={
                     <Button
-                        variant="outline"
+                        variant="default"
                         size="sm"
                         onClick={() => handleExport(filters)}
                         disabled={downloading || !hasQuery}

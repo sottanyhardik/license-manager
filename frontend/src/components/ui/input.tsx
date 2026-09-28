@@ -1,25 +1,51 @@
 import * as React from "react";
+import { TextField as MuiTextField, TextFieldProps as MuiTextFieldProps } from "@mui/material";
 
-import { cn } from "@/lib/utils";
-
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
-    return (
-        <input
-            type={type}
-            data-slot="input"
-            className={cn(
-                "flex h-10 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-sm transition-[color,box-shadow,border-color] outline-none",
-                "file:inline-flex file:border-0 file:bg-transparent file:text-sm file:font-medium",
-                "placeholder:text-muted-foreground",
-                "hover:border-input/80",
-                "focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[3px] focus-visible:shadow",
-                "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted",
-                "aria-invalid:border-destructive aria-invalid:ring-destructive/30",
-                className
-            )}
-            {...props}
-        />
-    );
+interface InputProps extends Omit<MuiTextFieldProps, 'variant'> {
+    type?: string;
+    // HTML input attributes that MUI might not directly support
+    step?: string | number;
+    min?: string | number;
+    max?: string | number;
+    pattern?: string;
+    accept?: string;
 }
+
+/**
+ * Input component wrapper around MUI TextField
+ * Provides a consistent input field styling across the application
+ * Accepts HTML input attributes and maps them to MUI TextField props
+ */
+const Input = React.forwardRef<HTMLDivElement, InputProps>(
+    ({ className, type = "text", size = "small", step, min, max, pattern, accept, ...props }, ref) => {
+        // Build inputProps to pass HTML attributes to the underlying input element
+        const inputProps: Record<string, any> = {};
+        if (step !== undefined) inputProps.step = step;
+        if (min !== undefined) inputProps.min = min;
+        if (max !== undefined) inputProps.max = max;
+        if (pattern !== undefined) inputProps.pattern = pattern;
+        if (accept !== undefined) inputProps.accept = accept;
+
+        return (
+            <MuiTextField
+                ref={ref}
+                type={type}
+                variant="outlined"
+                size={size}
+                fullWidth={true}
+                className={className}
+                data-slot="input"
+                slotProps={{
+                    input: {
+                        ...inputProps,
+                    },
+                }}
+                {...props}
+            />
+        );
+    }
+);
+
+Input.displayName = 'Input';
 
 export { Input };

@@ -1,53 +1,74 @@
 import * as React from "react";
-import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-
+import {
+    Tooltip as MuiTooltip,
+    TooltipProps as MuiTooltipProps,
+} from "@mui/material";
 import { cn } from "@/lib/utils";
 
-function TooltipProvider({
-    delayDuration = 200,
-    ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-    return (
-        <TooltipPrimitive.Provider
-            data-slot="tooltip-provider"
-            delayDuration={delayDuration}
-            {...props}
-        />
-    );
+interface TooltipProviderProps {
+    delayDuration?: number;
+    children: React.ReactNode;
 }
 
-function Tooltip(props: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-    return (
-        <TooltipProvider>
-            <TooltipPrimitive.Root data-slot="tooltip" {...props} />
-        </TooltipProvider>
-    );
+function TooltipProvider({ delayDuration = 200, children }: TooltipProviderProps) {
+    // MUI Tooltip doesn't require a provider, but we keep this for API compatibility
+    return <>{children}</>;
 }
 
-const TooltipTrigger = TooltipPrimitive.Trigger;
+interface TooltipProps extends Omit<MuiTooltipProps, "title"> {
+    title?: React.ReactNode;
+    children: React.ReactElement;
+}
 
-function TooltipContent({
-    className,
-    sideOffset = 4,
-    children,
-    ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-    return (
-        <TooltipPrimitive.Portal>
-            <TooltipPrimitive.Content
-                data-slot="tooltip-content"
-                sideOffset={sideOffset}
-                className={cn(
-                    "z-[1070] w-fit rounded-md bg-foreground px-2.5 py-1 text-xs text-background shadow-md",
-                    "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95",
-                    className
-                )}
+const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
+    ({ title, children, enterDelay = 200, ...props }, ref) => {
+        return (
+            <MuiTooltip
+                ref={ref}
+                data-slot="tooltip"
+                title={title}
+                enterDelay={enterDelay}
+                slotProps={{
+                    popper: {
+                        sx: {
+                            zIndex: 1070,
+                        },
+                    },
+                    tooltip: {
+                        sx: {
+                            backgroundColor: "var(--tb-foreground, #000000)",
+                            color: "var(--tb-background, #ffffff)",
+                            fontSize: "0.75rem",
+                            padding: "4px 8px",
+                            borderRadius: "var(--tb-r-sm, 4px)",
+                        },
+                    },
+                }}
                 {...props}
             >
                 {children}
-            </TooltipPrimitive.Content>
-        </TooltipPrimitive.Portal>
-    );
-}
+            </MuiTooltip>
+        );
+    }
+);
+Tooltip.displayName = "Tooltip";
+
+// TooltipTrigger - not needed for MUI Tooltip, children are the trigger
+const TooltipTrigger = React.forwardRef<
+    HTMLDivElement,
+    React.HTMLAttributes<HTMLDivElement>
+>(({ ...props }, ref) => <div ref={ref} {...props} />);
+TooltipTrigger.displayName = "TooltipTrigger";
+
+// TooltipContent - not needed for MUI Tooltip, title prop handles this
+const TooltipContent = React.forwardRef<
+    HTMLDivElement,
+    React.HTMLAttributes<HTMLDivElement>
+>(({ className, children, ...props }, ref) => (
+    <div ref={ref} className={cn("z-[1070] w-fit rounded-md bg-foreground px-2.5 py-1 text-xs text-background shadow-md", className)} {...props}>
+        {children}
+    </div>
+));
+TooltipContent.displayName = "TooltipContent";
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };

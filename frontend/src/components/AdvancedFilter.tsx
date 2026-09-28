@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import DateRangeFilter from "./DateRangeFilter";
 import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
+import { TextField, Stack, useTheme } from "@mui/material";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -40,6 +41,7 @@ export default function AdvancedFilter({
     const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
+    const muiTheme = useTheme();
 
     const toApiParams = useCallback((nextValues = filterValues, nextSearch = searchTerm) => {
         const params: Record<string, any> = {};
@@ -102,31 +104,47 @@ export default function AdvancedFilter({
     const primaryEntries = Object.entries(filterConfig).filter(([field]) => primaryFilterNames.includes(field));
     const secondaryEntries = Object.entries(filterConfig).filter(([field]) => !primaryFilterNames.includes(field));
 
-    // shared style token for react-select with proper height control
+    // shared style token for react-select with Material Design height (40-44px)
     const rsControl = (base) => ({
         ...base,
-        minHeight: "44px",
-        height: "44px",
-        borderColor: "var(--tb-border)"
+        minHeight: "42px",
+        height: "42px",
+        borderColor: muiTheme.palette.divider,
+        borderRadius: muiTheme.shape.borderRadius,
+        fontSize: "0.875rem",
     });
 
     const rsMultiSelectStyles = {
         control: rsControl,
         valueContainer: (base) => ({
             ...base,
-            maxHeight: "44px",
-            flexWrap: "nowrap",
-            overflow: "hidden",
+            maxHeight: "100%",
+            padding: "4px 8px",
+            flexWrap: "wrap",
         }),
         multiValue: (base) => ({
             ...base,
-            fontSize: "0.875rem",
+            fontSize: "0.8125rem",
+            margin: "2px 2px 2px 0",
+            backgroundColor: muiTheme.palette.primary.light,
+            color: muiTheme.palette.primary.contrastText,
+            borderRadius: muiTheme.shape.borderRadius,
         }),
         multiValueLabel: (base) => ({
             ...base,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            padding: "0 4px",
+        }),
+        multiValueRemove: (base) => ({
+            ...base,
+            color: muiTheme.palette.primary.contrastText,
+            cursor: "pointer",
+            paddingRight: "4px",
+            '&:hover': {
+                opacity: 0.8,
+            }
         }),
         menu: (base) => ({
             ...base,
@@ -149,8 +167,19 @@ export default function AdvancedFilter({
             case "icontains":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder={`Search ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label={label}
+                            variant="outlined"
+                            placeholder={`Search ${label.toLowerCase()}`}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(e) => handleFilterChange(fieldName, e.target.value)}
+                            sx={{
+                              '& .MuiOutlinedInput-root': { height: '42px' },
+                              '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                            }}
+                        />
                     </Col>
                 );
 
@@ -175,17 +204,34 @@ export default function AdvancedFilter({
                 const maxField = config.max_field || `${fieldName}_max`;
                 return (
                     <Col key={fieldName} wide>
-                        <Label className="mb-2">{label} Range</Label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <Input type="number" step="0.01" placeholder="Min" value={filterValues[minField] || ""} onChange={(e) => handleFilterChange(minField, e.target.value)} />
-                                <p className="mt-1 text-xs text-muted-foreground">Min</p>
-                            </div>
-                            <div>
-                                <Input type="number" step="0.01" placeholder="Max" value={filterValues[maxField] || ""} onChange={(e) => handleFilterChange(maxField, e.target.value)} />
-                                <p className="mt-1 text-xs text-muted-foreground">Max</p>
-                            </div>
-                        </div>
+                        <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                            <TextField
+                                size="small"
+                                type="number"
+                                label={`${label} Min`}
+                                variant="outlined"
+                                value={filterValues[minField] || ""}
+                                onChange={(e) => handleFilterChange(minField, e.target.value)}
+                                sx={{
+                                  flex: 1,
+                                  '& .MuiOutlinedInput-root': { height: '42px' },
+                                  '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                                }}
+                            />
+                            <TextField
+                                size="small"
+                                type="number"
+                                label={`${label} Max`}
+                                variant="outlined"
+                                value={filterValues[maxField] || ""}
+                                onChange={(e) => handleFilterChange(maxField, e.target.value)}
+                                sx={{
+                                  flex: 1,
+                                  '& .MuiOutlinedInput-root': { height: '42px' },
+                                  '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                                }}
+                            />
+                        </Stack>
                     </Col>
                 );
             }
@@ -225,8 +271,19 @@ export default function AdvancedFilter({
                 }
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder={`Exact ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label={label}
+                            variant="outlined"
+                            placeholder={`${label}`}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(e) => handleFilterChange(fieldName, e.target.value)}
+                            sx={{
+                              '& .MuiOutlinedInput-root': { height: '42px' },
+                              '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                            }}
+                        />
                     </Col>
                 );
             }
@@ -234,9 +291,20 @@ export default function AdvancedFilter({
             case "in":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder="Comma-separated values" value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
-                        <p className="mt-1 text-xs text-muted-foreground">Enter values separated by commas</p>
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label={label}
+                            variant="outlined"
+                            placeholder="Comma-separated values"
+                            value={filterValues[fieldName] || ""}
+                            onChange={(e) => handleFilterChange(fieldName, e.target.value)}
+                            helperText="Enter values separated by commas"
+                            sx={{
+                              '& .MuiOutlinedInput-root': { height: '42px' },
+                              '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                            }}
+                        />
                     </Col>
                 );
 

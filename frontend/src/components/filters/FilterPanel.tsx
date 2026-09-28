@@ -278,6 +278,7 @@ export function FilterPanel({ children, onFiltersChange, collapsible = false }: 
 export function FilterGrid({ children }: { children: ReactNode }) {
   return (
     <Box
+      data-testid="filter-grid"
       sx={{
         display: 'grid',
         gridTemplateColumns: {
@@ -288,6 +289,7 @@ export function FilterGrid({ children }: { children: ReactNode }) {
           xl: 'repeat(5, 1fr)',
         },
         gap: { xs: 1.5, sm: 2, md: 2 },
+        width: '100%',
       }}
     >
       {children}
@@ -298,6 +300,7 @@ export function FilterGrid({ children }: { children: ReactNode }) {
 export function FilterField({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
     <Box
+      data-testid="filter-field"
       sx={{
         gridColumn: wide ? { xs: 'span 1', sm: 'span 2', md: 'span 2', lg: 'span 2', xl: 'span 2' } : { xs: 'span 1', sm: 'span 1', md: 'span 1', lg: 'span 1', xl: 'span 1' },
         display: 'flex',

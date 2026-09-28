@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import api from "@/api/axios";
-import DataTable from "@/components/DataTable";
+import MuiDataGrid from "@/components/MuiDataGrid";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { useReconTabQuery } from "./useReconTabQuery";
 import { pick, pickId, reconKeys, type ReconRow } from "./reconciliationHelpers";
@@ -60,7 +60,7 @@ export default function DuplicateBoesTab({ confirmDangerousAction }: DuplicateBo
     }
 
     return (
-        <DataTable
+        <MuiDataGrid
             data={data ?? []}
             columns={COLUMNS}
             loading={isLoading}

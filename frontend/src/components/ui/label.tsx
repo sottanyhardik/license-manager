@@ -33,7 +33,7 @@ const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
                 {...props}
             >
                 {children}
-                {required && <span sx={{ color: 'error.main' }}>*</span>}
+                {required && <span style={{ color: '#d32f2f' }}>*</span>}
             </MuiFormLabel>
         );
     }

@@ -527,7 +527,13 @@ export default function TopNav() {
                     {/* Navigation */}
                     <Box sx={{ flex: 1, overflowY: "auto", py: 1 }}>
                         <List>
-                            <ListItem component={RouterLink} to="/dashboard" onClick={closeMobileNav} selected={isDashActive} sx={{ cursor: "pointer" }}>
+                            <ListItem
+                                component={RouterLink as any}
+                                to="/dashboard"
+                                onClick={closeMobileNav}
+                                selected={isDashActive}
+                                sx={{ cursor: "pointer" }}
+                            >
                                 <ListItemIcon>
                                     <Gauge size={18} aria-hidden="true" />
                                 </ListItemIcon>
@@ -554,7 +560,7 @@ export default function TopNav() {
                                     {group.items.map(item => (
                                         <ListItem
                                             key={item.path}
-                                            component={RouterLink}
+                                            component={RouterLink as any}
                                             to={item.path}
                                             onClick={closeMobileNav}
                                             selected={isPathActive(item.path)}
@@ -592,7 +598,7 @@ export default function TopNav() {
                                     {reportEntities.map(report => (
                                         <ListItem
                                             key={report.path}
-                                            component={RouterLink}
+                                            component={RouterLink as any}
                                             to={report.path}
                                             onClick={closeMobileNav}
                                             selected={isPathActive(report.path)}
@@ -629,7 +635,7 @@ export default function TopNav() {
                                 {masterEntities.filter(master => !master.deprecated).map(master => (
                                     <ListItem
                                         key={master.path}
-                                        component={RouterLink}
+                                        component={RouterLink as any}
                                         to={master.path}
                                         onClick={closeMobileNav}
                                         selected={isPathActive(master.path)}

@@ -35,7 +35,7 @@ interface BaseFieldProps {
 
 interface FormFieldProps
     extends BaseFieldProps,
-        Omit<React.InputHTMLAttributes<HTMLInputElement>, "name" | "required" | "className"> {
+        Omit<React.InputHTMLAttributes<HTMLInputElement>, "name" | "required" | "className" | "color"> {
     type?: string;
 }
 
@@ -47,12 +47,26 @@ export const FormField = ({
     required = false,
     className = "",
     id: idProp,
+    placeholder,
+    value,
+    onChange,
+    disabled,
     ...props
 }: FormFieldProps) => {
     const generatedId = useId();
     const id = idProp ?? generatedId;
     const errorId = `${id}-error`;
     const error = getFieldError(fieldErrors, name);
+
+    // Filter out HTML input attributes that MUI doesn't support
+    const muiProps = Object.fromEntries(
+        Object.entries(props).filter(([key]) =>
+            ![
+                'step', 'min', 'max', 'pattern', 'accept', 'maxLength', 'autoComplete',
+                'checked', 'defaultChecked', 'size'
+            ].includes(key)
+        )
+    );
 
     return (
         <Box className={className}>
@@ -66,15 +80,14 @@ export const FormField = ({
                 variant="outlined"
                 required={required}
                 error={!!error}
+                disabled={disabled}
+                placeholder={placeholder as string | undefined}
+                value={value}
+                onChange={onChange as any}
                 aria-invalid={!!error}
                 aria-required={required}
                 aria-describedby={error ? errorId : undefined}
-                slotProps={{
-                    input: {
-                        ...((props as any).slotProps?.input || {}),
-                    },
-                }}
-                {...props}
+                {...muiProps}
             />
             {error && (
                 <FormHelperText id={errorId} error role="alert">
@@ -89,7 +102,7 @@ export const FormField = ({
 
 interface FormTextAreaProps
     extends BaseFieldProps,
-        Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "required" | "className"> {
+        Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "name" | "required" | "className" | "color"> {
     rows?: number;
 }
 
@@ -101,12 +114,26 @@ export const FormTextArea = ({
     rows = 3,
     className = "",
     id: idProp,
+    placeholder,
+    value,
+    onChange,
+    disabled,
     ...props
 }: FormTextAreaProps) => {
     const generatedId = useId();
     const id = idProp ?? generatedId;
     const errorId = `${id}-error`;
     const error = getFieldError(fieldErrors, name);
+
+    // Filter out HTML textarea attributes that MUI doesn't support
+    const muiProps = Object.fromEntries(
+        Object.entries(props).filter(([key]) =>
+            ![
+                'step', 'min', 'max', 'pattern', 'accept', 'maxLength', 'autoComplete',
+                'size', 'cols', 'wrap'
+            ].includes(key)
+        )
+    );
 
     return (
         <Box className={className}>
@@ -121,15 +148,14 @@ export const FormTextArea = ({
                 rows={rows as number}
                 required={required}
                 error={!!error}
+                disabled={disabled}
+                placeholder={placeholder as string | undefined}
+                value={value}
+                onChange={onChange as any}
                 aria-invalid={!!error}
                 aria-required={required}
                 aria-describedby={error ? errorId : undefined}
-                slotProps={{
-                    input: {
-                        ...((props as any).slotProps?.input || {}),
-                    },
-                }}
-                {...props}
+                {...muiProps}
             />
             {error && (
                 <FormHelperText id={errorId} error role="alert">
@@ -146,7 +172,7 @@ interface SelectOption { value: string | number; label: string }
 
 interface FormSelectProps
     extends BaseFieldProps,
-        Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "name" | "required" | "className"> {
+        Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "name" | "required" | "className" | "color"> {
     options?: SelectOption[];
 }
 
@@ -158,12 +184,25 @@ export const FormSelect = ({
     required = false,
     className = "",
     id: idProp,
+    value,
+    onChange,
+    disabled,
     ...props
 }: FormSelectProps) => {
     const generatedId = useId();
     const id = idProp ?? generatedId;
     const errorId = `${id}-error`;
     const error = getFieldError(fieldErrors, name);
+
+    // Filter out HTML select attributes that MUI doesn't support
+    const muiProps = Object.fromEntries(
+        Object.entries(props).filter(([key]) =>
+            ![
+                'step', 'min', 'max', 'pattern', 'accept', 'maxLength', 'autoComplete',
+                'size', 'multiple'
+            ].includes(key)
+        )
+    );
 
     return (
         <Box className={className}>
@@ -172,10 +211,13 @@ export const FormSelect = ({
                     id={id}
                     name={name}
                     label={label}
+                    disabled={disabled}
+                    value={value}
+                    onChange={onChange as any}
                     aria-invalid={!!error}
                     aria-required={required}
                     aria-describedby={error ? errorId : undefined}
-                    {...props}
+                    {...muiProps}
                 >
                     {options.map((opt, idx) => (
                         <MenuItem key={idx} value={opt.value}>

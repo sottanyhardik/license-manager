@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import api from "@/api/axios";
-import DataTable from "@/components/DataTable";
+import MuiDataGrid from "@/components/MuiDataGrid";
 import { formatDate } from "@/utils/dateFormatter";
 import { getErrorMessage } from "@/utils/errorUtils";
 import LinkRecordModal from "./LinkRecordModal";
@@ -65,7 +65,7 @@ export default function MissingInvoiceTab() {
 
     return (
         <>
-            <DataTable
+            <MuiDataGrid
                 data={data ?? []}
                 columns={COLUMNS}
                 loading={isLoading}

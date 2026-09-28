@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-import DataTable from "@/components/DataTable";
+import MuiDataGrid from "@/components/MuiDataGrid";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { useReconTabQuery } from "./useReconTabQuery";
 import { fmtList, pick, pickId, type ReconRow } from "./reconciliationHelpers";
@@ -30,7 +30,7 @@ export default function MultiLinkTab({ kind }: MultiLinkTabProps) {
     }
 
     return (
-        <DataTable
+        <MuiDataGrid
             data={data ?? []}
             columns={columns}
             loading={isLoading}

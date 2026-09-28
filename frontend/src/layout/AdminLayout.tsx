@@ -89,7 +89,7 @@ export default function AdminLayout({ children }) {
                     }}
                 >
                     {/* Quick-create actions */}
-                    <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                         {QUICK_ACTIONS.map(a => (
                             <Button
                                 key={a.to}

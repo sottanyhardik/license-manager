@@ -59,7 +59,7 @@ export function ReportSelectFilter({
   value,
   onChange,
   options,
-  multiple = false,
+  _multiple,
   fullWidth = true,
   required = false,
   error = false,
@@ -70,14 +70,13 @@ export function ReportSelectFilter({
   value: string | string[] | number | number[];
   onChange: (value: string | string[] | number | number[]) => void;
   options: Array<{ label: string; value: string | number }>;
-  multiple?: boolean;
+  _multiple?: boolean;
   fullWidth?: boolean;
   required?: boolean;
   error?: boolean;
   helperText?: string;
   disabled?: boolean;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (
     <TextField
       label={label}
@@ -91,9 +90,6 @@ export function ReportSelectFilter({
       error={error}
       helperText={helperText}
       disabled={disabled}
-      SelectProps={{
-        multiple,
-      } as any}
       slotProps={{
         input: {
           style: { fontSize: '0.875rem' },

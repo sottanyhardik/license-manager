@@ -223,7 +223,11 @@ DropdownMenuLabel.displayName = "DropdownMenuLabel";
 // DropdownMenuSeparator
 const DropdownMenuSeparator = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ className, ...props }, ref) => (
-        <Divider ref={ref} className={cn("-mx-1 my-1 h-px bg-muted", className)} {...props} />
+        <Divider
+            ref={ref as any}
+            className={cn("-mx-1 my-1 h-px bg-muted", className)}
+            {...(props as any)}
+        />
     )
 );
 DropdownMenuSeparator.displayName = "DropdownMenuSeparator";

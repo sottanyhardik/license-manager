@@ -12,7 +12,7 @@ export interface ReportDataGridProps {
   loading?: boolean;
   onRowClick?: (id: any) => void;
   pageSize?: number;
-  disableSelectionOnClick?: boolean;
+  disableRowSelectionOnClick?: boolean;
   density?: 'compact' | 'standard' | 'comfortable';
   totalRows?: number;
   totalsRow?: any;
@@ -36,7 +36,7 @@ export default function ReportDataGrid({
   loading = false,
   onRowClick,
   pageSize = 25,
-  disableSelectionOnClick = true,
+  disableRowSelectionOnClick = true,
   density = 'compact',
   height = 600,
   showTotals = false,
@@ -111,12 +111,11 @@ export default function ReportDataGrid({
       )}
 
       {!loading && displayRows.length > 0 && (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         <DataGrid
           rows={displayRows as any[]}
           columns={enhancedColumns as any}
           density={density}
-          disableSelectionOnClick={disableSelectionOnClick}
+          disableRowSelectionOnClick={disableRowSelectionOnClick}
           onRowClick={onRowClick ? (params: any) => onRowClick(params.id) : undefined}
           initialState={{
             pagination: {

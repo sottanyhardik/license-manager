@@ -8,7 +8,7 @@ import {
 import api from "@/api/axios";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
-import DataTable from "@/components/DataTable";
+import MuiDataGrid from "@/components/MuiDataGrid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/utils/dateFormatter";
@@ -106,7 +106,7 @@ function IssueTable({
     }
 
     return (
-        <DataTable
+        <MuiDataGrid
             data={data ?? []}
             columns={columns}
             loading={isLoading}

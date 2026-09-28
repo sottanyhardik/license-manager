@@ -88,34 +88,34 @@ export default function ItemReportFilters({
         <div className="row mb-3">
             <div className="col-span-full">
                 <div className="surface-card">
-                    <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-                        <h5 className="mb-0 flex items-center gap-1.5 text-[15px] font-semibold">
+                    <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                        <h5 className="mb-0 flex items-center gap-1.5 text-sm font-semibold">
                             <SlidersHorizontal className="size-4" aria-hidden="true" />
                             Filters
                             {isPending && (
-                                <span className="ml-2 flex items-center gap-1 text-[13.5px] text-muted-foreground">
-                                    <span className="inline-block size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                                <span className="ml-2 flex items-center gap-1 text-xs text-muted-foreground">
+                                    <span className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
                                     Updating...
                                 </span>
                             )}
                         </h5>
                         {hasActiveFilters && (
-                            <Button variant="outline" size="sm" onClick={onClearFilters}>
-                                <XCircle className="size-3.5" />
-                                Clear Filters
+                            <Button variant="outline" size="sm" onClick={onClearFilters} className="h-8 px-3 text-xs">
+                                <XCircle className="size-4" />
+                                Clear
                             </Button>
                         )}
                     </div>
-                    <div style={{ padding: '14px 16px' }}>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div style={{ padding: '12px 14px' }}>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
                             <div>
-                                <label className="form-label font-bold mb-2" htmlFor={minBalanceId}>
-                                    <DollarSign className="size-4" aria-hidden="true" />
-                                    Min Balance (CIF)
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={minBalanceId}>
+                                    <DollarSign className="size-3.5" aria-hidden="true" />
+                                    Min Balance
                                 </label>
                                 <select
                                     id={minBalanceId}
-                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
                                     value={minBalance}
                                     onChange={(e) => onMinBalanceChange(normalizeReportNumber(e.target.value, minBalance))}
                                 >
@@ -129,13 +129,13 @@ export default function ItemReportFilters({
                             </div>
 
                             <div>
-                                <label className="form-label font-bold mb-2" htmlFor={minAvailQtyId}>
-                                    <Package className="size-4" aria-hidden="true" />
-                                    Min Avail Qty
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={minAvailQtyId}>
+                                    <Package className="size-3.5" aria-hidden="true" />
+                                    Min Qty
                                 </label>
                                 <select
                                     id={minAvailQtyId}
-                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
                                     value={minAvailQty}
                                     onChange={(e) => onMinAvailQtyChange(normalizeReportNumber(e.target.value, minAvailQty))}
                                 >
@@ -149,13 +149,13 @@ export default function ItemReportFilters({
                             </div>
 
                             <div>
-                                <label className="form-label font-bold mb-2" htmlFor={licenseStatusId}>
-                                    <CalendarCheck className="size-4" aria-hidden="true" />
-                                    License Status
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={licenseStatusId}>
+                                    <CalendarCheck className="size-3.5" aria-hidden="true" />
+                                    Status
                                 </label>
                                 <select
                                     id={licenseStatusId}
-                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
                                     value={licenseStatus}
                                     onChange={(e) => onLicenseStatusChange(e.target.value)}
                                 >
@@ -166,9 +166,9 @@ export default function ItemReportFilters({
                                 </select>
                             </div>
 
-                            <div className="sm:col-span-2">
+                            <div className="sm:col-span-2 lg:col-span-2">
                                 <DateRangeFilter
-                                    label="Expiry Date"
+                                    label="Expiry"
                                     icon={CalendarRange}
                                     fromId={expiryDateFromId}
                                     toId={expiryDateToId}
@@ -181,11 +181,11 @@ export default function ItemReportFilters({
                             </div>
 
                             <div>
-                                <label className="form-label font-bold mb-2">
-                                    <Building2 className="size-4" aria-hidden="true" />
-                                    Include Companies
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1">
+                                    <Building2 className="size-3.5" aria-hidden="true" />
+                                    Include
                                 </label>
-                                <div style={{minHeight: '38px'}}>
+                                <div style={{minHeight: '32px'}}>
                                     <AsyncSelectField
                                         endpoint="masters/companies/"
                                         labelField="name"
@@ -193,18 +193,18 @@ export default function ItemReportFilters({
                                         value={selectedCompanies}
                                         onChange={onCompanyChange}
                                         isMulti={true}
-                                        placeholder="All companies..."
+                                        placeholder="All..."
                                         loadOnMount={false}
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="form-label font-bold mb-2">
-                                    <MinusCircle className="size-4" aria-hidden="true" />
-                                    Exclude Companies
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1">
+                                    <MinusCircle className="size-3.5" aria-hidden="true" />
+                                    Exclude
                                 </label>
-                                <div style={{minHeight: '38px'}}>
+                                <div style={{minHeight: '32px'}}>
                                     <AsyncSelectField
                                         endpoint="masters/companies/"
                                         labelField="name"
@@ -212,22 +212,22 @@ export default function ItemReportFilters({
                                         value={excludeCompanies}
                                         onChange={onExcludeCompanyChange}
                                         isMulti={true}
-                                        placeholder="None excluded..."
+                                        placeholder="None..."
                                         loadOnMount={false}
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
                             <div>
-                                <label className="form-label font-bold mb-2" htmlFor={restrictedId}>
-                                    <ShieldCheck className="size-4" aria-hidden="true" />
-                                    Is Restricted
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={restrictedId}>
+                                    <ShieldCheck className="size-3.5" aria-hidden="true" />
+                                    Restricted
                                 </label>
                                 <select
                                     id={restrictedId}
-                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
+                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
                                     value={isRestricted}
                                     onChange={(e) => onIsRestrictedChange(e.target.value)}
                                 >
@@ -237,9 +237,9 @@ export default function ItemReportFilters({
                                 </select>
                             </div>
 
-                            <div className="sm:col-span-2">
-                                <label className="form-label font-bold mb-2" htmlFor={purchaseStatusId}>
-                                    <ShoppingCart className="size-4" aria-hidden="true" />
+                            <div className="sm:col-span-2 lg:col-span-2">
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={purchaseStatusId}>
+                                    <ShoppingCart className="size-3.5" aria-hidden="true" />
                                     Purchase Status
                                 </label>
                                 <Select
@@ -248,15 +248,15 @@ export default function ItemReportFilters({
                                     value={purchaseStatusOptions.filter(opt => purchaseStatus.includes(opt.value))}
                                     onChange={(selected) => onPurchaseStatusChange(selected ? selected.map(s => s.value) : [])}
                                     options={purchaseStatusOptions}
-                                    placeholder="Select purchase status..."
+                                    placeholder="All statuses"
                                     className="basic-multi-select"
                                     classNamePrefix="select"
                                 />
                             </div>
 
                             <div>
-                                <label className="form-label font-bold mb-2" htmlFor={normsId}>
-                                    <Tags className="size-4" aria-hidden="true" />
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={normsId}>
+                                    <Tags className="size-3.5" aria-hidden="true" />
                                     Norms
                                 </label>
                                 <Select
@@ -265,15 +265,15 @@ export default function ItemReportFilters({
                                     value={normOptions.filter(opt => selectedNorms.includes(opt.value))}
                                     onChange={(selected) => onNormsChange(selected ? selected.map(s => s.value) : [])}
                                     options={normOptions}
-                                    placeholder="Select norms..."
+                                    placeholder="Select..."
                                     className="basic-multi-select"
                                     classNamePrefix="select"
                                 />
                             </div>
 
                             <div>
-                                <label className="form-label font-bold mb-2" htmlFor={notificationId}>
-                                    <Bell className="size-4" aria-hidden="true" />
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={notificationId}>
+                                    <Bell className="size-3.5" aria-hidden="true" />
                                     Notification
                                 </label>
                                 <Select
@@ -282,49 +282,49 @@ export default function ItemReportFilters({
                                     value={notificationOptions.filter(opt => selectedNotifications.includes(opt.value))}
                                     onChange={(selected) => onNotificationsChange(selected ? selected.map(s => s.value) : [])}
                                     options={notificationOptions}
-                                    placeholder="Select notification..."
+                                    placeholder="Select..."
                                     className="basic-multi-select"
                                     classNamePrefix="select"
                                 />
                             </div>
                         </div>
 
-                        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            <div className="sm:col-span-full">
-                                <label className="form-label font-bold mb-2" htmlFor={productDescriptionId}>
-                                    <FileText className="size-4" aria-hidden="true" />
-                                    Product Description
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
+                            <div className="sm:col-span-1 lg:col-span-2">
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={productDescriptionId}>
+                                    <FileText className="size-3.5" aria-hidden="true" />
+                                    Product Desc
                                 </label>
                                 <input
                                     id={productDescriptionId}
                                     type="text"
-                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
-                                    placeholder="Search by product description..."
+                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    placeholder="Search..."
                                     value={productDescSearch}
                                     onChange={(e) => onProductDescSearchChange(e.target.value)}
                                 />
                             </div>
-                            <div className="sm:col-span-full">
-                                <label className="form-label font-bold mb-2" htmlFor={hsnCodeId}>
-                                    <ScanBarcode className="size-4" aria-hidden="true" />
+                            <div className="sm:col-span-1 lg:col-span-2">
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={hsnCodeId}>
+                                    <ScanBarcode className="size-3.5" aria-hidden="true" />
                                     HSN Code
                                 </label>
                                 <input
                                     id={hsnCodeId}
                                     type="text"
-                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none focus-visible:border-ring"
-                                    placeholder="Search by HSN code..."
+                                    className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                    placeholder="Search..."
                                     value={hsnCodeSearch}
                                     onChange={(e) => onHsnCodeSearchChange(e.target.value)}
                                 />
                             </div>
                         </div>
 
-                        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            <div className="col-span-full">
-                                <label className="form-label font-bold mb-2" htmlFor={itemNameFilterId}>
-                                    <Tag className="size-4" aria-hidden="true" />
-                                    Filter by Item Name (Multi-select)
+                        <div className="mt-2 grid grid-cols-1 gap-2">
+                            <div>
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={itemNameFilterId}>
+                                    <Tag className="size-3.5" aria-hidden="true" />
+                                    Item Names
                                 </label>
                                 <Select
                                     inputId={itemNameFilterId}
@@ -345,9 +345,9 @@ export default function ItemReportFilters({
                         </div>
 
                         {hasActiveFilters && (
-                            <div className="mt-3">
+                            <div className="mt-2.5">
                                 <div
-                                    className="alert alert-info flex justify-between items-center py-2 mb-0">
+                                    className="alert alert-info flex justify-between items-center py-1.5 px-3 mb-0 text-xs">
                                     <div>
                                         <Filter className="size-4" aria-hidden="true" />
                                         <strong>Active Filters:</strong>

@@ -104,6 +104,7 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
               },
               gap: { xs: 1.5, sm: 2, md: 2 },
               alignItems: 'start',
+              width: '100%',
             }}
           >
             {children}

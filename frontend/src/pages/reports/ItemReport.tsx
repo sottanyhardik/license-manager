@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Box, Paper, Typography, CircularProgress, useTheme } from "@mui/material";
 import api from "../../api/axios";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button as MuiButton } from "@mui/material";
 import { CalendarDays, FileSpreadsheet, Inbox, Loader2, Package, Tag } from "lucide-react";
 import { usePagination } from "@/hooks/usePagination";
 import DataPagination from "@/components/DataPagination";
@@ -121,33 +121,34 @@ export default function ItemReport() {
         }
     };
 
+    const theme = useTheme();
+
     return (
-        <div className="min-h-screen bg-background">
+        <Box sx={{ minHeight: '100vh', backgroundColor: theme.palette.background.default }}>
             <PageHeader
                 pretitle="Reports"
                 title="Item Report"
                 description={
                     reportData ? (
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <span>{reportData.report_date}</span>
-                            <span className="text-muted-foreground">•</span>
-                            <Package className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <span>{reportData.total_items} items</span>
-                        </div>
+                        <Box component="div" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: 1 }}>
+                            <CalendarDays className="size-3.5" style={{ color: theme.palette.text.secondary }} aria-hidden="true" />
+                            <Typography variant="body2">{reportData.report_date}</Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>•</Typography>
+                            <Package className="size-3.5" style={{ color: theme.palette.text.secondary }} aria-hidden="true" />
+                            <Typography variant="body2">{reportData.total_items} items</Typography>
+                        </Box>
                     ) : undefined
                 }
                 actions={
-                    <Button
-                        variant="default"
-                        size="sm"
+                    <MuiButton
+                        variant="contained"
+                        size="small"
                         onClick={() => handleExport(filters)}
                         disabled={downloading || !hasQuery}
+                        startIcon={downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                     >
-                        {downloading ? <Loader2 className="size-3.5 animate-spin shrink-0" /> : <FileSpreadsheet className="size-3.5 shrink-0" />}
-                        <span className="hidden sm:inline">{downloading ? 'Generating…' : 'Export Excel'}</span>
-                        <span className="sm:hidden">{downloading ? '…' : 'Export'}</span>
-                    </Button>
+                        <span style={{ display: 'inline' }}>{downloading ? 'Generating…' : 'Export Excel'}</span>
+                    </MuiButton>
                 }
             />
 
@@ -235,77 +236,110 @@ export default function ItemReport() {
             )}
 
             {/* Report Table */}
-            <div className="row mt-3">
-                <div className="col-span-full">
-                    {loading && (
-                        <Card>
-                            <CardContent className="flex flex-col items-center py-8 text-center">
-                                <Loader2 className="mb-2 size-8 animate-spin text-primary" />
-                                <h5 className="text-muted-foreground">Loading Item Report…</h5>
-                                <p className="text-muted-foreground text-sm">Please wait while we fetch the data</p>
-                            </CardContent>
-                        </Card>
-                    )}
+            <Box sx={{ maxWidth: '100%' }}>
+                {loading && (
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            p: 6,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            textAlign: 'center',
+                        }}
+                    >
+                        <CircularProgress sx={{ mb: 2 }} />
+                        <Typography variant="body1" sx={{ mb: 1, color: 'text.secondary' }}>
+                            Loading Item Report…
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Please wait while we fetch the data
+                        </Typography>
+                    </Paper>
+                )}
 
-                    {!loading && !hasQuery && (
-                        <Card>
-                            <CardContent className="py-5 text-center">
-                                <Tag className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
-                                <p className="text-muted-foreground">Please select item names, search by product description, or search by HSN code to load the report data</p>
-                            </CardContent>
-                        </Card>
-                    )}
+                {!loading && !hasQuery && (
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            p: 3,
+                            textAlign: 'center',
+                        }}
+                    >
+                        <Tag className="size-4 mx-auto" aria-hidden="true" />
+                        <Typography variant="body1" sx={{ mt: 2, mb: 1, color: 'primary.main', fontWeight: 600 }}>
+                            Select Filters to View Report
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Please select item names, search by product description, or search by HSN code to load the report data
+                        </Typography>
+                    </Paper>
+                )}
 
-                    {!loading && hasQuery && reportData && reportData.items.length === 0 && (
-                        <Card>
-                            <CardContent className="py-5 text-center">
-                                <Inbox className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-muted-foreground">No items found</h5>
-                                <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
-                                <div className="mx-auto mt-3 max-w-[600px] text-left">
-                                    <p className="mb-2 text-sm text-muted-foreground"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
-                                    <ul className="text-sm text-muted-foreground">
-                                        <li>Setting License Status to "All"</li>
-                                        <li>Lowering the Min Balance (CIF) to 100</li>
-                                        <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
-                                    </ul>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                {!loading && hasQuery && reportData && reportData.items.length === 0 && (
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            p: 3,
+                            textAlign: 'center',
+                        }}
+                    >
+                        <Inbox className="size-4 mx-auto" aria-hidden="true" />
+                        <Typography variant="body1" sx={{ mt: 2, mb: 1, color: 'text.secondary' }}>
+                            No items found
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                            Try adjusting your filters to see more results.
+                        </Typography>
+                        <Box sx={{ mx: 'auto', maxWidth: 600, textAlign: 'left' }}>
+                            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+                                <strong>Tip:</strong> When searching by Product Description or HSN Code, consider:
+                            </Typography>
+                            <Box component="ul" sx={{ color: 'text.secondary', fontSize: '0.875rem', pl: 2 }}>
+                                <li>Setting License Status to "All"</li>
+                                <li>Lowering the Min Balance (CIF) to 100</li>
+                                <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
+                            </Box>
+                        </Box>
+                    </Paper>
+                )}
 
-                    {!loading && hasQuery && reportData && reportData.items.length > 0 && (
-                        <>
-                            <ItemReportTable
-                                items={pageItems}
-                                totalsItems={reportData.items}
-                                startSrNo={startSrNo}
-                                itemNameMode="editable"
-                                itemNameOptions={itemNameOptions}
-                                onItemNamesChange={handleItemNamesEdit}
-                                editingCell={editingCell}
-                                editValue={editValue}
-                                onEditValueChange={setEditValue}
-                                onStartEdit={startEdit}
-                                onCancelEdit={cancelEdit}
-                                onSaveEdit={saveEdit}
-                            />
-                            <DataPagination
-                                currentPage={pagination.currentPage}
-                                totalPages={pagination.totalPages}
-                                pageSize={pagination.pageSize}
-                                hasNext={!pagination.isLastPage}
-                                hasPrevious={!pagination.isFirstPage}
-                                totalItems={licenseGroups.length}
-                                onPageChange={pagination.goToPage}
-                                onPageSizeChange={pagination.setPageSize}
-                            />
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
+                {!loading && hasQuery && reportData && reportData.items.length > 0 && (
+                    <>
+                        <ItemReportTable
+                            items={pageItems}
+                            totalsItems={reportData.items}
+                            startSrNo={startSrNo}
+                            itemNameMode="editable"
+                            itemNameOptions={itemNameOptions}
+                            onItemNamesChange={handleItemNamesEdit}
+                            editingCell={editingCell}
+                            editValue={editValue}
+                            onEditValueChange={setEditValue}
+                            onStartEdit={startEdit}
+                            onCancelEdit={cancelEdit}
+                            onSaveEdit={saveEdit}
+                        />
+                        <DataPagination
+                            currentPage={pagination.currentPage}
+                            totalPages={pagination.totalPages}
+                            pageSize={pagination.pageSize}
+                            hasNext={!pagination.isLastPage}
+                            hasPrevious={!pagination.isFirstPage}
+                            totalItems={licenseGroups.length}
+                            onPageChange={pagination.goToPage}
+                            onPageSizeChange={pagination.setPageSize}
+                        />
+                    </>
+                )}
+            </Box>
+        </Box>
     );
 }
 

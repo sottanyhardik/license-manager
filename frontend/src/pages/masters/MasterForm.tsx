@@ -6,8 +6,7 @@ import { openDocument, toProtectedMediaPath } from "../../utils/documentDownload
 import AuthedImage from "../../components/AuthedImage";
 import NestedFieldArray from "./NestedFieldArray";
 import HybridSelect from "../../components/HybridSelect";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import MuiDatePicker from "../../components/MuiDatePicker";
 import { formatDateForInput, parseDate as parseDateUtil } from "../../utils/dateFormatter";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import { navigateToList } from "../../utils/navigationUtils";
@@ -114,9 +113,6 @@ export default function MasterForm({
     // Submit state (saving drives the submit button and must be read in JSX)
     const [saving, setSaving] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, any>>({});
-
-    // Use centralized date parser from utility
-    const parseDate = (dateString: any) => parseDateUtil(dateString);
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date: any) => {
@@ -534,24 +530,18 @@ export default function MasterForm({
         const hasError = fieldError && (Array.isArray(fieldError) ? fieldError.length > 0 : fieldError);
         const errorClass = hasError ? 'is-invalid' : '';
 
-        // Handle date fields with DatePicker
+        // Handle date fields with MUI DatePicker
         if (fieldMeta.type === "date" || fieldName.includes("date") || fieldName.includes("_at") || fieldName.includes("_on")) {
             return (
-                <div className="w-full">
-                    <DatePicker
-                        id={fieldId}
-                        selected={parseDate(value)}
-                        onChange={(date: Date | null) => handleChange(fieldName, formatDateForAPI(date))}
-                        dateFormat="dd-MM-yyyy"
-                        className={cn("flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] focus-visible:border-ring aria-invalid:border-destructive", errorClass)}
-                        wrapperClassName="w-full block"
-                        placeholderText="Select date"
-                        isClearable
-                        showYearDropdown
-                        showMonthDropdown
-                        dropdownMode="select"
-                    />
-                </div>
+                <MuiDatePicker
+                    value={value}
+                    onChange={(date) => handleChange(fieldName, date ? formatDateForAPI(date.toDate ? date.toDate() : date) : null)}
+                    label={fieldName.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                    size="small"
+                    fullWidth
+                    error={hasError}
+                    helperText={hasError && fieldError ? (typeof fieldError === 'string' ? fieldError : 'Invalid value') : undefined}
+                />
             );
         }
 

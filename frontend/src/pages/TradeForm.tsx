@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import api from "../api/axios";
 import HybridSelect from "../components/HybridSelect";
 import ConditionBadge from "../components/ConditionBadge";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import MuiDatePicker from "../components/MuiDatePicker";
 import {parseDate} from "../utils/dateFormatter";
 import * as validateFormUtil from "../utils/formValidation";
 import { ValidationRules } from "../utils/formValidation";
@@ -1098,12 +1097,12 @@ export default function TradeForm() {
                         />
                     </div>
                     <div>
-                        <label className="mb-1.5 block text-sm font-medium">Invoice Date</label>
-                    <DatePicker
-                            selected={formData.invoice_date instanceof Date ? formData.invoice_date : parseDate(formData.invoice_date)}
-                            onChange={(date: Date | null) => setFormData(prev => ({ ...prev, invoice_date: date }))}
-                            dateFormat="dd-MM-yyyy"
-                            className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring "
+                        <MuiDatePicker
+                            label="Invoice Date"
+                            value={formData.invoice_date}
+                            onChange={(date) => setFormData(prev => ({ ...prev, invoice_date: date ? (date.toDate ? date.toDate() : date) : null }))}
+                            size="small"
+                            fullWidth
                         />
                     </div>
                 </div>

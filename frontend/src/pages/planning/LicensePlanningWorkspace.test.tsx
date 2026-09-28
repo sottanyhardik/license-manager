@@ -56,11 +56,11 @@ describe("SION planning workspace", () => {
   });
   it("disables planning actions without an active saved rule", async () => {
     vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...rule, is_active: false }]); renderWorkspace();
-    expect(await screen.findByRole("button", { name: "Preview Impact" })).toBeDisabled(); await userEvent.click(screen.getByRole("button", { name: "More planning actions" })); expect(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })).toHaveAttribute("data-disabled");
+    expect(await screen.findByRole("button", { name: "Preview Impact" })).toBeDisabled(); await userEvent.click(screen.getByRole("button", { name: "More planning actions" })); expect(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })).toBeDisabled();
   });
   it("confirms Force All and submits ALL mode", async () => {
     vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" }); renderWorkspace(); await ready();
-    await userEvent.click(screen.getByRole("button", { name: "More planning actions" })); await userEvent.click(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })); expect(screen.getByRole("alertdialog", { name: "Force re-plan E5?" })).toBeInTheDocument(); await userEvent.click(screen.getByRole("button", { name: "Force All" })); await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL")); expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "ALL");
+    await userEvent.click(screen.getByRole("button", { name: "More planning actions" })); await userEvent.click(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })); expect(await screen.findByRole("alertdialog", { name: "Force re-plan E5?" })).toBeInTheDocument(); await userEvent.click(screen.getByRole("button", { name: "Force All" })); await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL")); expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "ALL");
   });
   it("keeps invalid new drafts unsaved", async () => {
     renderWorkspace(); await ready(); await userEvent.click(screen.getByRole("button", { name: "New Rule" })); expect(await screen.findByLabelText("Rule editor")).toBeInTheDocument(); expect(screen.getByLabelText("Maximum unit price")).toHaveAttribute("aria-invalid", "true"); expect(screen.getByRole("button", { name: "Save Changes" })).toBeDisabled();

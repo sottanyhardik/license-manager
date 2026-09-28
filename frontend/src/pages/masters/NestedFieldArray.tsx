@@ -3,8 +3,7 @@ import ConditionBadge from "../../components/ConditionBadge";
 import { cn } from "@/lib/utils";
 import Select from "react-select";
 import AsyncCreatableSelect from "react-select/async-creatable";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import MuiDatePicker from "../../components/MuiDatePicker";
 import api from "../../api/axios";
 import {formatDateForInput, parseDate as parseDateUtil} from "../../utils/dateFormatter";
 import { AlertCircle, Calculator, Hash, Inbox, Lock, Plus, Table, Trash2, Wand2 } from "lucide-react";
@@ -58,11 +57,6 @@ export default function NestedFieldArray({
     // non-read-only fields (such as planning_target_item) can still be edited.
     const allowAdd = !Array.isArray(fields) || !fields.some((field) => field.allow_add === false);
     const allowRemove = !Array.isArray(fields) || !fields.some((field) => field.allow_remove === false);
-
-    // Use centralized date parser from utility
-    const parseDate = (dateString) => {
-        return parseDateUtil(dateString);
-    };
 
     // Helper function to format Date object to YYYY-MM-DD for API
     const formatDateForAPI = (date) => {
@@ -313,25 +307,16 @@ export default function NestedFieldArray({
             );
         }
 
-        // Handle date fields with DatePicker
+        // Handle date fields with MUI DatePicker
         if (field.type === "date" || field.name.includes("date") || field.name.includes("_at") || field.name.includes("_on")) {
             return (
-                <div className="w-full">
-                    <DatePicker
-                        id={fieldId}
-                        name={fieldId}
-                        selected={parseDate(fieldValue)}
-                        onChange={(date: Date | null) => handleChange(index, field.name, formatDateForAPI(date))}
-                        dateFormat="dd-MM-yyyy"
-                        className={`flex h-8 w-full rounded-md border border-input bg-card px-2 py-1 text-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${highlightClass}`}
-                        wrapperClassName="w-full block"
-                        placeholderText="Select date"
-                        isClearable
-                        showYearDropdown
-                        showMonthDropdown
-                        dropdownMode="select"
-                    />
-                </div>
+                <MuiDatePicker
+                    value={fieldValue}
+                    onChange={(date) => handleChange(index, field.name, date ? formatDateForAPI(date.toDate ? date.toDate() : date) : null)}
+                    label={field.label || field.name.replace(/_/g, " ")}
+                    size="small"
+                    fullWidth
+                />
             );
         }
 

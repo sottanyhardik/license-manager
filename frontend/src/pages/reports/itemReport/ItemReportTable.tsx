@@ -1,5 +1,5 @@
 import Select from "react-select";
-import { Card, CardContent } from "@/components/ui/card";
+import { Paper, useTheme } from "@mui/material";
 import ConditionBadge from "@/components/ConditionBadge";
 import { openAuthedFile } from "@/utils/documentDownload";
 import { formatDate } from "@/utils/dateFormatter";
@@ -57,6 +57,7 @@ export default function ItemReportTable({
     items, totalsItems, startSrNo = 0, itemNameMode, itemNameOptions = [], onItemNamesChange,
     editingCell, editValue, onEditValueChange, onStartEdit, onCancelEdit, onSaveEdit,
 }: ItemReportTableProps) {
+    const theme = useTheme();
     const totalsSource = totalsItems ?? items;
     // Group items by license_id
     const groupedByLicense: Record<string, any[]> = {};
@@ -70,9 +71,8 @@ export default function ItemReportTable({
     let srNo = startSrNo;
 
     return (
-        <Card>
-            <CardContent className="p-0">
-                <div className="overflow-x-auto">
+        <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
+            <div style={{ padding: 0, overflowX: 'auto' }}>
                     <table className="mb-0"
                            style={{tableLayout: 'auto', minWidth: '1600px', fontSize: '0.875rem'}}>
                         <thead style={{position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db'}}>
@@ -417,8 +417,7 @@ export default function ItemReportTable({
                         </tr>
                         </tfoot>
                     </table>
-                </div>
-            </CardContent>
-        </Card>
+            </div>
+        </Paper>
     );
 }

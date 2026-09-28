@@ -380,7 +380,7 @@ export default function AdvancedFilter({
     if (Object.keys(filterConfig).length === 0 && searchFields.length === 0) return null;
 
     return (
-        <div className="mb-4">
+        <div className="w-full mb-4">
             {/* Search bar */}
             {searchFields.length > 0 && (
                 <div className="mb-3">

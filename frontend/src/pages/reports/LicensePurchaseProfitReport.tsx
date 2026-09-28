@@ -1,11 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Box, Paper, Typography, TextField, Chip, Skeleton as MuiSkeleton, Button as MuiButton, useTheme } from "@mui/material";
 import { cn } from "@/lib/utils";
 import {
     ArrowDown, ArrowDownCircle, ArrowUp, ArrowUpDown, Building2, CalendarRange, FileBarChart2, FileSpreadsheet,
@@ -14,6 +9,11 @@ import {
 import AsyncSelectField from "@/components/AsyncSelectField";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import StatCard from "@/components/StatCard";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatIndianCompact, formatIndianNumber } from "@/utils/numberFormatter";
 import { formatDate } from "@/utils/dateFormatter";
 import { useLicensePurchaseProfitReportFilters, LICENSE_PURCHASE_PROFIT_NORM_OPTIONS } from "./licensePurchaseProfitReport/useLicensePurchaseProfitReportFilters";
@@ -157,6 +157,7 @@ function FilterLabel({ htmlFor, icon: Icon, children }: { htmlFor: string; icon:
 
 export default function LicensePurchaseProfitReport() {
     const navigate = useNavigate();
+    const theme = useTheme();
 
     const {
         fromDate, setFromDate, toDate, setToDate,
@@ -262,83 +263,84 @@ export default function LicensePurchaseProfitReport() {
             </div>
 
             {/* Filter toolbar */}
-            <Card className="mb-6">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-                    <h5 className="mb-0 flex items-center gap-2 text-[14px] font-semibold">
+            <Paper elevation={0} sx={{ mb: 3, border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2, borderBottom: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <SlidersHorizontal className="size-4" aria-hidden="true" />
-                        Filters
-                    </h5>
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={handleReset} disabled={!hasActiveFilters}>
-                            <RotateCcw className="size-3.5" aria-hidden="true" />
-                            Reset
-                        </Button>
-                    </div>
-                </div>
-                <CardContent className="px-4 py-3">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <div>
-                            <FilterLabel htmlFor={fromDateId} icon={CalendarRange}>From Date</FilterLabel>
-                            <Input id={fromDateId} type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                        </div>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            Filters
+                        </Typography>
+                    </Box>
+                    <MuiButton variant="text" size="small" onClick={handleReset} disabled={!hasActiveFilters} startIcon={<RotateCcw className="size-3.5" />}>
+                        Reset
+                    </MuiButton>
+                </Box>
+                <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+                    <Box>
+                        <FilterLabel htmlFor={fromDateId} icon={CalendarRange}>From Date</FilterLabel>
+                        <TextField id={fromDateId} type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                    </Box>
 
-                        <div>
-                            <FilterLabel htmlFor={toDateId} icon={CalendarRange}>To Date</FilterLabel>
-                            <Input id={toDateId} type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                        </div>
+                    <Box>
+                        <FilterLabel htmlFor={toDateId} icon={CalendarRange}>To Date</FilterLabel>
+                        <TextField id={toDateId} type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                    </Box>
 
-                        <div>
-                            <FilterLabel htmlFor={normId} icon={Tag}>Norm</FilterLabel>
-                            <select
-                                id={normId}
-                                className="flex h-10 w-full rounded-lg border border-gray-200 bg-card px-3 py-2 text-xs outline-none focus-visible:border-ring"
-                                value={norm}
-                                onChange={(e) => setNorm(e.target.value)}
-                            >
-                                {LICENSE_PURCHASE_PROFIT_NORM_OPTIONS.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                ))}
-                            </select>
-                        </div>
+                    <Box>
+                        <FilterLabel htmlFor={normId} icon={Tag}>Norm</FilterLabel>
+                        <TextField
+                            id={normId}
+                            select
+                            value={norm}
+                            onChange={(e) => setNorm(e.target.value)}
+                            fullWidth
+                            size="small"
+                        >
+                            {LICENSE_PURCHASE_PROFIT_NORM_OPTIONS.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </TextField>
+                    </Box>
 
-                        <div>
-                            <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                <Building2 className="size-3.5" aria-hidden="true" />
-                                Exporter
-                            </div>
-                            <AsyncSelectField
-                                endpoint="masters/companies/"
-                                labelField="name"
-                                valueField="id"
-                                value={exporter}
-                                onChange={handleExporterChange}
-                                isMulti={false}
-                                placeholder="All exporters..."
-                                loadOnMount={false}
-                            />
-                        </div>
+                    <Box>
+                        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, fontWeight: 500, color: 'text.secondary' }}>
+                            <Building2 className="size-3.5" aria-hidden="true" />
+                            Exporter
+                        </Typography>
+                        <AsyncSelectField
+                            endpoint="masters/companies/"
+                            labelField="name"
+                            valueField="id"
+                            value={exporter}
+                            onChange={handleExporterChange}
+                            isMulti={false}
+                            placeholder="All exporters..."
+                            loadOnMount={false}
+                        />
+                    </Box>
 
-                        <div>
-                            <FilterLabel htmlFor={licenseNumberId} icon={Search}>License Number</FilterLabel>
-                            <Input
-                                id={licenseNumberId}
-                                value={licenseNumber}
-                                onChange={(e) => setLicenseNumber(e.target.value)}
-                                placeholder="Search License Number..."
-                            />
-                        </div>
+                    <Box>
+                        <FilterLabel htmlFor={licenseNumberId} icon={Search}>License Number</FilterLabel>
+                        <TextField
+                            id={licenseNumberId}
+                            value={licenseNumber}
+                            onChange={(e) => setLicenseNumber(e.target.value)}
+                            placeholder="Search License Number..."
+                            fullWidth
+                            size="small"
+                        />
+                    </Box>
 
-                        <div className="sm:col-span-2 lg:col-span-4">
-                            <FilterLabel htmlFor={excludeLicenseNumberId} icon={FileText}>Exclude License Number</FilterLabel>
-                            <ExcludeLicenseNumberInput
-                                id={excludeLicenseNumberId}
-                                value={excludeLicenseNumber}
-                                onChange={setExcludeLicenseNumber}
-                            />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    <Box sx={{ gridColumn: { sm: 'span 2', lg: 'span 4' } }}>
+                        <FilterLabel htmlFor={excludeLicenseNumberId} icon={FileText}>Exclude License Number</FilterLabel>
+                        <ExcludeLicenseNumberInput
+                            id={excludeLicenseNumberId}
+                            value={excludeLicenseNumber}
+                            onChange={setExcludeLicenseNumber}
+                        />
+                    </Box>
+                </Box>
+            </Paper>
 
             {/* Active Filters Display */}
             <LicensePurchaseProfitReportActiveFiltersDisplay
@@ -365,78 +367,83 @@ export default function LicensePurchaseProfitReport() {
 
             {/* Report body */}
             {!canApply && (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                        <FileBarChart2 className="size-10 text-muted-foreground" aria-hidden="true" />
-                        <h5 className="text-foreground">License Purchase &amp; Profit Report</h5>
-                        <p className="max-w-sm text-muted-foreground">Select a date range to view the report.</p>
-                    </CardContent>
-                </Card>
+                <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, p: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2 }}>
+                    <FileBarChart2 className="size-10" style={{ color: theme.palette.text.secondary }} aria-hidden="true" />
+                    <Typography variant="body1">License Purchase &amp; Profit Report</Typography>
+                    <Typography variant="body2" sx={{ maxWidth: 'sm', color: 'text.secondary' }}>
+                        Select a date range to view the report.
+                    </Typography>
+                </Paper>
             )}
 
             {canApply && isInitialLoading && (
-                <Card>
-                    <div className="border-b border-border px-4 py-3">
-                        <h5 className="mb-0 text-[14px] font-semibold">License Summary</h5>
-                    </div>
-                    <CardContent className="p-0">
-                        <div className="w-full overflow-auto">
-                            <table className="w-full border-collapse text-sm" aria-busy="true" aria-label="Loading License Summary">
-                                <thead>
-                                    <tr>
+                <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
+                    <Box sx={{ borderBottom: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            License Summary
+                        </Typography>
+                    </Box>
+                    <Box sx={{ p: 0, overflow: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }} aria-busy="true" aria-label="Loading License Summary">
+                            <thead>
+                                <tr>
+                                    {COLUMNS.map((column) => (
+                                        <th
+                                            key={column.key}
+                                            scope="col"
+                                            style={{
+                                                backgroundColor: theme.palette.background.default,
+                                                padding: '0.75rem',
+                                                textAlign: column.align === "right" ? 'right' : 'left',
+                                                fontSize: '0.75rem',
+                                                fontWeight: 600,
+                                                color: theme.palette.text.secondary,
+                                            }}
+                                        >
+                                            {column.label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Array.from({ length: 6 }).map((_, rowIdx) => (
+                                    <tr key={rowIdx} style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                                         {COLUMNS.map((column) => (
-                                            <th
-                                                key={column.key}
-                                                scope="col"
-                                                className={cn(
-                                                    "bg-muted px-3 py-2 text-left text-xs font-semibold text-muted-foreground",
-                                                    column.align === "right" && "text-right",
-                                                )}
-                                            >
-                                                {column.label}
-                                            </th>
+                                            <td key={column.key} style={{ padding: '0.75rem' }}>
+                                                <MuiSkeleton variant="text" />
+                                            </td>
                                         ))}
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {Array.from({ length: 6 }).map((_, rowIdx) => (
-                                        <tr key={rowIdx} className="border-b border-border/60">
-                                            {COLUMNS.map((column) => (
-                                                <td key={column.key} className="px-3 py-2">
-                                                    <Skeleton className="h-4 w-full" />
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </CardContent>
-                </Card>
+                                ))}
+                            </tbody>
+                        </table>
+                    </Box>
+                </Paper>
             )}
 
             {canApply && !isInitialLoading && error && (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                        <TriangleAlert className="size-10 text-destructive" aria-hidden="true" />
-                        <h5 className="text-destructive">Failed to Load Report</h5>
-                        <p className="max-w-sm text-muted-foreground">{error}</p>
-                        <Button onClick={refetch}>
-                            <RotateCcw className="size-4" aria-hidden="true" />
-                            Retry
-                        </Button>
-                    </CardContent>
-                </Card>
+                <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, p: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2 }}>
+                    <TriangleAlert className="size-10" style={{ color: theme.palette.error.main }} aria-hidden="true" />
+                    <Typography variant="body1" sx={{ color: 'error.main' }}>Failed to Load Report</Typography>
+                    <Typography variant="body2" sx={{ maxWidth: 'sm', color: 'text.secondary' }}>
+                        {error}
+                    </Typography>
+                    <MuiButton onClick={refetch} startIcon={<RotateCcw className="size-4" />}>
+                        Retry
+                    </MuiButton>
+                </Paper>
             )}
 
             {canApply && !isInitialLoading && !error && licenseSummary.length === 0 && (
-                <Card>
-                    <CardContent className="py-16 text-center">
-                        <Inbox className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
-                        <h5 className="mt-3 text-muted-foreground">No licenses found</h5>
-                        <p className="text-muted-foreground">Try adjusting your filters — a different date range, norm, license number, excluded licenses, or exporter.</p>
-                    </CardContent>
-                </Card>
+                <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, p: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                    <Inbox className="mx-auto size-10" style={{ color: theme.palette.text.secondary }} aria-hidden="true" />
+                    <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary' }}>
+                        No licenses found
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 'sm' }}>
+                        Try adjusting your filters — a different date range, norm, license number, excluded licenses, or exporter.
+                    </Typography>
+                </Paper>
             )}
 
             {canApply && !isInitialLoading && !error && licenseSummary.length > 0 && (

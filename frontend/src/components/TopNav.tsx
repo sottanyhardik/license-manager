@@ -103,7 +103,7 @@ interface NavMenuProps {
     end?: boolean;
 }
 
-function NavMenu({ icon, label, items, isActive }: NavMenuProps) {
+function NavMenu({ label, items, isActive }: NavMenuProps) {
     const muiTheme = useMuiTheme();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
@@ -129,16 +129,27 @@ function NavMenu({ icon, label, items, isActive }: NavMenuProps) {
                     />
                 }
                 sx={{
+                    px: { md: 1.5, lg: 2 },
+                    py: 0.5,
+                    height: 40,
                     color: isActive ? muiTheme.palette.primary.main : muiTheme.palette.text.primary,
                     textTransform: "none",
-                    fontSize: "0.95rem",
-                    fontWeight: 500,
+                    fontSize: "0.9rem",
+                    fontWeight: isActive ? 600 : 500,
+                    backgroundColor: "transparent",
+                    borderBottom: isActive ? `2px solid ${muiTheme.palette.primary.main}` : "2px solid transparent",
+                    borderRadius: 0,
+                    transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
                     "&:hover": {
                         backgroundColor: muiTheme.palette.action.hover,
+                        color: muiTheme.palette.text.primary,
+                    },
+                    "&:focus-visible": {
+                        outline: `2px solid ${muiTheme.palette.primary.main}`,
+                        outlineOffset: "2px",
                     },
                 }}
             >
-                {icon && <Icon name={icon} className="size-4 mr-2" aria-hidden="true" />}
                 {label}
             </Button>
             <MuiMenu
@@ -152,6 +163,16 @@ function NavMenu({ icon, label, items, isActive }: NavMenuProps) {
                 transformOrigin={{
                     vertical: "top",
                     horizontal: "left",
+                }}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            minWidth: 220,
+                            backgroundColor: muiTheme.palette.background.paper,
+                            backgroundImage: "none",
+                            boxShadow: muiTheme.shadows[2],
+                        },
+                    },
                 }}
             >
                 {items}
@@ -237,73 +258,110 @@ export default function TopNav() {
         <>
             <AppBar
                 position="static"
-                className="tb-nav top-nav top-nav--premium"
+                className="tb-nav top-nav top-nav--unified"
                 aria-label="Main navigation"
-                elevation={1}
+                elevation={0}
+                sx={{
+                    borderBottom: `1px solid ${muiTheme.palette.divider}`,
+                }}
             >
                 <Toolbar
                     disableGutters
                     sx={{
-                        px: { xs: 1.5, sm: 3 },
+                        height: { xs: 56, md: 60 },
+                        minHeight: { xs: 56, md: 60 },
+                        px: { xs: 1.5, sm: 2, md: 3 },
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 2,
+                        gap: { xs: 1, md: 2 },
                     }}
                 >
-                    {/* Brand */}
-                    <Button
+                    {/* Brand - Clean text with icon, no styling pill */}
+                    <Box
                         component={RouterLink}
                         to="/"
                         sx={{
                             display: "flex",
                             alignItems: "center",
                             gap: 1,
-                            color: muiTheme.palette.primary.contrastText,
-                            textTransform: "none",
-                            fontSize: "0.95rem",
-                            fontWeight: 600,
-                            px: 1.5,
-                            py: 0.75,
-                            backgroundColor: muiTheme.palette.primary.main,
-                            borderRadius: 1,
+                            color: muiTheme.palette.text.primary,
+                            textDecoration: "none",
+                            cursor: "pointer",
+                            py: 1,
+                            flexShrink: 0,
                             "&:hover": {
-                                backgroundColor: muiTheme.palette.primary.dark,
+                                opacity: 0.8,
+                            },
+                            "&:focus-visible": {
+                                outline: `2px solid ${muiTheme.palette.primary.main}`,
+                                borderRadius: 0.5,
                             },
                         }}
                         className="tb-nav-brand"
                     >
-                        <ShieldCheck size={16} aria-hidden="true" />
-                        <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                        <ShieldCheck
+                            size={20}
+                            aria-hidden="true"
+                            style={{ color: muiTheme.palette.primary.main, flexShrink: 0 }}
+                        />
+                        <Typography
+                            variant="subtitle2"
+                            sx={{
+                                fontWeight: 700,
+                                fontSize: "0.9rem",
+                                display: { xs: "none", sm: "block" },
+                                letterSpacing: "-0.3px",
+                            }}
+                        >
                             License Manager
-                        </Box>
-                    </Button>
+                        </Typography>
+                    </Box>
 
-                    {/* Desktop Nav Items */}
+                    {/* Desktop Nav Items - Unified with proper spacing */}
                     {!isMobile && (
-                        <Stack direction="row" spacing={0} sx={{ flex: 1, ml: 3 }} aria-label="Primary sections">
+                        <Stack
+                            direction="row"
+                            spacing={0}
+                            sx={{
+                                flex: 1,
+                                ml: 3,
+                                display: "flex",
+                                alignItems: "center",
+                            }}
+                            aria-label="Primary sections"
+                        >
+                            {/* Dashboard */}
                             <Button
                                 component={RouterLink}
                                 to="/dashboard"
-                                startIcon={<Gauge size={16} aria-hidden="true" />}
                                 sx={{
+                                    px: { md: 1.5, lg: 2 },
+                                    py: 0.5,
+                                    height: 40,
                                     color: isDashActive ? muiTheme.palette.primary.main : muiTheme.palette.text.primary,
                                     textTransform: "none",
-                                    fontSize: "0.95rem",
+                                    fontSize: "0.9rem",
                                     fontWeight: isDashActive ? 600 : 500,
-                                    backgroundColor: isDashActive ? muiTheme.palette.primary.light : 'transparent',
+                                    backgroundColor: "transparent",
+                                    borderBottom: isDashActive ? `2px solid ${muiTheme.palette.primary.main}` : "2px solid transparent",
+                                    borderRadius: 0,
+                                    transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
                                     "&:hover": {
                                         backgroundColor: muiTheme.palette.action.hover,
+                                    },
+                                    "&:focus-visible": {
+                                        outline: `2px solid ${muiTheme.palette.primary.main}`,
+                                        outlineOffset: "2px",
                                     },
                                 }}
                             >
                                 Dashboard
                             </Button>
 
+                            {/* Primary nav menus */}
                             {visibleGroups.map(group => (
                                 <NavMenu
                                     key={group.label}
-                                    icon={group.icon}
                                     label={group.label}
                                     isActive={isGroupActive(group.items)}
                                     items={group.items.map(item => (
@@ -318,9 +376,9 @@ export default function TopNav() {
                                 />
                             ))}
 
+                            {/* Reports menu */}
                             {hasAnyRole(REPORT_ROLES) && (
                                 <NavMenu
-                                    icon="bar-chart-line"
                                     label="Reports"
                                     isActive={isGroupActive(reportEntities)}
                                     items={reportEntities.map(r => (
@@ -335,8 +393,8 @@ export default function TopNav() {
                                 />
                             )}
 
+                            {/* Masters menu */}
                             <NavMenu
-                                icon="database"
                                 label="Masters"
                                 isActive={isGroupActive(masterEntities)}
                                 items={masterEntities.filter(m => !m.deprecated).map(m => (
@@ -352,16 +410,37 @@ export default function TopNav() {
                         </Stack>
                     )}
 
-                    {/* Right-side controls */}
-                    <Stack direction="row" spacing={0.5} sx={{ ml: "auto", display: "flex", alignItems: "center" }} aria-label="Session controls">
+                    {/* Right-side controls - Icon buttons only, proper spacing */}
+                    <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{
+                            ml: "auto",
+                            display: "flex",
+                            alignItems: "center",
+                            flexShrink: 0,
+                        }}
+                        aria-label="Session controls"
+                    >
                         {/* Search button */}
                         <IconButton
                             onClick={openCmd}
-                            aria-label="Search (⌘K)"
-                            title="Search ⌘K"
+                            aria-label="Search (⌘K or Ctrl+K)"
+                            title="Search"
                             size="small"
                             sx={{
                                 display: { xs: "none", sm: "flex" },
+                                width: 40,
+                                height: 40,
+                                color: muiTheme.palette.text.secondary,
+                                "&:hover": {
+                                    color: muiTheme.palette.text.primary,
+                                    backgroundColor: muiTheme.palette.action.hover,
+                                },
+                                "&:focus-visible": {
+                                    outline: `2px solid ${muiTheme.palette.primary.main}`,
+                                    outlineOffset: "2px",
+                                },
                             }}
                         >
                             <Search size={18} aria-hidden="true" />
@@ -373,6 +452,19 @@ export default function TopNav() {
                             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                             title={theme === "dark" ? "Light mode" : "Dark mode"}
                             size="small"
+                            sx={{
+                                width: 40,
+                                height: 40,
+                                color: muiTheme.palette.text.secondary,
+                                "&:hover": {
+                                    color: muiTheme.palette.text.primary,
+                                    backgroundColor: muiTheme.palette.action.hover,
+                                },
+                                "&:focus-visible": {
+                                    outline: `2px solid ${muiTheme.palette.primary.main}`,
+                                    outlineOffset: "2px",
+                                },
+                            }}
                         >
                             {theme === "dark" ? (
                                 <Sun size={18} aria-hidden="true" />
@@ -388,7 +480,9 @@ export default function TopNav() {
                                     onClick={handleUserMenuClick}
                                     size="small"
                                     sx={{
-                                        ml: 1,
+                                        width: 40,
+                                        height: 40,
+                                        ml: 0.5,
                                     }}
                                     aria-label={`User menu for ${user.username}`}
                                     aria-haspopup="menu"
@@ -398,8 +492,9 @@ export default function TopNav() {
                                         sx={{
                                             width: 32,
                                             height: 32,
-                                            fontSize: "0.85rem",
+                                            fontSize: "0.8rem",
                                             backgroundColor: muiTheme.palette.primary.main,
+                                            fontWeight: 600,
                                         }}
                                     >
                                         {user.username.charAt(0).toUpperCase()}
@@ -416,6 +511,16 @@ export default function TopNav() {
                                     transformOrigin={{
                                         vertical: "top",
                                         horizontal: "right",
+                                    }}
+                                    slotProps={{
+                                        paper: {
+                                            sx: {
+                                                minWidth: 220,
+                                                backgroundColor: muiTheme.palette.background.paper,
+                                                backgroundImage: "none",
+                                                boxShadow: muiTheme.shadows[2],
+                                            },
+                                        },
                                     }}
                                 >
                                     <Box sx={{ px: 2, py: 1 }}>
@@ -479,6 +584,13 @@ export default function TopNav() {
                             size="small"
                             sx={{
                                 display: { xs: "flex", md: "none" },
+                                width: 40,
+                                height: 40,
+                                color: muiTheme.palette.text.secondary,
+                                "&:hover": {
+                                    color: muiTheme.palette.text.primary,
+                                    backgroundColor: muiTheme.palette.action.hover,
+                                },
                             }}
                         >
                             <Menu size={20} aria-hidden="true" />
@@ -496,7 +608,7 @@ export default function TopNav() {
                 data-testid="mobile-nav-drawer"
                 sx={{
                     "& .MuiDrawer-paper": {
-                        width: { xs: "100%", sm: 300 },
+                        width: { xs: "100%", sm: 320 },
                     },
                 }}
             >

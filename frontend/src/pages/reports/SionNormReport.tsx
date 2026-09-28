@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
+import { Box, Paper, Stack, Typography, Chip, useTheme } from "@mui/material";
 import api from "../../api/axios";
 import { toast } from "sonner";
 import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
 import PageHeader from "@/components/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { buildSionReportPath, formatReportNumber, getSionReportGroups, normalizeBooleanFilter } from "./sionNormReportUtils";
 
@@ -272,13 +272,16 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
         </div>
     );
 
+    const theme = useTheme();
+
     if (loading) {
         return (
             <>
                 <PageHeader pretitle="Reports" title={title} />
-                <div className="flex items-center gap-2 p-6 text-muted-foreground">
-                    <Loader2 className="size-5 animate-spin text-primary" aria-hidden="true" /> Loading…
-                </div>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 3, color: 'text.secondary' }}>
+                    <Loader2 className="size-5 animate-spin" style={{ color: theme.palette.primary.main }} aria-hidden="true" />
+                    <Typography variant="body2">Loading…</Typography>
+                </Box>
             </>
         );
     }
@@ -289,8 +292,12 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
         return (
             <>
                 <PageHeader pretitle="Reports" title={title} />
-                <Card className="mb-4"><CardContent className="pt-5"><FilterRadios /></CardContent></Card>
-                <p className="text-sm text-muted-foreground">No records found for SION Norm {sionNorm}</p>
+                <Paper elevation={0} sx={{ mb: 2, p: 2, border: `1px solid ${theme.palette.divider}`, borderRadius: 1 }}>
+                    <FilterRadios />
+                </Paper>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    No records found for SION Norm {sionNorm}
+                </Typography>
             </>
         );
     }
@@ -305,7 +312,9 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
             <PageHeader pretitle="Reports" title={title} />
 
             {/* Filters */}
-            <Card className="mb-4"><CardContent className="pt-5"><FilterRadios /></CardContent></Card>
+            <Paper elevation={0} sx={{ mb: 2, p: 2, border: `1px solid ${theme.palette.divider}`, borderRadius: 1 }}>
+                <FilterRadios />
+            </Paper>
 
             {/* Active Filters Display */}
             <SionNormReportActiveFiltersDisplay
@@ -326,20 +335,22 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
             />
 
             {/* Summary cards */}
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Box sx={{ mb: 4, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
                 {[
                     ["Total Licenses", sionGroup.license_count],
                     ["Total CIF", formatNumber(totals.total_cif)],
                     ["Balance CIF", formatNumber(totals.balance_cif)],
                 ].map(([label, value]) => (
-                    <Card key={label}>
-                        <CardContent className="pt-5">
-                            <div className="text-xs font-medium text-muted-foreground">{label}</div>
-                            <div className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums">{value}</div>
-                        </CardContent>
-                    </Card>
+                    <Paper key={label} elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, p: 2 }}>
+                        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontWeight: 500, mb: 1 }}>
+                            {label}
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {value}
+                        </Typography>
+                    </Paper>
                 ))}
-            </div>
+            </Box>
 
             {/* Tables by notification */}
             {notifications.map((notifGroup, notifIndex) => {
@@ -347,45 +358,54 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
                 const notificationNumber = notifGroup.notification_number || "—";
 
                 return (
-                <div key={`${notificationNumber}-${notifIndex}`} className="mb-4">
-                    <div className="mb-3 flex items-center gap-3 rounded-md bg-muted px-3 py-2">
-                        <span className="text-sm font-semibold text-foreground">Notification: {notificationNumber}</span>
-                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{notifGroup.license_count ?? licenses.length} licenses</span>
-                    </div>
-                    <Card>
-                        <CardContent className="p-0">
-                            <div className="overflow-auto" style={{maxHeight: '600px'}}>
-                                <table className="w-full border-collapse">
-                                    {renderTableHeaders()}
-                                    <tbody>
-                                        {licenses.map((license) => {
-                                            globalSrNo++;
-                                            return renderLicenseRow(license, globalSrNo - 1);
-                                        })}
-                                        {renderTotalsRow(notifGroup.totals, `Total - ${notificationNumber}`)}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                <Box key={`${notificationNumber}-${notifIndex}`} sx={{ mb: 3 }}>
+                    <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            Notification: {notificationNumber}
+                        </Typography>
+                        <Chip
+                            label={`${notifGroup.license_count ?? licenses.length} licenses`}
+                            size="small"
+                            variant="outlined"
+                        />
+                    </Stack>
+                    <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
+                        <Box sx={{ overflow: 'auto', maxHeight: '600px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                {renderTableHeaders()}
+                                <tbody>
+                                    {licenses.map((license) => {
+                                        globalSrNo++;
+                                        return renderLicenseRow(license, globalSrNo - 1);
+                                    })}
+                                    {renderTotalsRow(notifGroup.totals, `Total - ${notificationNumber}`)}
+                                </tbody>
+                            </table>
+                        </Box>
+                    </Paper>
+                </Box>
                 );
             })}
 
             {/* Grand total */}
-            <Card className="mt-4 border-success/40">
-                <div className="rounded-t-xl border-b border-success/30 bg-success/10 px-4 py-2.5 text-sm font-semibold text-success">
-                    Grand Total — SION Norm {sionNorm}
-                </div>
-                <CardContent className="p-0">
-                    <div className="overflow-auto">
-                        <table className="w-full border-collapse">
-                            {renderTableHeaders()}
-                            <tbody>{renderTotalsRow(totals, "Grand Total")}</tbody>
-                        </table>
-                    </div>
-                </CardContent>
-            </Card>
+            <Paper elevation={0} sx={{ mt: 3, border: `1px solid ${theme.palette.success.main}33`, borderRadius: 1, overflow: 'hidden' }}>
+                <Box sx={{
+                    backgroundColor: theme.palette.success.main + '15',
+                    borderBottom: `1px solid ${theme.palette.success.main}33`,
+                    px: 3,
+                    py: 1.5,
+                }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
+                        Grand Total — SION Norm {sionNorm}
+                    </Typography>
+                </Box>
+                <Box sx={{ overflow: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        {renderTableHeaders()}
+                        <tbody>{renderTotalsRow(totals, "Grand Total")}</tbody>
+                    </table>
+                </Box>
+            </Paper>
         </>
     );
 }

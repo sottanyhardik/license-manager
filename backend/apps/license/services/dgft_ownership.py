@@ -59,7 +59,8 @@ def fetch_scrip_ownership(
 
     Args:
         proxy:   Optional proxy URL (e.g., "http://proxy.example.com:8080" or "socks5://proxy.example.com:1080")
-                 If not provided, will check DGFT_PROXY environment variable.
+                 If not provided, will check DGFT_PROXY or DGFT_HTTP_PROXY environment variable.
+                 Useful for CloudFront WAF bypass on production servers.
         aws_alb: Optional AWSALB sticky-session cookie. DGFT now sits behind an
                  AWS load balancer; without this, requests can be routed to a
                  backend instance that doesn't recognize JSESSIONID.
@@ -99,7 +100,7 @@ def fetch_scrip_ownership(
     }
 
     # Get proxy from parameter or environment variable
-    proxy_url = _clean_optional(proxy) or _clean_optional(os.getenv("DGFT_PROXY"))
+    proxy_url = _clean_optional(proxy) or _clean_optional(os.getenv("DGFT_PROXY")) or _clean_optional(os.getenv("DGFT_HTTP_PROXY"))
     proxies = None
 
     if proxy_url:
@@ -107,6 +108,7 @@ def fetch_scrip_ownership(
             "http": proxy_url,
             "https": proxy_url,
         }
+        logger.info("Using proxy for DGFT request: %s", proxy_url[:50] if len(proxy_url) > 50 else proxy_url)
 
     logger.debug("Fetching scrip ownership for %s issued %s (IEC: %s)", required_values["scrip_number"], required_values["scrip_issue_date"], required_values["iec_number"])
 

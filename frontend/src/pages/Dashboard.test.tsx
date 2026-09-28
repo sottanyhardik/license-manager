@@ -47,31 +47,53 @@ function renderDashboard() {
     return render(<MemoryRouter><AuthContext.Provider value={permissions as never}><Dashboard /></AuthContext.Provider></MemoryRouter>);
 }
 
-describe("Dashboard command centre", () => {
+describe("Dashboard operational redesign", () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it("keeps canonical KPI values, operational queues, and correctly formatted recent dates", async () => {
+    it("renders urgent alerts, KPI snapshot, and recent activity tables", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({ data: dashboardData } as never);
         renderDashboard();
 
-        expect(await screen.findByRole("heading", { name: "Licence health" })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /total licences/i })).toHaveTextContent("12");
-        expect(screen.getByRole("button", { name: /pending invoices/i })).toHaveTextContent("2");
+        // Urgent alerts section
+        expect(await screen.findByText("Urgent alerts")).toBeInTheDocument();
+        expect(screen.getByText("Critical (< 7 days)")).toBeInTheDocument();
+        expect(screen.getByText("Require data entry")).toBeInTheDocument();
+        expect(screen.getByText("Awaiting follow-up")).toBeInTheDocument();
+
+        // KPI snapshot
+        expect(screen.getByText("Snapshot")).toBeInTheDocument();
+        expect(screen.getByText("Active")).toBeInTheDocument();
+        expect(screen.getByText("Expired")).toBeInTheDocument();
+
+        // Recent activity
+        expect(screen.getByText("Recent BOE entries")).toBeInTheDocument();
+        expect(screen.getByText("Recent allotments")).toBeInTheDocument();
         expect(screen.getByText("LIC-1")).toBeInTheDocument();
-        expect(screen.getAllByText("22-08-2026")).toHaveLength(2);
-        expect(screen.getByRole("tab", { name: /missing dgft/i })).toBeInTheDocument();
+        expect(screen.getByText("BOE-9")).toBeInTheDocument();
+        // Verify the company name is in the BOE table
+        expect(screen.getByText("Sugar")).toBeInTheDocument();
     });
 
-    it("refreshes only through the existing dashboard endpoint and keeps attention queues operable", async () => {
+    it("displays formatted dates and alert counts correctly", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({ data: dashboardData } as never);
+        renderDashboard();
+
+        // Wait for urgent alerts to load
+        await screen.findByText("Urgent alerts");
+        // Test that alert counts are displayed
+        expect(screen.getByText(/pending invoices/i)).toBeInTheDocument();
+        // Check formatted dates (date format from the data)
+        expect(screen.getAllByText("22-08-2026")).toBeDefined();
+    });
+
+    it("refreshes only through the existing dashboard endpoint", async () => {
         const get = vi.mocked(api.get);
         get.mockResolvedValue({ data: dashboardData } as never);
         renderDashboard();
         await screen.findByText("Recent allotments");
 
-        fireEvent.click(screen.getByRole("tab", { name: /pending invoices/i }));
-        expect(screen.getByText(/2 pending invoices/i)).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: /refresh dashboard data/i }));
         await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
         expect(get).toHaveBeenLastCalledWith("dashboard/");

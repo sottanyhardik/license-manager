@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useRef, useLayoutEffect} from "react";
+import React, {useEffect, useState, useCallback, useRef, useLayoutEffect, useMemo} from "react";
 import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import ConditionBadge from "../../components/ConditionBadge";
 import api from "../../api/axios";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeftRight, Bell, Calculator, CalendarDays, FileSpreadsheet, FileText, Filter, Inbox, Info, Loader2, Package, RefreshCw, StickyNote, Tag, Target, TriangleAlert, XCircle } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
@@ -120,6 +121,62 @@ const ACTION_PILL_BASE = {
 const PURCHASE_STATUS_STYLES = PURCHASE_STATUS_PALETTE;
 const UNKNOWN_PS_STYLE = PURCHASE_STATUS_UNKNOWN;
 
+// Action button styles using design system colors instead of hardcoded hex values
+const ACTION_BUTTON_STYLES = {
+    condition: {
+        color: 'var(--tb-warning-text)',
+        backgroundColor: 'var(--tb-warning-soft)',
+        border: '1px solid var(--tb-warning-border, #FAC9A8)',
+        ariaLabel: 'View condition sheet'
+    },
+    transfer: {
+        color: 'var(--tb-info-text)',
+        backgroundColor: 'var(--tb-info-soft)',
+        border: '1px solid var(--tb-info-border, #BBD4ED)',
+        ariaLabel: 'View transfer status'
+    },
+    replan: {
+        color: 'var(--tb-brand-active)',
+        backgroundColor: 'var(--tb-brand-50)',
+        border: '1px solid var(--tb-brand-100)',
+        ariaLabel: 'Re-plan this license'
+    },
+    note: {
+        color: 'var(--tb-danger-text)',
+        backgroundColor: 'var(--tb-danger-soft)',
+        border: '1px solid var(--tb-danger-border, #F0B8B8)',
+        ariaLabel: 'Add or view notes'
+    }
+};
+
+// Helper component for action buttons with accessibility support
+function ActionButton({ icon: Icon, label, onClick, disabled, available, style, ariaLabel }) {
+    if (!available && disabled) {
+        return (
+            <button
+                type="button"
+                disabled
+                title={`No ${label.toLowerCase()} is available`}
+                style={{...ACTION_PILL_BASE, opacity: .5}}
+                aria-label={`No ${label.toLowerCase()} is available`}
+            >
+                {label}
+            </button>
+        );
+    }
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            style={{...ACTION_PILL_BASE, ...style}}
+            aria-label={ariaLabel || label}
+        >
+            <Icon className="size-3.5" aria-hidden="true" />
+            {label}
+        </button>
+    );
+}
+
 function PurchaseStatusBadge({ code, label }) {
     if (!code) return null;
     const s = PURCHASE_STATUS_STYLES[code] || UNKNOWN_PS_STYLE;
@@ -224,7 +281,7 @@ function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, se
                             return <td key={`${item.key}-${key}`} className={cn('border p-2', ['total_qty','allotted_qty','debited_qty','balance_qty','restriction_value','plan_qty','planned_cif'].includes(key) && 'text-right', key === 'debited_qty' && 'text-orange-700', key === 'allotted_qty' && 'text-blue-700', key === 'balance_qty' && 'text-green-700')} style={bg}>{display}</td>;
                         });
                     });
-                    return <tr key={license.license_id} className={cn('align-middle hover:bg-muted/40', license.issue_count && 'border-l-4 border-l-red-600')}><td className="sticky left-0 z-10 border bg-background p-2 text-right">{index + 1}</td><td className="dfia-sticky-cell sticky z-20 border bg-background p-2" style={{left: 58, pointerEvents: 'auto'}}><Link to={`/licenses/${license.license_id}/overview`} className="font-semibold text-primary underline hover:text-primary/80 focus-visible:outline focus-visible:outline-2">{license.license_number}</Link>{license.highest_issue && <Badge variant="destructive" className="ml-1 text-[10px]">{license.highest_issue.replace('_', ' ')}</Badge>}<div className="mt-1 flex flex-col gap-1 text-[11px]">{license.condition_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onCondition(license); }} style={{...ACTION_PILL_BASE, color: '#92610a', backgroundColor: 'rgba(234,179,8,0.13)', border: '1px solid rgba(234,179,8,0.45)'}}><FileText className="size-3.5" />Condition</button> : <button type="button" disabled title="No condition sheet is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Condition</button>}{license.transfer_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onTransfer(license); }} style={{...ACTION_PILL_BASE, color: '#1d4ed8', backgroundColor: 'rgba(59,130,246,0.13)', border: '1px solid rgba(59,130,246,0.45)'}}><ArrowLeftRight className="size-3.5" />Transfer</button> : <button type="button" disabled title="No transfer status is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Transfer</button>}<button type="button" onClick={(event) => { event.stopPropagation(); onReplan(license); }} style={{...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid #a5b4fc'}}><Target className="size-3.5" />Re Plan me</button></div></td><td className="border p-2 whitespace-nowrap">{license.expiry_date || '—'}</td><td className="border p-2 min-w-48 whitespace-normal">{license.exporter || '—'}</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className={cn('border p-2 text-right whitespace-nowrap', key === 'debited_cif' && 'text-orange-700', key === 'allotted_cif' && 'text-blue-700', key === 'balance_cif' && 'text-green-700')}>{pivotNumber(license[key], 2)}</td>)}<td className="border p-2 text-center">{license.issue_count ? <button type="button" onClick={() => onIssue(license)}><Badge variant="destructive">{license.issue_count} Issues</Badge></button> : <Badge variant="secondary" className="text-green-700">OK</Badge>}</td>{pivotCells}</tr>;
+                    return <tr key={license.license_id} className={cn('align-middle hover:bg-muted/40', license.issue_count && 'border-l-4 border-l-red-600')}><td className="sticky left-0 z-10 border bg-background p-2 text-right">{index + 1}</td><td className="dfia-sticky-cell sticky z-20 border bg-background p-2" style={{left: 58, pointerEvents: 'auto'}}><Link to={`/licenses/${license.license_id}/overview`} className="font-semibold text-primary underline hover:text-primary/80 focus-visible:outline focus-visible:outline-2">{license.license_number}</Link>{license.highest_issue && <Badge variant="destructive" className="ml-1 text-[10px]">{license.highest_issue.replace('_', ' ')}</Badge>}<div className="mt-1 flex flex-col gap-1 text-[11px]">{license.condition_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onCondition(license); }} style={{...ACTION_PILL_BASE, color: 'var(--tb-warning-text)', backgroundColor: 'var(--tb-warning-soft)', border: '1px solid var(--tb-warning-border, #FAC9A8)'}}><FileText className="size-3.5" aria-hidden="true" />Condition</button> : <button type="button" disabled title="No condition sheet is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Condition</button>}{license.transfer_available ? <button type="button" onClick={(event) => { event.stopPropagation(); onTransfer(license); }} style={{...ACTION_PILL_BASE, color: 'var(--tb-info-text)', backgroundColor: 'var(--tb-info-soft)', border: '1px solid var(--tb-info-border, #BBD4ED)'}}><ArrowLeftRight className="size-3.5" aria-hidden="true" />Transfer</button> : <button type="button" disabled title="No transfer status is available" style={{...ACTION_PILL_BASE, opacity: .5}}>Transfer</button>}<button type="button" onClick={(event) => { event.stopPropagation(); onReplan(license); }} style={{...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid var(--tb-brand-100)'}}><Target className="size-3.5" aria-hidden="true" />Re Plan me</button></div></td><td className="border p-2 whitespace-nowrap">{license.expiry_date || '—'}</td><td className="border p-2 min-w-48 whitespace-normal">{license.exporter || '—'}</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className={cn('border p-2 text-right whitespace-nowrap', key === 'debited_cif' && 'text-orange-700', key === 'allotted_cif' && 'text-blue-700', key === 'balance_cif' && 'text-green-700')}>{pivotNumber(license[key], 2)}</td>)}<td className="border p-2 text-center">{license.issue_count ? <button type="button" onClick={() => onIssue(license)}><Badge variant="destructive">{license.issue_count} Issues</Badge></button> : <Badge variant="secondary" className="text-green-700">OK</Badge>}</td>{pivotCells}</tr>;
                 })}<tr className="border-t-4 border-double border-slate-400 bg-slate-200 font-bold"><td className="sticky left-0 z-10 border bg-slate-200 p-2 text-right" colSpan={2}>TOTAL — {group.license_count} LICENCES</td><td className="border bg-slate-200 p-2">—</td><td className="border bg-slate-200 p-2">—</td>{['total_cif','debited_cif','allotted_cif','planned_cif','balance_cif'].map(key => <td key={key} className="border bg-slate-200 p-2 text-right whitespace-nowrap">{pivotNumber(group.totals?.[key], 2)}</td>)}<td className="border bg-slate-200 p-2">{group.issue_license_count || 'OK'}</td><PivotTotalCells group={group} /></tr></tbody></table></div></CardContent>
         </Card> : null})}
     </div>;
@@ -669,6 +726,32 @@ export default function ItemPivotReport() {
                 />
             )}
 
+            {/* Active Filters Display */}
+            <ItemPivotReportActiveFiltersDisplay
+                filters={{
+                    selectedCompanies,
+                    excludeCompanies,
+                    minBalance,
+                    licenseStatus,
+                    expiryDateFrom,
+                    expiryDateTo,
+                    purchaseStatus,
+                }}
+                onRemoveFilter={(key) => {
+                    switch (key) {
+                        case 'selectedCompanies': setSelectedCompanies([]); break;
+                        case 'excludeCompanies': setExcludeCompanies([]); break;
+                        case 'minBalance': setMinBalance(200); break;
+                        case 'licenseStatus': setLicenseStatus('active'); break;
+                        case 'expiryDateFrom': setExpiryDateFrom(''); break;
+                        case 'expiryDateTo': setExpiryDateTo(''); break;
+                        case 'purchaseStatus': setPurchaseStatus(purchaseStatusOptions.map(o => o.value)); break;
+                    }
+                }}
+                onClearAll={handleClearFilters}
+                purchaseStatusOptions={purchaseStatusOptions}
+            />
+
             {/* Norm Tabs — redesigned */}
             <NormCardGrid
                 availableNorms={availableNorms}
@@ -1034,7 +1117,7 @@ export default function ItemPivotReport() {
                                                                                     type="button"
                                                                                     title="View condition sheet"
                                                                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConditionModal({ licenseNumber: license.license_number, content: license.condition_sheet }); }}
-                                                                                    style={{ ...ACTION_PILL_BASE, color: '#92610a', backgroundColor: 'rgba(234,179,8,0.13)', border: '1px solid rgba(234,179,8,0.45)' }}
+                                                                                    style={{ ...ACTION_PILL_BASE, color: 'var(--tb-warning-text)', backgroundColor: 'var(--tb-warning-soft)', border: '1px solid var(--tb-warning-border, #FAC9A8)' }}
                                                                                 >
                                                                                     <FileText className="size-3.5 shrink-0" aria-hidden="true" />
                                                                                     Condition
@@ -1045,7 +1128,7 @@ export default function ItemPivotReport() {
                                                                                     type="button"
                                                                                     title="View transfer status"
                                                                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTransferModal({ licenseNumber: license.license_number, content: license.latest_transfer }); }}
-                                                                                    style={{ ...ACTION_PILL_BASE, color: '#1d4ed8', backgroundColor: 'rgba(59,130,246,0.13)', border: '1px solid rgba(59,130,246,0.45)' }}
+                                                                                    style={{ ...ACTION_PILL_BASE, color: 'var(--tb-info-text)', backgroundColor: 'var(--tb-info-soft)', border: '1px solid var(--tb-info-border, #BBD4ED)' }}
                                                                                 >
                                                                                     <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden="true" />
                                                                                     Transfer
@@ -1056,7 +1139,7 @@ export default function ItemPivotReport() {
                                                                                     type="button"
                                                                                     title="View notes"
                                                                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setNoteModal({ licenseNumber: license.license_number, content: license.balance_report_notes }); }}
-                                                                                    style={{ ...ACTION_PILL_BASE, color: '#b91c1c', backgroundColor: 'rgba(239,68,68,0.13)', border: '1px solid rgba(239,68,68,0.45)' }}
+                                                                                    style={{ ...ACTION_PILL_BASE, color: 'var(--tb-danger-text)', backgroundColor: 'var(--tb-danger-soft)', border: '1px solid var(--tb-danger-border, #F0B8B8)' }}
                                                                                 >
                                                                                     <StickyNote className="size-3.5 shrink-0" aria-hidden="true" />
                                                                                     Note
@@ -1066,7 +1149,7 @@ export default function ItemPivotReport() {
                                                                                 type="button"
                                                                                 title={license.plan_source === 'manual' ? 'Re-plan utilization (already planned)' : 'Plan utilization'}
                                                                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPlanLicense({ id: license.id, number: license.license_number, balance: Number(license.balance_cif || 0) }); setShowPlanModal(true); }}
-                                                                                style={{ ...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid #a5b4fc' }}
+                                                                                style={{ ...ACTION_PILL_BASE, color: 'var(--tb-brand-active)', backgroundColor: 'var(--tb-brand-50)', border: '1px solid var(--tb-brand-100)' }}
                                                                             >
                                                                                 <Target className="size-3.5 shrink-0" aria-hidden="true" />
                                                                                 {license.plan_source === 'manual' ? 'Re Plan me' : 'Plan me'}
@@ -1726,6 +1809,111 @@ export default function ItemPivotReport() {
                 licenseNumber={planLicense?.number}
                 balanceCif={planLicense?.balance || 0}
                 onSaved={() => { if (activeNormTab) loadReport(activeNormTab); }}
+            />
+        </div>
+    );
+}
+
+/**
+ * ItemPivotReportActiveFiltersDisplay — shows all active filters with individual remove buttons
+ */
+function ItemPivotReportActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+    purchaseStatusOptions,
+}: {
+    filters: {
+        selectedCompanies: unknown[];
+        excludeCompanies: unknown[];
+        minBalance: number;
+        licenseStatus: string;
+        expiryDateFrom: string;
+        expiryDateTo: string;
+        purchaseStatus: string[];
+    };
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+    purchaseStatusOptions: { value: string; label: string }[];
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // Companies
+        if (filters.selectedCompanies.length > 0) {
+            items.push({
+                key: 'selectedCompanies',
+                label: 'Companies',
+                value: `${filters.selectedCompanies.length} selected`,
+            });
+        }
+
+        // Exclude Companies
+        if (filters.excludeCompanies.length > 0) {
+            items.push({
+                key: 'excludeCompanies',
+                label: 'Exclude Companies',
+                value: `${filters.excludeCompanies.length} excluded`,
+            });
+        }
+
+        // Min Balance
+        if (filters.minBalance !== 200) {
+            items.push({
+                key: 'minBalance',
+                label: 'Min Balance (CIF)',
+                value: `₹${filters.minBalance}`,
+            });
+        }
+
+        // License Status
+        if (filters.licenseStatus !== 'active') {
+            items.push({
+                key: 'licenseStatus',
+                label: 'License Status',
+                value: filters.licenseStatus,
+            });
+        }
+
+        // Purchase Status
+        const defaultPurchaseStatus = purchaseStatusOptions.map(o => o.value);
+        const isDefaultPurchaseStatus = filters.purchaseStatus.length === defaultPurchaseStatus.length &&
+            filters.purchaseStatus.every(ps => defaultPurchaseStatus.includes(ps));
+        if (!isDefaultPurchaseStatus && filters.purchaseStatus.length > 0) {
+            items.push({
+                key: 'purchaseStatus',
+                label: 'Purchase Status',
+                value: `${filters.purchaseStatus.length} selected`,
+            });
+        }
+
+        // Expiry Date Range
+        if (filters.expiryDateFrom || filters.expiryDateTo) {
+            const dateRange = [
+                filters.expiryDateFrom || '—',
+                filters.expiryDateTo || '—',
+            ].join(' to ');
+            items.push({
+                key: 'expiryDateRange',
+                label: 'Expiry Date Range',
+                value: dateRange,
+            });
+        }
+
+        return items;
+    }, [filters, purchaseStatusOptions]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={true}
             />
         </div>
     );

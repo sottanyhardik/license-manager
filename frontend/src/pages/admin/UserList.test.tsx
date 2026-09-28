@@ -92,7 +92,10 @@ describe("UserList", () => {
         expect(screen.getByText("manager")).toBeInTheDocument();
         expect(screen.getByText("No roles")).toBeInTheDocument();
         expect(screen.getByText("Inactive")).toBeInTheDocument();
-        expect(screen.getAllByRole("button", { name: "" })).toHaveLength(1);
+        // Delete button is shown for manager (non-current user)
+        expect(screen.getByRole("button", { name: "Delete user manager" })).toBeInTheDocument();
+        // Delete button is NOT shown for admin (current user)
+        expect(screen.queryByRole("button", { name: "Delete user admin" })).not.toBeInTheDocument();
     });
 
     it("debounces a text filter without replacing the page shell", async () => {

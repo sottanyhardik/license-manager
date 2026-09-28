@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import DataPagination from "@/components/DataPagination";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 
 interface PlanningOption {
     planning_target_item_id: number | null;
@@ -1192,6 +1193,61 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         defaultItemId={allocationInitialization?.default_item?.id ?? null}
                     />
 
+                    {/* Active Filters Display */}
+                    <AllotmentActionActiveFiltersDisplay
+                        filters={filters}
+                        itemFilterOptions={itemFilterOptions}
+                        notificationOptions={notificationOptions}
+                        purchaseStatusOptions={purchaseStatusOptions}
+                        onRemoveFilter={(key) => {
+                            const defaults = {
+                                description: "",
+                                exporter: "",
+                                exclude_exporter: "",
+                                license_number: "",
+                                available_quantity_gte: "50",
+                                available_quantity_lte: "",
+                                available_value_gte: "100",
+                                available_value_lte: "",
+                                notification_number: "",
+                                norm_class: "",
+                                hs_code: "",
+                                is_expired: "all",
+                                is_restricted: "all",
+                                purchase_status: purchaseStatusOptions.map(o => o.value).join(','),
+                                license_status: "active",
+                                item_id: "",
+                                expiry_date_from: "",
+                                expiry_date_to: "",
+                                debit_based_on: null as DebitBasis | null
+                            };
+                            updateFilters({ ...filters, [key]: defaults[key as keyof typeof defaults] });
+                        }}
+                        onClearAll={() => {
+                            updateFilters({
+                                description: "",
+                                exporter: "",
+                                exclude_exporter: "",
+                                license_number: "",
+                                available_quantity_gte: "50",
+                                available_quantity_lte: "",
+                                available_value_gte: "100",
+                                available_value_lte: "",
+                                notification_number: "",
+                                norm_class: "",
+                                hs_code: "",
+                                is_expired: "all",
+                                is_restricted: "all",
+                                purchase_status: purchaseStatusOptions.map(o => o.value).join(','),
+                                license_status: "active",
+                                item_id: "",
+                                expiry_date_from: "",
+                                expiry_date_to: "",
+                                debit_based_on: filters.debit_based_on
+                            });
+                        }}
+                    />
+
                     {filtersReady && (
                         <div className="mb-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
                             {filters.debit_based_on === "PLAN" ? <><strong>PLAN BALANCE MODE</strong> — Available values are based on current remaining planned Qty and CIF.</> : <><strong>ACTUAL BALANCE MODE</strong> — Available values are based on current raw licence-item availability.</>}
@@ -1480,6 +1536,247 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 onCancel={() => setCopyConfirm(false)}
             />
 
+        </div>
+    );
+}
+
+/**
+ * AllotmentActionActiveFiltersDisplay — shows all active filters with individual remove buttons
+ */
+function AllotmentActionActiveFiltersDisplay({
+    filters,
+    itemFilterOptions,
+    notificationOptions,
+    purchaseStatusOptions,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    filters: Record<string, any>;
+    itemFilterOptions: Array<{ value: any; label: string }>;
+    notificationOptions: Array<{ value: string; display_name: string }>;
+    purchaseStatusOptions: Array<{ value: string; label: string }>;
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+        const defaults = {
+            description: "",
+            exporter: "",
+            exclude_exporter: "",
+            license_number: "",
+            available_quantity_gte: "50",
+            available_quantity_lte: "",
+            available_value_gte: "100",
+            available_value_lte: "",
+            notification_number: "",
+            norm_class: "",
+            hs_code: "",
+            is_expired: "all",
+            is_restricted: "all",
+            purchase_status: purchaseStatusOptions.map(o => o.value).join(','),
+            license_status: "active",
+            item_id: "",
+            expiry_date_from: "",
+            expiry_date_to: "",
+            debit_based_on: null,
+        };
+
+        // License Number
+        if (filters.license_number && filters.license_number !== defaults.license_number) {
+            items.push({
+                key: 'license_number',
+                label: 'License Number',
+                value: filters.license_number,
+            });
+        }
+
+        // Item ID
+        if (filters.item_id && filters.item_id !== defaults.item_id) {
+            const itemLabel = itemFilterOptions.find(i => String(i.value) === String(filters.item_id))?.label || String(filters.item_id);
+            items.push({
+                key: 'item_id',
+                label: 'Item',
+                value: itemLabel,
+            });
+        }
+
+        // Norm Class
+        if (filters.norm_class && filters.norm_class !== defaults.norm_class) {
+            items.push({
+                key: 'norm_class',
+                label: 'Norm Class',
+                value: filters.norm_class,
+            });
+        }
+
+        // Exporter
+        if (filters.exporter && filters.exporter !== defaults.exporter) {
+            items.push({
+                key: 'exporter',
+                label: 'Exporter',
+                value: filters.exporter,
+            });
+        }
+
+        // Min Available Qty
+        if (filters.available_quantity_gte && filters.available_quantity_gte !== defaults.available_quantity_gte) {
+            items.push({
+                key: 'available_quantity_gte',
+                label: 'Min Available Qty',
+                value: filters.available_quantity_gte,
+            });
+        }
+
+        // Max Available Qty
+        if (filters.available_quantity_lte && filters.available_quantity_lte !== defaults.available_quantity_lte) {
+            items.push({
+                key: 'available_quantity_lte',
+                label: 'Max Available Qty',
+                value: filters.available_quantity_lte,
+            });
+        }
+
+        // Min Available Value
+        if (filters.available_value_gte && filters.available_value_gte !== defaults.available_value_gte) {
+            items.push({
+                key: 'available_value_gte',
+                label: 'Min Available Value',
+                value: filters.available_value_gte,
+            });
+        }
+
+        // Max Available Value
+        if (filters.available_value_lte && filters.available_value_lte !== defaults.available_value_lte) {
+            items.push({
+                key: 'available_value_lte',
+                label: 'Max Available Value',
+                value: filters.available_value_lte,
+            });
+        }
+
+        // License Status
+        if (filters.license_status && filters.license_status !== defaults.license_status) {
+            items.push({
+                key: 'license_status',
+                label: 'License Status',
+                value: filters.license_status,
+            });
+        }
+
+        // Debit Based On
+        if (filters.debit_based_on && filters.debit_based_on !== defaults.debit_based_on) {
+            items.push({
+                key: 'debit_based_on',
+                label: 'Debit Based On',
+                value: filters.debit_based_on === 'PLAN' ? 'Plan' : 'Actual',
+            });
+        }
+
+        // Notification Number
+        if (filters.notification_number && filters.notification_number !== defaults.notification_number) {
+            const notifLabel = notificationOptions.find(n => n.value === filters.notification_number)?.display_name || filters.notification_number;
+            items.push({
+                key: 'notification_number',
+                label: 'Notification',
+                value: notifLabel,
+            });
+        }
+
+        // Item Description
+        if (filters.description && filters.description !== defaults.description) {
+            items.push({
+                key: 'description',
+                label: 'Item Description',
+                value: `"${filters.description}"`,
+            });
+        }
+
+        // Exclude Exporter
+        if (filters.exclude_exporter && filters.exclude_exporter !== defaults.exclude_exporter) {
+            items.push({
+                key: 'exclude_exporter',
+                label: 'Exclude Exporter',
+                value: filters.exclude_exporter,
+            });
+        }
+
+        // HS Code
+        if (filters.hs_code && filters.hs_code !== defaults.hs_code) {
+            items.push({
+                key: 'hs_code',
+                label: 'HS Code',
+                value: filters.hs_code,
+            });
+        }
+
+        // Is Expired
+        if (filters.is_expired && filters.is_expired !== defaults.is_expired) {
+            items.push({
+                key: 'is_expired',
+                label: 'Expired',
+                value: filters.is_expired,
+            });
+        }
+
+        // Is Restricted
+        if (filters.is_restricted && filters.is_restricted !== defaults.is_restricted) {
+            items.push({
+                key: 'is_restricted',
+                label: 'Restricted',
+                value: filters.is_restricted === 'true' ? 'Yes' : 'No',
+            });
+        }
+
+        // Purchase Status
+        if (filters.purchase_status && filters.purchase_status !== defaults.purchase_status) {
+            const selectedStatuses = filters.purchase_status.split(',').map((s: string) => {
+                const opt = purchaseStatusOptions.find(o => o.value === s);
+                return opt?.label || s;
+            });
+            items.push({
+                key: 'purchase_status',
+                label: 'Purchase Status',
+                value: selectedStatuses.join(', '),
+            });
+        }
+
+        // Expiry Date Range
+        if (filters.expiry_date_from || filters.expiry_date_to) {
+            const dateRange = [
+                filters.expiry_date_from || '—',
+                filters.expiry_date_to || '—',
+            ].join(' to ');
+            items.push({
+                key: 'expiryDateRange',
+                label: 'Expiry Date',
+                value: dateRange,
+            });
+        }
+
+        return items;
+    }, [filters, itemFilterOptions, notificationOptions, purchaseStatusOptions]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-3">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={(key) => {
+                    if (key === 'expiryDateRange') {
+                        onRemoveFilter('expiry_date_from');
+                        onRemoveFilter('expiry_date_to');
+                    } else {
+                        onRemoveFilter(key);
+                    }
+                }}
+                onClearAll={onClearAll}
+                showCount={true}
+                compact={false}
+            />
         </div>
     );
 }

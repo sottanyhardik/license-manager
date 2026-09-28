@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import api from "../../api/axios";
 import {boeApi} from "../../services/api";
 import AdvancedFilter from "../../components/AdvancedFilter";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import DataPagination from "../../components/DataPagination";
 import DataTable from "../../components/DataTable";
 import AccordionTable from "../../components/AccordionTable";
@@ -829,17 +830,17 @@ export default function MasterList() {
                 }
                 actions={
                     <>
-                        <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel">
-                            <FileSpreadsheet className="size-3.5" />
+                        <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel" aria-label="Export to Excel">
+                            <FileSpreadsheet className="size-3.5" aria-hidden="true" />
                             <span className="hidden sm:inline">Excel</span>
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} title="Export to PDF" disabled={pdfLoading}>
-                            {pdfLoading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                        <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} title="Export to PDF" disabled={pdfLoading} aria-label={pdfLoading ? "Generating PDF export" : "Export to PDF"}>
+                            {pdfLoading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">{pdfLoading ? "Generating…" : "PDF"}</span>
                         </Button>
                         {entityName === 'bill-of-entries' && (
-                            <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel">
-                                <FileSpreadsheet className="size-3.5" />
+                            <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel" aria-label="Download port-wise BOE Excel">
+                                <FileSpreadsheet className="size-3.5" aria-hidden="true" />
                                 <span className="hidden sm:inline">Port Excel</span>
                             </Button>
                         )}
@@ -920,6 +921,14 @@ export default function MasterList() {
                 defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
                 resetToDefaults={entityName === 'allotments'}
                 isUpdating={isRefreshing}
+            />
+
+            {/* Active Filters Display */}
+            <MasterListActiveFiltersDisplay
+                filterParams={filterParams}
+                defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
+                filterConfig={metadata.filter_config || {}}
+                onFilterChange={handleFilterChange}
             />
 
             {/* Table */}
@@ -1619,6 +1628,78 @@ export default function MasterList() {
                 />
             )}
 
+        </div>
+    );
+}
+
+/**
+ * ActiveFilters display for MasterList using AdvancedFilter
+ * Converts API params (with __gte, __lte suffixes) to human-readable filter items
+ */
+function MasterListActiveFiltersDisplay({
+    filterParams,
+    defaultFilters,
+    filterConfig,
+    onFilterChange,
+}: {
+    filterParams: Record<string, any>;
+    defaultFilters: Record<string, any>;
+    filterConfig: Record<string, any>;
+    onFilterChange: (params: Record<string, any>) => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        Object.entries(filterParams).forEach(([key, value]) => {
+            // Skip empty values and defaults
+            if (value === null || value === undefined || value === '' || value === false) {
+                return;
+            }
+
+            const defaultValue = defaultFilters[key];
+            if (defaultValue !== undefined && value === defaultValue) {
+                return;
+            }
+
+            // Get field config for display
+            const fieldConfig = Object.values(filterConfig).find(
+                (f: any) => f.name === key || f.name?.replace(/__?(gte|lte|icontains|exact)$/i, '') === key
+            ) as any;
+
+            // Humanize field name
+            const label = fieldConfig?.label || key
+                .replace(/__?(gte|lte|icontains|exact)$/i, '')
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+
+            items.push({
+                key,
+                label,
+                value: String(value),
+            });
+        });
+
+        return items;
+    }, [filterParams, defaultFilters, filterConfig]);
+
+    // Don't display if no active filters
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mt-4 mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={(key) => {
+                    const newParams = { ...filterParams };
+                    delete newParams[key];
+                    onFilterChange(newParams);
+                }}
+                onClearAll={() => onFilterChange({})}
+                showCount={true}
+                compact={false}
+            />
         </div>
     );
 }

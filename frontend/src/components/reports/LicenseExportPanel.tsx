@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Download, Loader2, CheckCircle2 } from "lucide-react";
 
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { openAuthedFile } from "@/utils/documentDownload";
 import { MAX_DAYS, MIN_DAYS, normalizeExportDays } from "./licenseExportHelpers";
 
@@ -76,6 +77,15 @@ export default function LicenseExportPanel({
                             />
                             <p id={daysHelpId} className="mt-1.5 text-[11.5px] text-muted-foreground">{helpText(days)}</p>
                         </div>
+
+                        {/* Active Filters Display */}
+                        <LicenseExportPanelActiveFiltersDisplay
+                            days={days}
+                            defaultDays={defaultDays}
+                            onRemoveFilter={() => setDays(normalizeExportDays(defaultDays))}
+                            onClearAll={() => setDays(normalizeExportDays(defaultDays))}
+                        />
+
                         <Button onClick={handleExport} disabled={loading}>
                             {loading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
                             {loading ? "Generating…" : "Download Excel Report"}
@@ -100,5 +110,49 @@ export default function LicenseExportPanel({
                 )}
             </div>
         </>
+    );
+}
+
+/**
+ * LicenseExportPanelActiveFiltersDisplay — shows the active days filter
+ */
+function LicenseExportPanelActiveFiltersDisplay({
+    days,
+    defaultDays,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    days: number;
+    defaultDays: number;
+    onRemoveFilter: () => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        if (days !== defaultDays) {
+            items.push({
+                key: 'days',
+                label: 'Days Filter',
+                value: `${days} days`,
+            });
+        }
+
+        return items;
+    }, [days, defaultDays]);
+
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={false}
+            />
+        </div>
     );
 }

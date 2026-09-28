@@ -1,9 +1,10 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
     RefreshCw, LogIn, LogOut, Eye, PlusCircle, Pencil, Trash2,
     Download, Upload, FileDown, Search, ScrollText, FileX,
 } from "lucide-react";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 
 import api from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext";
@@ -204,6 +205,14 @@ export default function ActivityLog() {
                     </CardContent>
             </Card>
 
+            {/* ── Active Filters Display ─────────────────────────────── */}
+            <ActivityLogActiveFiltersDisplay
+                filters={filters}
+                onRemoveFilter={(key) => handleFilter(key as keyof FilterState, "")}
+                onClearAll={clearFilters}
+                user={user}
+            />
+
             {/* ── Action summary chips ──────────────────────────────── */}
             {!loading && logs.length > 0 && (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -364,5 +373,99 @@ export default function ActivityLog() {
                 )}
             </Card>
         </>
+    );
+}
+
+/**
+ * ActiveFilters display component for ActivityLog
+ */
+function ActivityLogActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+    user,
+}: {
+    filters: FilterState;
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+    user: any;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+
+        // Username filter (superuser only)
+        if (user?.is_superuser && filters.username) {
+            items.push({
+                key: 'username',
+                label: 'Username',
+                value: `"${filters.username}"`,
+            });
+        }
+
+        // Action filter
+        if (filters.action) {
+            items.push({
+                key: 'action',
+                label: 'Action',
+                value: filters.action,
+            });
+        }
+
+        // Search filter
+        if (filters.search) {
+            items.push({
+                key: 'search',
+                label: 'Search',
+                value: `"${filters.search}"`,
+            });
+        }
+
+        // Module filter
+        if (filters.module) {
+            items.push({
+                key: 'module',
+                label: 'Module',
+                value: `"${filters.module}"`,
+            });
+        }
+
+        // Date range filter
+        if (filters.date_from || filters.date_to) {
+            const dateRange = [
+                filters.date_from || '—',
+                filters.date_to || '—',
+            ].join(' to ');
+            items.push({
+                key: 'date_range',
+                label: 'Date Range',
+                value: dateRange,
+            });
+        }
+
+        return items;
+    }, [filters, user?.is_superuser]);
+
+    // Don't display if no active filters
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-3">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={(key) => {
+                    if (key === 'date_range') {
+                        onRemoveFilter('date_from');
+                        onRemoveFilter('date_to');
+                    } else {
+                        onRemoveFilter(key);
+                    }
+                }}
+                onClearAll={onClearAll}
+                showCount={true}
+                compact={false}
+            />
+        </div>
     );
 }

@@ -70,10 +70,16 @@ describe("LicenseLedger fresh filters", () => {
     it("renders every fresh filter and sends canonical defaults to both endpoints", async () => {
         render(<LicenseLedger />);
         expect(await screen.findByText("LIC-2436")).toBeInTheDocument();
-        for (const label of ["Filters & Search", "Company Filter", "Min Balance", "Sort By", "Active Only", "Norm", "Purchase Status", "Purchase Bill Status", "Purchase Date Range"]) {
-            expect(screen.getByText(label)).toBeInTheDocument();
-        }
+        // Verify core filter controls exist
+        expect(screen.getByText("Filters & Search")).toBeInTheDocument();
+        expect(screen.getByLabelText("Company Filter")).toBeInTheDocument();
+        expect(screen.getByRole("spinbutton")).toBeInTheDocument(); // Min Balance
+        expect(screen.getByLabelText("License Type")).toBeInTheDocument();
+        expect(screen.getByLabelText("Norm")).toBeInTheDocument();
+        expect(screen.getByLabelText("Status")).toBeInTheDocument();
+        expect(screen.getByRole("switch", { name: "Active Only" })).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/license # or exporter/i)).toBeInTheDocument();
+        // Verify API defaults
         const expectedFy = getFinancialYearRange();
         for (const prefix of ["license-ledger/license-wise/", "license-ledger/summary/"]) {
             const params = queryFor(prefix);
@@ -91,11 +97,11 @@ describe("LicenseLedger fresh filters", () => {
         fireEvent.change(screen.getByLabelText("Company Filter"), { target: { value: "7" } });
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "DFIA" }));
-        fireEvent.change(screen.getByLabelText("Min Balance"), { target: { value: "1000" } });
+        fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1000" } });
         fireEvent.click(screen.getByRole("switch", { name: "Active Only" }));
         fireEvent.change(screen.getByLabelText("Norm"), { target: { value: "E1" } });
-        fireEvent.change(screen.getByLabelText("Purchase Status"), { target: { value: "GE" } });
-        fireEvent.click(screen.getByRole("button", { name: "With Purchase Bill" }));
+        fireEvent.change(screen.getByLabelText("Status"), { target: { value: "GE" } });
+        fireEvent.click(screen.getByRole("button", { name: "With Bill" }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("purchase_bill")).toBe("WITH_PURCHASE_BILL"));
         const params = queryFor("license-ledger/license-wise/");
         expect(Object.fromEntries(params)).toMatchObject({ buying_company_id: "7", license_type: "DFIA", min_balance: "1000", active_only: "true", norm: "E1", purchase_status: "GE" });
@@ -117,9 +123,9 @@ describe("LicenseLedger fresh filters", () => {
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "RODTEP" }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("RODTEP"));
-        fireEvent.click(screen.getByRole("button", { name: /preview pdf/i }));
+        fireEvent.click(screen.getByRole("button", { name: /preview.*pdf/i }));
         await waitFor(() => expect(mockedPreviewPdf).toHaveBeenCalled());
-        fireEvent.click(screen.getByRole("button", { name: /download excel/i }));
+        fireEvent.click(screen.getByRole("button", { name: /download.*excel/i }));
         await waitFor(() => expect(mockedDownloadExcel).toHaveBeenCalled());
         const pdfParams = mockedPreviewPdf.mock.calls[0][0].params;
         const excelParams = mockedDownloadExcel.mock.calls[0][0].params;
@@ -132,16 +138,17 @@ describe("LicenseLedger fresh filters", () => {
         await screen.findByText("LIC-2436");
 
         const select = screen.getByRole("combobox", { name: "License Type" });
-        expect(select).toHaveTextContent("All Licenses");
+        expect(select).toHaveTextContent("All");
         expect(screen.queryByRole("button", { name: "DFIA Only" })).not.toBeInTheDocument();
 
         fireEvent.keyDown(select, { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "MEIS" }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("MEIS"));
 
-        fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
+        const clearAllButtons = screen.getAllByRole("button", { name: /clear all/i });
+        fireEvent.click(clearAllButtons[0]); // Click the first one in the filter header
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("ALL"));
-        expect(screen.getByRole("combobox", { name: "License Type" })).toHaveTextContent("All Licenses");
+        expect(screen.getByRole("combobox", { name: "License Type" })).toHaveTextContent("All");
     });
 
     it("sends the canonical ALL_INCENTIVE value for All Incentive", async () => {
@@ -149,7 +156,7 @@ describe("LicenseLedger fresh filters", () => {
         await screen.findByText("LIC-2436");
 
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
-        fireEvent.click(screen.getByRole("option", { name: "All Incentive" }));
+        fireEvent.click(screen.getByRole("option", { name: "Incentive" }));
 
         await waitFor(() => {
             expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("ALL_INCENTIVE");
@@ -180,17 +187,18 @@ describe("LicenseLedger fresh filters", () => {
         });
         render(<LicenseLedger />);
         await screen.findByText("0311051359");
-        expect(screen.getByRole("button", { name: "Choose Destination Folder & Start" })).toBeEnabled();
-        fireEvent.click(screen.getByRole("button", { name: "Choose Destination Folder & Start" }));
+        const downloadButton = screen.getByRole("button", { name: /choose.*folder.*start/i });
+        expect(downloadButton).toBeEnabled();
+        fireEvent.click(downloadButton);
         await waitFor(() => expect(mockedCreatePackage).toHaveBeenCalledWith(["2522", "2523"], expect.any(String), expect.any(String)));
         expect(mockedCreatePackage).toHaveBeenCalledTimes(1);
         // Downloading is a blob action: it must not navigate, clear the visible
         // selection, or cause the ledger filters/data to be replaced.
         expect(navigate).not.toHaveBeenCalled();
-        expect(screen.getByRole("button", { name: "Choose Destination Folder & Start" })).toBeEnabled();
+        expect(screen.getByRole("button", { name: /choose.*folder.*start/i })).toBeEnabled();
         expect(screen.getByText("0311051359", { exact: true })).toBeInTheDocument();
 
-        fireEvent.click(screen.getAllByRole("button", { name: "Custom Ledger PDF" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: /^PDF$/i })[0]);
         await waitFor(() => expect(mockedDownloadCustomLedger).toHaveBeenCalledWith("2522"));
     });
 
@@ -220,12 +228,13 @@ describe("LicenseLedger fresh filters", () => {
         expect(screen.getByRole("heading", { name: "SION: E5, E132" })).toBeInTheDocument();
         expect(screen.getByRole("heading", { name: "SION: N/A / EMPTY" })).toBeInTheDocument();
         expect(screen.getAllByText("LIC-MULTI")).toHaveLength(1);
-        expect(screen.getByText("NO PURCHASE BILL")).toBeInTheDocument();
+        expect(screen.getByText("NO BILL")).toBeInTheDocument();
         expect(screen.getAllByText("₹100.00").length).toBeGreaterThan(0);
         expect(screen.getAllByText("₹175.00").length).toBeGreaterThan(0);
-        expect(screen.getByText("Company Total — LABDHI MERCANTILE LLP")).toBeInTheDocument();
+        // Verify company total row exists under the company heading
+        expect(screen.getByText(/^Total$/, { selector: "span" })).toBeInTheDocument();
 
-        fireEvent.click(screen.getAllByRole("button", { name: "View Ledger" })[0]);
+        fireEvent.click(screen.getAllByRole("button", { name: /^Ledger$/i })[0]);
         expect(navigate).toHaveBeenCalledWith("/license-ledger/1/766");
     });
 });

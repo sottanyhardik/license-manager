@@ -353,8 +353,7 @@ export default function ItemReportFilters({
                                         <strong>Active Filters:</strong>
                                         {minBalance !== 200 && <span className="chip chip-primary ml-2">Min Balance: ₹{minBalance}</span>}
                                         {minAvailQty !== 0 && <span className="chip chip-primary ml-2">Min Qty: {minAvailQty}</span>}
-                                        {licenseStatus !== 'active' && <span
-                                            className="badge bg-primary ml-2">Status: {licenseStatus.replace('_', ' ')}</span>}
+                                        {licenseStatus !== 'active' && <span className="badge bg-primary ml-2">Status: {licenseStatus.replace(/_/g, ' ')}</span>}
                                         {selectedCompanies.length > 0 && <span className="chip chip-primary ml-2">Incl. Companies: {selectedCompanies.length}</span>}
                                         {excludeCompanies.length > 0 && <span className="chip chip-primary ml-2">Excl. Companies: {excludeCompanies.length}</span>}
                                         {isRestricted !== 'all' && <span className="chip chip-primary ml-2">Is Restricted: {isRestricted === 'true' ? 'Yes' : 'No'}</span>}

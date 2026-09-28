@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 import api from '../api/axios';
@@ -12,6 +12,7 @@ import EmptyState from '@/components/EmptyState';
 import AsyncSelectField from '../components/AsyncSelectField';
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import DateRangeFilter from '@/components/DateRangeFilter';
+import ActiveFilters, { type ActiveFilterItem } from '@/components/ActiveFilters';
 import { getCurrentFinancialYearRange, getPreviousFinancialYearRange } from '../utils/dateRangePresets';
 import { buildLicenseLedgerParams, defaultLicenseLedgerFilters, type LicenseLedgerFilters } from './licenseLedgerFilters';
 import { normalizeLicenseWiseData, type LicenseWiseData } from './licenseLedgerData';
@@ -63,51 +64,53 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
     }
 
     return (
-        <div className="space-y-3 p-2 sm:p-3" data-testid="transaction-ledger">
+        <div className="space-y-2 p-2 sm:p-3" data-testid="transaction-ledger">
             {licenses.map((license) => (
                 <section key={license.license_id} className="overflow-hidden rounded-md border border-border" aria-label={`Transactions for license ${license.license_number}`}>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-primary px-3 py-2 text-primary-foreground">
-                        <span className="font-bold">License {license.license_number}</span>
-                        <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
-                        <span className="text-xs text-primary-foreground/80">License date: {license.license_date}</span>
-                        <span className="text-xs text-primary-foreground/80">Expiry: {license.expiry_date}</span>
-                        {license.sion_norms && <span className="text-xs text-primary-foreground/80">SION: {license.sion_norms}</span>}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-primary px-3 py-1.5 text-primary-foreground">
+                        <span className="font-bold text-sm">License {license.license_number}</span>
+                        <span className="text-[11px] text-primary-foreground/80">{license.license_type}</span>
+                        <span className="hidden text-[11px] text-primary-foreground/80 sm:inline">Date: {license.license_date}</span>
+                        <span className="hidden text-[11px] text-primary-foreground/80 lg:inline">Expiry: {license.expiry_date}</span>
+                        {license.sion_norms && <span className="hidden text-[11px] text-primary-foreground/80 lg:inline">SION: {license.sion_norms}</span>}
                         {license.transactions[0] && (
-                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-xs font-semibold underline underline-offset-2">View details</button>
+                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-[11px] font-semibold underline underline-offset-2 hover:text-primary-foreground/80">Details</button>
                         )}
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full border-collapse text-xs">
+                        <table className="w-full border-collapse text-[12px]">
                             <thead className="sticky top-0 z-10">
                                 <tr className="border-b bg-muted/70 text-left text-muted-foreground">
-                                    <th className="px-3 py-2 font-semibold">Company</th><th className="px-3 py-2 font-semibold">SION</th>
-                                    <th className="px-3 py-2 font-semibold">Date</th><th className="px-3 py-2 font-semibold">Counterparty</th>
-                                    <th className="px-3 py-2 font-semibold">Invoice</th><th className="px-3 py-2 font-semibold">Transaction</th>
-                                    <th className="px-3 py-2 font-semibold">Product</th><th className="px-3 py-2 text-right font-semibold">FC Amount</th>
-                                    <th className="px-3 py-2 text-right font-semibold">INR Amount</th>
+                                    <th className="px-2.5 py-1.5 font-semibold">Company</th>
+                                    <th className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">SION</th>
+                                    <th className="px-2.5 py-1.5 font-semibold">Date</th>
+                                    <th className="hidden px-2.5 py-1.5 font-semibold sm:table-cell">Counterparty</th>
+                                    <th className="px-2.5 py-1.5 font-semibold">Invoice</th>
+                                    <th className="px-2.5 py-1.5 font-semibold">Type</th>
+                                    <th className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">Product</th>
+                                    <th className="px-2.5 py-1.5 text-right font-semibold">FC Amount</th>
+                                    <th className="px-2.5 py-1.5 text-right font-semibold">INR Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {license.transactions.map((transaction) => {
                                     const isPurchase = transaction.transaction_type === 'PURCHASE';
                                     return <tr key={`${transaction.transaction_type}-${transaction.trade_id}`} className={cn("border-b last:border-b-0", isPurchase ? "bg-success/[0.06]" : "bg-info/[0.06]")}>
-                                        <td className="px-3 py-2 font-medium">{transaction.company_name}</td>
-                                        <td className="px-3 py-2">{transaction.sion_norms || license.sion_norms || '—'}</td>
-                                        <td className="px-3 py-2 whitespace-nowrap">{transaction.invoice_date}</td>
-                                        <td className="px-3 py-2">{transaction.party_name}</td>
-                                        <td className="px-3 py-2 font-medium">{transaction.invoice_number}</td>
-                                        <td className="px-3 py-2"><Badge variant={isPurchase ? 'default' : 'info'} className={cn("text-[10px]", isPurchase && "bg-success hover:bg-success")}>{transaction.transaction_type}</Badge></td>
-                                        <td className="px-3 py-2">{transaction.item_names.join(', ') || '—'}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{fmtFc(transaction.amount)}</td>
-                                        <td className="px-3 py-2 text-right font-medium tabular-nums">{fmtInr(transaction.bill_amount)}</td>
+                                        <td className="px-2.5 py-1 font-medium">{transaction.company_name}</td>
+                                        <td className="hidden px-2.5 py-1 lg:table-cell text-[11px]">{transaction.sion_norms || license.sion_norms || '—'}</td>
+                                        <td className="px-2.5 py-1 whitespace-nowrap text-[11px]">{transaction.invoice_date}</td>
+                                        <td className="hidden px-2.5 py-1 text-[11px] sm:table-cell">{transaction.party_name}</td>
+                                        <td className="px-2.5 py-1 font-medium text-[11px]">{transaction.invoice_number}</td>
+                                        <td className="px-2.5 py-1"><Badge variant={isPurchase ? 'default' : 'info'} className={cn("text-[9px]", isPurchase && "bg-success hover:bg-success")}>{transaction.transaction_type}</Badge></td>
+                                        <td className="hidden px-2.5 py-1 text-[11px] lg:table-cell">{transaction.item_names.join(', ') || '—'}</td>
+                                        <td className="px-2.5 py-1 text-right tabular-nums text-[11px]">{fmtFc(transaction.amount)}</td>
+                                        <td className="px-2.5 py-1 text-right font-medium tabular-nums text-[11px]">{fmtInr(transaction.bill_amount)}</td>
                                     </tr>;
                                 })}
                                 <tr className="border-t-2 border-primary bg-primary/5 font-bold">
-                                    <td colSpan={6} className="px-3 py-2 uppercase">License Total</td>
-                                    <td className="px-3 py-2 text-muted-foreground">Purchase / Sale</td>
-                                    <td className="px-3 py-2 text-right tabular-nums">{fmtFc(license.purchase_total)} / {fmtFc(license.sale_total)}</td>
-                                    <td className={cn("px-3 py-2 text-right tabular-nums", license.profit_loss >= 0 ? "text-success" : "text-destructive")}>
-                                        {fmtInr(license.purchase_bill_total)} / {fmtInr(license.sale_bill_total)} · Balance {fmtFc(license.current_balance)}
+                                    <td colSpan={8} className="px-2.5 py-1.5 text-xs uppercase">License Total</td>
+                                    <td className={cn("px-2.5 py-1.5 text-right tabular-nums text-[11px]", license.profit_loss >= 0 ? "text-success" : "text-destructive")}>
+                                        {fmtInr(license.purchase_bill_total)} / {fmtInr(license.sale_bill_total)}
                                     </td>
                                 </tr>
                             </tbody>
@@ -139,50 +142,56 @@ function LicenseWiseLedger({
 
     if (company_groups.length > 0) {
         return (
-        <div className="space-y-3 p-2 sm:p-3" data-testid="company-sion-ledger">
+        <div className="space-y-2 p-2 sm:p-3" data-testid="company-sion-ledger">
                 {company_groups.map((company) => (
                     <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-md border border-border">
-                        <h2 className="flex items-center gap-2 bg-primary px-3 py-2 text-sm font-bold text-primary-foreground">
+                        <h2 className="flex items-center gap-2 bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
                             <Building2 className="size-4" aria-hidden="true" />{company.company_name}
                         </h2>
-                        <div className="space-y-3 p-2 sm:p-3">
+                        <div className="space-y-2 p-2 sm:p-3">
                             {company.sion_groups.map((sion) => (
                                 <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded border border-border">
-                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 bg-muted px-3 py-2">
-                                        <h3 className="text-sm font-bold text-foreground">SION: {sion.label}</h3>
-                                        <span className="text-xs text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
-                                        <span className="ml-auto text-xs tabular-nums">Purchase {fmt(sion.total_purchase_bill_inr)}</span>
-                                        <span className="text-xs tabular-nums">Sale {fmt(sion.total_sale_bill_inr)}</span>
-                                        <span className={cn("text-xs font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-muted px-3 py-1.5">
+                                        <h3 className="text-xs font-bold text-foreground">SION: {sion.label}</h3>
+                                        <span className="text-[11px] text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
+                                        <span className="ml-auto hidden text-[11px] tabular-nums lg:inline">Pur: {fmt(sion.total_purchase_bill_inr)}</span>
+                                        <span className="hidden text-[11px] tabular-nums lg:inline">Sale: {fmt(sion.total_sale_bill_inr)}</span>
+                                        <span className={cn("text-[11px] font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full border-collapse text-xs">
+                                        <table className="w-full border-collapse text-[12px]">
                                             <thead><tr className="border-y bg-primary/5 text-left">
-                                                <th className="px-3 py-2"><span className="sr-only">Select</span></th>
-                                                <th className="px-3 py-2">License Number</th><th className="px-3 py-2">Type</th>
-                                                <th className="px-3 py-2">Date</th><th className="px-3 py-2">1st Purchase Date</th>
-                                                <th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Purchase (₹)</th>
-                                                <th className="px-3 py-2 text-right">Sale (₹)</th><th className="px-3 py-2 text-right">P/L (₹)</th><th className="px-3 py-2" />
+                                                <th className="px-2.5 py-1"><span className="sr-only">Select</span></th>
+                                                <th className="px-2.5 py-1 font-semibold">License</th>
+                                                <th className="hidden px-2.5 py-1 font-semibold lg:table-cell">Type</th>
+                                                <th className="hidden px-2.5 py-1 font-semibold sm:table-cell">Date</th>
+                                                <th className="hidden px-2.5 py-1 font-semibold lg:table-cell">1st Pur</th>
+                                                <th className="px-2.5 py-1 text-right font-semibold">Balance</th>
+                                                <th className="px-2.5 py-1 text-right font-semibold">Purchase</th>
+                                                <th className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">Sale</th>
+                                                <th className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">P/L</th>
+                                                <th className="px-2.5 py-1" />
                                             </tr></thead>
                                             <tbody>{sion.licenses.map((license) => (
                                                 <tr key={license.license_id} className={cn("border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive")}>
-                                                    <td className="px-3 py-2"><input type="checkbox" checked={selectedLicenseIds.has(String(license.license_id))} onChange={() => onToggleLicense(String(license.license_id))} aria-label={`Select licence ${license.license_number}`} /></td>
-                                                    <td className="px-3 py-2 font-semibold">{license.license_number}{!license.has_purchase_bill && <span className="ml-2 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">NO PURCHASE BILL</span>}</td><td className="px-3 py-2">{license.license_type}</td>
-                                                    <td className="px-3 py-2">{license.license_date}</td><td className="px-3 py-2">{license.first_purchase_date}</td>
-                                                    <td className="px-3 py-2 text-right tabular-nums">{formatIndianNumber(license.current_balance, 2)}</td>
-                                                    <td className="px-3 py-2 text-right tabular-nums">{fmt(license.purchase_bill_inr)}</td>
-                                                    <td className="px-3 py-2 text-right tabular-nums">{fmt(license.sale_bill_inr)}</td>
-                                                    <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", license.profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>{fmt(license.profit_loss_inr)}</td>
-                                                    <td className="px-3 py-2 text-right">
+                                                    <td className="px-2.5 py-1"><input type="checkbox" checked={selectedLicenseIds.has(String(license.license_id))} onChange={() => onToggleLicense(String(license.license_id))} aria-label={`Select licence ${license.license_number}`} /></td>
+                                                    <td className="px-2.5 py-1 font-semibold text-[11px]">{license.license_number}{!license.has_purchase_bill && <span className="ml-1.5 rounded bg-destructive px-1 py-0.5 text-[9px] font-bold text-destructive-foreground">NO BILL</span>}</td>
+                                                    <td className="hidden px-2.5 py-1 text-[11px] lg:table-cell">{license.license_type}</td>
+                                                    <td className="hidden px-2.5 py-1 text-[11px] sm:table-cell">{license.license_date}</td>
+                                                    <td className="hidden px-2.5 py-1 text-[11px] lg:table-cell">{license.first_purchase_date}</td>
+                                                    <td className="px-2.5 py-1 text-right tabular-nums text-[11px]">{formatIndianNumber(license.current_balance, 2)}</td>
+                                                    <td className="px-2.5 py-1 text-right tabular-nums text-[11px]">{fmt(license.purchase_bill_inr)}</td>
+                                                    <td className="hidden px-2.5 py-1 text-right tabular-nums text-[11px] sm:table-cell">{fmt(license.sale_bill_inr)}</td>
+                                                    <td className={cn("hidden px-2.5 py-1 text-right font-semibold tabular-nums text-[11px] sm:table-cell", license.profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>{fmt(license.profit_loss_inr)}</td>
+                                                    <td className="px-2.5 py-1 text-right">
                                                         <button
                                                             type="button"
-                                                            className="font-semibold text-primary hover:underline"
+                                                            className="text-[11px] font-semibold text-primary hover:underline"
                                                             onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}
                                                         >
-                                                            View Ledger
+                                                            Ledger
                                                         </button>
-                                                        <button type="button" className="ml-2 font-semibold text-primary hover:underline" onClick={() => onDownloadLicense(String(license.license_id))}>Download Package</button>
-                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-2 font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>Custom Ledger PDF</button>}
+                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-[11px] font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
                                                     </td>
                                                 </tr>
                                             ))}</tbody>
@@ -190,17 +199,17 @@ function LicenseWiseLedger({
                                     </div>
                                 </section>
                             ))}
-                            <div className="flex flex-wrap justify-end gap-5 border-t-2 border-primary px-3 pt-2 text-xs font-bold">
-                                <span>Company Total — {company.company_name}</span><span>Purchase {fmt(company.total_purchase_bill_inr)}</span>
+                            <div className="flex flex-wrap justify-end gap-3 border-t-2 border-primary px-3 py-1.5 text-[11px] font-bold">
+                                <span>Total</span><span>Pur {fmt(company.total_purchase_bill_inr)}</span>
                                 <span>Sale {fmt(company.total_sale_bill_inr)}</span><span>P/L {fmt(company.total_profit_loss_inr)}</span>
                             </div>
                         </div>
                     </section>
                 ))}
                 {grand_total && company_groups.length > 1 && (
-                    <div className="flex flex-wrap justify-end gap-5 rounded-md bg-primary px-4 py-3 text-xs font-bold text-primary-foreground">
-                        <span>Grand Total — {grand_total.license_count} licenses</span>
-                        <span>Purchase {fmt(grand_total.total_purchase_bill_inr)}</span>
+                    <div className="flex flex-wrap justify-end gap-3 rounded-md bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground">
+                        <span>{grand_total.license_count} licenses</span>
+                        <span>Pur {fmt(grand_total.total_purchase_bill_inr)}</span>
                         <span>Sale {fmt(grand_total.total_sale_bill_inr)}</span>
                         <span>P/L {fmt(grand_total.total_profit_loss_inr)}</span>
                     </div>
@@ -222,54 +231,64 @@ function LicenseWiseLedger({
     return (
         <div className="p-2">
             {licenses.map((lic) => (
-                <div key={lic.license_id} className="mb-6 overflow-hidden rounded-md border border-border">
+                <div key={lic.license_id} className="mb-4 overflow-hidden rounded-md border border-border">
                     {/* ── License header bar ─────────────────────────── */}
-                    <div className="flex flex-wrap items-center gap-5 bg-primary px-4 py-2.5">
+                    <div className="flex flex-wrap items-center gap-2 bg-primary px-3 py-1.5 text-[12px]">
                         <label className="flex size-6 cursor-pointer items-center justify-center rounded bg-white/15" title={`Select ${lic.license_number}`}>
                             <input type="checkbox" className="size-4" checked={selectedLicenseIds.has(String(lic.license_id))} onChange={() => onToggleLicense(String(lic.license_id))} aria-label={`Select licence ${lic.license_number}`} />
                         </label>
-                        <span className="flex items-center gap-1.5 text-[15px] font-bold text-primary-foreground">
-                            <FileText className="size-4 shrink-0" aria-hidden="true" />
-                            <span className="ml-1">{lic.license_number}</span>
+                        <span className="flex items-center gap-1 font-bold text-primary-foreground">
+                            <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+                            {lic.license_number}
                         </span>
-                        <span className="flex items-center gap-1.5 text-[12.5px] text-primary-foreground/70">
-                            <Calendar className="size-4 shrink-0" aria-hidden="true" />
-                            <span className="ml-1">{lic.license_date}</span>
+                        <span className="flex items-center gap-1 text-primary-foreground/70">
+                            <Calendar className="size-3.5 shrink-0" aria-hidden="true" />
+                            <span className="text-[11px]">{lic.license_date}</span>
                         </span>
-                        <span className={cn(
-                            "rounded-md px-2 py-0.5 text-[11px] font-bold text-white",
-                            lic.license_type === 'DFIA' ? "bg-info/70" : "bg-white/20",
-                        )}>
+                        <Badge variant={lic.license_type === 'DFIA' ? 'default' : 'secondary'} className="py-0 text-[9px]">
                             {lic.license_type}
-                        </span>
+                        </Badge>
                         {lic.companies[0]?.company_id != null && (
                             <button
                                 type="button"
                                 onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}`)}
                                 aria-label={`View ledger for ${lic.license_number}`}
-                                className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25"
+                                className="ml-auto flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
                             >
-                                <BookOpen className="size-4" aria-hidden="true" />View Ledger
+                                <BookOpen className="size-3.5" aria-hidden="true" />
+                                <span className="hidden sm:inline">View</span>
                             </button>
                         )}
-                        <button type="button" className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25" onClick={() => onDownloadLicense(String(lic.license_id))}>
-                            <FileSpreadsheet className="size-4" aria-hidden="true" />Download Package
+                        <button
+                            type="button"
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                            onClick={() => onDownloadLicense(String(lic.license_id))}
+                            aria-label="Download license package"
+                        >
+                            <FileSpreadsheet className="size-3.5" aria-hidden="true" />
+                            <span className="hidden sm:inline">Package</span>
                         </button>
-                        {lic.license_type === 'DFIA' && <button type="button" className="flex cursor-pointer items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-white/25" onClick={() => onDownloadCustomLedger(String(lic.license_id))}>
-                            <FileText className="size-4" aria-hidden="true" />Custom Ledger PDF
+                        {lic.license_type === 'DFIA' && <button
+                            type="button"
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                            onClick={() => onDownloadCustomLedger(String(lic.license_id))}
+                            aria-label="Download custom ledger PDF"
+                        >
+                            <FileText className="size-3.5" aria-hidden="true" />
+                            <span className="hidden sm:inline">PDF</span>
                         </button>}
                     </div>
 
                     {/* ── Companies table ────────────────────────────── */}
                     <div className="overflow-x-auto" role="region" aria-label={`Companies for ${lic.license_number}`} tabIndex={0}>
-                    <table className="min-w-[680px] w-full border-collapse text-[12.5px]">
+                    <table className="w-full border-collapse text-[12px]">
                         <thead>
                             <tr className="border-b-2 border-border bg-muted/50">
-                                <th scope="col" className="w-[30%] px-3 py-[7px] text-left font-bold text-foreground">Company</th>
-                                <th scope="col" className="w-[15%] px-3 py-[7px] text-left font-bold text-foreground">Type</th>
-                                <th scope="col" className="w-[15%] px-3 py-[7px] text-left font-bold text-foreground">Date</th>
-                                <th scope="col" className="w-[20%] px-3 py-[7px] text-right font-bold text-success">Purchase (₹)</th>
-                                <th scope="col" className="w-[20%] px-3 py-[7px] text-right font-bold text-destructive">Sale (₹)</th>
+                                <th scope="col" className="px-2.5 py-1 text-left font-bold text-foreground">Company</th>
+                                <th scope="col" className="hidden px-2.5 py-1 text-left font-bold text-foreground sm:table-cell">Type</th>
+                                <th scope="col" className="hidden px-2.5 py-1 text-left font-bold text-foreground lg:table-cell">Date</th>
+                                <th scope="col" className="px-2.5 py-1 text-right font-bold text-success">Purchase</th>
+                                <th scope="col" className="px-2.5 py-1 text-right font-bold text-destructive">Sale</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -280,10 +299,10 @@ function LicenseWiseLedger({
                                         ci > 0 ? "border-t-2 border-border" : "",
                                         ci % 2 === 0 ? "bg-primary/5" : "bg-muted/40",
                                     )}>
-                                        <td colSpan={5} className="px-3 py-[5px] text-[0.82rem] font-bold text-foreground">
-                                            <span className="flex items-center gap-1.5">
-                                                <Building2 className="size-4 shrink-0" aria-hidden="true" />
-                                                <span className="ml-1">{company.company_name}</span>
+                                        <td colSpan={5} className="px-2.5 py-1 text-[11px] font-bold text-foreground">
+                                            <span className="flex items-center gap-1">
+                                                <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
+                                                {company.company_name}
                                             </span>
                                         </td>
                                     </tr>
@@ -291,48 +310,50 @@ function LicenseWiseLedger({
                                     {/* Purchase rows */}
                                     {company.purchases.map((row) => (
                                         <tr key={`p-${row.trade_id}`} className="border-b border-success/20 bg-success/[0.06]">
-                                            <td className="px-3 py-[4px] pl-6">
-                                                <span className="flex items-center gap-1.5 text-foreground">
-                                                    <ArrowDownCircle className="size-4 shrink-0" aria-hidden="true" /><span className="ml-1">Purchase</span>
+                                            <td className="px-2.5 py-1 pl-5">
+                                                <span className="flex items-center gap-1 text-foreground">
+                                                    <ArrowDownCircle className="size-3 shrink-0" aria-hidden="true" />
+                                                    <span className="text-[11px]">Purchase</span>
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{lic.license_type}</td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{row.invoice_date}</td>
-                                            <td className="px-3 py-[4px] text-right font-semibold text-success">{fmt(row.amount)}</td>
-                                            <td className="px-3 py-[4px]" />
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground sm:table-cell">{lic.license_type}</td>
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground lg:table-cell">{row.invoice_date}</td>
+                                            <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-success">{fmt(row.amount)}</td>
+                                            <td className="px-2.5 py-1" />
                                         </tr>
                                     ))}
 
                                     {/* Sale rows */}
                                     {company.sales.map((row) => (
                                         <tr key={`s-${row.trade_id}`} className="border-b border-destructive/20 bg-destructive/[0.06]">
-                                            <td className="px-3 py-[4px] pl-6">
-                                                <span className="flex items-center gap-1.5 text-foreground">
-                                                    <ArrowUpCircle className="size-4 shrink-0" aria-hidden="true" /><span className="ml-1">Sale</span>
+                                            <td className="px-2.5 py-1 pl-5">
+                                                <span className="flex items-center gap-1 text-foreground">
+                                                    <ArrowUpCircle className="size-3 shrink-0" aria-hidden="true" />
+                                                    <span className="text-[11px]">Sale</span>
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{lic.license_type}</td>
-                                            <td className="px-3 py-[4px] text-muted-foreground">{row.invoice_date}</td>
-                                            <td className="px-3 py-[4px]" />
-                                            <td className="px-3 py-[4px] text-right font-semibold text-destructive">{fmt(row.amount)}</td>
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground sm:table-cell">{lic.license_type}</td>
+                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground lg:table-cell">{row.invoice_date}</td>
+                                            <td className="px-2.5 py-1" />
+                                            <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-destructive">{fmt(row.amount)}</td>
                                         </tr>
                                     ))}
 
                                     {/* Company total row */}
                                     <tr className="bg-primary font-bold text-primary-foreground">
-                                        <td colSpan={3} className="px-3 py-[5px] text-right text-[12px]">
-                                            Total — {company.company_name}
+                                        <td colSpan={3} className="px-2.5 py-1 text-right text-[11px]">
+                                            Total
                                         </td>
-                                        <td className="px-3 py-[5px] text-right text-emerald-300">
+                                        <td className="px-2.5 py-1 text-right text-[11px] text-emerald-300">
                                             {fmt(company.purchase_total)}
                                         </td>
-                                        <td className="px-3 py-[5px] text-right text-red-300">
+                                        <td className="px-2.5 py-1 text-right text-[11px] text-red-300">
                                             {fmt(company.sale_total)}
                                             <span className={cn(
-                                                "ml-2 text-[11px]",
+                                                "ml-1 text-[9px]",
                                                 company.profit_loss >= 0 ? "text-emerald-300" : "text-red-300",
                                             )}>
-                                                P/L: {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}
+                                                {company.profit_loss >= 0 ? '+' : ''}{fmt(company.profit_loss)}
                                             </span>
                                         </td>
                                     </tr>
@@ -357,9 +378,9 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
         danger: "text-destructive",
     }[tone ?? "primary"] ?? "text-foreground";
     return (
-        <div className="py-2 text-center">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-            <div className={cn("text-sm font-bold tabular-nums", toneClass)}>{value}</div>
+        <div className="py-1.5 text-center">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+            <div className={cn("text-xs font-bold tabular-nums", toneClass)}>{value}</div>
         </div>
     );
 }
@@ -581,9 +602,9 @@ export default function LicenseLedger() {
                             size="sm"
                             disabled={packageDownloading || selectedLicenseIds.size === 0}
                             onClick={() => downloadPackage([...selectedLicenseIds])}
-                            title="Choose destination folder and start package download"
+                            aria-label="Choose destination folder and start package download"
                         >
-                            {packageDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            {packageDownloading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Choose Folder & Start</span>
                             <span className="sm:hidden">Download</span>
                         </Button>
@@ -616,8 +637,9 @@ export default function LicenseLedger() {
                             disabled={exporting !== null || visibleLicenseCount === 0}
                             onClick={() => runExport('pdf')}
                             title="Preview as PDF"
+                            aria-label="Preview license ledger as PDF"
                         >
-                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
+                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Preview PDF</span>
                             <span className="sm:hidden">Preview</span>
                         </Button>
@@ -627,8 +649,9 @@ export default function LicenseLedger() {
                             disabled={exporting !== null || visibleLicenseCount === 0}
                             onClick={() => runExport('xlsx')}
                             title="Download as Excel"
+                            aria-label="Download license ledger as Excel"
                         >
-                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
+                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Download Excel</span>
                             <span className="sm:hidden">Excel</span>
                         </Button>
@@ -644,102 +667,108 @@ export default function LicenseLedger() {
                         </span>
                         <div className="flex gap-2">
                             <Button type="button" size="sm" variant="outline" onClick={clearCompany} disabled={!filters.company}>
-                                <Building2 className="size-4" aria-hidden="true" />Clear Company
+                                <Building2 className="size-4" aria-hidden="true" />
+                                <span className="hidden sm:inline">Clear Company</span>
+                                <span className="sm:hidden">Company</span>
                             </Button>
                             <Button type="button" size="sm" variant="outline" onClick={clearAllFilters}>
-                                <XCircle className="size-4" aria-hidden="true" />Clear All
+                                <XCircle className="size-4" aria-hidden="true" />
+                                <span className="hidden sm:inline">Clear All</span>
+                                <span className="sm:hidden">Clear</span>
                             </Button>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-3 p-3">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
-                        <div className="lg:col-span-2">
-                            <label id="ledger-company-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Company Filter</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                        <div className="lg:col-span-1">
+                            <label id="ledger-company-label" className="mb-1 block text-xs font-semibold text-muted-foreground">Company</label>
                             <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id"
                                 value={filters.company} onChange={(value: LicenseLedgerFilters['company']) => updateFilter('company', value)}
-                                placeholder="All companies..." loadOnMount ariaLabel="Company Filter" />
+                                placeholder="All..." loadOnMount ariaLabel="Company Filter" />
                         </div>
-                        <div>
-                            <label htmlFor="ledger-min-balance" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Min Balance</label>
+                        <div className="lg:col-span-1">
+                            <label htmlFor="ledger-min-balance" className="mb-1 block text-xs font-semibold text-muted-foreground">Min Balance</label>
                             <Input id="ledger-min-balance" type="number" min="0" step="0.01" value={filters.minBalance}
-                                onChange={(event) => updateFilter('minBalance', event.target.value)} placeholder="0.00" />
+                                onChange={(event) => updateFilter('minBalance', event.target.value)} placeholder="0.00" className="h-9" />
                         </div>
-                        <div className="lg:col-span-2">
-                            <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">Search</label>
-                            <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
-                                placeholder="License # or exporter..." />
-                        </div>
-                        <div>
-                            <label htmlFor="ledger-sort" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Sort By</label>
-                            <select id="ledger-sort" value={filters.ordering} onChange={(event) => updateFilter('ordering', event.target.value)}
-                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm">
-                                <option value="-license_date">Latest First</option>
-                                <option value="license_date">Oldest First</option>
-                                <option value="-balance_value">Highest Balance</option>
-                                <option value="balance_value">Lowest Balance</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label htmlFor="ledger-license-numbers" className="mb-1.5 block text-xs font-semibold text-muted-foreground">License Numbers</label>
-                        <Input id="ledger-license-numbers" value={filters.licenseNumbers}
-                            onChange={(event) => updateFilter('licenseNumbers', event.target.value)}
-                            placeholder="Paste comma-separated license numbers, e.g. 3111004973, 3111004966" />
-                        <p className="mt-1 text-[11px] text-muted-foreground">Shows only the listed licenses; spaces and duplicate numbers are ignored.</p>
-                    </div>
-
-                    <div>
-                        <label htmlFor="ledger-exclude-license-numbers" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Exclude License Numbers</label>
-                        <Input id="ledger-exclude-license-numbers" value={filters.excludeLicenseNumbers}
-                            onChange={(event) => updateFilter('excludeLicenseNumbers', event.target.value)}
-                            placeholder="Paste comma-separated license numbers to exclude" />
-                        <p className="mt-1 text-[11px] text-muted-foreground">Hides the listed licenses; spaces and duplicate numbers are ignored.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
-                        <div>
-                            <label htmlFor="ledger-license-type" className="mb-1.5 block text-xs font-semibold text-muted-foreground">License Type</label>
+                        <div className="lg:col-span-1">
+                            <label htmlFor="ledger-license-type-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Type</label>
                             <Select value={filters.licenseType} onValueChange={(value) => updateFilter('licenseType', value)}>
-                                <SelectTrigger id="ledger-license-type" aria-label="License Type">
-                                    <SelectValue placeholder="All Licenses" />
+                                <SelectTrigger id="ledger-license-type-filter" className="h-9" aria-label="License Type">
+                                    <SelectValue placeholder="All" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="ALL">All Licenses</SelectItem>
+                                    <SelectItem value="ALL">All</SelectItem>
                                     <SelectItem value="DFIA">DFIA</SelectItem>
-                                    <SelectItem value="ALL_INCENTIVE">All Incentive</SelectItem>
+                                    <SelectItem value="ALL_INCENTIVE">Incentive</SelectItem>
                                     <SelectItem value="RODTEP">RODTEP</SelectItem>
                                     <SelectItem value="ROSTL">ROSTL</SelectItem>
                                     <SelectItem value="MEIS">MEIS</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div>
-                            <label id="ledger-norm-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Norm</label>
+                        <div className="lg:col-span-1">
+                            <label htmlFor="ledger-norm-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Norm</label>
                             <AsyncSelectField endpoint="masters/sion-classes/?is_active=true" labelField="norm_class" valueField="norm_class"
                                 value={filters.norm} onChange={(value: LicenseLedgerFilters['norm']) => updateFilter('norm', value)}
-                                placeholder="All norms..." ariaLabel="Norm" />
-                            <p className="mt-1 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
+                                placeholder="All..." ariaLabel="Norm" />
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">DFIA only</p>
                         </div>
-                        <div>
-                            <label id="ledger-purchase-status-label" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Purchase Status</label>
+                        <div className="lg:col-span-1">
+                            <label htmlFor="ledger-status-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Status</label>
                             <AsyncSelectField endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
                                 value={filters.purchaseStatus} onChange={(value: LicenseLedgerFilters['purchaseStatus']) => updateFilter('purchaseStatus', value)}
-                                placeholder="All statuses..." ariaLabel="Purchase Status" />
-                            <p className="mt-1 text-[11px] text-muted-foreground">DFIA only — hides Incentive licenses</p>
+                                placeholder="All..." ariaLabel="Status" />
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">DFIA only</p>
                         </div>
-                        <div className="flex items-center gap-2 pt-5">
+                        <div className="lg:col-span-1">
+                            <label htmlFor="ledger-sort" className="mb-1 block text-xs font-semibold text-muted-foreground">Sort</label>
+                            <select id="ledger-sort" value={filters.ordering} onChange={(event) => updateFilter('ordering', event.target.value)}
+                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm">
+                                <option value="-license_date">Latest</option>
+                                <option value="license_date">Oldest</option>
+                                <option value="-balance_value">High Balance</option>
+                                <option value="balance_value">Low Balance</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Search</label>
+                            <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
+                                placeholder="License # or exporter..." />
+                        </div>
+                        <div className="flex items-center gap-2 pt-7">
                             <Switch id="ledger-active-only" checked={filters.activeOnly} onCheckedChange={(value) => updateFilter('activeOnly', value)} />
                             <label htmlFor="ledger-active-only" className="text-sm font-medium">Active Only</label>
                         </div>
                     </div>
 
+                    <div className="space-y-2 rounded-md bg-muted/30 p-2">
+                        <div>
+                            <label htmlFor="ledger-license-numbers" className="mb-1 block text-xs font-semibold text-muted-foreground">Include License Numbers</label>
+                            <Input id="ledger-license-numbers" value={filters.licenseNumbers}
+                                onChange={(event) => updateFilter('licenseNumbers', event.target.value)}
+                                placeholder="e.g., 3111004973, 3111004966" className="text-sm" />
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
+                        </div>
+
+                        <div>
+                            <label htmlFor="ledger-exclude-license-numbers" className="mb-1 block text-xs font-semibold text-muted-foreground">Exclude License Numbers</label>
+                            <Input id="ledger-exclude-license-numbers" value={filters.excludeLicenseNumbers}
+                                onChange={(event) => updateFilter('excludeLicenseNumbers', event.target.value)}
+                                placeholder="e.g., 3111004973, 3111004966" className="text-sm" />
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
+                        </div>
+                    </div>
+
                     <fieldset>
                         <legend className="mb-1.5 text-xs font-semibold text-muted-foreground">Purchase Bill Status</legend>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-2">
                             {[
-                                ['ALL', 'All'], ['WITH_PURCHASE_BILL', 'With Purchase Bill'], ['NO_PURCHASE_BILL', 'No Purchase Bill'],
+                                ['ALL', 'All'], ['WITH_PURCHASE_BILL', 'With Bill'], ['NO_PURCHASE_BILL', 'No Bill'],
                             ].map(([value, label]) => (
                                 <Button key={value} type="button" size="sm" variant={filters.purchaseBill === value ? 'default' : 'outline'}
                                     onClick={() => updateFilter('purchaseBill', value)}>{label}</Button>
@@ -762,27 +791,34 @@ export default function LicenseLedger() {
                 </CardContent>
             </Card>
 
+            {/* ── Active Filters Display ──────────────────────────── */}
+            <LicenseLedgerActiveFiltersDisplay
+                filters={filters}
+                onRemoveFilter={(key) => updateFilter(key as keyof LicenseLedgerFilters, defaultLicenseLedgerFilters()[key as keyof LicenseLedgerFilters])}
+                onClearAll={clearAllFilters}
+            />
+
             {/* ── Summary cards ──────────────────────────────────── */}
             {summary && (
-                <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {/* DFIA card */}
                     <Card className="border-l-[3px] border-l-primary">
-                        <CardHeader className="border-b py-2 px-3">
+                        <CardHeader className="border-b px-3 py-1.5">
                             <div className="flex items-center gap-2">
                                 <Globe className="size-4 text-muted-foreground" aria-hidden="true" />
-                                <span className="text-[13px] font-semibold">DFIA Licenses</span>
-                                <Badge variant="default" className="ml-auto text-[10.5px]">
-                                    {summary.dfia?.total_licenses} active
+                                <span className="text-xs font-semibold">DFIA</span>
+                                <Badge variant="default" className="ml-auto py-0 text-[9px]">
+                                    {summary.dfia?.total_licenses} licenses
                                 </Badge>
                             </div>
                         </CardHeader>
-                        <CardContent className="px-3 py-2">
+                        <CardContent className="px-3 py-1.5">
                             <div className="grid grid-cols-2 divide-x divide-y divide-border text-center sm:grid-cols-4 sm:divide-y-0">
-                                <SummaryItem label="Total Value" value={`$ ${formatIndianNumber(summary.dfia?.total_value_usd, 2)}`} tone="primary" />
-                                <SummaryItem label="Balance" value={`$ ${formatIndianNumber(summary.dfia?.balance_value_usd, 2)}`} tone="success" />
+                                <SummaryItem label="Value" value={`$${formatIndianNumber(summary.dfia?.total_value_usd, 2)}`} tone="primary" />
+                                <SummaryItem label="Balance" value={`$${formatIndianNumber(summary.dfia?.balance_value_usd, 2)}`} tone="success" />
                                 <SummaryItem label="Purchase" value={`₹${formatIndianNumber(summary.dfia?.purchase_amount_inr, 0)}`} tone="warning" />
                                 <SummaryItem
-                                    label="P / L"
+                                    label="P/L"
                                     value={`${summary.dfia?.profit_loss_inr >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(summary.dfia?.profit_loss_inr), 0)}`}
                                     tone={summary.dfia?.profit_loss_inr >= 0 ? "success" : "danger"}
                                 />
@@ -792,22 +828,22 @@ export default function LicenseLedger() {
 
                     {/* Incentive card */}
                     <Card className="border-l-[3px] border-l-info">
-                        <CardHeader className="border-b py-2 px-3">
+                        <CardHeader className="border-b px-3 py-1.5">
                             <div className="flex items-center gap-2">
                                 <Trophy className="size-4 text-muted-foreground" aria-hidden="true" />
-                                <span className="text-[13px] font-semibold">Incentive Licenses</span>
-                                <Badge variant="info" className="ml-auto text-[10.5px]">
-                                    {summary.incentive?.total_licenses} active
+                                <span className="text-xs font-semibold">Incentive</span>
+                                <Badge variant="info" className="ml-auto py-0 text-[9px]">
+                                    {summary.incentive?.total_licenses} licenses
                                 </Badge>
                             </div>
                         </CardHeader>
-                        <CardContent className="px-3 py-2">
+                        <CardContent className="px-3 py-1.5">
                             <div className="grid grid-cols-2 divide-x divide-y divide-border text-center sm:grid-cols-4 sm:divide-y-0">
-                                <SummaryItem label="Total Value" value={`₹${formatIndianNumber(summary.incentive?.total_value_inr, 2)}`} tone="primary" />
+                                <SummaryItem label="Value" value={`₹${formatIndianNumber(summary.incentive?.total_value_inr, 2)}`} tone="primary" />
                                 <SummaryItem label="Balance" value={`₹${formatIndianNumber(summary.incentive?.balance_value_inr, 2)}`} tone="success" />
                                 <SummaryItem label="Purchase" value={`₹${formatIndianNumber(summary.incentive?.purchase_amount_inr, 0)}`} tone="warning" />
                                 <SummaryItem
-                                    label="P / L"
+                                    label="P/L"
                                     value={`${summary.incentive?.profit_loss_inr >= 0 ? '+' : ''}₹${formatIndianNumber(Math.abs(summary.incentive?.profit_loss_inr), 0)}`}
                                     tone={summary.incentive?.profit_loss_inr >= 0 ? "success" : "danger"}
                                 />
@@ -819,10 +855,10 @@ export default function LicenseLedger() {
 
             {/* ── Transaction ledger ───────────────────────────────── */}
             <Card>
-                <CardHeader className="border-b py-2 px-3">
+                <CardHeader className="border-b px-3 py-1.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground">
-                            Transaction Ledger — {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
+                        <span className="text-[12px] font-semibold text-muted-foreground">
+                            {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
                         </span>
                         {companyWiseLoading && (
                             <span className="text-xs text-muted-foreground">Loading…</span>
@@ -857,5 +893,186 @@ export default function LicenseLedger() {
                 </CardContent>
             </Card>
         </>
+    );
+}
+
+/**
+ * ActiveFilters display component for LicenseLedger
+ * Shows all currently applied filters with individual remove buttons
+ */
+function LicenseLedgerActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    filters: LicenseLedgerFilters;
+    onRemoveFilter: (key: keyof LicenseLedgerFilters) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+        const defaults = defaultLicenseLedgerFilters();
+
+        // Helper to check if value differs from default
+        const isActive = (key: keyof LicenseLedgerFilters) => {
+            const value = filters[key];
+            const defaultValue = defaults[key];
+
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'boolean') return value !== false;
+            if (typeof value === 'object') return value !== null;
+            return value !== defaultValue && value !== '' && value !== null && value !== undefined;
+        };
+
+        // Company filter
+        if (isActive('company')) {
+            items.push({
+                key: 'company',
+                label: 'Company',
+                value: String(filters.company),
+            });
+        }
+
+        // Min Balance filter
+        if (isActive('minBalance')) {
+            items.push({
+                key: 'minBalance',
+                label: 'Min Balance',
+                value: `₹${filters.minBalance}`,
+            });
+        }
+
+        // License Type filter
+        if (filters.licenseType && filters.licenseType !== 'ALL') {
+            items.push({
+                key: 'licenseType',
+                label: 'License Type',
+                value: filters.licenseType,
+            });
+        }
+
+        // Norm filter (DFIA only)
+        if (isActive('norm')) {
+            items.push({
+                key: 'norm',
+                label: 'Norm',
+                value: String(filters.norm),
+            });
+        }
+
+        // Purchase Status filter (DFIA only)
+        if (isActive('purchaseStatus')) {
+            items.push({
+                key: 'purchaseStatus',
+                label: 'Purchase Status',
+                value: String(filters.purchaseStatus),
+            });
+        }
+
+        // Sort filter (if not default)
+        if (filters.ordering && filters.ordering !== '-license_date') {
+            const sortLabels: Record<string, string> = {
+                '-license_date': 'Latest',
+                'license_date': 'Oldest',
+                '-balance_value': 'High Balance',
+                'balance_value': 'Low Balance',
+            };
+            items.push({
+                key: 'ordering',
+                label: 'Sort',
+                value: sortLabels[filters.ordering] || filters.ordering,
+            });
+        }
+
+        // Search filter
+        if (isActive('search')) {
+            items.push({
+                key: 'search',
+                label: 'Search',
+                value: `"${filters.search}"`,
+            });
+        }
+
+        // Active Only filter
+        if (filters.activeOnly === true) {
+            items.push({
+                key: 'activeOnly',
+                label: 'Active Only',
+                value: 'Yes',
+            });
+        }
+
+        // Include License Numbers
+        if (isActive('licenseNumbers')) {
+            const count = filters.licenseNumbers?.split(',').filter(n => n.trim()).length || 0;
+            items.push({
+                key: 'licenseNumbers',
+                label: 'Include Licenses',
+                value: `${count} license${count !== 1 ? 's' : ''}`,
+            });
+        }
+
+        // Exclude License Numbers
+        if (isActive('excludeLicenseNumbers')) {
+            const count = filters.excludeLicenseNumbers?.split(',').filter(n => n.trim()).length || 0;
+            items.push({
+                key: 'excludeLicenseNumbers',
+                label: 'Exclude Licenses',
+                value: `${count} license${count !== 1 ? 's' : ''}`,
+            });
+        }
+
+        // Purchase Bill Status
+        if (filters.purchaseBill && filters.purchaseBill !== 'ALL') {
+            const billLabels: Record<string, string> = {
+                'WITH_PURCHASE_BILL': 'With Bill',
+                'NO_PURCHASE_BILL': 'No Bill',
+            };
+            items.push({
+                key: 'purchaseBill',
+                label: 'Purchase Bill Status',
+                value: billLabels[filters.purchaseBill] || filters.purchaseBill,
+            });
+        }
+
+        // Purchase Date Range
+        if (filters.purchaseDateFrom || filters.purchaseDateTo) {
+            const dateRange = [
+                filters.purchaseDateFrom || '—',
+                filters.purchaseDateTo || '—',
+            ].join(' to ');
+            items.push({
+                key: 'purchaseDateRange',
+                label: 'Purchase Date Range',
+                value: dateRange,
+            });
+        }
+
+        return items;
+    }, [filters]);
+
+    // Don't display if no active filters
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-4">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={(key) => {
+                    if (key === 'purchaseDateRange') {
+                        // Special handling for date range
+                        onRemoveFilter('purchaseDateFrom');
+                        onRemoveFilter('purchaseDateTo');
+                    } else {
+                        onRemoveFilter(key as keyof LicenseLedgerFilters);
+                    }
+                }}
+                onClearAll={onClearAll}
+                showCount={true}
+                compact={false}
+            />
+        </div>
     );
 }

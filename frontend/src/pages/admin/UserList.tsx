@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { getErrorMessage } from "../../utils/errorUtils";
 import { ROLE_LABELS, ROLE_BADGE_COLOR, ROLE_BADGE_STYLE } from "../../utils/roleConstants";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
+import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,7 +49,7 @@ export default function UserList() {
     const [confirmDelete, setConfirmDelete] = useState<UserRecord | null>(null);
     const queryClient = useQueryClient();
     const {
-        filters, appliedFilters, isDebouncing, setTextFilter, setImmediateFilter,
+        filters, appliedFilters, isDebouncing, setTextFilter, setImmediateFilter, replaceFilters,
     } = useSmoothListFilters({ search: "", role: "", is_active: "" });
 
     const userQuery = useQuery({
@@ -146,6 +147,13 @@ export default function UserList() {
                     </Select>
                 </CardContent>
             </Card>
+
+            {/* Active Filters Display */}
+            <UserListActiveFiltersDisplay
+                filters={filters}
+                onRemoveFilter={(key) => setImmediateFilter(key as keyof typeof filters, "")}
+                onClearAll={() => replaceFilters({ search: "", role: "", is_active: "" })}
+            />
 
             {/* Table */}
             <Card>
@@ -248,12 +256,12 @@ export default function UserList() {
                                             <td className="px-4 py-2.5">
                                                 <div className="flex justify-end gap-1.5">
                                                     <Button variant="outline" size="sm" onClick={() => navigate(`/admin/users/${u.id}/edit`)}>
-                                                        <Pencil className="size-3.5" />
+                                                        <Pencil className="size-3.5" aria-hidden="true" />
                                                         Edit
                                                     </Button>
                                                     {currentUser?.is_superuser && u.id !== currentUser?.id && (
-                                                        <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setConfirmDelete(u)}>
-                                                            <Trash2 className="size-3.5" />
+                                                        <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => setConfirmDelete(u)} aria-label={`Delete user ${u.username}`}>
+                                                            <Trash2 className="size-3.5" aria-hidden="true" />
                                                         </Button>
                                                     )}
                                                 </div>
@@ -283,5 +291,71 @@ export default function UserList() {
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+/**
+ * ActiveFilters display component for UserList
+ */
+function UserListActiveFiltersDisplay({
+    filters,
+    onRemoveFilter,
+    onClearAll,
+}: {
+    filters: Record<string, string>;
+    onRemoveFilter: (key: string) => void;
+    onClearAll: () => void;
+}) {
+    const activeFilters: ActiveFilterItem[] = useMemo(() => {
+        const items: ActiveFilterItem[] = [];
+        const ALL = "__all__";
+
+        // Search filter
+        if (filters.search) {
+            items.push({
+                key: 'search',
+                label: 'Search',
+                value: `"${filters.search}"`,
+            });
+        }
+
+        // Role filter
+        if (filters.role && filters.role !== "") {
+            const roleLabel = ROLE_LABELS[filters.role as keyof typeof ROLE_LABELS] || filters.role;
+            items.push({
+                key: 'role',
+                label: 'Role',
+                value: roleLabel,
+            });
+        }
+
+        // is_active filter
+        if (filters.is_active !== "") {
+            const statusLabel = filters.is_active === "true" ? "Active" : filters.is_active === "false" ? "Inactive" : "All Status";
+            items.push({
+                key: 'is_active',
+                label: 'Status',
+                value: statusLabel,
+            });
+        }
+
+        return items;
+    }, [filters]);
+
+    // Don't display if no active filters
+    if (activeFilters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-3">
+            <ActiveFilters
+                filters={activeFilters}
+                onRemove={onRemoveFilter}
+                onClearAll={onClearAll}
+                showCount={true}
+                compact={false}
+            />
+        </div>
     );
 }

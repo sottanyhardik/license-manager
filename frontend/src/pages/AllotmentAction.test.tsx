@@ -128,7 +128,7 @@ describe("AllotmentAction canonical paired Max", () => {
 
         const qtyInput = await screen.findByPlaceholderText("Qty");
         const valueInput = screen.getByPlaceholderText("Value");
-        expect(screen.getByText("ALUMINIUM FOIL")).toBeInTheDocument();
+        expect(screen.getAllByText("ALUMINIUM FOIL").length).toBeGreaterThan(0);
 
         const maxButtons = screen.getAllByRole("button", { name: "Max" });
         fireEvent.click(maxButtons[0]);

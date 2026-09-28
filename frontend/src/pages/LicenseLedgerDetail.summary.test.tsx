@@ -304,15 +304,16 @@ describe("row presentation columns", () => {
 
         const purchaseRow = rowFor("PURCHASE");
         expect(within(purchaseRow).getByText("PUR-001")).toBeTruthy();
-        expect(within(purchaseRow).getByText("Copy unavailable")).toBeTruthy();
+        expect(within(purchaseRow).getByText("unavailable")).toBeTruthy();
         expect(within(purchaseRow).queryByRole("link", { name: /PUR-001/i })).toBeNull();
 
         const saleLink = within(rowFor("SALE")).getByRole("link", {
-            name: "Open invoice SAL-001 (unsigned)",
+            name: /Open invoice SAL-001/i,
         });
         expect(saleLink).toHaveAttribute("href", "/api/invoice-documents/view/opaque-token/");
         expect(saleLink).toHaveAttribute("target", "_blank");
-        expect(within(rowFor("SALE")).getByText("UNSIGNED")).toBeTruthy();
+        // Component renders "UNS" (unsigned abbreviated) in a small status span
+        expect(within(rowFor("SALE")).queryByText("UNS")).toBeTruthy();
     });
 
     it("shows the COUNTERPARTY in Particulars, not our own company", async () => {

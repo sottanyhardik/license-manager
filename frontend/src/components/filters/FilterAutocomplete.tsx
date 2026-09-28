@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Grid,
   Autocomplete,
   TextField,
   FormHelperText,
@@ -70,7 +69,7 @@ export function FilterAutocomplete({
   required = false,
   disabled = false,
   size = 'small',
-  gridSize = 12,
+  gridSize: _gridSize = 12,
   freeSolo = false,
   loading = false,
 }: FilterAutocompleteProps) {
@@ -113,8 +112,11 @@ export function FilterAutocomplete({
   };
 
   return (
-    <Grid item xs={12} sm={gridSize === 12 ? 12 : 6} md={gridSize === 12 ? 12 : gridSize === 6 ? 6 : 4} lg={gridSize} component="div">
-      <Box>
+    <Box
+      sx={{
+        width: '100%',
+      }}
+    >
         <Autocomplete
           options={options}
           getOptionLabel={(option) => option.label}
@@ -151,8 +153,7 @@ export function FilterAutocomplete({
             {helperText}
           </FormHelperText>
         )}
-      </Box>
-    </Grid>
+    </Box>
   );
 }
 

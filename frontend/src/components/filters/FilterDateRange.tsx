@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Grid,
   TextField,
   Box,
   FormHelperText,
@@ -57,7 +56,7 @@ export function FilterDateRange({
   required = false,
   disabled = false,
   size = 'small',
-  gridSize = 12,
+  gridSize: _gridSize = 12,
   minDate,
   maxDate,
 }: FilterDateRangeProps) {
@@ -74,8 +73,7 @@ export function FilterDateRange({
   };
 
   return (
-    <Grid item xs={12} sm={gridSize === 12 ? 12 : 6} md={gridSize === 12 ? 12 : gridSize === 6 ? 6 : 4} lg={gridSize} component="div">
-      <Box>
+    <Box sx={{ width: '100%' }}>
         <TextField
           fullWidth
           type="date"
@@ -93,7 +91,7 @@ export function FilterDateRange({
             input: {
               min: minDate,
               max: maxDate,
-            },
+            } as any,
           }}
         />
         {helperText && (
@@ -101,8 +99,7 @@ export function FilterDateRange({
             {helperText}
           </FormHelperText>
         )}
-      </Box>
-    </Grid>
+    </Box>
   );
 }
 

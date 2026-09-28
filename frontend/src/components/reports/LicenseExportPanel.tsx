@@ -1,12 +1,17 @@
 import { useId, useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Download, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  Box,
+  Stack,
+  Paper,
+  TextField,
+  Typography,
+  Button as MuiButton,
+  useTheme,
+} from "@mui/material";
 
 import PageHeader from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { openAuthedFile } from "@/utils/documentDownload";
 import { MAX_DAYS, MIN_DAYS, normalizeExportDays } from "./licenseExportHelpers";
@@ -38,6 +43,7 @@ export default function LicenseExportPanel({
 }: LicenseExportPanelProps) {
     const [days, setDays] = useState(() => normalizeExportDays(defaultDays));
     const [loading, setLoading] = useState(false);
+    const theme = useTheme();
     const daysInputId = useId();
     const daysHelpId = `${daysInputId}-help`;
 
@@ -57,59 +63,139 @@ export default function LicenseExportPanel({
     };
 
     return (
-        <>
+        <Box>
             <PageHeader pretitle="Reports" title={title} description={description} />
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <Card>
-                    <CardHeader className="border-b"><CardTitle className="text-sm">Export Settings</CardTitle></CardHeader>
-                    <CardContent className="pt-5">
-                        <div className="mb-4">
-                            <Label className="mb-1.5" htmlFor={daysInputId}>{daysLabel}</Label>
-                            <Input
-                                id={daysInputId}
-                                type="number"
-                                min={MIN_DAYS}
-                                max={MAX_DAYS}
-                                value={days}
-                                aria-describedby={daysHelpId}
-                                onChange={(e) => setDays(normalizeExportDays(e.target.value, defaultDays))}
-                            />
-                            <p id={daysHelpId} className="mt-1.5 text-[11.5px] text-muted-foreground">{helpText(days)}</p>
-                        </div>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2, mt: 0 }}>
+                <Box>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {/* Card Header */}
+                        <Box
+                            sx={{
+                                borderBottom: `1px solid ${theme.palette.divider}`,
+                                px: 3,
+                                py: 2,
+                            }}
+                        >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                Export Settings
+                            </Typography>
+                        </Box>
 
-                        {/* Active Filters Display */}
-                        <LicenseExportPanelActiveFiltersDisplay
-                            days={days}
-                            defaultDays={defaultDays}
-                            onRemoveFilter={() => setDays(normalizeExportDays(defaultDays))}
-                            onClearAll={() => setDays(normalizeExportDays(defaultDays))}
-                        />
+                        {/* Card Content */}
+                        <Box sx={{ p: 3 }}>
+                            <Stack spacing={3}>
+                                <Box>
+                                    <Typography
+                                        component="label"
+                                        htmlFor={daysInputId}
+                                        variant="body2"
+                                        sx={{ display: 'block', mb: 1.5, fontWeight: 500 }}
+                                    >
+                                        {daysLabel}
+                                    </Typography>
+                                    <TextField
+                                        id={daysInputId}
+                                        type="number"
+                                        slotProps={{
+                                            htmlInput: {
+                                                min: MIN_DAYS,
+                                                max: MAX_DAYS,
+                                            },
+                                        }}
+                                        value={days}
+                                        onChange={(e) => setDays(normalizeExportDays(e.target.value, defaultDays))}
+                                        aria-describedby={daysHelpId}
+                                        fullWidth
+                                        size="small"
+                                    />
+                                    <Typography
+                                        id={daysHelpId}
+                                        variant="caption"
+                                        sx={{ display: 'block', mt: 1, color: 'text.secondary' }}
+                                    >
+                                        {helpText(days)}
+                                    </Typography>
+                                </Box>
 
-                        <Button onClick={handleExport} disabled={loading}>
-                            {loading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                            {loading ? "Generating…" : "Download Excel Report"}
-                        </Button>
-                    </CardContent>
-                </Card>
+                                {/* Active Filters Display */}
+                                <LicenseExportPanelActiveFiltersDisplay
+                                    days={days}
+                                    defaultDays={defaultDays}
+                                    onRemoveFilter={() => setDays(normalizeExportDays(defaultDays))}
+                                    onClearAll={() => setDays(normalizeExportDays(defaultDays))}
+                                />
+
+                                <MuiButton
+                                    variant="contained"
+                                    onClick={handleExport}
+                                    disabled={loading}
+                                    startIcon={loading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                                >
+                                    {loading ? "Generating…" : "Download Excel Report"}
+                                </MuiButton>
+                            </Stack>
+                        </Box>
+                    </Paper>
+                </Box>
 
                 {features.length > 0 && (
-                    <Card>
-                        <CardHeader className="border-b"><CardTitle className="text-sm">Report Features</CardTitle></CardHeader>
-                        <CardContent className="pt-5">
-                            <ul className="flex flex-col gap-2.5">
-                                {features.map((f, i) => (
-                                    <li key={`${f}-${i}`} className="flex items-start gap-2 text-[13px] text-foreground">
-                                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
-                                        {f}
-                                    </li>
-                                ))}
-                            </ul>
-                        </CardContent>
-                    </Card>
+                    <Box>
+                        <Paper
+                            elevation={0}
+                            sx={{
+                                border: `1px solid ${theme.palette.divider}`,
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {/* Card Header */}
+                            <Box
+                                sx={{
+                                    borderBottom: `1px solid ${theme.palette.divider}`,
+                                    px: 3,
+                                    py: 2,
+                                }}
+                            >
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                    Report Features
+                                </Typography>
+                            </Box>
+
+                            {/* Card Content */}
+                            <Box sx={{ p: 3 }}>
+                                <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', p: 0, m: 0 }}>
+                                    {features.map((f, i) => (
+                                        <Stack
+                                            key={`${f}-${i}`}
+                                            component="li"
+                                            direction="row"
+                                            spacing={1.5}
+                                            sx={{ alignItems: 'flex-start' }}
+                                        >
+                                            <CheckCircle2
+                                                className="size-4 shrink-0"
+                                                style={{ marginTop: 2, color: theme.palette.success.main }}
+                                            />
+                                            <Typography variant="body2" sx={{ pt: 0.25 }}>
+                                                {f}
+                                            </Typography>
+                                        </Stack>
+                                    ))}
+                                </Stack>
+                            </Box>
+                        </Paper>
+                    </Box>
                 )}
-            </div>
-        </>
+            </Box>
+        </Box>
     );
 }
 
@@ -146,13 +232,13 @@ function LicenseExportPanelActiveFiltersDisplay({
     }
 
     return (
-        <div className="mb-4">
+        <Box sx={{ mb: 2 }}>
             <ActiveFilters
                 filters={activeFilters}
                 onRemove={onRemoveFilter}
                 onClearAll={onClearAll}
                 showCount={false}
             />
-        </div>
+        </Box>
     );
 }

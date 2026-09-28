@@ -192,7 +192,7 @@ export function Navbar({
   currentPath,
   onThemeToggle,
   userMenuItems,
-}: NavbarProps): JSX.Element {
+}: NavbarProps) {
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md")); // < 960px (MUI md breakpoint)
   const isDarkMode = muiTheme.palette.mode === "dark";
@@ -540,8 +540,13 @@ export function Navbar({
                 component="a"
                 href="/dashboard"
                 onClick={closeMobileDrawer}
-                selected={isDashboardActive}
-                sx={{ cursor: "pointer" }}
+                sx={{
+                  cursor: "pointer",
+                  backgroundColor: isDashboardActive ? 'action.selected' : 'transparent',
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                  }
+                }}
               >
                 <ListItemText primary="Dashboard" />
               </ListItem>
@@ -570,10 +575,13 @@ export function Navbar({
                       component="a"
                       href={item.path}
                       onClick={closeMobileDrawer}
-                      selected={isPathActive(currentPath, item.path)}
                       sx={{
                         pl: 4,
                         cursor: "pointer",
+                        backgroundColor: isPathActive(currentPath, item.path) ? 'action.selected' : 'transparent',
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                        }
                       }}
                     >
                       <ListItemText primary={item.label} />

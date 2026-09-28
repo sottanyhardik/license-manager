@@ -79,6 +79,7 @@ export default function DownloadLicense() {
     const bulkHelpId = `${bulkInputId}-help`;
     const daysInputId = useId();
     const daysHelpId = `${daysInputId}-help`;
+    const theme = useTheme();
 
     const handleDownload = async () => {
         const exportDays = normalizeDownloadDays(days);
@@ -134,143 +135,157 @@ export default function DownloadLicense() {
                 description="Export per-license balance summaries as Excel"
             />
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Grid container spacing={2}>
                 {/* Bulk by numbers */}
-                <Card>
-                    <CardHeader className="border-b">
-                        <CardTitle className="flex items-center gap-2 text-sm">
-                            <ScanBarcode className="size-4 text-primary" />
-                            Download by License Numbers
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col pt-5">
-                        <p className="mb-3 text-[13px] text-muted-foreground">
-                            Enter DFIA license numbers separated by commas or new lines. Each license gets its own sheet.
-                        </p>
-                        <div className="mb-3 flex-1">
-                            <Label className="mb-1.5 flex items-center gap-2" htmlFor={bulkInputId}>
-                                License Numbers
-                                {parsedCount > 0 && <Badge>{parsedCount} entered</Badge>}
-                            </Label>
-                            <Textarea
-                                id={bulkInputId}
-                                rows={5}
-                                className="font-mono"
-                                placeholder={"e.g. 3011007415, 3011007018, 3011008321\nor one per line"}
-                                value={bulkInput}
-                                aria-describedby={bulkHelpId}
-                                onChange={(e) => setBulkInput(e.target.value)}
-                            />
-                            <p id={bulkHelpId} className="mt-1.5 text-[11.5px] text-muted-foreground">
-                                Comma- or newline-separated. Each license = one sheet named after the license number.
-                            </p>
-                        </div>
-                        <Button className="w-full" onClick={handleBulkDownload} disabled={bulkLoading || parsedCount === 0}>
-                            {bulkLoading ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
-                            {bulkLoading ? "Generating…" : `Download Excel (${parsedCount} license${parsedCount !== 1 ? "s" : ""})`}
-                        </Button>
-                    </CardContent>
-                </Card>
+                <Grid item xs={12} lg={6}>
+                    <Paper sx={{ p: 2, borderRadius: 1 }}>
+                        <Box sx={{ mb: 2, pb: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                            <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <ScanBarcode size={18} />
+                                Download by License Numbers
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Enter DFIA license numbers separated by commas or new lines. Each license gets its own sheet.
+                            </Typography>
+                            <Box>
+                                <Typography component="label" htmlFor={bulkInputId} variant="body2" sx={{ mb: 1, fontWeight: 500, display: 'flex', alignItems: 'center' }}>
+                                    License Numbers
+                                    {parsedCount > 0 && <Chip label={`${parsedCount} entered`} size="small" sx={{ ml: 1 }} />}
+                                </Typography>
+                                <TextField
+                                    id={bulkInputId}
+                                    fullWidth
+                                    multiline
+                                    rows={5}
+                                    placeholder="e.g. 3011007415, 3011007018, 3011008321\nor one per line"
+                                    value={bulkInput}
+                                    onChange={(e) => setBulkInput(e.target.value)}
+                                    variant="outlined"
+                                    size="small"
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                    Comma- or newline-separated. Each license = one sheet named after the license number.
+                                </Typography>
+                            </Box>
+                            <MuiButton
+                                variant="contained"
+                                fullWidth
+                                onClick={handleBulkDownload}
+                                disabled={bulkLoading || parsedCount === 0}
+                                startIcon={bulkLoading ? <Loader2 size={18} /> : <FileSpreadsheet size={18} />}
+                            >
+                                {bulkLoading ? "Generating…" : `Download Excel (${parsedCount} license${parsedCount !== 1 ? "s" : ""})`}
+                            </MuiButton>
+                        </Box>
+                    </Paper>
+                </Grid>
 
                 {/* By status */}
-                <Card>
-                    <CardHeader className="border-b">
-                        <CardTitle className="flex items-center gap-2 text-sm">
-                            <Funnel className="size-4 text-success" />
-                            Download by Status
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col pt-5">
-                        <p className="mb-3 text-[13px] text-muted-foreground">
-                            Export all active or expiring licenses filtered by date range.
-                        </p>
+                <Grid item xs={12} lg={6}>
+                    <Paper sx={{ p: 2, borderRadius: 1 }}>
+                        <Box sx={{ mb: 2, pb: 2, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                            <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Funnel size={18} />
+                                Download by Status
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Export all active or expiring licenses filtered by date range.
+                            </Typography>
 
-                        <div className="mb-3">
-                            <div className="mb-1.5 text-[13px] font-medium">License Status</div>
-                            <div className="flex flex-wrap gap-2" role="group" aria-label="License status">
-                                {STATUS_OPTIONS.map(({ value, label, Icon, tone }) => {
-                                    const active = licenseStatus === value;
-                                    return (
-                                        <button
-                                            key={value}
-                                            type="button"
-                                            aria-pressed={active}
-                                            onClick={() => setLicenseStatus(value)}
-                                            className={`flex flex-1 min-w-[140px] items-center gap-2 rounded-md border px-3 py-2 text-[13px] font-medium transition-colors cursor-pointer ${
-                                                active
-                                                    ? tone === "success"
-                                                        ? "border-success/40 bg-success/10 text-success"
-                                                        : "border-warning/40 bg-warning/10 text-warning"
-                                                    : "border-border text-muted-foreground hover:bg-accent/50"
-                                            }`}
-                                        >
-                                            <Icon className="size-4" />
-                                            {label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                            <Box>
+                                <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                                    License Status
+                                </Typography>
+                                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                                    {STATUS_OPTIONS.map(({ value, label, Icon }) => {
+                                        const active = licenseStatus === value;
+                                        return (
+                                            <MuiButton
+                                                key={value}
+                                                variant={active ? "contained" : "outlined"}
+                                                size="small"
+                                                onClick={() => setLicenseStatus(value)}
+                                                startIcon={<Icon size={16} />}
+                                            >
+                                                {label}
+                                            </MuiButton>
+                                        );
+                                    })}
+                                </Stack>
+                            </Box>
 
-                        <div className="mb-4">
-                            <Label className="mb-1.5" htmlFor={daysInputId}>
-                                {licenseStatus === "expiring" ? "Expiring within (days)" : "Look-back period (days)"}
-                            </Label>
-                            <Input
-                                id={daysInputId}
-                                type="number"
-                                min={MIN_DAYS}
-                                max={MAX_DAYS}
-                                value={days}
-                                aria-describedby={daysHelpId}
-                                onChange={(e) => setDays(normalizeDownloadDays(e.target.value))}
+                            <Box>
+                                <Typography component="label" htmlFor={daysInputId} variant="body2" sx={{ mb: 1, fontWeight: 500, display: 'block' }}>
+                                    {licenseStatus === "expiring" ? "Expiring within (days)" : "Look-back period (days)"}
+                                </Typography>
+                                <TextField
+                                    id={daysInputId}
+                                    type="number"
+                                    fullWidth
+                                    inputProps={{ min: MIN_DAYS, max: MAX_DAYS }}
+                                    value={days}
+                                    onChange={(e) => setDays(normalizeDownloadDays(e.target.value))}
+                                    variant="outlined"
+                                    size="small"
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                    {licenseStatus === "expiring"
+                                        ? `Licenses expiring within the next ${days} days`
+                                        : `Active licenses expiring from ${days} days ago onward`}
+                                </Typography>
+                            </Box>
+
+                            {/* Active Filters Display */}
+                            <DownloadLicenseActiveFiltersDisplay
+                                licenseStatus={licenseStatus}
+                                days={days}
+                                onRemoveFilter={(key) => {
+                                    if (key === 'licenseStatus') setLicenseStatus('active');
+                                    if (key === 'days') setDays(DEFAULT_DAYS);
+                                }}
+                                onClearAll={() => {
+                                    setLicenseStatus('active');
+                                    setDays(DEFAULT_DAYS);
+                                }}
                             />
-                            <p id={daysHelpId} className="mt-1.5 text-[11.5px] text-muted-foreground">
-                                {licenseStatus === "expiring"
-                                    ? `Licenses expiring within the next ${days} days`
-                                    : `Active licenses expiring from ${days} days ago onward`}
-                            </p>
-                        </div>
 
-                        {/* Active Filters Display */}
-                        <DownloadLicenseActiveFiltersDisplay
-                            licenseStatus={licenseStatus}
-                            days={days}
-                            onRemoveFilter={(key) => {
-                                if (key === 'licenseStatus') setLicenseStatus('active');
-                                if (key === 'days') setDays(DEFAULT_DAYS);
-                            }}
-                            onClearAll={() => {
-                                setLicenseStatus('active');
-                                setDays(DEFAULT_DAYS);
-                            }}
-                        />
-
-                        <Button className="mt-auto w-full" onClick={handleDownload} disabled={loading}>
-                            {loading ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
-                            {loading ? "Generating…" : "Download Excel"}
-                        </Button>
-                    </CardContent>
-                </Card>
+                            <MuiButton
+                                variant="contained"
+                                fullWidth
+                                onClick={handleDownload}
+                                disabled={loading}
+                                startIcon={loading ? <Loader2 size={18} /> : <FileSpreadsheet size={18} />}
+                            >
+                                {loading ? "Generating…" : "Download Excel"}
+                            </MuiButton>
+                        </Box>
+                    </Paper>
+                </Grid>
 
                 {/* Info */}
-                <Card className="lg:col-span-2">
-                    <CardContent className="pt-5">
-                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                            <Info className="size-4 text-primary" />
+                <Grid item xs={12}>
+                    <Paper sx={{ p: 2, borderRadius: 1 }}>
+                        <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                            <Info size={18} />
                             Excel Report Includes
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        </Typography>
+                        <Grid container spacing={2}>
                             {EXCEL_INCLUDES.map((f, i) => (
-                                <div key={i} className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-                                    <CheckCircle2 className="size-4 shrink-0 text-success" />
-                                    {f}
-                                </div>
+                                <Grid item xs={12} sm={6} lg={4} key={i}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <CheckCircle2 size={16} style={{ flexShrink: 0, color: theme.palette.success.main }} />
+                                        <Typography variant="body2" color="text.secondary">{f}</Typography>
+                                    </Box>
+                                </Grid>
                             ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+                        </Grid>
+                    </Paper>
+                </Grid>
+            </Grid>
         </>
     );
 }
@@ -289,43 +304,43 @@ function DownloadLicenseActiveFiltersDisplay({
     onRemoveFilter: (key: string) => void;
     onClearAll: () => void;
 }) {
-    const activeFilters: ActiveFilterItem[] = useMemo(() => {
-        const items: ActiveFilterItem[] = [];
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === licenseStatus)?.label || 'Unknown';
+    const hasFilters = licenseStatus !== 'active' || days !== DEFAULT_DAYS;
 
-        // License Status
-        if (licenseStatus !== 'active') {
-            const statusLabel = STATUS_OPTIONS.find(o => o.value === licenseStatus)?.label || licenseStatus;
-            items.push({
-                key: 'licenseStatus',
-                label: 'License Status',
-                value: statusLabel,
-            });
-        }
-
-        // Days filter
-        if (days !== DEFAULT_DAYS) {
-            items.push({
-                key: 'days',
-                label: licenseStatus === 'expiring' ? 'Expiring within' : 'Look-back period',
-                value: `${days} days`,
-            });
-        }
-
-        return items;
-    }, [licenseStatus, days]);
-
-    if (activeFilters.length === 0) {
-        return null;
-    }
+    if (!hasFilters) return null;
 
     return (
-        <div className="mb-4">
-            <ActiveFilters
-                filters={activeFilters}
-                onRemove={onRemoveFilter}
-                onClearAll={onClearAll}
-                showCount={true}
-            />
-        </div>
+        <Box>
+            <Typography variant="caption" sx={{ mb: 1, display: 'block', fontWeight: 500 }}>
+                Active Filters:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {licenseStatus !== 'active' && (
+                    <Chip
+                        label={`Status: ${statusLabel}`}
+                        onDelete={() => onRemoveFilter('licenseStatus')}
+                        size="small"
+                        variant="outlined"
+                    />
+                )}
+                {days !== DEFAULT_DAYS && (
+                    <Chip
+                        label={`Days: ${days}`}
+                        onDelete={() => onRemoveFilter('days')}
+                        size="small"
+                        variant="outlined"
+                    />
+                )}
+                {hasFilters && (
+                    <MuiButton
+                        size="small"
+                        variant="text"
+                        onClick={onClearAll}
+                    >
+                        Clear All
+                    </MuiButton>
+                )}
+            </Box>
+        </Box>
     );
 }

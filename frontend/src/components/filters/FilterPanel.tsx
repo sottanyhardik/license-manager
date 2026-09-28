@@ -6,7 +6,6 @@ import {
   Chip,
   Typography,
   Paper,
-  Grid,
   InputAdornment,
 } from '@mui/material';
 import { Search, X } from 'lucide-react';
@@ -58,10 +57,22 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
       </Box>
 
       {/* Filter Controls */}
-      <Box sx={{ p: 2, borderBottom: hasActiveFilters ? '1px solid' : 'none', borderColor: 'divider' }}>
-        <Grid container spacing={2}>
-          {children}
-        </Grid>
+      <Box
+        sx={{
+          p: 2,
+          borderBottom: hasActiveFilters ? '1px solid' : 'none',
+          borderColor: 'divider',
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, 1fr)',
+            md: 'repeat(3, 1fr)',
+            lg: 'repeat(4, 1fr)',
+          },
+          gap: 2,
+        }}
+      >
+        {children}
       </Box>
 
       {/* Active Filters Display */}
@@ -159,14 +170,33 @@ export function FilterPanel({ children, onFiltersChange }: FilterPanelProps) {
 
 // Backward compatibility exports for AdvancedFilter.tsx
 export function FilterGrid({ children }: { children: ReactNode }) {
-  return <Grid container spacing={2}>{children}</Grid>;
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: {
+          xs: '1fr',
+          sm: 'repeat(2, 1fr)',
+          md: 'repeat(3, 1fr)',
+          lg: 'repeat(4, 1fr)',
+        },
+        gap: 2,
+      }}
+    >
+      {children}
+    </Box>
+  );
 }
 
 export function FilterField({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <Grid item xs={12} sm={wide ? 12 : 6} md={wide ? 12 : 6} component="div">
+    <Box
+      sx={{
+        gridColumn: wide ? { sm: 'span 2', md: 'span 2', lg: 'span 2' } : 'auto',
+      }}
+    >
       {children}
-    </Grid>
+    </Box>
   );
 }
 

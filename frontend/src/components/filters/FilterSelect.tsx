@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Grid,
   Select,
   MenuItem,
   FormControl,
@@ -63,7 +62,7 @@ export function FilterSelect({
   required = false,
   disabled = false,
   size = 'small',
-  gridSize = 12,
+  gridSize: _gridSize = 12,
 }: FilterSelectProps) {
   const { state, setFilter } = useFilters();
   const value = state.filters[filterKey] ?? (multiple ? [] : '');
@@ -77,7 +76,6 @@ export function FilterSelect({
   };
 
   return (
-    <Grid item xs={12} sm={gridSize === 12 ? 12 : 6} md={gridSize === 12 ? 12 : gridSize === 6 ? 6 : 4} lg={gridSize} component="div">
       <FormControl
         fullWidth
         size={size}
@@ -104,7 +102,6 @@ export function FilterSelect({
         </Select>
         {helperText && <FormHelperText>{helperText}</FormHelperText>}
       </FormControl>
-    </Grid>
   );
 }
 

@@ -13,7 +13,7 @@ import {formatDate} from "../utils/dateFormatter";
 import {useDebounce} from "@/hooks/useDebounce";
 import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
-import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, ChevronDown, Clipboard, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, ChevronDown, Clipboard, CloudDownload, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, RefreshCw, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
@@ -257,6 +257,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     // Confirm dialogs (replaces window.confirm)
     const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; allotmentItemId: number | null }>({ show: false, allotmentItemId: null });
     const [copyConfirm, setCopyConfirm] = useState(false);
+    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState<Set<number>>(new Set());
 
     // Enable browser back button support with filter preservation
     useBackButton('allotments', !isModal);
@@ -515,6 +516,36 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     const invalidateAllotment = () => {
         qc.invalidateQueries({ queryKey: ['allotments', id] });
     };
+
+    const handleFetchOwnership = useCallback(async () => {
+        if (allottedDetailGroups.length === 0) {
+            toast.error('No licenses to fetch');
+            return;
+        }
+        const licenseIds = [...new Set(allottedDetailGroups.map(d => d.license_id))].filter(Boolean);
+        setFetchingOwnershipIds(new Set(licenseIds));
+        let successCount = 0;
+        let failCount = 0;
+        try {
+            for (const licenseId of licenseIds) {
+                try {
+                    const r = await api.post(`license-actions/${licenseId}/fetch-ownership/`);
+                    successCount++;
+                } catch (err: any) {
+                    failCount++;
+                }
+            }
+            const msg = failCount > 0
+                ? `Updated ${successCount}/${licenseIds.length} license transfers`
+                : `Updated ${successCount} license transfers`;
+            toast.success(msg);
+            qc.invalidateQueries({ queryKey: ['allotments', id, 'info'] });
+        } catch (err: any) {
+            toast.error('Failed to fetch ownership');
+        } finally {
+            setFetchingOwnershipIds(new Set());
+        }
+    }, [allottedDetailGroups, id, qc]);
 
     // Refresh the exact currently visible query after a mutation.  Broad cache
     // invalidation alone can leave a cancelled request stale until another
@@ -1021,46 +1052,66 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 <span className="text-[11px] font-normal text-muted-foreground">merged from {allotment.allotment_details.length} allocations</span>
                             )}
                         </h6>
-                        <button
-                            className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
-                            onClick={() => {
-                                    const headers = ['License', 'Serial', 'Description', 'HSN Code', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
-                                    const rows = allottedDetailGroups.map(detail => {
-                                        const transferInfo = [detail.current_owner, detail.file_transfer_status].filter(Boolean).join(' - ') || '-';
-                                        return [
-                                            detail.license_number,
-                                            detail.serial_number,
-                                            detail.product_description,
-                                            detail.hs_code || '-',
-                                            detail.exporter,
-                                            transferInfo,
-                                            detail.license_date,
-                                            detail.license_expiry,
-                                            parseInt(detail.qty || 0).toLocaleString(),
-                                            parseFloat(detail.cif_fc || 0).toFixed(2)
-                                        ];
-                                    });
-                                    if (allottedDetailGroups.length > 1) {
-                                        rows.push([
-                                            '', '', '', '', '', '', '', 'Total DFIA allocation',
-                                            parseInt(allotment.alloted_quantity || 0).toLocaleString(),
-                                            `$${parseFloat(allotment.allotted_value || 0).toLocaleString('en-US', {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                            })}`,
-                                        ]);
-                                    }
-                                    const tsv = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\n');
-                                    navigator.clipboard.writeText(tsv).then(() => {
-                                        toast.success('Copied to clipboard!');
-                                    }).catch(() => {
-                                        toast.error('Failed to copy');
-                                    });
-                                }}
-                                title="Copy table data to clipboard"
+                        <div className="flex items-center gap-2">
+                            <button
+                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={handleFetchOwnership}
+                                disabled={fetchingOwnershipIds.size > 0 || allottedDetailGroups.length === 0}
+                                title="Fetch transfer status from DGFT"
                             >
-                                <Clipboard className="size-4" aria-hidden="true" /> Copy
+                                {fetchingOwnershipIds.size > 0 ? (
+                                    <>
+                                        <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+                                        Fetching…
+                                    </>
+                                ) : (
+                                    <>
+                                        <CloudDownload className="size-4" aria-hidden="true" />
+                                        Fetch from DGFT
+                                    </>
+                                )}
                             </button>
+                            <button
+                                className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted"
+                                onClick={() => {
+                                        const headers = ['License', 'Serial', 'Description', 'HSN Code', 'Exporter', 'Transfer Status', 'License Date', 'Expiry Date', 'Allotted Qty', 'Allotted Value'];
+                                        const rows = allottedDetailGroups.map(detail => {
+                                            const transferInfo = [detail.current_owner, detail.file_transfer_status].filter(Boolean).join(' - ') || '-';
+                                            return [
+                                                detail.license_number,
+                                                detail.serial_number,
+                                                detail.product_description,
+                                                detail.hs_code || '-',
+                                                detail.exporter,
+                                                transferInfo,
+                                                detail.license_date,
+                                                detail.license_expiry,
+                                                parseInt(detail.qty || 0).toLocaleString(),
+                                                parseFloat(detail.cif_fc || 0).toFixed(2)
+                                            ];
+                                        });
+                                        if (allottedDetailGroups.length > 1) {
+                                            rows.push([
+                                                '', '', '', '', '', '', '', 'Total DFIA allocation',
+                                                parseInt(allotment.alloted_quantity || 0).toLocaleString(),
+                                                `$${parseFloat(allotment.allotted_value || 0).toLocaleString('en-US', {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                })}`,
+                                            ]);
+                                        }
+                                        const tsv = [headers.join('\t'), ...rows.map(row => row.join('\t'))].join('\n');
+                                        navigator.clipboard.writeText(tsv).then(() => {
+                                            toast.success('Copied to clipboard!');
+                                        }).catch(() => {
+                                            toast.error('Failed to copy');
+                                        });
+                                    }}
+                                    title="Copy table data to clipboard"
+                                >
+                                    <Clipboard className="size-4" aria-hidden="true" /> Copy
+                                </button>
+                        </div>
                     </div>
                     <div>
                         <div className="overflow-x-auto">

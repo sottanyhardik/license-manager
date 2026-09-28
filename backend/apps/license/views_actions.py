@@ -1,4 +1,5 @@
 # license/views_actions.py
+import logging
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -10,6 +11,8 @@ from apps.accounts.permissions import LicensePermission
 from apps.core.models import CompanyModel
 from apps.core.utils.exceptions import api_error
 from apps.license.models import LicenseDetailsModel, LicenseOwnership, LicenseTransferModel
+
+logger = logging.getLogger(__name__)
 
 
 class LicenseActionViewSet(ViewSet):
@@ -457,7 +460,28 @@ class LicenseActionViewSet(ViewSet):
         from apps.license.management.commands.update_license_ownership import (
             fetch_and_update_ownership,
             DGFT_PROXY,
+            get_dgft_ownership_credentials,
         )
+        from django.conf import settings
+
+        # Validate DGFT credentials are configured
+        app_id, session_id, csrf_token, aws_alb = get_dgft_ownership_credentials()
+        if not all((app_id, session_id, csrf_token)):
+            missing = []
+            if not app_id:
+                missing.append('DGFT_APP_ID')
+            if not session_id:
+                missing.append('DGFT_SESSION_ID')
+            if not csrf_token:
+                missing.append('DGFT_CSRF_TOKEN')
+            return Response(
+                {
+                    'success': False,
+                    'error': 'DGFT credentials not configured',
+                    'missing_credentials': missing,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         default_iec = request.data.get('default_iec') if isinstance(request.data, dict) else None
         try:
@@ -465,14 +489,24 @@ class LicenseActionViewSet(ViewSet):
                 license_obj, max_retries=2, proxy=DGFT_PROXY, default_iec=default_iec,
             )
         except Exception as e:
+            import traceback
+            logger.exception("Unexpected error in fetch_and_update_ownership")
             return Response(
-                api_error('Unexpected error fetching ownership', e, __name__),
+                {
+                    'success': False,
+                    'error': 'Unexpected error fetching ownership',
+                    'detail': str(e),
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         if not ok:
+            logger.warning(f"Failed to fetch ownership for license {license_obj.license_number}: {error}")
             return Response(
-                {'success': False, 'error': error or 'Failed to fetch ownership from DGFT'},
+                {
+                    'success': False,
+                    'error': error or 'Failed to fetch ownership from DGFT',
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

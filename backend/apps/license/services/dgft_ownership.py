@@ -108,6 +108,8 @@ def fetch_scrip_ownership(
             "https": proxy_url,
         }
 
+    logger.debug("Fetching scrip ownership for %s issued %s (IEC: %s)", required_values["scrip_number"], required_values["scrip_issue_date"], required_values["iec_number"])
+
     for attempt in range(MAX_ATTEMPTS):
         try:
             response = requests.post(
@@ -124,14 +126,50 @@ def fetch_scrip_ownership(
                 logger.warning("Rate limited (429). Retrying in %ds... (attempt %d/%d)", wait, attempt + 1, MAX_ATTEMPTS)
                 time.sleep(wait)
                 continue
+
+            if response.status_code >= 400:
+                error_msg = f"HTTP {response.status_code}"
+                try:
+                    error_body = response.text[:500]  # First 500 chars
+                    error_msg += f": {error_body}"
+                except Exception:
+                    pass
+                logger.error("DGFT returned error: %s", error_msg)
+                if response.status_code >= 500:
+                    # Server error, retry
+                    if attempt < MAX_ATTEMPTS - 1:
+                        wait = 2**attempt * BASE_RETRY_DELAY_SECONDS
+                        logger.warning("Server error. Retrying in %ds... (attempt %d/%d)", wait, attempt + 1, MAX_ATTEMPTS)
+                        time.sleep(wait)
+                        continue
+                    return None
+                # Client error (4xx), don't retry
+                return None
+
             response.raise_for_status()
             return response
+        except requests.Timeout as e:
+            if attempt < MAX_ATTEMPTS - 1:
+                wait = 2**attempt * BASE_RETRY_DELAY_SECONDS
+                logger.warning("Request timeout (exceeded %ds). Retrying in %ds... (attempt %d/%d)", REQUEST_TIMEOUT_SECONDS, wait, attempt + 1, MAX_ATTEMPTS)
+                time.sleep(wait)
+            else:
+                logger.error("Timeout after %d attempts", MAX_ATTEMPTS)
+                return None
+        except requests.ConnectionError as e:
+            if attempt < MAX_ATTEMPTS - 1:
+                wait = 2**attempt * BASE_RETRY_DELAY_SECONDS
+                logger.warning("Connection error: %s. Retrying in %ds... (attempt %d/%d)", e, wait, attempt + 1, MAX_ATTEMPTS)
+                time.sleep(wait)
+            else:
+                logger.error("Connection failed after %d attempts: %s", MAX_ATTEMPTS, e)
+                return None
         except requests.RequestException as e:
             if attempt < MAX_ATTEMPTS - 1:
                 wait = 2**attempt * BASE_RETRY_DELAY_SECONDS
                 logger.warning("Request error: %s. Retrying in %ds... (attempt %d/%d)", e, wait, attempt + 1, MAX_ATTEMPTS)
                 time.sleep(wait)
             else:
-                logger.error("Error fetching scrip ownership: %s", e)
+                logger.error("Error fetching scrip ownership after %d attempts: %s", MAX_ATTEMPTS, e)
                 return None
     return None

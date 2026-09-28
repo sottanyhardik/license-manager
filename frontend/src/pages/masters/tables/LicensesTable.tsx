@@ -14,6 +14,7 @@ import {
     memo,
     useCallback,
     useEffect,
+    useRef,
     useMemo,
     useState,
 } from "react";
@@ -195,6 +196,7 @@ export interface LicensesTableProps {
     fetchingOwnershipIds: Set<number>;
     onFetchOwnership: (item: LicenseListItem) => void;
     invalidateList: () => void;
+    onDGFTComplete?: (licenseId: number) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -931,6 +933,7 @@ interface LicenseRowProps {
     onDelete: (item: LicenseListItem) => void;
     isFetchingDGFT: boolean;
     onFetchDGFT: (item: LicenseListItem) => void;
+    onDGFTComplete?: (licenseId: number) => void;
 }
 
 const LicenseRow = memo(function LicenseRow({
@@ -946,8 +949,10 @@ const LicenseRow = memo(function LicenseRow({
     onDelete,
     isFetchingDGFT,
     onFetchDGFT,
+    onDGFTComplete,
 }: LicenseRowProps) {
     const queryClient = useQueryClient();
+    const prevFetchingDGFT = useRef(isFetchingDGFT);
     const [activeTab, setActiveTab] = useState<TabId>("overview");
     const [visited, setVisited] = useState<Set<TabId>>(new Set(["overview"]));
     const [detail] = useState<LicenseDetail | null>(null);
@@ -1010,6 +1015,15 @@ const LicenseRow = memo(function LicenseRow({
             setActiveTab(visibleTabs[0]?.id ?? "overview");
         }
     }, [visibleTabs, activeTab]);
+
+    // Clear ownership cache when DGFT fetch completes so History tab reflects new data
+    useEffect(() => {
+        if (prevFetchingDGFT.current && !isFetchingDGFT && ownershipData) {
+            setOwnershipData(null);
+            onDGFTComplete?.(item.id);
+        }
+        prevFetchingDGFT.current = isFetchingDGFT;
+    }, [isFetchingDGFT, ownershipData, item.id, onDGFTComplete]);
 
     const handleOpenMergedPdf = useCallback(async (e: React.MouseEvent) => {
         e.stopPropagation(); // prevent accordion toggle
@@ -1364,6 +1378,7 @@ export default function LicensesTable({
     onDelete,
     fetchingOwnershipIds,
     onFetchOwnership,
+    onDGFTComplete,
 }: LicensesTableProps) {
     // Only one accordion open at a time
     const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -1405,6 +1420,7 @@ export default function LicensesTable({
                     onDelete={onDelete}
                     isFetchingDGFT={fetchingOwnershipIds.has(item.id)}
                     onFetchDGFT={onFetchOwnership}
+                    onDGFTComplete={onDGFTComplete}
                 />
             ))}
         </div>

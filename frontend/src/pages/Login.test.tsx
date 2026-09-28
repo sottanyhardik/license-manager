@@ -1,9 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
 
 import { AuthContext } from "../context/AuthContext";
 import { getSafeRedirect } from "../utils/authRedirect";
+import { lightTheme } from "../theme";
 import Login from "./Login";
 
 vi.mock("../api/axios", () => ({
@@ -34,11 +36,13 @@ describe("Login", () => {
 
     it("links to the password reset page", () => {
         render(
-            <MemoryRouter>
-                <AuthContext.Provider value={authValue as never}>
-                    <Login />
-                </AuthContext.Provider>
-            </MemoryRouter>,
+            <MuiThemeProvider theme={lightTheme}>
+                <MemoryRouter>
+                    <AuthContext.Provider value={authValue as never}>
+                        <Login />
+                    </AuthContext.Provider>
+                </MemoryRouter>
+            </MuiThemeProvider>,
         );
 
         expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute(

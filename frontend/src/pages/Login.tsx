@@ -1,240 +1,513 @@
 import { type FormEvent, useContext, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
+import { ShieldCheck, Eye, EyeOff, Loader2, Clock, AlertCircle, Check } from "lucide-react";
 import {
-    ShieldCheck,
-    Eye,
-    EyeOff,
-    LogIn,
-    Loader2,
-    Clock,
-    AlertCircle,
-} from "lucide-react";
+  Box,
+  Container,
+  Grid,
+  Stack,
+  Paper,
+  Typography,
+  TextField,
+  InputAdornment,
+  IconButton,
+  Button,
+  Alert,
+  AlertTitle,
+  Divider,
+  useTheme,
+  useMediaQuery,
+} from "@mui/material";
 
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
 import { getSafeRedirect } from "../utils/authRedirect";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
-const FEATURES = [
-    "License lifecycle management",
-    "Bill of Entry tracking",
-    "Allotment & utilization reports",
-    "SION norm compliance",
-    "Role-based access control",
+const CAPABILITIES = [
+  "License Management",
+  "Trade & Compliance Operations",
+  "Planning & Reconciliation",
+  "Reporting & Analytics",
 ];
 
 export default function Login() {
-    const { user, loading: authLoading, loginSuccess } = useContext(AuthContext);
-    const navigate = useNavigate();
-    const location = useLocation();
-    const reduce = useReducedMotion();
+  const { user, loading: authLoading, loginSuccess } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const reduce = useReducedMotion();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
-    const [form, setForm] = useState({ username: "", password: "" });
-    const [error, setError] = useState("");
-    const [submitting, setSubmitting] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-    const searchParams = new URLSearchParams(location.search);
-    const redirectParam = searchParams.get("redirect");
-    const reason = searchParams.get("reason");
-    const from = getSafeRedirect(location.state?.from) ?? getSafeRedirect(redirectParam) ?? "/dashboard";
+  const searchParams = new URLSearchParams(location.search);
+  const redirectParam = searchParams.get("redirect");
+  const reason = searchParams.get("reason");
+  const from =
+    getSafeRedirect(location.state?.from) ??
+    getSafeRedirect(redirectParam) ??
+    "/dashboard";
 
-    const sessionMessage =
-        reason === "idle" ? "You were logged out due to inactivity." :
-        reason === "session_expired" ? "Your session has expired. Please log in again." :
-        null;
+  const sessionMessage =
+    reason === "idle"
+      ? "You were logged out due to inactivity."
+      : reason === "session_expired"
+        ? "Your session has expired. Please log in again."
+        : null;
 
-    useEffect(() => { document.title = "Sign In · License Manager"; }, []);
+  useEffect(() => {
+    document.title = "Sign In · License Manager";
+  }, []);
 
-    useEffect(() => {
-        if (!authLoading && user) navigate(from, { replace: true });
-    }, [user, authLoading, navigate, from]);
+  useEffect(() => {
+    if (!authLoading && user) navigate(from, { replace: true });
+  }, [user, authLoading, navigate, from]);
 
-    const submit = async (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setError("");
-        setSubmitting(true);
-        try {
-            const { data } = await api.post("/auth/login/", form);
-            loginSuccess({ access: data.access, refresh: data.refresh, user: data.user });
-            navigate(from, { replace: true });
-        } catch (err) {
-            const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
-            setError(detail || "Invalid username or password.");
-            setSubmitting(false);
-        }
-    };
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const { data } = await api.post("/auth/login/", form);
+      loginSuccess({
+        access: data.access,
+        refresh: data.refresh,
+        user: data.user,
+      });
+      navigate(from, { replace: true });
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        .response?.data?.detail;
+      setError(detail || "Invalid username or password.");
+      setSubmitting(false);
+    }
+  };
 
-    return (
-        <div className="min-h-screen bg-muted/35 p-0 lg:p-4">
-            <main className="mx-auto flex min-h-screen max-w-[1440px] overflow-hidden bg-background lg:min-h-[calc(100vh-2rem)] lg:rounded-xl lg:border lg:border-border/80 lg:shadow-sm">
-            {/* Operations panel — hidden below lg */}
-            <aside
-                className="relative hidden w-[470px] shrink-0 flex-col overflow-hidden border-r border-primary-foreground/10 bg-primary text-primary-foreground lg:flex"
-                aria-hidden="true"
+  const handlePasswordToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setShowPassword((v) => !v);
+  };
+
+  return (
+    <Box
+      component="main"
+      role="main"
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        backgroundColor: theme.palette.mode === "light"
+          ? theme.palette.background.default
+          : theme.palette.background.default,
+      }}
+    >
+      {/* Left Brand Panel — hidden on mobile */}
+      {!isMobile && (
+        <Box
+          component="aside"
+          sx={{
+            width: "40%",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: theme.spacing(6),
+            backgroundColor:
+              theme.palette.mode === "light"
+                ? theme.palette.primary.main
+                : theme.palette.primary.dark,
+            color:
+              theme.palette.mode === "light"
+                ? theme.palette.primary.contrastText
+                : theme.palette.primary.contrastText,
+            position: "relative",
+            overflow: "hidden",
+            borderRight: `1px solid ${theme.palette.divider}`,
+          }}
+        >
+          {/* Subtle geometric background */}
+          <Box
+            sx={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage:
+                theme.palette.mode === "light"
+                  ? "linear-gradient(135deg, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(45deg, rgba(255,255,255,0.08) 1px, transparent 1px)"
+                  : "linear-gradient(135deg, rgba(0,0,0,0.2) 1px, transparent 1px), linear-gradient(45deg, rgba(0,0,0,0.2) 1px, transparent 1px)",
+              backgroundSize: "48px 48px",
+              pointerEvents: "none",
+              opacity: 0.5,
+            }}
+          />
+
+          {/* Brand Section */}
+          <Box sx={{ position: "relative", zIndex: 1 }}>
+            {/* Logo + Title */}
+            <Stack direction="row" spacing={2} sx={{ mb: 4, alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 1,
+                  border: `2px solid ${theme.palette.primary.contrastText}`,
+                  opacity: 0.9,
+                }}
+              >
+                <ShieldCheck size={20} />
+              </Box>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 700,
+                  letterSpacing: "0.5px",
+                  fontSize: "1.1rem",
+                }}
+              >
+                License Manager
+              </Typography>
+            </Stack>
+
+            {/* Product Statement */}
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                opacity: 0.85,
+                mb: 3,
+              }}
             >
-                <div
-                    className="pointer-events-none absolute inset-0 opacity-[0.08]"
+              Trade Operations Platform
+            </Typography>
+
+            <Typography
+              variant="body1"
+              sx={{
+                fontSize: "1rem",
+                lineHeight: 1.6,
+                opacity: 0.9,
+              }}
+            >
+              Manage licenses, BOEs, allotments, utilization and SION compliance
+              from one secure workspace.
+            </Typography>
+
+            {/* Capabilities List */}
+            <Stack spacing={2} sx={{ mt: 4 }}>
+              {CAPABILITIES.map((capability) => (
+                <Stack
+                  key={capability}
+                  direction="row"
+                  spacing={2}
+                  sx={{ alignItems: "flex-start" }}
+                >
+                  <Check
+                    size={18}
                     style={{
-                        backgroundImage:
-                            "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
-                        backgroundSize: "28px 28px",
+                      flexShrink: 0,
+                      marginTop: "2px",
+                      opacity: 0.8,
                     }}
+                  />
+                  <Typography variant="body2" sx={{ opacity: 0.85 }}>
+                    {capability}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Footer */}
+          <Box sx={{ position: "relative", zIndex: 1 }}>
+            <Divider
+              sx={{
+                borderColor: `rgba(${
+                  theme.palette.mode === "light" ? "255,255,255" : "0,0,0"
+                },0.12)`,
+                mb: 2,
+              }}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                fontSize: "0.7rem",
+                opacity: 0.6,
+              }}
+            >
+              Secure access · Role-based permissions
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
+      {/* Right Authentication Panel */}
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: theme.spacing(4),
+          [theme.breakpoints.down("sm")]: {
+            padding: theme.spacing(2),
+          },
+        }}
+      >
+        <motion.div
+          style={{
+            width: "100%",
+            maxWidth: "460px",
+          }}
+          initial={reduce ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Stack spacing={4}>
+            {/* Header */}
+            <Stack spacing={1.5}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 48,
+                  height: 48,
+                  borderRadius: 1.5,
+                  backgroundColor: theme.palette.primary.main,
+                  color: theme.palette.primary.contrastText,
+                }}
+              >
+                <ShieldCheck size={24} />
+              </Box>
+              <Typography
+                component="h1"
+                variant="h4"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: "1.75rem",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Welcome back
+              </Typography>
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{
+                  fontSize: "0.95rem",
+                }}
+              >
+                Sign in to continue to License Manager
+              </Typography>
+            </Stack>
+
+            {/* Alerts */}
+            <Stack spacing={2}>
+              {sessionMessage && (
+                <Alert
+                  severity="warning"
+                  icon={<Clock size={20} />}
+                  sx={{
+                    borderRadius: 1,
+                  }}
+                >
+                  <AlertTitle sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Session Notice
+                  </AlertTitle>
+                  {sessionMessage}
+                </Alert>
+              )}
+
+              {error && (
+                <Alert
+                  severity="error"
+                  icon={<AlertCircle size={20} />}
+                  sx={{
+                    borderRadius: 1,
+                  }}
+                >
+                  <AlertTitle sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Sign In Failed
+                  </AlertTitle>
+                  {error}
+                </Alert>
+              )}
+            </Stack>
+
+            {/* Form */}
+            <Box component="form" onSubmit={submit} noValidate>
+              <Stack spacing={3}>
+                {/* Username Field */}
+                <TextField
+                  fullWidth
+                  id="login-username"
+                  label="Username"
+                  type="text"
+                  placeholder="Enter your username"
+                  autoComplete="username"
+                  autoFocus
+                  required
+                  variant="outlined"
+                  value={form.username}
+                  onChange={(e) =>
+                    setForm({ ...form, username: e.target.value })
+                  }
+                  disabled={submitting}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      height: 48,
+                      fontSize: "0.95rem",
+                    },
+                  }}
                 />
 
-                <div className="relative z-10 flex-shrink-0 p-9 pb-0">
-                    <div className="flex items-center gap-3">
-                        <span className="flex size-9 items-center justify-center rounded-lg border border-primary-foreground/25 bg-primary-foreground/10">
-                            <ShieldCheck className="size-4.5 text-white" />
-                        </span>
-                        <span className="text-base font-semibold tracking-tight text-white">
-                            License Manager
-                        </span>
-                    </div>
-                </div>
-
-                <div className="relative z-10 flex flex-1 flex-col justify-center px-9">
-                    <div className="mb-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-foreground/75">
-                        <span className="size-1.5 rounded-full bg-emerald-400" />
-                        Trade Operations Platform
-                    </div>
-                    <h2 className="mt-4 text-[2rem] font-bold leading-[1.18] tracking-tight text-white">
-                        Your operational<br />
-                        <span className="text-primary-foreground/70">control centre.</span>
-                    </h2>
-                    <p className="mt-4 max-w-[310px] text-sm leading-relaxed text-primary-foreground/70">
-                        Work confidently across licences, BOE records, allotments,
-                        utilization, and SION compliance from one secure workspace.
-                    </p>
-
-                    <ul className="mt-8 flex flex-col gap-2.5">
-                        {FEATURES.map((f) => (
-                            <li key={f} className="flex items-center gap-3 text-sm text-white/80">
-                                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-foreground/15">
-                                    <svg className="size-2.5 text-white" viewBox="0 0 10 8" fill="none">
-                                        <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </span>
-                                {f}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                <div className="relative z-10 flex-shrink-0 border-t border-primary-foreground/10 px-9 py-5">
-                    <p className="text-xs text-white/40">
-                        Secure access · Role-based permissions enabled
-                    </p>
-                </div>
-            </aside>
-
-            <section className="flex flex-1 flex-col items-center justify-center bg-background px-5 py-8 sm:px-8 lg:px-12">
-                <motion.div
-                    className="w-full max-w-[430px]"
-                    initial={reduce ? false : { opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                >
-                    <div className="border-b border-border pb-7">
-                        <div className="mb-7">
-                            <div className="mb-4 flex size-10 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
-                                <ShieldCheck className="size-5" />
-                            </div>
-                            <h1 className="text-[1.5rem] font-bold leading-tight tracking-tight text-foreground">
-                                Welcome back
-                            </h1>
-                            <p className="mt-1.5 text-sm text-muted-foreground">
-                                Sign in to continue to License Manager
-                            </p>
-                        </div>
-
-                    {/* Session alert */}
-                    {sessionMessage && (
-                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-sm text-warning">
-                            <Clock className="mt-0.5 size-4 shrink-0" />
-                            <span>{sessionMessage}</span>
-                        </div>
-                    )}
-
-                    {/* Error */}
-                    {error && (
-                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
-                            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    {/* Form */}
-                    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="login-username">Username</Label>
-                            <Input
-                                id="login-username"
-                                placeholder="Enter your username"
-                                value={form.username}
-                                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                                required
-                                autoFocus
-                                autoComplete="username"
-                                className="h-10"
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="login-password">Password</Label>
-                            <div className="relative">
-                                <Input
-                                    id="login-password"
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Enter your password"
-                                    value={form.password}
-                                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                    required
-                                    autoComplete="current-password"
-                                    className="h-10 pr-10"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword((v) => !v)}
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
-                                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
-                                >
-                                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="-mt-2 text-right">
-                            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
-                                Forgot password?
-                            </Link>
-                        </div>
-
-                        <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
-                            {submitting ? (
-                                <>
-                                    <Loader2 className="size-4 animate-spin" />
-                                    Signing in…
-                                </>
+                {/* Password Field */}
+                <TextField
+                  fullWidth
+                  id="login-password"
+                  label="Password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                  variant="outlined"
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
+                  disabled={submitting}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={handlePasswordToggle}
+                            edge="end"
+                            aria-label={
+                              showPassword ? "Hide password" : "Show password"
+                            }
+                            disabled={submitting}
+                            sx={{
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            {showPassword ? (
+                              <EyeOff size={20} />
                             ) : (
-                                <>
-                                    <LogIn className="size-4" />
-                                    Sign in
-                                </>
+                              <Eye size={20} />
                             )}
-                        </Button>
-                    </form>
-                    </div>
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      height: 48,
+                      fontSize: "0.95rem",
+                    },
+                  }}
+                />
 
-                    <p className="mt-5 text-center text-xs text-muted-foreground">
-                        License Manager · Secure sign-in
-                    </p>
-                </motion.div>
-            </section>
-            </main>
-        </div>
-    );
+                {/* Forgot Password Link */}
+                <Box sx={{ textAlign: "right", mt: -2 }}>
+                  <Link
+                    to="/forgot-password"
+                    style={{
+                      fontSize: "0.875rem",
+                      fontWeight: 500,
+                      color: theme.palette.primary.main,
+                      textDecoration: "none",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.target as HTMLElement).style.textDecoration =
+                        "underline";
+                      (e.target as HTMLElement).style.opacity = "0.8";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.target as HTMLElement).style.textDecoration = "none";
+                      (e.target as HTMLElement).style.opacity = "1";
+                    }}
+                  >
+                    Forgot password?
+                  </Link>
+                </Box>
+
+                {/* Sign In Button */}
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  size="large"
+                  disabled={submitting}
+                  sx={{
+                    height: 48,
+                    fontSize: "1rem",
+                    fontWeight: 600,
+                    letterSpacing: "0.02em",
+                    textTransform: "none",
+                    borderRadius: 1,
+                    mt: 1,
+                    position: "relative",
+                    transition: "all 0.2s ease",
+                    "&:hover:not(:disabled)": {
+                      transform: "translateY(-1px)",
+                    },
+                  }}
+                >
+                  {submitting ? (
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Loader2
+                        size={18}
+                        style={{
+                          animation: "spin 0.6s linear infinite",
+                        }}
+                      />
+                      <span>Signing in…</span>
+                    </Stack>
+                  ) : (
+                    "Sign in"
+                  )}
+                </Button>
+              </Stack>
+            </Box>
+
+            {/* Footer */}
+            <Divider />
+            <Typography
+              align="center"
+              variant="caption"
+              color="textSecondary"
+              sx={{
+                fontSize: "0.75rem",
+                opacity: 0.7,
+              }}
+            >
+              License Manager · Secure sign-in
+            </Typography>
+          </Stack>
+        </motion.div>
+      </Box>
+
+      {/* Loading spinner CSS */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Box>
+  );
 }

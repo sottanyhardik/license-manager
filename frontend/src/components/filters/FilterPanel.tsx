@@ -30,34 +30,36 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 2,
+        gap: 1.5,
         mb: 3,
         width: '100%',
       }}
     >
-      {/* Main Filter Panel */}
+      {/* Main Filter Panel - MUI Minimal Dashboard Style */}
       <Paper
         elevation={0}
         sx={{
           backgroundColor: 'background.paper',
           border: `1px solid ${muiTheme.palette.divider}`,
-          borderRadius: 1,
+          borderRadius: 0.75,
           overflow: 'hidden',
           width: '100%',
+          transition: 'all 0.2s ease',
         }}
       >
         {/* Collapsible Header */}
         {collapsible && (
           <Box
             sx={{
-              px: { xs: 2, sm: 2.5, md: 3 },
-              py: 1.5,
+              px: { xs: 2, sm: 2, md: 2.5 },
+              py: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               borderBottom: !isExpanded && hasActiveFilters ? `1px solid ${muiTheme.palette.divider}` : 'none',
               cursor: 'pointer',
               userSelect: 'none',
+              transition: 'background-color 0.2s ease',
               '&:hover': {
                 backgroundColor: muiTheme.palette.action.hover,
               },
@@ -65,19 +67,20 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
             onClick={() => setIsExpanded(!isExpanded)}
           >
             <Typography
-              variant="body2"
+              variant="subtitle2"
               sx={{
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1.5,
+                gap: 1,
+                fontSize: '0.875rem',
               }}
             >
-              <Search size={18} />
+              <Search size={16} />
               Filters
             </Typography>
             <ChevronDown
-              size={18}
+              size={16}
               style={{
                 transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                 transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -90,16 +93,16 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
         {isExpanded && (
           <Box
             sx={{
-              p: { xs: 2, sm: 2.5, md: 3 },
+              p: { xs: 2, sm: 2, md: 2.5 },
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
                 sm: 'repeat(2, 1fr)',
                 md: 'repeat(3, 1fr)',
                 lg: 'repeat(4, 1fr)',
-                xl: 'repeat(4, 1fr)',
+                xl: 'repeat(5, 1fr)',
               },
-              gap: { xs: 2, sm: 2.5, md: 3 },
+              gap: { xs: 1.5, sm: 2, md: 2 },
               alignItems: 'start',
             }}
           >
@@ -147,8 +150,8 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
           sx={{
             backgroundColor: 'background.paper',
             border: `1px solid ${muiTheme.palette.divider}`,
-            borderRadius: 1,
-            p: { xs: 2, sm: 2.5, md: 3 },
+            borderRadius: 0.75,
+            p: { xs: 2, sm: 2, md: 2.5 },
             width: '100%',
           }}
         >
@@ -282,8 +285,9 @@ export function FilterGrid({ children }: { children: ReactNode }) {
           sm: 'repeat(2, 1fr)',
           md: 'repeat(3, 1fr)',
           lg: 'repeat(4, 1fr)',
+          xl: 'repeat(5, 1fr)',
         },
-        gap: { xs: 2, sm: 2.5, md: 3 },
+        gap: { xs: 1.5, sm: 2, md: 2 },
       }}
     >
       {children}

@@ -1,26 +1,173 @@
-import type { ReactNode } from "react";
-import { Filter, Loader2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React, { ReactNode } from 'react';
+import {
+  Box,
+  TextField,
+  Button,
+  Chip,
+  Typography,
+  Paper,
+  Grid,
+  InputAdornment,
+} from '@mui/material';
+import { Search, X } from 'lucide-react';
+import { useFilters, FilterProvider, FilterProviderProps } from './FilterContext';
 
-export function FilterPanel({ children, activeCount, isUpdating = false, onClear, clearDisabled = false }: {
-  children: ReactNode; activeCount: number; isUpdating?: boolean; onClear: () => void; clearDisabled?: boolean;
-}) {
-  return <section aria-label="Filters" className="rounded-lg border border-border/70 bg-card shadow-sm">
-    <div className="flex min-h-11 items-center gap-2 border-b border-border/60 px-3 py-2">
-      <Filter className="size-4 text-muted-foreground" aria-hidden="true" />
-      <h2 className="text-sm font-semibold">Filters</h2>
-      {activeCount > 0 && <span className="text-xs text-muted-foreground">{activeCount} active</span>}
-      {isUpdating && <span role="status" className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin motion-reduce:animate-none" />Updating</span>}
-      <Button type="button" variant="ghost" size="sm" className={isUpdating ? "" : "ml-auto"} onClick={onClear} disabled={clearDisabled}><X className="size-3.5" />Clear Filters</Button>
-    </div>
-    <div className="p-3">{children}</div>
-  </section>;
+interface FilterPanelInnerProps {
+  children: ReactNode;
 }
 
+/**
+ * Inner component that uses the FilterContext
+ */
+function FilterPanelInner({ children }: FilterPanelInnerProps) {
+  const { state, setSearch, removeFilter, clearAllFilters } = useFilters();
+  const { search, activeFilters } = state;
+  const hasActiveFilters = activeFilters.length > 0 || search.length > 0;
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        backgroundColor: 'background.paper',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        p: 0,
+        mb: 3,
+      }}
+    >
+      {/* Search Field */}
+      <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <TextField
+          fullWidth
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={18} style={{ color: 'var(--mui-palette-action-disabled)' }} />
+                </InputAdornment>
+              ),
+            },
+          }}
+          variant="outlined"
+          size="small"
+        />
+      </Box>
+
+      {/* Filter Controls */}
+      <Box sx={{ p: 2, borderBottom: hasActiveFilters ? '1px solid' : 'none', borderColor: 'divider' }}>
+        <Grid container spacing={2}>
+          {children}
+        </Grid>
+      </Box>
+
+      {/* Active Filters Display */}
+      {hasActiveFilters && (
+        <Box sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 0 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+              mb: 1,
+              color: 'text.primary',
+            }}
+          >
+            Active Filters:
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
+            {/* Search chip */}
+            {search && (
+              <Chip
+                label={`Search: ${search}`}
+                onDelete={() => setSearch('')}
+                size="small"
+                variant="outlined"
+              />
+            )}
+
+            {/* Filter chips */}
+            {activeFilters.map((filter) => (
+              <Chip
+                key={filter.key}
+                label={`${filter.label}: ${filter.value}`}
+                onDelete={() => removeFilter(filter.key)}
+                size="small"
+                variant="outlined"
+              />
+            ))}
+
+            {/* Clear All button */}
+            {hasActiveFilters && (
+              <Button
+                variant="text"
+                size="small"
+                startIcon={<X size={16} />}
+                onClick={clearAllFilters}
+                sx={{
+                  ml: 'auto',
+                  textTransform: 'none',
+                }}
+              >
+                Clear All
+              </Button>
+            )}
+          </Box>
+        </Box>
+      )}
+    </Paper>
+  );
+}
+
+export interface FilterPanelProps extends Omit<FilterProviderProps, 'children'> {
+  children: ReactNode;
+}
+
+/**
+ * FilterPanel Component
+ *
+ * Provides a complete filter interface with:
+ * - Search field
+ * - Filter controls (passed as children)
+ * - Active filters display with individual removal
+ * - Clear All button
+ *
+ * Usage:
+ * ```tsx
+ * <FilterPanel onFiltersChange={handleDataRefresh}>
+ *   <FilterSelect label="Status" filterKey="status" options={[...]} />
+ *   <FilterAutocomplete label="Port" filterKey="port" options={[...]} />
+ * </FilterPanel>
+ * ```
+ */
+export function FilterPanel({ children, onFiltersChange }: FilterPanelProps) {
+  return (
+    <FilterProvider onFiltersChange={onFiltersChange}>
+      <FilterPanelInner>{children}</FilterPanelInner>
+    </FilterProvider>
+  );
+}
+
+// Backward compatibility exports for AdvancedFilter.tsx
 export function FilterGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>;
+  return <Grid container spacing={2}>{children}</Grid>;
 }
 
 export function FilterField({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
-  return <div className={wide ? "xl:col-span-2" : ""}>{children}</div>;
+  return (
+    <Grid item xs={12} sm={wide ? 12 : 6} md={wide ? 12 : 6} component="div">
+      {children}
+    </Grid>
+  );
 }
+
+export default FilterPanel;

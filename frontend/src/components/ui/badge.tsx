@@ -3,9 +3,8 @@ import { Chip as MuiChip, ChipProps as MuiChipProps } from "@mui/material";
 
 export type BadgeVariant = "default" | "secondary" | "destructive" | "success" | "warning" | "info" | "outline";
 
-interface BadgeProps extends Omit<MuiChipProps, 'variant' | 'label'> {
+interface BadgeProps extends Omit<MuiChipProps, 'variant' | 'label' | 'children'> {
     variant?: BadgeVariant;
-    label?: React.ReactNode;
     children?: React.ReactNode;
 }
 
@@ -14,7 +13,7 @@ interface BadgeProps extends Omit<MuiChipProps, 'variant' | 'label'> {
  * Maps shadcn-style variants to MUI color/variant combinations
  */
 const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
-    ({ className, variant = "default", color = "default", label, children, ...props }, ref) => {
+    ({ className, variant = "default", color = "default", children, ...props }, ref) => {
         // Map badge variant to MUI color
         let muiColor: MuiChipProps['color'] = 'default';
         let muiVariant: MuiChipProps['variant'] = 'filled';
@@ -49,8 +48,8 @@ const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
                 break;
         }
 
-        // Support both label prop and children for flexibility
-        const chipLabel = label ?? children;
+        // Map children to label for MUI Chip
+        const chipLabel = children;
 
         return (
             <MuiChip

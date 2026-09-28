@@ -398,16 +398,13 @@ export default function CustomsLedgerTable({ rows, summary, licenseId, showHidde
                                     <td className="whitespace-nowrap px-3 py-2 font-medium">
                                         {row.type}
                                         {row.is_hidden && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Badge variant="secondary" className="ml-2 gap-1 align-middle no-underline cursor-default">
+                                            <Tooltip title={row.hidden_reason || "Hidden as a previous owner's utilisation."}>
+                                                <span className="ml-2 inline-flex items-center">
+                                                    <Badge variant="secondary" className="gap-1 no-underline cursor-default">
                                                         <EyeOff className="size-3" aria-hidden="true" />
                                                         Hidden
                                                     </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    {row.hidden_reason || "Hidden as a previous owner's utilisation."}
-                                                </TooltipContent>
+                                                </span>
                                             </Tooltip>
                                         )}
                                     </td>

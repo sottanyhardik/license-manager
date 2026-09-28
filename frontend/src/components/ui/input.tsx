@@ -52,7 +52,6 @@ const Input = React.forwardRef<HTMLDivElement, InputProps>(
                 fullWidth={true}
                 className={className}
                 data-slot="input"
-                InputProps={{ readOnly }}
                 slotProps={{
                     input: {
                         ...inputProps,

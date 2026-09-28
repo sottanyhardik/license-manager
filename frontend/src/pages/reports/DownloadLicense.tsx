@@ -4,15 +4,20 @@ import {
     ScanBarcode, Funnel, FileSpreadsheet, Loader2, Info,
     CircleCheck, TriangleAlert, CheckCircle2,
 } from "lucide-react";
+import {
+    Box,
+    Stack,
+    Grid,
+    Paper,
+    TextField,
+    Typography,
+    Button as MuiButton,
+    Chip,
+    useTheme,
+} from "@mui/material";
 
 import api from "../../api/axios";
 import PageHeader from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { MAX_DAYS, MIN_DAYS, normalizeDownloadDays, parseLicenseNumbers } from "./downloadLicenseHelpers";
 

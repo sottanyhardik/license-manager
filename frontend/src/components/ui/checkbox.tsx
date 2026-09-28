@@ -1,9 +1,9 @@
 import * as React from "react";
 import { Checkbox as MuiCheckbox, CheckboxProps as MuiCheckboxProps } from "@mui/material";
 
-interface CheckboxProps extends Omit<MuiCheckboxProps, 'onChange'> {
-    checked?: boolean | 'indeterminate';
-    onCheckedChange?: (checked: boolean | 'indeterminate') => void;
+interface CheckboxProps extends Omit<MuiCheckboxProps, 'onChange' | 'checked'> {
+    checked?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
     onChange?: (event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => void;
 }
 

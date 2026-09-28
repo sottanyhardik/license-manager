@@ -1,8 +1,7 @@
 import { useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import PageHeader from "@/components/PageHeader";
+import { Box, Stack, Typography, Button as MuiButton, CircularProgress, useTheme } from "@mui/material";
 import { CalendarDays, FileSpreadsheet, Inbox, Loader2, Package, Tag } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { useItemReportFilters } from "./itemReport/useItemReportFilters";
 import { useItemReportData } from "./itemReport/useItemReportData";
@@ -34,33 +33,34 @@ export default function PlannedReport() {
         exportFilename: "planned_report.xlsx",
     });
 
+    const theme = useTheme();
+
     return (
-        <div className="min-h-screen bg-background">
+        <Box sx={{ minHeight: '100vh', backgroundColor: theme.palette.background.default }}>
             <PageHeader
                 pretitle="Reports"
                 title="Planned Report"
                 description={
                     reportData ? (
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <span>{reportData.report_date}</span>
-                            <span className="text-muted-foreground">•</span>
-                            <Package className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <span>{reportData.total_items} items</span>
-                        </div>
+                        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <CalendarDays className="size-3.5" style={{ color: theme.palette.text.secondary }} aria-hidden="true" />
+                            <Typography variant="body2">{reportData.report_date}</Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>•</Typography>
+                            <Package className="size-3.5" style={{ color: theme.palette.text.secondary }} aria-hidden="true" />
+                            <Typography variant="body2">{reportData.total_items} items</Typography>
+                        </Stack>
                     ) : undefined
                 }
                 actions={
-                    <Button
-                        variant="default"
-                        size="sm"
+                    <MuiButton
+                        variant="contained"
+                        size="small"
                         onClick={() => handleExport(filters)}
                         disabled={downloading || !hasQuery}
+                        startIcon={downloading ? <Loader2 className="size-3.5 animate-spin" /> : <FileSpreadsheet className="size-3.5" />}
                     >
-                        {downloading ? <Loader2 className="size-3.5 animate-spin shrink-0" /> : <FileSpreadsheet className="size-3.5 shrink-0" />}
-                        <span className="hidden sm:inline">{downloading ? 'Generating…' : 'Export Excel'}</span>
-                        <span className="sm:hidden">{downloading ? '…' : 'Export'}</span>
-                    </Button>
+                        <span style={{ display: 'inline' }}>{downloading ? 'Generating…' : 'Export Excel'}</span>
+                    </MuiButton>
                 }
             />
 
@@ -148,43 +148,75 @@ export default function PlannedReport() {
             )}
 
             {/* Report Table */}
-            <div className="max-w-full">
+            <Box sx={{ maxWidth: '100%' }}>
                 {loading && (
-                    <Card>
-                        <CardContent className="flex flex-col items-center py-12 text-center">
-                            <Loader2 className="mb-3 size-10 animate-spin text-primary" />
-                            <h5 className="text-muted-foreground">Loading Planned Report…</h5>
-                            <p className="text-muted-foreground text-sm">Please wait while we fetch the data</p>
-                        </CardContent>
-                    </Card>
+                    <Box
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            p: 6,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            textAlign: 'center',
+                        }}
+                    >
+                        <CircularProgress sx={{ mb: 2 }} />
+                        <Typography variant="body1" sx={{ mb: 1, color: 'text.secondary' }}>
+                            Loading Planned Report…
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Please wait while we fetch the data
+                        </Typography>
+                    </Box>
                 )}
 
                 {!loading && !hasQuery && (
-                    <Card>
-                        <CardContent className="py-5 text-center">
-                            <Tag className="size-4" aria-hidden="true" />
-                            <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
-                            <p className="text-muted-foreground">Please select item names, search by product description, or search by HSN code to load the report data</p>
-                        </CardContent>
-                    </Card>
+                    <Box
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            p: 3,
+                            textAlign: 'center',
+                        }}
+                    >
+                        <Tag className="size-4 mx-auto" aria-hidden="true" />
+                        <Typography variant="body1" sx={{ mt: 2, mb: 1, color: 'primary.main', fontWeight: 600 }}>
+                            Select Filters to View Report
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Please select item names, search by product description, or search by HSN code to load the report data
+                        </Typography>
+                    </Box>
                 )}
 
                 {!loading && hasQuery && reportData && reportData.items.length === 0 && (
-                    <Card>
-                        <CardContent className="py-5 text-center">
-                            <Inbox className="size-4" aria-hidden="true" />
-                            <h5 className="mt-3 text-muted-foreground">No items found</h5>
-                            <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
-                            <div className="mt-3 text-left" style={{maxWidth: '600px', margin: '0 auto'}}>
-                                <p className="text-sm text-muted-foreground mb-2"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
-                                <ul className="text-sm text-muted-foreground">
-                                    <li>Setting License Status to "All"</li>
-                                    <li>Lowering the Min Balance (CIF) to 100</li>
-                                    <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
-                                </ul>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <Box
+                        sx={{
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            p: 3,
+                            textAlign: 'center',
+                        }}
+                    >
+                        <Inbox className="size-4 mx-auto" aria-hidden="true" />
+                        <Typography variant="body1" sx={{ mt: 2, mb: 1, color: 'text.secondary' }}>
+                            No items found
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                            Try adjusting your filters to see more results.
+                        </Typography>
+                        <Box sx={{ mx: 'auto', maxWidth: 600, textAlign: 'left' }}>
+                            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+                                <strong>Tip:</strong> When searching by Product Description or HSN Code, consider:
+                            </Typography>
+                            <Box component="ul" sx={{ color: 'text.secondary', fontSize: '0.875rem', pl: 2 }}>
+                                <li>Setting License Status to "All"</li>
+                                <li>Lowering the Min Balance (CIF) to 100</li>
+                                <li>Checking if your search term matches exactly (case-insensitive partial match)</li>
+                            </Box>
+                        </Box>
+                    </Box>
                 )}
 
                 {!loading && hasQuery && reportData && reportData.items.length > 0 && (
@@ -199,8 +231,8 @@ export default function PlannedReport() {
                         onSaveEdit={saveEdit}
                     />
                 )}
-            </div>
-        </div>
+            </Box>
+        </Box>
     );
 }
 

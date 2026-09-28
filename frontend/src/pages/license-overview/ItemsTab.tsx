@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
+import { DataGrid, GridColDef } from "@mui/x-data-grid";
+import { Box, useTheme } from "@mui/material";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLicenseOverviewItems } from "./useLicenseOverviewItems";
-import { extractApiError, fmtNum, sortRows, type SortState } from "./licenseOverviewHelpers";
-import SortableHeader from "./SortableHeader";
+import { extractApiError, fmtNum } from "./licenseOverviewHelpers";
 import type { LicenseOverviewItemRow } from "./types";
 
 interface ItemsTabProps {
@@ -20,26 +21,201 @@ type SortKey = keyof LicenseOverviewItemRow;
  * intentionally distinct from the "available"/"balance" figures shown
  * elsewhere (e.g. the license accordion row) — see `types.ts`.
  *
- * Row count is small (per-item, not per-BOE), so this always renders as a
- * plain table with client-side sort — no cards-vs-table threshold needed.
+ * Now uses MUI DataGrid for consistent table styling and sorting.
  */
 export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
     const { data, isLoading, isError, error } = useLicenseOverviewItems(licenseId, isActive);
-    const [sort, setSort] = useState<SortState<SortKey>>({ key: null, direction: "asc" });
+    const theme = useTheme();
 
-    const handleSort = (key: SortKey) => {
-        setSort((prev) => ({
-            key,
-            direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
-        }));
-    };
-
-    const rows = useMemo(
-        () => sortRows(data?.rows ?? [], sort, (row, key) => row[key] as string | number | null),
-        [data, sort]
-    );
     const footerTotals = data?.footer_totals;
-    const effectiveBalance = (row: LicenseOverviewItemRow) => row.effective_balance_cif ?? row.balance_cif;
+
+    // Transform rows for DataGrid (add totals row at end if needed)
+    const rows = useMemo(() => {
+        const baseRows = data?.rows ?? [];
+        // Add totals row with special ID
+        if (footerTotals) {
+            return [
+                ...baseRows,
+                {
+                    id: '__TOTALS_ROW__',
+                    description: 'Total',
+                    hs_code: '',
+                    unit: '',
+                    total_qty: footerTotals.total_qty ?? 0,
+                    total_cif: footerTotals.total_cif ?? 0,
+                    debited_qty: footerTotals.debited_qty ?? 0,
+                    debited_cif: footerTotals.debited_cif ?? 0,
+                    allotted_qty: footerTotals.allotted_qty ?? 0,
+                    allotted_cif: footerTotals.allotted_cif ?? 0,
+                    balance_qty: footerTotals.balance_qty ?? 0,
+                    effective_balance_cif: footerTotals.actual_effective_balance_cif ?? footerTotals.balance_cif ?? 0,
+                } as unknown as LicenseOverviewItemRow,
+            ];
+        }
+        return baseRows;
+    }, [data?.rows, footerTotals]);
+
+    const columns = useMemo<GridColDef[]>(() => [
+        {
+            field: 'description',
+            headerName: 'Product Description',
+            flex: 1.5,
+            minWidth: 200,
+            sortable: true,
+            renderCell: (params) => {
+                const value = params.value as string | null | undefined;
+                return (
+                    <div
+                        className={
+                            params.row.id === '__TOTALS_ROW__'
+                                ? 'font-semibold'
+                                : 'truncate'
+                        }
+                        title={value ?? ''}
+                    >
+                        {value ?? '—'}
+                    </div>
+                );
+            },
+        },
+        {
+            field: 'hs_code',
+            headerName: 'HSN Code',
+            width: 120,
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {(params.value as string | null) ?? '—'}
+                </span>
+            ),
+        },
+        {
+            field: 'unit',
+            headerName: 'Unit',
+            width: 100,
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {(params.value as string | null) ?? '—'}
+                </span>
+            ),
+        },
+        {
+            field: 'total_qty',
+            headerName: 'Total Qty',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'total_cif',
+            headerName: 'Total CIF',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'debited_qty',
+            headerName: 'Debited Qty',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'debited_cif',
+            headerName: 'Debited CIF',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'allotted_qty',
+            headerName: 'Allotted Qty',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'allotted_cif',
+            headerName: 'Allotted CIF',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'balance_qty',
+            headerName: 'Balance Qty',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => (
+                <span className={params.row.id === '__TOTALS_ROW__' ? 'font-semibold' : ''}>
+                    {fmtNum(params.value as number)}
+                </span>
+            ),
+        },
+        {
+            field: 'effective_balance_cif',
+            headerName: 'Balance CIF',
+            width: 120,
+            align: 'right',
+            headerAlign: 'right',
+            sortable: true,
+            renderCell: (params) => {
+                const row = params.row as unknown as LicenseOverviewItemRow & { id: string | number };
+                const isTotalsRow = String(params.row.id) === '__TOTALS_ROW__';
+                return (
+                    <span
+                        className={isTotalsRow ? 'font-semibold' : ''}
+                        title={
+                            !isTotalsRow && String(row.balance_cif_source) === 'LICENSE'
+                                ? 'Licence-level CIF'
+                                : 'Individual item CIF'
+                        }
+                    >
+                        {fmtNum(params.value as number)}
+                    </span>
+                );
+            },
+        },
+    ], []);
 
     if (!isActive) return null;
 
@@ -61,62 +237,67 @@ export default function ItemsTab({ licenseId, isActive }: ItemsTabProps) {
     }
 
     return (
-        <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-lg border border-border/70 bg-card">
-            <table className="w-full min-w-[1120px] text-[13px]">
-                <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
-                    <tr>
-                        <SortableHeader label="Product Description" sortKey="description" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
-                        <SortableHeader label="HSN Code" sortKey="hs_code" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
-                        <SortableHeader label="Unit" sortKey="unit" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
-                        <SortableHeader label="Total Qty" sortKey="total_qty" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Total CIF" sortKey="total_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Debited Qty" sortKey="debited_qty" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Debited CIF" sortKey="debited_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Allotted Qty" sortKey="allotted_qty" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Allotted CIF" sortKey="allotted_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Balance Qty" sortKey="balance_qty" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                        <SortableHeader label="Balance CIF" sortKey="effective_balance_cif" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.length === 0 && (
-                        <tr>
-                            <td colSpan={11} className="px-3 py-6 text-center text-muted-foreground">
-                                No import items on this licence.
-                            </td>
-                        </tr>
-                    )}
-                    {rows.map((row) => (
-                        <tr key={row.id} className="border-t border-border/60 hover:bg-muted/30">
-                            <td className="max-w-[280px] truncate px-3 py-1.5" title={row.description ?? ""}>{row.description ?? "—"}</td>
-                            <td className="px-3 py-1.5">{row.hs_code ?? "—"}</td>
-                            <td className="px-3 py-1.5">{row.unit ?? "—"}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.total_qty)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.total_cif)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.debited_qty)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.debited_cif)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_qty)}</td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">{fmtNum(row.allotted_cif)}</td>
-                            <td className="px-3 py-1.5 text-right font-medium tabular-nums">{fmtNum(row.balance_qty)}</td>
-                            <td className="px-3 py-1.5 text-right font-medium tabular-nums" title={row.balance_cif_source === "LICENSE" ? "Licence-level CIF" : "Individual item CIF"}>{fmtNum(effectiveBalance(row))}</td>
-                        </tr>
-                    ))}
-                </tbody>
-                {footerTotals && (
-                    <tfoot className="border-t-2 border-border bg-muted/40 text-[13px] font-semibold">
-                        <tr>
-                            <td colSpan={4} className="px-3 py-2">Total</td>
-                            <td data-column-id="total-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.total_cif ?? 0)}</td>
-                            <td />
-                            <td data-column-id="debited-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.debited_cif ?? 0)}</td>
-                            <td />
-                            <td data-column-id="allotted-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.allotted_cif ?? 0)}</td>
-                            <td />
-                            <td data-column-id="effective-balance-cif" className="px-3 py-2 text-right tabular-nums">{fmtNum(footerTotals.actual_effective_balance_cif ?? footerTotals.balance_cif ?? 0)}</td>
-                        </tr>
-                    </tfoot>
-                )}
-            </table>
-        </div>
+        <Box
+            sx={{
+                width: '100%',
+                height: 'calc(100vh - 15rem)',
+                '& .MuiDataGrid-root': {
+                    border: `1px solid ${theme.palette.divider}`,
+                    backgroundColor: theme.palette.background.paper,
+                    borderRadius: theme.shape.borderRadius,
+                },
+                '& .MuiDataGrid-cell': {
+                    borderColor: theme.palette.divider,
+                    py: 0.75,
+                    px: 1.5,
+                    fontSize: '0.8125rem',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                    backgroundColor:
+                        theme.palette.mode === 'dark'
+                            ? theme.palette.grey[900]
+                            : theme.palette.grey[100],
+                    borderColor: theme.palette.divider,
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                },
+                '& .MuiDataGrid-row': {
+                    '&:hover': {
+                        backgroundColor: theme.palette.action.hover,
+                    },
+                    '&[data-rowindex="__TOTALS_ROW__"]': {
+                        backgroundColor:
+                            theme.palette.mode === 'dark'
+                                ? theme.palette.grey[800]
+                                : theme.palette.grey[200],
+                        borderTop: `2px solid ${theme.palette.divider}`,
+                    },
+                },
+            }}
+        >
+            <DataGrid
+                rows={rows}
+                columns={columns}
+                pageSizeOptions={[25, 50, 100]}
+                paginationModel={{ pageSize: rows.length > 100 ? 100 : 25, page: 0 }}
+                onPaginationModelChange={() => {}}
+                sortingMode="client"
+                loading={isLoading}
+                getRowId={(row) => row.id ?? Math.random()}
+                disableRowSelectionOnClick
+                density="compact"
+                sx={{
+                    boxShadow: 'none',
+                    '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+                        outline: 'none',
+                    },
+                    '& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within': {
+                        outline: 'none',
+                    },
+                }}
+            />
+        </Box>
     );
 }

@@ -24,70 +24,84 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
   const hasActiveFilters = activeFilters.length > 0 || search.length > 0;
 
   return (
-    <Paper
-      elevation={0}
+    <Box
       sx={{
-        backgroundColor: 'background.paper',
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1,
-        p: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
         mb: 3,
       }}
     >
-      {/* Search Field */}
-      <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <TextField
-          fullWidth
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search size={18} style={{ color: 'var(--mui-palette-action-disabled)' }} />
-                </InputAdornment>
-              ),
-            },
-          }}
-          variant="outlined"
-          size="small"
-        />
-      </Box>
-
-      {/* Filter Controls */}
-      <Box
+      {/* Main Filter Panel */}
+      <Paper
+        elevation={0}
         sx={{
-          p: 2,
-          borderBottom: hasActiveFilters ? '1px solid' : 'none',
+          backgroundColor: 'background.paper',
+          border: '1px solid',
           borderColor: 'divider',
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            sm: 'repeat(2, 1fr)',
-            md: 'repeat(3, 1fr)',
-            lg: 'repeat(4, 1fr)',
-          },
-          gap: 2,
+          borderRadius: 1,
+          overflow: 'hidden',
         }}
       >
-        {children}
-      </Box>
+        {/* Filter Controls Grid */}
+        <Box
+          sx={{
+            p: { xs: 2, sm: 2.5, md: 3 },
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              md: 'repeat(3, 1fr)',
+              lg: 'repeat(4, 1fr)',
+            },
+            gap: { xs: 2, sm: 2.5 },
+            alignItems: 'start',
+          }}
+        >
+          {children}
+        </Box>
+      </Paper>
 
-      {/* Active Filters Display */}
+      {/* Active Filters Display (Always Visible) */}
       {hasActiveFilters && (
-        <Box sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 0 }}>
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 500,
-              mb: 1,
-              color: 'text.primary',
-            }}
-          >
-            Active Filters:
-          </Typography>
+        <Paper
+          elevation={0}
+          sx={{
+            backgroundColor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            p: { xs: 2, sm: 2.5, md: 3 },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <Search size={16} style={{ color: 'var(--tb-text-secondary)' }} />
+              Active Filters
+            </Typography>
+            <Button
+              variant="text"
+              size="small"
+              onClick={clearAllFilters}
+              startIcon={<X size={16} />}
+              sx={{
+                textTransform: 'none',
+                color: 'error.main',
+              }}
+            >
+              Clear All
+            </Button>
+          </Box>
+
+          {/* Filter chips display */}
           <Box
             sx={{
               display: 'flex',
@@ -116,26 +130,10 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
                 variant="outlined"
               />
             ))}
-
-            {/* Clear All button */}
-            {hasActiveFilters && (
-              <Button
-                variant="text"
-                size="small"
-                startIcon={<X size={16} />}
-                onClick={clearAllFilters}
-                sx={{
-                  ml: 'auto',
-                  textTransform: 'none',
-                }}
-              >
-                Clear All
-              </Button>
-            )}
           </Box>
-        </Box>
+        </Paper>
       )}
-    </Paper>
+    </Box>
   );
 }
 
@@ -180,7 +178,7 @@ export function FilterGrid({ children }: { children: ReactNode }) {
           md: 'repeat(3, 1fr)',
           lg: 'repeat(4, 1fr)',
         },
-        gap: 2,
+        gap: { xs: 2, sm: 2.5 },
       }}
     >
       {children}
@@ -192,7 +190,11 @@ export function FilterField({ children, wide = false }: { children: ReactNode; w
   return (
     <Box
       sx={{
-        gridColumn: wide ? { sm: 'span 2', md: 'span 2', lg: 'span 2' } : 'auto',
+        gridColumn: wide ? { xs: 'span 1', sm: 'span 2', md: 'span 2', lg: 'span 2' } : 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.75,
+        minWidth: 0, // Prevent grid overflow
       }}
     >
       {children}

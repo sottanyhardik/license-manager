@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global require */
 /**
  * Comprehensive route browser testing script
  * Tests all 30+ filterable routes in the License Manager app

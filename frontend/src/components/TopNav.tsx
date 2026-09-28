@@ -259,17 +259,21 @@ export default function TopNav() {
                             display: "flex",
                             alignItems: "center",
                             gap: 1,
-                            color: muiTheme.palette.primary.main,
+                            color: muiTheme.palette.primary.contrastText,
                             textTransform: "none",
-                            fontSize: "1.1rem",
+                            fontSize: "0.95rem",
                             fontWeight: 600,
+                            px: 1.5,
+                            py: 0.75,
+                            backgroundColor: muiTheme.palette.primary.main,
+                            borderRadius: 1,
                             "&:hover": {
-                                backgroundColor: "transparent",
+                                backgroundColor: muiTheme.palette.primary.dark,
                             },
                         }}
                         className="tb-nav-brand"
                     >
-                        <ShieldCheck size={18} aria-hidden="true" />
+                        <ShieldCheck size={16} aria-hidden="true" />
                         <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
                             License Manager
                         </Box>
@@ -287,6 +291,10 @@ export default function TopNav() {
                                     textTransform: "none",
                                     fontSize: "0.95rem",
                                     fontWeight: isDashActive ? 600 : 500,
+                                    backgroundColor: isDashActive ? muiTheme.palette.primary.light : 'transparent',
+                                    "&:hover": {
+                                        backgroundColor: muiTheme.palette.action.hover,
+                                    },
                                 }}
                             >
                                 Dashboard

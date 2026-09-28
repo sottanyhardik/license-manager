@@ -101,17 +101,49 @@ export default function AdvancedFilter({
         : Object.keys(filterConfig).slice(0, 6);
     const primaryEntries = Object.entries(filterConfig).filter(([field]) => primaryFilterNames.includes(field));
     const secondaryEntries = Object.entries(filterConfig).filter(([field]) => !primaryFilterNames.includes(field));
-    const activeEntries = Object.entries(filterValues).filter(([field, value]) => value !== "" && value !== null && value !== undefined && value !== "all" && String(value) !== String(defaultFilters[field] ?? ""));
 
-    // shared style token for react-select border
-    const rsControl = (base) => ({ ...base, minHeight: "44px", borderColor: "var(--tb-border)" });
+    // shared style token for react-select with proper height control
+    const rsControl = (base) => ({
+        ...base,
+        minHeight: "44px",
+        height: "44px",
+        borderColor: "var(--tb-border)"
+    });
+
+    const rsMultiSelectStyles = {
+        control: rsControl,
+        valueContainer: (base) => ({
+            ...base,
+            maxHeight: "44px",
+            flexWrap: "nowrap",
+            overflow: "hidden",
+        }),
+        multiValue: (base) => ({
+            ...base,
+            fontSize: "0.875rem",
+        }),
+        multiValueLabel: (base) => ({
+            ...base,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+        }),
+        menu: (base) => ({
+            ...base,
+            zIndex: 9999
+        })
+    };
 
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
         const label = config.label || humanize(fieldName);
 
-        // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
-        const Col = ({ wide = false, children }) => <FilterField wide={wide}>{children}</FilterField>;
+        // Shared col wrapper with proper MUI spacing
+        const Col = ({ wide = false, children }) => (
+            <FilterField wide={wide}>
+                {children}
+            </FilterField>
+        );
 
         switch (filterType) {
             case "icontains":
@@ -253,7 +285,7 @@ export default function AdvancedFilter({
                             isClearable isMulti
                             placeholder={`Select ${label.toLowerCase()}`}
                             classNamePrefix="react-select"
-                            styles={{ control: rsControl, valueContainer: (b) => ({ ...b, flexWrap: "wrap" }), multiValue: (b) => ({ ...b, maxWidth: "100%" }), multiValueLabel: (b) => ({ ...b, whiteSpace: "normal", wordBreak: "break-word" }), menu: (b) => ({ ...b, zIndex: 9999 }) }}
+                            styles={rsMultiSelectStyles}
                         />
                     </Col>
                 );
@@ -294,7 +326,7 @@ export default function AdvancedFilter({
             )}
 
             {/* Compact primary toolbar with progressive disclosure. */}
-            {Object.keys(filterConfig).length > 0 && <FilterPanel activeCount={activeEntries.length} isUpdating={isUpdating} onClear={handleResetFilters} clearDisabled={activeEntries.length === 0 && !searchTerm}><FilterGrid>{primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid></FilterPanel>}
+            {Object.keys(filterConfig).length > 0 && <FilterPanel onFiltersChange={() => {}}><FilterGrid>{primaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}{secondaryEntries.map(([fieldName, config]) => renderFilterField(fieldName, config))}</FilterGrid></FilterPanel>}
         </div>
     );
 }

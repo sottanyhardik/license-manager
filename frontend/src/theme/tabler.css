@@ -15,12 +15,12 @@
 /* ─── Light Mode Tokens ─────────────────────────────────── */
 :root {
     /* Brand (Deep Navy) */
-    --tb-brand:          #1A3A52;
-    --tb-brand-hover:    #0F2940;
-    --tb-brand-active:   #092033;
-    --tb-brand-50:       #F0F4F8;
-    --tb-brand-100:      #D4E1EC;
-    --tb-brand-200:      #B0C8DC;
+    --tb-brand:          #0066CC;
+    --tb-brand-hover:    #0052A3;
+    --tb-brand-active:   #004080;
+    --tb-brand-50:       #F0F5FF;
+    --tb-brand-100:      #D9E7FF;
+    --tb-brand-200:      #B3CCFF;
 
     /* Neutrals */
     --tb-body-bg:        #FAFBFC;
@@ -28,9 +28,15 @@
     --tb-sunken:         #F5F7FA;
     --tb-overlay:        rgba(26, 58, 82, 0.5);
 
-    --tb-border:         #D5DFE8;
-    --tb-border-soft:    #E8EDF3;
-    --tb-border-strong:  #BBC5D1;
+    --tb-border:         #CBD5E1;
+    --tb-border-soft:    #F1F5F9;
+    --tb-border-strong:  #94A3B8;
+
+    /* Button colors */
+    --btn-primary-bg:    #0066CC;
+    --btn-primary-hover: #0052A3;
+    --btn-secondary-bg:  #F1F5F9;
+    --btn-secondary-border: #CBD5E1;
 
     --tb-text:           #1A2332;
     --tb-text-secondary: #4F5F72;

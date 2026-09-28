@@ -58,13 +58,13 @@ export default function AdminLayout({ children }) {
                                     type="button"
                                     onClick={() => navigate(a.to)}
                                     className={[
-                                        "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] font-semibold transition-all duration-150",
+                                        "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-all duration-150 shadow-sm",
                                         a.primary
-                                            ? "bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97]"
-                                            : "border border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow active:scale-[0.97]"
+                                            : "border border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground hover:shadow",
                                     ].join(" ")}
                                 >
-                                    <Icon name={a.icon} className="size-3" aria-hidden="true" />
+                                    <Icon name={a.icon} className="size-4" aria-hidden="true" />
                                     <span className="footer-action-label">{a.label}</span>
                                 </button>
                             ))}

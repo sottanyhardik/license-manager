@@ -89,18 +89,18 @@ export default function DateRangeFilter({
                     </div>
                 )}
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="w-full">
                     <Label htmlFor={fromId} className="mb-2 block text-xs font-medium text-muted-foreground">
                         From
                     </Label>
-                    <Input id={fromId} type="date" value={fromValue} onChange={(e) => onFromChange(e.target.value)} />
+                    <Input id={fromId} type="date" className="w-full" value={fromValue} onChange={(e) => onFromChange(e.target.value)} />
                 </div>
-                <div>
+                <div className="w-full">
                     <Label htmlFor={toId} className="mb-2 block text-xs font-medium text-muted-foreground">
                         To
                     </Label>
-                    <Input id={toId} type="date" value={toValue} onChange={(e) => onToChange(e.target.value)} />
+                    <Input id={toId} type="date" className="w-full" value={toValue} onChange={(e) => onToChange(e.target.value)} />
                 </div>
             </div>
         </div>

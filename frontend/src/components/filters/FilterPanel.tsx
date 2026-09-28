@@ -299,11 +299,12 @@ export function FilterField({ children, wide = false }: { children: ReactNode; w
   return (
     <Box
       sx={{
-        gridColumn: wide ? { xs: 'span 1', sm: 'span 2', md: 'span 2', lg: 'span 2' } : 'auto',
+        gridColumn: wide ? { xs: 'span 1', sm: 'span 2', md: 'span 2', lg: 'span 2', xl: 'span 2' } : { xs: 'span 1', sm: 'span 1', md: 'span 1', lg: 'span 1', xl: 'span 1' },
         display: 'flex',
         flexDirection: 'column',
         gap: 0.75,
-        minWidth: 0, // Prevent grid overflow
+        minWidth: 0,
+        width: '100%',
       }}
     >
       {children}

@@ -258,14 +258,14 @@ export default function TopNav() {
                     {/* Command palette search trigger — pill style on wider viewports */}
                     <button
                         type="button"
-                        className="tb-nav-theme-toggle w-auto gap-1.5 px-2.5 text-xs text-muted-foreground/70"
+                        className="tb-nav-theme-toggle w-auto gap-2 px-3 text-xs text-muted-foreground/70 transition-colors hover:bg-muted/50 rounded-lg"
                         onClick={openCmd}
                         aria-label="Search (⌘K)"
                         title="Search ⌘K"
                     >
-                        <Search className="size-3.5" aria-hidden="true" />
-                        <span className="hidden sm:inline text-[12px]">Search</span>
-                        <kbd className="hidden rounded bg-muted/40 px-[5px] py-[1px] font-mono text-[10px] tracking-normal border border-border lg:inline-block">
+                        <Search className="size-4" aria-hidden="true" />
+                        <span className="hidden sm:inline text-xs">Search</span>
+                        <kbd className="hidden rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] tracking-normal border border-border lg:inline-block">
                             ⌘K
                         </kbd>
                     </button>

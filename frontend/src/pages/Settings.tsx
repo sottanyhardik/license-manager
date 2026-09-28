@@ -119,7 +119,7 @@ function RoleBadge({ code }: { code: string }) {
     if (customStyle) {
         return (
             <span
-                className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium"
+                className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium"
                 style={customStyle}
             >
                 {label}
@@ -128,7 +128,7 @@ function RoleBadge({ code }: { code: string }) {
     }
     const variant = BOOTSTRAP_TO_BADGE_VARIANT[bootstrapColor ?? "secondary"] ?? "secondary";
     return (
-        <Badge variant={variant} className="text-[10px]">
+        <Badge variant={variant} className="text-xs">
             {label}
         </Badge>
     );
@@ -304,15 +304,15 @@ export default function Settings() {
 
             <section aria-label="Access administration summary" className="mb-3 grid overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-3">
                 <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Directory users</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Directory users</p>
                     <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : users.length}</p>
                 </div>
                 <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active accounts</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active accounts</p>
                     <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{loading ? "—" : activeUsers}</p>
                 </div>
                 <div className="px-3 py-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Roles in use</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Roles in use</p>
                     <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : assignedRoles}</p>
                 </div>
             </section>
@@ -322,8 +322,8 @@ export default function Settings() {
                 <CardHeader className="border-b px-4 py-3">
                     <div className="flex items-center gap-2">
                         <Users className="size-4 text-muted-foreground" aria-hidden="true" />
-                        <span className="text-[13.5px] font-semibold text-foreground">User Management</span>
-                        <Badge variant="default" className="ml-1 text-[10px]">
+                        <span className="text-sm font-semibold text-foreground">User Management</span>
+                        <Badge variant="default" className="ml-1 text-xs">
                             {users.length}
                         </Badge>
                     </div>
@@ -352,17 +352,17 @@ export default function Settings() {
                                             <td className="pl-4 pt-3">
                                                 <div className="flex items-start gap-2.5">
                                                     <div
-                                                        className="mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-primary-foreground"
+                                                        className="mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
                                                         aria-hidden="true"
                                                     >
                                                         {user.username[0].toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <div className="text-[13px] font-medium text-foreground">
+                                                        <div className="text-sm font-medium text-foreground">
                                                             {user.username}
                                                         </div>
                                                         {user.is_superuser && (
-                                                            <Badge variant="destructive" className="mt-0.5 text-[10px]">
+                                                            <Badge variant="destructive" className="mt-0.5 text-xs">
                                                                 Superuser
                                                             </Badge>
                                                         )}
@@ -371,12 +371,12 @@ export default function Settings() {
                                             </td>
 
                                             {/* Email */}
-                                            <td className="pt-3 text-[12.5px] text-muted-foreground">
+                                            <td className="pt-3 text-xs text-muted-foreground">
                                                 {user.email || "—"}
                                             </td>
 
                                             {/* Name */}
-                                            <td className="pt-3 text-[12.5px]">
+                                            <td className="pt-3 text-xs">
                                                 {user.first_name || user.last_name
                                                     ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
                                                     : "—"}
@@ -385,7 +385,7 @@ export default function Settings() {
                                             {/* Roles */}
                                             <td className="pt-3">
                                                 {(user.roles ?? []).length === 0 ? (
-                                                    <span className="text-[12px] text-muted-foreground">—</span>
+                                                    <span className="text-xs text-muted-foreground">—</span>
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1">
                                                         {(user.roles ?? []).map(r => (
@@ -399,14 +399,14 @@ export default function Settings() {
                                             <td className="pt-3">
                                                 <Badge
                                                     variant={user.is_active ? "success" : "secondary"}
-                                                    className="text-[10.5px]"
+                                                    className="text-xs"
                                                 >
                                                     {user.is_active ? "Active" : "Inactive"}
                                                 </Badge>
                                             </td>
 
                                             {/* Joined date */}
-                                            <td className="pt-3 whitespace-nowrap text-[12px] text-muted-foreground">
+                                            <td className="pt-3 whitespace-nowrap text-xs text-muted-foreground">
                                                 {fmtDate(user.date_joined)}
                                             </td>
 
@@ -489,7 +489,7 @@ export default function Settings() {
                                 ? <SquarePen className="size-4" aria-hidden="true" />
                                 : <UserPlus className="size-4" aria-hidden="true" />}
                         </div>
-                        <DialogTitle className="text-[15px] font-semibold tracking-tight">
+                        <DialogTitle className="text-base font-semibold tracking-tight">
                             {editingUser ? "Edit User" : "Add New User"}
                         </DialogTitle>
                         <button
@@ -528,7 +528,7 @@ export default function Settings() {
                                             aria-required="true"
                                         />
                                         {editingUser && (
-                                            <p className="mt-1 text-[11.5px] text-muted-foreground">
+                                            <p className="mt-1 text-xs text-muted-foreground">
                                                 Username cannot be changed.
                                             </p>
                                         )}
@@ -616,7 +616,7 @@ export default function Settings() {
                                                     <label
                                                         htmlFor={`role-${code}`}
                                                         className={cn(
-                                                            "cursor-pointer select-none text-[11.5px]",
+                                                            "cursor-pointer select-none text-xs",
                                                             checked ? "font-semibold text-primary" : "font-medium text-muted-foreground",
                                                         )}
                                                     >

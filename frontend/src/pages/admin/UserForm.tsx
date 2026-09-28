@@ -139,7 +139,7 @@ export default function UserForm() {
 
     const FieldError = ({ name }: { name: string }) => {
         const error = getFieldError(fieldErrors, name);
-        return error ? <p className="mt-1 text-[11.5px] text-destructive">{error}</p> : null;
+        return error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null;
     };
 
     return (
@@ -155,7 +155,7 @@ export default function UserForm() {
                     </div>
                     <div>
                         <h1 className="text-xl font-semibold tracking-tight text-foreground">{isEdit ? "Edit user access" : "Create user"}</h1>
-                        <p className="mt-0.5 text-[13px] text-muted-foreground">Manage account details, operational roles, and access flags.</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">Manage account details, operational roles, and access flags.</p>
                     </div>
                 </div>
             </div>
@@ -227,7 +227,7 @@ export default function UserForm() {
                                 <label
                                     key={code}
                                     className={cn(
-                                        "flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-[13px] transition-colors",
+                                        "flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-sm transition-colors",
                                         checked ? "border-primary/50 bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-accent/50"
                                     )}
                                 >
@@ -277,7 +277,7 @@ export default function UserForm() {
                             aria-invalid={!!getFieldError(passwordResetErrors, "password")}
                         />
                         {getFieldError(passwordResetErrors, "password") && (
-                            <p className="basis-full text-[11.5px] text-destructive">
+                            <p className="basis-full text-xs text-destructive">
                                 {getFieldError(passwordResetErrors, "password")}
                             </p>
                         )}

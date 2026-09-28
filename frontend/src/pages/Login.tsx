@@ -90,14 +90,14 @@ export default function Login() {
                         <span className="flex size-9 items-center justify-center rounded-lg border border-primary-foreground/25 bg-primary-foreground/10">
                             <ShieldCheck className="size-4.5 text-white" />
                         </span>
-                        <span className="text-[15px] font-semibold tracking-tight text-white">
+                        <span className="text-base font-semibold tracking-tight text-white">
                             License Manager
                         </span>
                     </div>
                 </div>
 
                 <div className="relative z-10 flex flex-1 flex-col justify-center px-9">
-                    <div className="mb-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-foreground/75">
+                    <div className="mb-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-foreground/75">
                         <span className="size-1.5 rounded-full bg-emerald-400" />
                         Trade Operations Platform
                     </div>
@@ -105,14 +105,14 @@ export default function Login() {
                         Your operational<br />
                         <span className="text-primary-foreground/70">control centre.</span>
                     </h2>
-                    <p className="mt-4 max-w-[310px] text-[13px] leading-relaxed text-primary-foreground/70">
+                    <p className="mt-4 max-w-[310px] text-sm leading-relaxed text-primary-foreground/70">
                         Work confidently across licences, BOE records, allotments,
                         utilization, and SION compliance from one secure workspace.
                     </p>
 
                     <ul className="mt-8 flex flex-col gap-2.5">
                         {FEATURES.map((f) => (
-                            <li key={f} className="flex items-center gap-3 text-[13px] text-white/80">
+                            <li key={f} className="flex items-center gap-3 text-sm text-white/80">
                                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-foreground/15">
                                     <svg className="size-2.5 text-white" viewBox="0 0 10 8" fill="none">
                                         <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -125,7 +125,7 @@ export default function Login() {
                 </div>
 
                 <div className="relative z-10 flex-shrink-0 border-t border-primary-foreground/10 px-9 py-5">
-                    <p className="text-[11px] text-white/40">
+                    <p className="text-xs text-white/40">
                         Secure access · Role-based permissions enabled
                     </p>
                 </div>
@@ -153,7 +153,7 @@ export default function Login() {
 
                     {/* Session alert */}
                     {sessionMessage && (
-                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px] text-warning">
+                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-sm text-warning">
                             <Clock className="mt-0.5 size-4 shrink-0" />
                             <span>{sessionMessage}</span>
                         </div>
@@ -161,7 +161,7 @@ export default function Login() {
 
                     {/* Error */}
                     {error && (
-                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
                             <AlertCircle className="mt-0.5 size-4 shrink-0" />
                             <span>{error}</span>
                         </div>
@@ -229,7 +229,7 @@ export default function Login() {
                     </form>
                     </div>
 
-                    <p className="mt-5 text-center text-[11px] text-muted-foreground">
+                    <p className="mt-5 text-center text-xs text-muted-foreground">
                         License Manager · Secure sign-in
                     </p>
                 </motion.div>

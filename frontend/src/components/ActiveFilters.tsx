@@ -107,10 +107,10 @@ export default function ActiveFilters({
             variant="ghost"
             size="sm"
             onClick={onClearAll}
-            className="h-7 px-2 text-xs"
+            className="h-8 px-3 text-xs"
             title="Clear all filters"
           >
-            <XCircle className="size-3.5 mr-1" aria-hidden="true" />
+            <XCircle className="size-4 mr-1.5" aria-hidden="true" />
             Clear All
           </Button>
         )}
@@ -141,10 +141,10 @@ export default function ActiveFilters({
             variant="outline"
             size="sm"
             onClick={onClearAll}
-            className="h-8 text-xs"
+            className="h-8 px-3 text-xs"
             title="Clear all filters"
           >
-            <XCircle className="size-3.5 mr-1" aria-hidden="true" />
+            <XCircle className="size-4 mr-1.5" aria-hidden="true" />
             Clear All
           </Button>
         )}

@@ -69,16 +69,16 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
                 <section key={license.license_id} className="overflow-hidden rounded-md border border-border" aria-label={`Transactions for license ${license.license_number}`}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-primary px-3 py-1.5 text-primary-foreground">
                         <span className="font-bold text-sm">License {license.license_number}</span>
-                        <span className="text-[11px] text-primary-foreground/80">{license.license_type}</span>
-                        <span className="hidden text-[11px] text-primary-foreground/80 sm:inline">Date: {license.license_date}</span>
-                        <span className="hidden text-[11px] text-primary-foreground/80 lg:inline">Expiry: {license.expiry_date}</span>
-                        {license.sion_norms && <span className="hidden text-[11px] text-primary-foreground/80 lg:inline">SION: {license.sion_norms}</span>}
+                        <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
+                        <span className="hidden text-xs text-primary-foreground/80 sm:inline">Date: {license.license_date}</span>
+                        <span className="hidden text-xs text-primary-foreground/80 lg:inline">Expiry: {license.expiry_date}</span>
+                        {license.sion_norms && <span className="hidden text-xs text-primary-foreground/80 lg:inline">SION: {license.sion_norms}</span>}
                         {license.transactions[0] && (
-                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-[11px] font-semibold underline underline-offset-2 hover:text-primary-foreground/80">Details</button>
+                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-xs font-semibold underline underline-offset-2 hover:text-primary-foreground/80">Details</button>
                         )}
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full border-collapse text-[12px]">
+                        <table className="w-full border-collapse text-xs">
                             <thead className="sticky top-0 z-10">
                                 <tr className="border-b bg-muted/70 text-left text-muted-foreground">
                                     <th className="px-2.5 py-1.5 font-semibold">Company</th>
@@ -97,19 +97,19 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
                                     const isPurchase = transaction.transaction_type === 'PURCHASE';
                                     return <tr key={`${transaction.transaction_type}-${transaction.trade_id}`} className={cn("border-b last:border-b-0", isPurchase ? "bg-success/[0.06]" : "bg-info/[0.06]")}>
                                         <td className="px-2.5 py-1 font-medium">{transaction.company_name}</td>
-                                        <td className="hidden px-2.5 py-1 lg:table-cell text-[11px]">{transaction.sion_norms || license.sion_norms || '—'}</td>
-                                        <td className="px-2.5 py-1 whitespace-nowrap text-[11px]">{transaction.invoice_date}</td>
-                                        <td className="hidden px-2.5 py-1 text-[11px] sm:table-cell">{transaction.party_name}</td>
-                                        <td className="px-2.5 py-1 font-medium text-[11px]">{transaction.invoice_number}</td>
+                                        <td className="hidden px-2.5 py-1 lg:table-cell text-xs">{transaction.sion_norms || license.sion_norms || '—'}</td>
+                                        <td className="px-2.5 py-1 whitespace-nowrap text-xs">{transaction.invoice_date}</td>
+                                        <td className="hidden px-2.5 py-1 text-xs sm:table-cell">{transaction.party_name}</td>
+                                        <td className="px-2.5 py-1 font-medium text-xs">{transaction.invoice_number}</td>
                                         <td className="px-2.5 py-1"><Badge variant={isPurchase ? 'default' : 'info'} className={cn("text-[9px]", isPurchase && "bg-success hover:bg-success")}>{transaction.transaction_type}</Badge></td>
-                                        <td className="hidden px-2.5 py-1 text-[11px] lg:table-cell">{transaction.item_names.join(', ') || '—'}</td>
-                                        <td className="px-2.5 py-1 text-right tabular-nums text-[11px]">{fmtFc(transaction.amount)}</td>
-                                        <td className="px-2.5 py-1 text-right font-medium tabular-nums text-[11px]">{fmtInr(transaction.bill_amount)}</td>
+                                        <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{transaction.item_names.join(', ') || '—'}</td>
+                                        <td className="px-2.5 py-1 text-right tabular-nums text-xs">{fmtFc(transaction.amount)}</td>
+                                        <td className="px-2.5 py-1 text-right font-medium tabular-nums text-xs">{fmtInr(transaction.bill_amount)}</td>
                                     </tr>;
                                 })}
                                 <tr className="border-t-2 border-primary bg-primary/5 font-bold">
                                     <td colSpan={8} className="px-2.5 py-1.5 text-xs uppercase">License Total</td>
-                                    <td className={cn("px-2.5 py-1.5 text-right tabular-nums text-[11px]", license.profit_loss >= 0 ? "text-success" : "text-destructive")}>
+                                    <td className={cn("px-2.5 py-1.5 text-right tabular-nums text-xs", license.profit_loss >= 0 ? "text-success" : "text-destructive")}>
                                         {fmtInr(license.purchase_bill_total)} / {fmtInr(license.sale_bill_total)}
                                     </td>
                                 </tr>
@@ -153,13 +153,13 @@ function LicenseWiseLedger({
                                 <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded border border-border">
                                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-muted px-3 py-1.5">
                                         <h3 className="text-xs font-bold text-foreground">SION: {sion.label}</h3>
-                                        <span className="text-[11px] text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
-                                        <span className="ml-auto hidden text-[11px] tabular-nums lg:inline">Pur: {fmt(sion.total_purchase_bill_inr)}</span>
-                                        <span className="hidden text-[11px] tabular-nums lg:inline">Sale: {fmt(sion.total_sale_bill_inr)}</span>
-                                        <span className={cn("text-[11px] font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
+                                        <span className="text-xs text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
+                                        <span className="ml-auto hidden text-xs tabular-nums lg:inline">Pur: {fmt(sion.total_purchase_bill_inr)}</span>
+                                        <span className="hidden text-xs tabular-nums lg:inline">Sale: {fmt(sion.total_sale_bill_inr)}</span>
+                                        <span className={cn("text-xs font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full border-collapse text-[12px]">
+                                        <table className="w-full border-collapse text-xs">
                                             <thead><tr className="border-y bg-primary/5 text-left">
                                                 <th className="px-2.5 py-1"><span className="sr-only">Select</span></th>
                                                 <th className="px-2.5 py-1 font-semibold">License</th>
@@ -175,23 +175,23 @@ function LicenseWiseLedger({
                                             <tbody>{sion.licenses.map((license) => (
                                                 <tr key={license.license_id} className={cn("border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive")}>
                                                     <td className="px-2.5 py-1"><input type="checkbox" checked={selectedLicenseIds.has(String(license.license_id))} onChange={() => onToggleLicense(String(license.license_id))} aria-label={`Select licence ${license.license_number}`} /></td>
-                                                    <td className="px-2.5 py-1 font-semibold text-[11px]">{license.license_number}{!license.has_purchase_bill && <span className="ml-1.5 rounded bg-destructive px-1 py-0.5 text-[9px] font-bold text-destructive-foreground">NO BILL</span>}</td>
-                                                    <td className="hidden px-2.5 py-1 text-[11px] lg:table-cell">{license.license_type}</td>
-                                                    <td className="hidden px-2.5 py-1 text-[11px] sm:table-cell">{license.license_date}</td>
-                                                    <td className="hidden px-2.5 py-1 text-[11px] lg:table-cell">{license.first_purchase_date}</td>
-                                                    <td className="px-2.5 py-1 text-right tabular-nums text-[11px]">{formatIndianNumber(license.current_balance, 2)}</td>
-                                                    <td className="px-2.5 py-1 text-right tabular-nums text-[11px]">{fmt(license.purchase_bill_inr)}</td>
-                                                    <td className="hidden px-2.5 py-1 text-right tabular-nums text-[11px] sm:table-cell">{fmt(license.sale_bill_inr)}</td>
-                                                    <td className={cn("hidden px-2.5 py-1 text-right font-semibold tabular-nums text-[11px] sm:table-cell", license.profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>{fmt(license.profit_loss_inr)}</td>
+                                                    <td className="px-2.5 py-1 font-semibold text-xs">{license.license_number}{!license.has_purchase_bill && <span className="ml-1.5 rounded bg-destructive px-1 py-0.5 text-[9px] font-bold text-destructive-foreground">NO BILL</span>}</td>
+                                                    <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{license.license_type}</td>
+                                                    <td className="hidden px-2.5 py-1 text-xs sm:table-cell">{license.license_date}</td>
+                                                    <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{license.first_purchase_date}</td>
+                                                    <td className="px-2.5 py-1 text-right tabular-nums text-xs">{formatIndianNumber(license.current_balance, 2)}</td>
+                                                    <td className="px-2.5 py-1 text-right tabular-nums text-xs">{fmt(license.purchase_bill_inr)}</td>
+                                                    <td className="hidden px-2.5 py-1 text-right tabular-nums text-xs sm:table-cell">{fmt(license.sale_bill_inr)}</td>
+                                                    <td className={cn("hidden px-2.5 py-1 text-right font-semibold tabular-nums text-xs sm:table-cell", license.profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>{fmt(license.profit_loss_inr)}</td>
                                                     <td className="px-2.5 py-1 text-right">
                                                         <button
                                                             type="button"
-                                                            className="text-[11px] font-semibold text-primary hover:underline"
+                                                            className="text-xs font-semibold text-primary hover:underline"
                                                             onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}
                                                         >
                                                             Ledger
                                                         </button>
-                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-[11px] font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
+                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-xs font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
                                                     </td>
                                                 </tr>
                                             ))}</tbody>
@@ -199,7 +199,7 @@ function LicenseWiseLedger({
                                     </div>
                                 </section>
                             ))}
-                            <div className="flex flex-wrap justify-end gap-3 border-t-2 border-primary px-3 py-1.5 text-[11px] font-bold">
+                            <div className="flex flex-wrap justify-end gap-3 border-t-2 border-primary px-3 py-1.5 text-xs font-bold">
                                 <span>Total</span><span>Pur {fmt(company.total_purchase_bill_inr)}</span>
                                 <span>Sale {fmt(company.total_sale_bill_inr)}</span><span>P/L {fmt(company.total_profit_loss_inr)}</span>
                             </div>
@@ -207,7 +207,7 @@ function LicenseWiseLedger({
                     </section>
                 ))}
                 {grand_total && company_groups.length > 1 && (
-                    <div className="flex flex-wrap justify-end gap-3 rounded-md bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground">
+                    <div className="flex flex-wrap justify-end gap-3 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
                         <span>{grand_total.license_count} licenses</span>
                         <span>Pur {fmt(grand_total.total_purchase_bill_inr)}</span>
                         <span>Sale {fmt(grand_total.total_sale_bill_inr)}</span>
@@ -233,7 +233,7 @@ function LicenseWiseLedger({
             {licenses.map((lic) => (
                 <div key={lic.license_id} className="mb-4 overflow-hidden rounded-md border border-border">
                     {/* ── License header bar ─────────────────────────── */}
-                    <div className="flex flex-wrap items-center gap-2 bg-primary px-3 py-1.5 text-[12px]">
+                    <div className="flex flex-wrap items-center gap-2 bg-primary px-3 py-1.5 text-xs">
                         <label className="flex size-6 cursor-pointer items-center justify-center rounded bg-white/15" title={`Select ${lic.license_number}`}>
                             <input type="checkbox" className="size-4" checked={selectedLicenseIds.has(String(lic.license_id))} onChange={() => onToggleLicense(String(lic.license_id))} aria-label={`Select licence ${lic.license_number}`} />
                         </label>
@@ -243,7 +243,7 @@ function LicenseWiseLedger({
                         </span>
                         <span className="flex items-center gap-1 text-primary-foreground/70">
                             <Calendar className="size-3.5 shrink-0" aria-hidden="true" />
-                            <span className="text-[11px]">{lic.license_date}</span>
+                            <span className="text-xs">{lic.license_date}</span>
                         </span>
                         <Badge variant={lic.license_type === 'DFIA' ? 'default' : 'secondary'} className="py-0 text-[9px]">
                             {lic.license_type}
@@ -253,7 +253,7 @@ function LicenseWiseLedger({
                                 type="button"
                                 onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}`)}
                                 aria-label={`View ledger for ${lic.license_number}`}
-                                className="ml-auto flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                                className="ml-auto flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/25"
                             >
                                 <BookOpen className="size-3.5" aria-hidden="true" />
                                 <span className="hidden sm:inline">View</span>
@@ -261,7 +261,7 @@ function LicenseWiseLedger({
                         )}
                         <button
                             type="button"
-                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/25"
                             onClick={() => onDownloadLicense(String(lic.license_id))}
                             aria-label="Download license package"
                         >
@@ -270,7 +270,7 @@ function LicenseWiseLedger({
                         </button>
                         {lic.license_type === 'DFIA' && <button
                             type="button"
-                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-white/25"
+                            className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/25"
                             onClick={() => onDownloadCustomLedger(String(lic.license_id))}
                             aria-label="Download custom ledger PDF"
                         >
@@ -281,7 +281,7 @@ function LicenseWiseLedger({
 
                     {/* ── Companies table ────────────────────────────── */}
                     <div className="overflow-x-auto" role="region" aria-label={`Companies for ${lic.license_number}`} tabIndex={0}>
-                    <table className="w-full border-collapse text-[12px]">
+                    <table className="w-full border-collapse text-xs">
                         <thead>
                             <tr className="border-b-2 border-border bg-muted/50">
                                 <th scope="col" className="px-2.5 py-1 text-left font-bold text-foreground">Company</th>
@@ -299,7 +299,7 @@ function LicenseWiseLedger({
                                         ci > 0 ? "border-t-2 border-border" : "",
                                         ci % 2 === 0 ? "bg-primary/5" : "bg-muted/40",
                                     )}>
-                                        <td colSpan={5} className="px-2.5 py-1 text-[11px] font-bold text-foreground">
+                                        <td colSpan={5} className="px-2.5 py-1 text-xs font-bold text-foreground">
                                             <span className="flex items-center gap-1">
                                                 <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
                                                 {company.company_name}
@@ -313,12 +313,12 @@ function LicenseWiseLedger({
                                             <td className="px-2.5 py-1 pl-5">
                                                 <span className="flex items-center gap-1 text-foreground">
                                                     <ArrowDownCircle className="size-3 shrink-0" aria-hidden="true" />
-                                                    <span className="text-[11px]">Purchase</span>
+                                                    <span className="text-xs">Purchase</span>
                                                 </span>
                                             </td>
-                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground sm:table-cell">{lic.license_type}</td>
-                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground lg:table-cell">{row.invoice_date}</td>
-                                            <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-success">{fmt(row.amount)}</td>
+                                            <td className="hidden px-2.5 py-1 text-xs text-muted-foreground sm:table-cell">{lic.license_type}</td>
+                                            <td className="hidden px-2.5 py-1 text-xs text-muted-foreground lg:table-cell">{row.invoice_date}</td>
+                                            <td className="px-2.5 py-1 text-right text-xs font-semibold text-success">{fmt(row.amount)}</td>
                                             <td className="px-2.5 py-1" />
                                         </tr>
                                     ))}
@@ -329,25 +329,25 @@ function LicenseWiseLedger({
                                             <td className="px-2.5 py-1 pl-5">
                                                 <span className="flex items-center gap-1 text-foreground">
                                                     <ArrowUpCircle className="size-3 shrink-0" aria-hidden="true" />
-                                                    <span className="text-[11px]">Sale</span>
+                                                    <span className="text-xs">Sale</span>
                                                 </span>
                                             </td>
-                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground sm:table-cell">{lic.license_type}</td>
-                                            <td className="hidden px-2.5 py-1 text-[11px] text-muted-foreground lg:table-cell">{row.invoice_date}</td>
+                                            <td className="hidden px-2.5 py-1 text-xs text-muted-foreground sm:table-cell">{lic.license_type}</td>
+                                            <td className="hidden px-2.5 py-1 text-xs text-muted-foreground lg:table-cell">{row.invoice_date}</td>
                                             <td className="px-2.5 py-1" />
-                                            <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-destructive">{fmt(row.amount)}</td>
+                                            <td className="px-2.5 py-1 text-right text-xs font-semibold text-destructive">{fmt(row.amount)}</td>
                                         </tr>
                                     ))}
 
                                     {/* Company total row */}
                                     <tr className="bg-primary font-bold text-primary-foreground">
-                                        <td colSpan={3} className="px-2.5 py-1 text-right text-[11px]">
+                                        <td colSpan={3} className="px-2.5 py-1 text-right text-xs">
                                             Total
                                         </td>
-                                        <td className="px-2.5 py-1 text-right text-[11px] text-emerald-300">
+                                        <td className="px-2.5 py-1 text-right text-xs text-emerald-300">
                                             {fmt(company.purchase_total)}
                                         </td>
-                                        <td className="px-2.5 py-1 text-right text-[11px] text-red-300">
+                                        <td className="px-2.5 py-1 text-right text-xs text-red-300">
                                             {fmt(company.sale_total)}
                                             <span className={cn(
                                                 "ml-1 text-[9px]",
@@ -379,7 +379,7 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
     }[tone ?? "primary"] ?? "text-foreground";
     return (
         <div className="py-1.5 text-center">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
             <div className={cn("text-xs font-bold tabular-nums", toneClass)}>{value}</div>
         </div>
     );
@@ -622,7 +622,7 @@ export default function LicenseLedger() {
                             {packageJob.failed > 0 && <Button size="sm" variant="outline" onClick={async () => setPackageJob(await retryLicenseLedgerPackage(packageJob.job_id))}>Retry failed</Button>}
                             {packageJob.licences?.map(item => <div key={item.id} className="mt-1 flex items-start gap-2">
                                 <div><span>{downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? `Saved: ${packageFolder?.selected ?? downloadState?.selectedDirectoryName ?? 'selected-folder'}/${packageFolder?.job ?? downloadState?.jobDirectoryName ?? 'license-ledger-package'}/${item.licence_number}.pdf` : `${item.licence_number}: ${downloadState?.downloading === String(item.license_id ?? item.id) ? 'Downloading' : ["server_ready", "completed"].includes(item.status) ? 'Server ready' : item.status === 'running' ? 'Generating' : item.status === 'failed' ? `Failed — ${item.error ?? 'Unable to generate PDF.'}` : 'Queued'}`}</span>
-                                {item.audit && <div className="text-[11px] text-muted-foreground">
+                                {item.audit && <div className="text-xs text-muted-foreground">
                                     <div>Purchase invoices: {item.audit.expected_purchase_invoices ?? '—'} / {item.audit.included_purchase_invoices ?? '—'} · Final-party sales invoices: {item.audit.expected_final_party_sales_invoices ?? '—'} / {item.audit.included_final_party_sales_invoices ?? '—'} · Interlinked sales excluded: {item.audit.excluded_interlinked_sales_invoices ?? '—'}</div>
                                     <div>PDF pages: {item.audit.expected_pdf_pages ?? '—'} / {item.audit.actual_pdf_pages ?? '—'} · Server validation: {item.audit.server_validation ?? '—'} · Local save validation: {downloadState?.downloaded.includes(String(item.license_id ?? item.id)) ? 'passed' : 'pending'}</div>
                                     {item.audit.final_party_sales_invoice_numbers?.length ? <div>Final-party sales invoices included: {item.audit.final_party_sales_invoice_numbers.join(', ')}</div> : null}
@@ -713,14 +713,14 @@ export default function LicenseLedger() {
                             <AsyncSelectField endpoint="masters/sion-classes/?is_active=true" labelField="norm_class" valueField="norm_class"
                                 value={filters.norm} onChange={(value: LicenseLedgerFilters['norm']) => updateFilter('norm', value)}
                                 placeholder="All..." ariaLabel="Norm" />
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">DFIA only</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">DFIA only</p>
                         </div>
                         <div className="lg:col-span-1">
                             <label htmlFor="ledger-status-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Status</label>
                             <AsyncSelectField endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
                                 value={filters.purchaseStatus} onChange={(value: LicenseLedgerFilters['purchaseStatus']) => updateFilter('purchaseStatus', value)}
                                 placeholder="All..." ariaLabel="Status" />
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">DFIA only</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">DFIA only</p>
                         </div>
                         <div className="lg:col-span-1">
                             <label htmlFor="ledger-sort" className="mb-1 block text-xs font-semibold text-muted-foreground">Sort</label>
@@ -752,7 +752,7 @@ export default function LicenseLedger() {
                             <Input id="ledger-license-numbers" value={filters.licenseNumbers}
                                 onChange={(event) => updateFilter('licenseNumbers', event.target.value)}
                                 placeholder="e.g., 3111004973, 3111004966" className="text-sm" />
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
                         </div>
 
                         <div>
@@ -760,7 +760,7 @@ export default function LicenseLedger() {
                             <Input id="ledger-exclude-license-numbers" value={filters.excludeLicenseNumbers}
                                 onChange={(event) => updateFilter('excludeLicenseNumbers', event.target.value)}
                                 placeholder="e.g., 3111004973, 3111004966" className="text-sm" />
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
                         </div>
                     </div>
 
@@ -857,7 +857,7 @@ export default function LicenseLedger() {
             <Card>
                 <CardHeader className="border-b px-3 py-1.5">
                     <div className="flex items-center justify-between">
-                        <span className="text-[12px] font-semibold text-muted-foreground">
+                        <span className="text-xs font-semibold text-muted-foreground">
                             {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
                         </span>
                         {companyWiseLoading && (

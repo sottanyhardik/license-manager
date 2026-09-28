@@ -962,7 +962,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     <ListChecks className="size-4 text-primary" aria-hidden="true" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Allotment Details</p>
+                                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Allotment Details</p>
                                     <h3 className="text-sm font-bold leading-tight tracking-tight text-foreground">{allotment.item_name}</h3>
                                 </div>
                             </div>
@@ -973,7 +973,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                     </div>
                                     <span className={cn("text-xs font-bold tabular-nums", progressTextCls)}>{progressPct}%</span>
                                 </div>
-                                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none", statusBadgeCls)}>
+                                <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold leading-none", statusBadgeCls)}>
                                     {isComplete ? '✓ Complete' : 'In Progress'}
                                 </span>
                             </div>
@@ -985,24 +985,24 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <div className="flex flex-col px-3 py-2">
                                 <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-info" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Unit Price</span>
+                                    <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Unit Price</span>
                                 </div>
                                 <span className="text-base font-extrabold leading-none tabular-nums text-info">
                                     {unitPrice.toFixed(3)}
                                 </span>
-                                <span className="mt-1 text-[10px] text-muted-foreground">USD per unit</span>
+                                <span className="mt-1 text-xs text-muted-foreground">USD per unit</span>
                             </div>
 
                             {/* Required */}
                             <div className="flex flex-col px-3 py-2">
                                 <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-muted-foreground/40" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Required</span>
+                                    <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Required</span>
                                 </div>
                                 <span className="text-base font-extrabold leading-none tabular-nums text-foreground">
                                     {requiredQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1 text-[10px] font-semibold text-muted-foreground">
+                                <span className="mt-1 text-xs font-semibold text-muted-foreground">
                                     ${requiredValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
@@ -1011,12 +1011,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <div className="flex flex-col bg-success/[0.04] px-3 py-2">
                                 <div className="mb-1 flex items-center gap-1.5">
                                     <span className="size-2 shrink-0 rounded-full bg-success" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-success">Allotted</span>
+                                    <span className="text-xs font-bold uppercase tracking-widest text-success">Allotted</span>
                                 </div>
                                 <span className="text-base font-extrabold leading-none tabular-nums text-success">
                                     {allotedQty.toLocaleString()}
                                 </span>
-                                <span className="mt-1 text-[10px] font-semibold text-success">
+                                <span className="mt-1 text-xs font-semibold text-success">
                                     ${allotedValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
@@ -1025,12 +1025,12 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <div className={cn("flex flex-col px-3 py-2", balanceQty <= 0 ? "bg-success/[0.06]" : "bg-primary/10")}>
                                 <div className="mb-1 flex items-center gap-1.5">
                                     <span className={cn("size-2 shrink-0 rounded-full", balanceQty <= 0 ? "bg-success" : "bg-primary")} />
-                                    <span className={cn("text-[10px] font-bold uppercase tracking-widest", balanceQty <= 0 ? "text-success" : "text-primary")}>Balance</span>
+                                    <span className={cn("text-xs font-bold uppercase tracking-widest", balanceQty <= 0 ? "text-success" : "text-primary")}>Balance</span>
                                 </div>
                                 <span className={cn("text-base font-extrabold leading-none tabular-nums", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     {balanceQty.toLocaleString()}
                                 </span>
-                                <span className={cn("mt-1 text-[10px] font-semibold", balanceQty <= 0 ? "text-success" : "text-primary")}>
+                                <span className={cn("mt-1 text-xs font-semibold", balanceQty <= 0 ? "text-success" : "text-primary")}>
                                     ${balanceValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     <span className="ml-1 font-normal opacity-50">+$20 buf</span>
                                 </span>
@@ -1047,9 +1047,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <h6 className="font-semibold text-foreground flex items-center gap-1.5">
                             <CheckSquare className="size-4" aria-hidden="true" />
                             Allotted Items
-                            <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-bold text-success">{allottedDetailGroups.length}</span>
+                            <span className="ml-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-bold text-success">{allottedDetailGroups.length}</span>
                             {allottedDetailGroups.length !== allotment.allotment_details.length && (
-                                <span className="text-[11px] font-normal text-muted-foreground">merged from {allotment.allotment_details.length} allocations</span>
+                                <span className="text-xs font-normal text-muted-foreground">merged from {allotment.allotment_details.length} allocations</span>
                             )}
                         </h6>
                         <div className="flex items-center gap-2">
@@ -1118,34 +1118,34 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                             <table className="min-w-[980px] w-full text-sm">
                                 <thead className="sticky top-0 z-10 bg-muted/95 border-b-2 border-border">
                                 <tr>
-                                    <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-[12px] p-2">License</th>
-                                    <th scope="col" className="min-w-[70px] whitespace-nowrap font-semibold text-[12px] p-2">Serial</th>
-                                    <th scope="col" className="min-w-[240px] font-semibold text-[12px] p-2">Description</th>
-                                    <th scope="col" className="min-w-[80px] whitespace-nowrap font-semibold text-[12px] p-2">HSN Code</th>
-                                    <th scope="col" className="min-w-[160px] font-semibold text-[12px] p-2">Exporter</th>
-                                    <th scope="col" className="min-w-[140px] font-semibold text-[12px] p-2">Transfer<br/>Status</th>
-                                    <th scope="col" className="min-w-[100px] font-semibold text-[12px] p-2">License<br/>Date</th>
-                                    <th scope="col" className="min-w-[100px] font-semibold text-[12px] p-2">Expiry<br/>Date</th>
-                                    <th scope="col" className="min-w-[80px] text-right font-semibold text-[12px] p-2">Allotted<br/>Qty</th>
-                                    <th scope="col" className="min-w-[90px] text-right font-semibold text-[12px] p-2">Allotted<br/>Value</th>
-                                    <th scope="col" className="min-w-[64px] whitespace-nowrap font-semibold text-[12px] p-2">Action</th>
+                                    <th scope="col" className="min-w-[120px] whitespace-nowrap font-semibold text-xs p-2">License</th>
+                                    <th scope="col" className="min-w-[70px] whitespace-nowrap font-semibold text-xs p-2">Serial</th>
+                                    <th scope="col" className="min-w-[240px] font-semibold text-xs p-2">Description</th>
+                                    <th scope="col" className="min-w-[80px] whitespace-nowrap font-semibold text-xs p-2">HSN Code</th>
+                                    <th scope="col" className="min-w-[160px] font-semibold text-xs p-2">Exporter</th>
+                                    <th scope="col" className="min-w-[140px] font-semibold text-xs p-2">Transfer<br/>Status</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-xs p-2">License<br/>Date</th>
+                                    <th scope="col" className="min-w-[100px] font-semibold text-xs p-2">Expiry<br/>Date</th>
+                                    <th scope="col" className="min-w-[80px] text-right font-semibold text-xs p-2">Allotted<br/>Qty</th>
+                                    <th scope="col" className="min-w-[90px] text-right font-semibold text-xs p-2">Allotted<br/>Value</th>
+                                    <th scope="col" className="min-w-[64px] whitespace-nowrap font-semibold text-xs p-2">Action</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {allottedDetailGroups.map((detail) => (
                                     <tr key={detail.allocationIds.join("-")} className="border-b border-border/40 transition-colors hover:bg-muted/30">
-                                        <td className="px-3 py-1.5 font-mono text-[12.5px] font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">{detail.license_number}</td>
-                                        <td className="px-3 py-1.5 text-[12.5px] whitespace-nowrap"><span className="font-medium">{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" />{detail.allocationCount > 1 && <span className="ml-1 text-[10px] text-muted-foreground">×{detail.allocationCount}</span>}</td>
-                                        <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.product_description}</td>
-                                        <td className="px-3 py-1.5 font-mono text-[11.5px] text-muted-foreground whitespace-nowrap">{detail.hs_code || '-'}</td>
-                                        <td className="px-3 py-1.5 text-[12.5px] break-words whitespace-normal">{detail.exporter}</td>
+                                        <td className="px-3 py-1.5 font-mono text-xs font-semibold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">{detail.license_number}</td>
+                                        <td className="px-3 py-1.5 text-xs whitespace-nowrap"><span className="font-medium">{detail.serial_number}</span><ConditionBadge type={detail.condition_type} size="xs" />{detail.allocationCount > 1 && <span className="ml-1 text-xs text-muted-foreground">×{detail.allocationCount}</span>}</td>
+                                        <td className="px-3 py-1.5 text-xs break-words whitespace-normal">{detail.product_description}</td>
+                                        <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{detail.hs_code || '-'}</td>
+                                        <td className="px-3 py-1.5 text-xs break-words whitespace-normal">{detail.exporter}</td>
                                         <td className="px-3 py-1.5 text-[0.80rem] leading-[1.3] break-words whitespace-normal">
                                             {detail.current_owner && detail.file_transfer_status ? (
                                                 <div>
                                                     <div className="mb-1 font-semibold">
                                                         {detail.current_owner}
                                                     </div>
-                                                    <div className="text-muted-foreground text-[12px]">
+                                                    <div className="text-muted-foreground text-xs">
                                                         {detail.file_transfer_status}
                                                     </div>
                                                 </div>
@@ -1157,10 +1157,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                 <span className="text-muted-foreground">-</span>
                                             )}
                                         </td>
-                                        <td className="px-3 py-1.5 text-[12px] text-muted-foreground whitespace-nowrap">{detail.license_date}</td>
-                                        <td className="px-3 py-1.5 text-[12px] text-muted-foreground whitespace-nowrap">{detail.license_expiry}</td>
-                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseInt(detail.qty || 0).toLocaleString()}</td>
-                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[12.5px] whitespace-nowrap">{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
+                                        <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{detail.license_date}</td>
+                                        <td className="px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap">{detail.license_expiry}</td>
+                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-xs whitespace-nowrap">{parseInt(detail.qty || 0).toLocaleString()}</td>
+                                        <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-xs whitespace-nowrap">{parseFloat(detail.cif_fc || 0).toFixed(2)}</td>
                                         <td className="px-2 py-1.5 text-center whitespace-nowrap">
                                             <div className="flex justify-center gap-1">
                                                 {detail.allocationIds.map((allocationId) => (
@@ -1186,9 +1186,9 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 </tbody>
                                 {allottedDetailGroups.length > 1 && <tfoot>
                                     <tr className="bg-primary/5 border-t-2 border-primary/30">
-                                        <th scope="row" colSpan={8} className="px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total DFIA allocation</th>
-                                        <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Quantity">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
-                                        <td className="px-3 py-2 text-right text-[13px] font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Dollar value">${parseFloat(allotment.allotted_value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <th scope="row" colSpan={8} className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">Total DFIA allocation</th>
+                                        <td className="px-3 py-2 text-right text-sm font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Quantity">{parseInt(allotment.alloted_quantity || 0).toLocaleString()}</td>
+                                        <td className="px-3 py-2 text-right text-sm font-extrabold tabular-nums text-foreground" aria-label="Total DFIA Dollar value">${parseFloat(allotment.allotted_value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>}
@@ -1204,14 +1204,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                         <ListChecks className="size-4 text-primary" aria-hidden="true" />
                         <span className="text-sm font-bold tracking-tight text-foreground">Available License Items</span>
                         {totalItems > 0 && (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{totalItems} items</span>
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{totalItems} items</span>
                         )}
                     </div>
                 </div>
                 <div className="p-3">
 
                     {allocationInitialization?.plan_status === "AMBIGUOUS_ACTIVE_PLAN" && (
-                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 px-3.5 py-2.5 text-[13px] text-amber-900" role="alert">
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900" role="alert">
                             <TriangleAlert className="size-4" aria-hidden="true" />
                             <div>{allocationInitialization.message || allocationInitialization.plan_message}</div>
                         </div>
@@ -1219,14 +1219,14 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
                     {/* Show success/error messages near the table for better visibility */}
                     {error && (
-                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive" role="alert">
                             <TriangleAlert className="size-4" aria-hidden="true" />
                             <div className="flex-1">{error}</div>
                             <button type="button" className="ml-auto shrink-0 cursor-pointer opacity-60 hover:opacity-100" onClick={() => setError("")}><X className="size-3.5" /></button>
                         </div>
                     )}
                     {success && (
-                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success" role="alert">
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-sm text-success" role="alert">
                             <CheckCircle2 className="size-4" aria-hidden="true" />
                             <div className="flex-1">{success}</div>
                             <button type="button" className="ml-auto shrink-0 cursor-pointer opacity-60 hover:opacity-100" onClick={() => setSuccess("")}><X className="size-3.5" /></button>
@@ -1313,7 +1313,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                 return (
                                     <div key={licenseKey} className="mb-3 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md hover:shadow-primary/5">
                                         {/* ── LICENSE HEADER (compact) ── */}
-                                        <div className="px-3 py-1.5 bg-muted/50 border-b border-border/60 text-[12px]">
+                                        <div className="px-3 py-1.5 bg-muted/50 border-b border-border/60 text-xs">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <button
                                                     onClick={async () => {
@@ -1325,7 +1325,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         }
                                                     }}
                                                     title="View license document"
-                                                    className="inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-[13px] text-primary underline decoration-dotted underline-offset-[2px] hover:opacity-80"
+                                                    className="inline-flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer font-bold text-sm text-primary underline decoration-dotted underline-offset-[2px] hover:opacity-80"
                                                 >
                                                     <FileText className="size-3.5" aria-hidden="true" />
                                                     {licenseKey}
@@ -1367,7 +1367,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                     <div key={item.id} className="border border-border/60 rounded p-2 bg-muted/20">
                                                         {/* Item header with item-specific info */}
                                                         {itemIdx === 0 && (
-                                                            <div className="px-1 py-1 mb-1.5 text-[12px] border-b border-border/60">
+                                                            <div className="px-1 py-1 mb-1.5 text-xs border-b border-border/60">
                                                                 <div className="flex items-center gap-1.5 flex-wrap">
                                                                     <span className="font-bold text-foreground">{item.description}</span>
                                                                     {item.hs_code_label && (
@@ -1381,7 +1381,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         )}
 
                                                         {/* Item identifier + availability info (compact inline) */}
-                                                        <div className="mb-1.5 flex flex-col gap-2 text-[11px] sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="mb-1.5 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="font-semibold text-foreground">SR #{item.serial_number}</span>
                                                                 {item.condition_type
@@ -1408,10 +1408,10 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                                                         </div>
 
                                                         {/* Allocation controls (compact inline) */}
-                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" role="status">
+                                                        {isBlocked ? <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900" role="status">
                                                             <strong className="mr-1">Allocation unavailable</strong>
                                                             {maxAllocation.message || "No quantity or CIF remains for the selected mode."}
-                                                        </div> : <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                                        </div> : <div className="flex items-center gap-2 flex-wrap text-xs">
                                                             <div className="flex min-w-[200px] flex-1 items-center gap-1 sm:min-w-[200px]">
                                                                 <label className="text-muted-foreground font-semibold whitespace-nowrap">Qty:</label>
                                                                 <input
@@ -1518,7 +1518,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             {allotment && allotment.allotment_details && allotment.allotment_details.length > 0 && (
                 <section id="transfer-letter-section" className="mb-3 overflow-hidden rounded-lg border border-border bg-card">
                     <button type="button" onClick={() => setTransferLetterOpen(open => !open)} aria-expanded={transferLetterOpen} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                        <span className="flex min-w-0 items-center gap-2"><FileText className="size-4 shrink-0 text-primary" aria-hidden="true" /><span><span className="block text-[13px] font-bold text-foreground">Generate Transfer Letter</span><span className="block text-[11px] text-muted-foreground">{allotment.allotment_details.length} selected licence{allotment.allotment_details.length === 1 ? "" : "s"} · expand to manage recipients</span></span></span>
+                        <span className="flex min-w-0 items-center gap-2"><FileText className="size-4 shrink-0 text-primary" aria-hidden="true" /><span><span className="block text-sm font-bold text-foreground">Generate Transfer Letter</span><span className="block text-xs text-muted-foreground">{allotment.allotment_details.length} selected licence{allotment.allotment_details.length === 1 ? "" : "s"} · expand to manage recipients</span></span></span>
                         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", transferLetterOpen && "rotate-180")} aria-hidden="true" />
                     </button>
                     <div className={transferLetterOpen ? "border-t border-border/60" : "hidden"}>

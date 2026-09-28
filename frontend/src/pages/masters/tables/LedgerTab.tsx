@@ -193,9 +193,9 @@ function SummaryMetric({
     const cls = { default: "text-foreground", primary: "text-primary", success: "text-emerald-700", danger: "text-destructive", muted: "text-muted-foreground" }[variant];
     return (
         <div>
-            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
             <div className={cn("mt-0.5 tabular-nums font-bold", cls, size === "lg" ? "text-2xl" : "text-sm")}>{value}</div>
-            {sub && <div className="text-[10.5px] text-muted-foreground">{sub}</div>}
+            {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
         </div>
     );
 }
@@ -241,8 +241,8 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                 <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-amber-100">
                     <Receipt className="size-3.5 text-amber-700" aria-hidden="true" />
                 </div>
-                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">BOE Utilization</span>
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BOE Utilization</span>
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
                     {boes.length} {boes.length === 1 ? "entry" : "entries"}
                 </span>
             </div>
@@ -268,7 +268,7 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                                             </button>
                                         )}
                                     </div>
-                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/60">
+                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200/60">
                                         BOE
                                     </span>
                                 </div>
@@ -276,7 +276,7 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                                 <div className="mb-1.5 truncate text-xs text-muted-foreground" title={b.company || ""}>{b.company || "—"}</div>
                                 {/* Date + port */}
                                 {(b.date || b.port) && (
-                                    <div className="mb-2 text-[10.5px] text-muted-foreground/70">
+                                    <div className="mb-2 text-xs text-muted-foreground/70">
                                         {b.date && String(b.date)}
                                         {b.date && b.port && " · "}
                                         {b.port}
@@ -286,21 +286,21 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                                 <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{fmtQty(b.quantity)}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-foreground">{fmtQty(b.quantity)}</div>
                                     </div>
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{rate > 0 ? fmtUsd(rate) : "—"}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-foreground">{rate > 0 ? fmtUsd(rate) : "—"}</div>
                                     </div>
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-amber-700">{fmtUsd(b.cif_fc)}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-amber-700">{fmtUsd(b.cif_fc)}</div>
                                     </div>
                                 </div>
                                 {/* Running balance */}
                                 <div className="mt-2 flex items-center justify-between rounded-lg bg-muted/40 px-2 py-1">
                                     <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Balance after</span>
-                                    <span className="tabular-nums text-[11.5px] font-bold text-emerald-700">{fmtUsd(b.running_balance)}</span>
+                                    <span className="tabular-nums text-xs font-bold text-emerald-700">{fmtUsd(b.running_balance)}</span>
                                 </div>
                             </div>
                         );
@@ -311,7 +311,7 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                 <div className="overflow-x-auto rounded-xl border border-border/50">
                     <table className="w-full text-xs">
                         <thead className="bg-muted/50">
-                            <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <tr className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 <th scope="col" className="px-3 py-2">BOE No.</th>
                                 <th scope="col" className="px-3 py-2">Company</th>
                                 <th scope="col" className="px-3 py-2">Date</th>
@@ -325,7 +325,7 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                                 <tr key={b.id} className="hover:bg-muted/20">
                                     <td className="px-3 py-1.5">
                                         <div className="flex items-center gap-1">
-                                            <span className="font-mono text-[10.5px]">{b.bill_of_entry_number || "—"}</span>
+                                            <span className="font-mono text-xs">{b.bill_of_entry_number || "—"}</span>
                                             {b.bill_of_entry_number && (
                                                 <button type="button" onClick={() => copyToClipboard(b.bill_of_entry_number)}
                                                     className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer" title="Copy">
@@ -334,8 +334,8 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-3 py-1.5 text-[10.5px]">{b.company || "—"}</td>
-                                    <td className="px-3 py-1.5 text-[10.5px] text-muted-foreground">{b.date ? String(b.date) : "—"}</td>
+                                    <td className="px-3 py-1.5 text-xs">{b.company || "—"}</td>
+                                    <td className="px-3 py-1.5 text-xs text-muted-foreground">{b.date ? String(b.date) : "—"}</td>
                                     <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(b.quantity)}</td>
                                     <td className="px-3 py-1.5 text-right tabular-nums text-amber-700">{fmtUsd(b.cif_fc)}</td>
                                     <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700">{fmtUsd(b.running_balance)}</td>
@@ -348,9 +348,9 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
 
             {/* Section total */}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50/60 px-4 py-2.5 ring-1 ring-amber-200/60">
-                <span className="text-[10.5px] font-bold uppercase tracking-widest text-amber-700">Total BOE Utilized</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-amber-700">Total BOE Utilized</span>
                 <div className="flex items-center gap-4">
-                    <span className="text-[11px] text-amber-700">Qty: <b>{fmtQty(totalQty)}</b></span>
+                    <span className="text-xs text-amber-700">Qty: <b>{fmtQty(totalQty)}</b></span>
                     <span className="text-base font-bold tabular-nums text-amber-700">{fmtUsd(totalCif)}</span>
                 </div>
             </div>
@@ -370,8 +370,8 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
                 <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-violet-100">
                     <Package className="size-3.5 text-violet-700" aria-hidden="true" />
                 </div>
-                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Allotment Usage</span>
-                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-700 ring-1 ring-violet-200">
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Allotment Usage</span>
+                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200">
                     {allotments.length} {allotments.length === 1 ? "entry" : "entries"}
                 </span>
             </div>
@@ -395,7 +395,7 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
                                             </button>
                                         )}
                                     </div>
-                                    <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200/60">
+                                    <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-semibold text-violet-700 ring-1 ring-violet-200/60">
                                         Allotment
                                     </span>
                                 </div>
@@ -403,15 +403,15 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
                                 <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{fmtQty(a.quantity)}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-foreground">{fmtQty(a.quantity)}</div>
                                     </div>
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{rate > 0 ? fmtUsd(rate) : "—"}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-foreground">{rate > 0 ? fmtUsd(rate) : "—"}</div>
                                     </div>
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-violet-700">{fmtUsd(a.cif_fc)}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-violet-700">{fmtUsd(a.cif_fc)}</div>
                                     </div>
                                 </div>
                             </div>
@@ -422,7 +422,7 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
                 <div className="overflow-x-auto rounded-xl border border-border/50">
                     <table className="w-full text-xs">
                         <thead className="bg-muted/50">
-                            <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <tr className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 <th scope="col" className="px-3 py-2">Allotment</th>
                                 <th scope="col" className="px-3 py-2">Company</th>
                                 <th scope="col" className="px-3 py-2 text-right">Qty</th>
@@ -434,7 +434,7 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
                                 <tr key={a.id} className="hover:bg-muted/20">
                                     <td className="px-3 py-1.5">
                                         <div className="flex items-center gap-1">
-                                            <span className="font-mono text-[10.5px]">{a.allotment_number || "—"}</span>
+                                            <span className="font-mono text-xs">{a.allotment_number || "—"}</span>
                                             {a.allotment_number && (
                                                 <button type="button" onClick={() => copyToClipboard(a.allotment_number)}
                                                     className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer" title="Copy">
@@ -443,7 +443,7 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-3 py-1.5 text-[10.5px]">{a.company || "—"}</td>
+                                    <td className="px-3 py-1.5 text-xs">{a.company || "—"}</td>
                                     <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(a.quantity)}</td>
                                     <td className="px-3 py-1.5 text-right tabular-nums text-violet-700">{fmtUsd(a.cif_fc)}</td>
                                 </tr>
@@ -454,9 +454,9 @@ function AllotmentSection({ allotments }: { allotments: AllotmentEntry[] }) {
             )}
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-violet-50/60 px-4 py-2.5 ring-1 ring-violet-200/60">
-                <span className="text-[10.5px] font-bold uppercase tracking-widest text-violet-700">Total Allotted</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-violet-700">Total Allotted</span>
                 <div className="flex items-center gap-4">
-                    <span className="text-[11px] text-violet-700">Qty: <b>{fmtQty(totalQty)}</b></span>
+                    <span className="text-xs text-violet-700">Qty: <b>{fmtQty(totalQty)}</b></span>
                     <span className="text-base font-bold tabular-nums text-violet-700">{fmtUsd(totalCif)}</span>
                 </div>
             </div>
@@ -653,10 +653,10 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
             {/* ── License Summary ──────────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
                 <div className="border-b border-border/50 px-4 py-2.5">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         License Summary
                         {commonBalance && (
-                            <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-200">
+                            <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
                                 Common CIF Balance
                             </span>
                         )}
@@ -672,7 +672,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                 </div>
                 {licenseValue > 0 && (
                     <div className="border-t border-border/30 px-4 pb-3 pt-2">
-                        <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
+                        <div className="mb-1 flex justify-between text-xs text-muted-foreground">
                             <span>Utilization</span>
                             <span>{(100 - balancePct).toFixed(1)}% used · {balancePct.toFixed(1)}% remaining</span>
                         </div>
@@ -687,14 +687,14 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
             {/* ── Import Items table ────────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-border/60">
                 <div className="border-b border-border/50 bg-muted/30 px-4 py-2.5">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Import Items — click a row to expand full details
                     </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
-                            <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 <th scope="col" className="w-8 px-3 py-2.5">#</th>
                                 <th scope="col" className="px-3 py-2.5">Description</th>
                                 <th scope="col" className="hidden px-3 py-2.5 sm:table-cell">HS Code</th>
@@ -734,7 +734,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                             <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{r.serial_number}</td>
                                             <td className="px-3 py-2.5">
                                                 <div className="max-w-[200px] truncate text-sm font-medium" title={r.description}>{r.description || "—"}</div>
-                                                <div className="mt-0.5 text-[10px] text-muted-foreground">{r.unit}</div>
+                                                <div className="mt-0.5 text-xs text-muted-foreground">{r.unit}</div>
                                             </td>
                                             <td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground sm:table-cell">{r.hs_code_label || "—"}</td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-xs">{fmtQty(r.quantity)}</td>
@@ -749,7 +749,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                 {r.billed_no_boe != null && Number(r.billed_no_boe) > 0
                                                     ? (
                                                         <span
-                                                            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-orange-700 bg-orange-50 ring-1 ring-orange-200"
+                                                            className="rounded px-1.5 py-0.5 text-xs font-semibold text-orange-700 bg-orange-50 ring-1 ring-orange-200"
                                                             title="This amount is debiting your balance via a SALE trade that has no BOE linked. Open the trade and link its BOE to fix the balance."
                                                         >
                                                             {fmtUsd(r.billed_no_boe)}
@@ -792,15 +792,15 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                 {/* ══ Section 1: Item Summary ════════════════════════ */}
                                                                 <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
                                                                     <div className="border-b border-border/50 bg-muted/20 px-4 py-2">
-                                                                        <div className="text-[10.5px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                                        <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                                                                             Item Summary
                                                                         </div>
                                                                     </div>
                                                                     <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-4">
                                                                         <div className="lg:col-span-1">
-                                                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Item</div>
+                                                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item</div>
                                                                             <div className="mt-0.5 text-sm font-semibold text-foreground">{r.description || "—"}</div>
-                                                                            {r.hs_code_label && <div className="text-[10.5px] font-mono text-muted-foreground">{r.hs_code_label}</div>}
+                                                                            {r.hs_code_label && <div className="text-xs font-mono text-muted-foreground">{r.hs_code_label}</div>}
                                                                         </div>
                                                                         <SummaryMetric label="Available Qty" value={fmtQty(r.available_quantity)} />
                                                                         {/* Planned Qty/$ — the item's Original Plan cap (Plan tab /
@@ -816,12 +816,12 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                         <SummaryMetric label="Allotted" value={fmtUsd(r.allotted_value)} variant="muted"
                                                                             sub={r.allotted_quantity != null ? `${fmtQty(r.allotted_quantity)} ${r.unit}` : undefined} />
                                                                         <div>
-                                                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
+                                                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
                                                                             <div className={cn("mt-0.5 text-xl font-bold tabular-nums",
                                                                                 balCif > 0 ? "text-emerald-700" : "text-muted-foreground")}>
                                                                                 {fmtUsd(balCif)}
                                                                             </div>
-                                                                            <div className="text-[10.5px] text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
+                                                                            <div className="text-xs text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
                                                                         </div>
                                                                     </div>
 
@@ -835,7 +835,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                         Max-allotment cap is built from. */}
                                                                     {r.has_plan && (
                                                                         <div className="border-t border-primary/10 bg-primary/5 px-4 py-3">
-                                                                            <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-widest text-primary">
+                                                                            <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-primary">
                                                                                 <ListChecks className="size-3.5" aria-hidden="true" />
                                                                                 Plan Usage (product group)
                                                                             </div>
@@ -853,7 +853,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                 {/* ══ Section 2: Usage ════════════════════════════════ */}
                                                                 {(usage?.boes?.length || usage?.allotments?.length) ? (
                                                                     <div className="rounded-xl border border-border/60 bg-card p-4 space-y-5">
-                                                                        <div className="text-[10.5px] font-bold uppercase tracking-widest text-muted-foreground">Usage</div>
+                                                                        <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Usage</div>
                                                                         <BoeSection boes={usage?.boes ?? []} openingCif={Number(r.cif_fc || 0)} />
                                                                         {(usage?.boes?.length > 0 && usage?.allotments?.length > 0) && (
                                                                             <div className="border-t border-border/40" />
@@ -874,9 +874,9 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                             <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
                                                                                 <Tag className="size-3.5 text-primary" />
                                                                             </div>
-                                                                            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Item Names</span>
+                                                                            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Item Names</span>
                                                                             {tags.length > 0 && (
-                                                                                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                                                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                                                                                     {tags.length}
                                                                                 </span>
                                                                             )}
@@ -911,7 +911,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                                 {/* Tag chips */}
                                                                                 <div className="flex flex-wrap gap-1.5">
                                                                                     {tags.map((d) => (
-                                                                                        <span key={d.id} className="inline-flex items-center gap-1 rounded-full bg-primary/5 px-2.5 py-1 text-[11.5px] font-medium text-foreground ring-1 ring-primary/20">
+                                                                                        <span key={d.id} className="inline-flex items-center gap-1 rounded-full bg-primary/5 px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-primary/20">
                                                                                             {d.name}
                                                                                             <button type="button"
                                                                                                 onClick={() => handleRemoveItemTag(r.id, d.id)}
@@ -977,7 +977,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                             <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted">
                                                                                 <FileText className="size-3.5 text-muted-foreground" />
                                                                             </div>
-                                                                            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Marking</span>
+                                                                            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Marking</span>
                                                                         </div>
 
                                                                         {markingEditingId === r.id ? (
@@ -1004,7 +1004,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                                 {/* Current marking display */}
                                                                                 {currentMarking ? (
                                                                                     <div className="mb-3">
-                                                                                        <div className="text-[10.5px] text-muted-foreground mb-1">Current Marking</div>
+                                                                                        <div className="text-xs text-muted-foreground mb-1">Current Marking</div>
                                                                                         <div className="flex items-center gap-2">
                                                                                             <ConditionBadge type={currentMarking} size="sm" />
                                                                                             <span className="text-xl font-bold text-foreground">{currentMarking}</span>
@@ -1026,7 +1026,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                 {/* ══ Section 4: Balance Calculation ══════════════════ */}
                                                                 <div className="overflow-hidden rounded-xl border border-primary/20 bg-primary/5">
                                                                     <div className="border-b border-primary/20 px-4 py-2">
-                                                                        <div className="text-[10.5px] font-bold uppercase tracking-widest text-primary">Balance Calculation</div>
+                                                                        <div className="text-xs font-bold uppercase tracking-widest text-primary">Balance Calculation</div>
                                                                     </div>
                                                                     <div className="px-6 py-4">
                                                                         {/* Waterfall */}
@@ -1065,8 +1065,8 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                                                                                 <div className="flex items-center gap-2">
                                                                                     <TrendingUp className={cn("size-5", balCif > 0 ? "text-emerald-700" : "text-muted-foreground")} />
                                                                                     <div>
-                                                                                        <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
-                                                                                        <div className="text-[10.5px] text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
+                                                                                        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
+                                                                                        <div className="text-xs text-muted-foreground">{fmtInr(r.balance_cif_fc)}</div>
                                                                                     </div>
                                                                                 </div>
                                                                                 <div className={cn("text-2xl font-extrabold tabular-nums",
@@ -1111,7 +1111,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
             {/* ── Balance Summary ────────────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-primary/20 bg-primary/5">
                 <div className="border-b border-primary/20 px-4 py-2.5">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-wider text-primary">Balance Summary</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-primary">Balance Summary</div>
                 </div>
                 <div className="grid grid-cols-2 gap-4 px-4 py-3 sm:grid-cols-4">
                     <div className="flex items-center gap-2.5">
@@ -1119,7 +1119,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             <FileText className="size-4 text-primary" />
                         </div>
                         <div>
-                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Opening CIF</div>
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Opening CIF</div>
                             <div className="text-sm font-bold tabular-nums text-foreground">{fmtUsd(licenseValue)}</div>
                         </div>
                     </div>
@@ -1128,7 +1128,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             <TrendingDown className="size-4 text-amber-700" />
                         </div>
                         <div>
-                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">BOE Utilized</div>
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">BOE Utilized</div>
                             <div className="text-sm font-bold tabular-nums text-amber-700">{fmtUsd(totalDebited)}</div>
                         </div>
                     </div>
@@ -1137,7 +1137,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             <Package className="size-4 text-violet-700" />
                         </div>
                         <div>
-                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Allotted</div>
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Allotted</div>
                             <div className="text-sm font-bold tabular-nums text-violet-700">{fmtUsd(totalAllotted)}</div>
                         </div>
                     </div>
@@ -1146,7 +1146,7 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                             <TrendingUp className={cn("size-4", displayBalance > 0 ? "text-emerald-700" : "text-muted-foreground")} />
                         </div>
                         <div>
-                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Remaining Balance</div>
                             <div className={cn("text-lg font-bold tabular-nums", displayBalance > 0 ? "text-emerald-700" : "text-muted-foreground")}>
                                 {fmtUsd(displayBalance)}
                             </div>

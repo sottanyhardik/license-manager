@@ -100,17 +100,17 @@ export default function UserList() {
 
             <section aria-label="User access summary" className="mb-3 grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-3">
                 <div className="border-b border-r border-border px-3 py-2.5 sm:border-b-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Users</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Users</p>
                     <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{loading ? "—" : users.length}</p>
                 </div>
                 <div className="border-b border-border px-3 py-2.5 sm:border-b-0 sm:border-r">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Active</p>
                     <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{loading ? "—" : activeUsers}</p>
                 </div>
                 <div className="col-span-2 flex items-center gap-2 px-3 py-2.5 sm:col-span-1">
                     <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><ShieldCheck className="size-4" aria-hidden="true" /></span>
                     <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Super administrators</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Super administrators</p>
                         <p className="text-sm font-semibold tabular-nums text-foreground">{loading ? "—" : superusers}</p>
                     </div>
                 </div>
@@ -237,13 +237,13 @@ export default function UserList() {
                                                             const label = ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r;
                                                             if (customStyle) {
                                                                 return (
-                                                                    <span key={r} className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium" style={customStyle}>
+                                                                    <span key={r} className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium" style={customStyle}>
                                                                         {label}
                                                                     </span>
                                                                 );
                                                             }
                                                             const variant = BOOTSTRAP_TO_BADGE[bootstrapColor ?? "secondary"] ?? "secondary";
-                                                            return <Badge key={r} variant={variant} className="text-[10px]">{label}</Badge>;
+                                                            return <Badge key={r} variant={variant} className="text-xs">{label}</Badge>;
                                                         })}
                                                     </div>
                                                 )}

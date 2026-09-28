@@ -101,21 +101,21 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                                     <Badge variant={overviewAllotmentStatusVariant(a.status)}>{a.status}</Badge>
                                 </div>
                                 <div className="mb-1.5 truncate text-xs text-muted-foreground" title={a.customer ?? ""}>{a.customer ?? "—"}</div>
-                                <div className="mb-2 truncate text-[10.5px] text-muted-foreground/70" title={a.product ?? ""}>{a.product ?? "—"}</div>
-                                <div className="flex items-center gap-2 text-[10.5px] text-muted-foreground/70">{fmtDate(a.date)}</div>
+                                <div className="mb-2 truncate text-xs text-muted-foreground/70" title={a.product ?? ""}>{a.product ?? "—"}</div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground/70">{fmtDate(a.date)}</div>
                                 <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/40 pt-2">
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{fmtNum(a.quantity)}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-foreground">{fmtNum(a.quantity)}</div>
                                     </div>
                                     <div>
                                         <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
-                                        <div className="tabular-nums text-[11.5px] font-semibold text-foreground">{rate > 0 ? fmtNum(rate) : "—"}</div>
+                                        <div className="tabular-nums text-xs font-semibold text-foreground">{rate > 0 ? fmtNum(rate) : "—"}</div>
                                     </div>
                                 </div>
                                 <div className="mt-2 flex items-center justify-between rounded-lg bg-violet-50/60 px-2 py-1 dark:bg-violet-500/10">
                                     <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</span>
-                                    <span className="tabular-nums text-[11.5px] font-bold text-violet-700 dark:text-violet-400">{fmtNum(a.cif_fc)}</span>
+                                    <span className="tabular-nums text-xs font-bold text-violet-700 dark:text-violet-400">{fmtNum(a.cif_fc)}</span>
                                 </div>
                             </div>
                         );
@@ -123,8 +123,8 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                 </div>
             ) : (
                 <div className="max-h-[calc(100vh-17rem)] overflow-auto rounded-lg border border-border/70 bg-card">
-                    <table className="w-full min-w-[800px] text-[13px]">
-                        <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
+                    <table className="w-full min-w-[800px] text-sm">
+                        <thead className="sticky top-0 z-[1] bg-muted/95 text-xs uppercase tracking-wide text-muted-foreground backdrop-blur">
                             <tr>
                                 <SortableHeader label="Allotment Number" sortKey="allotment_number" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
                                 <SortableHeader label="Date" sortKey="date" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
@@ -155,11 +155,11 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
             )}
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-                <span className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-widest text-primary">
+                <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-primary">
                     <Package className="size-3.5" /> Total Allotted
                 </span>
                 <div className="flex items-center gap-4">
-                    <span className="text-[11px] text-primary">Qty: <b>{fmtNum(totalQty)}</b></span>
+                    <span className="text-xs text-primary">Qty: <b>{fmtNum(totalQty)}</b></span>
                     <span className="text-base font-bold tabular-nums text-primary">{fmtNum(totalCif)}</span>
                 </div>
             </div>

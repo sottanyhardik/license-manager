@@ -288,7 +288,7 @@ const STATUS_CFG: Record<PlanStatus, { label: string; Icon: React.ElementType; b
 function StatusBadge({ status }: { status: PlanStatus }) {
     const { label, Icon, badge } = STATUS_CFG[status];
     return (
-        <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold", badge)}>
+        <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", badge)}>
             <Icon className="size-3" aria-hidden="true" />
             {label}
         </span>
@@ -308,7 +308,7 @@ function SummaryCard({ label, value, variant = "default", tooltip }: {
     const bg  = { default: "bg-card", primary: "bg-primary/5", success: "bg-emerald-50/50", danger: "bg-destructive/5", muted: "bg-muted/40" }[variant];
     return (
         <div title={tooltip} className={cn("flex flex-col rounded-xl border border-border/60 px-3.5 py-3", bg)}>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
+            <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
             <div className={cn("mt-0.5 text-base font-bold tabular-nums leading-tight", cls)}>{value}</div>
         </div>
     );
@@ -337,10 +337,10 @@ function SplitCard({
         )}>
             <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{index + 1}</span>
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{index + 1}</span>
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Planning Entry {index + 1}</span>
                     {rowOver && (
-                        <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">Over</span>
+                        <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-xs font-semibold text-destructive">Over</span>
                     )}
                 </div>
                 {canRemove && (
@@ -354,7 +354,7 @@ function SplitCard({
 
             <div className="grid gap-2.5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Item Name</label>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item Name</label>
                     <select value={split.item_name} onChange={(e) => onChange(split.key, "item_name", e.target.value)}
                         className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label="Item name">
@@ -364,7 +364,7 @@ function SplitCard({
                 </div>
 
                 <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Qty <span className="font-normal normal-case opacity-60">max {fmtQty(maxForRow)}</span>
                     </label>
                     <Input type="number" min="0" step="0.001" max={maxForRow}
@@ -375,21 +375,21 @@ function SplitCard({
                 </div>
 
                 <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Unit Price ($)</label>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Unit Price ($)</label>
                     <Input type="number" min="0" step="0.01" value={split.unit_price}
                         onChange={(e) => onChange(split.key, "unit_price", e.target.value)}
                         className="h-8 text-right tabular-nums" placeholder="0.00" aria-label="Unit price" />
                 </div>
 
                 <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">CIF ($)</label>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">CIF ($)</label>
                     <Input type="number" min="0" step="0.01" value={split.planned_cif_fc}
                         onChange={(e) => onChange(split.key, "planned_cif_fc", e.target.value)}
                         className="h-8 text-right tabular-nums" placeholder="0.00" aria-label="Planned CIF" />
                 </div>
 
                 <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Remarks</label>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Remarks</label>
                     <Input value={split.note} onChange={(e) => onChange(split.key, "note", e.target.value)}
                         className="h-8" placeholder="Optional notes…" aria-label="Remarks" />
                 </div>
@@ -397,7 +397,7 @@ function SplitCard({
 
             {/* Computed preview */}
             {num(split.planned_quantity) > 0 && num(split.unit_price) > 0 && (
-                <div className="mt-2.5 flex items-center justify-between rounded-lg bg-muted/40 px-2.5 py-1.5 text-[11px]">
+                <div className="mt-2.5 flex items-center justify-between rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs">
                     <span className="text-muted-foreground">{fmtQty(num(split.planned_quantity))} × ${num(split.unit_price).toFixed(2)}</span>
                     <span className="font-semibold tabular-nums text-primary">= {fmtUsd(num(split.planned_quantity) * num(split.unit_price))}</span>
                 </div>
@@ -459,7 +459,7 @@ function InlineEditor({
                             <span className="text-muted-foreground">Planned <b className="text-destructive">{fmtQty(planned)}</b></span>
                             <span className="text-muted-foreground">Over by <b className="text-destructive">{fmtQty(planned - group.available_quantity)}</b></span>
                         </div>
-                        <p className="mt-1.5 text-[10.5px] text-muted-foreground">Reduce planned quantity to save this item.</p>
+                        <p className="mt-1.5 text-xs text-muted-foreground">Reduce planned quantity to save this item.</p>
                     </div>
                 </div>
             )}
@@ -951,7 +951,7 @@ export default function PlanningEditor({
                         Plan utilization
                     </div>
                     {totals.lastUpdatedLabel && (
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                             · Last updated: {totals.lastUpdatedLabel}
                         </span>
                     )}
@@ -998,14 +998,14 @@ export default function PlanningEditor({
             {/* ── Planned Items table ──────────────────────────────── */}
             <div className="overflow-hidden rounded-xl border border-border/60">
                 <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-2.5">
-                    <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         <ClipboardList className="size-3.5" />Planned Items
-                        <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">
                             {groups.length}
                         </span>
                     </div>
                     {editingGroupId !== null && (
-                        <span className="text-[10.5px] font-medium text-amber-700">
+                        <span className="text-xs font-medium text-amber-700">
                             1 item open for editing
                         </span>
                     )}
@@ -1014,7 +1014,7 @@ export default function PlanningEditor({
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50">
-                            <tr className="border-b border-border/50 text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <tr className="border-b border-border/50 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 <th scope="col" className="px-4 py-2.5">Item</th>
                                 <th scope="col" className="px-4 py-2.5">HS Code</th>
                                 <th scope="col" className="px-4 py-2.5">S.No</th>
@@ -1121,7 +1121,7 @@ export default function PlanningEditor({
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {isEditing ? (
-                                                    <span className="text-[10.5px] font-medium text-primary">Editing ↓</span>
+                                                    <span className="text-xs font-medium text-primary">Editing ↓</span>
                                                 ) : (
                                                     <div className="flex items-center justify-center gap-1">
                                                         <Button
@@ -1159,7 +1159,7 @@ export default function PlanningEditor({
                                                 className="border-b border-border/30 bg-primary/[0.02]"
                                             >
                                                 <td colSpan={12} className="px-4 py-2 pl-11">
-                                                    <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                                                    <div className="flex flex-wrap items-center gap-2 text-xs">
                                                         <span className="text-muted-foreground/50" aria-hidden="true">└</span>
                                                         <span className="text-muted-foreground">Planning Item:</span>
                                                         <span className="font-medium text-foreground">{splitLabel(sp, g, si)}</span>
@@ -1168,7 +1168,7 @@ export default function PlanningEditor({
                                                         </span>
                                                         {sp.needs_rebuild && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9.5px] font-semibold text-amber-800">Needs Rebuild</span>}
                                                     </div>
-                                                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-5">
+                                                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-5">
                                                         {(() => {
                                                             const isPercentageSplit = sp.split_percentage != null;
                                                             const auditQty = (value: number) => value < 0 ? `(${fmtQty(Math.abs(value))})` : fmtQty(value);
@@ -1228,7 +1228,7 @@ export default function PlanningEditor({
                             {/* Totals follow the semantic planning-position columns. */}
                             {anyPlanExists && (
                                 <tr className="border-t-2 border-border bg-muted/40 font-semibold text-sm">
-                                    <td className="px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Totals</td>
+                                    <td className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Totals</td>
                                     <td />
                                     <td />
                                     <td />

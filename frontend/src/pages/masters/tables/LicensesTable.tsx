@@ -330,7 +330,7 @@ function ActionPanel({
                         <button
                             type="button"
                             onClick={onDelete}
-                            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-destructive/30 px-3 py-2 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/5"
+                            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-destructive/30 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/5"
                         >
                             <Trash2 className="size-4 shrink-0" aria-hidden="true" />
                             Delete
@@ -370,7 +370,7 @@ function ActionRow({
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
             <Icon className={cn("size-4 shrink-0", spinning && "animate-spin")} aria-hidden="true" />
             {label}
@@ -385,7 +385,7 @@ function ActionRow({
 function OverviewField({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
     return (
         <div className={wide ? "sm:col-span-3" : ""}>
-            <dt className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {label}
             </dt>
             <dd className="mt-0.5 text-sm font-medium text-foreground" title={value}>
@@ -441,7 +441,7 @@ function OverviewTab({ item, detail }: { item: LicenseListItem; detail: LicenseD
 
             {/* ── Condition Sheet / Notes ───────────────────────── */}
             <div className="border-t border-border/40 pt-4">
-                <div className="mb-2.5 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     <ScrollText className="size-3.5" aria-hidden="true" />
                     Condition Sheet / Notes
                 </div>
@@ -454,7 +454,7 @@ function OverviewTab({ item, detail }: { item: LicenseListItem; detail: LicenseD
                     </div>
                 ) : notes ? (
                     <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/30">
-                        <pre className="whitespace-pre-wrap px-4 py-3 font-sans text-[12.5px] leading-relaxed text-foreground/80">
+                        <pre className="whitespace-pre-wrap px-4 py-3 font-sans text-xs leading-relaxed text-foreground/80">
                             {previewText}
                             {isLong && !notesExpanded && (
                                 <span className="text-muted-foreground">…</span>
@@ -464,7 +464,7 @@ function OverviewTab({ item, detail }: { item: LicenseListItem; detail: LicenseD
                             <button
                                 type="button"
                                 onClick={() => setNotesExpanded((v) => !v)}
-                                className="w-full border-t border-border/50 bg-muted/50 px-4 py-1.5 text-left text-[11px] font-medium text-primary hover:bg-muted transition-colors cursor-pointer"
+                                className="w-full border-t border-border/50 bg-muted/50 px-4 py-1.5 text-left text-xs font-medium text-primary hover:bg-muted transition-colors cursor-pointer"
                             >
                                 {notesExpanded
                                     ? "Show less ↑"
@@ -498,7 +498,7 @@ function AllocationTab({ item: _item, detail, loading }: { item: LicenseListItem
         <div className="overflow-x-auto py-4">
             <table className="w-full text-sm">
                 <thead>
-                    <tr className="border-b border-border/60 text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <tr className="border-b border-border/60 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         <th scope="col" className="pb-2 pr-4">Sl#</th>
                         <th scope="col" className="pb-2 pr-4">HS Code</th>
                         <th scope="col" className="pb-2 pr-4">Description</th>
@@ -584,15 +584,15 @@ function TransactionsTab({
             {/* Summary bar */}
             <div className="mb-3 flex flex-wrap gap-4 rounded-lg bg-muted/30 px-4 py-2.5 text-sm">
                 <div>
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Total Value</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Value</span>
                     <div className="font-semibold tabular-nums">${fmtNum(ledger.total_value)}</div>
                 </div>
                 <div>
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">License Balance</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">License Balance</span>
                     <div className="font-semibold tabular-nums text-primary">${fmtNum(ledger.license_running_balance ?? ledger.available_balance ?? 0)}</div>
                 </div>
                 <div>
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Transactions</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transactions</span>
                     <div className="font-semibold tabular-nums">{displayRows.length}</div>
                 </div>
             </div>
@@ -601,7 +601,7 @@ function TransactionsTab({
             <div className="overflow-x-auto rounded-lg border border-border/50">
                 <table className="w-full text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
-                        <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             <th scope="col" className="px-3 py-2.5">Date</th>
                             <th scope="col" className="px-3 py-2.5">Type</th>
                             <th scope="col" className="px-3 py-2.5">Particular</th>
@@ -628,13 +628,13 @@ function TransactionsTab({
                                         {txn.date ? String(txn.date) : "—"}
                                     </td>
                                     <td className="px-3 py-2">
-                                        <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-semibold", typeBadge(txn.type))}>
+                                        <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", typeBadge(txn.type))}>
                                             {txn.type}
                                         </span>
                                     </td>
                                     <td className="max-w-[200px] px-3 py-2">
                                         <div className="truncate text-xs" title={txn.particular}>{txn.particular || "—"}</div>
-                                        {txn.items && <div className="truncate text-[10.5px] text-muted-foreground" title={txn.items}>{txn.items}</div>}
+                                        {txn.items && <div className="truncate text-xs text-muted-foreground" title={txn.items}>{txn.items}</div>}
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
                                         {txn.invoice_number || "—"}
@@ -701,7 +701,7 @@ function DocumentsTab({ item: _item, detail, loading }: { item: LicenseListItem;
             <div className="overflow-hidden rounded-lg border border-border/50">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50">
-                        <tr className="border-b border-border text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             <th scope="col" className="px-4 py-2.5">Type</th>
                             <th scope="col" className="px-4 py-2.5">File Name</th>
                             <th scope="col" className="px-4 py-2.5 text-right">Actions</th>
@@ -713,7 +713,7 @@ function DocumentsTab({ item: _item, detail, loading }: { item: LicenseListItem;
                             return (
                                 <tr key={doc.id} className="transition-colors hover:bg-muted/20">
                                     <td className="px-4 py-3">
-                                        <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", typeBadgeCls(doc.type as string))}>
+                                        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", typeBadgeCls(doc.type as string))}>
                                             {doc.type as string || "OTHER"}
                                         </span>
                                     </td>
@@ -780,14 +780,14 @@ function HistoryTab({
             {/* Current owner card */}
             {ownershipData.current_owner && (
                 <div className="mb-4 rounded-lg border border-border/50 bg-card px-4 py-3">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Current Owner</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current Owner</div>
                     <div className="mt-1 font-semibold text-foreground">{ownershipData.current_owner.name}</div>
                     <div className="text-xs text-muted-foreground">IEC: {ownershipData.current_owner.iec}</div>
                     {ownershipData.current_owner.address && (
                         <div className="mt-0.5 text-xs text-muted-foreground">{ownershipData.current_owner.address}</div>
                     )}
                     {ownershipData.last_ownership_fetch && (
-                        <div className="mt-2 text-[10.5px] text-muted-foreground">
+                        <div className="mt-2 text-xs text-muted-foreground">
                             Last synced: {new Date(ownershipData.last_ownership_fetch).toLocaleString("en-IN")}
                         </div>
                     )}
@@ -797,7 +797,7 @@ function HistoryTab({
             {/* File transfer status */}
             {ownershipData.file_transfer_status && (
                 <div className="mb-4 rounded-lg border border-border/50 bg-muted/30 px-4 py-2.5">
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">File Transfer Status: </span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">File Transfer Status: </span>
                     <span className="text-sm font-medium text-foreground">{ownershipData.file_transfer_status}</span>
                 </div>
             )}
@@ -831,7 +831,7 @@ function HistoryTab({
                                 <div className="rounded-lg border border-border/50 bg-card px-4 py-3">
                                     {/* Header */}
                                     <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", sc.badge)}>
+                                        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", sc.badge)}>
                                             {t.transfer_status || "Unknown"}
                                         </span>
                                         {formattedDate && (
@@ -842,13 +842,13 @@ function HistoryTab({
                                     {/* From ↔ To */}
                                     <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                                         <div>
-                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">From</div>
+                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">From</div>
                                             <div className="font-medium text-foreground">{t.from_name || "—"}</div>
                                             {t.from_iec && <div className="text-xs text-muted-foreground">IEC: {t.from_iec}</div>}
                                         </div>
                                         <Network className="mx-2 size-4 shrink-0 text-muted-foreground/50" aria-hidden="true" />
                                         <div>
-                                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">To</div>
+                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">To</div>
                                             <div className="font-medium text-foreground">{t.to_name || "—"}</div>
                                             {t.to_iec && <div className="text-xs text-muted-foreground">IEC: {t.to_iec}</div>}
                                         </div>
@@ -856,7 +856,7 @@ function HistoryTab({
 
                                     {/* Dates */}
                                     {t.transfer_initiation_date && (
-                                        <div className="mt-1.5 text-[10.5px] text-muted-foreground">
+                                        <div className="mt-1.5 text-xs text-muted-foreground">
                                             Initiated: {new Date(t.transfer_initiation_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                                         </div>
                                     )}
@@ -1178,7 +1178,7 @@ const LicenseRow = memo(function LicenseRow({
                     )}
 
                     <span className="license-row__summary">
-                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold", status.badge)}>
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold", status.badge)}>
                             <span className={cn("size-1.5 rounded-full", status.dot)} aria-hidden="true" />
                             {status.label}
                         </span>
@@ -1208,7 +1208,7 @@ const LicenseRow = memo(function LicenseRow({
                         <InfoField label="IEC" value={item.exporter_iec} mono />
                         <InfoField label="Transfer Status" value={item.latest_transfer} />
                         <div className="col-span-2 sm:col-span-4 lg:col-span-1">
-                            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 Balance CIF
                             </div>
                             <div className="mt-0.5 text-[22px] font-bold tabular-nums leading-none text-foreground">
@@ -1322,7 +1322,7 @@ function InfoField({
 }) {
     return (
         <div className="min-w-0">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {label}
             </div>
             <div

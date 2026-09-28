@@ -97,7 +97,7 @@ export default function Profile() {
             />
 
             {error && (
-                <div role="alert" className="mb-4 flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                <div role="alert" className="mb-4 flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
                     <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                     <span className="flex-1">{error}</span>
                     <button
@@ -111,7 +111,7 @@ export default function Profile() {
                 </div>
             )}
             {success && (
-                <div role="status" className="mb-4 flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-[13px] text-success">
+                <div role="status" className="mb-4 flex items-center gap-2.5 rounded-lg border border-success/30 bg-success/10 px-3.5 py-2.5 text-sm text-success">
                     <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
                     <span className="flex-1">{success}</span>
                     <button
@@ -134,7 +134,7 @@ export default function Profile() {
                         >
                             {initials}
                         </div>
-                        <div className="text-[15px] font-semibold tracking-tight text-foreground">
+                        <div className="text-base font-semibold tracking-tight text-foreground">
                             {displayName}
                         </div>
                         <div className="mb-3 text-xs text-muted-foreground">@{user.username}</div>
@@ -143,8 +143,8 @@ export default function Profile() {
                             {user.is_superuser && <Badge>Superuser</Badge>}
                         </div>
                         <div className="mt-5 w-full border-t border-border pt-4 text-left">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Account access</p>
-                            <p className="mt-1 text-[12px] text-muted-foreground">Your roles determine which business workflows are available to you.</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Account access</p>
+                            <p className="mt-1 text-xs text-muted-foreground">Your roles determine which business workflows are available to you.</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -162,7 +162,7 @@ export default function Profile() {
                             <div className="mb-4">
                                 <Label className="mb-1.5" htmlFor="username">Username</Label>
                                 <Input id="username" value={user.username} disabled readOnly />
-                                <p className="mt-1.5 text-[11.5px] text-muted-foreground">Username cannot be changed.</p>
+                                <p className="mt-1.5 text-xs text-muted-foreground">Username cannot be changed.</p>
                             </div>
 
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

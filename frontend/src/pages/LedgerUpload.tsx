@@ -477,7 +477,7 @@ const LedgerUpload = () => {
 
                             {/* Error */}
                             {(error || asyncError) && (
-                                <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                                <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
                                     <XCircle className="size-4 shrink-0" />
                                     <div>{error || asyncError}</div>
                                 </div>
@@ -549,7 +549,7 @@ const LedgerUpload = () => {
                             <CardContent className="max-h-[420px] overflow-y-auto pt-3">
                                 {results.map((result, index) => (
                                     <div key={`${result.fileName}-${index}`} className={cn(
-                                        "mb-2 rounded-lg border px-3.5 py-2.5 text-[13px]",
+                                        "mb-2 rounded-lg border px-3.5 py-2.5 text-sm",
                                         result.success ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10",
                                     )}>
                                         <div className="flex items-start gap-3">
@@ -604,7 +604,7 @@ const LedgerUpload = () => {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-3">
-                            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Required CSV Columns</div>
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Required CSV Columns</div>
                             <div className="mb-3 flex flex-wrap gap-1">
                                 {["Regn.No.", "Regn.Date", "Lic.No.", "Lic.Date", "IEC", "Scheme.Cd.", "Port", "Notification"].map((col) => (
                                     <code key={col} className="rounded border border-primary/15 bg-primary/10 px-2 py-0.5 text-xs text-primary">{col}</code>

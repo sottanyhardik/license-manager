@@ -147,7 +147,7 @@ export default function ActivityLog() {
                 <CardContent className="flex flex-wrap items-end gap-2 p-2">
                     {user?.is_superuser && (
                         <div className="min-w-[160px] flex-1">
-                            <Label className="mb-1 text-[11px]" htmlFor="f-user">Username</Label>
+                            <Label className="mb-1 text-xs" htmlFor="f-user">Username</Label>
                             <Input
                                 id="f-user"
                                 className="h-8"
@@ -158,7 +158,7 @@ export default function ActivityLog() {
                         </div>
                     )}
                     <div className="min-w-[150px]">
-                        <Label className="mb-1 text-[11px]" htmlFor="f-action">Action</Label>
+                        <Label className="mb-1 text-xs" htmlFor="f-action">Action</Label>
                         <Select value={filters.action || ALL} onValueChange={v => handleFilter("action", v === ALL ? "" : v)}>
                             <SelectTrigger id="f-action" size="sm">
                                 <SelectValue placeholder="All Actions" />
@@ -170,7 +170,7 @@ export default function ActivityLog() {
                         </Select>
                     </div>
                     <div className="min-w-[180px] flex-[1.5]">
-                        <Label className="mb-1 text-[11px]" htmlFor="f-search">Search</Label>
+                        <Label className="mb-1 text-xs" htmlFor="f-search">Search</Label>
                         <Input
                             id="f-search"
                             className="h-8"
@@ -183,7 +183,7 @@ export default function ActivityLog() {
                 </CardContent>
                     <CardContent className="grid grid-cols-1 gap-3 border-t border-border bg-muted/20 p-3 sm:grid-cols-2">
                         <div>
-                            <Label className="mb-1 text-[11px]" htmlFor="f-module">Module</Label>
+                            <Label className="mb-1 text-xs" htmlFor="f-module">Module</Label>
                             <Input id="f-module" className="h-8" placeholder="e.g. licenses" value={filters.module} onChange={e => handleFilter("module", e.target.value)} />
                         </div>
                         <DateRangeFilter
@@ -300,12 +300,12 @@ export default function ActivityLog() {
                                                     <td className="px-3 py-2">
                                                         <div className="flex items-center gap-2">
                                                             <div
-                                                                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+                                                                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
                                                                 aria-hidden="true"
                                                             >
                                                                 {(log.username || "?")[0].toUpperCase()}
                                                             </div>
-                                                            <span className="text-[13px] font-medium">
+                                                            <span className="text-sm font-medium">
                                                                 {log.username || "—"}
                                                             </span>
                                                         </div>
@@ -314,7 +314,7 @@ export default function ActivityLog() {
 
                                                 <td className="px-3 py-2">
                                                     <span className={cn(
-                                                        "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium",
+                                                        "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium",
                                                         m.chipClass,
                                                     )}>
                                                         <Icon className="size-3" aria-hidden="true" />
@@ -343,7 +343,7 @@ export default function ActivityLog() {
                                                 <td className="px-3 py-2">
                                                     {log.status_code != null ? (
                                                         <span className={cn(
-                                                            "rounded px-1.5 py-0.5 text-[10.5px] font-medium",
+                                                            "rounded px-1.5 py-0.5 text-xs font-medium",
                                                             isError
                                                                 ? "bg-destructive/15 text-destructive"
                                                                 : "bg-success/15 text-success",

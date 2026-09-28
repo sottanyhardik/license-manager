@@ -852,7 +852,7 @@ export default function TradeForm() {
                             const m = directionMeta[formData.direction];
                             const Icon = m?.icon;
                             return (
-                                <span className="ml-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px]" style={{ background: m?.soft, color: m?.color }}>
+                                <span className="ml-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs" style={{ background: m?.soft, color: m?.color }}>
                                     {Icon && <Icon className="size-3.5" aria-hidden="true" />}
                                     {m?.label}
                                 </span>
@@ -1272,7 +1272,7 @@ export default function TradeForm() {
                                     <List className="size-4" aria-hidden="true" />
                                     Trade Lines
                                     {formData.lines.length > 0 && (
-                                        <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                                             {formData.lines.length}
                                         </span>
                                     )}
@@ -1468,7 +1468,7 @@ export default function TradeForm() {
                                     <Award className="size-4" aria-hidden="true" />
                                     Incentive Lines
                                     {formData.incentive_lines.length > 0 && (
-                                        <span className="ml-2 inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
+                                        <span className="ml-2 inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                                             {formData.incentive_lines.length}
                                         </span>
                                     )}

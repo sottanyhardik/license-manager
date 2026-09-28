@@ -101,8 +101,8 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                     <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-500/15">
                         <Receipt className="size-3.5 text-amber-700 dark:text-amber-400" aria-hidden="true" />
                     </span>
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Bills of Entry</span>
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20">
+                    <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Bills of Entry</span>
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20">
                         {allBoes.length} total{search ? `, ${rows.length} shown` : ""}
                     </span>
                 </div>
@@ -140,25 +140,25 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                                 <Badge variant={overviewBoeStatusVariant(b.status)}>{b.status}</Badge>
                             </div>
                             <div className="mb-1.5 truncate text-xs text-muted-foreground" title={b.supplier || ""}>{b.supplier || "—"}</div>
-                            <div className="mb-2 text-[10.5px] text-muted-foreground/70">
+                            <div className="mb-2 text-xs text-muted-foreground/70">
                                 {fmtDate(b.bill_of_entry_date)}
                                 {b.port ? ` · ${b.port}` : ""}
                             </div>
-                            <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-2 text-[10.5px] text-muted-foreground">
+                            <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-2 text-xs text-muted-foreground">
                                 <div>Invoice: {b.invoice_no || "—"}</div>
                                 <div>{fmtDate(b.invoice_date)}</div>
                             </div>
                             <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50/60 px-2 py-1 dark:bg-amber-500/10">
                                 <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</span>
-                                <span className="tabular-nums text-[11.5px] font-bold text-amber-700 dark:text-amber-400">{fmtNum(b.cif_fc)}</span>
+                                <span className="tabular-nums text-xs font-bold text-amber-700 dark:text-amber-400">{fmtNum(b.cif_fc)}</span>
                             </div>
                         </div>
                     ))}
                 </div>
             ) : (
                 <div className="max-h-[calc(100vh-19rem)] overflow-auto rounded-lg border border-border/70 bg-card">
-                    <table className="w-full min-w-[900px] text-[13px]">
-                        <thead className="sticky top-0 z-[1] bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground backdrop-blur">
+                    <table className="w-full min-w-[900px] text-sm">
+                        <thead className="sticky top-0 z-[1] bg-muted/95 text-xs uppercase tracking-wide text-muted-foreground backdrop-blur">
                             <tr>
                                 <SortableHeader label="BOE No." sortKey="bill_of_entry_number" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
                                 <SortableHeader label="Date" sortKey="bill_of_entry_date" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
@@ -173,13 +173,13 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                         <tbody>
                             {rows.map((b, idx) => (
                                 <tr key={`${b.bill_of_entry_number}-${idx}`} className="border-t border-border/60 hover:bg-muted/30">
-                                    <td className="px-3 py-1.5 font-mono text-[10.5px]">{b.bill_of_entry_number || "—"}</td>
-                                    <td className="whitespace-nowrap px-3 py-1.5 text-[10.5px]">{fmtDate(b.bill_of_entry_date)}</td>
-                                    <td className="px-3 py-1.5 text-[10.5px]">{b.port || "—"}</td>
-                                    <td className="px-3 py-1.5 text-[10.5px]">{b.supplier || "—"}</td>
-                                    <td className="px-3 py-1.5 text-[10.5px]">{b.invoice_no || "—"}</td>
-                                    <td className="whitespace-nowrap px-3 py-1.5 text-[10.5px]">{fmtDate(b.invoice_date)}</td>
-                                    <td className="px-3 py-1.5 text-right tabular-nums text-[10.5px]">{fmtNum(b.cif_fc)}</td>
+                                    <td className="px-3 py-1.5 font-mono text-xs">{b.bill_of_entry_number || "—"}</td>
+                                    <td className="whitespace-nowrap px-3 py-1.5 text-xs">{fmtDate(b.bill_of_entry_date)}</td>
+                                    <td className="px-3 py-1.5 text-xs">{b.port || "—"}</td>
+                                    <td className="px-3 py-1.5 text-xs">{b.supplier || "—"}</td>
+                                    <td className="px-3 py-1.5 text-xs">{b.invoice_no || "—"}</td>
+                                    <td className="whitespace-nowrap px-3 py-1.5 text-xs">{fmtDate(b.invoice_date)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums text-xs">{fmtNum(b.cif_fc)}</td>
                                     <td className="px-3 py-1.5">
                                         <Badge variant={overviewBoeStatusVariant(b.status)}>{b.status}</Badge>
                                     </td>
@@ -192,7 +192,7 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
 
             {rows.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/20 bg-warning/5 px-3 py-2">
-                    <span className="text-[10.5px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                    <span className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                         Total CIF{search ? " (filtered)" : ""}
                     </span>
                     <span className="text-base font-bold tabular-nums text-amber-700 dark:text-amber-400">{fmtNum(totalCif)}</span>

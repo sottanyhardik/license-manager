@@ -48,23 +48,23 @@ export default function DataPagination({
     const endItem = totalItems ? Math.min(currentPage * pageSize, totalItems) : null;
 
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-1 pt-3 mt-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-1 pt-3 mt-3">
             {/* Left: page size selector + count */}
             <div className="flex items-center gap-3">
                 {showPageSize && <div className="flex items-center gap-1.5">
-                    <span className="text-[12px] text-muted-foreground">Show</span>
+                    <span className="text-xs text-muted-foreground">Show</span>
                     <select
-                        className="h-7 rounded-md border border-input bg-card px-2 text-[12px] outline-none focus-visible:border-ring cursor-pointer"
+                        className="h-8 rounded-lg border border-input bg-card px-3 text-xs outline-none focus-visible:border-ring cursor-pointer"
                         value={pageSize}
                         onChange={e => onPageSizeChange(parseInt(e.target.value))}
                         aria-label="Rows per page"
                     >
                         {pageSizeOptions.map(size => <option key={size} value={size}>{size}</option>)}
                     </select>
-                    <span className="text-[12px] text-muted-foreground">per page</span>
+                    <span className="text-xs text-muted-foreground">per page</span>
                 </div>}
                 {totalItems != null && (
-                    <span className="hidden text-[12px] text-muted-foreground sm:inline-block">
+                    <span className="hidden text-xs text-muted-foreground sm:inline-block">
                         {startItem}–{endItem} of {totalItems.toLocaleString()}
                     </span>
                 )}
@@ -76,15 +76,15 @@ export default function DataPagination({
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={!hasPrevious}
                     aria-label="Previous page"
-                    className="flex size-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    <ChevronLeft className="size-3.5" />
+                    <ChevronLeft className="size-4" />
                 </button>
 
                 {getPageNumbers().map((page, idx) => {
                     if (page === "…") {
                         return (
-                            <span key={`e${idx}`} className="flex size-7 items-center justify-center text-[12px] text-muted-foreground">
+                            <span key={`e${idx}`} className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
                                 …
                             </span>
                         );
@@ -96,7 +96,7 @@ export default function DataPagination({
                             onClick={() => handlePageChange(page as number)}
                             aria-label={`Page ${page}`}
                             aria-current={isActive ? "page" : undefined}
-                            className={`flex min-w-[28px] h-7 items-center justify-center rounded-md px-1.5 text-[12px] font-medium transition-colors ${
+                            className={`flex min-w-[32px] h-8 items-center justify-center rounded-lg px-2 text-xs font-medium transition-colors ${
                                 isActive
                                     ? "bg-primary text-primary-foreground shadow-sm"
                                     : "border border-border bg-card text-foreground hover:bg-muted"
@@ -111,14 +111,14 @@ export default function DataPagination({
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={!hasNext}
                     aria-label="Next page"
-                    className="flex size-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    <ChevronRight className="size-3.5" />
+                    <ChevronRight className="size-4" />
                 </button>
             </nav>
 
             {/* Right: page indicator */}
-            <span className="text-[12px] text-muted-foreground tabular-nums">
+            <span className="text-xs text-muted-foreground tabular-nums">
                 {currentPage} / {totalPages}
             </span>
         </div>

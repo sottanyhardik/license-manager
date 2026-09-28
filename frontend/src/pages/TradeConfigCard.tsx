@@ -23,7 +23,7 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                     <div className="p-3">
                         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                             <div>
-                                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     TRANSACTION TYPE <span className="text-destructive">*</span>
                                 </label>
                                 <div className="flex gap-2 flex-wrap">
@@ -50,7 +50,7 @@ export default function TradeConfigCard({ formData, setFormData, id, autoCreateP
                                 </div>
                             </div>
                             <div>
-                                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                     LICENSE TYPE <span className="text-destructive">*</span>
                                 </label>
                                 <div className="flex gap-2">

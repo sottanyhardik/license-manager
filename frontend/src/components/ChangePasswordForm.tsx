@@ -94,7 +94,7 @@ export default function ChangePasswordForm({ onSuccess }: ChangePasswordFormProp
                 {error && (
                     <div
                         role="alert"
-                        className="mb-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive"
+                        className="mb-4 flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
                     >
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />
                         <span>{error}</span>
@@ -164,7 +164,7 @@ export default function ChangePasswordForm({ onSuccess }: ChangePasswordFormProp
                                 {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                             </button>
                         </div>
-                        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+                        <p className="mt-1.5 text-xs text-muted-foreground">
                             Minimum 8 characters. Use a strong password with letters, numbers, and symbols.
                         </p>
                     </div>

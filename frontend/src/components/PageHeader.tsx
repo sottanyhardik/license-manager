@@ -36,7 +36,7 @@ export default function PageHeader({
             {/* Left: Breadcrumb + title + description */}
             <div className="min-w-0 flex-1">
                 {pretitle && (
-                    <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {pretitle}
                     </div>
                 )}

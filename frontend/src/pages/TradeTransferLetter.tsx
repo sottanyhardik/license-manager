@@ -12,7 +12,7 @@ import PageHeader from "@/components/PageHeader";
 function Detail({ label, value }) {
     return (
         <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
             <div className="text-sm font-semibold text-foreground">{value ?? "—"}</div>
         </div>
     );
@@ -57,7 +57,7 @@ export default function TradeTransferLetter({ tradeId: propId, isModal = false, 
             )}
 
             {error && (
-                <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive">
+                <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
                     {error}
                 </div>
             )}

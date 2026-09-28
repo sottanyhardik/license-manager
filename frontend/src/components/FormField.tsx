@@ -188,7 +188,7 @@ export const NonFieldErrors = ({
 
     return (
         <div
-            className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive"
+            className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
             role="alert"
         >
             <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

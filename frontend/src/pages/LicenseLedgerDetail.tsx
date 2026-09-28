@@ -190,7 +190,7 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
     const billSuffix = billCurrency === 'USD' ? '($)' : '(₹)';
     return (
         <thead className="sticky top-0 z-10">
-            <tr className="border-b-2 border-primary/20 bg-primary/8 text-[11px]">
+            <tr className="border-b-2 border-primary/20 bg-primary/8 text-xs">
                 <th scope="col" className="px-2.5 py-1 text-left font-bold text-foreground">Date</th>
                 <th scope="col" className="px-2.5 py-1 text-left font-bold text-foreground">Particulars</th>
                 <th scope="col" className="px-2.5 py-1 text-left font-bold text-foreground">Invoice</th>
@@ -215,7 +215,7 @@ function InvoiceDocumentCell({ transaction }: { transaction: CanonicalTransactio
 
     if (document?.document_exists && document.secure_url) {
         return (
-            <td className="px-2.5 py-1 text-[11px] text-foreground">
+            <td className="px-2.5 py-1 text-xs text-foreground">
                 <a
                     href={document.secure_url}
                     target="_blank"
@@ -233,7 +233,7 @@ function InvoiceDocumentCell({ transaction }: { transaction: CanonicalTransactio
     }
 
     return (
-        <td className="px-2.5 py-1 text-[11px] text-foreground">
+        <td className="px-2.5 py-1 text-xs text-foreground">
             <span>{invoiceNumber}</span>
             {document?.status === 'COPY_UNAVAILABLE' && (
                 <span className="ml-1 text-[9px] text-muted-foreground">unavailable</span>
@@ -253,13 +253,13 @@ function InvoiceDocumentCell({ transaction }: { transaction: CanonicalTransactio
 function LedgerItemsCell({ itemNames }: { itemNames: string[] | undefined }) {
     const names = (itemNames ?? []).filter(Boolean);
     if (!names.length) {
-        return <td className="px-2.5 py-1 text-[11px] text-muted-foreground">-</td>;
+        return <td className="px-2.5 py-1 text-xs text-muted-foreground">-</td>;
     }
     const [first, ...rest] = names;
     const fullList = names.join(', ');
     return (
         <td
-            className="max-w-[180px] px-2.5 py-1 text-[11px] text-foreground"
+            className="max-w-[180px] px-2.5 py-1 text-xs text-foreground"
             title={fullList}
             aria-label={fullList}
         >
@@ -331,7 +331,7 @@ export default function LicenseLedgerDetail() {
     if (error) {
         return (
             <div className="py-4">
-                <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-[13px] text-destructive" role="alert">
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive" role="alert">
                     <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
                     {error}
                 </div>
@@ -428,8 +428,8 @@ export default function LicenseLedgerDetail() {
                 <div className="mx-3 mt-2 flex items-start gap-2 rounded-md border border-warning/30 border-l-4 border-warning bg-warning/10 px-3 py-2 sm:mx-5">
                     <TriangleAlert className="size-3.5 shrink-0 text-warning mt-0.5" aria-hidden="true" />
                     <div className="flex-1">
-                        <strong className="text-[12px] font-semibold text-warning">Action Required</strong>
-                        <p className="text-[12px] text-warning/80 mt-0.5">
+                        <strong className="text-xs font-semibold text-warning">Action Required</strong>
+                        <p className="text-xs text-warning/80 mt-0.5">
                             {!hasPurchases && isNegativeBalance &&
                                 'No purchase transactions found and balance is negative.'}
                             {!hasPurchases && !isNegativeBalance &&
@@ -454,7 +454,7 @@ export default function LicenseLedgerDetail() {
                                 {String(ledger.license_type)}
                             </Badge>
                         </h4>
-                        <div className="grid grid-cols-1 gap-x-3 gap-y-0.5 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2 lg:grid-cols-3">
                             <div>
                                 <span className="text-muted-foreground">Exporter:</span>
                                 <strong className="ml-1">{normalizeText(ledger.exporter_name, 'N/A')}</strong>
@@ -493,7 +493,7 @@ export default function LicenseLedgerDetail() {
 
                     {/* Balance panel */}
                     <div className="rounded-md border border-border bg-muted/60 px-2.5 py-1.5 text-right">
-                        <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                             Balance
                         </div>
                         <div className={cn(
@@ -523,7 +523,7 @@ export default function LicenseLedgerDetail() {
                         <div className="mx-5 my-5 flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-card px-5 py-12 text-center">
                             <ScrollText className="size-8 text-muted-foreground" aria-hidden="true" />
                             <p className="text-sm font-semibold text-foreground">No transactions</p>
-                            <p className="text-[13px] text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                                 No ledger entries found for this license.
                             </p>
                         </div>
@@ -547,14 +547,14 @@ export default function LicenseLedgerDetail() {
                         <div className="flex flex-wrap items-center justify-between gap-1 border-b border-border bg-muted px-3 py-1.5">
                             <div className="flex items-center gap-2">
                                 <Wallet className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                <span className="text-[12px] font-bold text-foreground">Opening Balance</span>
+                                <span className="text-xs font-bold text-foreground">Opening Balance</span>
                             </div>
-                            <span className="hidden text-[11px] text-muted-foreground lg:inline">
+                            <span className="hidden text-xs text-muted-foreground lg:inline">
                                 Starting state
                             </span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full border-collapse bg-card text-[12px]">
+                            <table className="w-full border-collapse bg-card text-xs">
                                 <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
                                 <tbody>
                                     <tr className="border-b border-border bg-muted/50">
@@ -564,7 +564,7 @@ export default function LicenseLedgerDetail() {
                                         <td className="px-2.5 py-1 font-medium text-foreground">Opening Balance</td>
                                         <td className="px-2.5 py-1 text-muted-foreground">-</td>
                                         <td className="px-2.5 py-1 text-foreground">
-                                            <Badge variant="secondary" className="text-[10px]">{openingRow.type}</Badge>
+                                            <Badge variant="secondary" className="text-xs">{openingRow.type}</Badge>
                                         </td>
                                         {isDFIA && <td className="px-2.5 py-1 text-muted-foreground">-</td>}
                                         <td className="px-2.5 py-1 text-right font-semibold text-destructive">-</td>
@@ -604,18 +604,18 @@ export default function LicenseLedgerDetail() {
                             <div className="flex flex-wrap items-center justify-between gap-1 bg-primary px-3 py-1.5 text-primary-foreground">
                                 <div className="flex items-center gap-2">
                                     <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
-                                    <span data-testid="ledger-company-group" className="text-[12px] font-bold">
+                                    <span data-testid="ledger-company-group" className="text-xs font-bold">
                                         {company.company_name}
                                     </span>
                                 </div>
-                                <div className="hidden text-[11px] text-primary-foreground/80 lg:block">
+                                <div className="hidden text-xs text-primary-foreground/80 lg:block">
                                     Balance: <span className="font-semibold">{formatCurrency(companyBalance, balanceCurrency)}</span>
                                 </div>
                             </div>
 
                             {/* Company ledger table */}
                             <div className="overflow-x-auto">
-                                <table className="w-full border-collapse bg-card text-[12px]">
+                                <table className="w-full border-collapse bg-card text-xs">
                                     <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
                                     <tbody>
                                         {txns.map((txn, ti) => {
@@ -633,29 +633,29 @@ export default function LicenseLedgerDetail() {
                                                             : "border-border/60 bg-card",
                                                     )}
                                                 >
-                                                    <td className="whitespace-nowrap px-2.5 py-1 text-[11px] text-muted-foreground">
+                                                    <td className="whitespace-nowrap px-2.5 py-1 text-xs text-muted-foreground">
                                                         {formatDate(txn.date)}
                                                     </td>
-                                                    <td className="px-2.5 py-1 text-[11px] text-foreground">
+                                                    <td className="px-2.5 py-1 text-xs text-foreground">
                                                         {normalizeText(txn.party_name, '-')}
                                                     </td>
                                                     <InvoiceDocumentCell transaction={txn} />
                                                     <td className="px-2.5 py-1 text-foreground">
-                                                        <Badge variant={isCommission ? "secondary" : "outline"} className="text-[10px]">
+                                                        <Badge variant={isCommission ? "secondary" : "outline"} className="text-xs">
                                                             {txn.type}
                                                         </Badge>
                                                     </td>
                                                     {isDFIA && <LedgerItemsCell itemNames={txn.item_names} />}
-                                                    <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-destructive">
+                                                    <td className="px-2.5 py-1 text-right text-xs font-semibold text-destructive">
                                                         {formatCurrency(txn.sale_amount, balanceCurrency)}
                                                     </td>
-                                                    <td className="px-2.5 py-1 text-right text-[11px] font-semibold text-success">
+                                                    <td className="px-2.5 py-1 text-right text-xs font-semibold text-success">
                                                         {formatCurrency(txn.purchase_amount, balanceCurrency)}
                                                     </td>
-                                                    <td className="px-2.5 py-1 text-right text-[11px] tabular-nums text-destructive">
+                                                    <td className="px-2.5 py-1 text-right text-xs tabular-nums text-destructive">
                                                         {formatCurrency(txn.sale_bill_amount, billCurrency)}
                                                     </td>
-                                                    <td className="px-2.5 py-1 text-right text-[11px] tabular-nums text-success">
+                                                    <td className="px-2.5 py-1 text-right text-xs tabular-nums text-success">
                                                         {formatCurrency(txn.purchase_bill_amount, billCurrency)}
                                                     </td>
                                                 </tr>

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { Box, TextField, MenuItem, Typography, useTheme } from "@mui/material";
+import { Box, TextField, MenuItem, Typography, useTheme, Chip, Stack } from "@mui/material";
 import Select from "react-select";
 import HybridSelect from "../components/HybridSelect";
 import DateRangeFilter from "../components/DateRangeFilter";
-import { FilterGrid, FilterPanel, FilterField } from "../components/filters/FilterPanel";
+import { FilterPanel, FilterField } from "../components/filters/FilterPanel";
 
 interface AllotmentFiltersProps {
     filters: Record<string, string | null>;
@@ -14,6 +14,40 @@ interface AllotmentFiltersProps {
     routePlanningTarget?: { id: number; name: string; sion?: string | null } | null;
     defaultSearchMode?: "PLAN" | "ACTUAL";
     defaultItemId?: number | null;
+}
+
+// Custom MultiValue component for compact multi-select display
+function CompactMultiValue({ data, removeProps }: any) {
+    return (
+        <Chip
+            label={data.label}
+            onDelete={() => removeProps.onClick()}
+            size="small"
+            variant="outlined"
+            sx={{ height: 28, fontSize: '0.8rem' }}
+        />
+    );
+}
+
+// Custom ValueContainer for compact display of many values
+function CompactValueContainer({ children, ...props }: any) {
+    const selectedValues = props.getValue ? props.getValue() : [];
+    const maxVisible = 2;
+    const moreCount = Math.max(0, selectedValues.length - maxVisible);
+
+    return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', minHeight: '44px', padding: '4px 8px' }}>
+            {children.slice(0, (selectedValues.length > 0 ? maxVisible * 2 : 0) + (moreCount > 0 ? 0 : 1))}
+            {moreCount > 0 && (
+                <Chip
+                    label={`+${moreCount} more`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ height: 28, fontSize: '0.75rem', pointerEvents: 'none' }}
+                />
+            )}
+        </div>
+    );
 }
 
 export default function AllotmentFilters({
@@ -57,8 +91,9 @@ export default function AllotmentFilters({
         control: (base: any) => ({
             ...base,
             minHeight: '44px',
-            height: '44px',
+            height: 'auto',
             borderColor: muiTheme.palette.divider,
+            padding: '2px 0',
         }),
         menu: (base: any) => ({
             ...base,
@@ -66,12 +101,13 @@ export default function AllotmentFilters({
         }),
         valueContainer: (base: any) => ({
             ...base,
-            maxHeight: '44px',
-            flexWrap: 'nowrap',
+            maxHeight: '100%',
+            padding: '4px 8px',
         }),
         multiValue: (base: any) => ({
             ...base,
             fontSize: '0.875rem',
+            margin: '2px',
         }),
         multiValueLabel: (base: any) => ({
             ...base,
@@ -84,11 +120,11 @@ export default function AllotmentFilters({
     return (
         <Box sx={{ mb: 3 }}>
             <FilterPanel onFiltersChange={() => {}}>
-                <FilterGrid>
                     {/* Row 1: License Number, Item, Norm Class, Exporter */}
                     <FilterField>
-                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }}>License Number</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }} component="label" htmlFor="license-number">License Number</Typography>
                         <TextField
+                            id="license-number"
                             size="small"
                             placeholder="Search licence…"
                             value={filters.license_number || ""}
@@ -136,8 +172,9 @@ export default function AllotmentFilters({
 
                     {/* Row 2: Quantities */}
                     <FilterField>
-                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }}>Min Available Qty</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }} component="label" htmlFor="min-available-qty">Min Available Qty</Typography>
                         <TextField
+                            id="min-available-qty"
                             size="small"
                             type="number"
                             placeholder="0"
@@ -163,8 +200,9 @@ export default function AllotmentFilters({
 
                     {/* Row 3: Values */}
                     <FilterField>
-                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }}>Min Available Value</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }} component="label" htmlFor="min-available-value">Min Available Value</Typography>
                         <TextField
+                            id="min-available-value"
                             size="small"
                             type="number"
                             placeholder="0"
@@ -256,8 +294,9 @@ export default function AllotmentFilters({
                     </FilterField>
 
                     <FilterField>
-                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }}>Item Description</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }} component="label" htmlFor="item-description">Item Description</Typography>
                         <TextField
+                            id="item-description"
                             size="small"
                             placeholder="Search description"
                             value={filters.description || ""}
@@ -280,8 +319,9 @@ export default function AllotmentFilters({
                     </FilterField>
 
                     <FilterField>
-                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }}>HS Code</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.75 }} component="label" htmlFor="hs-code">HS Code</Typography>
                         <TextField
+                            id="hs-code"
                             size="small"
                             placeholder="Filter by HS code"
                             value={filters.hs_code || ""}
@@ -301,6 +341,10 @@ export default function AllotmentFilters({
                             options={purchaseStatusOptions}
                             placeholder="All"
                             styles={selectStyles}
+                            components={{
+                                MultiValue: CompactMultiValue,
+                                ValueContainer: CompactValueContainer,
+                            }}
                             classNamePrefix="react-select"
                         />
                     </FilterField>
@@ -316,7 +360,6 @@ export default function AllotmentFilters({
                             onClear={() => setFilters({ ...filters, expiry_date_from: "", expiry_date_to: "" })}
                         />
                     </FilterField>
-                </FilterGrid>
             </FilterPanel>
         </Box>
     );

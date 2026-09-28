@@ -1,27 +1,29 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import {
   Box,
-  TextField,
   Button,
   Chip,
   Typography,
   Paper,
-  InputAdornment,
+  useTheme as useMuiTheme,
 } from '@mui/material';
-import { Search, X } from 'lucide-react';
+import { Search, X, ChevronDown } from 'lucide-react';
 import { useFilters, FilterProvider, FilterProviderProps } from './FilterContext';
 
 interface FilterPanelInnerProps {
   children: ReactNode;
+  collapsible?: boolean;
 }
 
 /**
  * Inner component that uses the FilterContext
  */
-function FilterPanelInner({ children }: FilterPanelInnerProps) {
+function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerProps) {
   const { state, setSearch, removeFilter, clearAllFilters } = useFilters();
   const { search, activeFilters } = state;
   const hasActiveFilters = activeFilters.length > 0 || search.length > 0;
+  const [isExpanded, setIsExpanded] = useState(!collapsible);
+  const muiTheme = useMuiTheme();
 
   return (
     <Box
@@ -30,6 +32,7 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
         flexDirection: 'column',
         gap: 2,
         mb: 3,
+        width: '100%',
       }}
     >
       {/* Main Filter Panel */}
@@ -37,46 +40,121 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
         elevation={0}
         sx={{
           backgroundColor: 'background.paper',
-          border: '1px solid',
-          borderColor: 'divider',
+          border: `1px solid ${muiTheme.palette.divider}`,
           borderRadius: 1,
           overflow: 'hidden',
+          width: '100%',
         }}
       >
-        {/* Filter Controls Grid */}
-        <Box
-          sx={{
-            p: { xs: 2, sm: 2.5, md: 3 },
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, 1fr)',
-              md: 'repeat(3, 1fr)',
-              lg: 'repeat(4, 1fr)',
-            },
-            gap: { xs: 2, sm: 2.5 },
-            alignItems: 'start',
-          }}
-        >
-          {children}
-        </Box>
+        {/* Collapsible Header */}
+        {collapsible && (
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5, md: 3 },
+              py: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: !isExpanded && hasActiveFilters ? `1px solid ${muiTheme.palette.divider}` : 'none',
+              cursor: 'pointer',
+              userSelect: 'none',
+              '&:hover': {
+                backgroundColor: muiTheme.palette.action.hover,
+              },
+            }}
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+              }}
+            >
+              <Search size={18} />
+              Filters
+            </Typography>
+            <ChevronDown
+              size={18}
+              style={{
+                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            />
+          </Box>
+        )}
+
+        {/* Filter Controls Grid - Visible when expanded */}
+        {isExpanded && (
+          <Box
+            sx={{
+              p: { xs: 2, sm: 2.5, md: 3 },
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+                lg: 'repeat(4, 1fr)',
+                xl: 'repeat(4, 1fr)',
+              },
+              gap: { xs: 2, sm: 2.5, md: 3 },
+              alignItems: 'start',
+            }}
+          >
+            {children}
+          </Box>
+        )}
+
+        {/* Collapsed state - show active filters in panel */}
+        {!isExpanded && hasActiveFilters && (
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5, md: 3 },
+              py: 2,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
+            {search && (
+              <Chip
+                label={`Search: ${search}`}
+                onDelete={() => setSearch('')}
+                size="small"
+                variant="outlined"
+              />
+            )}
+            {activeFilters.map((filter) => (
+              <Chip
+                key={filter.key}
+                label={`${filter.label}: ${filter.value}`}
+                onDelete={() => removeFilter(filter.key)}
+                size="small"
+                variant="outlined"
+              />
+            ))}
+          </Box>
+        )}
       </Paper>
 
-      {/* Active Filters Display (Always Visible) */}
-      {hasActiveFilters && (
+      {/* Active Filters Display - Separate panel when not collapsed */}
+      {!collapsible && hasActiveFilters && (
         <Paper
           elevation={0}
           sx={{
             backgroundColor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
+            border: `1px solid ${muiTheme.palette.divider}`,
             borderRadius: 1,
             p: { xs: 2, sm: 2.5, md: 3 },
+            width: '100%',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Typography
-              variant="subtitle2"
+              variant="body2"
               sx={{
                 fontWeight: 600,
                 display: 'flex',
@@ -84,7 +162,7 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
                 gap: 1,
               }}
             >
-              <Search size={16} style={{ color: 'var(--tb-text-secondary)' }} />
+              <Search size={16} style={{ color: muiTheme.palette.text.secondary }} />
               Active Filters
             </Typography>
             <Button
@@ -94,7 +172,12 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
               startIcon={<X size={16} />}
               sx={{
                 textTransform: 'none',
+                fontSize: '0.85rem',
+                fontWeight: 600,
                 color: 'error.main',
+                '&:hover': {
+                  backgroundColor: 'transparent',
+                },
               }}
             >
               Clear All
@@ -133,35 +216,57 @@ function FilterPanelInner({ children }: FilterPanelInnerProps) {
           </Box>
         </Paper>
       )}
+
+      {/* Collapsed with active filters - show clear all */}
+      {collapsible && !isExpanded && hasActiveFilters && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button
+            variant="text"
+            size="small"
+            onClick={clearAllFilters}
+            startIcon={<X size={16} />}
+            sx={{
+              textTransform: 'none',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: 'error.main',
+            }}
+          >
+            Clear All
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }
 
 export interface FilterPanelProps extends Omit<FilterProviderProps, 'children'> {
   children: ReactNode;
+  collapsible?: boolean;
 }
 
 /**
  * FilterPanel Component
  *
  * Provides a complete filter interface with:
- * - Search field
- * - Filter controls (passed as children)
- * - Active filters display with individual removal
- * - Clear All button
+ * - Professional surface with subtle border
+ * - Responsive CSS Grid (4 cols at 1536px, 3 at 1200px, 2 at 768px, 1 at 375px)
+ * - Active filters display with individual removal and Clear All button
+ * - Optional collapsible design
+ * - All controls 40-44px height
  *
  * Usage:
  * ```tsx
- * <FilterPanel onFiltersChange={handleDataRefresh}>
+ * <FilterPanel onFiltersChange={handleDataRefresh} collapsible>
  *   <FilterSelect label="Status" filterKey="status" options={[...]} />
  *   <FilterAutocomplete label="Port" filterKey="port" options={[...]} />
  * </FilterPanel>
  * ```
  */
-export function FilterPanel({ children, onFiltersChange }: FilterPanelProps) {
+export function FilterPanel({ children, onFiltersChange, collapsible = false }: FilterPanelProps) {
   return (
     <FilterProvider onFiltersChange={onFiltersChange}>
-      <FilterPanelInner>{children}</FilterPanelInner>
+      <FilterPanelInner collapsible={collapsible}>{children}</FilterPanelInner>
     </FilterProvider>
   );
 }
@@ -178,7 +283,7 @@ export function FilterGrid({ children }: { children: ReactNode }) {
           md: 'repeat(3, 1fr)',
           lg: 'repeat(4, 1fr)',
         },
-        gap: { xs: 2, sm: 2.5 },
+        gap: { xs: 2, sm: 2.5, md: 3 },
       }}
     >
       {children}

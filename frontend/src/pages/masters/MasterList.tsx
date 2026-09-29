@@ -556,6 +556,11 @@ export default function MasterList() {
         setCurrentPage(1);
     }, []);
 
+    // Memoize filter params as a string to prevent effect dependency churn
+    const filterParamsString = useMemo(() =>
+        JSON.stringify(Object.entries(filterParams).sort(([a], [b]) => a.localeCompare(b)))
+    , [filterParams]);
+
     useEffect(() => {
         // Keep every list's current search and filters in the URL.  The old
         // allotments-only synchronizer dropped `search` as soon as a user
@@ -576,7 +581,7 @@ export default function MasterList() {
         const current = new URLSearchParams(location.search);
         current.sort();
         if (nextSearch !== current.toString()) navigate({ search: nextSearch }, { replace: true });
-    }, [entityName, filterParams, currentPage, location.search, navigate]);
+    }, [entityName, filterParamsString, currentPage, location.search, navigate]);
 
     const handlePageChange = (page) => {
         setCurrentPage(page);

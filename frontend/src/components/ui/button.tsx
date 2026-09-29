@@ -30,6 +30,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             size = "default",
             className,
             children,
+            asChild: _asChild,
             ...props
         },
         ref

@@ -212,79 +212,81 @@ export default function DebouncedAsyncSelect({
             ? Math.max(0, selectedOption.length - limitTags)
             : 0;
 
-        return (
-            <Autocomplete
-                fullWidth
-                open={open}
-                onOpen={() => {
-                    setOpen(true);
-                    setFocused(true);
-                }}
-                onClose={() => {
-                    setOpen(false);
-                    setFocused(false);
-                }}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                isOptionEqualToValue={(option, value) => {
-                    if (!option || !value) return false;
-                    return option.value === value.value;
-                }}
-                getOptionLabel={(option) => {
-                    if (typeof option === 'string') return option;
-                    return option.label || '';
-                }}
-                options={options}
-                loading={isSearching}
-                value={selectedOption || (isMulti ? [] : null)}
-                onChange={(event, newValue) => {
-                    handleChange(newValue);
-                }}
-                onInputChange={(event, newInputValue) => {
-                    setInputValue(newInputValue);
-                }}
-                multiple={isMulti}
-                disableCloseOnSelect={isMulti}
-                filterOptions={(x) => x}
-                noOptionsText={inputValue === '' ? 'Start typing to search...' : 'No options'}
-                {...(isMulti && {
-                    renderTags: (value, getTagProps) => {
-                        const displayedTags = focused ? value : value.slice(0, limitTags);
-                        return (
-                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                                {displayedTags.map((option, index) => (
-                                    <Chip
-                                        {...getTagProps({ index })}
-                                        key={option.value}
-                                        label={option.label}
-                                        size="small"
-                                        sx={{ maxWidth: '100%' }}
-                                    />
-                                ))}
-                                {!focused && hiddenTagCount > 0 && (
-                                    <Chip
-                                        label={`+${hiddenTagCount}`}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ maxWidth: '100%', pointerEvents: 'none' }}
-                                    />
-                                )}
-                            </Box>
-                        );
-                    }
-                })}
-                slotProps={{
-                    paper: {
-                        sx: {
-                            '& .MuiAutocomplete-listbox': {
-                                maxHeight: '200px',
-                            }
+        const renderTagsFunc = isMulti
+            ? (value: typeof selectedOption, getTagProps: (config: any) => any) => {
+                const displayedTags = focused ? value : value.slice(0, limitTags);
+                return (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {displayedTags.map((option, index) => (
+                            <Chip
+                                {...getTagProps({ index })}
+                                key={option.value}
+                                label={option.label}
+                                size="small"
+                                sx={{ maxWidth: '100%' }}
+                            />
+                        ))}
+                        {!focused && hiddenTagCount > 0 && (
+                            <Chip
+                                label={`+${hiddenTagCount}`}
+                                size="small"
+                                variant="outlined"
+                                sx={{ maxWidth: '100%', pointerEvents: 'none' }}
+                            />
+                        )}
+                    </Box>
+                );
+            }
+            : undefined;
+
+        const autocompleteProps: any = {
+            fullWidth: true,
+            open,
+            onOpen: () => {
+                setOpen(true);
+                setFocused(true);
+            },
+            onClose: () => {
+                setOpen(false);
+                setFocused(false);
+            },
+            onFocus: () => setFocused(true),
+            onBlur: () => setFocused(false),
+            isOptionEqualToValue: (option: any, value: any) => {
+                if (!option || !value) return false;
+                return option.value === value.value;
+            },
+            getOptionLabel: (option: any) => {
+                if (typeof option === 'string') return option;
+                return option.label || '';
+            },
+            options,
+            loading: isSearching,
+            value: selectedOption || (isMulti ? [] : null),
+            onChange: (event: any, newValue: any) => {
+                handleChange(newValue);
+            },
+            onInputChange: (event: any, newInputValue: string) => {
+                setInputValue(newInputValue);
+            },
+            multiple: isMulti,
+            disableCloseOnSelect: isMulti,
+            filterOptions: (x: any) => x,
+            noOptionsText: inputValue === '' ? 'Start typing to search...' : 'No options',
+            slotProps: {
+                paper: {
+                    sx: {
+                        '& .MuiAutocomplete-listbox': {
+                            maxHeight: '200px',
                         }
                     }
-                }}
-                renderInput={(params) => (
+                }
+            },
+            renderInput: (params: any) => {
+                const { slotProps: paramSlotProps, ...restParams } = params;
+                return (
                     <TextField
-                        {...params}
+                        {...restParams}
                         label={fieldLabel}
                         placeholder={placeholder}
                         variant="outlined"
@@ -299,20 +301,28 @@ export default function DebouncedAsyncSelect({
                             }
                         }}
                         slotProps={{
+                            ...paramSlotProps,
                             input: {
-                                ...params.slotProps?.input,
+                                ...paramSlotProps?.input,
                                 endAdornment: (
                                     <>
                                         {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
-                                        {params.slotProps?.input?.endAdornment}
+                                        {paramSlotProps?.input?.endAdornment}
                                     </>
                                 ),
                             },
                         }}
                     />
-                )}
-            />
-        );
+                );
+            }
+        };
+
+        // Only add renderTags if it's defined (i.e., when isMulti is true)
+        if (renderTagsFunc) {
+            (autocompleteProps as any).renderTags = renderTagsFunc;
+        }
+
+        return <Autocomplete {...autocompleteProps} />;
     }
 
     // Fall back to react-select for legacy use without fieldLabel

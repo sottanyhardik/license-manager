@@ -351,26 +351,32 @@ export default function DebouncedAsyncSelect({
                 }
             },
             renderInput: (params: any) => {
-                // Exclude renderTags and renderInput from params spread
-                // These cause prop warnings and aren't needed for TextField
-                const { InputProps: baseInputProps, renderTags, renderInput, ...safeParams } = params;
+                // Use MUI v9's slotProps pattern for clean prop handling
+                const { id, disabled, fullWidth, size, slotProps: providedSlotProps = {} } = params;
 
-                const newInputProps = {
-                    ...baseInputProps,
-                    endAdornment: (
-                        <>
-                            {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
-                            {baseInputProps?.endAdornment}
-                        </>
-                    ),
-                };
+                const endAdornmentComponent = (
+                    <>
+                        {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
+                        {providedSlotProps?.input?.endAdornment}
+                    </>
+                );
 
                 return (
                     <TextField
-                        {...safeParams}
+                        id={id}
+                        disabled={disabled}
+                        fullWidth={fullWidth}
+                        size={size}
                         label={fieldLabel}
                         placeholder={placeholder}
-                        InputProps={newInputProps}
+                        slotProps={{
+                            inputLabel: providedSlotProps?.inputLabel,
+                            htmlInput: providedSlotProps?.htmlInput,
+                            input: {
+                                ...providedSlotProps?.input,
+                                endAdornment: endAdornmentComponent,
+                            },
+                        }}
                         sx={{
                             '& .MuiOutlinedInput-root': {
                                 minHeight: '56px',

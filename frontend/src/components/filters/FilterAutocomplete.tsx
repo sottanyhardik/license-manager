@@ -138,16 +138,22 @@ export function FilterAutocomplete({
             },
           }}
           renderInput={(params) => {
-            const { InputProps, renderTags, renderInput, ...safeParams } = params;
+            const { id, disabled, fullWidth, slotProps: providedSlotProps = {} } = params;
             return (
               <TextField
-                {...safeParams}
+                id={id}
+                disabled={disabled}
+                fullWidth={fullWidth}
                 label={label}
                 required={required}
                 size={size}
                 variant="outlined"
                 placeholder={searchable ? 'Search...' : undefined}
-                InputProps={InputProps}
+                slotProps={{
+                  inputLabel: providedSlotProps?.inputLabel,
+                  htmlInput: providedSlotProps?.htmlInput,
+                  input: providedSlotProps?.input,
+                }}
               />
             );
           }}

@@ -1,4 +1,4 @@
-import {useState, useEffect, useCallback, useMemo} from "react";
+import {useState, useEffect, useCallback, useMemo, useRef} from "react";
 import AsyncSelect from "react-select/async";
 import api from "../api/axios";
 import { useDebouncedCallback } from "../hooks/useDebounce";
@@ -71,6 +71,9 @@ export default function DebouncedAsyncSelect({
     const useMUIMode = Boolean(fieldLabel);
     // muiTheme may be needed for future styling customization
 
+    // Use a ref to track the current abort controller for request cancellation
+    const abortControllerRef = useRef<AbortController | null>(null);
+
     const formatOption = useCallback((item) => {
         let label;
 
@@ -87,17 +90,7 @@ export default function DebouncedAsyncSelect({
         };
     }, [formatLabel, labelField, valueField]);
 
-    const fetchOptionById = async (id) => {
-        try {
-            const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-            const {data} = await api.get(`${baseEndpoint}${numId}/`);
-            return formatOption(data);
-        } catch (err) {
-            return null;
-        }
-    };
-
-    const loadSelectedOption = async (val) => {
+    const loadSelectedOption = useCallback(async (val) => {
         if (!val) {
             setSelectedOption(null);
             return;
@@ -123,17 +116,31 @@ export default function DebouncedAsyncSelect({
                 if (typeof item === 'object' && item[valueField]) {
                     options.push(formatOption(item));
                 } else {
-                    const opt = await fetchOptionById(item);
-                    if (opt) options.push(opt);
+                    // Don't fetch by ID individually - use the ID as-is
+                    // The selected value is just an ID string, not full object
+                    // This avoids the purchase-statuses/2, 4, 5, 7 request storm
+                    options.push({
+                        value: item,
+                        label: String(item),
+                        data: null
+                    });
                 }
             }
 
             setSelectedOption(options);
         } else {
-            const opt = await fetchOptionById(val);
-            setSelectedOption(opt);
+            if (typeof val === 'object' && val[valueField]) {
+                setSelectedOption(formatOption(val));
+            } else {
+                // For single select, use the value as-is without fetching
+                setSelectedOption({
+                    value: val,
+                    label: String(val),
+                    data: null
+                });
+            }
         }
-    };
+    }, [valueField, isMulti, formatOption]);
 
     // Sync internal state with external value
     useEffect(() => {
@@ -142,40 +149,36 @@ export default function DebouncedAsyncSelect({
         } else {
             setSelectedOption(null);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [value]);
+    }, [value, loadSelectedOption]);
 
-    // Handle MUI Autocomplete options fetching
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => {
-        if (!useMUIMode) return;
-        if (!open) {
-            setOptions([]);
-            return;
-        }
-
-        if (inputValue === '') {
-            setOptions([]);
-            return;
-        }
-
-        debouncedFetch(inputValue)
-            .then(results => { setOptions(results || []); })
-            .catch(() => { setOptions([]); });
-    }, [inputValue, open, useMUIMode]);
-
-    // Debounced API call function
-    const fetchOptionsFromAPI = useCallback(async (inputValue) => {
+    // Debounced API call and fetch function declarations moved before useEffect
+    // to avoid forward reference errors
+    const _fetchOptionsFromAPI = useCallback(async (inputValue: string) => {
         try {
+            // Cancel previous request if it's still pending
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+
+            // Create new abort controller for this request
+            const abortController = new AbortController();
+            abortControllerRef.current = abortController;
+
             const params = new URLSearchParams(existingParams);
             params.set('search', inputValue);
             params.set('page_size', '50');
 
-            const {data} = await api.get(`${baseEndpoint}?${params.toString()}`);
+            const { data } = await api.get(`${baseEndpoint}?${params.toString()}`, {
+                signal: abortController.signal
+            });
 
             const results = data.results || data || [];
             return results.map(item => formatOption(item));
-        } catch (err) {
+        } catch (err: any) {
+            // Don't log abort errors - they're expected behavior
+            if (err?.name !== 'AbortError' && err?.code !== 'ERR_CANCELED') {
+                console.error('Fetch error:', err);
+            }
             return [];
         } finally {
             setIsSearching(false);
@@ -183,14 +186,40 @@ export default function DebouncedAsyncSelect({
     }, [baseEndpoint, existingParams, formatOption]);
 
     // Create debounced version
-    const debouncedFetch = useDebouncedCallback(fetchOptionsFromAPI, debounceDelay);
+    const _debouncedFetch = useDebouncedCallback(_fetchOptionsFromAPI, debounceDelay);
+
+    // Handle MUI Autocomplete options fetching
+    useEffect(() => {
+        if (!useMUIMode) return;
+        if (!open) {
+            setOptions([]);
+            return;
+        }
+
+        // Don't fetch with empty/whitespace search - wait for user to type
+        if (inputValue.trim() === '') {
+            setOptions([]);
+            return;
+        }
+
+        _debouncedFetch(inputValue)
+            .then(results => {
+                if (results) setOptions(results);
+            })
+            .catch((err) => {
+                // Ignore abort errors - they're expected when user types quickly
+                if (err?.name !== 'AbortError' && err?.code !== 'ERR_CANCELED') {
+                    setOptions([]);
+                }
+            });
+    }, [inputValue, open, useMUIMode, _debouncedFetch]);
 
     // Wrapper that returns a promise for react-select
-    const loadOptions = (inputValue, callback) => {
+    const loadOptions = (inputValue: string, callback: any) => {
         setIsSearching(true);
 
         // Call the debounced function and handle the result
-        debouncedFetch(inputValue)
+        _debouncedFetch(inputValue)
             .then(options => { if (callback) callback(options); })
             .catch(() => { if (callback) callback([]); });
     };
@@ -297,7 +326,15 @@ export default function DebouncedAsyncSelect({
                                 paddingY: 0.5
                             },
                             '& .MuiInputBase-input': {
-                                fontSize: '0.875rem'
+                                fontSize: '0.875rem',
+                                color: '#000 !important',
+                                WebkitTextFillColor: '#000 !important',
+                                opacity: 1,
+                                caretColor: '#000'
+                            },
+                            '& .MuiInputBase-input::placeholder': {
+                                color: 'rgba(0, 0, 0, 0.4)',
+                                opacity: 1
                             }
                         }}
                         slotProps={{

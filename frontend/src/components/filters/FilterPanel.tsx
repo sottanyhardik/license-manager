@@ -33,6 +33,8 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
         gap: 1.5,
         mb: 3,
         width: '100%',
+        boxSizing: 'border-box',
+        minWidth: 0,
       }}
     >
       {/* Main Filter Panel - MUI Minimal Dashboard Style */}
@@ -44,6 +46,7 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
           borderRadius: 0.75,
           overflow: 'hidden',
           width: '100%',
+          boxSizing: 'border-box',
           transition: 'all 0.2s ease',
         }}
       >
@@ -105,6 +108,9 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
               gap: { xs: 1.5, sm: 2, md: 2 },
               alignItems: 'start',
               width: '100%',
+              boxSizing: 'border-box',
+              minWidth: 0,
+              maxWidth: '100%',
             }}
           >
             {children}

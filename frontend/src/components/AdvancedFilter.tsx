@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import DateRangeFilter from "./DateRangeFilter";
 import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
-import { TextField, Stack, useTheme } from "@mui/material";
+import { TextField, Stack, useTheme, FormControl, FormLabel } from "@mui/material";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -242,8 +242,12 @@ export default function AdvancedFilter({
                     const selected = opts.find((o) => o.value === filterValues[fieldName]) || null;
                     return (
                         <Col key={fieldName}>
-                            <Label className="mb-2">{label}</Label>
-                            <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
+                            <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
+                                <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
+                                <div style={{ width: '100%' }}>
+                                    <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
+                                </div>
+                            </FormControl>
                         </Col>
                     );
                 }
@@ -311,8 +315,12 @@ export default function AdvancedFilter({
             case "fk":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                        <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
+                            <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
+                            <div style={{ width: '100%' }}>
+                                <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                            </div>
+                        </FormControl>
                     </Col>
                 );
 
@@ -345,16 +353,20 @@ export default function AdvancedFilter({
                 }
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Select
-                            options={choiceOpts}
-                            value={selectedChoices}
-                            onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "", true)}
-                            isClearable isMulti
-                            placeholder={`Select ${label.toLowerCase()}`}
-                            classNamePrefix="react-select"
-                            styles={rsMultiSelectStyles}
-                        />
+                        <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
+                            <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
+                            <div style={{ width: '100%' }}>
+                                <Select
+                                    options={choiceOpts}
+                                    value={selectedChoices}
+                                    onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "", true)}
+                                    isClearable isMulti
+                                    placeholder={`Select ${label.toLowerCase()}`}
+                                    classNamePrefix="react-select"
+                                    styles={rsMultiSelectStyles}
+                                />
+                            </div>
+                        </FormControl>
                     </Col>
                 );
             }
@@ -362,8 +374,12 @@ export default function AdvancedFilter({
             case "exclude_fk":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                        <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
+                            <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
+                            <div style={{ width: '100%' }}>
+                                <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                            </div>
+                        </FormControl>
                     </Col>
                 );
 

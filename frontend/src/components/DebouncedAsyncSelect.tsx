@@ -330,8 +330,12 @@ export default function DebouncedAsyncSelect({
             onChange: (event: any, newValue: any) => {
                 handleChange(newValue);
             },
-            onInputChange: (event: any, newInputValue: string) => {
-                setInputValue(newInputValue);
+            onInputChange: (event: any, newInputValue: string, reason: string) => {
+                // Only update inputValue for actual user input, not for MUI's internal resets
+                // reason="reset" happens when options change, which would clear the user's typing
+                if (reason !== 'reset') {
+                    setInputValue(newInputValue);
+                }
             },
             multiple: isMulti,
             disableCloseOnSelect: isMulti,

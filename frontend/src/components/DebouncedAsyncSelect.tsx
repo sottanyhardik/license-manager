@@ -54,12 +54,8 @@ export default function DebouncedAsyncSelect({
     fieldLabel = null,
     limitTags = 2,
 }) {
-    const _muiTheme = useTheme();
     const [focused, setFocused] = useState(false);
-    // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
-
-    // Parse endpoint to separate base URL and existing query params
     const [baseEndpoint, queryString] = cleanEndpoint?.split('?') || [cleanEndpoint, ''];
     const existingParams = useMemo(() => new URLSearchParams(queryString), [queryString]);
 
@@ -352,23 +348,20 @@ export default function DebouncedAsyncSelect({
                 }
             },
             renderInput: (params: any) => {
-                const { InputProps = {}, inputProps = {}, ...textFieldParams } = params;
+                const { InputProps: autocompleteInputProps, ...other } = params;
                 return (
                     <TextField
-                        {...textFieldParams}
+                        {...other}
                         label={fieldLabel}
                         placeholder={placeholder}
                         InputProps={{
-                            ...InputProps,
+                            ...autocompleteInputProps,
                             endAdornment: (
                                 <>
                                     {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
-                                    {InputProps.endAdornment}
+                                    {autocompleteInputProps?.endAdornment}
                                 </>
                             ),
-                        }}
-                        inputProps={{
-                            ...inputProps,
                         }}
                         sx={{
                             '& .MuiOutlinedInput-root': {

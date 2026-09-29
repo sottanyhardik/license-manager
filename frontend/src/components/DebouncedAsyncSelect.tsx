@@ -347,21 +347,25 @@ export default function DebouncedAsyncSelect({
                 }
             },
             renderInput: (params: any) => {
-                const { InputProps: autocompleteInputProps, ...other } = params;
+                // Destructure InputProps separately to avoid double-setting it
+                const { InputProps: baseInputProps, ...paramsWithoutInputProps } = params;
+
+                const newInputProps = {
+                    ...baseInputProps,
+                    endAdornment: (
+                        <>
+                            {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
+                            {baseInputProps?.endAdornment}
+                        </>
+                    ),
+                };
+
                 return (
                     <TextField
-                        {...other}
+                        {...paramsWithoutInputProps}
                         label={fieldLabel}
                         placeholder={placeholder}
-                        InputProps={{
-                            ...autocompleteInputProps,
-                            endAdornment: (
-                                <>
-                                    {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
-                                    {autocompleteInputProps?.endAdornment}
-                                </>
-                            ),
-                        }}
+                        InputProps={newInputProps}
                         sx={{
                             '& .MuiOutlinedInput-root': {
                                 minHeight: '56px',

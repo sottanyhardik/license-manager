@@ -121,7 +121,7 @@ export default function AdvancedFilter({
             else params[key] = value;
         });
         return params;
-    }, [filterValues, searchTerm]);
+    }, []);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -143,7 +143,7 @@ export default function AdvancedFilter({
         if (skipNextAutoApply.current) { skipNextAutoApply.current = false; return; }
         const timeoutId = setTimeout(() => onFilterChange(toApiParams()), 400);
         return () => clearTimeout(timeoutId);
-    }, [searchTerm, filterValues, onFilterChange, toApiParams]);
+    }, [searchTerm, filterValues, onFilterChange]);
 
     const handleFilterChange = (field, value, immediate = false) =>
         setFilterValues((prev) => {

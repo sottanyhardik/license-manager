@@ -80,7 +80,8 @@ export default function DebouncedAsyncSelect({
         if (formatLabel) {
             label = formatLabel(item);
         } else {
-            label = item[labelField] || item[valueField] || String(item.id);
+            // Try to get label from the configured labelField, fall back to other common label fields
+            label = item[labelField] || item['label'] || item['name'] || item[valueField] || String(item.id);
         }
 
         return {
@@ -142,14 +143,103 @@ export default function DebouncedAsyncSelect({
         }
     }, [valueField, isMulti, formatOption]);
 
-    // Sync internal state with external value
+    // Cache for master data to resolve IDs to labels
+    const masterCacheRef = useRef<Map<string | number, any>>(new Map());
+
+    // Sync internal state with external value, resolving IDs to labels
     useEffect(() => {
-        if (value) {
-            loadSelectedOption(value);
-        } else {
+        if (!value) {
             setSelectedOption(null);
+            return;
         }
-    }, [value, loadSelectedOption]);
+
+        const resolveValue = async () => {
+            // Helper to resolve master data
+            const getResolutionCache = async () => {
+                if (masterCacheRef.current.size > 0) {
+                    return masterCacheRef.current;
+                }
+
+                try {
+                    const params = new URLSearchParams(existingParams);
+                    params.set('page_size', '1000');
+                    const fullUrl = `${baseEndpoint}?${params.toString()}`;
+                    const { data } = await api.get(fullUrl);
+                    const results = data.results || data || [];
+
+                    const cache = new Map();
+                    results.forEach((item: any) => {
+                        // Cache by both string and number ID to handle mismatches
+                        cache.set(item.id, item);
+                        cache.set(String(item.id), item);
+                    });
+
+                    masterCacheRef.current = cache;
+                    return cache;
+                } catch (err: any) {
+                    return new Map();
+                }
+            };
+
+            if (typeof value === 'object' && !Array.isArray(value)) {
+                if (value[valueField]) {
+                    setSelectedOption(formatOption(value));
+                }
+                return;
+            }
+
+            if (isMulti) {
+                let items = Array.isArray(value) ? value : [value];
+
+                if (items.length === 1 && typeof items[0] === 'string' && items[0].includes(',')) {
+                    items = items[0].split(',').map(id => id.trim()).filter(id => id);
+                }
+
+                items = items.filter(item => item !== null && item !== undefined && item !== '');
+
+                const cache = await getResolutionCache();
+                const options = [];
+
+                for (const item of items) {
+                    if (typeof item === 'object' && item[valueField]) {
+                        options.push(formatOption(item));
+                    } else {
+                        const masterItem = cache.get(item);
+                        if (masterItem) {
+                            options.push(formatOption(masterItem));
+                        } else {
+                            // Fallback: use the item value as-is if not found in master data
+                            options.push({
+                                value: item,
+                                label: String(item),
+                                data: null
+                            });
+                        }
+                    }
+                }
+
+                setSelectedOption(options);
+            } else {
+                if (typeof value === 'object' && value[valueField]) {
+                    setSelectedOption(formatOption(value));
+                } else {
+                    const cache = await getResolutionCache();
+                    const masterItem = cache.get(value);
+                    if (masterItem) {
+                        setSelectedOption(formatOption(masterItem));
+                    } else {
+                        setSelectedOption({
+                            value: value,
+                            label: String(value),
+                            data: null
+                        });
+                    }
+                }
+            }
+        };
+
+        resolveValue();
+    }, [value, valueField, isMulti, formatOption, baseEndpoint, existingParams]);
 
     // Debounced API call and fetch function declarations moved before useEffect
     // to avoid forward reference errors
@@ -268,6 +358,7 @@ export default function DebouncedAsyncSelect({
             }
             : undefined;
 
+        // Build the autocompleteProps without renderTags first
         const autocompleteProps: any = {
             fullWidth: true,
             open,
@@ -311,52 +402,48 @@ export default function DebouncedAsyncSelect({
                     }
                 }
             },
-            renderInput: (params: any) => {
-                const { slotProps: paramSlotProps, ...restParams } = params;
-                return (
-                    <TextField
-                        {...restParams}
-                        label={fieldLabel}
-                        placeholder={placeholder}
-                        variant="outlined"
-                        size="medium"
-                        sx={{
-                            '& .MuiOutlinedInput-root': {
-                                minHeight: '56px',
-                                paddingY: 0.5
-                            },
-                            '& .MuiInputBase-input': {
-                                fontSize: '0.875rem',
-                                color: '#000 !important',
-                                WebkitTextFillColor: '#000 !important',
-                                opacity: 1,
-                                caretColor: '#000'
-                            },
-                            '& .MuiInputBase-input::placeholder': {
-                                color: 'rgba(0, 0, 0, 0.4)',
-                                opacity: 1
-                            }
-                        }}
-                        slotProps={{
-                            ...paramSlotProps,
-                            input: {
-                                ...paramSlotProps?.input,
-                                endAdornment: (
-                                    <>
-                                        {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
-                                        {paramSlotProps?.input?.endAdornment}
-                                    </>
-                                ),
-                            },
-                        }}
-                    />
-                );
-            }
+            renderInput: (params: any) => (
+                <TextField
+                    {...params}
+                    label={fieldLabel}
+                    placeholder={placeholder}
+                    variant="outlined"
+                    size="medium"
+                    slotProps={{
+                        ...params.slotProps,
+                        input: {
+                            ...params.slotProps?.input,
+                            endAdornment: (
+                                <>
+                                    {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
+                                    {params.slotProps?.input?.endAdornment}
+                                </>
+                            ),
+                        },
+                    }}
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            minHeight: '56px',
+                            paddingY: 0.5
+                        },
+                        '& .MuiInputBase-input': {
+                            fontSize: '0.875rem',
+                            color: 'inherit',
+                            opacity: 1,
+                            caretColor: 'inherit'
+                        },
+                        '& .MuiInputBase-input::placeholder': {
+                            color: 'rgba(0, 0, 0, 0.4)',
+                            opacity: 1
+                        }
+                    }}
+                />
+            )
         };
 
-        // Only add renderTags if it's defined (i.e., when isMulti is true)
-        if (renderTagsFunc) {
-            (autocompleteProps as any).renderTags = renderTagsFunc;
+        // Only add renderTags for multi-select to avoid prop warning on single-select
+        if (isMulti && renderTagsFunc) {
+            autocompleteProps.renderTags = renderTagsFunc;
         }
 
         return <Autocomplete {...autocompleteProps} />;

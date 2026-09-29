@@ -137,16 +137,20 @@ export function FilterAutocomplete({
               },
             },
           }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label={label}
-              required={required}
-              size={size}
-              variant="outlined"
-              placeholder={searchable ? 'Search...' : undefined}
-            />
-          )}
+          renderInput={(params) => {
+            const { InputProps, renderTags, renderInput, ...safeParams } = params;
+            return (
+              <TextField
+                {...safeParams}
+                label={label}
+                required={required}
+                size={size}
+                variant="outlined"
+                placeholder={searchable ? 'Search...' : undefined}
+                InputProps={InputProps}
+              />
+            );
+          }}
         />
         {helperText && (
           <FormHelperText sx={{ mt: 0.5 }}>

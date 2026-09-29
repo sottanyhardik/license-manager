@@ -351,8 +351,9 @@ export default function DebouncedAsyncSelect({
                 }
             },
             renderInput: (params: any) => {
-                // Destructure InputProps separately to avoid double-setting it
-                const { InputProps: baseInputProps, ...paramsWithoutInputProps } = params;
+                // Exclude renderTags and renderInput from params spread
+                // These cause prop warnings and aren't needed for TextField
+                const { InputProps: baseInputProps, renderTags, renderInput, ...safeParams } = params;
 
                 const newInputProps = {
                     ...baseInputProps,
@@ -366,7 +367,7 @@ export default function DebouncedAsyncSelect({
 
                 return (
                     <TextField
-                        {...paramsWithoutInputProps}
+                        {...safeParams}
                         label={fieldLabel}
                         placeholder={placeholder}
                         InputProps={newInputProps}

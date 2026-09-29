@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import DateRangeFilter from "./DateRangeFilter";
 import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
-import { TextField, Stack, useTheme, FormControl, FormLabel } from "@mui/material";
+import { TextField, Stack, useTheme, FormControl, InputLabel, Select as MuiSelect, MenuItem, Box } from "@mui/material";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -176,7 +176,7 @@ export default function AdvancedFilter({
                             value={filterValues[fieldName] || ""}
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '42px' },
+                              '& .MuiOutlinedInput-root': { height: '56px' },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />
@@ -243,10 +243,10 @@ export default function AdvancedFilter({
                     return (
                         <Col key={fieldName}>
                             <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                                <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
-                                <div style={{ width: '100%' }}>
+                                <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
+                                <Box sx={{ width: '100%' }}>
                                     <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
-                                </div>
+                                </Box>
                             </FormControl>
                         </Col>
                     );
@@ -256,20 +256,24 @@ export default function AdvancedFilter({
                     const isAll = cur === "all" || (!cur && cur !== "True" && cur !== "False");
                     return (
                         <Col key={fieldName}>
-                            <Label className="mb-2 block">{label}</Label>
-                            <div className="flex gap-2">
-                                {[{ val: "all", lbl: "All", cls: "secondary" }, { val: "True", lbl: "Yes", cls: "success" }, { val: "False", lbl: "No", cls: "danger" }].map(({ val, lbl, cls }) => {
-                                    const active = val === "all" ? isAll : cur === val || cur === (val === "True");
-                                    return (
-                                        <button
-                                            key={val}
-                                            type="button"
-                                            onClick={() => handleFilterChange(fieldName, val, true)}
-                                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/15 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
-                                        >{lbl}</button>
-                                    );
-                                })}
-                            </div>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
+                                <Box sx={{ fontSize: '0.875rem', fontWeight: 600, color: muiTheme.palette.text.secondary }}>
+                                    {label}
+                                </Box>
+                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                    {[{ val: "all", lbl: "All", cls: "secondary" }, { val: "True", lbl: "Yes", cls: "success" }, { val: "False", lbl: "No", cls: "danger" }].map(({ val, lbl, cls }) => {
+                                        const active = val === "all" ? isAll : cur === val || cur === (val === "True");
+                                        return (
+                                            <button
+                                                key={val}
+                                                type="button"
+                                                onClick={() => handleFilterChange(fieldName, val, true)}
+                                                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/15 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
+                                            >{lbl}</button>
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
                         </Col>
                     );
                 }
@@ -284,7 +288,7 @@ export default function AdvancedFilter({
                             value={filterValues[fieldName] || ""}
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '42px' },
+                              '& .MuiOutlinedInput-root': { height: '56px' },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />
@@ -305,7 +309,7 @@ export default function AdvancedFilter({
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             helperText="Enter values separated by commas"
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '42px' },
+                              '& .MuiOutlinedInput-root': { height: '56px' },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />
@@ -316,10 +320,10 @@ export default function AdvancedFilter({
                 return (
                     <Col key={fieldName}>
                         <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                            <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
-                            <div style={{ width: '100%' }}>
+                            <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
+                            <Box sx={{ width: '100%' }}>
                                 <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
-                            </div>
+                            </Box>
                         </FormControl>
                     </Col>
                 );
@@ -328,18 +332,22 @@ export default function AdvancedFilter({
                 const bgChoices = (config.choices || []).map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
                 return (
                     <Col key={fieldName} wide>
-                        <Label className="mb-2 block">{label}</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {bgChoices.map((choice, idx) => {
-                                const active = filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === "");
-                                const colorCls = choice.value === "" ? "" : choice.value === "YES" ? "border-destructive text-destructive" : choice.value === "NO" ? "border-success text-success" : choice.value === "PARTIAL" ? "border-warning text-warning" : "";
-                                return (
-                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
-                                        {choice.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
+                            <Box sx={{ fontSize: '0.875rem', fontWeight: 600, color: muiTheme.palette.text.secondary }}>
+                                {label}
+                            </Box>
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                {bgChoices.map((choice, idx) => {
+                                    const active = filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === "");
+                                    const colorCls = choice.value === "" ? "" : choice.value === "YES" ? "border-destructive text-destructive" : choice.value === "NO" ? "border-success text-success" : choice.value === "PARTIAL" ? "border-warning text-warning" : "";
+                                    return (
+                                        <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
+                                            {choice.label}
+                                        </button>
+                                    );
+                                })}
+                            </Box>
+                        </Box>
                     </Col>
                 );
             }
@@ -354,8 +362,8 @@ export default function AdvancedFilter({
                 return (
                     <Col key={fieldName}>
                         <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                            <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
-                            <div style={{ width: '100%' }}>
+                            <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
+                            <Box sx={{ width: '100%' }}>
                                 <Select
                                     options={choiceOpts}
                                     value={selectedChoices}
@@ -365,7 +373,7 @@ export default function AdvancedFilter({
                                     classNamePrefix="react-select"
                                     styles={rsMultiSelectStyles}
                                 />
-                            </div>
+                            </Box>
                         </FormControl>
                     </Col>
                 );
@@ -375,10 +383,10 @@ export default function AdvancedFilter({
                 return (
                     <Col key={fieldName}>
                         <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                            <FormLabel sx={{ mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>{label}</FormLabel>
-                            <div style={{ width: '100%' }}>
+                            <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
+                            <Box sx={{ width: '100%' }}>
                                 <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
-                            </div>
+                            </Box>
                         </FormControl>
                     </Col>
                 );
@@ -386,8 +394,19 @@ export default function AdvancedFilter({
             default:
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder={`Filter ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <TextField
+                            fullWidth
+                            size="small"
+                            label={label}
+                            variant="outlined"
+                            placeholder={`Filter ${label.toLowerCase()}`}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(e) => handleFilterChange(fieldName, e.target.value)}
+                            sx={{
+                              '& .MuiOutlinedInput-root': { height: '56px' },
+                              '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                            }}
+                        />
                     </Col>
                 );
         }

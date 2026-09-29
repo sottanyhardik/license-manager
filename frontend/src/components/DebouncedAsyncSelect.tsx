@@ -275,14 +275,6 @@ export default function DebouncedAsyncSelect({
 
     // Use MUI Autocomplete if fieldLabel is provided
     if (useMUIMode) {
-        console.log('[DebouncedAsyncSelect] MUI Mode:', {
-            fieldLabel,
-            inputValue,
-            selectedOption,
-            isMulti,
-            options: options.length,
-            open
-        });
         const hiddenTagCount = isMulti && selectedOption && Array.isArray(selectedOption) && !focused
             ? Math.max(0, selectedOption.length - limitTags)
             : 0;
@@ -343,13 +335,7 @@ export default function DebouncedAsyncSelect({
             onChange: (event: any, newValue: any) => {
                 handleChange(newValue);
             },
-            onInputChange: (event: any, newInputValue: string, reason: string) => {
-                console.log('[DebouncedAsyncSelect] onInputChange - typing detected:', {
-                    newInputValue,
-                    reason,
-                    fieldLabel,
-                    baseEndpoint
-                });
+            onInputChange: (event: any, newInputValue: string) => {
                 setInputValue(newInputValue);
             },
             multiple: isMulti,
@@ -365,43 +351,40 @@ export default function DebouncedAsyncSelect({
                     }
                 }
             },
-            renderInput: (params: any) => (
-                <TextField
-                    {...params}
-                    label={fieldLabel}
-                    placeholder={placeholder}
-                    variant="outlined"
-                    size="medium"
-                    slotProps={{
-                        ...params.slotProps,
-                        input: {
-                            ...params.slotProps?.input,
+            renderInput: (params: any) => {
+                const { InputProps = {}, inputProps = {}, ...textFieldParams } = params;
+                return (
+                    <TextField
+                        {...textFieldParams}
+                        label={fieldLabel}
+                        placeholder={placeholder}
+                        InputProps={{
+                            ...InputProps,
                             endAdornment: (
                                 <>
                                     {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
-                                    {params.slotProps?.input?.endAdornment}
+                                    {InputProps.endAdornment}
                                 </>
                             ),
-                        },
-                    }}
-                    sx={{
-                        '& .MuiOutlinedInput-root': {
-                            minHeight: '56px',
-                            paddingY: 0.5
-                        },
-                        '& .MuiInputBase-input': {
-                            fontSize: '0.875rem',
-                            color: 'inherit',
-                            opacity: 1,
-                            caretColor: 'inherit'
-                        },
-                        '& .MuiInputBase-input::placeholder': {
-                            color: 'rgba(0, 0, 0, 0.4)',
-                            opacity: 1
-                        }
-                    }}
-                />
-            )
+                        }}
+                        inputProps={{
+                            ...inputProps,
+                        }}
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                minHeight: '56px',
+                                paddingY: 0.5
+                            },
+                            '& .MuiInputBase-input': {
+                                fontSize: '0.875rem',
+                                color: 'inherit',
+                                opacity: 1,
+                                caretColor: 'inherit'
+                            },
+                        }}
+                    />
+                );
+            }
         };
 
         // Only add renderTags for multi-select to avoid prop warning on single-select

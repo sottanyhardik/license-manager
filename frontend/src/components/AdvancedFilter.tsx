@@ -93,7 +93,7 @@ export default function AdvancedFilter({
     onFilterChange,
     initialFilters = {} as Record<string, any>,
     defaultFilters = {} as Record<string, any>,
-    resetToDefaults = false,
+    _resetToDefaults = false,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];
@@ -111,10 +111,10 @@ export default function AdvancedFilter({
     const skipNextAutoApply = useRef(false);
     const muiTheme = useTheme();
 
-    const toApiParams = useCallback((nextValues = filterValues, nextSearch = searchTerm) => {
+    const buildApiParams = useCallback((values: Record<string, any>, search: string) => {
         const params: Record<string, any> = {};
-        if (nextSearch) params.search = nextSearch;
-        Object.entries(nextValues).forEach(([key, value]) => {
+        if (search) params.search = search;
+        Object.entries(values).forEach(([key, value]) => {
             if (value === null || value === undefined || value === "") return;
             if (key.endsWith("_from")) params[`${key.replace("_from", "")}__gte`] = value;
             else if (key.endsWith("_to")) params[`${key.replace("_to", "")}__lte`] = value;
@@ -141,16 +141,16 @@ export default function AdvancedFilter({
     useEffect(() => {
         if (isAutoApplyInitialMount.current) { isAutoApplyInitialMount.current = false; return; }
         if (skipNextAutoApply.current) { skipNextAutoApply.current = false; return; }
-        const timeoutId = setTimeout(() => onFilterChange(toApiParams()), 400);
+        const timeoutId = setTimeout(() => onFilterChange(buildApiParams(filterValues, searchTerm)), 400);
         return () => clearTimeout(timeoutId);
-    }, [searchTerm, filterValues, onFilterChange]);
+    }, [searchTerm, filterValues, onFilterChange, buildApiParams]);
 
     const handleFilterChange = (field, value, immediate = false) =>
         setFilterValues((prev) => {
             const next = { ...prev, [field]: value };
             if (immediate) {
                 skipNextAutoApply.current = true;
-                onFilterChange(toApiParams(next));
+                onFilterChange(buildApiParams(next, searchTerm));
             }
             return next;
         });

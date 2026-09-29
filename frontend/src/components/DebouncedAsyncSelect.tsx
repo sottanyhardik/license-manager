@@ -54,7 +54,7 @@ export default function DebouncedAsyncSelect({
     fieldLabel = null,
     limitTags = 2,
 }) {
-    const muiTheme = useTheme();
+    const _muiTheme = useTheme();
     const [focused, setFocused] = useState(false);
     // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
@@ -90,58 +90,6 @@ export default function DebouncedAsyncSelect({
             data: item
         };
     }, [formatLabel, labelField, valueField]);
-
-    const loadSelectedOption = useCallback(async (val) => {
-        if (!val) {
-            setSelectedOption(null);
-            return;
-        }
-
-        if (typeof val === 'object' && !Array.isArray(val) && val[valueField]) {
-            setSelectedOption(formatOption(val));
-            return;
-        }
-
-        if (isMulti) {
-            let items = Array.isArray(val) ? val : [val];
-
-            if (items.length === 1 && typeof items[0] === 'string' && items[0].includes(',')) {
-                items = items[0].split(',').map(id => id.trim()).filter(id => id);
-            }
-
-            items = items.filter(item => item !== null && item !== undefined && item !== '');
-
-            const options = [];
-
-            for (const item of items) {
-                if (typeof item === 'object' && item[valueField]) {
-                    options.push(formatOption(item));
-                } else {
-                    // Don't fetch by ID individually - use the ID as-is
-                    // The selected value is just an ID string, not full object
-                    // This avoids the purchase-statuses/2, 4, 5, 7 request storm
-                    options.push({
-                        value: item,
-                        label: String(item),
-                        data: null
-                    });
-                }
-            }
-
-            setSelectedOption(options);
-        } else {
-            if (typeof val === 'object' && val[valueField]) {
-                setSelectedOption(formatOption(val));
-            } else {
-                // For single select, use the value as-is without fetching
-                setSelectedOption({
-                    value: val,
-                    label: String(val),
-                    data: null
-                });
-            }
-        }
-    }, [valueField, isMulti, formatOption]);
 
     // Cache for master data to resolve IDs to labels
     const masterCacheRef = useRef<Map<string | number, any>>(new Map());

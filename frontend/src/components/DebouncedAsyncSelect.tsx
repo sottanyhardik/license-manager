@@ -64,6 +64,7 @@ export default function DebouncedAsyncSelect({
     const [open, setOpen] = useState(false);
     const [options, setOptions] = useState([]);
     const [inputValue, setInputValue] = useState('');
+    const useMUIMode = Boolean(fieldLabel);
 
     const formatOption = useCallback((item) => {
         let label;
@@ -139,6 +140,24 @@ export default function DebouncedAsyncSelect({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value]);
 
+    // Handle MUI Autocomplete options fetching
+    useEffect(() => {
+        if (!useMUIMode) return;
+        if (!open) {
+            setOptions([]);
+            return;
+        }
+
+        if (inputValue === '') {
+            setOptions([]);
+            return;
+        }
+
+        debouncedFetch(inputValue)
+            .then(results => { setOptions(results || []); })
+            .catch(() => { setOptions([]); });
+    }, [inputValue, open, useMUIMode]);
+
     // Debounced API call function
     const fetchOptionsFromAPI = useCallback(async (inputValue) => {
         try {
@@ -182,28 +201,7 @@ export default function DebouncedAsyncSelect({
     };
 
     // Use MUI Autocomplete if fieldLabel is provided
-    if (fieldLabel) {
-        useEffect(() => {
-            if (!open) {
-                setOptions([]);
-                return;
-            }
-
-            if (inputValue === '') {
-                setOptions([]);
-                return;
-            }
-
-            const handleLoad = async () => {
-                const results = await fetchOptionsFromAPI(inputValue);
-                setOptions(results);
-            };
-
-            debouncedFetch(inputValue)
-                .then(results => { setOptions(results || []); })
-                .catch(() => { setOptions([]); });
-        }, [inputValue, open]);
-
+    if (useMUIMode) {
         return (
             <Autocomplete
                 fullWidth

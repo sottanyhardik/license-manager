@@ -925,7 +925,6 @@ export default function MasterList() {
                 initialFilters={uiFilterParams}
                 defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
                 resetToDefaults={entityName === 'allotments'}
-                isUpdating={isRefreshing}
             />
 
             {/* Active Filters Display */}

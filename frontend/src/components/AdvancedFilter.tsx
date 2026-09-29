@@ -1,15 +1,85 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import DateRangeFilter from "./DateRangeFilter";
 import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
-import { TextField, Stack, useTheme, FormControl, InputLabel, Select as MuiSelect, MenuItem, Box, Autocomplete, Chip } from "@mui/material";
+import { TextField, Stack, useTheme, FormControl, InputLabel, Select as MuiSelect, MenuItem, Box, Autocomplete, Chip, ToggleButton, ToggleButtonGroup, FormLabel } from "@mui/material";
+
+/**
+ * Segmented filter control using MUI ToggleButtonGroup for button_group and is_* filters.
+ * Provides consistent styling with other form controls.
+ */
+function SegmentedFilter({
+    label,
+    value,
+    choices,
+    onChange,
+    muiTheme,
+}: {
+    label: string;
+    value: string | null;
+    choices: Array<{ value: string; label: string; cls?: string }>;
+    onChange: (val: string) => void;
+    muiTheme: any;
+}) {
+    const normalizedValue = value === "all" || !value ? "all" : value;
+
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
+            <FormLabel sx={{ fontSize: '0.875rem', fontWeight: 600, color: muiTheme.palette.text.secondary }}>
+                {label}
+            </FormLabel>
+            <ToggleButtonGroup
+                value={normalizedValue}
+                exclusive
+                onChange={(e, val) => {
+                    if (val !== null) onChange(val);
+                }}
+                size="small"
+                sx={{
+                    display: 'flex',
+                    gap: 0.5,
+                    flexWrap: 'wrap',
+                    '& .MuiToggleButton-root': {
+                        textTransform: 'none',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        padding: '6px 12px',
+                        border: `1px solid ${muiTheme.palette.divider}`,
+                        borderRadius: muiTheme.shape.borderRadius,
+                        color: muiTheme.palette.text.primary,
+                        '&.Mui-selected': {
+                            backgroundColor: muiTheme.palette.primary.light,
+                            color: muiTheme.palette.primary.dark,
+                            borderColor: muiTheme.palette.primary.main,
+                            '&:hover': {
+                                backgroundColor: muiTheme.palette.primary.light,
+                            }
+                        }
+                    }
+                }}
+            >
+                {choices.map((choice) => (
+                    <ToggleButton
+                        key={choice.value}
+                        value={choice.value}
+                        sx={{
+                            ...(choice.value === "False" && {
+                                '&.Mui-selected': {
+                                    backgroundColor: '#f3e5e5 !important',
+                                    color: muiTheme.palette.error.main,
+                                    borderColor: muiTheme.palette.error.main,
+                                }
+                            })
+                        }}
+                    >
+                        {choice.label}
+                    </ToggleButton>
+                ))}
+            </ToggleButtonGroup>
+        </Box>
+    );
+}
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -24,7 +94,6 @@ export default function AdvancedFilter({
     initialFilters = {} as Record<string, any>,
     defaultFilters = {} as Record<string, any>,
     resetToDefaults = false,
-    isUpdating = false,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];
@@ -32,7 +101,6 @@ export default function AdvancedFilter({
     initialFilters?: Record<string, any>;
     defaultFilters?: Record<string, any>;
     resetToDefaults?: boolean;
-    isUpdating?: boolean;
 }) {
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
@@ -87,70 +155,28 @@ export default function AdvancedFilter({
             return next;
         });
 
-    const handleResetFilters = () => {
-        setSearchTerm("");
-        setFilterValues(resetToDefaults ? defaultFilters : {});
-    };
-
     const humanize = (fieldName: string) => fieldName
         .replace(/__?(gte|lte|icontains|exact)$/i, "")
         .replace(/_/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase())
         .replace(/^Balance Balance /, "Balance ");
+
+    const formatRangeLabel = (baseLabel: string): string => {
+        let label = baseLabel;
+        // Remove "Balance Balance " if present (from config.label being "Balance Balance Cif")
+        if (label.startsWith("Balance Balance ")) {
+            label = label.replace(/^Balance Balance /, "Balance ");
+        }
+        // Uppercase CIF -> CIF
+        label = label.replace(/\bCif\b/i, "CIF");
+        return label;
+    };
     const isLicenseFilter = Object.keys(filterConfig).some((name) => /license|exporter|notification|norm|purchase|expired|balance/i.test(name));
     const primaryFilterNames = isLicenseFilter
         ? ["exporter", "license_number", "notification_number", "norm_class", "purchase_status", "license_status", "is_expired"]
         : Object.keys(filterConfig).slice(0, 6);
     const primaryEntries = Object.entries(filterConfig).filter(([field]) => primaryFilterNames.includes(field));
     const secondaryEntries = Object.entries(filterConfig).filter(([field]) => !primaryFilterNames.includes(field));
-
-    // shared style token for react-select with Material Design height (40-44px)
-    const rsControl = (base) => ({
-        ...base,
-        minHeight: "42px",
-        height: "42px",
-        borderColor: muiTheme.palette.divider,
-        borderRadius: muiTheme.shape.borderRadius,
-        fontSize: "0.875rem",
-    });
-
-    const rsMultiSelectStyles = {
-        control: rsControl,
-        valueContainer: (base) => ({
-            ...base,
-            maxHeight: "100%",
-            padding: "4px 8px",
-            flexWrap: "wrap",
-        }),
-        multiValue: (base) => ({
-            ...base,
-            fontSize: "0.8125rem",
-            margin: "2px 2px 2px 0",
-            backgroundColor: muiTheme.palette.primary.light,
-            color: muiTheme.palette.primary.contrastText,
-            borderRadius: muiTheme.shape.borderRadius,
-        }),
-        multiValueLabel: (base) => ({
-            ...base,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            padding: "0 4px",
-        }),
-        multiValueRemove: (base) => ({
-            ...base,
-            color: muiTheme.palette.primary.contrastText,
-            cursor: "pointer",
-            paddingRight: "4px",
-            '&:hover': {
-                opacity: 0.8,
-            }
-        }),
-        menu: (base) => ({
-            ...base,
-            zIndex: 9999
-        })
-    };
 
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
@@ -169,14 +195,14 @@ export default function AdvancedFilter({
                     <Col key={fieldName}>
                         <TextField
                             fullWidth
-                            size="small"
+                            size="medium"
                             label={label}
                             variant="outlined"
                             placeholder={`Search ${label.toLowerCase()}`}
                             value={filterValues[fieldName] || ""}
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '56px' },
+                              '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />
@@ -188,13 +214,41 @@ export default function AdvancedFilter({
                 const toValue = filterValues[`${fieldName}_to`] || "";
                 return (
                     <Col key={fieldName} wide>
-                        <DateRangeFilter
-                            label={`${label} Range`}
-                            fromValue={fromValue}
-                            toValue={toValue}
-                            onFromChange={(v) => handleFilterChange(`${fieldName}_from`, v, true)}
-                            onToChange={(v) => handleFilterChange(`${fieldName}_to`, v, true)}
-                        />
+                        <FormControl component="fieldset" fullWidth>
+                            <FormLabel sx={{ fontSize: '0.875rem', fontWeight: 600, mb: 1.5, color: muiTheme.palette.text.secondary }}>
+                                {label} Range
+                            </FormLabel>
+                            <Stack direction="row" spacing={1.5} sx={{ width: '100%' }}>
+                                <TextField
+                                    size="medium"
+                                    type="date"
+                                    label="From"
+                                    variant="outlined"
+                                    value={fromValue}
+                                    onChange={(e) => handleFilterChange(`${fieldName}_from`, e.target.value, true)}
+                                    slotProps={{ inputLabel: { shrink: true } }}
+                                    sx={{
+                                        flex: 1,
+                                        '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
+                                        '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                                    }}
+                                />
+                                <TextField
+                                    size="medium"
+                                    type="date"
+                                    label="To"
+                                    variant="outlined"
+                                    value={toValue}
+                                    onChange={(e) => handleFilterChange(`${fieldName}_to`, e.target.value, true)}
+                                    slotProps={{ inputLabel: { shrink: true } }}
+                                    sx={{
+                                        flex: 1,
+                                        '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
+                                        '& .MuiInputBase-input': { fontSize: '0.875rem' }
+                                    }}
+                                />
+                            </Stack>
+                        </FormControl>
                     </Col>
                 );
             }
@@ -202,32 +256,33 @@ export default function AdvancedFilter({
             case "range": {
                 const minField = config.min_field || `${fieldName}_min`;
                 const maxField = config.max_field || `${fieldName}_max`;
+                const rangeLabel = formatRangeLabel(label);
                 return (
                     <Col key={fieldName} wide>
-                        <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                        <Stack direction="row" spacing={1.5} sx={{ width: '100%' }}>
                             <TextField
-                                size="small"
+                                size="medium"
                                 type="number"
-                                label={`${label} Min`}
+                                label={`${rangeLabel} Min`}
                                 variant="outlined"
                                 value={filterValues[minField] || ""}
                                 onChange={(e) => handleFilterChange(minField, e.target.value)}
                                 sx={{
                                   flex: 1,
-                                  '& .MuiOutlinedInput-root': { height: '42px' },
+                                  '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
                                   '& .MuiInputBase-input': { fontSize: '0.875rem' }
                                 }}
                             />
                             <TextField
-                                size="small"
+                                size="medium"
                                 type="number"
-                                label={`${label} Max`}
+                                label={`${rangeLabel} Max`}
                                 variant="outlined"
                                 value={filterValues[maxField] || ""}
                                 onChange={(e) => handleFilterChange(maxField, e.target.value)}
                                 sx={{
                                   flex: 1,
-                                  '& .MuiOutlinedInput-root': { height: '42px' },
+                                  '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
                                   '& .MuiInputBase-input': { fontSize: '0.875rem' }
                                 }}
                             />
@@ -264,28 +319,19 @@ export default function AdvancedFilter({
                     );
                 }
                 if (fieldName.startsWith("is_") || fieldName.startsWith("has_") || fieldName.includes("__is_") || fieldName.includes("__has_")) {
-                    const cur = filterValues[fieldName];
-                    const isAll = cur === "all" || (!cur && cur !== "True" && cur !== "False");
                     return (
                         <Col key={fieldName}>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
-                                <Box sx={{ fontSize: '0.875rem', fontWeight: 600, color: muiTheme.palette.text.secondary }}>
-                                    {label}
-                                </Box>
-                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                    {[{ val: "all", lbl: "All", cls: "secondary" }, { val: "True", lbl: "Yes", cls: "success" }, { val: "False", lbl: "No", cls: "danger" }].map(({ val, lbl, cls }) => {
-                                        const active = val === "all" ? isAll : cur === val || cur === (val === "True");
-                                        return (
-                                            <button
-                                                key={val}
-                                                type="button"
-                                                onClick={() => handleFilterChange(fieldName, val, true)}
-                                                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/15 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
-                                            >{lbl}</button>
-                                        );
-                                    })}
-                                </Box>
-                            </Box>
+                            <SegmentedFilter
+                                label={label}
+                                value={filterValues[fieldName] || "all"}
+                                choices={[
+                                    { value: "all", label: "All" },
+                                    { value: "True", label: "Yes" },
+                                    { value: "False", label: "No" },
+                                ]}
+                                onChange={(val) => handleFilterChange(fieldName, val, true)}
+                                muiTheme={muiTheme}
+                            />
                         </Col>
                     );
                 }
@@ -293,14 +339,14 @@ export default function AdvancedFilter({
                     <Col key={fieldName}>
                         <TextField
                             fullWidth
-                            size="small"
+                            size="medium"
                             label={label}
                             variant="outlined"
                             placeholder={`${label}`}
                             value={filterValues[fieldName] || ""}
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '56px' },
+                              '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />
@@ -313,7 +359,7 @@ export default function AdvancedFilter({
                     <Col key={fieldName}>
                         <TextField
                             fullWidth
-                            size="small"
+                            size="medium"
                             label={label}
                             variant="outlined"
                             placeholder="Comma-separated values"
@@ -321,7 +367,7 @@ export default function AdvancedFilter({
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             helperText="Enter values separated by commas"
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '56px' },
+                              '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />
@@ -349,22 +395,13 @@ export default function AdvancedFilter({
                 const bgChoices = (config.choices || []).map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
                 return (
                     <Col key={fieldName} wide>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
-                            <Box sx={{ fontSize: '0.875rem', fontWeight: 600, color: muiTheme.palette.text.secondary }}>
-                                {label}
-                            </Box>
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                {bgChoices.map((choice, idx) => {
-                                    const active = filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === "");
-                                    const colorCls = choice.value === "" ? "" : choice.value === "YES" ? "border-destructive text-destructive" : choice.value === "NO" ? "border-success text-success" : choice.value === "PARTIAL" ? "border-warning text-warning" : "";
-                                    return (
-                                        <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
-                                            {choice.label}
-                                        </button>
-                                    );
-                                })}
-                            </Box>
-                        </Box>
+                        <SegmentedFilter
+                            label={label}
+                            value={filterValues[fieldName] || ""}
+                            choices={bgChoices}
+                            onChange={(val) => handleFilterChange(fieldName, val, true)}
+                            muiTheme={muiTheme}
+                        />
                     </Col>
                 );
             }
@@ -374,6 +411,8 @@ export default function AdvancedFilter({
                 const selectedValues = filterValues[fieldName]
                     ? (typeof filterValues[fieldName] === "string" ? filterValues[fieldName].split(",") : filterValues[fieldName])
                     : [];
+                const limitTags = 2;
+                const hiddenCount = Math.max(0, selectedValues.length - limitTags);
                 return (
                     <Col key={fieldName}>
                         <FormControl fullWidth size="small" variant="outlined">
@@ -386,11 +425,14 @@ export default function AdvancedFilter({
                                 label={label}
                                 onChange={(e) => handleFilterChange(fieldName, typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value.join(','), true)}
                                 renderValue={(selected) => (
-                                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                        {selected.map((value) => {
+                                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                                        {selected.slice(0, limitTags).map((value) => {
                                             const opt = choiceOpts.find(o => o.value === value);
-                                            return <Chip key={value} label={opt?.label || value} size="small" />;
+                                            return <Chip key={value} label={opt?.label || value} size="small" sx={{ maxWidth: '100%' }} />;
                                         })}
+                                        {hiddenCount > 0 && (
+                                            <Chip label={`+${hiddenCount}`} size="small" variant="outlined" sx={{ maxWidth: '100%', pointerEvents: 'none' }} />
+                                        )}
                                     </Box>
                                 )}
                                 sx={{
@@ -429,14 +471,14 @@ export default function AdvancedFilter({
                     <Col key={fieldName}>
                         <TextField
                             fullWidth
-                            size="small"
+                            size="medium"
                             label={label}
                             variant="outlined"
                             placeholder={`Filter ${label.toLowerCase()}`}
                             value={filterValues[fieldName] || ""}
                             onChange={(e) => handleFilterChange(fieldName, e.target.value)}
                             sx={{
-                              '& .MuiOutlinedInput-root': { height: '56px' },
+                              '& .MuiOutlinedInput-root': { height: '56px', py: 0.5 },
                               '& .MuiInputBase-input': { fontSize: '0.875rem' }
                             }}
                         />

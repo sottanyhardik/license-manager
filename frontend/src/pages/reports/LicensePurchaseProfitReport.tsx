@@ -278,12 +278,12 @@ export default function LicensePurchaseProfitReport() {
                 <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
                     <Box>
                         <FilterLabel htmlFor={fromDateId} icon={CalendarRange}>From Date</FilterLabel>
-                        <TextField id={fromDateId} type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                        <TextField id={fromDateId} type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
                     </Box>
 
                     <Box>
                         <FilterLabel htmlFor={toDateId} icon={CalendarRange}>To Date</FilterLabel>
-                        <TextField id={toDateId} type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                        <TextField id={toDateId} type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
                     </Box>
 
                     <Box>

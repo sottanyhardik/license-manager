@@ -24,6 +24,7 @@ import { useTheme } from "@mui/material/styles";
  * @param {number} debounceDelay - Debounce delay in milliseconds (default: 300)
  * @param {boolean} loadOnMount - Control whether to load options on mount (default: false)
  * @param {string} fieldLabel - Label for MUI TextField (optional - enables MUI mode)
+ * @param {number} limitTags - Maximum number of tags to show at once in multi-select (default: 2)
  *
  * @example
  * <DebouncedAsyncSelect
@@ -33,6 +34,7 @@ import { useTheme } from "@mui/material/styles";
  *   debounceDelay={500}
  *   placeholder="Search companies..."
  *   fieldLabel="Company"
+ *   limitTags={2}
  * />
  */
 export default function DebouncedAsyncSelect({
@@ -49,9 +51,11 @@ export default function DebouncedAsyncSelect({
     className = "",
     loadOnMount = false,
     debounceDelay = 300,
-    fieldLabel = null
+    fieldLabel = null,
+    limitTags = 2,
 }) {
     const muiTheme = useTheme();
+    const [focused, setFocused] = useState(false);
     // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
 
@@ -65,6 +69,7 @@ export default function DebouncedAsyncSelect({
     const [options, setOptions] = useState([]);
     const [inputValue, setInputValue] = useState('');
     const useMUIMode = Boolean(fieldLabel);
+    // muiTheme may be needed for future styling customization
 
     const formatOption = useCallback((item) => {
         let label;
@@ -141,6 +146,7 @@ export default function DebouncedAsyncSelect({
     }, [value]);
 
     // Handle MUI Autocomplete options fetching
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (!useMUIMode) return;
         if (!open) {
@@ -202,12 +208,24 @@ export default function DebouncedAsyncSelect({
 
     // Use MUI Autocomplete if fieldLabel is provided
     if (useMUIMode) {
+        const hiddenTagCount = isMulti && selectedOption && Array.isArray(selectedOption) && !focused
+            ? Math.max(0, selectedOption.length - limitTags)
+            : 0;
+
         return (
             <Autocomplete
                 fullWidth
                 open={open}
-                onOpen={() => setOpen(true)}
-                onClose={() => setOpen(false)}
+                onOpen={() => {
+                    setOpen(true);
+                    setFocused(true);
+                }}
+                onClose={() => {
+                    setOpen(false);
+                    setFocused(false);
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
                 isOptionEqualToValue={(option, value) => {
                     if (!option || !value) return false;
                     return option.value === value.value;
@@ -226,30 +244,55 @@ export default function DebouncedAsyncSelect({
                     setInputValue(newInputValue);
                 }}
                 multiple={isMulti}
+                disableCloseOnSelect={isMulti}
                 filterOptions={(x) => x}
                 noOptionsText={inputValue === '' ? 'Start typing to search...' : 'No options'}
                 {...(isMulti && {
-                    renderTags: (value, getTagProps) =>
-                        value.map((option, index) => (
-                            <Chip
-                                {...getTagProps({ index })}
-                                key={option.value}
-                                label={option.label}
-                                size="small"
-                            />
-                        ))
+                    renderTags: (value, getTagProps) => {
+                        const displayedTags = focused ? value : value.slice(0, limitTags);
+                        return (
+                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                                {displayedTags.map((option, index) => (
+                                    <Chip
+                                        {...getTagProps({ index })}
+                                        key={option.value}
+                                        label={option.label}
+                                        size="small"
+                                        sx={{ maxWidth: '100%' }}
+                                    />
+                                ))}
+                                {!focused && hiddenTagCount > 0 && (
+                                    <Chip
+                                        label={`+${hiddenTagCount}`}
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{ maxWidth: '100%', pointerEvents: 'none' }}
+                                    />
+                                )}
+                            </Box>
+                        );
+                    }
                 })}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            '& .MuiAutocomplete-listbox': {
+                                maxHeight: '200px',
+                            }
+                        }
+                    }
+                }}
                 renderInput={(params) => (
                     <TextField
                         {...params}
                         label={fieldLabel}
                         placeholder={placeholder}
                         variant="outlined"
-                        size="small"
+                        size="medium"
                         sx={{
                             '& .MuiOutlinedInput-root': {
                                 minHeight: '56px',
-                                fontSize: '0.875rem'
+                                paddingY: 0.5
                             },
                             '& .MuiInputBase-input': {
                                 fontSize: '0.875rem'

@@ -3,7 +3,6 @@ import AsyncSelect from "react-select/async";
 import api from "../api/axios";
 import { useDebouncedCallback } from "../hooks/useDebounce";
 import { Autocomplete, TextField, Chip, CircularProgress, Box } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 /**
  * Debounced AsyncSelectField Component

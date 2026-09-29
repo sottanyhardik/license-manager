@@ -97,16 +97,6 @@ function FilterPanelInner({ children, collapsible = false }: FilterPanelInnerPro
           <Box
             sx={{
               p: { xs: 2, sm: 2, md: 2.5 },
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(3, 1fr)',
-                lg: 'repeat(4, 1fr)',
-                xl: 'repeat(5, 1fr)',
-              },
-              gap: { xs: 1.5, sm: 2, md: 2 },
-              alignItems: 'start',
               width: '100%',
               boxSizing: 'border-box',
               minWidth: 0,
@@ -290,13 +280,16 @@ export function FilterGrid({ children }: { children: ReactNode }) {
         display: 'grid',
         gridTemplateColumns: {
           xs: '1fr',
-          sm: 'repeat(2, 1fr)',
-          md: 'repeat(3, 1fr)',
-          lg: 'repeat(4, 1fr)',
-          xl: 'repeat(5, 1fr)',
+          sm: 'repeat(2, minmax(0, 1fr))',
+          md: 'repeat(3, minmax(0, 1fr))',
+          lg: 'repeat(4, minmax(0, 1fr))',
+          xl: 'repeat(5, minmax(0, 1fr))',
         },
         gap: { xs: 1.5, sm: 2, md: 2 },
         width: '100%',
+        boxSizing: 'border-box',
+        minWidth: 0,
+        maxWidth: '100%',
       }}
     >
       {children}

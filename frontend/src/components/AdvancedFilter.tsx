@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import DateRangeFilter from "./DateRangeFilter";
 import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
-import { TextField, Stack, useTheme, FormControl, InputLabel, Select as MuiSelect, MenuItem, Box } from "@mui/material";
+import { TextField, Stack, useTheme, FormControl, InputLabel, Select as MuiSelect, MenuItem, Box, Autocomplete, Chip } from "@mui/material";
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -239,14 +239,26 @@ export default function AdvancedFilter({
             case "exact": {
                 if (config.choices && config.choices.length > 0) {
                     const opts = config.choices.map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
-                    const selected = opts.find((o) => o.value === filterValues[fieldName]) || null;
                     return (
                         <Col key={fieldName}>
-                            <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                                <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
-                                <Box sx={{ width: '100%' }}>
-                                    <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
-                                </Box>
+                            <FormControl fullWidth size="small" variant="outlined">
+                                <InputLabel id={`${fieldName}-label`}>{label}</InputLabel>
+                                <MuiSelect
+                                    labelId={`${fieldName}-label`}
+                                    id={fieldName}
+                                    value={filterValues[fieldName] || ""}
+                                    label={label}
+                                    onChange={(e) => handleFilterChange(fieldName, e.target.value, true)}
+                                    sx={{
+                                        height: '56px',
+                                        '& .MuiOutlinedInput-input': { fontSize: '0.875rem' }
+                                    }}
+                                >
+                                    <MenuItem value=""><em>Select {label.toLowerCase()}</em></MenuItem>
+                                    {opts.map((opt) => (
+                                        <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                                    ))}
+                                </MuiSelect>
                             </FormControl>
                         </Col>
                     );
@@ -319,12 +331,17 @@ export default function AdvancedFilter({
             case "fk":
                 return (
                     <Col key={fieldName}>
-                        <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                            <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
-                            <Box sx={{ width: '100%' }}>
-                                <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
-                            </Box>
-                        </FormControl>
+                        <DebouncedAsyncSelect
+                            endpoint={config.fk_endpoint || config.endpoint}
+                            labelField={config.label_field || "name"}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(val) => handleFilterChange(fieldName, val)}
+                            placeholder={`Select ${label.toLowerCase()}`}
+                            isClearable
+                            isMulti
+                            debounceDelay={300}
+                            fieldLabel={label}
+                        />
                     </Col>
                 );
 
@@ -354,26 +371,37 @@ export default function AdvancedFilter({
 
             case "choice": {
                 const choiceOpts = (config.choices || []).map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
-                let selectedChoices = [];
-                if (filterValues[fieldName]) {
-                    const vals = typeof filterValues[fieldName] === "string" ? filterValues[fieldName].split(",") : filterValues[fieldName];
-                    selectedChoices = choiceOpts.filter((o) => vals.includes(o.value));
-                }
+                const selectedValues = filterValues[fieldName]
+                    ? (typeof filterValues[fieldName] === "string" ? filterValues[fieldName].split(",") : filterValues[fieldName])
+                    : [];
                 return (
                     <Col key={fieldName}>
-                        <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                            <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
-                            <Box sx={{ width: '100%' }}>
-                                <Select
-                                    options={choiceOpts}
-                                    value={selectedChoices}
-                                    onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "", true)}
-                                    isClearable isMulti
-                                    placeholder={`Select ${label.toLowerCase()}`}
-                                    classNamePrefix="react-select"
-                                    styles={rsMultiSelectStyles}
-                                />
-                            </Box>
+                        <FormControl fullWidth size="small" variant="outlined">
+                            <InputLabel id={`${fieldName}-label`}>{label}</InputLabel>
+                            <MuiSelect
+                                labelId={`${fieldName}-label`}
+                                id={fieldName}
+                                multiple
+                                value={selectedValues}
+                                label={label}
+                                onChange={(e) => handleFilterChange(fieldName, typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value.join(','), true)}
+                                renderValue={(selected) => (
+                                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                        {selected.map((value) => {
+                                            const opt = choiceOpts.find(o => o.value === value);
+                                            return <Chip key={value} label={opt?.label || value} size="small" />;
+                                        })}
+                                    </Box>
+                                )}
+                                sx={{
+                                    minHeight: '56px',
+                                    '& .MuiOutlinedInput-input': { fontSize: '0.875rem' }
+                                }}
+                            >
+                                {choiceOpts.map((opt) => (
+                                    <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                                ))}
+                            </MuiSelect>
                         </FormControl>
                     </Col>
                 );
@@ -382,12 +410,17 @@ export default function AdvancedFilter({
             case "exclude_fk":
                 return (
                     <Col key={fieldName}>
-                        <FormControl fullWidth size="small" variant="outlined" sx={{ width: '100%' }}>
-                            <InputLabel sx={{ fontSize: '0.875rem' }}>{label}</InputLabel>
-                            <Box sx={{ width: '100%' }}>
-                                <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
-                            </Box>
-                        </FormControl>
+                        <DebouncedAsyncSelect
+                            endpoint={config.fk_endpoint || config.endpoint}
+                            labelField={config.label_field || "name"}
+                            value={filterValues[fieldName] || ""}
+                            onChange={(val) => handleFilterChange(fieldName, val)}
+                            placeholder={`Exclude ${label.toLowerCase()}`}
+                            isClearable
+                            isMulti
+                            debounceDelay={300}
+                            fieldLabel={label}
+                        />
                     </Col>
                 );
 

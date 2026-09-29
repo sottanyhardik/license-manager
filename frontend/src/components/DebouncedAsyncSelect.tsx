@@ -2,6 +2,8 @@ import {useState, useEffect, useCallback, useMemo} from "react";
 import AsyncSelect from "react-select/async";
 import api from "../api/axios";
 import { useDebouncedCallback } from "../hooks/useDebounce";
+import { Autocomplete, TextField, Chip, CircularProgress, Box } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
 /**
  * Debounced AsyncSelectField Component
@@ -21,6 +23,7 @@ import { useDebouncedCallback } from "../hooks/useDebounce";
  * @param {function} formatLabel - Custom function to format option label
  * @param {number} debounceDelay - Debounce delay in milliseconds (default: 300)
  * @param {boolean} loadOnMount - Control whether to load options on mount (default: false)
+ * @param {string} fieldLabel - Label for MUI TextField (optional - enables MUI mode)
  *
  * @example
  * <DebouncedAsyncSelect
@@ -29,6 +32,7 @@ import { useDebouncedCallback } from "../hooks/useDebounce";
  *   onChange={setSelectedCompany}
  *   debounceDelay={500}
  *   placeholder="Search companies..."
+ *   fieldLabel="Company"
  * />
  */
 export default function DebouncedAsyncSelect({
@@ -44,8 +48,10 @@ export default function DebouncedAsyncSelect({
     formatLabel = null,
     className = "",
     loadOnMount = false,
-    debounceDelay = 300
+    debounceDelay = 300,
+    fieldLabel = null
 }) {
+    const muiTheme = useTheme();
     // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
 
@@ -55,6 +61,9 @@ export default function DebouncedAsyncSelect({
 
     const [selectedOption, setSelectedOption] = useState(null);
     const [isSearching, setIsSearching] = useState(false);
+    const [open, setOpen] = useState(false);
+    const [options, setOptions] = useState([]);
+    const [inputValue, setInputValue] = useState('');
 
     const formatOption = useCallback((item) => {
         let label;
@@ -172,6 +181,100 @@ export default function DebouncedAsyncSelect({
         }
     };
 
+    // Use MUI Autocomplete if fieldLabel is provided
+    if (fieldLabel) {
+        useEffect(() => {
+            if (!open) {
+                setOptions([]);
+                return;
+            }
+
+            if (inputValue === '') {
+                setOptions([]);
+                return;
+            }
+
+            const handleLoad = async () => {
+                const results = await fetchOptionsFromAPI(inputValue);
+                setOptions(results);
+            };
+
+            debouncedFetch(inputValue)
+                .then(results => { setOptions(results || []); })
+                .catch(() => { setOptions([]); });
+        }, [inputValue, open]);
+
+        return (
+            <Autocomplete
+                fullWidth
+                open={open}
+                onOpen={() => setOpen(true)}
+                onClose={() => setOpen(false)}
+                isOptionEqualToValue={(option, value) => {
+                    if (!option || !value) return false;
+                    return option.value === value.value;
+                }}
+                getOptionLabel={(option) => {
+                    if (typeof option === 'string') return option;
+                    return option.label || '';
+                }}
+                options={options}
+                loading={isSearching}
+                value={selectedOption || (isMulti ? [] : null)}
+                onChange={(event, newValue) => {
+                    handleChange(newValue);
+                }}
+                onInputChange={(event, newInputValue) => {
+                    setInputValue(newInputValue);
+                }}
+                multiple={isMulti}
+                filterOptions={(x) => x}
+                noOptionsText={inputValue === '' ? 'Start typing to search...' : 'No options'}
+                {...(isMulti && {
+                    renderTags: (value, getTagProps) =>
+                        value.map((option, index) => (
+                            <Chip
+                                {...getTagProps({ index })}
+                                key={option.value}
+                                label={option.label}
+                                size="small"
+                            />
+                        ))
+                })}
+                renderInput={(params) => (
+                    <TextField
+                        {...params}
+                        label={fieldLabel}
+                        placeholder={placeholder}
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                minHeight: '56px',
+                                fontSize: '0.875rem'
+                            },
+                            '& .MuiInputBase-input': {
+                                fontSize: '0.875rem'
+                            }
+                        }}
+                        slotProps={{
+                            input: {
+                                ...params.slotProps?.input,
+                                endAdornment: (
+                                    <>
+                                        {isSearching ? <CircularProgress color="inherit" size={20} /> : null}
+                                        {params.slotProps?.input?.endAdornment}
+                                    </>
+                                ),
+                            },
+                        }}
+                    />
+                )}
+            />
+        );
+    }
+
+    // Fall back to react-select for legacy use without fieldLabel
     return (
         <div className="position-relative">
             <AsyncSelect

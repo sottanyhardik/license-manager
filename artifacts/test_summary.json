@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-09-29T15:43:57.119464",
+  "environment": "development",
+  "test_url": "http://localhost:5173",
+  "test_cleanup": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0,
+    "created_records": [],
+    "modified_records": []
+  }
+}

@@ -275,6 +275,14 @@ export default function DebouncedAsyncSelect({
 
     // Use MUI Autocomplete if fieldLabel is provided
     if (useMUIMode) {
+        console.log('[DebouncedAsyncSelect] MUI Mode:', {
+            fieldLabel,
+            inputValue,
+            selectedOption,
+            isMulti,
+            options: options.length,
+            open
+        });
         const hiddenTagCount = isMulti && selectedOption && Array.isArray(selectedOption) && !focused
             ? Math.max(0, selectedOption.length - limitTags)
             : 0;
@@ -335,7 +343,13 @@ export default function DebouncedAsyncSelect({
             onChange: (event: any, newValue: any) => {
                 handleChange(newValue);
             },
-            onInputChange: (event: any, newInputValue: string) => {
+            onInputChange: (event: any, newInputValue: string, reason: string) => {
+                console.log('[DebouncedAsyncSelect] onInputChange - typing detected:', {
+                    newInputValue,
+                    reason,
+                    fieldLabel,
+                    baseEndpoint
+                });
                 setInputValue(newInputValue);
             },
             multiple: isMulti,

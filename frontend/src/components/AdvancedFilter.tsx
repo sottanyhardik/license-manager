@@ -93,7 +93,7 @@ export default function AdvancedFilter({
     onFilterChange,
     initialFilters = {} as Record<string, any>,
     defaultFilters = {} as Record<string, any>,
-    _resetToDefaults = false,
+    resetToDefaults: _resetToDefaults = false,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];

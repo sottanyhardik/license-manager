@@ -331,6 +331,7 @@ export default function DebouncedAsyncSelect({
             options,
             loading: isSearching,
             value: selectedOption || (isMulti ? [] : null),
+            inputValue,
             onChange: (event: any, newValue: any) => {
                 handleChange(newValue);
             },

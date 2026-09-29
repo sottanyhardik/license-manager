@@ -270,36 +270,6 @@ export default function DebouncedAsyncSelect({
 
     // Use MUI Autocomplete if fieldLabel is provided
     if (useMUIMode) {
-        const hiddenTagCount = isMulti && selectedOption && Array.isArray(selectedOption) && !focused
-            ? Math.max(0, selectedOption.length - limitTags)
-            : 0;
-
-        const renderTagsFunc = isMulti
-            ? (value: typeof selectedOption, getTagProps: (config: any) => any) => {
-                const displayedTags = focused ? value : value.slice(0, limitTags);
-                return (
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {displayedTags.map((option, index) => (
-                            <Chip
-                                {...getTagProps({ index })}
-                                key={option.value}
-                                label={option.label}
-                                size="small"
-                                sx={{ maxWidth: '100%' }}
-                            />
-                        ))}
-                        {!focused && hiddenTagCount > 0 && (
-                            <Chip
-                                label={`+${hiddenTagCount}`}
-                                size="small"
-                                variant="outlined"
-                                sx={{ maxWidth: '100%', pointerEvents: 'none' }}
-                            />
-                        )}
-                    </Box>
-                );
-            }
-            : undefined;
 
         // Build the autocompleteProps without renderTags first
         const autocompleteProps: any = {
@@ -338,6 +308,7 @@ export default function DebouncedAsyncSelect({
                 }
             },
             multiple: isMulti,
+            limitTags: isMulti ? limitTags : undefined,
             disableCloseOnSelect: isMulti,
             filterOptions: (x: any) => x,
             noOptionsText: inputValue === '' ? 'Start typing to search...' : 'No options',
@@ -393,11 +364,6 @@ export default function DebouncedAsyncSelect({
                 );
             }
         };
-
-        // Only add renderTags for multi-select to avoid prop warning on single-select
-        if (isMulti && renderTagsFunc) {
-            autocompleteProps.renderTags = renderTagsFunc;
-        }
 
         return <Autocomplete {...autocompleteProps} />;
     }

@@ -45,8 +45,8 @@ BOE_VIEWSET_CONFIG = {
     "filter": {
         "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
         "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name", "filter_field": "company"},
-        "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-        "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name", "filter_field": "port"},
+        "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "code"},
+        "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "code", "filter_field": "port"},
         "bill_of_entry_date": {"type": "date_range"},
         "is_fetch": {"type": "exact"},
     },
@@ -92,7 +92,7 @@ BOE_VIEWSET_CONFIG = {
     },
     "field_meta": {
         "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
-        "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
+        "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "code"},
         "allotment": {"type": "m2m", "fk_endpoint": "/allotments/?is_boe=false", "label_field": "display_label"},
         "planning_target_item": {"type": "fk", "fk_endpoint": "/masters/item-names/?is_active=true", "label_field": "name"},
         "row_type": {"type": "select", "choices": list(ROW_TYPE_CHOICES)},

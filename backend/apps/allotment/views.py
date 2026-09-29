@@ -54,8 +54,8 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
                                 "filter_field": "company"},
-            "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
+            "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "code"},
+            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "code",
                              "filter_field": "port"},
             "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
             "estimated_arrival_date": {"type": "date_range"},
@@ -130,7 +130,7 @@ AllotmentViewSet = MasterViewSet.create_viewset(
             "port": {
                 "type": "fk",
                 "fk_endpoint": "/masters/ports/",
-                "label_field": "name"
+                "label_field": "code"
             },
             "related_company": {
                 "type": "fk",

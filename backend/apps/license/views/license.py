@@ -105,8 +105,8 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "exporter": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
             "exclude_exporter": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
                                  "filter_field": "exporter"},
-            "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
-            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
+            "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "code"},
+            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "code",
                              "filter_field": "port"},
             "export_license__norm_class": {"type": "fk", "fk_endpoint": "/masters/sion-classes/",
                                            "label_field": "norm_class"},
@@ -178,7 +178,7 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "port": {
                 "type": "fk",
                 "fk_endpoint": "/masters/ports/",
-                "label_field": "name"
+                "label_field": "code"
             },
             "current_owner": {
                 "type": "fk",

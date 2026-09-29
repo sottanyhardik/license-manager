@@ -55,6 +55,7 @@ export default function AdminLayout({ children }) {
                         px: isInIframe ? 2.5 : { xs: 2, sm: 3 },
                         py: isInIframe ? 2 : { xs: 2, sm: 3 },
                         flex: 1,
+                        boxSizing: 'border-box',
                     }}
                 >
                     {/* ARIA live region for form validation announcements */}

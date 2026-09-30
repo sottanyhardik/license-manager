@@ -62,11 +62,11 @@ export function toProtectedMediaPath(fileUrlOrPath: string): string {
  * Fetch a protected file with the auth header and either trigger a download
  * (when `filename` is given) or open it in a new tab. `path` is relative to the
  * axios baseURL, e.g. "/media/licenses/123/copy.pdf" or
- * "/licenses/123/balance-excel/".
+ * "/licenses/123/balance-excel/". Optional `params` are passed as query parameters.
  */
-export async function openAuthedFile(path: string, filename?: string): Promise<void> {
+export async function openAuthedFile(path: string, filename?: string, params?: Record<string, string | number | boolean>): Promise<void> {
   const safePath = normalizeAuthedFilePath(path);
-  const res = await api.get(safePath, { responseType: "blob" });
+  const res = await api.get(safePath, { responseType: "blob", params });
   const blobUrl = URL.createObjectURL(res.data as Blob);
   try {
     if (filename) {

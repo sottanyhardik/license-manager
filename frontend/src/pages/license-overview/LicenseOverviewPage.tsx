@@ -148,8 +148,11 @@ export default function LicenseOverviewPage() {
         if (!id) return;
         setDownloadingExcel(true);
         try {
-            const query = showHiddenBoe ? "?show_hidden=true" : "";
-            await openAuthedFile(`licenses/${id}/balance-excel/${query}`, `${summary?.license_number || id}-balance.xlsx`);
+            await openAuthedFile(
+                `licenses/${id}/balance-excel/`,
+                `${summary?.license_number || id}-balance.xlsx`,
+                showHiddenBoe ? { show_hidden: true } : undefined
+            );
             toast.success("Excel file downloaded successfully!");
         } catch (err) {
             toast.error(extractApiError(err, "Failed to generate Excel file"));

@@ -1094,9 +1094,22 @@ const LicenseRow = memo(function LicenseRow({
 
     const handleDownloadExcel = useCallback(async () => {
         try {
+            toast.info("Generating Excel file...");
             await openAuthedFile(`licenses/${item.id}/balance-excel/`, `${item.license_number || item.id}-balance.xlsx`);
+            toast.success("Excel file downloaded successfully!");
         } catch (err: unknown) {
-            toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to generate Excel");
+            console.error("Excel download error:", err);
+            let errorMsg = "Failed to download Excel file";
+
+            if (err && typeof err === "object") {
+                if ("response" in err && (err as any).response?.data?.error) {
+                    errorMsg = (err as any).response.data.error;
+                } else if ("message" in err) {
+                    errorMsg = (err as any).message;
+                }
+            }
+
+            toast.error(errorMsg);
         }
     }, [item.id, item.license_number]);
 

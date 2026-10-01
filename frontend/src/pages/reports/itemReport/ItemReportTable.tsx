@@ -212,6 +212,7 @@ export default function ItemReportTable({
                                             {itemNameMode === 'editable' ? (
                                                 <Select
                                                     isMulti
+                                                    isClearable
                                                     value={(item.item_names || []).map((i: any) => ({
                                                         value: i.id,
                                                         label: i.name

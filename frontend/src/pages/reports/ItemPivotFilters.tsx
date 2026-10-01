@@ -122,6 +122,7 @@ export default function ItemPivotFilters({
                         <Select
                             inputId={purchaseStatusId}
                             isMulti
+                            isClearable
                             options={purchaseStatusOptions}
                             value={purchaseStatusOptions.filter((option) => purchaseStatus.includes(option.value))}
                             onChange={(selected) => setPurchaseStatus(selected ? selected.map((option) => option.value) : [])}

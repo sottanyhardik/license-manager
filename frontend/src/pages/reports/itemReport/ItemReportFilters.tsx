@@ -245,6 +245,7 @@ export default function ItemReportFilters({
                                 <Select
                                     inputId={purchaseStatusId}
                                     isMulti
+                                    isClearable
                                     value={purchaseStatusOptions.filter(opt => purchaseStatus.includes(opt.value))}
                                     onChange={(selected) => onPurchaseStatusChange(selected ? selected.map(s => s.value) : [])}
                                     options={purchaseStatusOptions}
@@ -262,6 +263,7 @@ export default function ItemReportFilters({
                                 <Select
                                     inputId={normsId}
                                     isMulti
+                                    isClearable
                                     value={normOptions.filter(opt => selectedNorms.includes(opt.value))}
                                     onChange={(selected) => onNormsChange(selected ? selected.map(s => s.value) : [])}
                                     options={normOptions}
@@ -279,6 +281,7 @@ export default function ItemReportFilters({
                                 <Select
                                     inputId={notificationId}
                                     isMulti
+                                    isClearable
                                     value={notificationOptions.filter(opt => selectedNotifications.includes(opt.value))}
                                     onChange={(selected) => onNotificationsChange(selected ? selected.map(s => s.value) : [])}
                                     options={notificationOptions}
@@ -329,6 +332,7 @@ export default function ItemReportFilters({
                                 <Select
                                     inputId={itemNameFilterId}
                                     isMulti
+                                    isClearable
                                     value={itemNameOptions.filter(opt => selectedItemNames.includes(opt.value))}
                                     onChange={(selected) => onItemNameChange(selected ? selected.map(s => s.value) : [])}
                                     options={itemNameOptions}

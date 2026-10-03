@@ -578,6 +578,88 @@ class TestLicenseLedgerUpload:
         url = reverse('license:upload-ledger')
         with open(csv_file, 'rb') as f:
             response = authenticated_client.post(url, {'ledger': f}, format='multipart')
-        
+
         assert response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]
         assert 'message' in response.data or 'licenses' in response.data
+
+
+@pytest.mark.api
+@pytest.mark.database
+class TestLicenseDocumentsUpload:
+    """Test License Document Upload"""
+
+    def test_upload_license_document(self, authenticated_client, test_license, tmp_path):
+        """Test POST /licenses/{id}/documents/ to upload a document"""
+        from apps.license.models import LicenseDocumentModel
+
+        # Create a test PDF file
+        pdf_content = b'%PDF-1.4\n%fake pdf content'
+        pdf_file = tmp_path / "test_license.pdf"
+        pdf_file.write_bytes(pdf_content)
+
+        url = reverse('license:licenses-documents', kwargs={'pk': test_license.id})
+        with open(pdf_file, 'rb') as f:
+            response = authenticated_client.post(
+                url,
+                {'file': f, 'type': 'LICENSE COPY'},
+                format='multipart'
+            )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['type'] == 'LICENSE COPY'
+        assert 'file' in response.data
+
+        # Verify document was saved
+        document = LicenseDocumentModel.objects.get(license=test_license, type='LICENSE COPY')
+        assert document.file is not None
+
+    def test_upload_transfer_letter(self, authenticated_client, test_license, tmp_path):
+        """Test POST /licenses/{id}/documents/ with TRANSFER LETTER type"""
+        # Create a test PDF file
+        pdf_content = b'%PDF-1.4\n%fake pdf content'
+        pdf_file = tmp_path / "transfer_letter.pdf"
+        pdf_file.write_bytes(pdf_content)
+
+        url = reverse('license:licenses-documents', kwargs={'pk': test_license.id})
+        with open(pdf_file, 'rb') as f:
+            response = authenticated_client.post(
+                url,
+                {'file': f, 'type': 'TRANSFER LETTER'},
+                format='multipart'
+            )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['type'] == 'TRANSFER LETTER'
+
+    def test_upload_document_no_file(self, authenticated_client, test_license):
+        """Test POST /licenses/{id}/documents/ without file"""
+        url = reverse('license:licenses-documents', kwargs={'pk': test_license.id})
+        response = authenticated_client.post(url, {'type': 'LICENSE COPY'})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'error' in response.data
+
+    def test_upload_document_invalid_type(self, authenticated_client, test_license, tmp_path):
+        """Test POST /licenses/{id}/documents/ with invalid document type"""
+        pdf_content = b'%PDF-1.4\n%fake pdf content'
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(pdf_content)
+
+        url = reverse('license:licenses-documents', kwargs={'pk': test_license.id})
+        with open(pdf_file, 'rb') as f:
+            response = authenticated_client.post(
+                url,
+                {'file': f, 'type': 'INVALID_TYPE'},
+                format='multipart'
+            )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'error' in response.data
+
+    def test_upload_document_license_not_found(self, authenticated_client):
+        """Test POST /licenses/{id}/documents/ with non-existent license"""
+        url = reverse('license:licenses-documents', kwargs={'pk': 99999})
+        response = authenticated_client.post(url, {'type': 'LICENSE COPY'})
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert 'error' in response.data

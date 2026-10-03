@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ from apps.core.constants import SCHEME_CODE_CHOICES, \
 from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
 from apps.core.filtersets import LicenseFilterSet
 from apps.core.views.master_view import MasterViewSet
-from apps.license.models import LicenseDetailsModel
+from apps.license.models import LicenseDetailsModel, LicenseDocumentModel
 from apps.license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
     LicenseDocumentSerializer
 from apps.license.serializers.license import IndividualItemCifOverrideSerializer
@@ -219,6 +220,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     """
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
+    parser_classes = [MultiPartParser, FormParser]
 
     # Actions attached by add_license_balance_ledger_actions — gated by their
     # own fine-grained permission class rather than LicensePermission,
@@ -1164,6 +1166,65 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             full_trace = tb.format_exc()
             logger.error(f"Error merging documents: {full_trace}")
             return HttpResponse(f"Error: {str(e)}\n\n{full_trace}", status=500, content_type='text/plain')
+
+    @action(detail=True, methods=['post'], url_path='documents')
+    def documents(self, request, pk=None):
+        """
+        Upload and save license documents.
+        POST /licenses/{id}/documents/
+
+        Accepts multipart/form-data with:
+        - file: The document file (PDF, image, etc.)
+        - type: Document type (LICENSE COPY, TRANSFER LETTER, OTHER)
+        """
+        from apps.license.models import LicenseDocumentModel
+
+        try:
+            license_obj = LicenseDetailsModel.objects.get(pk=pk)
+        except LicenseDetailsModel.DoesNotExist:
+            return Response(
+                {"error": "License not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Get uploaded file and document type
+        uploaded_file = request.FILES.get('file')
+        doc_type = request.data.get('type', 'OTHER')
+
+        if not uploaded_file:
+            return Response(
+                {"error": "No file provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate document type
+        valid_types = [choice[0] for choice in LicenseDocumentModel.DOCUMENT_TYPE_CHOICES]
+        if doc_type not in valid_types:
+            return Response(
+                {"error": f"Invalid document type. Must be one of: {', '.join(valid_types)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Create document record
+            document = LicenseDocumentModel(
+                license=license_obj,
+                type=doc_type,
+                file=uploaded_file
+            )
+            document.save()
+
+            logger.info(f"Document saved for license {license_obj.license_number}: {doc_type}")
+
+            serializer = LicenseDocumentSerializer(document)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Error saving document for license {pk}: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to save document: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 # Add license report actions to viewset

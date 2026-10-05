@@ -41,17 +41,19 @@ export default function AdvancedFilter({
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
 
-    const toApiParams = useCallback((nextValues = filterValues, nextSearch = searchTerm) => {
+    const toApiParams = useCallback((nextValues, nextSearch) => {
         const params: Record<string, any> = {};
-        if (nextSearch) params.search = nextSearch;
-        Object.entries(nextValues).forEach(([key, value]) => {
+        const valuesObj = nextValues ?? filterValues;
+        const searchStr = nextSearch ?? searchTerm;
+        if (searchStr) params.search = searchStr;
+        Object.entries(valuesObj).forEach(([key, value]) => {
             if (value === null || value === undefined || value === "") return;
             if (key.endsWith("_from")) params[`${key.replace("_from", "")}__gte`] = value;
             else if (key.endsWith("_to")) params[`${key.replace("_to", "")}__lte`] = value;
             else params[key] = value;
         });
         return params;
-    }, [filterValues, searchTerm]);
+    }, []);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -75,15 +77,16 @@ export default function AdvancedFilter({
         return () => clearTimeout(timeoutId);
     }, [searchTerm, filterValues, onFilterChange, toApiParams]);
 
-    const handleFilterChange = (field, value, immediate = false) =>
+    const handleFilterChange = (field, value, immediate = false) => {
         setFilterValues((prev) => {
             const next = { ...prev, [field]: value };
             if (immediate) {
                 skipNextAutoApply.current = true;
-                onFilterChange(toApiParams(next));
+                setTimeout(() => onFilterChange(toApiParams(next)), 0);
             }
             return next;
         });
+    };
 
     const handleResetFilters = () => {
         setSearchTerm("");

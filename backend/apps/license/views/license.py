@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +220,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     """
     permission_classes = [LicensePermission]
     lookup_value_regex = '[^/]+'  # Allow both numbers and strings
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     # Actions attached by add_license_balance_ledger_actions — gated by their
     # own fine-grained permission class rather than LicensePermission,

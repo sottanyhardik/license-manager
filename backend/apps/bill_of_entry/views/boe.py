@@ -139,24 +139,26 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         # Apply select_related for FK optimization
         queryset = queryset.select_related('company', 'port')
 
-        # Prefetch related data to avoid N+1 queries
-        queryset = queryset.prefetch_related(
-            'item_details',
-            'item_details__sr_number',
-            'item_details__sr_number__hs_code',
-            'item_details__sr_number__license',
-            'item_details__sr_number__license__purchase_status',
-            'item_details__sr_number__items',
-            'allotment',
-        )
+        # Only heavy prefetch for detail views, not list
+        if self.action in ['retrieve', 'update', 'partial_update']:
+            # Prefetch related data to avoid N+1 queries for detail view
+            queryset = queryset.prefetch_related(
+                'item_details',
+                'item_details__sr_number',
+                'item_details__sr_number__hs_code',
+                'item_details__sr_number__license',
+                'item_details__sr_number__license__purchase_status',
+                'item_details__sr_number__items',
+                'allotment',
+            )
+            return queryset
+
+        # Light prefetch for list view only
+        queryset = queryset.prefetch_related('item_details', 'allotment')
 
         # Handle available_for_trade filtering
         if self.request.query_params.get('available_for_trade') == 'true':
             queryset = annotate_and_exclude_hidden(queryset)
-            return queryset
-
-        # Don't filter single-item retrieval by invoice status
-        if self.action in ['retrieve', 'update', 'partial_update']:
             return queryset
 
         # Apply is_invoice filter with defaults

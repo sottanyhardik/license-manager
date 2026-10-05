@@ -53,7 +53,7 @@ export default function AdvancedFilter({
             else params[key] = value;
         });
         return params;
-    }, []);
+    }, [filterValues, searchTerm]);
 
     useEffect(() => {
         if (isInitialMount.current) {

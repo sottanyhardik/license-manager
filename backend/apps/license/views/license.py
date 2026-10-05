@@ -584,6 +584,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # Validity must report an expired or inactive licence's current
             # state.  Object permissions still apply after lookup.
             'check_validity',
+            'hide_boe', 'restore_boe', 'hide_boe_bulk', 'restore_boe_bulk',
         ]
 
         if skip_default_filters:

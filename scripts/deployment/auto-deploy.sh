@@ -89,23 +89,38 @@ validate_env_line_value() {
 # ── Health gate ──────────────────────────────────────────────
 # Polls https://<domain>/api/health/ — uses the DuckDNS domain with HTTPS
 # directly so there is no HTTP→HTTPS redirect to chase.
+# Retries with exponential backoff and longer initial delays to allow
+# nginx proxy reload and gunicorn startup.
 wait_for_health() {
     local domain="${1:-localhost}"
-    local max_attempts=10
+    local max_attempts=15
     local status
     local i
+    local delay=2
+
+    # Initial delay to allow nginx reload + gunicorn startup
+    print_info "Initial 3s delay for nginx/gunicorn startup..."
+    sleep 3
+
     for ((i = 1; i <= max_attempts; i++)); do
-        status=$(curl --silent --show-error --connect-timeout 5 --max-time 15 \
+        status=$(curl --silent --show-error --connect-timeout 8 --max-time 20 \
             --output /dev/null --write-out "%{http_code}" \
             "https://${domain}/api/health/" 2>/dev/null || echo "000")
         if [ "$status" = "200" ]; then
             print_success "Health check passed (HTTP 200) — https://${domain}/api/health/"
             return 0
         fi
-        print_warn "Health check attempt $i/$max_attempts failed (HTTP $status), retrying in 3s..."
-        sleep 3
+        if [ "$status" = "502" ] || [ "$status" = "503" ]; then
+            print_warn "Health check attempt $i/$max_attempts: nginx returned HTTP $status (backend not ready yet), retrying in ${delay}s..."
+        else
+            print_warn "Health check attempt $i/$max_attempts failed (HTTP $status), retrying in ${delay}s..."
+        fi
+        sleep "$delay"
+        # Increase delay on each retry, max 5s
+        [ "$delay" -lt 5 ] && ((delay += 1))
     done
     print_error "Deploy failed: https://${domain}/api/health/ not 200 after $max_attempts attempts"
+    print_error "Check server logs: ssh django@$domain 'sudo tail -50 /var/log/lmanagement.log'"
     return 1
 }
 
@@ -744,7 +759,25 @@ sudo_cmd pkill -9 -f "celery" 2>/dev/null || true
 sleep 2
 sudo_cmd supervisorctl start license-manager-celery
 
-# ── 9. Summary ───────────────────────────────────────────────
+# ── 9. Fix nginx proxy port (ensure 8000, not 8001) ─────────
+echo_info "Verifying nginx proxy port configuration..."
+NGINX_SITE="/etc/nginx/sites-available/${NGINX_SITE_NAME}"
+if sudo_cmd grep -q '127.0.0.1:8001' "$NGINX_SITE" 2>/dev/null; then
+	echo_warn "Nginx config still has port 8001 — updating to 8000..."
+	sudo_cmd sed -i 's/127.0.0.1:8001/127.0.0.1:8000/g' "$NGINX_SITE"
+	if sudo_cmd nginx -t 2>/dev/null; then
+		sudo_cmd systemctl reload nginx
+		echo_ok "Nginx reloaded with port 8000"
+		sleep 2
+	else
+		echo_err "Nginx config validation failed after port fix"
+		exit 1
+	fi
+else
+	echo_ok "Nginx already configured with port 8000"
+fi
+
+# ── 10. Summary ───────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN}🎉 Deployment complete — ${SERVER_IP}${NC}"

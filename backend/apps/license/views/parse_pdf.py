@@ -76,6 +76,45 @@ def _match_hs_code(hsn: str | None):
     return HSCodeModel.objects.filter(hs_code=hsn.strip()).first()
 
 
+def _resolve_hs_code(hsn: str | None, description: str | None = None, create_if_missing: bool = False):
+    """Look up an HS code by HSN, optionally creating one if not found.
+
+    Returns a tuple (hs_code_obj, created): the HSCode object (or None) and whether it was created.
+    Only creates codes for valid 7-8 digit HSNs when create_if_missing=True.
+    """
+    if not hsn:
+        return None, False
+
+    hsn = hsn.strip()
+    if not hsn or not hsn.isdigit() or len(hsn) not in (7, 8):
+        # Invalid HSN format — don't create
+        return None, False
+
+    # Pad 7-digit HSNs to 8 digits (matches parser logic)
+    if len(hsn) == 7:
+        hsn = "0" + hsn
+
+    # Try to find existing
+    existing = HSCodeModel.objects.filter(hs_code=hsn).first()
+    if existing:
+        return existing, False
+
+    # Create if requested
+    if not create_if_missing:
+        return None, False
+
+    try:
+        obj, created = HSCodeModel.objects.get_or_create(
+            hs_code=hsn,
+            defaults={"product_description": (description or "")[:500]}  # Max length is safe
+        )
+        return obj, created
+    except Exception:
+        # If creation fails (e.g., concurrent create), silently fall back to None
+        # The license can still be created without an HS code
+        return None, False
+
+
 def _resolve_notification_number(code: str | None):
     """Look up a NotificationNumber row by code, creating one if the PDF
     contains a new notification value we haven't seen before.
@@ -104,14 +143,24 @@ def _resolve_scheme_code(code: str | None):
     return SchemeCode.objects.filter(code=code.strip()).first()
 
 
-def _annotate_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Attach matched HS-code IDs to the parsed item rows."""
+def _annotate_items(items: list[dict[str, Any]], create_hs_code: bool = False) -> list[dict[str, Any]]:
+    """Attach matched (or created) HS-code IDs to the parsed item rows.
+
+    Returns each item with:
+    - matched_hs_code_id: the HS code ID (or None if not found/created)
+    - hs_code_created: True if this HS code was newly created
+    """
     out = []
     for item in items:
-        hs = _match_hs_code(item.get("hsn"))
+        hs, created = _resolve_hs_code(
+            item.get("hsn"),
+            description=item.get("description"),
+            create_if_missing=create_hs_code
+        )
         out.append({
             **item,
             "matched_hs_code_id": hs.id if hs else None,
+            "hs_code_created": created,
         })
     return out
 
@@ -160,12 +209,18 @@ class LicensePdfParseView(APIView):
         ).only("id", "license_number").first()
 
         create_company = str(request.data.get("create_company", "true")).lower() != "false"
+        # Only create new HS codes when importing a new license (not a duplicate/re-parse)
+        create_hs_code = existing is None and str(request.data.get("create_hs_code", "true")).lower() != "false"
+
         company, company_created = _match_or_create_company(parsed, create_company)
         port = _match_port(parsed.get("port_code"))
         notification = _resolve_notification_number(parsed.get("notification_number"))
         scheme = _resolve_scheme_code(DFIA_DEFAULT_SCHEME_CODE)
 
-        items = _annotate_items(parsed.get("items") or [])
+        items = _annotate_items(parsed.get("items") or [], create_hs_code=create_hs_code)
+
+        # Count how many HS codes were created
+        hs_codes_created = sum(1 for item in items if item.get("hs_code_created"))
 
         # Auto-calculate registration_number (license_number with any
         # leading zero stripped) to match the form's existing autofill rule.
@@ -204,4 +259,5 @@ class LicensePdfParseView(APIView):
             "matched_port_code": parsed.get("port_code"),
             "items": items,
             "existing_license_id": existing.id if existing else None,
+            "hs_codes_created": hs_codes_created,
         })

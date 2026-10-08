@@ -80,7 +80,7 @@ export const buildLicensePatch = (data) => {
 
 export const buildLicenseSummary = (data) => {
     const { parsed = {}, items = [], matched_company_id, matched_company_name,
-            company_created, matched_port_id, matched_port_code } = data || {};
+            company_created, matched_port_id, matched_port_code, hs_codes_created } = data || {};
     return {
         license_number: parsed.license_number,
         license_date: parsed.license_date,
@@ -95,5 +95,6 @@ export const buildLicenseSummary = (data) => {
         source_kind: parsed.source_kind,
         items: items || [],
         unmatchedHsn: (items || []).filter(it => !it.matched_hs_code_id).length,
+        hsnCreated: hs_codes_created || 0,
     };
 };

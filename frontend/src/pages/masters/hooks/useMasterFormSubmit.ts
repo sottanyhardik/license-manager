@@ -163,8 +163,10 @@ export function useMasterFormSubmit({
             // Validate import items using validation utility
             if (formData.import_license && Array.isArray(formData.import_license)) {
                 const importSchema = {
-                    // HS Code is optional — allows PDF imports where HS codes may not be matched
-                    // hs_code is not in required fields, so null/undefined is allowed
+                    hs_code: {
+                        rules: [ValidationRules.REQUIRED],
+                        label: 'HS Code',
+                    },
                     description: {
                         rules: [ValidationRules.REQUIRED],
                         label: 'Description',

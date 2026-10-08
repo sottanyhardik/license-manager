@@ -182,12 +182,24 @@ class LicenseWriteMixin:
         from django.db import transaction
         from apps.license.signals import suspend_license_flag_recalc, update_license_flags
         from apps.license.utils.item_matcher import bulk_auto_link_license_items
+        from apps.core.models import PurchaseStatus
 
         exports = validated_data.pop("export_license", [])
         imports = validated_data.pop("import_license", [])
         docs = validated_data.pop("license_documents", [])
         transfers = validated_data.pop("transfers", [])
         purchases = validated_data.pop("purchases", [])
+
+        # Set default purchase_status to "Global Exim" (GE) if not provided
+        if "purchase_status" not in validated_data or validated_data.get("purchase_status") is None:
+            try:
+                global_exim = PurchaseStatus.objects.get(code="GE")
+                validated_data["purchase_status"] = global_exim
+            except PurchaseStatus.DoesNotExist:
+                # If "Global Exim" doesn't exist, try to get the first active purchase status
+                default_status = PurchaseStatus.objects.filter(is_active=True).first()
+                if default_status:
+                    validated_data["purchase_status"] = default_status
 
         # Route moved fields (balance_cif, is_*, current_owner, condition_sheet, …)
         # away from the parent so .create()/setattr won't hit read-only @properties.

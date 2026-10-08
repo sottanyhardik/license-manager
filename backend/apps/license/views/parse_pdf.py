@@ -104,9 +104,11 @@ def _resolve_hs_code(hsn: str | None, description: str | None = None, create_if_
         return None, False
 
     try:
+        # Truncate description to a safe length (500 chars for HSCodeModel.product_description)
+        safe_description = (description or "")[:500] if description else ""
         obj, created = HSCodeModel.objects.get_or_create(
             hs_code=hsn,
-            defaults={"product_description": (description or "")[:500]}  # Max length is safe
+            defaults={"product_description": safe_description}
         )
         return obj, created
     except Exception:

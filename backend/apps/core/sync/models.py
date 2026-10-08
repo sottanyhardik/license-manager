@@ -18,7 +18,7 @@ class SyncConflictLog(models.Model):
     """Append-only log of sync conflicts for audit and debugging."""
 
     model_label = models.CharField(max_length=100, db_index=True)
-    natural_key = models.CharField(max_length=255)
+    natural_key = models.CharField(max_length=2000)
     op = models.CharField(max_length=10)
     source_server = models.CharField(max_length=100)
     source_version = models.PositiveBigIntegerField(default=0)
@@ -109,7 +109,7 @@ class SyncEvent(models.Model):
     event_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     source_server = models.CharField(max_length=100, db_index=True)
     model_label = models.CharField(max_length=100, db_index=True)
-    natural_key = models.CharField(max_length=255, db_index=True)
+    natural_key = models.CharField(max_length=2000, db_index=True)
     op = models.CharField(max_length=10)
     source_version = models.PositiveBigIntegerField(default=1)
     payload = models.JSONField(default=dict)

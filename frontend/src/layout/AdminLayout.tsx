@@ -3,6 +3,7 @@ import { useState } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import TopNav from "../components/TopNav";
 import TaskFAB from "../components/TaskFAB";
+import ParsingStatusDisplay from "../components/ParsingStatusDisplay";
 import Icon from "@/components/Icon";
 
 const QUICK_ACTIONS = [
@@ -46,33 +47,39 @@ export default function AdminLayout({ children }) {
             {!isInIframe && (
                 <footer
                     className="app-shell__quick-actions sticky bottom-0 z-40 border-t border-border/60 bg-card/95 backdrop-blur-sm"
-                    aria-label="Quick actions"
-                    style={{ height: 44 }}
+                    aria-label="Quick actions and status"
+                    style={{ minHeight: 44 }}
                 >
-                    <div className="flex h-full items-center justify-between px-4">
-                        {/* Quick-create actions */}
-                        <div className="flex items-center gap-1.5">
-                            {QUICK_ACTIONS.map(a => (
-                                <button
-                                    key={a.to}
-                                    type="button"
-                                    onClick={() => navigate(a.to)}
-                                    className={[
-                                        "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-all duration-150 shadow-sm",
-                                        a.primary
-                                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow active:scale-[0.97]"
-                                            : "border border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground hover:shadow",
-                                    ].join(" ")}
-                                >
-                                    <Icon name={a.icon} className="size-4" aria-hidden="true" />
-                                    <span className="footer-action-label">{a.label}</span>
-                                </button>
-                            ))}
+                    <div className="flex flex-col gap-2 px-4 py-2">
+                        {/* Parsing status display */}
+                        <ParsingStatusDisplay />
+
+                        {/* Quick actions row */}
+                        <div className="flex h-full items-center justify-between">
+                            {/* Quick-create actions */}
+                            <div className="flex items-center gap-1.5">
+                                {QUICK_ACTIONS.map(a => (
+                                    <button
+                                        key={a.to}
+                                        type="button"
+                                        onClick={() => navigate(a.to)}
+                                        className={[
+                                            "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-all duration-150 shadow-sm",
+                                            a.primary
+                                                ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow active:scale-[0.97]"
+                                                : "border border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground hover:shadow",
+                                        ].join(" ")}
+                                    >
+                                        <Icon name={a.icon} className="size-4" aria-hidden="true" />
+                                        <span className="footer-action-label">{a.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Subtle meta text */}
+                            <span className="hidden text-[10.5px] text-muted-foreground/40 sm:block">
+                                License Manager
+                            </span>
                         </div>
-                        {/* Subtle meta text */}
-                        <span className="hidden text-[10.5px] text-muted-foreground/40 sm:block">
-                            License Manager
-                        </span>
                     </div>
                 </footer>
             )}

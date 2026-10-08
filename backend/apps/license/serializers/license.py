@@ -726,9 +726,8 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
                 item_errors = {}
                 is_existing = _nested_item_id(item) in existing_import_ids
 
-                if 'hs_code' in item or not is_existing:
-                    if not item.get('hs_code'):
-                        item_errors['hs_code'] = ['HS Code is required for import item']
+                # HS Code is optional for import items (can be null/blank)
+                # This allows PDF imports where HS codes may not be in the master
 
                 if 'description' in item or not is_existing:
                     if not item.get('description') or not item.get('description').strip():

@@ -1318,8 +1318,11 @@ class AllotmentActionViewSet(ViewSet):
                     errors.append({
                         'item_id': item_id,
                         'code': 'ALLOCATION_PAIR_MISMATCH',
-                        'error': 'CIF must equal the canonical unit price multiplied by the allocated quantity.',
+                        'error': f'CIF must equal quantity × unit price (canonical). Expected: {canonical_cif} (Qty {qty} × Unit Price {unit_price}), but got {cif_fc}.',
                         'expected_cif_fc': str(canonical_cif),
+                        'received_cif_fc': str(cif_fc),
+                        'quantity': str(qty),
+                        'unit_price': str(unit_price),
                     })
                     continue
 

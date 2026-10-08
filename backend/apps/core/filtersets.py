@@ -235,30 +235,27 @@ class BOEFilterSet(BaseFilterSet):
     """
 
     # BOE date filters
-    boe_date_from = filters.DateFilter(field_name='boe_date', lookup_expr='gte')
-    boe_date_to = filters.DateFilter(field_name='boe_date', lookup_expr='lte')
+    bill_of_entry_date_from = filters.DateFilter(field_name='bill_of_entry_date', lookup_expr='gte')
+    bill_of_entry_date_to = filters.DateFilter(field_name='bill_of_entry_date', lookup_expr='lte')
 
-    # Company filter
-    company = filters.NumberFilter(field_name='company_id')
-    port = filters.NumberFilter(field_name='port_id')
+    # Company and Port filters - use FK field names directly (not _id)
+    company = filters.NumberFilter(field_name='company')
+    port = filters.NumberFilter(field_name='port')
     company_ids = filters.CharFilter(method='filter_company_ids')
 
     # BOE number
-    boe_number = filters.CharFilter(field_name='boe_number', lookup_expr='icontains')
-
-    # Port
-    port = filters.CharFilter(field_name='port', lookup_expr='icontains')
+    bill_of_entry_number = filters.CharFilter(field_name='bill_of_entry_number', lookup_expr='icontains')
 
     # Recent filter
     recent_days = filters.NumberFilter(method='filter_recent_days', label='Recent Days')
 
     def filter_company_ids(self, queryset, name, value):
         """Filter by comma-separated company IDs."""
-        return _filter_company_ids(queryset, 'company_id', value)
+        return _filter_company_ids(queryset, 'company', value)
 
     def filter_recent_days(self, queryset, name, value):
         """Filter BOEs from last N days."""
-        return _filter_recent_days(queryset, 'boe_date', value)
+        return _filter_recent_days(queryset, 'bill_of_entry_date', value)
 
 
 # ============================================================================

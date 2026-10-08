@@ -41,7 +41,7 @@ export default function AdvancedFilter({
     const prevInitialFilters = useRef(initialFilters);
     const skipNextAutoApply = useRef(false);
 
-    const toApiParams = useCallback((nextValues, nextSearch) => {
+    const toApiParams = useCallback((nextValues?: Record<string, any>, nextSearch?: string) => {
         const params: Record<string, any> = {};
         const valuesObj = nextValues ?? filterValues;
         const searchStr = nextSearch ?? searchTerm;
@@ -53,7 +53,7 @@ export default function AdvancedFilter({
             else params[key] = value;
         });
         return params;
-    }, []);
+    }, [filterValues, searchTerm]);
 
     useEffect(() => {
         if (isInitialMount.current) {

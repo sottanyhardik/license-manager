@@ -236,6 +236,7 @@ export default function MasterForm({
         if (summary.company_created) bits.push("new company created");
         else if (summary.matched_company_id) bits.push("company matched");
         bits.push(`${(data.items || []).length} import item(s)`);
+        if (summary.hsnCreated > 0) bits.push(`${summary.hsnCreated} HSN(s) created in master`);
         if (summary.unmatchedHsn > 0) bits.push(`${summary.unmatchedHsn} HSN(s) not in master`);
         toast.success(bits.join(" · "));
     };

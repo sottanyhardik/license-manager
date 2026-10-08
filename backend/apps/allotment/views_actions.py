@@ -1314,7 +1314,8 @@ class AllotmentActionViewSet(ViewSet):
                             and canonical_cif <= remaining_required_cif + Decimal('20.00'))
                     )
                 )
-                if qty <= 0 or cif_fc <= 0 or (unit_price > 0 and cif_fc != canonical_cif and not final_settlement):
+                cif_difference = abs(cif_fc - canonical_cif) if unit_price > 0 else Decimal('0')
+                if qty <= 0 or cif_fc <= 0 or (unit_price > 0 and cif_difference > Decimal('0.01') and not final_settlement):
                     errors.append({
                         'item_id': item_id,
                         'code': 'ALLOCATION_PAIR_MISMATCH',

@@ -69,9 +69,35 @@ def _related_license(instance, relation_name):
     return getattr(related, "license", None) if related is not None else None
 
 
+_deleting_state = threading.local()
+
+
+def _licenses_being_deleted() -> set:
+    if not hasattr(_deleting_state, "license_ids"):
+        _deleting_state.license_ids = set()
+    return _deleting_state.license_ids
+
+
+@receiver(pre_delete, sender=LicenseDetailsModel)
+def mark_license_being_deleted(sender, instance, **kwargs):
+    """Django fires the licence's pre_delete before deleting any child rows,
+    so child post_delete hooks can tell the licence is going away."""
+    _licenses_being_deleted().add(instance.pk)
+
+
+@receiver(post_delete, sender=LicenseDetailsModel)
+def unmark_license_being_deleted(sender, instance, **kwargs):
+    _licenses_being_deleted().discard(instance.pk)
+
+
 def _enqueue_replan(license_id, reason, *, source_model="", source_pk=""):
-    """Record an async replan request; never execute planning in a signal."""
-    if license_id:
+    """Record an async replan request; never execute planning in a signal.
+
+    Skipped for a licence that is being deleted: its replan row would be
+    created after the cascade collector has gathered the licence's children,
+    so it would be left behind pointing at a deleted licence.
+    """
+    if license_id and license_id not in _licenses_being_deleted():
         from apps.license.services.replan_requests import mark_license_replan_source_changed
         mark_license_replan_source_changed(
             license_id=license_id, reason=reason, source_model=source_model, source_pk=source_pk,

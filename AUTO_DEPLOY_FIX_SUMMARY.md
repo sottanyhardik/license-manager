@@ -101,7 +101,7 @@ To test the fix on your next deployment:
 
 ```bash
 # Deploy to all servers
-export DEPLOY_PASSWORD=admin
+export DEPLOY_PASSWORD="$(cat ~/.config/license-manager/deploy-password)"
 ./scripts/deployment/auto-deploy.sh master
 
 # Or deploy to a single server

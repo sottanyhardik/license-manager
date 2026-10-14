@@ -4,6 +4,7 @@
 - **IP Address:** 165.232.185.220
 - **Domain:** license-tractor.duckdns.org
 - **User:** django
+- **Sudo password:** not stored in this repo. Export it as `SERVER_SUDO_PASSWORD` before running the commands below (for example `export SERVER_SUDO_PASSWORD="$(cat ~/.config/license-manager/deploy-password)"`).
 - **Hostname:** license-tractor
 - **SSH:** `ssh django@165.232.185.220`
 
@@ -44,11 +45,11 @@ scp nginx-tractor-http.conf django@165.232.185.220:/tmp/
 
 # On server, configure nginx
 ssh django@165.232.185.220 << 'EOF'
-echo 'admin' | sudo -S mv /tmp/nginx-tractor-http.conf /etc/nginx/sites-available/license-manager
-echo 'admin' | sudo -S ln -sf /etc/nginx/sites-available/license-manager /etc/nginx/sites-enabled/
-echo 'admin' | sudo -S rm -f /etc/nginx/sites-enabled/default
-echo 'admin' | sudo -S nginx -t
-echo 'admin' | sudo -S systemctl reload nginx
+echo "$SERVER_SUDO_PASSWORD" | sudo -S mv /tmp/nginx-tractor-http.conf /etc/nginx/sites-available/license-manager
+echo "$SERVER_SUDO_PASSWORD" | sudo -S ln -sf /etc/nginx/sites-available/license-manager /etc/nginx/sites-enabled/
+echo "$SERVER_SUDO_PASSWORD" | sudo -S rm -f /etc/nginx/sites-enabled/default
+echo "$SERVER_SUDO_PASSWORD" | sudo -S nginx -t
+echo "$SERVER_SUDO_PASSWORD" | sudo -S systemctl reload nginx
 EOF
 
 # Run regular deployment
@@ -123,10 +124,10 @@ If you want to add SSL later:
 ssh django@165.232.185.220
 
 # Install certbot
-echo 'admin' | sudo -S apt install -y certbot python3-certbot-nginx
+echo "$SERVER_SUDO_PASSWORD" | sudo -S apt install -y certbot python3-certbot-nginx
 
 # Obtain certificate
-echo 'admin' | sudo -S certbot --nginx \
+echo "$SERVER_SUDO_PASSWORD" | sudo -S certbot --nginx \
     -d license-tractor.duckdns.org \
     --email info@labdhimercantile.com \
     --agree-tos \
@@ -139,8 +140,8 @@ echo 'admin' | sudo -S certbot --nginx \
 # CSRF_COOKIE_SECURE=True
 
 # Restart services
-echo 'admin' | sudo -S supervisorctl restart license-manager
-echo 'admin' | sudo -S systemctl reload nginx
+echo "$SERVER_SUDO_PASSWORD" | sudo -S supervisorctl restart license-manager
+echo "$SERVER_SUDO_PASSWORD" | sudo -S systemctl reload nginx
 ```
 
 ## Troubleshooting
@@ -148,16 +149,16 @@ echo 'admin' | sudo -S systemctl reload nginx
 ### Nginx Not Working
 ```bash
 ssh django@165.232.185.220
-echo 'admin' | sudo -S nginx -t
-echo 'admin' | sudo -S systemctl status nginx
-echo 'admin' | sudo -S tail -f /var/log/nginx/error.log
+echo "$SERVER_SUDO_PASSWORD" | sudo -S nginx -t
+echo "$SERVER_SUDO_PASSWORD" | sudo -S systemctl status nginx
+echo "$SERVER_SUDO_PASSWORD" | sudo -S tail -f /var/log/nginx/error.log
 ```
 
 ### Application Not Starting
 ```bash
 ssh django@165.232.185.220
-echo 'admin' | sudo -S supervisorctl status
-echo 'admin' | sudo -S supervisorctl tail -f license-manager
+echo "$SERVER_SUDO_PASSWORD" | sudo -S supervisorctl status
+echo "$SERVER_SUDO_PASSWORD" | sudo -S supervisorctl tail -f license-manager
 tail -f /home/django/license-manager/logs/*.log
 ```
 
@@ -165,16 +166,16 @@ tail -f /home/django/license-manager/logs/*.log
 ```bash
 ssh django@165.232.185.220 << 'EOF'
 echo "=== Supervisor ==="
-echo 'admin' | sudo -S supervisorctl status
+echo "$SERVER_SUDO_PASSWORD" | sudo -S supervisorctl status
 
 echo "=== Nginx ==="
-echo 'admin' | sudo -S systemctl status nginx --no-pager | head -10
+echo "$SERVER_SUDO_PASSWORD" | sudo -S systemctl status nginx --no-pager | head -10
 
 echo "=== PostgreSQL ==="
-echo 'admin' | sudo -S systemctl status postgresql --no-pager | head -10
+echo "$SERVER_SUDO_PASSWORD" | sudo -S systemctl status postgresql --no-pager | head -10
 
 echo "=== Redis ==="
-echo 'admin' | sudo -S systemctl status redis --no-pager | head -10
+echo "$SERVER_SUDO_PASSWORD" | sudo -S systemctl status redis --no-pager | head -10
 EOF
 ```
 

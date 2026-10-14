@@ -129,7 +129,25 @@ SERVER_USER="django"
 ALL_SERVERS=("143.110.252.201" "139.59.92.226" "165.232.185.220")
 SERVER_PATH="/home/django/license-manager"
 BRANCH="${1:-master}"
-PASSWORD="${DEPLOY_PASSWORD:-}"          # set: export DEPLOY_PASSWORD=admin
+# Git-ignored local secrets file. Each server's sudo password can differ, so the
+# file may hold DEPLOY_PASSWORD (default) and DEPLOY_PASSWORD_<ip with dots as _> overrides.
+SECRETS_FILE="$PROJECT_ROOT/deploy-secrets.env"
+# Values are unquoted, one per line; trailing CR is stripped for CRLF-edited files.
+read_secret() { [ -f "$SECRETS_FILE" ] || return 0; sed -n "s/^$1=//p" "$SECRETS_FILE" | head -n 1 | tr -d '\r'; }
+if [ -z "${DEPLOY_PASSWORD:-}" ]; then
+    DEPLOY_PASSWORD="$(read_secret DEPLOY_PASSWORD)"
+fi
+if [ -z "${DEPLOY_PASSWORD:-}" ] && [ -f "$HOME/.config/license-manager/deploy-password" ]; then
+    DEPLOY_PASSWORD="$(cat "$HOME/.config/license-manager/deploy-password")"
+fi
+# Sudo password for one server: DEPLOY_PASSWORD_<ip> env/file override, else the default.
+server_password() {
+    local key="DEPLOY_PASSWORD_${1//./_}"
+    local value="${!key:-}"
+    [ -n "$value" ] || value="$(read_secret "$key")"
+    printf '%s' "${value:-${DEPLOY_PASSWORD:-}}"
+}
+PASSWORD="${DEPLOY_PASSWORD:-}"          # sudo password for the server being deployed (see server_password)
 
 require_command git
 require_command ssh
@@ -305,7 +323,7 @@ echo_ok()   { echo -e "${GREEN}  ✅ $1${NC}"; }
 echo_info() { echo -e "${BLUE}  → $1${NC}"; }
 echo_warn() { echo -e "${YELLOW}  ⚠️  $1${NC}"; }
 echo_err()  { echo -e "${RED}  ❌ $1${NC}"; }
-sudo_cmd()  { printf '%s\n' "$DEPLOY_PASSWORD" | sudo -S "$@"; }
+sudo_cmd()  { printf '%s\n' "$DEPLOY_PASSWORD" | sudo -S -p "" "$@"; }
 read_env_value() {
     local file="$1" key="$2" value
     [ -f "$file" ] || return 1
@@ -358,7 +376,11 @@ echo_info "Current HEAD: $(git rev-parse --short HEAD)"
 STASH_ID=""
 STASH_COUNT_BEFORE=$(git stash list | wc -l)
 echo_info "Stashing local changes (stash count before: $STASH_COUNT_BEFORE)..."
-git stash push --include-untracked --message "auto-deploy-$(date +%s)" || { echo_err "git stash failed"; exit 1; }
+# Keep server-only files out of the stash: the venv backup is large, logs/ is written by supervisor,
+# and backend/gunicorn.conf.py is loaded by gunicorn from the working directory (timeout = 120).
+git stash push --include-untracked --message "auto-deploy-$(date +%s)" -- . \
+    ':(exclude)venv-py312-backup' ':(exclude)logs' ':(exclude)backend/gunicorn.conf.py' \
+    || { echo_err "git stash failed"; exit 1; }
 STASH_COUNT_AFTER=$(git stash list | wc -l)
 if [ "$STASH_COUNT_AFTER" -gt "$STASH_COUNT_BEFORE" ]; then
     STASH_ID=$(git stash list | head -1 | cut -d: -f1)
@@ -585,7 +607,7 @@ else
         --non-interactive \
         --agree-tos \
         -m "$ADMIN_EMAIL" \
-        --deploy-hook "sudo systemctl reload nginx" 2>&1 | \
+        --deploy-hook "systemctl reload nginx" 2>&1 | \
         grep -E "Congratulations|Certificate|Error|failed" || true
 
     # Verify cert was obtained
@@ -803,6 +825,8 @@ FAILED=()
 SUCCESS=0
 
 for IP in "${SERVERS[@]}"; do
+    PASSWORD="$(server_password "$IP")"
+    DEPLOY_PASSWORD="$PASSWORD"
     if deploy_to_server "$IP"; then
         ((SUCCESS += 1))
         get_server_meta "$IP"

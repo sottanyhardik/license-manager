@@ -21,8 +21,8 @@ from apps.accounts.permissions import TradePermission
 from apps.trade.models import InvoiceDocumentAccessToken, LicenseTrade, TradeInvoiceDocument
 
 
-DEFAULT_TTL_SECONDS = 15 * 60
-MAX_SUCCESSFUL_VIEWS = 2
+DEFAULT_TTL_SECONDS = 5 * 24 * 60 * 60
+MAX_SUCCESSFUL_VIEWS = 10
 INVOICE_READ_ROLES = set(TradePermission.required_roles_for_read) | {
     "LICENSE_MANAGER", "LEDGER_MANAGER"
 }

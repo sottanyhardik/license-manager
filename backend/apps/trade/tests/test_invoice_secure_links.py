@@ -86,25 +86,23 @@ def test_raw_token_and_storage_path_are_never_persisted_or_exposed(invoice_conte
     assert access.view_count == 0
 
 
-def test_two_successful_views_then_gone_and_audited(invoice_context):
+def test_ten_successful_views_then_gone_and_audited(invoice_context):
     url = _issue(invoice_context)["secure_url"]
     client = APIClient()
 
-    first = client.get(url)
-    assert first.status_code == 200
-    _consume(first)
-    second = client.get(url)
-    assert second.status_code == 200
-    _consume(second)
-    third = client.get(url)
-    assert third.status_code == 410
-    assert third.json() == {"detail": "Invoice Link Expired"}
+    for _ in range(10):
+        response = client.get(url)
+        assert response.status_code == 200
+        _consume(response)
+    eleventh = client.get(url)
+    assert eleventh.status_code == 410
+    assert eleventh.json() == {"detail": "Invoice Link Expired"}
 
     access = InvoiceDocumentAccessToken.objects.get()
-    assert access.view_count == 2
+    assert access.view_count == 10
     assert InvoiceDocumentAuditEvent.objects.filter(
         event=InvoiceDocumentAuditEvent.EVENT_PURCHASE_VIEWED
-    ).count() == 2
+    ).count() == 10
     assert InvoiceDocumentAuditEvent.objects.filter(
         event=InvoiceDocumentAuditEvent.EVENT_EXPIRED
     ).exists()
@@ -160,9 +158,10 @@ def test_changed_trade_company_invalidates_token_without_consuming(invoice_conte
 
 def test_concurrent_second_view_has_one_success_and_one_gone(invoice_context):
     url = _issue(invoice_context)["secure_url"]
-    first = APIClient().get(url)
-    assert first.status_code == 200
-    _consume(first)
+    for _ in range(9):
+        response = APIClient().get(url)
+        assert response.status_code == 200
+        _consume(response)
 
     def request_once():
         response = APIClient().get(url)
@@ -175,4 +174,4 @@ def test_concurrent_second_view_has_one_success_and_one_gone(invoice_context):
 
     assert statuses == [200, 410]
     access = InvoiceDocumentAccessToken.objects.get()
-    assert access.view_count == 2
+    assert access.view_count == 10

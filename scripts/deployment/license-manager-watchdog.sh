@@ -21,6 +21,9 @@
 #    PUBLIC_DOMAIN       required, e.g. license-manager.duckdns.org
 #    MONITOR_USER        optional dedicated account for a real login test
 #    MONITOR_PASSWORD    optional, paired with MONITOR_USER
+#    ALERT_EMAIL_TO      optional recipient for problem emails
+#    SMTP_HOST, SMTP_PORT (default 587, STARTTLS), SMTP_USER, SMTP_PASSWORD,
+#    SMTP_FROM           SMTP relay used to send the alert emails
 # ============================================================
 
 set -Eeuo pipefail
@@ -41,6 +44,7 @@ RAM_MIN_AVAIL_PCT="${RAM_MIN_AVAIL_PCT:-10}"
 SWAP_MAX_USED_PCT="${SWAP_MAX_USED_PCT:-80}"
 DISK_MAX_USED_PCT="${DISK_MAX_USED_PCT:-90}"
 REBOOT_COOLDOWN_SECONDS="${REBOOT_COOLDOWN_SECONDS:-21600}"
+ALERT_INTERVAL_SECONDS="${ALERT_INTERVAL_SECONDS:-3600}"
 LOG_FILE="${LOG_FILE:-/var/log/license-manager-watchdog.log}"
 LOCK_FILE="/var/lock/license-manager-watchdog.lock"
 STATE_DIR="/var/lib/license-manager-watchdog"
@@ -261,6 +265,57 @@ remediate() {
     return 0
 }
 
+# Emails the current problems via SMTP, configured in $CONF_FILE. Does nothing
+# when ALERT_EMAIL_TO or SMTP_HOST is unset. Repeats of the same problem are
+# sent at most once per ALERT_INTERVAL_SECONDS, so a down server does not flood
+# the inbox every 10 minutes. The SMTP password is passed through the
+# environment, never on the command line.
+send_alert() {
+    local subject="$1" signature now last_epoch="" last_sig=""
+    signature="$(printf '%s\n' "${PROBLEMS[@]}" | sort | sha256sum | cut -c1-16)"
+    now="$(date +%s)"
+    if [ -f "$STATE_DIR/last-alert" ]; then
+        read -r last_epoch last_sig < "$STATE_DIR/last-alert" || true
+    fi
+    if [ "$signature" = "$last_sig" ] && [ $((now - ${last_epoch:-0})) -lt "$ALERT_INTERVAL_SECONDS" ]; then
+        return 0
+    fi
+    if [ -z "${ALERT_EMAIL_TO:-}" ] || [ -z "${SMTP_HOST:-}" ]; then
+        log "alert not emailed (ALERT_EMAIL_TO or SMTP_HOST not set): $subject"
+        return 0
+    fi
+    local body entry
+    body="Host: $(hostname) ($PUBLIC_DOMAIN)"$'\n'"Time: $(date '+%Y-%m-%d %H:%M:%S %Z')"$'\n\n'
+    for entry in "${PROBLEMS[@]}"; do
+        body+="- ${entry#*|}"$'\n'
+    done
+    if ALERT_TO="$ALERT_EMAIL_TO" ALERT_FROM="${SMTP_FROM:-$SMTP_USER}" \
+        ALERT_SUBJECT="[license-manager] $subject ($(hostname))" ALERT_BODY="$body" \
+        SMTP_HOST="$SMTP_HOST" SMTP_PORT="${SMTP_PORT:-587}" \
+        SMTP_USER="${SMTP_USER:-}" SMTP_PASSWORD="${SMTP_PASSWORD:-}" \
+        python3 -I - <<'PY'
+import os, smtplib, ssl
+from email.message import EmailMessage
+
+msg = EmailMessage()
+msg["From"] = os.environ["ALERT_FROM"]
+msg["To"] = os.environ["ALERT_TO"]
+msg["Subject"] = os.environ["ALERT_SUBJECT"]
+msg.set_content(os.environ["ALERT_BODY"])
+with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.environ["SMTP_PORT"]), timeout=30) as smtp:
+    smtp.starttls(context=ssl.create_default_context())
+    if os.environ["SMTP_USER"]:
+        smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+    smtp.send_message(msg)
+PY
+    then
+        printf '%s %s\n' "$now" "$signature" > "$STATE_DIR/last-alert"
+        log "alert emailed to $ALERT_EMAIL_TO: $subject"
+    else
+        log "alert email FAILED to send: $subject"
+    fi
+}
+
 reboot_if_allowed() {
     local now last=0
     now="$(date +%s)"
@@ -269,10 +324,12 @@ reboot_if_allowed() {
     fi
     if [ $((now - last)) -lt "$REBOOT_COOLDOWN_SECONDS" ]; then
         log "still failing after restart; reboot skipped (last reboot $(date -d "@$last" '+%Y-%m-%d %H:%M:%S'), cooldown ${REBOOT_COOLDOWN_SECONDS}s)"
+        send_alert "still failing, reboot in cooldown"
         exit 1
     fi
     echo "$now" > "$REBOOT_STAMP"
     log "still failing after restart; rebooting server"
+    send_alert "still failing, rebooting server"
     systemctl reboot
 }
 
@@ -342,4 +399,5 @@ if blocking_problems; then
 fi
 
 log "WARN: only alert-only problems remain (disk or nginx config)"
+send_alert "disk or nginx config needs attention"
 exit 0

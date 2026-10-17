@@ -422,17 +422,26 @@ if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
     echo_ok "Switched to $BRANCH"
 fi
 
-# Pull with fast-forward only
-echo_info "Pulling with --ff-only..."
-if ! git pull --ff-only origin "$BRANCH" 2>&1; then
-    echo_err "git pull --ff-only failed (non-fast-forward changes detected)"
-    echo_info "Attempting status check..."
-    git status || true
-    git log --oneline -3 || true
+# Sync to origin.  A server is a deploy target and should carry no commits of
+# its own.  If it does (diverged history), keep them on a backup branch rather
+# than failing every deploy with a non-fast-forward error.
+echo_info "Syncing to origin/${BRANCH}..."
+LOCAL_ONLY_COMMITS=$(git rev-list --count "origin/$BRANCH..HEAD" 2>/dev/null || echo 0)
+if [ "$LOCAL_ONLY_COMMITS" -gt 0 ]; then
+    BACKUP_BRANCH="backup/pre-deploy-$(date +%Y%m%d%H%M%S)"
+    echo_warn "$LOCAL_ONLY_COMMITS local commit(s) not on origin/${BRANCH}; saving them to ${BACKUP_BRANCH}"
+    git branch "$BACKUP_BRANCH" HEAD || {
+        echo_err "Failed to create backup branch ${BACKUP_BRANCH}"
+        [ -n "$STASH_ID" ] && git stash pop "$STASH_ID" 2>/dev/null || true
+        exit 1
+    }
+fi
+git reset --hard "origin/$BRANCH" || {
+    echo_err "git reset to origin/${BRANCH} failed"
     [ -n "$STASH_ID" ] && git stash pop "$STASH_ID" 2>/dev/null || true
     exit 1
-fi
-echo_ok "Git pull successful"
+}
+echo_ok "Git sync successful"
 echo_info "Final HEAD: $(git rev-parse --short HEAD)"
 
 # Try to reapply local changes if they were stashed

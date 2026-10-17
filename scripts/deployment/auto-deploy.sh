@@ -786,7 +786,9 @@ sudo_cmd cp "$SERVER_PATH/scripts/deployment/license-manager-celery.conf" \
 sudo_cmd supervisorctl reread
 sudo_cmd supervisorctl update
 sudo_cmd supervisorctl stop license-manager-celery 2>/dev/null || true
-sudo_cmd pkill -9 -f "celery" 2>/dev/null || true
+# '[c]elery' stops pkill from matching the sudo wrapper's own command line
+# ("...pkill -9 -f celery"), which would otherwise kill the deploy mid-run.
+sudo_cmd pkill -9 -f '[c]elery' 2>/dev/null || true
 sleep 2
 sudo_cmd supervisorctl start license-manager-celery
 

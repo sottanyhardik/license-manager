@@ -347,7 +347,7 @@ install_watchdog() {
 # Managed by license-manager-watchdog --install. Re-run --install instead of editing.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-3-59/10 * * * * root flock -n $LOCK_FILE $INSTALL_PATH >/dev/null 2>&1
+3-59/10 * * * * root $INSTALL_PATH >/dev/null 2>&1
 EOF
     chmod 644 "$CRON_FILE"
     echo "Installed $INSTALL_PATH and $CRON_FILE"

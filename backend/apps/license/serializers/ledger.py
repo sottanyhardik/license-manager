@@ -55,6 +55,9 @@ class TransactionSerializer(serializers.Serializer):
     sale_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
     purchase_bill_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
     sale_bill_amount = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
+    #: CIF in INR: Σ active `InvoiceBOEAllocation.allocated_cif_inr` for the
+    #: trade's BOEs, else the CIF billed on its lines. NULL when neither exists.
+    cif_inr = serializers.DecimalField(max_digits=19, decimal_places=2, allow_null=True, required=False)
     #: Billed licence item names, deduped, first-seen order ([] for incentive
     #: licences and the OPENING row). A list, not a joined string: one trade is
     #: ONE ledger row no matter how many items it bills.

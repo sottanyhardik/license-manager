@@ -118,20 +118,20 @@ def test_excel_list_and_detail_reconcile_verbatim_with_canonical_dto():
     detail = workbook["Financial Trade Ledger"]
     assert any(tuple(cell.value for cell in row) == (
         "Company", "SION", "License Number", "Date", "Particulars", "Invoice Number", "Type", "Items",
-        "Credit ($)", "Debit ($)", "Purchase (₹)", "Sale (₹)", "Balance ($)", "P/L (₹)",
+        "Credit ($)", "Debit ($)", "CIF INR (₹)", "Purchase (₹)", "Sale (₹)", "Balance ($)", "P/L (₹)",
     ) for row in detail.iter_rows())
     purchase_row = next(row for row in detail.iter_rows(values_only=True) if row[3] == datetime(2026, 4, 1))
     sale_row = next(row for row in detail.iter_rows(values_only=True) if row[3] == datetime(2026, 4, 2))
-    assert purchase_row[1:12] == (
+    assert purchase_row[1:13] == (
         "SION-A", "2436", datetime(2026, 4, 1), "Supplier", "PUR-001", "PURCHASE", "Item 766",
-        Decimal("1250.50"), None, Decimal("100000.25"), None,
+        Decimal("1250.50"), None, None, Decimal("100000.25"), None,
     )
-    assert sale_row[1:12] == (
+    assert sale_row[1:13] == (
         "SION-A", "2436", datetime(2026, 4, 2), "Buyer", "SAL-001", "SALE", "Item 766",
-        None, Decimal("250.25"), None, Decimal("30000.75"),
+        None, Decimal("250.25"), None, None, Decimal("30000.75"),
     )
     total_row = next(row for row in detail.iter_rows(values_only=True) if row[4] == "LICENSE TOTAL")
-    assert total_row[10:14] == (
+    assert total_row[11:15] == (
         Decimal("100000.25"), Decimal("30000.75"), Decimal("1000.25"), Decimal("-69999.50"),
     )
 
@@ -265,3 +265,20 @@ def test_retained_collection_endpoints_work_without_filter_parameters(authentica
     assert set(payload) == {"licenses", "company_groups", "grand_total"}
     assert isinstance(payload["company_groups"], list)
     assert "total_profit_loss_inr" in payload["grand_total"]
+
+
+def test_detail_sheet_shows_cif_inr_per_transaction():
+    """The CIF INR column carries each transaction's cif_inr, verbatim."""
+    workbook = load_workbook(render_financial_ledger_excel({
+        "licenses": [{
+            "license_number": "2436", "sion_norms": "SION-A", "summary": {},
+            "display_transactions": [{
+                "date": datetime(2026, 4, 1), "type": "PURCHASE", "party_name": "Supplier",
+                "item_names": ["Item 766"], "purchase_amount": Decimal("1250.50"),
+                "purchase_bill_amount": Decimal("100000.25"), "cif_inr": Decimal("88000.00"),
+            }],
+        }],
+    }), data_only=True)
+
+    row = next(row for row in workbook["Financial Trade Ledger"].iter_rows(values_only=True) if row[4] == "Supplier")
+    assert row[10] == Decimal("88000.00")

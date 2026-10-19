@@ -383,6 +383,10 @@ class CanonicalLedgerService:
                 # 2dp, and deliberately NOT folded into any balance — the bill
                 # is INR while the balance is CIF USD for DFIA.
                 'bill_amount': txn_data.get('bill_amount'),
+                # CIF in INR: Σ of the BOE rows allocated to this trade, else
+                # the CIF billed on its lines. None when neither exists. Never
+                # folded into any balance.
+                'cif_inr': txn_data.get('cif_inr'),
                 'item_names': txn_data.get('item_names') or [],
                 # Optional exchange rate copied from the billed lines.  It is
                 # deliberately absent when a trade has no single unambiguous
@@ -1076,6 +1080,27 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             Prefetch('incentive_lines', queryset=incentive_lines_qs, to_attr='license_incentive_lines')
         ).distinct()
 
+    # BOE CIF INR per trade: Σ `allocated_cif_inr` of the ACTIVE, current BOE
+    # allocations on that trade's billed lines. One query for every trade of
+    # this license (no per-trade lookup). Trades with no BOE link stay absent.
+    from apps.reconciliation.models import InvoiceBOEAllocation
+    boe_cif_by_trade: Dict[int, Decimal] = {}
+    if license_type == 'DFIA':
+        boe_totals = (
+            InvoiceBOEAllocation.objects
+            .filter(
+                trade_line__sr_number__license=license_obj,
+                status=InvoiceBOEAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+            .values('trade_line__trade_id')
+            .annotate(total=Sum('allocated_cif_inr'))
+        )
+        boe_cif_by_trade = {
+            row['trade_line__trade_id']: quantize_2dp(to_decimal(row['total'], DEC_0))
+            for row in boe_totals
+        }
+
     # Process each trade
     for trade in trades:
         # Normalize transaction data
@@ -1104,6 +1129,7 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
         # reference an IncentiveLicense directly and carry no licence items.
         sion_norms = ''
         item_names: List[str] = []
+        bill_cif_inr = None
 
         if license_type == 'DFIA':
             # Prefetched above, already filtered to this license.
@@ -1111,6 +1137,10 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
                 # Extract CIF value (with currency conversion if needed)
                 line_cif = _extract_line_cif(line)
                 total_cif += line_cif
+            # CIF INR as billed on the trade lines; the fallback when no BOE is linked.
+            bill_cif_inr = quantize_2dp(
+                sum((to_decimal(line.cif_inr, DEC_0) for line in trade.license_lines), DEC_0)
+            )
             sion_norms = _extract_sion_norms(trade.license_lines)
             item_names = _extract_item_names(trade.license_lines)
             bill_amount = _extract_bill_amount(trade.license_lines)
@@ -1145,6 +1175,7 @@ def _fetch_transactions(license_obj, license_type: str) -> List[Dict[str, Any]]:
             'party_name': party_name,
             'amount': total_cif,
             'bill_amount': bill_amount,
+            'cif_inr': boe_cif_by_trade.get(trade.id, bill_cif_inr),
             'rate': rate,
             'item_names': item_names,
             'sion_norms': sion_norms,

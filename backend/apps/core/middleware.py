@@ -25,6 +25,8 @@ import os
 import sys
 import threading
 
+from django.db import connection
+
 _logger = logging.getLogger('core.activity')
 
 _DOWNLOAD_KEYWORDS = ('download', 'pdf', 'excel', 'export', 'generate-bill',
@@ -94,6 +96,21 @@ def _activity_logging_disabled():
     return "test" in sys.argv or "pytest" in argv0 or argv0.endswith("py.test")
 
 
+def _start_log_thread(target, *args):
+    """Run an audit write in a daemon thread and release its DB connection after.
+
+    Each thread opens its own Postgres connection, and Django does not close it
+    when the thread ends. Without the explicit close, every logged request
+    leaves an idle session behind until max_connections is exhausted.
+    """
+    def _run():
+        try:
+            target(*args)
+        finally:
+            connection.close()
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _write_log_entry(user, request, status_code):
     if _activity_logging_disabled():
         return
@@ -132,11 +149,7 @@ class ActivityLogMiddleware:
             and hasattr(request, 'user')
             and getattr(request.user, 'is_authenticated', False)
         ):
-            threading.Thread(
-                target=_write_log_entry,
-                args=(request.user, request, response.status_code),
-                daemon=True,
-            ).start()
+            _start_log_thread(_write_log_entry, request.user, request, response.status_code)
         return response
 
 
@@ -172,4 +185,4 @@ def _explicit(user, request, action, description):
             )
         except Exception:
             _logger.exception('ActivityLog explicit write failed')
-    threading.Thread(target=_do, daemon=True).start()
+    _start_log_thread(_do)

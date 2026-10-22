@@ -373,6 +373,66 @@ cif_inr = cif_fc × exchange_rate_on_clearance_date
 
 ---
 
+## BR-19A: SION Planning — Priority Waterfall
+
+**Rule**: SION planning executes rules in priority order (lowest number = highest priority). Each rule consumes from the remaining CIF and quantity pool. Once a source import item is claimed by a higher-priority rule, lower-priority rules cannot re-allocate it.
+
+**Execution Order**:
+1. Load all active rules for the SION norm, sorted by `priority` then `pk`
+2. For each rule, evaluate the expression tree against all import items
+3. Filter out already-claimed items
+4. Calculate available quantity: `original_quantity − BOE_used − unlinked_allotment`
+5. Allocate CIF: `min(requested CIF, remaining_waterfall_CIF)`
+6. Claim source item IDs to prevent double-allocation
+
+**CIF Allocation Formula** (`allocate_step`):
+- If `balance >= requested_qty × max_price` → use `max_price`
+- Else → use `balance / requested_qty` (effective rate drops below max)
+- If `requested_qty == 0` or `balance == 0` → planned CIF is 0
+
+**Files**:
+- `backend/apps/license/services/sion_planning_execution.py` — `_compute_license_new_architecture()`
+- `backend/apps/license/services/planning_allocation.py` — `allocate_step()`
+- `backend/apps/license/services/sion_rule_engine.py` — `evaluate_expression()`
+
+---
+
+## BR-19B: SION Planning — CIF Restriction per Item (Feature Request — Not Yet Implemented)
+
+**Rule**: Each planning rule (or percentage/unit-value row) can specify a CIF restriction percentage. During planning, if an import item's used CIF (debited + allotted) exceeds this percentage of its total CIF value, the planner skips that item.
+
+**Formula**:
+```
+used_cif = debited_cif + allotted_cif
+ceiling = item.cif_fc × cif_restriction_percentage / 100
+skip_if: used_cif >= ceiling
+cap_if: used_cif + new_planned_cif > ceiling → new_planned_cif = ceiling - used_cif
+```
+
+**Allowed Values**: `2`, `3`, `5`, `10`, or `NULL` (no restriction)
+
+**Scope**: Per import item, not per license total. A NULL value means the item is planned without this cap.
+
+**Behavior**:
+- The restriction is a **hard ceiling** — if already exceeded, the item is skipped entirely
+- If not exceeded but the planned CIF would exceed it, the planned CIF is capped
+- Items skipped due to CIF restriction are logged in the planning diagnostics with reason `CIF_RESTRICTION_EXCEEDED`
+- Preview mode shows which items were skipped and why
+
+**Edge Cases**:
+- Item with zero CIF: ceiling is zero, item is always skipped
+- Multiple rules matching the same item: first rule in priority order applies its restriction; later rules see the item as already claimed
+- Restriction change on existing rule: affects future planning runs only, not existing plans
+
+**Files to Modify**:
+- `backend/apps/license/models/core.py` — add `cif_restriction_percentage` to `SionPlanningRule`, `SionPlanningPercentageRow`, `SionPlanningUnitValueRow`
+- `backend/apps/license/services/sion_planning_execution.py` — add CIF restriction check in allocation logic
+- `backend/apps/license/serializers/incentive.py` — include field in serializer
+- `frontend/src/pages/planning/AllocationStrategyEditor.tsx` — add dropdown UI
+- `frontend/src/services/api/planningRuleApi.ts` — add to types
+
+---
+
 ## BR-20: Task Visibility
 
 **Rule**: A task is visible to:

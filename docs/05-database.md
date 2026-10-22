@@ -384,6 +384,155 @@ Payment records with date, amount, reference.
 
 ---
 
+## Schema: `license` app — SION Planning
+
+### `license_sionplanningrule`
+Versioned, database-driven planning rules for SION auto-allocation.
+
+| Column | Type | Notes |
+|---|---|---|
+| sion | FK SionNormClassModel | PROTECT |
+| stable_key | varchar(120) nullable | DB index |
+| execution_output | varchar(120) | Legacy execution bucket |
+| import_item | FK ItemNameModel nullable | PROTECT — target item for STANDARD strategy |
+| name | varchar(255) | |
+| version | int | Default 1 |
+| expression | JSON | AND/OR tree of match conditions |
+| max_unit_price | decimal | ≥ 0 |
+| unit | varchar(10) | KG, LTR, etc. |
+| priority | int | DB index — unique per SION when active |
+| is_active | bool | DB index |
+| percentage_constraint | decimal nullable | 0–100 — percentage cap for input under parent SION |
+| rule_type | varchar(50) | PERCENTAGE_CAP / SPLIT_BY_PERCENTAGE / QUANTITY_CAP |
+| rule_group_id | varchar(120) nullable | Groups related rules |
+| strategy | varchar(30) nullable | STANDARD / SPLIT_BY_UNIT_VALUE / SPLIT_BY_PERCENT |
+| **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+
+**cif_restriction_percentage** (Feature Request):
+- Nullable Decimal field. Allowed values: `2`, `3`, `5`, `10`, or `NULL` (no restriction)
+- When set, the planner checks each matched import item: if `debited_cif + allotted_cif >= item.cif_fc × cif_restriction_percentage / 100`, the item is skipped
+- Applies per import item, not per license total
+
+**Constraints**:
+- Unique: `(sion, stable_key, version)` where stable_key IS NOT NULL
+- Unique: `(sion, name, version)`
+- Unique: `(sion, priority)` where is_active = TRUE
+- Check: `max_unit_price >= 0`
+- Index: `(sion, is_active, priority)`
+
+### `license_sionplanningunitvaluerow`
+Unit-value allocation rows (child of SionPlanningRule).
+
+| Column | Type | Notes |
+|---|---|---|
+| rule | FK SionPlanningRule | CASCADE delete |
+| import_item | FK ItemNameModel | PROTECT |
+| min_unit_price | decimal | ≥ 0 |
+| max_unit_price | decimal | ≥ 0, ≥ min_unit_price |
+| preferred_unit_price | decimal | ≥ 0 |
+| priority | int | Default 0 |
+| **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+
+**Constraints**:
+- Unique: `(rule, import_item)`
+- Check: `max_unit_price >= min_unit_price`
+- Check: `preferred_unit_price >= 0`
+
+### `license_sionplanningpercentagerow`
+Percentage allocation rows (child of SionPlanningRule).
+
+| Column | Type | Notes |
+|---|---|---|
+| rule | FK SionPlanningRule | CASCADE delete |
+| import_item | FK ItemNameModel | PROTECT |
+| percentage | decimal | 0–100 |
+| unit_price | decimal | ≥ 0 |
+| max_quantity | decimal nullable | ≥ 0 — optional quantity ceiling |
+| priority | int | Default 0 |
+| **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+
+**Constraints**:
+- Unique: `(rule, import_item)`
+
+### `license_sionplanningprofile`
+Versioned, SION-neutral description of how planning is executed.
+
+| Column | Type | Notes |
+|---|---|---|
+| uid | UUID | Unique |
+| sion | FK SionNormClassModel | PROTECT |
+| stable_key | varchar(100) | Unique |
+| strategy_type | varchar(50) | Default ACTION_PIPELINE |
+| config | JSON | Validated — no executable keys |
+| version | int | ≥ 1 |
+| is_active | bool | Unique per SION when active |
+
+### `license_sionplanningaction`
+One ordered stage in a planning profile pipeline.
+
+| Column | Type | Notes |
+|---|---|---|
+| uid | UUID | |
+| profile | FK SionPlanningProfile | PROTECT |
+| stable_key | varchar(100) | Unique per profile |
+| action_type | varchar(20) | MATCH / PRICE / GROUP / ALLOCATE / SPLIT / REBALANCE / ROUND / MAP_OUTPUT |
+| priority | int | ≥ 1, unique per profile when active |
+| config | JSON | |
+| version | int | ≥ 1 |
+| is_active | bool | |
+
+### `license_sionplanningoutputmapping`
+Maps a match/rule to a canonical output item.
+
+| Column | Type | Notes |
+|---|---|---|
+| uid | UUID | |
+| profile | FK SionPlanningProfile | PROTECT |
+| stable_key | varchar(100) | Unique per profile |
+| source_rule | FK SionPlanningRule nullable | PROTECT |
+| output_item | FK ItemNameModel nullable | PROTECT |
+| conversion_factor | decimal | ≥ 0 |
+| rate | decimal nullable | ≥ 0 |
+| unit | varchar(10) | |
+| priority | int | ≥ 1, unique per profile when active |
+| config | JSON | |
+| version | int | ≥ 1 |
+| is_active | bool | |
+
+### `license_sioninputaliasconfig`
+Maps raw product names to canonical input codes.
+
+| Column | Type | Notes |
+|---|---|---|
+| canonical_input_code | varchar(100) | DB index |
+| alias_normalized | varchar(255) | Unique — uppercase, normalized whitespace |
+| sion | FK SionNormClassModel nullable | Scope to SION |
+| output_item | FK ItemNameModel nullable | Scope to output item |
+| source_description | text | |
+| is_active | bool | |
+
+### `license_licenseitemplan`
+Generated plan lines from SION planning execution.
+
+| Column | Type | Notes |
+|---|---|---|
+| license | FK LicenseDetailsModel | |
+| import_item | FK LicenseImportItemsModel | |
+| item_name | FK ItemNameModel | PROTECT |
+| planned_quantity | decimal | |
+| planned_cif_fc | decimal | |
+| planned_cif_inr | decimal | |
+| unit | varchar(10) | |
+| planning_rule | FK SionPlanningRule nullable | PROTECT |
+| planning_rule_version | int nullable | |
+| planning_rule_priority | int nullable | |
+| allocation_provenance | JSON | Full provenance dict |
+| is_active | bool | Default true |
+| is_deleted | bool | Default false |
+| is_cancelled | bool | Default false |
+
+---
+
 ## Key Database Signals
 
 ```mermaid

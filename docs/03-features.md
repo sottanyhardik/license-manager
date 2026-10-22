@@ -565,3 +565,100 @@ LicenseTrade.objects.filter(pk=677).delete()
 | `TL_GENERATE` | Generate transfer letters |
 | `LEDGER_MANAGER` | Upload ledger files |
 | `ACCOUNT_ACCESS` | Finance read access |
+
+---
+
+### F-14: SION Planning (Auto Plan)
+
+**Purpose**: Automate the allocation of import-license entitlements to SION (Scheme for Value Addition in Non-Conventionally Imported Products) export planning. The system matches import items to export items based on configurable rules, then allocates CIF (Cost, Insurance, Freight) values using a priority-based waterfall algorithm.
+
+**Entry Points**:
+- Frontend: `/planning?sion=E5&rule=48` → `LicensePlanningWorkspace.tsx`
+- API: `GET/POST/PATCH/DELETE /api/sion-planning-rules/`
+- API: `POST /api/sion-planning-rules/plan/` (execute planning)
+- API: `POST /api/sion-planning-rules/preview/` (preview without saving)
+- API: `GET /api/sion-planning-rules/preview-scoped/` (exact license/SION preview)
+
+**Core Concepts**:
+
+1. **SION Norm Classes**: E1, E5, E126, E132, etc. Each norm defines what import items can be converted to what export items.
+2. **Planning Rules**: Versioned, database-driven rules that define how to match and allocate. Each rule has:
+   - **Expression**: AND/OR tree of conditions (HSN, product description, item key)
+   - **Max Unit Price**: The maximum CIF price per unit for this rule's output
+   - **Priority**: Execution order (lower = higher priority)
+   - **Strategy**: STANDARD (single item), SPLIT_BY_PERCENT, or SPLIT_BY_UNIT_VALUE
+3. **Planning Execution**: Priority waterfall — rules execute in priority order, each consuming from the remaining CIF/quantity pool.
+
+**Rule Strategies**:
+
+| Strategy | Description | Configuration |
+|---|---|---|
+| STANDARD | One import item → one output item | `import_item` FK, `max_unit_price` |
+| SPLIT_BY_PERCENT | Split one import item into multiple outputs by percentage | `percentage_rows` (each row: import_item, percentage, unit_price, max_quantity) |
+| SPLIT_BY_UNIT_VALUE | Split by price bands | `unit_value_rows` (each row: import_item, min/max/preferred unit price) |
+
+**Planning Execution Flow**:
+1. Load all active rules for the selected SION norm, ordered by priority
+2. For each rule, evaluate the expression against all import items
+3. Calculate available quantity: `original_quantity − BOE_used − unlinked_allotment`
+4. Allocate CIF using `allocate_step()`: min(requested CIF, remaining balance)
+5. Claim source items to prevent double-allocation across rules
+6. Generate `LicenseItemPlan` records with full provenance
+
+**CIF Restriction per Item** (Feature Request — Not Yet Implemented):
+
+The user requests a new field on each planning rule (or percentage row) that limits how much of an import item's total CIF value can be planned. The restriction is expressed as a percentage of the item's total CIF value.
+
+**Proposed Field**: `cif_restriction_percentage` (nullable Decimal, choices: 2, 3, 5, 10)
+
+**Logic**:
+- For each import item matched by a rule, compute: `used_cif = debited_cif + allotted_cif`
+- Compute the restriction ceiling: `ceiling = item.cif_fc × cif_restriction_percentage / 100`
+- If `used_cif >= ceiling`, skip planning for that item
+- Otherwise, plan normally but cap the new planned CIF so that `used_cif + new_planned_cif <= ceiling`
+
+**UI Changes Required**:
+- In `AllocationStrategyEditor.tsx`, add a dropdown for CIF restriction percentage (None, 2%, 3%, 5%, 10%)
+- For STANDARD strategy: one dropdown per rule
+- For SPLIT_BY_PERCENT: one dropdown per percentage row
+- For SPLIT_BY_UNIT_VALUE: one dropdown per unit value row
+- In `LicensePlanningWorkspace.tsx` rule detail view, display the CIF restriction value
+
+**Backend Changes Required**:
+- `SionPlanningRule` model: add `cif_restriction_percentage` field (nullable Decimal)
+- `SionPlanningPercentageRow` model: add `cif_restriction_percentage` field (nullable Decimal)
+- `SionPlanningUnitValueRow` model: add `cif_restriction_percentage` field (nullable Decimal)
+- `sion_planning_execution.py`: in `add_line()` or before allocation, check the restriction and skip/cap accordingly
+- `SionPlanningRuleSerializer`: include the new field
+- Frontend types: add `cif_restriction_percentage` to `SionPlanningRule`, `PercentageRow`, and `UnitValueRow`
+
+**Database Tables**:
+- `license_sionplanningrule` — add `cif_restriction_percentage` column
+- `license_sionplanningpercentagerow` — add `cif_restriction_percentage` column
+- `license_sionplanningunitvaluerow` — add `cif_restriction_percentage` column
+
+**Files**:
+- `backend/apps/license/models/core.py` — `SionPlanningRule`, `SionPlanningPercentageRow`, `SionPlanningUnitValueRow`
+- `backend/apps/license/serializers/incentive.py` — `SionPlanningRuleSerializer`
+- `backend/apps/license/services/sion_planning_execution.py` — `_compute_license_new_architecture()`, `add_line()`
+- `frontend/src/pages/planning/LicensePlanningWorkspace.tsx`
+- `frontend/src/pages/planning/AllocationStrategyEditor.tsx`
+- `frontend/src/services/api/planningRuleApi.ts` — types
+
+**Business Rules**:
+- The restriction applies per import item, not per license total
+- "Debited CIF" = sum of BOE RowDetails DEBIT CIF for this item
+- "Allotted CIF" = sum of allotment CIF for this item
+- If restriction is not set (NULL), the item is planned without this cap
+- The restriction is a hard ceiling — the planner skips the item entirely if already exceeded
+
+**Edge Cases**:
+- Item with zero CIF: restriction ceiling is zero, item is always skipped
+- Multiple rules matching the same item: first rule in priority order applies its restriction; later rules see the item as already claimed
+- Restriction change on existing rule: affects future planning runs only, not existing plans
+
+**Acceptance Criteria**:
+- User can select CIF restriction percentage (2%, 3%, 5%, 10%, or None) when editing a planning rule
+- During planning, items exceeding their CIF restriction are skipped with a diagnostic reason
+- Preview shows which items were skipped and why
+- The restriction is persisted and shown in the rule detail view

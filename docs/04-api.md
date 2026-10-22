@@ -328,6 +328,71 @@ All masters follow standard CRUD: `GET`, `POST`, `PUT/PATCH`, `DELETE`.
 
 ---
 
+## SION Planning Rules (`/api/sion-planning-rules/`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/sion-planning-rules/` | List rules (filter: `sion`, `is_active`) |
+| POST | `/api/sion-planning-rules/` | Create rule |
+| GET | `/api/sion-planning-rules/:id/` | Get rule detail |
+| PATCH | `/api/sion-planning-rules/:id/` | Update rule |
+| DELETE | `/api/sion-planning-rules/:id/` | Delete rule |
+| POST | `/api/sion-planning-rules/plan/` | Execute planning for a SION norm |
+| POST | `/api/sion-planning-rules/preview/` | Preview planning impact without saving |
+| GET | `/api/sion-planning-rules/preview-scoped/` | Preview for exact license + SION |
+| POST | `/api/sion-planning-rules/:id/test/` | Test a single rule |
+| POST | `/api/sion-planning-rules/reorder/` | Reorder rule priorities |
+| GET | `/api/sion-planning-rules/import-items/` | List import items for a SION norm |
+
+**POST /api/sion-planning-rules/ body**:
+```json
+{
+  "sion": 5,
+  "name": "DIETARY FIBRE",
+  "expression": { "operator": "AND", "conditions": [...] },
+  "max_unit_price": "2.70",
+  "unit": "KG",
+  "is_active": true,
+  "strategy": "STANDARD",
+  "import_item": 42,
+  "percentage_rows": [],
+  "unit_value_rows": [],
+  "cif_restriction_percentage": "5"
+}
+```
+
+**cif_restriction_percentage** (Feature Request — Not Yet Implemented):
+- Nullable Decimal field on the rule and on each percentage/unit-value row
+- Allowed values: `2`, `3`, `5`, `10`, or `null` (no restriction)
+- When set, the planner skips items whose `debited_cif + allotted_cif` exceeds this percentage of the item's total CIF value
+
+**POST /api/sion-planning-rules/plan/ body**:
+```json
+{
+  "sion": 5,
+  "mode": "NEW"
+}
+```
+- `mode`: `"NEW"` (plan only unlicensed) or `"ALL"` (re-plan all eligible)
+
+**Preview response**:
+```json
+{
+  "sion": "E5",
+  "summary": {
+    "licenses_matched": 10,
+    "licenses_new": 3,
+    "licenses_changed": 5,
+    "licenses_unchanged": 2,
+    "licenses_shortage": 0,
+    "rules_processed": 8
+  },
+  "licenses": [ ... ]
+}
+```
+
+---
+
 ## System
 
 | Method | Path | Description |

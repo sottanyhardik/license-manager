@@ -411,3 +411,126 @@ sequenceDiagram
     MasterList->>MasterList: invalidateList()
     MasterList->>User: Navigate to counterpart edit page
 ```
+
+---
+
+## UF-16: SION Planning — CIF Restriction per Item (Feature Request — Not Yet Implemented)
+
+**Trigger**: User edits a SION planning rule and sets a CIF restriction percentage (2%, 3%, 5%, or 10%) to limit how much of an import item's total CIF can be planned.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Workspace as LicensePlanningWorkspace
+    participant Editor as AllocationStrategyEditor
+    participant API
+    participant Serializer as SionPlanningRuleSerializer
+    participant DB
+    participant Planner as sion_planning_execution
+
+    User->>Workspace: Navigate to /planning?sion=E5&rule=48
+    User->>Workspace: Click "Edit Rule"
+    Workspace->>Editor: Show rule editor with draft
+    User->>Editor: Select CIF restriction: 5%
+    Editor->>Workspace: Update draft with cif_restriction_percentage=5
+    User->>Workspace: Click "Save Changes"
+    Workspace->>API: PATCH /api/sion-planning-rules/:id/
+    API->>Serializer: validate and save
+    Serializer->>DB: Update rule with cif_restriction_percentage
+    DB-->>API: 200 OK
+    API-->>Workspace: Updated rule data
+    Workspace->>User: "Rule saved" toast
+
+    Note over User,Planner: Later — User runs planning
+    User->>Workspace: Click "Preview Impact"
+    Workspace->>API: POST /api/sion-planning-rules/preview/
+    API->>Planner: Execute planning with CIF restriction
+    Planner->>DB: Load all active rules for SION
+    Planner->>Planner: For each rule, evaluate expression
+    loop For each matched import item
+        Planner->>DB: Read item.cif_fc, debited_cif, allotted_cif
+        Planner->>Planner: used_cif = debited + allotted
+        Planner->>Planner: ceiling = cif_fc × 5 / 100
+        alt used_cif >= ceiling
+            Planner->>Planner: Skip item, log CIF_RESTRICTION_EXCEEDED
+        else used_cif < ceiling
+            Planner->>Planner: Plan normally, cap at ceiling
+        end
+    end
+    Planner-->>API: Preview result with skipped items
+    API-->>Workspace: Preview data
+    Workspace->>User: Show preview with skip reasons
+```
+
+**Key points**:
+- The CIF restriction is configured per rule (STANDARD strategy) or per row (SPLIT strategies)
+- During planning, each matched import item is checked against its restriction ceiling
+- Items exceeding the ceiling are skipped with diagnostic reason `CIF_RESTRICTION_EXCEEDED`
+- Preview mode shows which items were skipped and why, before any plans are saved
+- The restriction is a hard ceiling — no partial planning beyond the limit
+- Allowed values: 2%, 3%, 5%, 10%, or None (no restriction)
+
+---
+
+## UF-17: SION Planning — Normal Execution Flow
+
+**Trigger**: User runs SION auto-plan for a norm class (e.g., E5) to allocate import entitlements to export planning.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Workspace as LicensePlanningWorkspace
+    participant API
+    participant Planner as sion_planning_execution
+    participant RuleEngine as sion_rule_engine
+    participant Allocator as planning_allocation
+    participant DB
+
+    User->>Workspace: Select SION norm (e.g., E5)
+    Workspace->>API: GET /api/sion-planning-rules/?sion=5&is_active=true
+    API->>DB: Fetch active rules ordered by priority
+    DB-->>API: Rules list
+    API-->>Workspace: Rules data
+    Workspace->>User: Show rules list and detail
+
+    User->>Workspace: Click "Preview Impact"
+    Workspace->>API: POST /api/sion-planning-rules/preview/ {sion: 5, mode: "NEW"}
+    API->>Planner: plan_sion(sion=5, mode="NEW", preview=true)
+    Planner->>DB: Load eligible licenses for SION
+    Planner->>DB: Calculate live financial balance per license
+    loop For each license
+        Planner->>Planner: _compute_license_new_architecture()
+        loop For each rule in priority order
+            Planner->>RuleEngine: evaluate_expression(rule, item)
+            RuleEngine-->>Planner: Match result
+            alt item matched and not claimed
+                Planner->>DB: Read item.available_quantity
+                Planner->>Allocator: allocate_step(quantity, max_price, balance)
+                Allocator-->>Planner: (planned_cif, unit_price)
+                Planner->>Planner: Claim source item IDs
+                Planner->>Planner: Add plan line with provenance
+            end
+        end
+    end
+    Planner-->>API: Preview with license summaries
+    API-->>Workspace: Preview data
+    Workspace->>User: Show plan preview table
+
+    alt User confirms
+        User->>Workspace: Click "Re-plan all"
+        Workspace->>API: POST /api/sion-planning-rules/plan/ {sion: 5, mode: "ALL"}
+        API->>Planner: plan_sion(sion=5, mode="ALL", preview=false)
+        Planner->>DB: Save LicenseItemPlan records
+        DB-->>API: 200 OK with summary
+        API-->>Workspace: Result
+        Workspace->>User: "Re-plan successful" toast
+    end
+```
+
+**Key points**:
+- Preview is read-only — no database writes
+- Planning uses a priority waterfall: higher-priority rules claim items first
+- Each rule's expression tree is evaluated against import items
+- CIF allocation respects the remaining balance ceiling
+- Source items are claimed to prevent double-allocation across rules
+- Full provenance is stored in `allocation_provenance` JSON field

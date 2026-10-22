@@ -355,8 +355,8 @@ class ItemPivotService:
                 key = item["key"]
                 applicable = [row["items"][key] for row in group["licenses"] if key in row["items"]]
                 totals["items"][key] = {
-                    field: _text(sum((_decimal(cell.get(field)) for cell in applicable), ZERO_CIF if field in {"restriction_value", "planned_cif"} else ZERO_QTY))
-                    for field in ("total_qty", "allotted_qty", "debited_qty", "balance_qty", "restriction_value", "plan_qty", "planned_cif")
+                    field: _text(sum((_decimal(cell.get(field)) for cell in applicable), ZERO_CIF if field in {"restriction_value", "planned_cif", "boe_used_cif", "allotted_cif"} else ZERO_QTY))
+                    for field in ("total_qty", "allotted_qty", "allotted_cif", "debited_qty", "boe_used_cif", "balance_qty", "restriction_value", "plan_qty", "planned_cif")
                 }
             group["totals"] = {
                 **{key: _text(value) for key, value in totals.items() if key != "items"},

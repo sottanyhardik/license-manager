@@ -1661,7 +1661,7 @@ class ItemPivotReportView(APIView):
             if "groups" in report_data:
                 workbook = openpyxl.Workbook(write_only=True)
                 fixed = ["SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF", "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF"]
-                fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "DEBITED QTY", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
+                fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY", "DEBITED CIF", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
                 for group_index, group in enumerate(report_data["groups"], 1):
                     notification_num = group['notification_number'] or 'Pivot'
                     safe_notification = notification_num[:24].replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace(':', '-').replace('[', '-').replace(']', '-')
@@ -1672,13 +1672,13 @@ class ItemPivotReportView(APIView):
                         row = [index, license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
                         for item in group["item_groups"]:
                             cell = license_row["items"].get(item["key"])
-                            row.extend([cell.get(key) if cell else None for key in ("hsn_code", "description", "total_qty", "allotted_qty", "debited_qty", "balance_qty", "restriction_percent", "restriction_value", "plan_qty", "planned_cif")])
+                            row.extend([cell.get(key) if cell else None for key in ("hsn_code", "description", "total_qty", "allotted_qty", "allotted_cif", "debited_qty", "boe_used_cif", "balance_qty", "restriction_percent", "restriction_value", "plan_qty", "planned_cif")])
                         sheet.append(row)
                     totals = group["totals"]
                     total_row = [f"TOTAL — {group['license_count']} LICENCES", None, None, None, totals["total_cif"], totals["debited_cif"], totals["allotted_cif"], totals["planned_cif"], totals["balance_cif"]]
                     for item in group["item_groups"]:
                         cell = totals["items"][item["key"]]
-                        total_row.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["debited_qty"], cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
+                        total_row.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["allotted_cif"], cell["debited_qty"], cell["boe_used_cif"], cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
                     sheet.append(total_row)
                     sheet.append([])
                     sheet.append(["ITEM SUMMARY", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"])

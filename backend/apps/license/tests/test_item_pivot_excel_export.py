@@ -169,10 +169,10 @@ def test_item_pivot_excel_is_a_valid_workbook_with_canonical_group_sheet(superus
         "SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF",
         "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF",
     ]
-    assert len(header) == 19
+    assert len(header) == 21
     assert header[9:] == [
-        "HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "DEBITED QTY",
-        "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF",
+        "HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY",
+        "DEBITED CIF", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF",
     ]
     assert group["license_count"] == 1
 
@@ -200,11 +200,11 @@ def test_item_pivot_excel_data_and_totals_match_the_canonical_json_matrix(superu
 
     assert data_row[9] == item["hsn_code"]
     assert data_row[10] == item["description"]
-    for index, field in ((11, "total_qty"), (12, "allotted_qty"), (13, "debited_qty"), (14, "balance_qty"), (17, "plan_qty"), (18, "planned_cif")):
+    for index, field in ((11, "total_qty"), (12, "allotted_qty"), (13, "allotted_cif"), (14, "debited_qty"), (15, "boe_used_cif"), (16, "balance_qty"), (19, "plan_qty"), (20, "planned_cif")):
         assert _number(data_row[index]) == _number(item[field])
         assert _number(total_row[index]) == _number(item_total[field])
-    assert data_row[15] is None
-    assert data_row[16] is None
+    assert data_row[17] is None
+    assert data_row[18] is None
     assert len(total_row) == len([cell.value for cell in sheet[2]])
 
 

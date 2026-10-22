@@ -95,7 +95,7 @@ def test_excel_total_row_consumes_the_same_canonical_group_totals(superuser_clie
 
     # Canonical exporter writes metadata at row 1, headers at row 2, and a
     # TOTAL row after the group licences. Fixed columns precede each item's
-    # ten fields; compare by index so repeated labels cannot select another
+    # twelve fields; compare by index so repeated labels cannot select another
     # canonical item column.
     header = [cell.value for cell in sheet[2]]
     total_row = next([cell.value for cell in row] for row in sheet.iter_rows() if str(row[0].value).startswith("TOTAL —"))
@@ -103,5 +103,5 @@ def test_excel_total_row_consumes_the_same_canonical_group_totals(superuser_clie
     for index, field in ((4, "total_cif"), (5, "debited_cif"), (6, "allotted_cif"), (7, "planned_cif"), (8, "balance_cif")):
         assert _number(total_row[index]) == _number(group["totals"][field])
     item_totals = next(iter(group["totals"]["items"].values()))
-    assert _number(total_row[17]) == _number(item_totals["plan_qty"])
-    assert _number(total_row[18]) == _number(item_totals["planned_cif"])
+    assert _number(total_row[19]) == _number(item_totals["plan_qty"])
+    assert _number(total_row[20]) == _number(item_totals["planned_cif"])

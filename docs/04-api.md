@@ -349,7 +349,23 @@ All masters follow standard CRUD: `GET`, `POST`, `PUT/PATCH`, `DELETE`.
 {
   "sion": 5,
   "name": "DIETARY FIBRE",
-  "expression": { "operator": "AND", "conditions": [...] },
+  "expression": {
+    "operator": "AND",
+    "conditions": [
+      {
+        "field": "PRODUCT_DESCRIPTION",
+        "comparator": "CONTAINS",
+        "value": "dietary fibre"
+      },
+      {
+        "operator": "OR",
+        "conditions": [
+          { "field": "HSN", "comparator": "STARTS_WITH", "value": "0802" },
+          { "field": "PRODUCT_DESCRIPTION", "comparator": "CONTAINS", "value": "0802" }
+        ]
+      }
+    ]
+  },
   "max_unit_price": "2.70",
   "unit": "KG",
   "is_active": true,
@@ -360,6 +376,32 @@ All masters follow standard CRUD: `GET`, `POST`, `PUT/PATCH`, `DELETE`.
   "cif_restriction_percentage": "5"
 }
 ```
+
+**Expression JSON Format**:
+
+The `expression` field is a JSON tree with AND/OR/NOT boolean operators and leaf conditions. The backend evaluator (`sion_rule_engine.py`) uses a safe whitelist — no `eval` or SQL injection.
+
+- **Boolean nodes**: `{ "operator": "AND" | "OR" | "NOT", "conditions": [...] }`
+- **Leaf conditions**: `{ "field": "HSN" | "PRODUCT_DESCRIPTION", "comparator": "...", "value": "..." }`
+- **Depth limit**: 12 levels, **node limit**: 128 nodes
+- **Empty root** `{}` matches nothing (not the vacuous truth of `all([])`)
+
+**Match Fields Available in UI**:
+
+| Field | Allowed Comparators | Backend Context Key |
+|---|---|---|
+| `HSN` | `STARTS_WITH`, `NOT_STARTS_WITH` | `hs_code` |
+| `PRODUCT_DESCRIPTION` | `CONTAINS`, `NOT_CONTAINS` | `description` |
+
+**Backend-Only Fields** (not exposed in planning UI but supported by evaluator):
+
+| Field | Backend Context Key |
+|---|---|
+| `HSN_DIGITS` | `hs_code` |
+| `ITEM_KEY` | `item_key` |
+| `available_qty`, `total_qty`, `cif_fc`, `license_balance_cif`, `unit`, `serial_number`, `condition_type`, `is_restricted`, `available_value` | Same name |
+
+**Text Normalization**: Case-insensitive, whitespace-collapsed. HSN values have non-alphanumeric characters stripped before comparison.
 
 **cif_restriction_percentage** (Feature Request — Not Yet Implemented):
 - Nullable Decimal field on the rule and on each percentage/unit-value row

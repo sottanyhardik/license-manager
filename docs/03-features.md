@@ -589,6 +589,75 @@ LicenseTrade.objects.filter(pk=677).delete()
    - **Strategy**: STANDARD (single item), SPLIT_BY_PERCENT, or SPLIT_BY_UNIT_VALUE
 3. **Planning Execution**: Priority waterfall — rules execute in priority order, each consuming from the remaining CIF/quantity pool.
 
+**Rule Editor UI** (`LicensePlanningWorkspace.tsx` + `AllocationStrategyEditor.tsx` + `ExpressionTreeEditor.tsx`):
+
+The rule editor has four main sections:
+
+1. **Rule Header**: Rule name, version badge, active status, View/Edit toggle, Save Changes button
+2. **Rule Metadata**: Name input, Max Price (decimal), Unit (text), Active checkbox
+3. **Strategy Section** (`AllocationStrategyEditor.tsx`):
+   - Strategy dropdown: "Standard (single item)", "Split by Unit Value", "Split by %"
+   - For STANDARD: Import Item async select dropdown with auto-derive rule name hint
+   - For SPLIT_BY_PERCENT: Dynamic rows with import item, percentage, unit price, max quantity
+   - For SPLIT_BY_UNIT_VALUE: Dynamic rows with import item, min/max/preferred unit price
+   - Strategy change warning: Confirm dialog when switching strategies with existing rows
+4. **Match Logic Section** (`ExpressionTreeEditor.tsx`):
+   - Root group with operator selector (ALL (AND) / ANY (OR))
+   - Condition count badge
+   - "+ Condition" and "+ Group" buttons to add conditions or nested groups
+   - Each condition row: Field selector → Operator selector → Value input → Delete button
+   - Nested groups: Expandable with chevron, indented with left border, have their own operator and delete button
+   - Root-level "..." menu: "Clear All Match Conditions" with confirmation dialog
+   - Empty state: "No match conditions defined. This rule currently matches no items."
+
+**Match Fields and Operators**:
+
+The UI exposes only two safe text-filter fields for planning rules:
+
+| Field | Operators | Description |
+|---|---|---|
+| **HSN** | Starts with, Does not start with | Matches against the item's HSN code (alphanumeric, case-insensitive) |
+| **Product Description** | Contains, Does not contain | Matches against the item's description text (case-insensitive) |
+
+Backend supports additional fields not exposed in the planning UI:
+| Field (Backend Only) | Operators | Description |
+|---|---|---|
+| HSN_DIGITS | Starts with, Does not start with | Same as HSN, alias for hs_code |
+| ITEM_KEY | Contains, Does not contain | Matches against comma-joined item names |
+
+**Expression JSON Structure**:
+
+```json
+{
+  "operator": "AND",
+  "conditions": [
+    {
+      "field": "PRODUCT_DESCRIPTION",
+      "comparator": "CONTAINS",
+      "value": "dietary fibre"
+    },
+    {
+      "operator": "OR",
+      "conditions": [
+        { "field": "HSN", "comparator": "STARTS_WITH", "value": "0802" },
+        { "field": "PRODUCT_DESCRIPTION", "comparator": "CONTAINS", "value": "0802" }
+      ]
+    }
+  ]
+}
+```
+
+**Backend Expression Evaluation** (`sion_rule_engine.py`):
+
+- Safe evaluator — no `eval`, no SQL injection, no dynamic imports
+- Whitelisted context fields: `available_qty`, `total_qty`, `available_value`, `cif_fc`, `license_balance_cif`, `hs_code`, `description`, `condition_type`, `is_restricted`, `unit`, `serial_number`, `item_key`
+- Field aliases map UI names to context keys: HSN → hs_code, PRODUCT_DESCRIPTION → description, ITEM_KEY → item_key
+- Text normalization: case-insensitive, whitespace-collapsed; HSN strips non-alphanumeric chars
+- Comparison operators: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `not_contains`, `starts_with`, `not_starts_with`, `word_contains`, `in`
+- Boolean operators: `AND`, `OR`, `NOT`
+- Depth limit: 12 levels, node limit: 128 nodes
+- Empty root expression matches nothing (not the vacuous truth of `all([])`)
+
 **Rule Strategies**:
 
 | Strategy | Description | Configuration |

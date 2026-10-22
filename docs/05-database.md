@@ -397,7 +397,7 @@ Versioned, database-driven planning rules for SION auto-allocation.
 | import_item | FK ItemNameModel nullable | PROTECT — target item for STANDARD strategy |
 | name | varchar(255) | |
 | version | int | Default 1 |
-| expression | JSON | AND/OR tree of match conditions |
+| expression | JSON | AND/OR tree — safe evaluator, no eval/SQL |
 | max_unit_price | decimal | ≥ 0 |
 | unit | varchar(10) | KG, LTR, etc. |
 | priority | int | DB index — unique per SION when active |
@@ -407,6 +407,35 @@ Versioned, database-driven planning rules for SION auto-allocation.
 | rule_group_id | varchar(120) nullable | Groups related rules |
 | strategy | varchar(30) nullable | STANDARD / SPLIT_BY_UNIT_VALUE / SPLIT_BY_PERCENT |
 | **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+
+**expression** JSON column details:
+- Stores an AND/OR/NOT boolean tree with leaf conditions
+- Evaluated by `sion_rule_engine.py` — safe whitelist, no `eval` or SQL injection
+- Depth limit: 12 levels, node limit: 128 nodes
+- Empty root `{}` matches nothing (not vacuous truth)
+- Serializer validates via `normalize_expression()` and `validate_expression()` before save
+
+**Expression Context Fields** (whitelisted for evaluation):
+
+| Context Key | Source | Description |
+|---|---|---|
+| `hs_code` | `item.hs_code.hs_code` | HSN code string |
+| `description` | `item.description` | Product description text |
+| `item_key` | `item.items.all()` | Comma-joined item names |
+| `available_qty` | `item.available_quantity` | Available quantity after deductions |
+| `total_qty` | `item.quantity` | Original total quantity |
+| `cif_fc` | `item.cif_fc` | CIF value in foreign currency |
+| `available_value` | `item.available_value` | Available CIF value |
+| `license_balance_cif` | Calculated | License-level CIF balance |
+| `unit` | `item.unit` | Unit of measure (KG, LTR, etc.) |
+| `serial_number` | `item.serial_number` | Import item serial number |
+| `condition_type` | `item.condition_type` | Condition type (e.g., RAW, CONSUMED) |
+| `is_restricted` | `item.is_restricted` | Boolean — restricted item flag |
+
+**Field Aliases** (UI field names → context keys):
+- `HSN` → `hs_code`, `HSN_DIGITS` → `hs_code`
+- `PRODUCT_DESCRIPTION` → `description`
+- `ITEM_KEY` → `item_key`
 
 **cif_restriction_percentage** (Feature Request):
 - Nullable Decimal field. Allowed values: `2`, `3`, `5`, `10`, or `NULL` (no restriction)

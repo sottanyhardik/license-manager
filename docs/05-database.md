@@ -140,10 +140,24 @@ Tracks running Celery task IDs with status and result metadata.
 | product_description | varchar | |
 | hs_code | FK HSCode | |
 | cif_value | decimal | Authorised CIF in USD |
-| available_quantity | decimal | Remaining balance |
-| debited_quantity | decimal | Used in BOEs |
-| allotted_quantity | decimal | Reserved in allotments |
+| quantity | decimal | Current stored licence item quantity |
+| available_quantity | decimal | **Stored** remaining balance (updated by `calculate_balance.py`) |
+| available_value | decimal | Stored available CIF value |
+| debited_quantity | decimal | Used in BOEs (stored snapshot) |
+| debited_value | decimal | BOE debited CIF (stored snapshot) |
+| allotted_quantity | decimal | Reserved in allotments (stored snapshot) |
+| allotted_value | decimal | Allotted CIF (stored snapshot) |
 | condition_type | varchar | Restriction |
+
+**⚠️ `available_quantity` stored field vs live calculation**:
+
+The `available_quantity` column is a **materialized** value updated by save signals via `apps.core.scripts.calculate_balance.calculate_available_quantity()`. Its formula includes all four components: `quantity − debited − allotted − direct_sale_quantity`. This matches the trade creation validation formula.
+
+However, other parts of the system compute available quantity differently:
+- `balance_snapshot.py` (used by list views) omits `direct_sale_quantity`
+- Frontend's `CustomsLedgerSection.tsx` computes `quantity - boe_debited_quantity` only, omitting both `allotted` and `direct_sale_quantity`
+
+Always use `ItemBalanceCalculator.calculate_available_quantity()` for authoritative validation. See BR-17E for details.
 
 ### `license_licenseexportitemsmodel`
 Export entitlement items per license (product, quantity, FOB value).
@@ -265,18 +279,51 @@ Transfer history with from_company, to_company, transfer_date, document referenc
 ### `trade_licensetrade`
 | Column | Type | Notes |
 |---|---|---|
-| direction | varchar | `PURCHASE` / `SALE` |
-| license_type | varchar | `DFIA` / incentive type |
-| from_company | FK Company nullable | |
-| to_company | FK Company nullable | |
-| boe | FK BillOfEntryModel nullable | |
-| incentive_license | FK IncentiveLicense nullable | |
-| invoice_number | varchar AUTO | Auto-generated per FY |
+| direction | varchar | `PURCHASE` / `SALE` / `COMMISSION_PURCHASE` / `COMMISSION_SALE` |
+| license_type | varchar | `DFIA` / `INCENTIVE` |
+| from_company | FK Company nullable | SET_NULL on delete |
+| to_company | FK Company nullable | SET_NULL on delete |
+| boes | M2M BillOfEntryModel | Cleared on trade delete |
+| incentive_license | FK IncentiveLicense nullable | SET_NULL on delete |
+| invoice_number | varchar | Auto-generated per FY (e.g., `P-LM/2025-26/0024`) |
 | invoice_date | date | |
 | remarks | text | |
-| linked_trade | FK self nullable | Paired purchase/sale |
-| total_amount_inr | decimal | Computed |
-| purchase_invoice_copy | file | |
+| subtotal_amount | decimal | Sum of line amounts |
+| roundoff | decimal | Rounding adjustment |
+| total_amount | decimal | subtotal + roundoff |
+| purchase_invoice_copy | file | PURCHASE-only upload |
+| linked_trade | FK self nullable | SET_NULL — older manual link |
+| transaction_pair_uuid | UUID nullable | Shared UUID for counterpart pair |
+| counterpart | OneToOne self nullable | PROTECT — immutable reciprocal pair |
+| copied_from | FK self nullable | PROTECT — provenance tracking |
+| copied_from_type | varchar | |
+| source_document_number | varchar | |
+| final_party_status | varchar | `UNKNOWN` / `FINAL_PARTY` / `INTERLINKED` / `NOT_APPLICABLE` |
+| final_party | FK Company nullable | PROTECT — final purchaser for SALE |
+| from_pan, from_gst, from_addr_* | varchar/text | Party snapshots (frozen on save) |
+| to_pan, to_gst, to_addr_* | varchar/text | Party snapshots (frozen on save) |
+
+**Delete cascade**: Deleting a `LicenseTrade` CASCADE-deletes all child objects:
+- `trade_licensetradelineitem` (via `trade` FK, CASCADE)
+- `trade_incentivetradelineitem` (via `trade` FK, CASCADE)
+- `trade_licensetradepaymment` (via `trade` FK, CASCADE)
+- `trade_tradeinvoicedocument` (via `trade` FK, CASCADE)
+- `trade_invoicedocumentaccesstoken` (via `trade` FK, CASCADE)
+- `trade_invoicedocumentauditevent` (via `trade` FK, CASCADE)
+
+**Delete constraints** (PROTECT FKs — block `instance.delete()`):
+- `counterpart` OneToOneField uses PROTECT — paired trades cannot be deleted one-sided
+- `SaleClassificationDecision.trade` uses PROTECT — blocks delete if classification decisions exist
+- `TradePairAudit.source/counterpart` uses PROTECT — blocks delete if audit records exist
+
+**Force delete** (manual, via Django shell):
+To bypass the PROTECT constraints, you must first clear them:
+1. Set `counterpart = NULL` on both trades in the pair
+2. Delete `TradePairAudit` records where `source` or `counterpart` matches the trade
+3. Delete `SaleClassificationDecision` records where `trade` matches
+4. Then call `trade.delete()` or `LicenseTrade.objects.filter(pk=id).delete()`
+
+Note: `QuerySet.delete()` bypasses `pre_delete` signals but NOT `PROTECT` FK constraints.
 
 ### `trade_licensetradelineitem`
 | Column | Type | Notes |
@@ -346,10 +393,17 @@ graph LR
         S2["LicenseImportItemsModel.post_save\n→ update LicenseBalance.balance_cif"]
         S3["AllotmentItems.post_save/delete\n→ update LicenseImportItemsModel.allotted_quantity"]
         S4["RowDetails.post_save/delete\n→ update LicenseImportItemsModel.debited_quantity"]
+        S5["LicenseTrade.pre_delete\n→ clear BOE invoice_no\n(clear_boe_invoice_on_trade_delete)"]
+        S6["LicenseTrade.pre_delete\n→ block if counterpart exists\n(prevent_single_counterpart_delete)"]
+        S7["IncentiveTradeLine.post_save/delete\n→ update IncentiveLicense sold status"]
     end
 ```
 
 All balance fields are materialised — maintained by signals, not computed on read. This makes listing endpoints fast but requires signal integrity.
+
+**Trade deletion signals** are critical for data integrity:
+- `clear_boe_invoice_on_trade_delete`: When a trade is deleted, any linked BOE whose `invoice_no` matches the trade's `invoice_number` has its `invoice_no` and `invoice_date` cleared, allowing the BOE to be reused.
+- `prevent_single_counterpart_delete`: Blocks deletion of a trade that has a `counterpart` (paired Sale↔Purchase), raising `ValidationError` to preserve audit trail integrity.
 
 ---
 

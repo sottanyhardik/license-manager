@@ -106,16 +106,144 @@ Standard CRUD endpoint (`GET`, `POST`, `PUT/PATCH`, `DELETE`).
 
 ---
 
-## Trades (`/api/trades/`)
+## Trades (`/api/trade/trades/`)
+
+**Note:** The URL prefix is `/api/trade/` (registered in `apps/trade/urls.py`), so the full trade endpoint path is `/api/trade/trades/`.
+
+### CRUD
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/trades/` | List trades |
-| POST | `/api/trades/` | Create trade |
-| GET | `/api/trades/:id/` | Get trade |
-| PUT/PATCH | `/api/trades/:id/` | Update trade |
-| DELETE | `/api/trades/:id/` | Delete trade |
-| POST | `/api/trades/:id/generate-transfer-letter/` | Generate transfer letter |
+| GET | `/api/trade/trades/` | List trades (paginated, filtered) |
+| POST | `/api/trade/trades/` | Create trade (with nested lines, incentive_lines, payments) |
+| GET | `/api/trade/trades/:id/` | Get trade detail |
+| PUT/PATCH | `/api/trade/trades/:id/` | Update trade |
+| DELETE | `/api/trade/trades/:id/` | Delete trade |
+
+**Key Query Params** (GET list):
+- `search` — invoice_number, from_company__name, to_company__name, remarks, lines__sr_number__license__license_number, incentive_license__license_number
+- `direction` — `PURCHASE` | `SALE` | `COMMISSION_PURCHASE` | `COMMISSION_SALE`
+- `license_type` — `DFIA` | `INCENTIVE`
+- `from_company` — company ID (FK autocomplete endpoint: `/masters/companies/`)
+- `to_company` — company ID (FK autocomplete endpoint: `/masters/companies/`)
+- `boes` — BOE ID (FK autocomplete endpoint: `/bill-of-entries/`)
+- `incentive_license` — incentive license ID (FK autocomplete endpoint: `/incentive-licenses/`)
+- `invoice_date` — date range filter
+- `ordering` — e.g. `-invoice_date` (default ordering enforced on list)
+
+### Custom Actions
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/trade/trades/:id/summary/` | Trade summary with computed fields |
+| POST | `/api/trade/trades/:id/link-trade/` | Bidirectionally link two trades (body: `{"partner_id": <int>}` or `null`) |
+| POST | `/api/trade/trades/:id/copy-to-purchase/` | Copy SALE → PURCHASE counterpart |
+| POST | `/api/trade/trades/:id/copy-to-sale/` | Copy PURCHASE → SALE counterpart |
+| GET | `/api/trade/trades/:id/counterpart/` | Get the paired counterpart trade |
+| GET | `/api/trade/trades/:id/generate-bill-of-supply/` | Generate Bill of Supply PDF (SALE only) |
+| GET | `/api/trade/trades/:id/generate-purchase-invoice/` | Generate Purchase Invoice PDF (PURCHASE only) |
+| POST | `/api/trade/trades/:id/generate-transfer-letter/` | Generate transfer letter |
+| POST | `/api/trade/trades/:id/resolve-final-party/` | Authorise final-party classification (SALE only) |
+| GET | `/api/trade/trades/prefill-invoice-number/` | Generate next invoice number (query: `direction`, `company_id`, `invoice_date`) |
+| GET | `/api/trade/trades/sales-classification-review/` | List SALE trades needing classification |
+| POST | `/api/trade/trades/sales-classification-review/import/` | Bulk import classification decisions (CSV) |
+| POST | `/api/trade/trades/:id/sales-classification-review/` | Apply classification decision to a SALE |
+
+### POST `/api/trade/trades/` — Create Trade (Sale Quantity Validation)
+
+**Sale Quantity Validation** (applies only to direct SALE without BOEs):
+
+When creating a SALE trade with no BOEs attached (`"boes": []`), the server validates that the total requested quantity per import item does not exceed the available quantity. This prevents over-selling imported goods.
+
+**Validation trigger**: `direction == "SALE"` AND `boes` array is empty.
+
+**Available quantity formula**: `total_quantity − BOE_debited − outstanding_allotted − direct_sale_quantity`
+
+Where:
+- **total_quantity**: The import item's stored quantity
+- **BOE_debited**: Physical consumption already recorded via BOE RowDetails DEBIT rows
+- **outstanding_allotted**: Allotment quantity not yet linked to a BOE
+- **direct_sale_quantity**: Quantity consumed by existing unpaired direct SALE lines (no counterpart, no linked BOE)
+
+**Error Response** when quantity exceeds available:
+```json
+{
+  "lines": "SALE quantity 342672.0200 exceeds available quantity 327420.7200 for import item 38728."
+}
+```
+HTTP status: `400 Bad Request`
+
+**When BOEs ARE attached**: This validation is skipped — the BOE linkage itself serves as the physical quantity debit.
+
+**Concurrency protection**: The validation uses `select_for_update()` row locks on import items to prevent two concurrent direct sales from both over-consuming the same item.
+
+**⚠️ UI Balance Discrepancy Warning**: The available quantity shown in the frontend's Customs Ledger section may be **higher** than what this API accepts. The frontend calculates `quantity - boe_debited_quantity` only, omitting `outstanding_allotted` and `direct_sale_quantity`. The stored `item.available_quantity` field (used by the Items Tab) includes all four components and matches the API's validation formula. See BR-17E for the complete analysis of all four calculation paths.
+
+### DELETE `/api/trade/trades/:id/` — Delete Trade
+
+**Permissions:** `TRADE_MANAGER` role required.
+
+**Request:**
+```
+DELETE /api/trade/trades/677/
+Authorization: Bearer <token>
+```
+
+**Success Response:** `204 No Content`
+
+**Error Responses:**
+- `400 Bad Request` — Trade has a linked counterpart (`counterpart_id` is set). Error: `"This trade has a linked counterpart. Use the audited pair-deletion workflow."`
+- `400 Bad Request` — Trade is referenced by protected objects (e.g., `SaleClassificationDecision`, `TradePairAudit`). Error lists the referencing objects.
+- `403 Forbidden` — User lacks `TRADE_MANAGER` role.
+- `404 Not Found` — Trade ID does not exist.
+
+**Delete Side Effects:**
+1. Linked BOE `invoice_no` and `invoice_date` are cleared (if they match the trade's `invoice_number`)
+2. Child objects deleted via CASCADE: `LicenseTradeLine`, `IncentiveTradeLine`, `LicenseTradePayment`, `TradeInvoiceDocument`, `InvoiceDocumentAccessToken`, `InvoiceDocumentAuditEvent`
+3. M2M relation `boes` is cleared
+
+**Constraints:**
+- A trade with a `counterpart` (paired Sale↔Purchase) **cannot** be deleted alone — the `prevent_single_counterpart_delete` signal blocks it
+- A trade referenced by `SaleClassificationDecision` or `TradePairAudit` records **cannot** be deleted (PROTECT FK)
+
+### Force Delete (Manual — No API Endpoint)
+
+There is no `DELETE /api/trade/trades/:id/?force=1` endpoint. Force deletion must be performed manually via Django shell or direct database operations when a trade has protecting references.
+
+**Prerequisites**: Django superuser access or database admin access.
+
+**Steps**:
+
+1. **Clear the counterpart link** on both trades:
+   ```python
+   from apps.trade.models import LicenseTrade, TradePairAudit, SaleClassificationDecision
+   
+   trade = LicenseTrade.objects.get(pk=<TRADE_ID>)
+   counterpart = trade.counterpart
+   
+   trade.counterpart = None
+   trade.save(update_fields=['counterpart'])
+   
+   if counterpart:
+       counterpart.counterpart = None
+       counterpart.save(update_fields=['counterpart'])
+   ```
+
+2. **Delete protecting audit records**:
+   ```python
+   TradePairAudit.objects.filter(source=trade).delete()
+   TradePairAudit.objects.filter(counterpart=trade).delete()
+   SaleClassificationDecision.objects.filter(trade=trade).delete()
+   ```
+
+3. **Delete the trade**:
+   ```python
+   trade.delete()
+   ```
+
+**Warning**: Force delete destroys audit trail integrity. The `TradePairAudit` records and `SaleClassificationDecision` records are permanently lost. Use only for data cleanup or error recovery.
+
+**Note**: Django's `QuerySet.delete()` bypasses `pre_delete` signals (including `clear_boe_invoice_on_trade_delete` and `prevent_single_counterpart_delete`), but does NOT bypass `PROTECT` FK constraints. The PROTECT references must still be cleared first.
 
 ---
 

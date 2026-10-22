@@ -170,14 +170,201 @@ All frontend pages and components are TypeScript (`.tsx`). The UI uses **shadcn/
 - `trade_licensetradepaymment`
 
 **Business Rules**:
-- Direction: `PURCHASE` or `SALE`; some trades are `COMMISSION` variant
+- Direction: `PURCHASE`, `SALE`, `COMMISSION_PURCHASE`, or `COMMISSION_SALE`
+- License type: `DFIA` (default, uses `LicenseTradeLine`) or `INCENTIVE` (uses `IncentiveTradeLine`)
 - Line modes: `QTY` (quantity × rate), `CIF_INR` (CIF × %), `FOB_INR` (FOB × %)
-- Invoice number auto-generated per financial year (format: `INV-FY-NNNN`)
-- A trade can be linked to a paired trade (`linked_trade`) — e.g. purchase linked to corresponding sale
-- `auto_create_paired` toggle creates a mirror trade automatically
-- Payments tracked separately with date and amount fields
-- Composite indexes on `(invoice_date)`, `(direction, invoice_date)`, `(direction, from_company)`, `(direction, to_company)` for fast list queries
-- ViewSet applies `select_related` + `prefetch_related` for all FK chains — no N+1 on list view
+- Invoice number auto-generated per financial year:
+  - PURCHASE: `P-PREFIX/YYYY-YY/NNNN` (e.g., `P-LM/2025-26/0024`)
+  - SALE: `PREFIX/YYYY-YY/NNNN` (e.g., `LM/2025-26/0001`)
+  - COMMISSION_PURCHASE: `COM-P-PREFIX/YYYY-YY/NNNN`
+  - COMMISSION_SALE: `COM-PREFIX/YYYY-YY/NNNN`
+- Company prefix derived from company name (first 3 letters if 1 word, first letter of each word if 2+)
+- Totals auto-computed: `subtotal_amount` + `roundoff` = `total_amount`
+- Party snapshots (`from_pan`, `to_gst`, etc.) frozen from company master on save
+- Payments tracked via `LicenseTradePayment` (CASCADE on trade delete)
+- Composite indexes on `(invoice_date)`, `(direction, invoice_date)`, `(direction, from_company)`, `(direction, to_company)`
+
+**Counterpart / Paired Trade System**:
+- `counterpart` (OneToOneField, PROTECT) — immutable reciprocal Sale↔Purchase pair created by `copy-to-purchase` / `copy-to-sale` actions
+- `transaction_pair_uuid` (UUIDField) — shared UUID linking both halves of a pair
+- `linked_trade` (ForeignKey, SET_NULL) — older manual link field, still present for backwards compatibility
+- `copied_from` / `copied_from_type` / `source_document_number` — provenance tracking for copy operations
+
+**Trade Deletion** (`DELETE /api/trades/:id/`):
+
+**Delete Flow**:
+1. Frontend: `MasterList.tsx` → `handleDelete(item)` → confirmation dialog → `api.delete('trades/{id}/')`
+2. Backend: `LicenseTradeViewSet.destroy()` → `MasterViewSet.perform_destroy(instance)` → `instance.delete()`
+3. Django signals fire before delete:
+   - `clear_boe_invoice_on_trade_delete`: clears `invoice_no` and `invoice_date` on any linked BOE whose `invoice_no` matches the trade's `invoice_number`
+   - `prevent_single_counterpart_delete`: **blocks delete** if `instance.counterpart_id` is set — raises `ValidationError` requiring audited pair-deletion workflow
+4. Django CASCADE deletes child objects:
+   - `LicenseTradeLine` (via `trade` FK, CASCADE)
+   - `IncentiveTradeLine` (via `trade` FK, CASCADE)
+   - `LicenseTradePayment` (via `trade` FK, CASCADE)
+   - `TradeInvoiceDocument` (via `trade` FK, CASCADE)
+   - `InvoiceDocumentAccessToken` (via `trade` FK, CASCADE)
+   - `InvoiceDocumentAuditEvent` (via `trade` FK, CASCADE)
+5. M2M relations cleared: `boes` many-to-many
+
+**Delete Constraints**:
+- **Paired trades cannot be deleted one-sided**: if `counterpart_id` is set, `prevent_single_counterpart_delete` signal raises `ValidationError` with message: "This trade has a linked counterpart. Use the audited pair-deletion workflow."
+- **ProtectedError handling**: if any external reference (via PROTECT FK) exists, `MasterViewSet.perform_destroy` catches `ProtectedError` and returns 400 with detail listing the referencing objects
+- **MDS cutover**: if MDS (Master Data Service) is active for the model, delete goes through MDS first; MDS down → 503, local row left intact
+
+**Delete Permissions**:
+- Requires `TRADE_MANAGER` role (via `TradePermission` — `required_roles_for_write = ['TRADE_MANAGER']`)
+- `TRADE_VIEWER` can read but not delete
+
+**Frontend Delete UI**:
+- Delete button (trash icon, danger tone) shown in `TradesListView.tsx` when `canWrite` is true
+- `handleDelete` in `MasterList.tsx` shows confirmation dialog, then calls `api.delete('trades/{id}/')`
+- On success: toast "Record deleted successfully" + list refresh via `invalidateList()`
+- On error: toast shows server error message (e.g., counterpart constraint violation)
+
+**Validation Rules**:
+- Unique constraint: `from_company` + `invoice_number` + `direction` must be unique for PURCHASE (non-blank invoice_number)
+- Unique constraint: `to_company` + `invoice_number` + `direction` must be unique for SALE (non-blank invoice_number)
+- `from_company` ≠ `to_company` (check constraint, NULLs allowed)
+
+**Sale Quantity Validation** (direct SALE without BOEs):
+
+When creating a SALE trade with no BOEs attached (`boes: []`), the serializer validates that the total requested quantity per import item does not exceed the available quantity. This prevents over-selling imported goods.
+
+**Validation Flow**:
+1. Serializer `create()` method checks: `direction == SALE` AND `boes` is empty
+2. For each line, accumulates `qty_kg` by `sr_number` (import item) — handles multiple lines for the same item
+3. For each import item, acquires a row lock (`select_for_update()`) to prevent concurrent over-consumption
+4. Calculates available quantity: `total_quantity − BOE_debited − outstanding_allotted − direct_sale_quantity`
+5. If requested > available, raises `ValidationError` with message: `"SALE quantity {requested} exceeds available quantity {available} for import item {item_id}."`
+
+**Available Quantity Formula** (`ItemBalanceCalculator.calculate_available_quantity`):
+- **total_quantity**: The import item's stored `quantity` field (from `LicenseImportItemsModel`)
+- **BOE_debited**: Sum of `RowDetails.qty` where `transaction_type = DEBIT` for this item (physical consumption via BOE linkage)
+- **outstanding_allotted**: Outstanding allotment quantity from `LicenseBalanceCalculator.get_outstanding_allotment_totals` — allotments not yet linked to a BOE
+- **direct_sale_quantity**: Sum of `qty_kg − allocated_qty` for unpaired SALE lines (no counterpart, no linked_trade, no BOE linkage) — represents already-consumed direct sales
+
+**Direct Sale Quantity Exclusions** (what does NOT count as direct sale consumption):
+- SALE lines with a linked BOE (the BOE's RowDetails DEBIT already accounts for the physical quantity)
+- SALE lines with a counterpart (paired Sale↔Purchase has net zero effect — the purchase restores the quantity)
+- SALE lines with a `linked_trade` (older manual link field, same net-zero logic)
+- Allocated portions via `InvoiceBOEAllocation` (only `qty_kg − allocated_qty` counts)
+
+**When BOEs ARE attached**: The validation is skipped because the BOE linkage itself serves as the physical quantity debit — the BOE's RowDetails DEBIT rows track the actual consumption.
+
+**⚠️ UI vs Backend Balance Discrepancy**:
+
+The frontend and backend use **different formulas** for calculating available quantity, causing the UI to display a higher balance than what the API actually allows for new direct sales.
+
+**Backend validation formula** (`ItemBalanceCalculator.calculate_available_quantity`):
+```
+Available = total_quantity − BOE_debited − outstanding_allotted − direct_sale_quantity
+```
+
+**Frontend display formula** (`CustomsLedgerSection.tsx`):
+```
+Actual Available = quantity − boe_debited_quantity
+```
+The frontend omits **outstanding_allotted** and **direct_sale_quantity** from the displayed balance.
+
+**Balance snapshot API** (`balance_snapshot.py`):
+```
+Available = total_quantity − debited_quantity − outstanding_qty
+```
+The snapshot omits **direct_sale_quantity** from the calculated balance.
+
+**Stored field** (`item.available_quantity`, updated by `calculate_balance.py`):
+```
+Available = quantity − debited − allotted − direct_sale_quantity
+```
+The stored field includes all four components correctly.
+
+**Impact**: When the user views the Customs Ledger section on the license overview page, the "Actual Available" column shows `quantity - boe_debited` only. If there are outstanding allotments or prior direct sales for that item, the displayed balance will be higher than what the trade creation API accepts. For example, if an item has 342,672.02 kg total quantity and 15,251.30 kg in direct sale quantities, the UI shows 342,672.02 kg available, but the API rejects quantities above 327,420.72 kg.
+
+**Affected UI components**:
+- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — "Actual Available" column uses `quantity - boe_debited_quantity` only
+- `frontend/src/pages/license-overview/ItemsTab.tsx` — "Balance Qty" uses the stored `item.available_quantity` field (correct)
+- Balance snapshot API used by list views — omits `direct_sale_quantity`
+
+**Files**:
+- `backend/apps/trade/serializers.py` — `LicenseTradeSerializer.create()` lines 431-445 (validation)
+- `backend/apps/license/services/balance_calculator.py` — `ItemBalanceCalculator.calculate_available_quantity()` (formula)
+- `backend/apps/license/services/balance_calculator.py` — `ItemBalanceCalculator._direct_sale_quantity_rows()` (direct sale filter)
+- `backend/apps/license/services/balance_calculator.py` — `ItemBalanceCalculator.calculate_direct_sale_quantity()` (aggregation)
+- `backend/apps/license/services/balance_snapshot.py` — `get_snapshot_bulk()` lines 202-203 (snapshot formula — missing direct_sale_qty)
+- `backend/apps/core/scripts/calculate_balance.py` — `calculate_available_quantity()` (stored field update — correct)
+- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — line 12 (frontend formula — incomplete)
+
+**Potential Edge Cases**:
+- Deleting a trade with linked BOEs: BOE's `invoice_no` is cleared, allowing reuse
+- Deleting a trade with a counterpart: **blocked** by signal — user must delete both or use audited workflow
+- Deleting a trade with `SaleClassificationDecision` records: **blocked** by PROTECT on `trade` FK
+- Deleting a trade with `TradePairAudit` records: **blocked** by PROTECT on `source`/`counterpart` FKs
+- Deleting incentive trade lines triggers `update_incentive_license_on_trade_line_delete` signal to refresh sold status
+
+**Acceptance Criteria**:
+- Deleting an unpaired PURCHASE trade removes the trade, all lines, payments, and generated documents
+- Deleting a trade with linked BOEs clears the BOE's invoice reference without deleting the BOE
+- Attempting to delete one half of a paired trade returns 400 with clear error message
+- Only `TRADE_MANAGER` role can delete; `TRADE_VIEWER` sees no delete button
+
+**Force Delete** (bypassing counterpart protection):
+
+When a trade must be deleted despite having a counterpart or other protecting references, the following manual steps are required via Django shell or database operations:
+
+1. **Clear the counterpart link** on both trades:
+   ```python
+   # In Django shell
+   from apps.trade.models import LicenseTrade, TradePairAudit, SaleClassificationDecision
+   
+   trade = LicenseTrade.objects.get(pk=677)
+   counterpart = trade.counterpart
+   
+   # Clear counterpart on both sides
+   trade.counterpart = None
+   trade.save(update_fields=['counterpart'])
+   
+   if counterpart:
+       counterpart.counterpart = None
+       counterpart.save(update_fields=['counterpart'])
+   ```
+
+2. **Delete protecting audit records**:
+   ```python
+   # Delete TradePairAudit records (PROTECT FK on source/counterpart)
+   TradePairAudit.objects.filter(source=trade).delete()
+   TradePairAudit.objects.filter(counterpart=trade).delete()
+   
+   # Delete SaleClassificationDecision records (PROTECT FK on trade)
+   SaleClassificationDecision.objects.filter(trade=trade).delete()
+   ```
+
+3. **Delete the trade**:
+   ```python
+   trade.delete()
+   ```
+
+**Alternative: QuerySet delete() bypass**:
+Django's `QuerySet.delete()` bypasses `pre_delete` signals, but NOT `PROTECT` FK constraints. So you still need to clear the PROTECT references first:
+```python
+# Clear PROTECT references first
+trade = LicenseTrade.objects.get(pk=677)
+if trade.counterpart_id:
+    cp = LicenseTrade.objects.get(pk=trade.counterpart_id)
+    trade.counterpart = None
+    trade.save(update_fields=['counterpart'])
+    cp.counterpart = None
+    cp.save(update_fields=['counterpart'])
+
+TradePairAudit.objects.filter(source=trade).delete()
+TradePairAudit.objects.filter(counterpart=trade).delete()
+SaleClassificationDecision.objects.filter(trade=trade).delete()
+
+# Now queryset delete bypasses signals
+LicenseTrade.objects.filter(pk=677).delete()
+```
+
+**Warning**: Force delete destroys audit trail integrity. Use only for data cleanup or error recovery, not for normal operations.
 
 ---
 

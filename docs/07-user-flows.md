@@ -223,3 +223,191 @@ sequenceDiagram
 
     Note over Cron: Failures saved to failed-*.csv\nExit code 2 if any failures (triggers cron email)
 ```
+
+---
+
+## UF-12: Delete a Trade (Purchase/Sale)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant TradesListView
+    participant MasterList as MasterList.tsx
+    participant API
+    participant Backend as LicenseTradeViewSet
+    participant Signal as Django Signals
+    participant DB
+
+    User->>TradesListView: Click trash icon on a trade row
+    TradesListView->>MasterList: onDelete(tradeItem)
+    MasterList->>User: Show confirmation dialog
+    User->>MasterList: Confirm delete
+    MasterList->>API: DELETE /api/trade/trades/:id/
+    API->>Backend: destroy(pk)
+    Backend->>Backend: get_object() — fetch trade
+    Backend->>Signal: pre_delete signals fire
+
+    alt trade has counterpart
+        Signal-->>Backend: ValidationError (prevent_single_counterpart_delete)
+        Backend-->>API: 400 Bad Request
+        API-->>MasterList: Error response
+        MasterList->>User: Toast: "This trade has a linked counterpart..."
+    else trade has linked BOEs
+        Signal->>DB: Clear invoice_no/invoice_date on matching BOEs
+    else no constraints
+        Signal-->>Backend: OK
+    end
+
+    alt delete allowed
+        Backend->>DB: instance.delete()
+        DB->>DB: CASCADE delete LicenseTradeLine, IncentiveTradeLine,<br/>LicenseTradePayment, TradeInvoiceDocument,<br/>InvoiceDocumentAccessToken, InvoiceDocumentAuditEvent
+        DB->>DB: Clear boes M2M relation
+        Backend-->>API: 204 No Content
+        API-->>MasterList: Success
+        MasterList->>MasterList: invalidateList() — refresh trade list
+        MasterList->>User: Toast: "Record deleted successfully"
+    end
+```
+
+**Key points**:
+- Only `TRADE_MANAGER` role can delete
+- Paired trades (with `counterpart`) are **blocked** from single-side deletion
+- Linked BOE invoice references are cleared, not deleted
+- Child objects (lines, payments, documents) are CASCADE-deleted
+
+---
+
+## UF-14: Force Delete a Trade (Manual Override via Django Shell)
+
+**Trigger**: When a trade must be deleted despite having a counterpart, audit records, or classification decisions — e.g., data cleanup after testing or error recovery.
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Shell as Django Shell
+    participant Models as Trade Models
+    participant DB
+
+    Admin->>Shell: Open Django shell (python manage.py shell)
+    Shell->>Models: Import LicenseTrade, TradePairAudit, SaleClassificationDecision
+
+    Note over Admin,DB: Step 1: Clear counterpart link
+    Admin->>Shell: trade = LicenseTrade.objects.get(pk=<ID>)
+    Shell->>Models: Fetch trade and counterpart
+    Admin->>Shell: trade.counterpart = None; trade.save()
+    alt counterpart exists
+        Admin->>Shell: counterpart.counterpart = None; counterpart.save()
+    end
+    Models->>DB: Update counterpart = NULL on both trades
+
+    Note over Admin,DB: Step 2: Delete protecting audit records
+    Admin->>Shell: TradePairAudit.objects.filter(source=trade).delete()
+    Models->>DB: Delete TradePairAudit records
+    Admin->>Shell: TradePairAudit.objects.filter(counterpart=trade).delete()
+    Models->>DB: Delete more TradePairAudit records
+    Admin->>Shell: SaleClassificationDecision.objects.filter(trade=trade).delete()
+    Models->>DB: Delete SaleClassificationDecision records
+
+    Note over Admin,DB: Step 3: Delete the trade
+    Admin->>Shell: trade.delete()
+    Models->>DB: CASCADE delete LicenseTradeLine, IncentiveTradeLine,<br/>LicenseTradePayment, TradeInvoiceDocument,<br/>InvoiceDocumentAccessToken, InvoiceDocumentAuditEvent
+    Models->>DB: Clear boes M2M relation
+    Models-->>Shell: Trade deleted
+    Shell-->>Admin: Confirmation
+
+    Note over Admin,DB: ⚠️ Audit trail permanently destroyed
+```
+
+**Key points**:
+- No API endpoint exists for force delete — must use Django shell or direct database operations
+- Requires Django superuser access
+- The `counterpart` link must be cleared on **both** trades before deletion
+- `TradePairAudit` and `SaleClassificationDecision` records must be deleted to satisfy PROTECT FK constraints
+- `QuerySet.delete()` bypasses `pre_delete` signals but NOT `PROTECT` FK constraints
+- Linked BOE invoice references are **NOT** cleared when using `QuerySet.delete()` (signals are bypassed)
+- Use only for data cleanup, error recovery, or database maintenance — not for normal operations
+
+---
+
+## UF-15: Create Direct SALE Trade — Quantity Validation Error
+
+**Trigger**: User creates a SALE trade without BOEs (direct sale bypass path), and the requested quantity exceeds the available quantity for one or more import items.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant TradeForm as TradeForm.tsx
+    participant API
+    participant Serializer as LicenseTradeSerializer
+    participant Calculator as ItemBalanceCalculator
+    participant DB
+
+    User->>TradeForm: Fill SALE trade form (no BOEs selected)
+    User->>TradeForm: Add line items with quantities
+    User->>TradeForm: Submit form
+    TradeForm->>API: POST /api/trade/trades/
+    API->>Serializer: create(validated_data)
+    Serializer->>Serializer: Check direction==SALE AND boes is empty
+    alt validation triggered
+        Serializer->>DB: select_for_update() on each import item
+        Serializer->>Calculator: calculate_available_quantity(item)
+        Calculator->>DB: Read item.quantity (total)
+        Calculator->>DB: Sum RowDetails DEBIT qty (BOE debited)
+        Calculator->>DB: Get outstanding allotment qty
+        Calculator->>DB: Sum unpaired direct SALE qty
+        Calculator-->>Serializer: available = total - debited - allotted - directSale
+        alt requested > available
+            Serializer-->>API: ValidationError
+            API-->>TradeForm: 400 {"lines": "SALE quantity X exceeds..."}
+            TradeForm->>User: Display error message
+        else requested <= available
+            Serializer->>DB: Create trade and lines
+            Serializer-->>API: 201 Created
+            API-->>TradeForm: Trade data
+            TradeForm->>User: Success, navigate to trade list
+        end
+    else BOEs attached — validation skipped
+        Serializer->>DB: Create trade and lines
+        Serializer-->>API: 201 Created
+        API-->>TradeForm: Trade data
+        TradeForm->>User: Success
+    end
+```
+
+**Key points**:
+- Validation only fires for SALE trades with no BOEs (`boes: []`)
+- When BOEs are attached, the validation is skipped — the BOE linkage serves as the physical quantity debit
+- Row locks (`select_for_update()`) prevent concurrent over-consumption
+- The error message identifies the specific import item and shows both requested and available quantities
+- User must either reduce quantities or attach BOEs to bypass the validation
+
+---
+
+## UF-13: Copy Trade to Counterpart (Purchase ↔ Sale)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant TradesListView
+    participant MasterList as MasterList.tsx
+    participant API
+    participant Backend as EnhancedLicenseTradeViewSet
+    participant Service as trade_service.py
+    participant DB
+
+    User->>TradesListView: Click "Copy to Purchase/Sale" button
+    TradesListView->>MasterList: onCopyToCounterpart(tradeItem)
+    MasterList->>User: Show confirmation dialog
+    User->>MasterList: Confirm
+    MasterList->>API: POST /api/trade/trades/:id/copy-to-purchase/ or copy-to-sale/
+    API->>Backend: copy_to_purchase / copy_to_sale(pk)
+    Backend->>Service: copy_sale_to_purchase() or copy_purchase_to_sale()
+    Service->>DB: Create counterpart trade with shared transaction_pair_uuid
+    Service->>DB: Link counterpart FK both ways
+    Service->>DB: Create TradePairAudit record
+    Service-->>Backend: (source, counterpart, created)
+    Backend-->>API: 201 Created or 200 OK (if already exists)
+    API-->>MasterList: Response with counterpart info
+    MasterList->>MasterList: invalidateList()
+    MasterList->>User: Navigate to counterpart edit page
+```

@@ -70,12 +70,22 @@ available_quantity = authorised_cif - debited_quantity - allotted_quantity
 
 ## BR-07: Trade Invoice Numbering
 
-**Rule**: Invoice numbers are auto-generated per financial year in the format `INV-FY<year>-<sequential_number>`.
+**Rule**: Invoice numbers are auto-generated per financial year with a company-derived prefix:
 
-- Financial year starts April 1 (India)
-- Example: `INV-FY25-0042` for the 42nd invoice in FY 2025-26
-- Number resets to 0001 each April 1
-- Sequence is guaranteed unique per direction (PURCHASE vs SALE)
+| Direction | Format | Example |
+|---|---|---|
+| PURCHASE | `P-PREFIX/YYYY-YY/NNNN` | `P-LM/2025-26/0024` |
+| SALE | `PREFIX/YYYY-YY/NNNN` | `LM/2025-26/0001` |
+| COMMISSION_PURCHASE | `COM-P-PREFIX/YYYY-YY/NNNN` | `COM-P-LM/2025-26/0001` |
+| COMMISSION_SALE | `COM-PREFIX/YYYY-YY/NNNN` | `COM-LM/2025-26/0001` |
+
+**Prefix derivation**: First 3 letters of company name if 1 word; first letter of each word if 2+ words (e.g., "Labdhi Mercantile" → "LM").
+
+**Sequence**: Takes the maximum existing sequence number for the prefix+FY combination and adds 1 (skips gaps). Restarts at 0001 for each new financial year.
+
+**Uniqueness constraints**:
+- PURCHASE: `from_company` + `invoice_number` + `direction` must be unique (non-blank invoice_number)
+- SALE: `to_company` + `invoice_number` + `direction` must be unique (non-blank invoice_number)
 
 ---
 
@@ -185,6 +195,156 @@ Computations happen in the frontend (live preview while filling the form) and ar
 - Both trades are linked via `linked_trade` FK
 - Line items are duplicated
 - Invoice numbers are independent (separate sequence)
+
+---
+
+## BR-17A: Trade Counterpart System
+
+**Rule**: The counterpart system creates immutable, audited Sale↔Purchase pairs via `copy-to-purchase` / `copy-to-sale` API actions.
+
+**Mechanism**:
+- `counterpart` (OneToOneField, PROTECT) — reciprocal link between paired trades
+- `transaction_pair_uuid` (UUIDField) — shared UUID identifying the pair
+- `copied_from` / `copied_from_type` / `source_document_number` — provenance tracking
+- `TradePairAudit` — append-only audit log of pair operations
+
+**Constraint**: A trade with a `counterpart` **cannot be deleted alone**. The `prevent_single_counterpart_delete` signal raises `ValidationError`: "This trade has a linked counterpart. Use the audited pair-deletion workflow."
+
+---
+
+## BR-17B: Trade Deletion Rules
+
+**Rule**: Deleting a trade removes the trade header, all child objects, and clears BOE invoice references.
+
+**Delete Flow**:
+1. User clicks delete button → confirmation dialog → `DELETE /api/trade/trades/:id/`
+2. Backend validates permissions (`TRADE_MANAGER` role required)
+3. Pre-delete signals fire:
+   - `clear_boe_invoice_on_trade_delete`: clears `invoice_no`/`invoice_date` on linked BOEs
+   - `prevent_single_counterpart_delete`: blocks if `counterpart_id` is set
+4. Django CASCADE deletes: `LicenseTradeLine`, `IncentiveTradeLine`, `LicenseTradePayment`, `TradeInvoiceDocument`, `InvoiceDocumentAccessToken`, `InvoiceDocumentAuditEvent`
+5. M2M relation `boes` is cleared
+
+**Blocking Conditions**:
+- Trade has a `counterpart` (paired Sale↔Purchase) — blocked by signal
+- Trade referenced by `SaleClassificationDecision` — blocked by PROTECT FK
+- Trade referenced by `TradePairAudit` — blocked by PROTECT FK
+
+---
+
+## BR-17C: Trade Force Delete (Manual Override)
+
+**Rule**: When a trade must be deleted despite having protecting references (counterpart, audit records, classification decisions), the force delete process must be followed via Django shell or database operations. There is no API endpoint for force delete.
+
+**Prerequisites**: Django superuser access or database admin access.
+
+**Process**:
+1. Clear the `counterpart` link on both trades in the pair by setting `counterpart = NULL`
+2. Delete all `TradePairAudit` records where `source` or `counterpart` matches the trade
+3. Delete all `SaleClassificationDecision` records where `trade` matches
+4. Delete the trade using `trade.delete()` or `LicenseTrade.objects.filter(pk=id).delete()`
+
+**Technical Notes**:
+- Django's `QuerySet.delete()` bypasses `pre_delete` signals (`clear_boe_invoice_on_trade_delete`, `prevent_single_counterpart_delete`) but does NOT bypass `PROTECT` FK constraints
+- The PROTECT FK constraints must be cleared before any delete method will succeed
+- Child objects (lines, payments, documents) are still CASCADE-deleted
+
+**Warning**: Force delete permanently destroys audit trail integrity. The `TradePairAudit` records and `SaleClassificationDecision` records are lost. Use only for:
+- Data cleanup after development/testing
+- Error recovery when a trade was created incorrectly
+- Database maintenance operations
+
+**Not allowed** for normal business operations — paired trades should use the audited pair-deletion workflow.
+
+---
+
+## BR-17D: Sale Quantity Validation (Direct Sale Without BOEs)
+
+**Rule**: When creating a SALE trade without BOEs (direct sale bypass path), the total requested quantity per import item must not exceed the available quantity. This prevents over-selling imported goods beyond what the license allows.
+
+**Trigger**: `direction == "SALE"` AND `boes` array is empty on trade creation.
+
+**Available Quantity Formula**:
+```
+Available = total_quantity − BOE_debited − outstanding_allotted − direct_sale_quantity
+```
+
+Where:
+- **total_quantity**: The import item's stored `quantity` field
+- **BOE_debited**: Sum of DEBIT RowDetails quantities for this item (physical consumption via BOE linkage)
+- **outstanding_allotted**: Allotment quantity not yet linked to a BOE (from `LicenseBalanceCalculator.get_outstanding_allotment_totals`)
+- **direct_sale_quantity**: Quantity consumed by existing unpaired direct SALE lines (no counterpart, no linked_trade, no BOE linkage)
+
+**Direct Sale Quantity Exclusions** (what does NOT count as consumption):
+- SALE lines with a linked BOE — the BOE's RowDetails DEBIT already accounts for the physical quantity
+- SALE lines with a counterpart (paired Sale↔Purchase) — net zero effect, the purchase restores the quantity
+- SALE lines with a `linked_trade` — same net-zero logic for manually linked pairs
+- Allocated portions via `InvoiceBOEAllocation` — only `qty_kg − allocated_qty` counts as direct consumption
+
+**When BOEs ARE attached**: This validation is skipped — the BOE linkage itself serves as the physical quantity debit, and the BOE's RowDetails DEBIT rows track actual consumption.
+
+**Concurrency Protection**: Uses `select_for_update()` row locks on import items during validation to prevent two concurrent direct sales from both over-consuming the same item.
+
+**Error Message**: `"SALE quantity {requested} exceeds available quantity {available} for import item {item_id}."`
+
+**Files**:
+- `backend/apps/trade/serializers.py` — `LicenseTradeSerializer.create()` (validation logic)
+- `backend/apps/license/services/balance_calculator.py` — `ItemBalanceCalculator.calculate_available_quantity()` (formula)
+- `backend/apps/license/services/balance_calculator.py` — `ItemBalanceCalculator._direct_sale_quantity_rows()` (direct sale filter)
+
+---
+
+## BR-17E: Available Quantity Calculation — Multiple Paths
+
+**Rule**: The system has **four different code paths** that compute "available quantity" for import items. They use **different formulas**, so the displayed balance in some UI views can differ from the amount the trade creation API actually accepts.
+
+**Path 1 — Trade creation validation (authoritative)**:
+```
+Available = total_quantity − BOE_debited − outstanding_allotted − direct_sale_quantity
+```
+- **File**: `backend/apps/license/services/balance_calculator.py` — `ItemBalanceCalculator.calculate_available_quantity()`
+- **Used by**: `LicenseTradeSerializer.create()` when validating direct SALE trades
+- **Status**: ✓ Complete formula — this is the authoritative limit
+
+**Path 2 — Stored field update**:
+```
+Available = quantity − debited − allotted − direct_sale_quantity
+```
+- **File**: `backend/apps/core/scripts/calculate_balance.py` — `calculate_available_quantity()`
+- **Used by**: Model save signals, allotment/BOE completion callbacks that update `item.available_quantity`
+- **Status**: ✓ Complete formula — matches Path 1
+
+**Path 3 — Balance snapshot API**:
+```
+Available = total_quantity − debited_quantity − outstanding_qty
+```
+- **File**: `backend/apps/license/services/balance_snapshot.py` — `get_snapshot_bulk()` lines 202-203
+- **Used by**: License list views, balance overview endpoints
+- **Status**: ⚠️ **Missing `direct_sale_quantity`** — returns higher value than Path 1 when direct sales exist
+
+**Path 4 — Frontend Customs Ledger display**:
+```
+Actual Available = quantity − boe_debited_quantity
+```
+- **File**: `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` line 12
+- **Used by**: License overview page's "Customs Ledger — Item Detail" card view
+- **Status**: ⚠️ **Missing `outstanding_allotted` and `direct_sale_quantity`** — returns the highest value of all paths
+
+**Impact**: When an import item has prior direct sales or outstanding allotments, the user sees a higher "Available" quantity in the Customs Ledger section than what the API will accept for a new direct SALE trade. The discrepancy equals `outstanding_allotted + direct_sale_quantity`.
+
+**Example**: Item with 342,672.02 kg total quantity, 0 kg BOE debited, 0 kg outstanding allotted, and 15,251.30 kg in prior direct sales:
+- Path 1 (validation): 342,672.02 − 0 − 0 − 15,251.30 = **327,420.72 kg** ✓
+- Path 3 (snapshot): 342,672.02 − 0 − 0 = **342,672.02 kg** ⚠️
+- Path 4 (frontend display): 342,672.02 − 0 = **342,672.02 kg** ⚠️
+
+**Resolution guidance**: The frontend's `CustomsLedgerSection.tsx` should use the stored `item.available_quantity` field (which includes all four components) instead of computing `quantity - boe_debited_quantity`. The `balance_snapshot.py` should include `direct_sale_quantity` in its calculation to match the authoritative formula.
+
+**Files**:
+- `backend/apps/license/services/balance_calculator.py` — authoritative formula
+- `backend/apps/core/scripts/calculate_balance.py` — stored field update
+- `backend/apps/license/services/balance_snapshot.py` — snapshot API (incomplete)
+- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — frontend display (incomplete)
+- `frontend/src/pages/license-overview/ItemsTab.tsx` — uses stored field (correct)
 
 ---
 

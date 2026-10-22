@@ -91,3 +91,4 @@ server-envs/
 
 # DFIA PDF copies — stored on disk, not tracked in git
 backend/DFIA_COPY/
+.codex/

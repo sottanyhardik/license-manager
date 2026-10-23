@@ -39,23 +39,34 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 1,
     },
-    # PKO: HSN 1513 OR desc 1513
+    # OLIVE OIL: (HSN starts with 1509 OR HSN starts with 1510 OR Description contains 1509 OR Description contains 1510)
+    # If item has 1509 and 1511 then olive oil (checked before RBD PALMOLEIN OIL)
+    # If item has 1509 and 1513 then olive oil (checked before PKO)
     {
-        "name": "PKO",
-        "hsn_prefixes": ["1513"],
-        "desc_contains_any": ["1513"],
+        "name": "OLIVE OIL",
+        "hsn_prefixes": ["1509", "1510"],
+        "desc_contains_any": ["1509", "1510"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 2,
     },
-    # RBD PALMOLEIN OIL: (HSN 1511 OR desc 1511) AND NOT (HSN 1513 OR desc 1513)
+    # PKO: HSN 1513 OR desc 1513 (exclude if also olive oil 1509/1510)
+    {
+        "name": "PKO",
+        "hsn_prefixes": ["1513"],
+        "desc_contains_any": ["1513"],
+        "exclude_hsn_prefixes": ["1509", "1510"],
+        "exclude_desc_contains": ["1509", "1510"],
+        "sort_order": 3,
+    },
+    # RBD PALMOLEIN OIL: (HSN 1511 OR desc 1511) AND NOT (HSN 1513/1509/1510 OR desc 1513/1509/1510)
     {
         "name": "RBD PALMOLEIN OIL",
         "hsn_prefixes": ["1511"],
         "desc_contains_any": ["1511"],
-        "exclude_hsn_prefixes": ["1513"],
-        "exclude_desc_contains": ["1513"],
-        "sort_order": 3,
+        "exclude_hsn_prefixes": ["1513", "1509", "1510"],
+        "exclude_desc_contains": ["1513", "1509", "1510"],
+        "sort_order": 4,
     },
     # DWP or SWP: HSN 0404 OR desc 0404
     {
@@ -64,7 +75,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_any": ["0404"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
-        "sort_order": 4,
+        "sort_order": 5,
     },
     # WPC: (HSN 3502 OR desc 3502) AND NOT (0404 or 0406)
     {
@@ -73,7 +84,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_any": ["3502"],
         "exclude_hsn_prefixes": ["0404", "0406"],
         "exclude_desc_contains": ["0404", "0406"],
-        "sort_order": 5,
+        "sort_order": 6,
     },
     # WHEAT FLOUR: (HSN 1101 OR desc 1101) AND desc contains FLOUR
     {
@@ -83,7 +94,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["FLOUR"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
-        "sort_order": 6,
+        "sort_order": 7,
     },
     # YEAST: (HSN 2102/2106 OR desc 2102/2106) AND desc contains YEAST
     {
@@ -93,7 +104,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["YEAST"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
-        "sort_order": 7,
+        "sort_order": 8,
     },
     # CHEESE: (HSN 0406 OR desc 0406) AND NOT (HSN 0404 OR desc 0404)
     {
@@ -104,13 +115,24 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": ["0404"],
         "sort_order": 99,
     },
-    # FOOD FLAVOUR: (HSN 0802 OR desc 0802) AND NOT (HSN 0813 OR desc 0813) AND NOT (HSN 2009 OR desc 2009) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
+    # APPLE DRIES: HSN 0813 OR desc contains 0813 (checked before FOOD FLAVOUR so pure 0813 items match here)
+    # Excludes items with "FOOD ADDITIVES" in description so they fall through to FOOD FLAVOUR
+    {
+        "name": "APPLE DRIES",
+        "hsn_prefixes": ["0813"],
+        "desc_contains_any": ["0813"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": ["FOOD ADDITIVES"],
+        "sort_order": 99,
+    },
+    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813/2008 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
+    # Covers: Fruit (0804/0805/0813/2008), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
     {
         "name": "FOOD FLAVOUR",
-        "hsn_prefixes": ["0802"],
-        "desc_contains_any": ["0802"],
-        "exclude_hsn_prefixes": ["0813", "2009"],
-        "exclude_desc_contains": ["0813", "2009", "DIETARY", "CONFECTIONERY"],
+        "hsn_prefixes": ["0802", "0804", "0805", "0813", "2008"],
+        "desc_contains_any": ["0802", "0804", "0805", "0813", "2008", "FOOD ADDITIVES"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": ["DIETARY", "CONFECTIONERY"],
         "sort_order": 99,
     },
     # JUICE: (HSN 2009 OR desc 2009) AND desc contains FRUIT
@@ -151,29 +173,47 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # CMC: HSN 3912/3902 OR desc contains 3912/3902
+    # CMC: HSN 3912 OR desc contains 3912
     {
         "name": "CMC",
-        "hsn_prefixes": ["3912", "3902"],
-        "desc_contains_any": ["3912", "3902"],
+        "hsn_prefixes": ["3912"],
+        "desc_contains_any": ["3912"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # PP (Polypropylene): HSN 3920/3923 OR desc contains 3920/3923/PP
-    {
-        "name": "PP",
-        "hsn_prefixes": ["3920", "3923"],
-        "desc_contains_any": ["3920", "3923", "PP"],
-        "exclude_hsn_prefixes": ["3902", "3912"],
-        "exclude_desc_contains": ["3902", "3912"],
-        "sort_order": 99,
-    },
-    # ALUMINIUM FOIL: HSN 7607 OR desc contains 7607
+    # ALUMINIUM FOIL: HSN 7607 OR desc contains 7607 (priority before PP so 7607 matches first)
     {
         "name": "ALUMINIUM FOIL",
         "hsn_prefixes": ["7607"],
         "desc_contains_any": ["7607"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
+    # PP (Polypropylene): HSN 3902/3920/3923 OR desc contains 3902/3920/3923/PP (exclude 7607 so aluminium foil doesn't match PP)
+    {
+        "name": "PP",
+        "hsn_prefixes": ["3902", "3920", "3923"],
+        "desc_contains_any": ["3902", "3920", "3923", "PP"],
+        "exclude_hsn_prefixes": ["3912", "7607"],
+        "exclude_desc_contains": ["3912", "7607"],
+        "sort_order": 99,
+    },
+    # GLASS BOTTLE: HSN 7010 OR desc contains 7010
+    {
+        "name": "GLASS BOTTLE",
+        "hsn_prefixes": ["7010"],
+        "desc_contains_any": ["7010"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
+    # SANITATION: desc contains SANITATION
+    {
+        "name": "SANITATION",
+        "hsn_prefixes": [],
+        "desc_contains_any": ["SANITATION"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 99,

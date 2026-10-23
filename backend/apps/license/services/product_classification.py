@@ -85,12 +85,12 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 6,
     },
-    # YEAST: (HSN 2102/2106 OR desc 2102/2106) AND desc contains LEAVENING
+    # YEAST: (HSN 2102/2106 OR desc 2102/2106) AND desc contains YEAST
     {
         "name": "YEAST",
         "hsn_prefixes": ["2102", "2106"],
         "desc_contains_any": ["2102", "2106"],
-        "desc_contains_all": ["LEAVENING"],
+        "desc_contains_all": ["YEAST"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 7,

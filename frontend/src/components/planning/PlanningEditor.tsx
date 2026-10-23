@@ -101,7 +101,10 @@ const validSplitsOf = (g: Group): Split[] =>
 // selectable names are only a compatibility fallback for older responses.
 const splitLabel = (sp: Split, group: Group, index: number): string => {
     if (sp.planning_item_name) return sp.planning_item_name;
-    const name = group.itemNames.find((n) => String(n.id) === sp.item_name)?.name;
+    const item = group.itemNames.find((n) => String(n.id) === sp.item_name);
+    const name = item?.name;
+    const hsCode = item?.hsCode;
+    if (name && hsCode) return `${name} (HSN ${hsCode})`;
     return name || `Planning item ${index + 1}`;
 };
 
@@ -165,7 +168,7 @@ interface Group {
     license_balance_cif: number;
     effective_license_balance_cif: number;
     balance_cif_fc: number;
-    itemNames: { id: number; name: string }[];
+    itemNames: { id: number; name: string; hsCode?: string | null }[];
     splits: Split[];
     // Utilization-plan status (Original/Used/Remaining), identical across
     // every member of the group — see plan_status_for on the backend. Used
@@ -359,7 +362,7 @@ function SplitCard({
                         className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label="Item name">
                         <option value="">— None —</option>
-                        {group.itemNames.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+                        {group.itemNames.map((n) => <option key={n.id} value={n.id}>{n.name}{n.hsCode ? ` (HSN ${n.hsCode})` : ''}</option>)}
                     </select>
                 </div>
 
@@ -622,7 +625,7 @@ export default function PlanningEditor({
             const groupRows: {
                 group_id: number; description?: string | null; hs_code?: string | null;
                 serials?: number[]; member_ids?: number[];
-                item_names?: { id: number; name: string }[];
+                item_names?: { id: number; name: string; hs_code?: string | null }[];
                 available_quantity?: string | number; total_quantity?: string | number;
                 total_qty?: string | number; total_utilized_qty?: string | number; balance_qty?: string | number;
                 effective_available_quantity?: string | number;
@@ -664,7 +667,7 @@ export default function PlanningEditor({
                         grp.effective_license_balance_cif ?? grp.license_balance_cif ?? license?.get_balance_cif ?? 0,
                     ),
                     balance_cif_fc: Number(grp.balance_cif_fc ?? 0),
-                    itemNames: grp.item_names ?? [],
+                    itemNames: (grp.item_names ?? []).map(n => ({ id: n.id, name: n.name, hsCode: n.hs_code || undefined })),
                     splits: splits.length ? splits : [emptySplit()],
                     operational_status: grp.operational_status,
                     presentation_status: grp.presentation_status,

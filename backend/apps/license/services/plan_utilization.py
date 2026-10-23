@@ -167,7 +167,9 @@ def plan_utilization_rows(
             name = (getattr(name_obj, "name", "") or "").strip()
             if name_obj.id not in group["_item_name_ids"]:
                 group["_item_name_ids"].add(name_obj.id)
-                group["item_names"].append({"id": name_obj.id, "name": name})
+                hs = getattr(item, "hs_code", None)
+                hs_code_value = hs.hs_code if hs and getattr(hs, "hs_code", None) else None
+                group["item_names"].append({"id": name_obj.id, "name": name, "hs_code": hs_code_value})
         # Retain an explicitly lower persisted availability (for example a
         # reconciled/manual restriction) while preventing a stale, higher
         # denormalized value from masking a just-written live debit.

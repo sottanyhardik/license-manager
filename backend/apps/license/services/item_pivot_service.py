@@ -69,10 +69,29 @@ def _merge_plan_cell(existing, candidate):
         if existing.get("available_cif") is not None and candidate.get("available_cif") is not None:
             existing["available_cif"] = _text(_decimal(existing["available_cif"]) + _decimal(candidate["available_cif"]))
 
-    hsn_codes = {row.get("hsn_code") for row in existing["source_items"] if row.get("hsn_code")}
-    descriptions = {row.get("description") for row in existing["source_items"] if row.get("description")}
-    existing["hsn_code"] = next(iter(hsn_codes)) if len(hsn_codes) == 1 else ""
-    existing["description"] = next(iter(descriptions)) if len(descriptions) == 1 else ""
+    hsn_codes = [row.get("hsn_code") for row in existing["source_items"] if row.get("hsn_code")]
+    descriptions = [row.get("description") for row in existing["source_items"] if row.get("description")]
+    # Normalize descriptions: strip whitespace and ignore case for deduplication.
+    # If all descriptions are the same after normalization, show one; otherwise join with comma.
+    if hsn_codes:
+        unique_hsns = list(dict.fromkeys(hs.strip() for hs in hsn_codes if hs.strip()))
+        existing["hsn_code"] = unique_hsns[0] if len(unique_hsns) == 1 else ", ".join(unique_hsns)
+    else:
+        existing["hsn_code"] = ""
+    if descriptions:
+        # Normalize by stripping whitespace and lowercasing for comparison
+        normalized = [desc.strip() for desc in descriptions if desc.strip()]
+        # Deduplicate while preserving order; ignore case for comparison
+        seen = set()
+        unique_descs = []
+        for desc in normalized:
+            key = desc.lower()
+            if key not in seen:
+                seen.add(key)
+                unique_descs.append(desc)
+        existing["description"] = unique_descs[0] if len(unique_descs) == 1 else ", ".join(unique_descs)
+    else:
+        existing["description"] = ""
     return existing
 
 
@@ -220,6 +239,19 @@ class ItemPivotService:
                 description_for_class = next((item.description for item in source_items if item.description), item_name)
                 hsn_for_class = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
                 product_category = classify_product(hsn_for_class, description_for_class)
+                # Collect all descriptions and HSN codes from source items for display.
+                # Deduplicate by case-insensitive comparison, preserve original casing.
+                source_descs = [item.description.strip() for item in source_items if item.description and item.description.strip()]
+                seen_desc = set()
+                unique_descs = []
+                for d in source_descs:
+                    if d.lower() not in seen_desc:
+                        seen_desc.add(d.lower())
+                        unique_descs.append(d)
+                display_description = unique_descs[0] if len(unique_descs) == 1 else (", ".join(unique_descs) if unique_descs else item_name)
+                source_hsns = [item.hs_code.hs_code.strip() for item in source_items if item.hs_code_id and item.hs_code.hs_code and item.hs_code.hs_code.strip()]
+                unique_hsns = list(dict.fromkeys(hs for hs in source_hsns if hs))
+                display_hsn = unique_hsns[0] if len(unique_hsns) == 1 else (", ".join(unique_hsns) if unique_hsns else "")
                 # The matrix key uses product category so items with the same
                 # category (e.g. DIETARY FIBRE) merge into one column per license.
                 # A canonical item with two SIONs must remain two cells.
@@ -299,7 +331,7 @@ class ItemPivotService:
                 candidate_cell = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
                     "product_category": product_category,
-                    "hsn_code": hsn_for_class, "description": description_for_class, "total_qty": _text(adjusted_total_qty),
+                    "hsn_code": display_hsn, "description": display_description, "total_qty": _text(adjusted_total_qty),
                     # A pivot cell is a projection of particular import rows,
                     # not a substitute for them.  Keep the precise source
                     # lineage available to the API/UI/exporter rather than

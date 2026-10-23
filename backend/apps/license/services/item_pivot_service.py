@@ -12,6 +12,7 @@ from apps.license.services.item_usage import (
     billed_no_boe_bulk_map,
     billed_no_boe_qty_bulk_map,
 )
+from apps.license.services.product_classification import classify_product
 
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
@@ -292,8 +293,11 @@ class ItemPivotService:
                 canonical_item_cif_capacity = (source_total_cif * adjusted_total_qty / source_total_qty
                                                if source_total_qty > ZERO_QTY else ZERO_CIF)
                 available_cif = max(item_cif_cap - max(source_used_cif, ZERO_CIF), ZERO_CIF) if has_item_cif_cap else None
+                # Classify the item into a product category based on HSN and description
+                product_category = classify_product(hsn, description)
                 candidate_cell = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
+                    "product_category": product_category,
                     "hsn_code": hsn, "description": description, "total_qty": _text(adjusted_total_qty),
                     # A pivot cell is a projection of particular import rows,
                     # not a substitute for them.  Keep the precise source
@@ -383,8 +387,11 @@ class ItemPivotService:
                 unplanned_restriction_value = None
                 if unplanned_restriction_pct is not None:
                     unplanned_restriction_value = item_total_cif * _decimal(unplanned_restriction_pct) / Decimal("100")
+                # Classify the unplanned item into a product category
+                unplanned_product_category = classify_product(hsn_str, item_name_str)
                 cells[unplanned_key] = {
                     "canonical_item_id": first_item_name_id, "item_name": item_name_str, "sion": sion_str,
+                    "product_category": unplanned_product_category,
                     "hsn_code": hsn_str, "description": item_name_str,
                     "total_qty": _text(item_total_qty),
                     "source_items": [
@@ -436,7 +443,10 @@ class ItemPivotService:
                 name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or default_sion
                 key = f"{plan.item_name_id or 'unmapped'}:{sion}"
-                group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
+                # Look up the product category from the cell if it exists
+                plan_cell = cells.get(key)
+                plan_product_category = plan_cell.get("product_category") if plan_cell else None
+                group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "product_category": plan_product_category, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
             # Register unplanned items in item_groups so they appear as columns
             # in the report matrix even when no plan exists for them.
             for item in import_items:
@@ -455,7 +465,9 @@ class ItemPivotService:
                     unplanned_key = f"hsn:{hsn_str}:{sion_str}"
                 else:
                     unplanned_key = f"unplanned:{item.id}:{sion_str}"
-                group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": first_item_name_id, "name": item_name_str, "sion": sion_str, "priority": 999999, "sequence": item.id})
+                unplanned_cell = cells.get(unplanned_key)
+                unplanned_product_category = unplanned_cell.get("product_category") if unplanned_cell else None
+                group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": first_item_name_id, "name": item_name_str, "sion": sion_str, "product_category": unplanned_product_category, "priority": 999999, "sequence": item.id})
             issues = []
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])
@@ -509,7 +521,18 @@ class ItemPivotService:
             group["license_count"] = len(group["licenses"])
             group["issue_license_count"] = sum(1 for row in group["licenses"] if row["issue_count"])
             group["issue_record_count"] = sum(row["issue_count"] for row in group["licenses"])
-            group["item_groups"] = sorted(group["item_groups"].values(), key=lambda row: (row["sion"], row["priority"], row["sequence"], row["name"]))
+            # Sort by product category first, then SION, priority, sequence, name
+            # Items without a product category sort last
+            group["item_groups"] = sorted(
+                group["item_groups"].values(),
+                key=lambda row: (
+                    row.get("product_category") or "ZZZ_UNCLASSIFIED",
+                    row["sion"],
+                    row["priority"],
+                    row["sequence"],
+                    row["name"],
+                )
+            )
             totals = {
                 "total_cif": sum((_decimal(row["total_cif"]) for row in group["licenses"]), ZERO_CIF),
                 "debited_cif": sum((_decimal(row["debited_cif"]) for row in group["licenses"]), ZERO_CIF),
@@ -575,6 +598,7 @@ class ItemPivotService:
             status = "over_utilized" if actual_contributing else ("over_planned" if contributing else ("planned" if planned_qty else "available"))
             items.append({
                 "key": key, "item_name": row["name"], "sion": row["sion"],
+                "product_category": row.get("product_category"),
                 "priority": row["priority"], "sequence": row["sequence"],
                 "hsn_codes": sorted({cell["hsn_code"] for cell in cells if cell.get("hsn_code")}),
                 "license_count": len(cells), "total_qty": _text(total_qty), "boe_used_qty": _text(boe_qty),
@@ -588,7 +612,7 @@ class ItemPivotService:
                 "contributing_licenses": contributing,
                 "licenses": cells,
             })
-        items = sorted(items, key=lambda row: (row["sion"], row["priority"], row["sequence"], row["item_name"]))
+        items = sorted(items, key=lambda row: (row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row["priority"], row["sequence"], row["item_name"]))
         global_summary = {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         # Aliases make the report contract explicit while preserving the
         # existing consumers during the presentation-only migration.

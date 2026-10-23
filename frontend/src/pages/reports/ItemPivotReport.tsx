@@ -265,13 +265,59 @@ function NotificationLicenseSummary({ group }: { group: any }) {
 /** Backend-owned canonical pivot DTO.  This component formats only. */
 function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, selectedItem, exceptionOnly }: { groups: any[]; onCondition: (license: any) => void; onTransfer: (license: any) => void; onReplan: (license: any) => void; onIssue: (license: any) => void; selectedItem?: string | null; exceptionOnly?: boolean }) {
     const fixed = ['SR NO', 'DFIA NO', 'EXPIRY DT', 'EXPORTER', 'TOTAL CIF', 'DEBITED CIF', 'ALLOTTED CIF', 'PLANNED CIF', 'BALANCE CIF', 'ISSUES'];
+    // Product category colors for visual distinction
+    const PRODUCT_CATEGORY_COLORS = {
+        'PKO': '#fef3c7',
+        'RBD PALMOLEIN OIL': '#fed7aa',
+        'DWP/SWP': '#dbeafe',
+        'CHEESE': '#fce7f3',
+        'WPC': '#e0e7ff',
+        'DIETARY FIBRE': '#d1fae5',
+        'YEAST': '#fef9c3',
+        'SUGAR': '#f3e8ff',
+        'WHEAT FLOUR': '#ffedd5',
+        'PP': '#e0f2fe',
+        'PAPER': '#f0fdf4',
+        'ALUMINIUM FOIL': '#f1f5f9',
+    };
     return <div className="space-y-6">
-        {groups.map((group) => { const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem)); return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`} data-item-pivot-sticky-stack>
-            <CardHeader data-item-pivot-notification className="sticky top-0 z-30 flex-row items-center justify-between text-primary-foreground shadow-sm" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
-                <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
-                <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
-            </CardHeader>
-            <CardContent className="p-0"><div className="overflow-x-auto" data-item-pivot-scroll-container><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted"><tr data-item-pivot-header-tier>{fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}{group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={14} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}</tr><tr data-item-pivot-header-tier>{group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','ALLOTTED CIF','DEBITED QTY','DEBITED CIF','BILLED QTY','BILLED CIF','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}</tr></thead>
+        {groups.map((group) => {
+            // Compute product category spans for merged header row
+            const categorySpans = [];
+            let j = 0;
+            while (j < group.item_groups.length) {
+                const cat = group.item_groups[j].product_category || 'UNCLASSIFIED';
+                let span = 0;
+                while (j + span < group.item_groups.length && (group.item_groups[j + span].product_category || 'UNCLASSIFIED') === cat) {
+                    span++;
+                }
+                categorySpans.push({ category: cat, span: span * 14, start: j });
+                j += span;
+            }
+            const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem));
+            return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`} data-item-pivot-sticky-stack>
+                <CardHeader data-item-pivot-notification className="sticky top-0 z-30 flex-row items-center justify-between text-primary-foreground shadow-sm" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
+                    <div><div className="flex items-center gap-2 font-semibold"><Bell className="size-4" /> Notification Number: {group.notification_number}<Badge variant="secondary">{group.purchase_status?.name || 'UNASSIGNED'}</Badge></div><div className="mt-1 text-xs opacity-90">{group.license_count} Licences</div></div>
+                    <span className="flex size-9 items-center justify-center rounded-full bg-white/20 font-bold">{group.license_count}</span>
+                </CardHeader>
+                <CardContent className="p-0"><div className="overflow-x-auto" data-item-pivot-scroll-container><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted">
+                    {/* Row 1: Product category headers */}
+                    <tr data-item-pivot-header-tier>
+                        {fixed.map((name, i) => <th key={name} rowSpan={3} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}
+                        {categorySpans.map((cs) => {
+                            const bgColor = PRODUCT_CATEGORY_COLORS[cs.category] || '#f3f4f6';
+                            return <th key={`cat-${cs.category}`} colSpan={cs.span} className="border p-2 text-center font-bold text-xs uppercase tracking-wider" style={{backgroundColor: bgColor, color: '#374151'}}>{cs.category}</th>;
+                        })}
+                    </tr>
+                    {/* Row 2: Item name headers */}
+                    <tr data-item-pivot-header-tier>
+                        {group.item_groups.map((item, i) => <th id={`pivot-item-${item.key}`} key={item.key} colSpan={14} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{item.name} — {item.sion}</th>)}
+                    </tr>
+                    {/* Row 3: Field sub-headers */}
+                    <tr data-item-pivot-header-tier>
+                        {group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','ALLOTTED CIF','DEBITED QTY','DEBITED CIF','BILLED QTY','BILLED CIF','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}
+                    </tr>
+                </thead>
                 <tbody>{visibleLicenses.map((license, index) => {
                     const pivotCells = group.item_groups.flatMap((item, itemIndex) => {
                         const cell = license.items?.[item.key];
@@ -358,7 +404,10 @@ export default function ItemPivotReport() {
                     cell.style.zIndex = String(40 - index);
                     // An opaque background prevents licence rows from
                     // bleeding through a tier while it is pinned.
-                    cell.style.backgroundColor = index === 0 ? '#f8fafc' : '#e2e8f0';
+                    // Only override background for rows without explicit color (item sub-headers).
+                    if (!cell.style.backgroundColor || cell.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
+                        cell.style.backgroundColor = index === 0 ? '#f8fafc' : '#e2e8f0';
+                    }
                 });
                 top += row.getBoundingClientRect().height;
             });

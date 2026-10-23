@@ -275,6 +275,11 @@ class ItemPivotService:
             # Build zero-plan cells for import items not covered by any active
             # plan so the pivot report shows the full licence contents — even
             # items with available quantity 0 or no plan at all.
+            # Use a key that merges with planned items when possible:
+            # prefer the first attached ItemNameModel (matching the planned
+            # item's key format), then fall back to HSN-based key so items
+            # with the same HSN merge across licenses, then fall back to
+            # import item id as a last resort.
             planned_import_item_ids = {plan.import_item_id for plan in plans_by_license[license_obj.id]}
             for item in import_items:
                 if item.id in planned_import_item_ids:
@@ -282,9 +287,18 @@ class ItemPivotService:
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
                 hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
                 sion_str = default_sion
-                # Use a key derived from the import item id so it never
-                # collides with a planned item's item_name_id key.
-                unplanned_key = f"unplanned:{item.id}:{sion_str}"
+                # Determine the pivot key — try to match a planned item's key
+                # so the column merges across planned and unplanned licenses.
+                first_item_name_id = None
+                for attached in item.items.all():
+                    first_item_name_id = attached.id
+                    break
+                if first_item_name_id is not None:
+                    unplanned_key = f"{first_item_name_id}:{sion_str}"
+                elif hsn_str:
+                    unplanned_key = f"hsn:{hsn_str}:{sion_str}"
+                else:
+                    unplanned_key = f"unplanned:{item.id}:{sion_str}"
                 item_usage_boe_qty = usage_totals[item.id]["boe_qty"]
                 item_usage_boe_cif = usage_totals[item.id]["boe_cif"]
                 item_usage_allot_qty = usage_totals[item.id]["allot_qty"]
@@ -348,9 +362,19 @@ class ItemPivotService:
                 if item.id in planned_import_item_ids:
                     continue
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
+                hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
                 sion_str = default_sion
-                unplanned_key = f"unplanned:{item.id}:{sion_str}"
-                group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": None, "name": item_name_str, "sion": sion_str, "priority": 999999, "sequence": item.id})
+                first_item_name_id = None
+                for attached in item.items.all():
+                    first_item_name_id = attached.id
+                    break
+                if first_item_name_id is not None:
+                    unplanned_key = f"{first_item_name_id}:{sion_str}"
+                elif hsn_str:
+                    unplanned_key = f"hsn:{hsn_str}:{sion_str}"
+                else:
+                    unplanned_key = f"unplanned:{item.id}:{sion_str}"
+                group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": first_item_name_id, "name": item_name_str, "sion": sion_str, "priority": 999999, "sequence": item.id})
             issues = []
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])

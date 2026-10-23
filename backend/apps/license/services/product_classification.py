@@ -142,6 +142,24 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
+    # CEREALS: HSN 1104 OR desc contains 1104
+    {
+        "name": "CEREALS",
+        "hsn_prefixes": ["1104"],
+        "desc_contains_any": ["1104"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
+    # CMC: HSN 3912 OR desc contains 3912
+    {
+        "name": "CMC",
+        "hsn_prefixes": ["3912"],
+        "desc_contains_any": ["3912"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
 ]
 
 

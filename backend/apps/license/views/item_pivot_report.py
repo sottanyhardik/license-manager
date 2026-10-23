@@ -1668,7 +1668,6 @@ class ItemPivotReportView(APIView):
                 numFields = len(fields)  # 14 sub-columns per item
                 headerFill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
                 headerFont = Font(bold=True, size=11)
-                sionHeaderFont = Font(bold=True, size=12)
                 for group_index, group in enumerate(report_data["groups"], 1):
                     notification_num = group['notification_number'] or 'Pivot'
                     safe_notification = notification_num[:24].replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace(':', '-').replace('[', '-').replace(']', '-')
@@ -1704,19 +1703,6 @@ class ItemPivotReportView(APIView):
                                 span_start = i
                         category_spans.append((current_category, span_start, numItems - 1))
 
-                    # Build SION group spans: list of (sion, startItemIndex, endItemIndex)
-                    sion_spans = []
-                    if numItems > 0:
-                        current_sion = item_groups[0].get("sion", "")
-                        span_start = 0
-                        for i in range(1, numItems):
-                            item_sion = item_groups[i].get("sion", "")
-                            if item_sion != current_sion:
-                                sion_spans.append((current_sion, span_start, i - 1))
-                                current_sion = item_sion
-                                span_start = i
-                        sion_spans.append((current_sion, span_start, numItems - 1))
-
                     # Product category colors for Excel
                     product_category_fills = {
                         'PKO': PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid"),
@@ -1731,9 +1717,9 @@ class ItemPivotReportView(APIView):
                         'PAPER': PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid"),
                     }
 
-                    # Row 3: Product category header row
-                    categoryRow = 3
-                    # Fixed columns span all 4 rows (Category + SION + Item + Field)
+                    # Row 1: Product category header row
+                    categoryRow = 1
+                    # Fixed columns span 2 rows (Category + Field)
                     for col_idx, name in enumerate(fixed, 1):
                         cell = sheet.cell(row=categoryRow, column=col_idx, value=name)
                         cell.font = headerFont
@@ -1751,36 +1737,8 @@ class ItemPivotReportView(APIView):
                         if start_col != end_col:
                             sheet.merge_cells(start_row=categoryRow, start_column=start_col, end_row=categoryRow, end_column=end_col)
 
-                    # Row 4: SION group header row
-                    sionRow = 4
-                    for sion_name, start_item, end_item in sion_spans:
-                        start_col = numFixed + (start_item * numFields) + 1
-                        end_col = numFixed + ((end_item + 1) * numFields)
-                        cell = sheet.cell(row=sionRow, column=start_col, value=f"SION: {sion_name}" if sion_name else "SION: —")
-                        cell.font = sionHeaderFont
-                        cell.fill = PatternFill(start_color="CBD5E1", end_color="CBD5E1", fill_type="solid")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                        if start_col != end_col:
-                            sheet.merge_cells(start_row=sionRow, start_column=start_col, end_row=sionRow, end_column=end_col)
-
-                    # Row 5: Item name header row
-                    itemRow = 5
-                    for item_idx, item in enumerate(item_groups):
-                        start_col = numFixed + (item_idx * numFields) + 1
-                        end_col = numFixed + ((item_idx + 1) * numFields)
-                        # Build item label with total quantity from totals
-                        total_qty = ""
-                        if group["totals"]["items"].get(item["key"], {}).get("total_qty"):
-                            total_qty = f" ({group['totals']['items'][item['key']]['total_qty']} Kgs)"
-                        cell = sheet.cell(row=itemRow, column=start_col, value=f"{item['name']}{total_qty}")
-                        cell.font = headerFont
-                        cell.fill = headerFill
-                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                        if start_col != end_col:
-                            sheet.merge_cells(start_row=itemRow, start_column=start_col, end_row=itemRow, end_column=end_col)
-
-                    # Row 6: Field sub-headers
-                    fieldRow = 6
+                    # Row 2: Field sub-headers
+                    fieldRow = 2
                     for col_idx, name in enumerate(fixed, 1):
                         cell = sheet.cell(row=fieldRow, column=col_idx, value=name)
                         cell.font = headerFont
@@ -1795,12 +1753,12 @@ class ItemPivotReportView(APIView):
                             cell.fill = headerFill
                             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                    # Merge fixed columns across Category + SION + Item rows (rows 3-5)
+                    # Merge fixed columns across both header rows (rows 1-2)
                     for col_idx in range(1, numFixed + 1):
-                        sheet.merge_cells(start_row=categoryRow, start_column=col_idx, end_row=itemRow, end_column=col_idx)
+                        sheet.merge_cells(start_row=categoryRow, start_column=col_idx, end_row=fieldRow, end_column=col_idx)
 
-                    # Data rows start at row 7
-                    dataStartRow = 7
+                    # Data rows start at row 3
+                    dataStartRow = 3
                     for index, license_row in enumerate(group["licenses"], dataStartRow):
                         row_data = [index - (dataStartRow - 1), license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
                         for item in item_groups:

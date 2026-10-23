@@ -292,18 +292,6 @@ function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, se
                 categorySpans.push({ category: cat, span: span * 14, start: j });
                 j += span;
             }
-            // Compute SION group spans for merged header row (matches Excel export)
-            const sionSpans = [];
-            let k = 0;
-            while (k < group.item_groups.length) {
-                const sion = group.item_groups[k].sion || '';
-                let sionSpan = 0;
-                while (k + sionSpan < group.item_groups.length && (group.item_groups[k + sionSpan].sion || '') === sion) {
-                    sionSpan++;
-                }
-                sionSpans.push({ sion: sion, span: sionSpan * 14, start: k });
-                k += sionSpan;
-            }
             const visibleLicenses = group.licenses.filter((license) => !exceptionOnly || license.issues?.some((issue) => !selectedItem || issue.item_key === selectedItem));
             return visibleLicenses.length ? <Card key={`${group.notification_number}-${group.purchase_status?.id ?? group.purchase_status?.name}`} data-item-pivot-sticky-stack>
                 <CardHeader data-item-pivot-notification className="sticky top-0 z-30 flex-row items-center justify-between text-primary-foreground shadow-sm" style={{background: 'linear-gradient(135deg, var(--tb-brand), var(--tb-brand-hover))'}}>
@@ -313,27 +301,13 @@ function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, se
                 <CardContent className="p-0"><div className="overflow-x-auto" data-item-pivot-scroll-container><table className="w-max min-w-full border-collapse text-sm"><thead className="bg-muted">
                     {/* Row 1: Product category headers */}
                     <tr data-item-pivot-header-tier>
-                        {fixed.map((name, i) => <th key={name} rowSpan={4} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}
+                        {fixed.map((name, i) => <th key={name} rowSpan={2} className={cn('border p-2 text-left whitespace-nowrap', i < 2 && 'sticky z-30 bg-muted')} style={i === 0 ? {left: 0} : i === 1 ? {left: 58} : {}}>{name}</th>)}
                         {categorySpans.map((cs) => {
                             const bgColor = PRODUCT_CATEGORY_COLORS[cs.category] || '#f3f4f6';
                             return <th key={`cat-${cs.category}`} colSpan={cs.span} className="border p-2 text-center font-bold text-xs uppercase tracking-wider" style={{backgroundColor: bgColor, color: '#374151'}}>{cs.category}</th>;
                         })}
                     </tr>
-                    {/* Row 2: SION group headers */}
-                    <tr data-item-pivot-header-tier>
-                        {sionSpans.map((ss) => {
-                            return <th key={`sion-${ss.sion}`} colSpan={ss.span} className="border p-2 text-center font-bold text-xs uppercase tracking-wider" style={{backgroundColor: '#cbd5e1', color: '#374151'}}>SION: {ss.sion || '—'}</th>;
-                        })}
-                    </tr>
-                    {/* Row 3: Item name headers (with total quantity from totals, matches Excel) */}
-                    <tr data-item-pivot-header-tier>
-                        {group.item_groups.map((item, i) => {
-                            const totalQty = group.totals?.items?.[item.key]?.total_qty;
-                            const itemLabel = totalQty ? `${item.name} (${totalQty} Kgs)` : item.name;
-                            return <th id={`pivot-item-${item.key}`} key={item.key} colSpan={14} className={cn('border p-2 text-center font-bold', selectedItem === item.key && 'ring-2 ring-red-500')} style={{backgroundColor: itemBgColor(i)}}>{itemLabel}</th>;
-                        })}
-                    </tr>
-                    {/* Row 4: Field sub-headers */}
+                    {/* Row 2: Field sub-headers */}
                     <tr data-item-pivot-header-tier>
                         {group.item_groups.flatMap((item, i) => ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','ALLOTTED CIF','DEBITED QTY','DEBITED CIF','BILLED QTY','BILLED CIF','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'].map(name => <th key={`${item.key}-${name}`} className="border p-2 whitespace-nowrap" style={{backgroundColor: itemBgColor(i)}}>{name}</th>))}
                     </tr>

@@ -272,6 +272,59 @@ class ItemPivotService:
                 # Add the column to the licence's notification/company group
                 # after its identity is known below.
 
+            # Build zero-plan cells for import items not covered by any active
+            # plan so the pivot report shows the full licence contents — even
+            # items with available quantity 0 or no plan at all.
+            planned_import_item_ids = {plan.import_item_id for plan in plans_by_license[license_obj.id]}
+            for item in import_items:
+                if item.id in planned_import_item_ids:
+                    continue
+                item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
+                hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
+                sion_str = (getattr(item.norm_class, "norm_class", "") or default_sion)
+                # Use a key derived from the import item id so it never
+                # collides with a planned item's item_name_id key.
+                unplanned_key = f"unplanned:{item.id}:{sion_str}"
+                item_usage_boe_qty = usage_totals[item.id]["boe_qty"]
+                item_usage_boe_cif = usage_totals[item.id]["boe_cif"]
+                item_usage_allot_qty = usage_totals[item.id]["allot_qty"]
+                item_usage_allot_cif = usage_totals[item.id]["allot_cif"]
+                item_total_qty = _decimal(item.quantity)
+                item_total_cif = _decimal(item.cif_fc)
+                balance_qty_unplanned = max(item_total_qty - item_usage_boe_qty - item_usage_allot_qty, ZERO_QTY)
+                cells[unplanned_key] = {
+                    "canonical_item_id": None, "item_name": item_name_str, "sion": sion_str,
+                    "hsn_code": hsn_str, "description": item_name_str,
+                    "total_qty": _text(item_total_qty),
+                    "source_items": [
+                        {
+                            "import_item_id": item.id,
+                            "serial_number": item.serial_number,
+                            "hsn_code": hsn_str,
+                            "description": item.description or "",
+                            "quantity": _text(item_total_qty),
+                            "allotted_quantity": _text(_decimal(item.allotted_quantity)),
+                            "debited_quantity": _text(_decimal(item.debited_quantity)),
+                            "available_quantity": _text(_decimal(item.available_quantity)),
+                        }
+                    ],
+                    "percentage_target_qty": _text(ZERO_QTY), "own_excess_qty": _text(ZERO_QTY),
+                    "excess_other_item_qty": _text(ZERO_QTY), "adjusted_total_qty": _text(item_total_qty),
+                    "allotted_qty": _text(max(item_usage_allot_qty, ZERO_QTY)),
+                    "debited_qty": _text(max(item_usage_boe_qty, ZERO_QTY)),
+                    "boe_used_cif": _text(max(item_usage_boe_cif, ZERO_CIF)),
+                    "allotted_cif": _text(max(item_usage_allot_cif, ZERO_CIF)),
+                    "balance_qty": _text(max(balance_qty_unplanned, ZERO_QTY)),
+                    "plan_qty": _text(ZERO_QTY), "planned_cif": _text(ZERO_CIF),
+                    "effective_planned_qty": _text(ZERO_QTY), "effective_planned_cif": _text(ZERO_CIF),
+                    "has_item_cif_cap": False, "has_explicit_item_cif_cap": False,
+                    "item_cif_cap": None, "canonical_item_cif_capacity": _text(item_total_cif),
+                    "available_cif": None, "restriction_percent": None, "restriction_value": None,
+                    "planning_priority": None, "planning_rule_id": None,
+                    "planning_rule_name": None, "planning_strategy": None,
+                    "priority_item_order": None, "priority_source": "unplanned",
+                }
+
             notification = license_obj.notification_number.code if license_obj.notification_number_id else "Unknown"
             # Purchase status is the report's grouping dimension.  Exporter,
             # owner, and transfer company are intentionally presentation-only
@@ -289,6 +342,15 @@ class ItemPivotService:
                 sion = provenance.get("sion") or default_sion
                 key = f"{plan.item_name_id or 'unmapped'}:{sion}"
                 group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
+            # Register unplanned items in item_groups so they appear as columns
+            # in the report matrix even when no plan exists for them.
+            for item in import_items:
+                if item.id in planned_import_item_ids:
+                    continue
+                item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
+                sion_str = (getattr(item.norm_class, "norm_class", "") or default_sion)
+                unplanned_key = f"unplanned:{item.id}:{sion_str}"
+                group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": None, "name": item_name_str, "sion": sion_str, "priority": 999999, "sequence": item.id})
             issues = []
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])

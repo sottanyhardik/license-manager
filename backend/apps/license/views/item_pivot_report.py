@@ -1715,6 +1715,8 @@ class ItemPivotReportView(APIView):
                         'SUGAR': PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid"),
                         'WHEAT FLOUR': PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid"),
                         'PAPER': PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid"),
+                        'ALUMINIUM FOIL': PatternFill(start_color="E5E7EB", end_color="E5E7EB", fill_type="solid"),
+                        'CEREALS': PatternFill(start_color="FEFCE8", end_color="FEFCE8", fill_type="solid"),
                     }
 
                     # Row 1: Product category header row

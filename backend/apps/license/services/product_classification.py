@@ -142,20 +142,29 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # CEREALS: (HSN 1104 OR desc 1104) OR (HSN 0713 OR desc 0713) OR desc contains CEREAL/CHICKPEAS/LENTILS
+    # CEREALS: (HSN 1104/0713/0710 OR desc) OR desc contains CEREAL/CHICKPEAS/LENTILS/PEAS/SOYABEAN/CEREAL FLAKES
     {
         "name": "CEREALS",
-        "hsn_prefixes": ["1104", "0713"],
-        "desc_contains_any": ["1104", "0713", "CEREAL", "CHICKPEAS", "LENTILS"],
+        "hsn_prefixes": ["1104", "0713", "0710"],
+        "desc_contains_any": ["1104", "0713", "0710", "CEREAL", "CHICKPEAS", "LENTILS", "PEAS", "SOYABEAN", "SOYBEAN"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # CMC: HSN 3912 OR desc contains 3912
+    # CMC: HSN 3912/3902 OR desc contains 3912/3902
     {
         "name": "CMC",
-        "hsn_prefixes": ["3912"],
-        "desc_contains_any": ["3912"],
+        "hsn_prefixes": ["3912", "3902"],
+        "desc_contains_any": ["3912", "3902"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
+    # ALUMINIUM FOIL: HSN 7607 OR desc contains 7607
+    {
+        "name": "ALUMINIUM FOIL",
+        "hsn_prefixes": ["7607"],
+        "desc_contains_any": ["7607"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 99,

@@ -17,52 +17,18 @@ from typing import Optional
 
 # Product classification conditions for E5 norm.
 # Order matters: higher-priority products are checked first.
-# Each tuple: (product_name, hsn_prefixes, description_keywords, exclude_hsn_prefixes, exclude_description_keywords)
+# The `sort_order` field controls display order in the item pivot report.
+# Sequence: 1=DIETARY FIBRE, 2=PKO, 3=RBD PALMOLEIN OIL, 4=DWP/SWP, 5=WPC,
+# 6=WHEAT FLOUR, 7=YEAST, then 99+ for all others (alphabetical fallback).
+# Each dict: (product_name, hsn_prefixes, desc_contains_any, desc_contains_all,
+# exclude_hsn_prefixes, exclude_desc_contains, sort_order)
 # - hsn_prefixes: list of HSN code prefixes to match (OR logic)
-# - description_keywords: list of keywords that must appear in description (AND with HSN)
+# - desc_contains_any: list of keywords, any one matches (OR logic)
+# - desc_contains_all: list of keywords, all must match (AND logic)
 # - exclude_hsn_prefixes: list of HSN prefixes that exclude the match
-# - exclude_description_keywords: list of keywords that exclude the match
+# - exclude_desc_contains: list of keywords that exclude the match
+# - sort_order: display order in item pivot report (lower = first)
 E5_PRODUCT_CONDITIONS = [
-    # RBD PALMOLEIN OIL: (HSN 1511 OR desc 1511) AND NOT (HSN 1513 OR desc 1513)
-    {
-        "name": "RBD PALMOLEIN OIL",
-        "hsn_prefixes": ["1511"],
-        "desc_contains_any": ["1511"],
-        "exclude_hsn_prefixes": ["1513"],
-        "exclude_desc_contains": ["1513"],
-    },
-    # PKO: HSN 1513 OR desc 1513
-    {
-        "name": "PKO",
-        "hsn_prefixes": ["1513"],
-        "desc_contains_any": ["1513"],
-        "exclude_hsn_prefixes": [],
-        "exclude_desc_contains": [],
-    },
-    # CHEESE: (HSN 0406 OR desc 0406) AND NOT (HSN 0404 OR desc 0404)
-    {
-        "name": "CHEESE",
-        "hsn_prefixes": ["0406"],
-        "desc_contains_any": ["0406"],
-        "exclude_hsn_prefixes": ["0404"],
-        "exclude_desc_contains": ["0404"],
-    },
-    # DWP or SWP: HSN 0404 OR desc 0404
-    {
-        "name": "DWP/SWP",
-        "hsn_prefixes": ["0404"],
-        "desc_contains_any": ["0404"],
-        "exclude_hsn_prefixes": [],
-        "exclude_desc_contains": [],
-    },
-    # WPC: (HSN 3502 OR desc 3502) AND NOT (0404 or 0406)
-    {
-        "name": "WPC",
-        "hsn_prefixes": ["3502"],
-        "desc_contains_any": ["3502"],
-        "exclude_hsn_prefixes": ["0404", "0406"],
-        "exclude_desc_contains": ["0404", "0406"],
-    },
     # DIETARY FIBRE: (HSN 0802 OR desc 0802) AND desc contains DIETARY
     {
         "name": "DIETARY FIBRE",
@@ -71,32 +37,43 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["DIETARY"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 1,
     },
-    # FOOD FLAVOUR: (HSN 0802 OR desc 0802) AND NOT desc contains DIETARY
+    # PKO: HSN 1513 OR desc 1513
     {
-        "name": "FOOD FLAVOUR",
-        "hsn_prefixes": ["0802"],
-        "desc_contains_any": ["0802"],
-        "exclude_hsn_prefixes": [],
-        "exclude_desc_contains": ["DIETARY"],
-    },
-    # JUICE: (HSN 2009 OR desc 2009) AND desc contains FRUIT
-    {
-        "name": "JUICE",
-        "hsn_prefixes": ["2009"],
-        "desc_contains_any": ["2009"],
-        "desc_contains_all": ["FRUIT"],
+        "name": "PKO",
+        "hsn_prefixes": ["1513"],
+        "desc_contains_any": ["1513"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 2,
     },
-    # YEAST: (HSN 2102/2106 OR desc 2102/2106) AND desc contains LEAVENING
+    # RBD PALMOLEIN OIL: (HSN 1511 OR desc 1511) AND NOT (HSN 1513 OR desc 1513)
     {
-        "name": "YEAST",
-        "hsn_prefixes": ["2102", "2106"],
-        "desc_contains_any": ["2102", "2106"],
-        "desc_contains_all": ["LEAVENING"],
+        "name": "RBD PALMOLEIN OIL",
+        "hsn_prefixes": ["1511"],
+        "desc_contains_any": ["1511"],
+        "exclude_hsn_prefixes": ["1513"],
+        "exclude_desc_contains": ["1513"],
+        "sort_order": 3,
+    },
+    # DWP or SWP: HSN 0404 OR desc 0404
+    {
+        "name": "DWP/SWP",
+        "hsn_prefixes": ["0404"],
+        "desc_contains_any": ["0404"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 4,
+    },
+    # WPC: (HSN 3502 OR desc 3502) AND NOT (0404 or 0406)
+    {
+        "name": "WPC",
+        "hsn_prefixes": ["3502"],
+        "desc_contains_any": ["3502"],
+        "exclude_hsn_prefixes": ["0404", "0406"],
+        "exclude_desc_contains": ["0404", "0406"],
+        "sort_order": 5,
     },
     # WHEAT FLOUR: (HSN 1101 OR desc 1101) AND desc contains FLOUR
     {
@@ -106,6 +83,45 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["FLOUR"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 6,
+    },
+    # YEAST: (HSN 2102/2106 OR desc 2102/2106) AND desc contains LEAVENING
+    {
+        "name": "YEAST",
+        "hsn_prefixes": ["2102", "2106"],
+        "desc_contains_any": ["2102", "2106"],
+        "desc_contains_all": ["LEAVENING"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 7,
+    },
+    # CHEESE: (HSN 0406 OR desc 0406) AND NOT (HSN 0404 OR desc 0404)
+    {
+        "name": "CHEESE",
+        "hsn_prefixes": ["0406"],
+        "desc_contains_any": ["0406"],
+        "exclude_hsn_prefixes": ["0404"],
+        "exclude_desc_contains": ["0404"],
+        "sort_order": 99,
+    },
+    # FOOD FLAVOUR: (HSN 0802 OR desc 0802) AND NOT desc contains DIETARY
+    {
+        "name": "FOOD FLAVOUR",
+        "hsn_prefixes": ["0802"],
+        "desc_contains_any": ["0802"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": ["DIETARY"],
+        "sort_order": 99,
+    },
+    # JUICE: (HSN 2009 OR desc 2009) AND desc contains FRUIT
+    {
+        "name": "JUICE",
+        "hsn_prefixes": ["2009"],
+        "desc_contains_any": ["2009"],
+        "desc_contains_all": ["FRUIT"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
     },
     # PAPER: (HSN 48 OR desc 48) AND desc contains PAPER
     {
@@ -115,6 +131,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["PAPER"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 99,
     },
     # ALUMINIUM FOIL: (HSN 7607 OR desc 7607) AND desc contains PACKING
     {
@@ -124,6 +141,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["PACKING"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 99,
     },
     # PP: HSN 390 OR desc 390
     {
@@ -132,6 +150,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_any": ["390"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 99,
     },
     # SUGAR: desc contains SUGAR
     {
@@ -140,6 +159,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_any": ["SUGAR"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "sort_order": 99,
     },
 ]
 
@@ -213,3 +233,18 @@ def classify_product(hs_code: str, description: str) -> Optional[str]:
 def get_e5_product_categories() -> list:
     """Return the list of E5 product category names in priority order."""
     return [cond["name"] for cond in E5_PRODUCT_CONDITIONS]
+
+
+# Build a lookup dict: category name -> sort_order
+_PRODUCT_SORT_ORDER = {cond["name"]: cond.get("sort_order", 99) for cond in E5_PRODUCT_CONDITIONS}
+
+
+def get_product_category_sort_order(category_name: Optional[str]) -> int:
+    """Return the sort order for a product category name.
+
+    Returns the sort_order if the category is known, otherwise 99 (sort last).
+    UNCLASSIFIED items sort after all known categories (99 + alphabetical fallback).
+    """
+    if not category_name:
+        return 999  # UNCLASSIFIED sorts last
+    return _PRODUCT_SORT_ORDER.get(category_name, 99)

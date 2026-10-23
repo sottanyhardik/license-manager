@@ -12,7 +12,7 @@ from apps.license.services.item_usage import (
     billed_no_boe_bulk_map,
     billed_no_boe_qty_bulk_map,
 )
-from apps.license.services.product_classification import classify_product
+from apps.license.services.product_classification import classify_product, get_product_category_sort_order
 
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
@@ -514,11 +514,12 @@ class ItemPivotService:
             group["license_count"] = len(group["licenses"])
             group["issue_license_count"] = sum(1 for row in group["licenses"] if row["issue_count"])
             group["issue_record_count"] = sum(row["issue_count"] for row in group["licenses"])
-            # Sort by product category first, then SION, priority, sequence, name
+            # Sort by product category sort order, then SION, priority, sequence, name
             # Items without a product category sort last
             group["item_groups"] = sorted(
                 group["item_groups"].values(),
                 key=lambda row: (
+                    get_product_category_sort_order(row.get("product_category")),
                     row.get("product_category") or "ZZZ_UNCLASSIFIED",
                     row["sion"],
                     row["priority"],
@@ -605,7 +606,7 @@ class ItemPivotService:
                 "contributing_licenses": contributing,
                 "licenses": cells,
             })
-        items = sorted(items, key=lambda row: (row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row["priority"], row["sequence"], row["item_name"]))
+        items = sorted(items, key=lambda row: (get_product_category_sort_order(row.get("product_category")), row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row["priority"], row["sequence"], row["item_name"]))
         global_summary = {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         # Aliases make the report contract explicit while preserving the
         # existing consumers during the presentation-only migration.

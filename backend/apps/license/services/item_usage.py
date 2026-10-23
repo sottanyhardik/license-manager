@@ -212,7 +212,9 @@ def billed_no_boe_qty_bulk_map(item_ids) -> dict:
     Returns:
         `{item_id: Decimal}` billed-no-BOE quantity total per item.
     """
-    from django.db.models import Sum, Value
+    from decimal import Decimal
+
+    from django.db.models import DecimalField, Sum, Value
     from django.db.models.functions import Coalesce
 
     from apps.trade.models import LicenseTradeLine

@@ -136,6 +136,16 @@ E5_PRODUCT_CONDITIONS = [
         "norm": "E1",
         "sort_order": 99,
     },
+    # FRUIT COCKTAIL: HSN 2008 only — fruit preparations like cocktails, pulps, purees
+    # Checked before JUICE so HSN 2008 items match FRUIT COCKTAIL first
+    {
+        "name": "FRUIT COCKTAIL",
+        "hsn_prefixes": ["2008"],
+        "desc_contains_any": [],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
     # JUICE: HSN 2009 only — these HSN codes are specifically for fruit juice preparations
     # Works for all norms — checked before FOOD FLAVOUR so HSN 2009 items match JUICE first
     # Matches items like "Juice HS 20098990" based on HSN alone

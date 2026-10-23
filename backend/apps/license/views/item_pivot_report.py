@@ -1718,6 +1718,15 @@ class ItemPivotReportView(APIView):
                         'ALUMINIUM FOIL': PatternFill(start_color="E5E7EB", end_color="E5E7EB", fill_type="solid"),
                         'CEREALS': PatternFill(start_color="FEFCE8", end_color="FEFCE8", fill_type="solid"),
                         'PP': PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid"),
+                        'APPLE DRIES': PatternFill(start_color="FCE7F3", end_color="FCE7F3", fill_type="solid"),
+                        'OLIVE OIL': PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid"),
+                        'GLASS BOTTLE': PatternFill(start_color="E0F2FE", end_color="E0F2FE", fill_type="solid"),
+                        'SANITATION': PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid"),
+                        'OTHER CONFECTIONERY INGREDIENTS': PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid"),
+                        'ESSENTIAL OIL': PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid"),
+                        'CITRIC ACID': PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid"),
+                        'FOOD COLOURS': PatternFill(start_color="CCFBF1", end_color="CCFBF1", fill_type="solid"),
+                        'FRUIT COCKTAIL': PatternFill(start_color="FFE4E6", end_color="FFE4E6", fill_type="solid"),
                     }
 
                     # Row 1: Product category header row

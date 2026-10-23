@@ -280,6 +280,15 @@ function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, se
         'ALUMINIUM FOIL': '#e5e7eb',
         'CEREALS': '#fefce8',
         'PP': '#dbeafe',
+        'APPLE DRIES': '#fce7f3',
+        'OLIVE OIL': '#dcfce7',
+        'GLASS BOTTLE': '#e0f2fe',
+        'SANITATION': '#f0fdf4',
+        'OTHER CONFECTIONERY INGREDIENTS': '#fef3c7',
+        'ESSENTIAL OIL': '#f3e8ff',
+        'CITRIC ACID': '#fef9c3',
+        'FOOD COLOURS': '#ccfbf1',
+        'FRUIT COCKTAIL': '#ffe4e6',
     };
     return <div className="space-y-6">
         {groups.map((group) => {

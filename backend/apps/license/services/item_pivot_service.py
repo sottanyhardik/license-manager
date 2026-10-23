@@ -214,8 +214,9 @@ class ItemPivotService:
                     priority_item_order = provenance.get("member_sequence", plan.id)
                 item_name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or default_sion
+                source_ids = [int(source_id) for source_id in provenance.get("source_item_ids", []) if str(source_id).isdigit()] or [plan.import_item_id]
+                source_items = [item_by_id[source_id] for source_id in source_ids if source_id in item_by_id]
                 # Classify the item into a product category based on HSN and description
-                # (moved up early so the key can use it)
                 description_for_class = next((item.description for item in source_items if item.description), item_name)
                 hsn_for_class = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
                 product_category = classify_product(hsn_for_class, description_for_class)
@@ -223,8 +224,6 @@ class ItemPivotService:
                 # category (e.g. DIETARY FIBRE) merge into one column per license.
                 # A canonical item with two SIONs must remain two cells.
                 key = f"{product_category or 'UNCLASSIFIED'}:{sion}"
-                source_ids = [int(source_id) for source_id in provenance.get("source_item_ids", []) if str(source_id).isdigit()] or [plan.import_item_id]
-                source_items = [item_by_id[source_id] for source_id in source_ids if source_id in item_by_id]
                 is_percentage = provenance.get("strategy") in {"SPLIT_BY_PERCENT", "SPLIT_BY_PERCENTAGE"}
 
                 # Actual usage belongs to the planning target only if a persisted

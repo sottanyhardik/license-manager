@@ -276,9 +276,7 @@ function CanonicalPivot({ groups, onCondition, onTransfer, onReplan, onIssue, se
         'YEAST': '#fef9c3',
         'SUGAR': '#f3e8ff',
         'WHEAT FLOUR': '#ffedd5',
-        'PP': '#e0f2fe',
         'PAPER': '#f0fdf4',
-        'ALUMINIUM FOIL': '#f1f5f9',
     };
     return <div className="space-y-6">
         {groups.map((group) => {

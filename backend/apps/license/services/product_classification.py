@@ -133,25 +133,6 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # ALUMINIUM FOIL: (HSN 7607 OR desc 7607) AND desc contains PACKING
-    {
-        "name": "ALUMINIUM FOIL",
-        "hsn_prefixes": ["7607"],
-        "desc_contains_any": ["7607"],
-        "desc_contains_all": ["PACKING"],
-        "exclude_hsn_prefixes": [],
-        "exclude_desc_contains": [],
-        "sort_order": 99,
-    },
-    # PP: HSN 390 OR desc 390
-    {
-        "name": "PP",
-        "hsn_prefixes": ["390"],
-        "desc_contains_any": ["390"],
-        "exclude_hsn_prefixes": [],
-        "exclude_desc_contains": [],
-        "sort_order": 99,
-    },
     # SUGAR: desc contains SUGAR
     {
         "name": "SUGAR",

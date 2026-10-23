@@ -142,11 +142,11 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # CEREALS: HSN 1104 OR desc contains 1104
+    # CEREALS: (HSN 1104 OR desc 1104) OR (HSN 0713 OR desc 0713) OR desc contains CEREAL/CHICKPEAS/LENTILS
     {
         "name": "CEREALS",
-        "hsn_prefixes": ["1104"],
-        "desc_contains_any": ["1104"],
+        "hsn_prefixes": ["1104", "0713"],
+        "desc_contains_any": ["1104", "0713", "CEREAL", "CHICKPEAS", "LENTILS"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 99,

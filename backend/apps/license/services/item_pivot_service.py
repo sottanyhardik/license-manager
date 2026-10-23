@@ -7,7 +7,11 @@ from collections import defaultdict
 from decimal import Decimal
 
 from apps.license.models import LicenseItemPlan
-from apps.license.services.item_usage import get_item_usage_for_items
+from apps.license.services.item_usage import (
+    get_item_usage_for_items,
+    billed_no_boe_bulk_map,
+    billed_no_boe_qty_bulk_map,
+)
 
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
@@ -126,6 +130,50 @@ class ItemPivotService:
             }
             for item_id, values in usage.items()
         }
+
+        # Fetch billed (no BOE) quantity and CIF for all import items in one
+        # batched query each — same source as the Customs Ledger "Billed (No BOE)"
+        # fields: SALE trade lines with no BOE attached.
+        all_import_item_ids = list(usage_totals.keys())
+        billed_no_boe_cif_map = billed_no_boe_bulk_map(all_import_item_ids) if all_import_item_ids else {}
+        billed_no_boe_qty_map = billed_no_boe_qty_bulk_map(all_import_item_ids) if all_import_item_ids else {}
+        for item_id in all_import_item_ids:
+            usage_totals[item_id]["billed_qty"] = _decimal(billed_no_boe_qty_map.get(item_id, 0))
+            usage_totals[item_id]["billed_cif"] = _decimal(billed_no_boe_cif_map.get(item_id, 0))
+
+        # Load active SION planning rules so we can look up cif_restriction_percentage
+        # per item.  We'll build a map: {sion_norm: {item_name_id: restriction_pct}}.
+        from apps.license.models import SionPlanningRule, SionPlanningUnitValueRow, SionPlanningPercentageRow
+        active_rules = list(
+            SionPlanningRule.objects.filter(is_active=True)
+            .select_related("sion")
+            .prefetch_related("unit_value_rows", "percentage_rows")
+        )
+        cif_restriction_by_sion_item = defaultdict(dict)  # {sion_norm: {item_name_id: pct}}
+        for rule in active_rules:
+            sion_norm = rule.sion.norm_class if rule.sion_id else None
+            if not sion_norm:
+                continue
+            rule_pct = rule.cif_restriction_percentage
+            # STANDARD strategy: restriction is on the rule's import_item
+            if rule.strategy == "STANDARD" and rule.import_item_id:
+                cif_restriction_by_sion_item[sion_norm][rule.import_item_id] = rule_pct
+            # SPLIT_BY_UNIT_VALUE: each row has its own import_item and restriction
+            if rule.strategy == "SPLIT_BY_UNIT_VALUE":
+                for row in rule.unit_value_rows.all():
+                    row_pct = row.cif_restriction_percentage if row.cif_restriction_percentage is not None else rule_pct
+                    if row.import_item_id and row_pct is not None:
+                        cif_restriction_by_sion_item[sion_norm][row.import_item_id] = row_pct
+            # SPLIT_BY_PERCENT: each row has its own import_item and restriction
+            if rule.strategy == "SPLIT_BY_PERCENT":
+                for row in rule.percentage_rows.all():
+                    row_pct = row.cif_restriction_percentage if row.cif_restriction_percentage is not None else rule_pct
+                    if row.import_item_id and row_pct is not None:
+                        cif_restriction_by_sion_item[sion_norm][row.import_item_id] = row_pct
+            # Also store rule-level restriction for STANDARD when no import_item match
+            # (the rule-level restriction applies to all items matched by the rule)
+            if rule.strategy == "STANDARD" and rule_pct is not None and not rule.import_item_id:
+                cif_restriction_by_sion_item[sion_norm]["__rule__"] = rule_pct
         output_groups = defaultdict(lambda: {"licenses": [], "item_groups": {}})
 
         # Imported once for the complete projection rather than once per
@@ -150,6 +198,9 @@ class ItemPivotService:
             allotted_cif = sum((usage_totals[item.id]["allot_cif"] for item in import_items), ZERO_CIF)
             cells = {}
             planned_cif = ZERO_CIF
+
+            # Look up CIF restriction map for this license's SION norm
+            license_cif_restriction_map = cif_restriction_by_sion_item.get(default_sion, {})
 
             for plan in plans_by_license[license_obj.id]:
                 provenance = plan.allocation_provenance or {}
@@ -191,6 +242,8 @@ class ItemPivotService:
                     boe_cif = sum((usage_totals[item.id]["boe_cif"] for item in source_items), ZERO_CIF)
                     allot_qty = sum((usage_totals[item.id]["allot_qty"] for item in source_items), ZERO_QTY)
                     allot_cif = sum((usage_totals[item.id]["allot_cif"] for item in source_items), ZERO_CIF)
+                billed_qty = sum((usage_totals[item.id]["billed_qty"] for item in source_items), ZERO_QTY)
+                billed_cif = sum((usage_totals[item.id]["billed_cif"] for item in source_items), ZERO_CIF)
                 percentage_target_qty = total_qty
                 own_actual_qty = boe_qty + allot_qty
                 own_excess_qty = max(own_actual_qty - percentage_target_qty, ZERO_QTY) if is_percentage else ZERO_QTY
@@ -205,11 +258,11 @@ class ItemPivotService:
                 )
                 adjusted_total_qty = max(adjusted_total_qty, ZERO_QTY)
                 if is_percentage:
-                    balance_qty = adjusted_total_qty - own_actual_qty
+                    balance_qty = adjusted_total_qty - own_actual_qty - billed_qty
                 else:
                     balance_qty = _decimal(provenance.get("audit_remaining_quantity", plan.planned_quantity))
                     if balance_qty == _decimal(plan.planned_quantity):
-                        balance_qty = total_qty - boe_qty - allot_qty
+                        balance_qty = total_qty - boe_qty - allot_qty - billed_qty
                 plan_qty = _decimal(plan.planned_quantity)
                 plan_cif = _decimal(plan.planned_cif_fc)
                 planned_cif += plan_cif
@@ -217,7 +270,16 @@ class ItemPivotService:
                 hsn = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
                 source_total_qty = sum((_decimal(item.quantity) for item in source_items), ZERO_QTY)
                 source_total_cif = sum((_decimal(item.cif_fc) for item in source_items), ZERO_CIF)
-                source_used_cif = boe_cif + allot_cif
+                source_used_cif = boe_cif + allot_cif + billed_cif
+                # Look up CIF restriction percentage for this plan's item
+                plan_restriction_pct = None
+                if plan.item_name_id and plan.item_name_id in license_cif_restriction_map:
+                    plan_restriction_pct = license_cif_restriction_map[plan.item_name_id]
+                elif "__rule__" in license_cif_restriction_map:
+                    plan_restriction_pct = license_cif_restriction_map["__rule__"]
+                plan_restriction_value = None
+                if plan_restriction_pct is not None:
+                    plan_restriction_value = source_total_cif * _decimal(plan_restriction_pct) / Decimal("100")
                 # Allocate only this target's adjusted share of its source
                 # balance.  Never repeat the full licence balance per item.
                 # A licence's CIF is a shared budget.  A proportional source
@@ -254,11 +316,15 @@ class ItemPivotService:
                     "percentage_target_qty": _text(percentage_target_qty), "own_excess_qty": _text(own_excess_qty),
                     "excess_other_item_qty": _text(excess_other_item_qty), "adjusted_total_qty": _text(adjusted_total_qty),
                     "allotted_qty": _text(max(allot_qty, ZERO_QTY)), "debited_qty": _text(max(boe_qty, ZERO_QTY)),
+                    "billed_qty": _text(max(billed_qty, ZERO_QTY)),
                     "boe_used_cif": _text(max(boe_cif, ZERO_CIF)), "allotted_cif": _text(max(allot_cif, ZERO_CIF)),
+                    "billed_cif": _text(max(billed_cif, ZERO_CIF)),
                     "balance_qty": _text(max(balance_qty, ZERO_QTY)), "plan_qty": _text(max(plan_qty, ZERO_QTY)),
                     "planned_cif": _text(max(plan_cif, ZERO_CIF)), "effective_planned_qty": _text(max(plan_qty, ZERO_QTY)),
-                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "has_item_cif_cap": has_item_cif_cap, "has_explicit_item_cif_cap": has_item_cif_cap, "item_cif_cap": _text(item_cif_cap) if item_cif_cap is not None else None, "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif) if available_cif is not None else None, "restriction_percent": None,
-                    "restriction_value": None, "planning_priority": planning_priority,
+                    "effective_planned_cif": _text(max(plan_cif, ZERO_CIF)), "has_item_cif_cap": has_item_cif_cap, "has_explicit_item_cif_cap": has_item_cif_cap, "item_cif_cap": _text(item_cif_cap) if item_cif_cap is not None else None, "canonical_item_cif_capacity": _text(canonical_item_cif_capacity), "available_cif": _text(available_cif) if available_cif is not None else None,
+                    "restriction_percent": _text(plan_restriction_pct) if plan_restriction_pct is not None else None,
+                    "restriction_value": _text(plan_restriction_value) if plan_restriction_value is not None else None,
+                    "planning_priority": planning_priority,
                     "planning_rule_id": rule.id if rule else plan.planning_rule_id,
                     "planning_rule_name": rule.name if rule else None,
                     "planning_strategy": (rule.strategy or "STANDARD").lower() if rule else provenance.get("strategy"),
@@ -303,11 +369,22 @@ class ItemPivotService:
                 item_usage_boe_cif = usage_totals[item.id]["boe_cif"]
                 item_usage_allot_qty = usage_totals[item.id]["allot_qty"]
                 item_usage_allot_cif = usage_totals[item.id]["allot_cif"]
+                item_usage_billed_qty = usage_totals[item.id]["billed_qty"]
+                item_usage_billed_cif = usage_totals[item.id]["billed_cif"]
                 item_total_qty = _decimal(item.quantity)
                 item_total_cif = _decimal(item.cif_fc)
-                balance_qty_unplanned = max(item_total_qty - item_usage_boe_qty - item_usage_allot_qty, ZERO_QTY)
+                balance_qty_unplanned = max(item_total_qty - item_usage_boe_qty - item_usage_allot_qty - item_usage_billed_qty, ZERO_QTY)
+                # Look up CIF restriction for this unplanned item
+                unplanned_restriction_pct = None
+                if first_item_name_id is not None and first_item_name_id in license_cif_restriction_map:
+                    unplanned_restriction_pct = license_cif_restriction_map[first_item_name_id]
+                elif "__rule__" in license_cif_restriction_map:
+                    unplanned_restriction_pct = license_cif_restriction_map["__rule__"]
+                unplanned_restriction_value = None
+                if unplanned_restriction_pct is not None:
+                    unplanned_restriction_value = item_total_cif * _decimal(unplanned_restriction_pct) / Decimal("100")
                 cells[unplanned_key] = {
-                    "canonical_item_id": None, "item_name": item_name_str, "sion": sion_str,
+                    "canonical_item_id": first_item_name_id, "item_name": item_name_str, "sion": sion_str,
                     "hsn_code": hsn_str, "description": item_name_str,
                     "total_qty": _text(item_total_qty),
                     "source_items": [
@@ -326,14 +403,18 @@ class ItemPivotService:
                     "excess_other_item_qty": _text(ZERO_QTY), "adjusted_total_qty": _text(item_total_qty),
                     "allotted_qty": _text(max(item_usage_allot_qty, ZERO_QTY)),
                     "debited_qty": _text(max(item_usage_boe_qty, ZERO_QTY)),
+                    "billed_qty": _text(max(item_usage_billed_qty, ZERO_QTY)),
                     "boe_used_cif": _text(max(item_usage_boe_cif, ZERO_CIF)),
                     "allotted_cif": _text(max(item_usage_allot_cif, ZERO_CIF)),
+                    "billed_cif": _text(max(item_usage_billed_cif, ZERO_CIF)),
                     "balance_qty": _text(max(balance_qty_unplanned, ZERO_QTY)),
                     "plan_qty": _text(ZERO_QTY), "planned_cif": _text(ZERO_CIF),
                     "effective_planned_qty": _text(ZERO_QTY), "effective_planned_cif": _text(ZERO_CIF),
                     "has_item_cif_cap": False, "has_explicit_item_cif_cap": False,
                     "item_cif_cap": None, "canonical_item_cif_capacity": _text(item_total_cif),
-                    "available_cif": None, "restriction_percent": None, "restriction_value": None,
+                    "available_cif": None,
+                    "restriction_percent": _text(unplanned_restriction_pct) if unplanned_restriction_pct is not None else None,
+                    "restriction_value": _text(unplanned_restriction_value) if unplanned_restriction_value is not None else None,
                     "planning_priority": None, "planning_rule_id": None,
                     "planning_rule_name": None, "planning_strategy": None,
                     "priority_item_order": None, "priority_source": "unplanned",
@@ -378,12 +459,12 @@ class ItemPivotService:
             issues = []
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])
-                used_qty = _decimal(cell["debited_qty"]) + _decimal(cell["allotted_qty"])
+                used_qty = _decimal(cell["debited_qty"]) + _decimal(cell["allotted_qty"]) + _decimal(cell.get("billed_qty", 0))
                 actual_used_qty = max(used_qty, ZERO_QTY)
                 available_qty = max(adjusted_qty - actual_used_qty, ZERO_QTY)
                 planned_qty = max(_decimal(cell["plan_qty"]), ZERO_QTY)
                 balance_after_plan = max(available_qty - planned_qty, ZERO_QTY)
-                actual_used_cif = max(_decimal(cell["boe_used_cif"]) + _decimal(cell["allotted_cif"]), ZERO_CIF)
+                actual_used_cif = max(_decimal(cell["boe_used_cif"]) + _decimal(cell["allotted_cif"]) + _decimal(cell.get("billed_cif", 0)), ZERO_CIF)
                 has_item_cif_cap = bool(cell.get("has_item_cif_cap"))
                 item_cif_cap = _decimal(cell["item_cif_cap"]) if has_item_cif_cap else ZERO_CIF
                 over_utilized_qty = max(actual_used_qty - adjusted_qty, ZERO_QTY)
@@ -441,8 +522,8 @@ class ItemPivotService:
                 key = item["key"]
                 applicable = [row["items"][key] for row in group["licenses"] if key in row["items"]]
                 totals["items"][key] = {
-                    field: _text(sum((_decimal(cell.get(field)) for cell in applicable), ZERO_CIF if field in {"restriction_value", "planned_cif", "boe_used_cif", "allotted_cif"} else ZERO_QTY))
-                    for field in ("total_qty", "allotted_qty", "allotted_cif", "debited_qty", "boe_used_cif", "balance_qty", "restriction_value", "plan_qty", "planned_cif")
+                    field: _text(sum((_decimal(cell.get(field)) for cell in applicable), ZERO_CIF if field in {"restriction_value", "planned_cif", "boe_used_cif", "allotted_cif", "billed_cif"} else ZERO_QTY))
+                    for field in ("total_qty", "allotted_qty", "allotted_cif", "debited_qty", "billed_qty", "boe_used_cif", "billed_cif", "balance_qty", "restriction_value", "plan_qty", "planned_cif")
                 }
             group["totals"] = {
                 **{key: _text(value) for key, value in totals.items() if key != "items"},
@@ -480,10 +561,10 @@ class ItemPivotService:
         for key, row in item_summary.items():
             cells = row.pop("cells")
             values = lambda field, zero=ZERO_QTY: sum((_decimal(cell.get(field)) for cell in cells), zero)
-            total_qty, boe_qty, allotted_qty, planned_qty = values("total_qty"), values("debited_qty"), values("allotted_qty"), values("plan_qty")
-            actual_qty = boe_qty + allotted_qty
+            total_qty, boe_qty, allotted_qty, billed_qty, planned_qty = values("total_qty"), values("debited_qty"), values("allotted_qty"), values("billed_qty"), values("plan_qty")
+            actual_qty = boe_qty + allotted_qty + billed_qty
             planned_cif = values("planned_cif", ZERO_CIF)
-            actual_cif = values("boe_used_cif", ZERO_CIF) + values("allotted_cif", ZERO_CIF)
+            actual_cif = values("boe_used_cif", ZERO_CIF) + values("allotted_cif", ZERO_CIF) + values("billed_cif", ZERO_CIF)
             available_qty = max(total_qty - actual_qty, ZERO_QTY)
             balance_qty = max(available_qty - planned_qty, ZERO_QTY)
             contributing = [

@@ -160,6 +160,15 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
+    # PP (Polypropylene): HSN 3920/3923 OR desc contains 3920/3923/PP
+    {
+        "name": "PP",
+        "hsn_prefixes": ["3920", "3923"],
+        "desc_contains_any": ["3920", "3923", "PP"],
+        "exclude_hsn_prefixes": ["3902", "3912"],
+        "exclude_desc_contains": ["3902", "3912"],
+        "sort_order": 99,
+    },
     # ALUMINIUM FOIL: HSN 7607 OR desc contains 7607
     {
         "name": "ALUMINIUM FOIL",

@@ -136,23 +136,23 @@ E5_PRODUCT_CONDITIONS = [
         "norm": "E1",
         "sort_order": 99,
     },
-    # JUICE: (HSN 2008/2009 OR desc 2008/2009) AND desc contains FRUIT
-    # Works for all norms — checked before FOOD FLAVOUR so fruit items (2008/2009) match JUICE first
-    # Matches juice/pulp/puree/cocktail items like "Fruit Cocktail HS 20089991" or "Juice HS 20098990"
+    # JUICE: HSN 2008/2009 only — these HSN codes are specifically for fruit preparations (juice, cocktail, pulp, puree)
+    # Works for all norms — checked before FOOD FLAVOUR so HSN 2008/2009 items match JUICE first
+    # Matches items like "Fruit Cocktail HS 20089991" or "Juice HS 20098990" based on HSN alone
     {
         "name": "JUICE",
         "hsn_prefixes": ["2008", "2009"],
-        "desc_contains_any": ["2008", "2009"],
-        "desc_contains_all": ["FRUIT"],
+        "desc_contains_any": [],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813/2008/2009 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
-    # Covers: Fruit (0804/0805/0813/2008/2009), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
+    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
+    # Covers: Fruit (0804/0805/0813), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
+    # Note: HSN 2008/2009 are handled by JUICE category above; FOOD FLAVOUR catches 2008/2009 only if desc contains the numbers
     {
         "name": "FOOD FLAVOUR",
-        "hsn_prefixes": ["0802", "0804", "0805", "0813", "2008", "2009"],
+        "hsn_prefixes": ["0802", "0804", "0805", "0813"],
         "desc_contains_any": ["0802", "0804", "0805", "0813", "2008", "2009", "FOOD ADDITIVES"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": ["DIETARY", "CONFECTIONERY"],

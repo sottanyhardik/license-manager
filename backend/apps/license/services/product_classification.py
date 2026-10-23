@@ -104,13 +104,13 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": ["0404"],
         "sort_order": 99,
     },
-    # FOOD FLAVOUR: (HSN 0802 OR desc 0802) AND NOT (HSN 0813 OR desc 0813) AND NOT (HSN 2009 OR desc 2009) AND NOT desc contains DIETARY
+    # FOOD FLAVOUR: (HSN 0802 OR desc 0802) AND NOT (HSN 0813 OR desc 0813) AND NOT (HSN 2009 OR desc 2009) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
     {
         "name": "FOOD FLAVOUR",
         "hsn_prefixes": ["0802"],
         "desc_contains_any": ["0802"],
         "exclude_hsn_prefixes": ["0813", "2009"],
-        "exclude_desc_contains": ["0813", "2009", "DIETARY"],
+        "exclude_desc_contains": ["0813", "2009", "DIETARY", "CONFECTIONERY"],
         "sort_order": 99,
     },
     # JUICE: (HSN 2009 OR desc 2009) AND desc contains FRUIT

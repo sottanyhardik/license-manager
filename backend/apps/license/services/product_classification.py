@@ -137,13 +137,13 @@ E5_PRODUCT_CONDITIONS = [
         "sort_order": 99,
     },
     # FRUIT COCKTAIL: HSN 2008 only — fruit preparations like cocktails, pulps, purees
-    # Checked before JUICE so HSN 2008 items match FRUIT COCKTAIL first
+    # Exclude NUT so HSN 2008 + NUT items fall through to FOOD FLAVOUR
     {
         "name": "FRUIT COCKTAIL",
         "hsn_prefixes": ["2008"],
         "desc_contains_any": [],
         "exclude_hsn_prefixes": [],
-        "exclude_desc_contains": [],
+        "exclude_desc_contains": ["NUT"],
         "sort_order": 99,
     },
     # JUICE: HSN 2009 only — these HSN codes are specifically for fruit juice preparations
@@ -157,12 +157,12 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
-    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
+    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813/2008 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY AND NOT desc contains NUT
     # Covers: Fruit (0804/0805/0813), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
-    # Note: HSN 2008/2009 are handled by JUICE category above; FOOD FLAVOUR catches 2008/2009 only if desc contains the numbers
+    # HSN 2008 items with NUT in description match here (FRUIT COCKTAIL excludes NUT)
     {
         "name": "FOOD FLAVOUR",
-        "hsn_prefixes": ["0802", "0804", "0805", "0813"],
+        "hsn_prefixes": ["0802", "0804", "0805", "0813", "2008"],
         "desc_contains_any": ["0802", "0804", "0805", "0813", "2008", "2009", "FOOD ADDITIVES"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": ["DIETARY", "CONFECTIONERY"],

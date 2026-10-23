@@ -125,6 +125,17 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": ["FOOD ADDITIVES"],
         "sort_order": 99,
     },
+    # OTHER CONFECTIONERY INGREDIENTS: (Norm = E1) AND (HSN 0802 OR desc 0802) AND (desc contains CONFECTIONERY OR INGREDIENTS OR NUT)
+    # E1 norm only — checked before FOOD FLAVOUR so E1 confectionery items match here
+    {
+        "name": "OTHER CONFECTIONERY INGREDIENTS",
+        "hsn_prefixes": ["0802"],
+        "desc_contains_any": ["0802", "CONFECTIONERY", "INGREDIENTS", "NUT"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "norm": "E1",
+        "sort_order": 99,
+    },
     # FOOD FLAVOUR: (HSN 0802/0804/0805/0813/2008 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
     # Covers: Fruit (0804/0805/0813/2008), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
     {
@@ -135,7 +146,8 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": ["DIETARY", "CONFECTIONERY"],
         "sort_order": 99,
     },
-    # JUICE: (HSN 2009 OR desc 2009) AND desc contains FRUIT
+    # JUICE: (Norm = E1) AND (HSN 2009 OR desc 2009) AND desc contains FRUIT
+    # E1 norm only — matches juice/pulp/puree items like "Fruit (20089991) - (Juice / Pulp/ Pure) HS 20098990"
     {
         "name": "JUICE",
         "hsn_prefixes": ["2009"],
@@ -143,6 +155,7 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["FRUIT"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
+        "norm": "E1",
         "sort_order": 99,
     },
     # PAPER: (HSN 48 OR desc 48) AND desc contains PAPER
@@ -218,6 +231,33 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_desc_contains": [],
         "sort_order": 99,
     },
+    # ESSENTIAL OIL: desc contains ESSENTIAL OIL
+    {
+        "name": "ESSENTIAL OIL",
+        "hsn_prefixes": [],
+        "desc_contains_any": ["ESSENTIAL OIL"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
+    # CITRIC ACID: HSN 2918 OR desc contains CITRIC ACID
+    {
+        "name": "CITRIC ACID",
+        "hsn_prefixes": ["2918"],
+        "desc_contains_any": ["2918", "CITRIC ACID"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
+    # FOOD COLOURS: desc contains FOOD COLOUR
+    {
+        "name": "FOOD COLOURS",
+        "hsn_prefixes": [],
+        "desc_contains_any": ["FOOD COLOUR"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+        "sort_order": 99,
+    },
 ]
 
 
@@ -235,16 +275,18 @@ def _normalize_text(text: str) -> str:
     return " ".join(text.strip().lower().split())
 
 
-def classify_product(hs_code: str, description: str) -> Optional[str]:
-    """Classify an import item into a product category based on HSN and description.
+def classify_product(hs_code: str, description: str, norm: str = "") -> Optional[str]:
+    """Classify an import item into a product category based on HSN, description, and norm.
 
     Returns the product category name (e.g., "PKO", "DIETARY FIBRE") or None
     if no condition matches.
 
     The conditions are evaluated in order; the first match wins.
+    Some conditions are norm-specific (e.g., OTHER CONFECTIONERY INGREDIENTS for E1 only).
     """
     hsn_norm = _normalize_hsn(hs_code)
     desc_norm = _normalize_text(description)
+    norm_upper = norm.strip().upper() if norm else ""
 
     for condition in E5_PRODUCT_CONDITIONS:
         # Check exclusion conditions first
@@ -269,6 +311,11 @@ def classify_product(hs_code: str, description: str) -> Optional[str]:
         desc_all_match = True
         if condition.get("desc_contains_all"):
             desc_all_match = all(keyword.lower() in desc_norm for keyword in condition["desc_contains_all"])
+
+        # Check norm filter if specified
+        if condition.get("norm"):
+            if norm_upper != condition["norm"].upper():
+                continue
 
         # Match logic: (HSN match OR desc any match) AND desc all match
         # For conditions with no hsn_prefixes and no desc_contains_any,

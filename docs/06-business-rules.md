@@ -437,6 +437,56 @@ skip_if: used_cif >= ceiling
 
 ---
 
+## BR-19C: SION Planning — Product Classification Conditions
+
+**Rule**: Each SION planning rule uses an expression tree to classify which import items belong to a product category. The expression is evaluated against each import item's HSN code and description text. Only items matching the entire expression are planned by that rule.
+
+**Expression Fields**:
+- `HSN` (alias for `hs_code`): The import item's HSN code, matched as alphanumeric string (case-insensitive, non-alphanumeric chars stripped)
+- `PRODUCT_DESCRIPTION` (alias for `description`): The import item's description text, matched case-insensitively with whitespace normalization
+
+**Operators**:
+- `STARTS_WITH` / `NOT_STARTS_WITH`: HSN code prefix matching
+- `CONTAINS` / `NOT_CONTAINS`: Substring matching in description text
+- `AND` / `OR` / `NOT`: Boolean composition of conditions
+
+**Product Classification Reference Table**:
+
+| Product | HSN Codes | Description Keywords | Logic |
+|---|---|---|---|
+| PKO | 1513 | 1513 | HSN starts with 1513 OR description contains 1513 |
+| RBD PALMOLEIN OIL | 1511 (exclude 1513) | 1511 (exclude 1513) | (HSN 1511 OR desc 1511) AND NOT (HSN 1513 OR desc 1513) |
+| DWP or SWP | 0404 | 0404 | HSN starts with 0404 OR description contains 0404 |
+| CHEESE | 0406 (exclude 0404) | 0406 (exclude 0404) | (HSN 0406 OR desc 0406) AND NOT (HSN 0404 OR desc 0404) |
+| WPC | 3502 (exclude 0404, 0406) | 3502 (exclude 0404, 0406) | (HSN 3502 OR desc 3502) AND NOT classified as 0404 or 0406 |
+| DIETARY FIBRE | 0802 | DIETARY | (HSN 0802 OR desc 0802) AND description contains DIETARY |
+| YEAST | 2102, 2106 | LEAVENING | (HSN 2102/2106 OR desc 2102/2106) AND description contains LEAVENING |
+| SUGAR | — | SUGAR | Description contains SUGAR |
+| WHEAT FLOUR | 1101 | FLOUR | (HSN 1101 OR desc 1101) AND description contains FLOUR |
+| PP | 390 | 390 | HSN starts with 390 OR description contains 390 |
+| PAPER | 48 | PAPER | (HSN 48 OR desc 48) AND description contains PAPER |
+| ALUMINIUM FOIL | 7607 | PACKING | (HSN 7607 OR desc 7607) AND description contains PACKING |
+
+**Expression Evaluation**:
+- The expression is stored as JSON in `SionPlanningRule.expression`
+- Evaluated by `sion_rule_engine.py` using a safe whitelist evaluator — no `eval`, no SQL injection
+- Context fields: `hs_code` from item's HSN FK, `description` from item's description field
+- Depth limit: 12 levels, node limit: 128 nodes
+- Empty expression matches nothing (not vacuous truth)
+
+**Rule Naming Convention**:
+- The `SionPlanningRule.name` field should store the product name (e.g., "PKO", "DIETARY FIBRE")
+- Rules are executed in priority order; higher-priority rules claim items first
+- An item can match multiple rules, but only the highest-priority matching rule plans it
+
+**Files**:
+- `backend/apps/license/services/sion_rule_engine.py` — `evaluate_expression()`, `_item_context()`, field aliases
+- `backend/apps/license/models/core.py` — `SionPlanningRule.expression` JSONField
+- `frontend/src/pages/planning/ExpressionTreeEditor.tsx` — Match logic UI
+- `frontend/src/pages/planning/ruleConditionDisplay.ts` — Field and operator definitions
+
+---
+
 ## BR-20: Task Visibility
 
 **Rule**: A task is visible to:

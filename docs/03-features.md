@@ -730,3 +730,47 @@ Limits how much of an import item's total CIF value can be planned across all ru
 - ✓ During planning, items exceeding their CIF restriction are skipped
 - ✓ The restriction is persisted and shown in the rule editor
 - ✓ Row-level restriction overrides rule-level default
+
+---
+
+**Product Classification Conditions** (Reference Table):
+
+The table below maps each product category to its SION planning rule expression. Each row defines how the system identifies import items belonging to a product category, using HSN code prefixes and description text matching. These conditions are configured in the rule editor's Match Logic section and stored as JSON in the `expression` field.
+
+| Product | Classification Condition | Expression JSON |
+|---|---|---|
+| **PKO** | HSN starts with 1513 OR description contains 1513 | `{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"1513"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"1513"}]}` |
+| **RBD PALMOLEIN OIL** | (HSN starts with 1511 OR description contains 1511) AND (HSN does not start with 1513 AND description does not contain 1513) | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"1511"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"1511"}]},{"operator":"AND","conditions":[{"field":"HSN","comparator":"NOT_STARTS_WITH","value":"1513"},{"field":"PRODUCT_DESCRIPTION","comparator":"NOT_CONTAINS","value":"1513"}]}]}` |
+| **DWP or SWP** | HSN starts with 0404 OR description contains 0404 | `{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"0404"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"0404"}]}` |
+| **CHEESE** | (HSN starts with 0406 OR description contains 0406) AND (HSN does not start with 0404 AND description does not contain 0404) | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"0406"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"0406"}]},{"operator":"AND","conditions":[{"field":"HSN","comparator":"NOT_STARTS_WITH","value":"0404"},{"field":"PRODUCT_DESCRIPTION","comparator":"NOT_CONTAINS","value":"0404"}]}]}` |
+| **WPC** | (HSN starts with 3502 OR description contains 3502) AND (not classified as 0404 or 0406) | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"3502"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"3502"}]},{"operator":"AND","conditions":[{"field":"HSN","comparator":"NOT_STARTS_WITH","value":"0404"},{"field":"PRODUCT_DESCRIPTION","comparator":"NOT_CONTAINS","value":"0404"},{"field":"HSN","comparator":"NOT_STARTS_WITH","value":"0406"},{"field":"PRODUCT_DESCRIPTION","comparator":"NOT_CONTAINS","value":"0406"}]}]}` |
+| **DIETARY FIBRE** | (HSN starts with 0802 OR description contains 0802) AND description contains DIETARY | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"0802"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"0802"}]},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"DIETARY"}]}` |
+| **YEAST** | (HSN starts with 2102 OR description contains 2102) OR (HSN starts with 2106 OR description contains 2106) AND description contains LEAVENING | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"2102"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"2102"}]},{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"2106"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"2106"}]}]},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"LEAVENING"}]}` |
+| **SUGAR** | Description contains SUGAR | `{"operator":"AND","conditions":[{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"SUGAR"}]}` |
+| **WHEAT FLOUR** | (HSN starts with 1101 OR description contains 1101) AND description contains FLOUR | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"1101"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"1101"}]},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"FLOUR"}]}` |
+| **PP** | HSN starts with 390 OR description contains 390 | `{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"390"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"390"}]}` |
+| **PAPER** | (HSN starts with 48 OR description contains 48) AND description contains PAPER | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"48"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"48"}]},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"PAPER"}]}` |
+| **ALUMINIUM FOIL** | (HSN starts with 7607 OR description contains 7607) AND description contains PACKING | `{"operator":"AND","conditions":[{"operator":"OR","conditions":[{"field":"HSN","comparator":"STARTS_WITH","value":"7607"},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"7607"}]},{"field":"PRODUCT_DESCRIPTION","comparator":"CONTAINS","value":"PACKING"}]}` |
+
+**How to Create a Product Classification Rule**:
+
+1. Navigate to `/planning?sion=E5&rule=NEW` (or edit an existing rule)
+2. Set the **Rule Name** to the product name (e.g., "PKO", "DIETARY FIBRE")
+3. Set **Max Price** and **Unit** for the output item
+4. In the **Match Logic** section, build the expression tree:
+   - For "HSN starts with 1513 OR description contains 1513":
+     - Set root operator to "ANY (OR)"
+     - Add Condition: Field=HSN, Operator=Starts with, Value=1513
+     - Add Condition: Field=Product Description, Operator=Contains, Value=1513
+   - For nested AND/OR expressions (e.g., RBD PALMOLEIN OIL):
+     - Set root operator to "ALL (AND)"
+     - Add Group: operator "ANY (OR)" with HSN 1511 + description 1511 conditions
+     - Add Group: operator "ALL (AND)" with HSN NOT 1513 + description NOT 1513 conditions
+5. Save the rule — the expression tree is stored as JSON in `SionPlanningRule.expression`
+
+**Expression Evaluation Notes**:
+- HSN matching strips non-alphanumeric characters and is case-insensitive
+- Description matching is case-insensitive with whitespace normalization
+- The expression is evaluated against each import item's context: `hs_code` from the item's HSN FK, `description` from the item's description field
+- A rule matches an item only when the entire expression evaluates to `true`
+- Priority ordering ensures higher-priority rules claim items first; lower-priority rules see only remaining items

@@ -136,8 +136,8 @@ E5_PRODUCT_CONDITIONS = [
         "norm": "E1",
         "sort_order": 99,
     },
-    # JUICE: (Norm = E1) AND (HSN 2008/2009 OR desc 2008/2009) AND desc contains FRUIT
-    # E1 norm only — checked before FOOD FLAVOUR so E1 fruit items (2008/2009) match JUICE first
+    # JUICE: (HSN 2008/2009 OR desc 2008/2009) AND desc contains FRUIT
+    # Works for all norms — checked before FOOD FLAVOUR so fruit items (2008/2009) match JUICE first
     # Matches juice/pulp/puree/cocktail items like "Fruit Cocktail HS 20089991" or "Juice HS 20098990"
     {
         "name": "JUICE",
@@ -146,15 +146,14 @@ E5_PRODUCT_CONDITIONS = [
         "desc_contains_all": ["FRUIT"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
-        "norm": "E1",
         "sort_order": 99,
     },
-    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813/2008 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
-    # Covers: Fruit (0804/0805/0813/2008), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
+    # FOOD FLAVOUR: (HSN 0802/0804/0805/0813/2008/2009 OR desc contains any of those OR desc contains FOOD ADDITIVES) AND NOT desc contains DIETARY AND NOT desc contains CONFECTIONERY
+    # Covers: Fruit (0804/0805/0813/2008/2009), Nut Products (0802), Yeast Extract, Cinnamon, Cumin, Garlic, Vinegar
     {
         "name": "FOOD FLAVOUR",
-        "hsn_prefixes": ["0802", "0804", "0805", "0813", "2008"],
-        "desc_contains_any": ["0802", "0804", "0805", "0813", "2008", "FOOD ADDITIVES"],
+        "hsn_prefixes": ["0802", "0804", "0805", "0813", "2008", "2009"],
+        "desc_contains_any": ["0802", "0804", "0805", "0813", "2008", "2009", "FOOD ADDITIVES"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": ["DIETARY", "CONFECTIONERY"],
         "sort_order": 99,

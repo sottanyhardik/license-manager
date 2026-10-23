@@ -136,12 +136,13 @@ E5_PRODUCT_CONDITIONS = [
         "norm": "E1",
         "sort_order": 99,
     },
-    # FRUIT COCKTAIL: HSN 2008 only — fruit preparations like cocktails, pulps, purees
+    # FRUIT COCKTAIL: HSN 2008 AND desc contains FRUIT — fruit preparations like cocktails, pulps, purees
     # Exclude NUT so HSN 2008 + NUT items fall through to FOOD FLAVOUR
     {
         "name": "FRUIT COCKTAIL",
         "hsn_prefixes": ["2008"],
         "desc_contains_any": [],
+        "desc_contains_all": ["FRUIT"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": ["NUT"],
         "sort_order": 99,

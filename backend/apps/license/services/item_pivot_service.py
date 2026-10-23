@@ -281,7 +281,7 @@ class ItemPivotService:
                     continue
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
                 hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
-                sion_str = (getattr(item.norm_class, "norm_class", "") or default_sion)
+                sion_str = default_sion
                 # Use a key derived from the import item id so it never
                 # collides with a planned item's item_name_id key.
                 unplanned_key = f"unplanned:{item.id}:{sion_str}"
@@ -348,7 +348,7 @@ class ItemPivotService:
                 if item.id in planned_import_item_ids:
                     continue
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
-                sion_str = (getattr(item.norm_class, "norm_class", "") or default_sion)
+                sion_str = default_sion
                 unplanned_key = f"unplanned:{item.id}:{sion_str}"
                 group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": None, "name": item_name_str, "sion": sion_str, "priority": 999999, "sequence": item.id})
             issues = []

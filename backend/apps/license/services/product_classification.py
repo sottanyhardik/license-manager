@@ -72,6 +72,23 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
     },
+    # FOOD FLAVOUR: (HSN 0802 OR desc 0802) AND NOT desc contains DIETARY
+    {
+        "name": "FOOD FLAVOUR",
+        "hsn_prefixes": ["0802"],
+        "desc_contains_any": ["0802"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": ["DIETARY"],
+    },
+    # JUICE: (HSN 2009 OR desc 2009) AND desc contains FRUIT
+    {
+        "name": "JUICE",
+        "hsn_prefixes": ["2009"],
+        "desc_contains_any": ["2009"],
+        "desc_contains_all": ["FRUIT"],
+        "exclude_hsn_prefixes": [],
+        "exclude_desc_contains": [],
+    },
     # YEAST: (HSN 2102/2106 OR desc 2102/2106) AND desc contains LEAVENING
     {
         "name": "YEAST",

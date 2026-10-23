@@ -214,9 +214,15 @@ class ItemPivotService:
                     priority_item_order = provenance.get("member_sequence", plan.id)
                 item_name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or default_sion
-                # The matrix key is identity based.  Names are presentation
-                # only: a canonical item with two SIONs must remain two cells.
-                key = f"{plan.item_name_id or 'unmapped'}:{sion}"
+                # Classify the item into a product category based on HSN and description
+                # (moved up early so the key can use it)
+                description_for_class = next((item.description for item in source_items if item.description), item_name)
+                hsn_for_class = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
+                product_category = classify_product(hsn_for_class, description_for_class)
+                # The matrix key uses product category so items with the same
+                # category (e.g. DIETARY FIBRE) merge into one column per license.
+                # A canonical item with two SIONs must remain two cells.
+                key = f"{product_category or 'UNCLASSIFIED'}:{sion}"
                 source_ids = [int(source_id) for source_id in provenance.get("source_item_ids", []) if str(source_id).isdigit()] or [plan.import_item_id]
                 source_items = [item_by_id[source_id] for source_id in source_ids if source_id in item_by_id]
                 is_percentage = provenance.get("strategy") in {"SPLIT_BY_PERCENT", "SPLIT_BY_PERCENTAGE"}
@@ -267,8 +273,6 @@ class ItemPivotService:
                 plan_qty = _decimal(plan.planned_quantity)
                 plan_cif = _decimal(plan.planned_cif_fc)
                 planned_cif += plan_cif
-                description = next((item.description for item in source_items if item.description), item_name)
-                hsn = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
                 source_total_qty = sum((_decimal(item.quantity) for item in source_items), ZERO_QTY)
                 source_total_cif = sum((_decimal(item.cif_fc) for item in source_items), ZERO_CIF)
                 source_used_cif = boe_cif + allot_cif + billed_cif
@@ -293,12 +297,10 @@ class ItemPivotService:
                 canonical_item_cif_capacity = (source_total_cif * adjusted_total_qty / source_total_qty
                                                if source_total_qty > ZERO_QTY else ZERO_CIF)
                 available_cif = max(item_cif_cap - max(source_used_cif, ZERO_CIF), ZERO_CIF) if has_item_cif_cap else None
-                # Classify the item into a product category based on HSN and description
-                product_category = classify_product(hsn, description)
                 candidate_cell = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
                     "product_category": product_category,
-                    "hsn_code": hsn, "description": description, "total_qty": _text(adjusted_total_qty),
+                    "hsn_code": hsn_for_class, "description": description_for_class, "total_qty": _text(adjusted_total_qty),
                     # A pivot cell is a projection of particular import rows,
                     # not a substitute for them.  Keep the precise source
                     # lineage available to the API/UI/exporter rather than
@@ -345,11 +347,8 @@ class ItemPivotService:
             # Build zero-plan cells for import items not covered by any active
             # plan so the pivot report shows the full licence contents — even
             # items with available quantity 0 or no plan at all.
-            # Use a key that merges with planned items when possible:
-            # prefer the first attached ItemNameModel (matching the planned
-            # item's key format), then fall back to HSN-based key so items
-            # with the same HSN merge across licenses, then fall back to
-            # import item id as a last resort.
+            # Use product category as the key so unplanned items merge with
+            # planned items in the same category (e.g. DIETARY FIBRE).
             planned_import_item_ids = {plan.import_item_id for plan in plans_by_license[license_obj.id]}
             for item in import_items:
                 if item.id in planned_import_item_ids:
@@ -357,18 +356,15 @@ class ItemPivotService:
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
                 hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
                 sion_str = default_sion
-                # Determine the pivot key — try to match a planned item's key
-                # so the column merges across planned and unplanned licenses.
+                # Classify the unplanned item into a product category
+                unplanned_product_category = classify_product(hsn_str, item_name_str)
+                # Use product category as the key so items with the same
+                # category merge into one column per license.
+                unplanned_key = f"{unplanned_product_category or 'UNCLASSIFIED'}:{sion_str}"
                 first_item_name_id = None
                 for attached in item.items.all():
                     first_item_name_id = attached.id
                     break
-                if first_item_name_id is not None:
-                    unplanned_key = f"{first_item_name_id}:{sion_str}"
-                elif hsn_str:
-                    unplanned_key = f"hsn:{hsn_str}:{sion_str}"
-                else:
-                    unplanned_key = f"unplanned:{item.id}:{sion_str}"
                 item_usage_boe_qty = usage_totals[item.id]["boe_qty"]
                 item_usage_boe_cif = usage_totals[item.id]["boe_cif"]
                 item_usage_allot_qty = usage_totals[item.id]["allot_qty"]
@@ -387,9 +383,9 @@ class ItemPivotService:
                 unplanned_restriction_value = None
                 if unplanned_restriction_pct is not None:
                     unplanned_restriction_value = item_total_cif * _decimal(unplanned_restriction_pct) / Decimal("100")
-                # Classify the unplanned item into a product category
-                unplanned_product_category = classify_product(hsn_str, item_name_str)
-                cells[unplanned_key] = {
+                # Merge with existing cell if another unplanned item has the
+                # same product category key, otherwise create a new one.
+                unplanned_candidate = {
                     "canonical_item_id": first_item_name_id, "item_name": item_name_str, "sion": sion_str,
                     "product_category": unplanned_product_category,
                     "hsn_code": hsn_str, "description": item_name_str,
@@ -426,6 +422,10 @@ class ItemPivotService:
                     "planning_rule_name": None, "planning_strategy": None,
                     "priority_item_order": None, "priority_source": "unplanned",
                 }
+                cells[unplanned_key] = (
+                    _merge_plan_cell(cells[unplanned_key], unplanned_candidate)
+                    if unplanned_key in cells else unplanned_candidate
+                )
 
             notification = license_obj.notification_number.code if license_obj.notification_number_id else "Unknown"
             # Purchase status is the report's grouping dimension.  Exporter,
@@ -442,8 +442,7 @@ class ItemPivotService:
                 provenance = plan.allocation_provenance or {}
                 name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
                 sion = provenance.get("sion") or default_sion
-                key = f"{plan.item_name_id or 'unmapped'}:{sion}"
-                # Look up the product category from the cell if it exists
+                # Use the same product category key as the cells dict
                 plan_cell = cells.get(key)
                 plan_product_category = plan_cell.get("product_category") if plan_cell else None
                 group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "product_category": plan_product_category, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
@@ -455,18 +454,13 @@ class ItemPivotService:
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
                 hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
                 sion_str = default_sion
+                unplanned_product_category = classify_product(hsn_str, item_name_str)
+                unplanned_key = f"{unplanned_product_category or 'UNCLASSIFIED'}:{sion_str}"
+                unplanned_cell = cells.get(unplanned_key)
                 first_item_name_id = None
                 for attached in item.items.all():
                     first_item_name_id = attached.id
                     break
-                if first_item_name_id is not None:
-                    unplanned_key = f"{first_item_name_id}:{sion_str}"
-                elif hsn_str:
-                    unplanned_key = f"hsn:{hsn_str}:{sion_str}"
-                else:
-                    unplanned_key = f"unplanned:{item.id}:{sion_str}"
-                unplanned_cell = cells.get(unplanned_key)
-                unplanned_product_category = unplanned_cell.get("product_category") if unplanned_cell else None
                 group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": first_item_name_id, "name": item_name_str, "sion": sion_str, "product_category": unplanned_product_category, "priority": 999999, "sequence": item.id})
             issues = []
             for item_key, cell in cells.items():

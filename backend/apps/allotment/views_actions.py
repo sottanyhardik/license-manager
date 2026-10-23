@@ -548,15 +548,16 @@ class AllotmentActionViewSet(ViewSet):
             from apps.license.services.condition_pool import available_value_bulk_map
             available_value_map = available_value_bulk_map(paginated_items)
 
-        # Same batching for the two other per-item SerializerMethodFields
-        # that would otherwise run one query each per row on the page:
-        # `planned_quantity` (LicenseItemPlan) and `billed_no_boe`
-        # (LicenseTradeLine) — mirrors `available_value_map` above.
+        # Same batching for the per-item SerializerMethodFields that would
+        # otherwise run one query each per row on the page:
+        # `planned_quantity` (LicenseItemPlan), `billed_no_boe` (CIF), and
+        # `billed_no_boe_qty` (quantity) — mirrors `available_value_map` above.
         page_item_ids = [item.id for item in paginated_items]
         from apps.license.services.plan_reporting import plan_map_for_import_items
         plan_map = plan_map_for_import_items(page_item_ids)
-        from apps.license.services.item_usage import billed_no_boe_bulk_map
+        from apps.license.services.item_usage import billed_no_boe_bulk_map, billed_no_boe_qty_bulk_map
         billed_no_boe_map = billed_no_boe_bulk_map(page_item_ids)
+        billed_no_boe_qty_map = billed_no_boe_qty_bulk_map(page_item_ids)
 
         # Serialize the data
         license_serializer = LicenseImportItemSerializer(
@@ -566,6 +567,7 @@ class AllotmentActionViewSet(ViewSet):
                 'available_value_map': available_value_map,
                 'plan_map': plan_map,
                 'billed_no_boe_map': billed_no_boe_map,
+                'billed_no_boe_qty_map': billed_no_boe_qty_map,
             }
         )
         allotment_serializer = AllotmentSerializer(allotment, context={'request': request})
@@ -929,8 +931,9 @@ class AllotmentActionViewSet(ViewSet):
         import_items = [source for _plan, source in paginated_pairs]
         from apps.license.services.condition_pool import available_value_bulk_map
         available_value_map = available_value_bulk_map(import_items)
-        from apps.license.services.item_usage import billed_no_boe_bulk_map
+        from apps.license.services.item_usage import billed_no_boe_bulk_map, billed_no_boe_qty_bulk_map
         billed_no_boe_map = billed_no_boe_bulk_map([ii.id for ii in import_items])
+        billed_no_boe_qty_map = billed_no_boe_qty_bulk_map([ii.id for ii in import_items])
         from apps.license.services.balance_calculator import ItemBalanceCalculator
         boe_debited_quantity_map = ItemBalanceCalculator.calculate_debited_quantity_for_items([ii.id for ii in import_items])
 
@@ -943,6 +946,7 @@ class AllotmentActionViewSet(ViewSet):
                                  # apply to an already-per-plan-line row — see
                                  # the frontend, which only renders it in Actual mode.
                 'billed_no_boe_map': billed_no_boe_map,
+                'billed_no_boe_qty_map': billed_no_boe_qty_map,
                 'boe_debited_quantity_map': boe_debited_quantity_map,
             }
         )

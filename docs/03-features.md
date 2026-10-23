@@ -263,9 +263,9 @@ Available = total_quantity − BOE_debited − outstanding_allotted − direct_s
 
 **Frontend display formula** (`CustomsLedgerSection.tsx`):
 ```
-Actual Available = quantity − boe_debited_quantity − allotted_quantity − billed_no_boe
+Actual Available = quantity − boe_debited_quantity − allotted_quantity − billed_no_boe_qty
 ```
-The frontend omits **direct_sale_quantity** from the displayed balance. `billed_no_boe` represents the CIF from SALE trade lines with no BOE attached.
+The frontend omits **direct_sale_quantity** from the displayed balance. `billed_no_boe_qty` represents the quantity from SALE trade lines with no BOE attached (the quantity counterpart to `billed_no_boe` which is the CIF amount).
 
 **Balance snapshot API** (`balance_snapshot.py`):
 ```
@@ -279,10 +279,10 @@ Available = quantity − debited − allotted − direct_sale_quantity
 ```
 The stored field includes all four components correctly.
 
-**Impact**: When the user views the Customs Ledger section on the license overview page, the "Actual Available" column shows `quantity - boe_debited - allotted - billed_no_boe`. The "Billed (No BOE)" column displays the CIF from SALE trade lines with no BOE attached. If there are prior direct sales for that item, the displayed balance will be higher than what the trade creation API accepts. For example, if an item has 342,672.02 kg total quantity and 15,251.30 kg in direct sale quantities, the UI shows 342,672.02 kg available, but the API rejects quantities above 327,420.72 kg.
+**Impact**: When the user views the Customs Ledger section on the license overview page, the "Actual Available" column shows `quantity - boe_debited - allotted - billed_no_boe_qty`. The "Billed (No BOE)" column appears in both the Quantity section (showing `billed_no_boe_qty`) and the CIF (FC) section (showing `billed_no_boe` CIF amount). This lets operators see how much of an item's quantity has been directly billed without any BOE or allotment. If there are prior direct sales for that item, the displayed balance will be higher than what the trade creation API accepts. For example, if an item has 342,672.02 kg total quantity and 15,251.30 kg in direct sale quantities, the UI shows 342,672.02 kg available, but the API rejects quantities above 327,420.72 kg.
 
 **Affected UI components**:
-- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — "Actual Available" column uses `quantity - boe_debited_quantity - allotted_quantity - billed_no_boe` (missing `direct_sale_quantity`); "Billed (No BOE)" column shows CIF from SALE trades without BOE
+- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — "Actual Available" column uses `quantity - boe_debited_quantity - allotted_quantity - billed_no_boe_qty` (missing `direct_sale_quantity`); "Billed (No BOE)" appears in both Quantity section (`billed_no_boe_qty`) and CIF (FC) section (`billed_no_boe`)
 - `frontend/src/pages/license-overview/ItemsTab.tsx` — "Balance Qty" uses the stored `item.available_quantity` field (correct)
 - Balance snapshot API used by list views — omits `direct_sale_quantity`
 

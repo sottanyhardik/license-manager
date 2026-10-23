@@ -324,20 +324,20 @@ Available = total_quantity − debited_quantity − outstanding_qty
 
 **Path 4 — Frontend Customs Ledger display**:
 ```
-Actual Available = quantity − boe_debited_quantity − allotted_quantity − billed_no_boe
+Actual Available = quantity − boe_debited_quantity − allotted_quantity − billed_no_boe_qty
 ```
 - **File**: `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` line 12
 - **Used by**: License overview page's "Customs Ledger — Item Detail" card view
-- **Status**: ⚠️ **Missing `direct_sale_quantity`** — includes `billed_no_boe` (CIF from SALE trades with no BOE attached) but still omits `direct_sale_quantity`
+- **Status**: ⚠️ **Missing `direct_sale_quantity`** — includes `billed_no_boe_qty` (quantity from SALE trades with no BOE attached) but still omits `direct_sale_quantity`
 
-**Impact**: When an import item has prior direct sales, the user sees a higher "Available" quantity in the Customs Ledger section than what the API will accept for a new direct SALE trade. The discrepancy equals `direct_sale_quantity`. The "Billed (No BOE)" column now shows the CIF from SALE trade lines without BOE attachment, helping operators identify unlinked sales.
+**Impact**: When an import item has prior direct sales, the user sees a higher "Available" quantity in the Customs Ledger section than what the API will accept for a new direct SALE trade. The discrepancy equals `direct_sale_quantity`. The "Billed (No BOE)" column appears in both the Quantity section (showing `billed_no_boe_qty`) and the CIF (FC) section (showing `billed_no_boe` CIF amount), helping operators identify items that were directly billed without any BOE or allotment.
 
-**Example**: Item with 342,672.02 kg total quantity, 0 kg BOE debited, 0 kg allotted, 10 kg billed (no BOE), and 15,251.30 kg in prior direct sales:
+**Example**: Item with 342,672.02 kg total quantity, 0 kg BOE debited, 0 kg allotted, 10 kg billed (no BOE qty), and 15,251.30 kg in prior direct sales:
 - Path 1 (validation): 342,672.02 − 0 − 0 − 15,251.30 = **327,420.72 kg** ✓
 - Path 3 (snapshot): 342,672.02 − 0 − 0 = **342,672.02 kg** ⚠️
 - Path 4 (frontend display): 342,672.02 − 0 − 0 − 10 = **342,662.02 kg** ⚠️
 
-**Resolution guidance**: The frontend's `CustomsLedgerSection.tsx` should use the stored `item.available_quantity` field (which includes all four components) instead of computing `quantity - boe_debited_quantity - allotted_quantity - billed_no_boe`. The `balance_snapshot.py` should include `direct_sale_quantity` in its calculation to match the authoritative formula.
+**Resolution guidance**: The frontend's `CustomsLedgerSection.tsx` should use the stored `item.available_quantity` field (which includes all four components) instead of computing `quantity - boe_debited_quantity - allotted_quantity - billed_no_boe_qty`. The `balance_snapshot.py` should include `direct_sale_quantity` in its calculation to match the authoritative formula.
 
 **Files**:
 - `backend/apps/license/services/balance_calculator.py` — authoritative formula

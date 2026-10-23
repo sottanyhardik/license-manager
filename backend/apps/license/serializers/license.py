@@ -209,6 +209,12 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     # corresponding BOE, making the double-count visible in the UI.
     billed_no_boe = serializers.SerializerMethodField(read_only=True)
 
+    # Total quantity (qty_kg) from SALE trade lines with no BOE attached —
+    # the quantity counterpart to `billed_no_boe` (CIF).  Used by the Customs
+    # Ledger to show how much of an item's quantity has been directly billed
+    # without any BOE or allotment.
+    billed_no_boe_qty = serializers.SerializerMethodField(read_only=True)
+
     # Planning options for this import item — all LicenseItemPlan rows split across
     # this item, each with its own remaining availability after allocations.
     planning_options = serializers.SerializerMethodField(read_only=True)
@@ -220,7 +226,7 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                   'allotted_quantity', 'allotted_value', 'debited_quantity', 'boe_debited_quantity', 'debited_value', 'planned_quantity',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
-                  'is_restricted', 'condition_type', 'billed_no_boe', 'planning_options']
+                  'is_restricted', 'condition_type', 'billed_no_boe', 'billed_no_boe_qty', 'planning_options']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -375,6 +381,41 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                 trade__boes__isnull=True,       # no BOE attached to this trade
             ).aggregate(
                 t=Coalesce(Sum('cif_fc'), Value(Decimal('0')), output_field=DecimalField())
+            )['t']
+            return float(total or 0)
+        except Exception:
+            return 0.0
+
+    def get_billed_no_boe_qty(self, obj):
+        """
+        Total quantity (qty_kg) from SALE trade lines for this import item
+        where the parent trade has no BOE attached.
+
+        Same filter as `get_billed_no_boe` but sums `qty_kg` instead of
+        `cif_fc`.  Used by the Customs Ledger to show how much of an item's
+        quantity has been directly billed without any BOE or allotment.
+
+        List callers should batch a `{item_id: Decimal}` map once via
+        `item_usage.billed_no_boe_qty_bulk_map` and pass it in as
+        `self.context['billed_no_boe_qty_map']`.  Falls back to the live
+        per-item aggregate when no batch map is supplied (standalone usage).
+        """
+        billed_no_boe_qty_map = self.context.get('billed_no_boe_qty_map')
+        if billed_no_boe_qty_map is not None:
+            return float(billed_no_boe_qty_map.get(obj.id) or 0)
+        try:
+            from apps.trade.models import LicenseTradeLine
+            from django.db.models import Sum, DecimalField
+            from django.db.models.functions import Coalesce
+            from django.db.models import Value
+            from decimal import Decimal
+
+            total = LicenseTradeLine.objects.filter(
+                sr_number=obj,
+                trade__direction='SALE',
+                trade__boes__isnull=True,
+            ).aggregate(
+                t=Coalesce(Sum('qty_kg'), Value(Decimal('0')), output_field=DecimalField())
             )['t']
             return float(total or 0)
         except Exception:

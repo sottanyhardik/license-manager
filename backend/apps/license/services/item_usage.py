@@ -194,3 +194,40 @@ def billed_no_boe_bulk_map(item_ids) -> dict:
         .annotate(t=Coalesce(Sum('cif_fc'), Value(Decimal('0')), output_field=DecimalField()))
     )
     return {row['sr_number_id']: row['t'] for row in rows}
+
+
+def billed_no_boe_qty_bulk_map(item_ids) -> dict:
+    """
+    Batched sibling of `LicenseImportItemSerializer.get_billed_no_boe_qty` —
+    total quantity (qty_kg) from SALE trade lines with no BOE attached to the
+    parent trade, for MANY import items in one query instead of one per item.
+
+    Same filter as `billed_no_boe_bulk_map` but sums `qty_kg` instead of
+    `cif_fc`.  An id with no matching trade lines is simply absent from the
+    result (callers should use `.get(id, ZERO_QTY)`).
+
+    Args:
+        item_ids: iterable of LicenseImportItemsModel pks.
+
+    Returns:
+        `{item_id: Decimal}` billed-no-BOE quantity total per item.
+    """
+    from django.db.models import Sum, Value
+    from django.db.models.functions import Coalesce
+
+    from apps.trade.models import LicenseTradeLine
+
+    ids = list(item_ids)
+    if not ids:
+        return {}
+
+    rows = (
+        LicenseTradeLine.objects.filter(
+            sr_number_id__in=ids,
+            trade__direction='SALE',
+            trade__boes__isnull=True,
+        )
+        .values('sr_number_id')
+        .annotate(t=Coalesce(Sum('qty_kg'), Value(Decimal('0')), output_field=DecimalField()))
+    )
+    return {row['sr_number_id']: row['t'] for row in rows}

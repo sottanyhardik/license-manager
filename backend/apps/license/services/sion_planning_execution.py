@@ -631,6 +631,47 @@ class SionPlanningExecutionService:
         global_percent_index = 0
         global_assigned_nominal = Decimal("0")
         waterfall_diagnostics = []
+
+        # CIF restriction tracking: accumulate planned CIF per import item across all rules
+        # so the planner can skip items that have reached their configured ceiling
+        planned_cif_by_import_item: dict[int, Decimal] = {}
+
+        def get_effective_cif_restriction(rule, row=None):
+            """Resolve the effective CIF restriction percentage for a rule/row.
+            
+            Row-level value takes precedence; falls back to rule-level; None means no restriction.
+            """
+            if row is not None and getattr(row, "cif_restriction_percentage", None) is not None:
+                return Decimal(str(row.cif_restriction_percentage))
+            if getattr(rule, "cif_restriction_percentage", None) is not None:
+                return Decimal(str(rule.cif_restriction_percentage))
+            return None
+
+        def check_cif_restriction(import_item_id, item_total_cif, restriction_pct):
+            """Check whether planning more for this import item would exceed the CIF restriction.
+            
+            Returns True if the item should be SKIPPED (restriction exceeded).
+            """
+            if restriction_pct is None:
+                return False
+            already_planned = planned_cif_by_import_item.get(import_item_id, Decimal("0"))
+            # Also count historical debited + allotted CIF from actual usage
+            historical_cif = Decimal("0")
+            for (source_id, _target_id), values in context.actual_usage["mapped"].items():
+                if source_id == import_item_id:
+                    historical_cif += values["boe_used_cif"] + values["unlinked_allotment_cif"]
+            unmapped = context.actual_usage["unmapped_by_source"].get(import_item_id, {})
+            historical_cif += unmapped.get("boe_used_cif", Decimal("0")) + unmapped.get("unlinked_allotment_cif", Decimal("0"))
+            used_cif = already_planned + historical_cif
+            limit = item_total_cif * restriction_pct / Decimal("100")
+            return used_cif >= limit
+
+        def record_planned_cif(import_item_id, cif):
+            """Record planned CIF for an import item so subsequent rules can check the restriction."""
+            planned_cif_by_import_item[import_item_id] = (
+                planned_cif_by_import_item.get(import_item_id, Decimal("0")) + cif
+            )
+
         for rule in context.ordered_rules:
             stage_qty_before = remaining_waterfall_qty
             stage_cif_before = remaining_waterfall_cif
@@ -764,7 +805,17 @@ class SionPlanningExecutionService:
                         ))
                         for item in source_item_group
                     ), Decimal("0")).quantize(Decimal("0.001"), rounding=ROUND_DOWN)
-                    allocated += add_line(
+                    # CIF restriction check for STANDARD strategy
+                    restriction_pct = get_effective_cif_restriction(rule)
+                    skip_group = False
+                    for item in source_item_group:
+                        item_total_cif = Decimal(str(item.cif_fc or 0))
+                        if check_cif_restriction(item.pk, item_total_cif, restriction_pct):
+                            skip_group = True
+                            break
+                    if skip_group:
+                        continue
+                    allocated_qty = add_line(
                         rule, item_name, source_item_group, source_quantity,
                         rule.max_unit_price,
                         {
@@ -772,6 +823,11 @@ class SionPlanningExecutionService:
                             "quantity_source": "available_import_group_quantity",
                         },
                     )
+                    allocated += allocated_qty
+                    # Record planned CIF for restriction tracking
+                    if allocated_qty > 0:
+                        for item in source_item_group:
+                            record_planned_cif(item.pk, allocated_qty * Decimal(str(rule.max_unit_price or 0)))
                 if allocated > 0:
                     claimed_source_item_ids.update(item.pk for item in group)
                 waterfall_diagnostics.append({
@@ -807,8 +863,13 @@ class SionPlanningExecutionService:
                     for row, split_quantity in mix:
                         if split_quantity <= 0:
                             continue
+                        # CIF restriction check
+                        restriction_pct = get_effective_cif_restriction(rule, row)
+                        item_total_cif = Decimal(str(source_item.cif_fc or 0))
+                        if check_cif_restriction(source_item.pk, item_total_cif, restriction_pct):
+                            continue
                         planning_price = Decimal(str(row.preferred_unit_price if row.preferred_unit_price > 0 else row.max_unit_price))
-                        add_line(rule, row.import_item, [source_item], split_quantity, planning_price, {
+                        allocated = add_line(rule, row.import_item, [source_item], split_quantity, planning_price, {
                             "strategy": "SPLIT_BY_UNIT_VALUE",
                             "quantity_source": "available_import_item_quantity",
                             "min_unit_price": str(row.min_unit_price),
@@ -822,6 +883,8 @@ class SionPlanningExecutionService:
                             "opening_operational_cif": str(stage_cif_before),
                             "unit_value_solver": "DECIMAL_BOUNDED_MIX",
                         })
+                        if allocated > 0:
+                            record_planned_cif(source_item.pk, allocated * planning_price)
                 if any(line["planning_rule_id"] == rule.pk for line in all_lines):
                     claimed_source_item_ids.update(item.pk for item in matched_source)
                 waterfall_diagnostics.append({
@@ -939,6 +1002,20 @@ class SionPlanningExecutionService:
                     remaining_capacity = max(nominal - actual_by_target.get(row.import_item_id, Decimal("0")), Decimal("0"))
                     final_quantity = solved_member["remaining_qty"]
                     generated_quantity_total += final_quantity
+                    # CIF restriction check
+                    restriction_pct = get_effective_cif_restriction(rule, row)
+                    source_item_ids_for_row = [item.pk for item in matched_by_row.get(row.pk, [])]
+                    if source_item_ids_for_row:
+                        skip = False
+                        for sid in source_item_ids_for_row:
+                            item_total_cif = Decimal(str(
+                                next((i.cif_fc for i in matched_source if i.pk == sid), 0) or 0
+                            ))
+                            if check_cif_restriction(sid, item_total_cif, restriction_pct):
+                                skip = True
+                                break
+                        if skip:
+                            continue
                     line_provenance = {
                         "strategy": "SPLIT_BY_PERCENT",
                         "percentage": str(row.percentage),
@@ -1008,19 +1085,26 @@ class SionPlanningExecutionService:
                                 )
                             )
                             assigned_source_quantity += source_final_quantity
-                            generated += bool(add_line(
+                            allocated_qty = add_line(
                                 rule, row.import_item, [source], source_final_quantity,
                                 solved_member["effective_unit_price"], {
                                     **line_provenance,
                                     "source_quantity_share": str(source_quantity),
                                     "source_quantity_share_total": str(source_total),
                                 },
-                            ))
+                            )
+                            generated += bool(allocated_qty)
+                            if allocated_qty > 0:
+                                record_planned_cif(source.pk, allocated_qty * solved_member["effective_unit_price"])
                     else:
-                        generated += bool(add_line(
+                        allocated_qty = add_line(
                             rule, row.import_item, matched_by_row[row.pk], final_quantity,
                             solved_member["effective_unit_price"], line_provenance, emit_zero=True,
-                        ))
+                        )
+                        generated += bool(allocated_qty)
+                        if allocated_qty > 0:
+                            for src in matched_by_row[row.pk]:
+                                record_planned_cif(src.pk, allocated_qty * solved_member["effective_unit_price"])
                     diagnostics.append({
                         "rule_id": rule.pk, "row_id": row.pk, "item_name": row.import_item.name,
                         "raw_nominal_quantity": str(raw_nominal),

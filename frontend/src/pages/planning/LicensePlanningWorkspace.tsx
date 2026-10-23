@@ -322,7 +322,7 @@ export default function LicensePlanningWorkspace() {
                             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                                 <div><h2 className="font-semibold">{draft.id ? `Edit Rule #${draft.priority}` : `New ${sionLabel} Rule`}</h2><p className="text-xs text-muted-foreground">{draft.id ? `Version ${draft.version ?? "—"}` : "Define a new database-backed planning rule"}</p></div>
                                 <div className="space-y-3">
-                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_100px_auto]">
+                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_100px_120px_auto]">
                                         <div>
                                             <label className="text-xs">Rule Name</label>
                                             <input aria-label="Rule name" aria-invalid={!!formErrors.name} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={`mt-1 h-9 w-full rounded-md border px-2 ${formErrors.name ? "border-destructive" : ""}`} />
@@ -337,6 +337,22 @@ export default function LicensePlanningWorkspace() {
                                             <label className="text-xs">Unit</label>
                                             <input aria-label="Planning unit" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} className="mt-1 h-9 w-full rounded-md border px-2" />
                                             {formErrors.unit && <span className="mt-1 block text-[11px] text-destructive">{formErrors.unit}</span>}
+                                        </div>
+                                        <div>
+                                            <label className="text-xs">CIF Restriction</label>
+                                            <select
+                                                aria-label="CIF restriction percentage"
+                                                value={draft.cif_restriction_percentage ?? ""}
+                                                onChange={(e) => setDraft({ ...draft, cif_restriction_percentage: e.target.value ? Number(e.target.value) : null })}
+                                                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                                            >
+                                                <option value="">No restriction</option>
+                                                <option value="2">2%</option>
+                                                <option value="3">3%</option>
+                                                <option value="5">5%</option>
+                                                <option value="10">10%</option>
+                                            </select>
+                                            <p className="mt-1 text-[10px] text-muted-foreground">Skip planning if debited + allotted CIF exceeds this % of item total CIF</p>
                                         </div>
                                         <label className="flex items-center gap-2 self-end pb-2 text-xs"><input aria-label="Rule active" type="checkbox" checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />Active</label>
                                     </div>

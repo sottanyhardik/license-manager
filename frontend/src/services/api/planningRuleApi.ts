@@ -25,6 +25,7 @@ export type UnitValueRow = {
     min_unit_price: string;
     max_unit_price: string;
     preferred_unit_price: string;
+    cif_restriction_percentage?: string | null;
     priority?: number;
 };
 
@@ -34,6 +35,7 @@ export type PercentageRow = {
     percentage: string;
     unit_price: string;
     max_quantity?: string | null;
+    cif_restriction_percentage?: string | null;
     priority?: number;
 };
 
@@ -54,6 +56,7 @@ export type SionPlanningRule = {
     percentage_rows?: PercentageRow[];
     percentage_constraint?: string | number | null;
     rule_type?: string;
+    cif_restriction_percentage?: string | number | null;
     output_item?: number | null;
     version?: number;
     modified_on?: string;

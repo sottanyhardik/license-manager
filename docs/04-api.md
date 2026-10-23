@@ -403,10 +403,12 @@ The `expression` field is a JSON tree with AND/OR/NOT boolean operators and leaf
 
 **Text Normalization**: Case-insensitive, whitespace-collapsed. HSN values have non-alphanumeric characters stripped before comparison.
 
-**cif_restriction_percentage** (Feature Request — Not Yet Implemented):
+**cif_restriction_percentage** (Implemented):
 - Nullable Decimal field on the rule and on each percentage/unit-value row
 - Allowed values: `2`, `3`, `5`, `10`, or `null` (no restriction)
-- When set, the planner skips items whose `debited_cif + allotted_cif` exceeds this percentage of the item's total CIF value
+- Row-level value takes precedence over rule-level; NULL falls back to rule-level
+- When set, the planner skips items whose `debited_cif + allotted_cif + already_planned_cif` exceeds this percentage of the item's total CIF value
+- Validation error on invalid values: `"cif_restriction_percentage must be one of 2, 3, 5, 10, or left blank."`
 
 **POST /api/sion-planning-rules/plan/ body**:
 ```json

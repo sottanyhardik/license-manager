@@ -170,8 +170,10 @@ function UnitValueStrategySection({
   disabled = false,
   errors: _errors = {},
 }: UnitValueStrategySectionProps) {
+  const CIF_RESTRICTION_OPTIONS = ["", "2", "3", "5", "10"];
+
   const addRow = () => {
-    onChange([...rows, { import_item: 0, min_unit_price: "0", max_unit_price: "0", preferred_unit_price: "0" }]);
+    onChange([...rows, { import_item: 0, min_unit_price: "0", max_unit_price: "0", preferred_unit_price: "0", cif_restriction_percentage: null }]);
   };
 
   const updateRow = (index: number, field: keyof UnitValueRow, value: any) => {
@@ -236,6 +238,23 @@ function UnitValueStrategySection({
               />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-muted-foreground">CIF Restriction (% of item total CIF)</label>
+            <select
+              aria-label={`CIF restriction percentage row ${idx + 1}`}
+              value={row.cif_restriction_percentage ?? ""}
+              onChange={(e) => updateRow(idx, "cif_restriction_percentage", e.target.value || null)}
+              disabled={disabled}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">No restriction</option>
+              <option value="2">2%</option>
+              <option value="3">3%</option>
+              <option value="5">5%</option>
+              <option value="10">10%</option>
+            </select>
+            <p className="mt-1 text-[10px] text-muted-foreground">Skip planning if debited + allotted CIF exceeds this % of item total CIF</p>
+          </div>
           <button
             type="button"
             onClick={() => removeRow(idx)}
@@ -276,7 +295,7 @@ function PercentageStrategySection({
   const totalPercentage = rows.reduce((sum, row) => sum + parseFloat(row.percentage || "0"), 0);
 
   const addRow = () => {
-    onChange([...rows, { import_item: 0, percentage: "0", unit_price: "0" }]);
+    onChange([...rows, { import_item: 0, percentage: "0", unit_price: "0", cif_restriction_percentage: null }]);
   };
 
   const updateRow = (index: number, field: keyof PercentageRow, value: any) => {
@@ -332,7 +351,24 @@ function PercentageStrategySection({
                 placeholder="0.00"
               />
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground">CIF Restriction</label>
+              <select
+                aria-label={`CIF restriction percentage row ${idx + 1}`}
+                value={row.cif_restriction_percentage ?? ""}
+                onChange={(e) => updateRow(idx, "cif_restriction_percentage", e.target.value || null)}
+                disabled={disabled}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">No restriction</option>
+                <option value="2">2%</option>
+                <option value="3">3%</option>
+                <option value="5">5%</option>
+                <option value="10">10%</option>
+              </select>
+            </div>
           </div>
+          <p className="text-[10px] text-muted-foreground">Skip planning if debited + allotted CIF exceeds selected % of item total CIF</p>
           <button
             type="button"
             onClick={() => removeRow(idx)}

@@ -263,9 +263,9 @@ Available = total_quantity − BOE_debited − outstanding_allotted − direct_s
 
 **Frontend display formula** (`CustomsLedgerSection.tsx`):
 ```
-Actual Available = quantity − boe_debited_quantity
+Actual Available = quantity − boe_debited_quantity − allotted_quantity − billed_no_boe
 ```
-The frontend omits **outstanding_allotted** and **direct_sale_quantity** from the displayed balance.
+The frontend omits **direct_sale_quantity** from the displayed balance. `billed_no_boe` represents the CIF from SALE trade lines with no BOE attached.
 
 **Balance snapshot API** (`balance_snapshot.py`):
 ```
@@ -279,10 +279,10 @@ Available = quantity − debited − allotted − direct_sale_quantity
 ```
 The stored field includes all four components correctly.
 
-**Impact**: When the user views the Customs Ledger section on the license overview page, the "Actual Available" column shows `quantity - boe_debited` only. If there are outstanding allotments or prior direct sales for that item, the displayed balance will be higher than what the trade creation API accepts. For example, if an item has 342,672.02 kg total quantity and 15,251.30 kg in direct sale quantities, the UI shows 342,672.02 kg available, but the API rejects quantities above 327,420.72 kg.
+**Impact**: When the user views the Customs Ledger section on the license overview page, the "Actual Available" column shows `quantity - boe_debited - allotted - billed_no_boe`. The "Billed (No BOE)" column displays the CIF from SALE trade lines with no BOE attached. If there are prior direct sales for that item, the displayed balance will be higher than what the trade creation API accepts. For example, if an item has 342,672.02 kg total quantity and 15,251.30 kg in direct sale quantities, the UI shows 342,672.02 kg available, but the API rejects quantities above 327,420.72 kg.
 
 **Affected UI components**:
-- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — "Actual Available" column uses `quantity - boe_debited_quantity` only
+- `frontend/src/pages/license-overview/CustomsLedgerSection.tsx` — "Actual Available" column uses `quantity - boe_debited_quantity - allotted_quantity - billed_no_boe` (missing `direct_sale_quantity`); "Billed (No BOE)" column shows CIF from SALE trades without BOE
 - `frontend/src/pages/license-overview/ItemsTab.tsx` — "Balance Qty" uses the stored `item.available_quantity` field (correct)
 - Balance snapshot API used by list views — omits `direct_sale_quantity`
 
@@ -674,60 +674,59 @@ Backend supports additional fields not exposed in the planning UI:
 5. Claim source items to prevent double-allocation across rules
 6. Generate `LicenseItemPlan` records with full provenance
 
-**CIF Restriction per Item** (Feature Request — Not Yet Implemented):
+**CIF Restriction per Item** (Implemented):
 
-The user requests a new field on each planning rule (or percentage row) that limits how much of an import item's total CIF value can be planned. The restriction is expressed as a percentage of the item's total CIF value.
+Limits how much of an import item's total CIF value can be planned across all rules. The restriction is expressed as a percentage of the item's total CIF value.
 
-**Proposed Field**: `cif_restriction_percentage` (nullable Decimal, choices: 2, 3, 5, 10)
+**Field**: `cif_restriction_percentage` (nullable Decimal, allowed values: 2, 3, 5, 10, or NULL for no restriction)
 
 **Logic**:
-- For each import item matched by a rule, compute: `used_cif = debited_cif + allotted_cif`
+- For each import item matched by a rule, compute: `used_cif = debited_cif + allotted_cif + already_planned_cif`
 - Compute the restriction ceiling: `ceiling = item.cif_fc × cif_restriction_percentage / 100`
-- If `used_cif >= ceiling`, skip planning for that item
-- Otherwise, plan normally but cap the new planned CIF so that `used_cif + new_planned_cif <= ceiling`
+- If `used_cif >= ceiling`, skip planning for that item entirely
+- Row-level value takes precedence over rule-level; NULL falls back to rule-level; NULL at both levels means no restriction
 
-**UI Changes Required**:
-- In `AllocationStrategyEditor.tsx`, add a dropdown for CIF restriction percentage (None, 2%, 3%, 5%, 10%)
-- For STANDARD strategy: one dropdown per rule
-- For SPLIT_BY_PERCENT: one dropdown per percentage row
-- For SPLIT_BY_UNIT_VALUE: one dropdown per unit value row
-- In `LicensePlanningWorkspace.tsx` rule detail view, display the CIF restriction value
+**UI**:
+- In `LicensePlanningWorkspace.tsx`, the rule editor form has a "CIF Restriction" dropdown (applies to all strategies, especially STANDARD)
+- In `AllocationStrategyEditor.tsx`, each SPLIT_BY_PERCENT and SPLIT_BY_UNIT_VALUE row has its own "CIF Restriction" dropdown
+- Options: "No restriction", "2%", "3%", "5%", "10%"
+- Help text: "Skip planning if debited + allotted CIF exceeds this % of item total CIF"
+- Row-level value overrides rule-level; NULL at row level falls back to rule-level; NULL at both means no restriction
 
-**Backend Changes Required**:
-- `SionPlanningRule` model: add `cif_restriction_percentage` field (nullable Decimal)
-- `SionPlanningPercentageRow` model: add `cif_restriction_percentage` field (nullable Decimal)
-- `SionPlanningUnitValueRow` model: add `cif_restriction_percentage` field (nullable Decimal)
-- `sion_planning_execution.py`: in `add_line()` or before allocation, check the restriction and skip/cap accordingly
-- `SionPlanningRuleSerializer`: include the new field
-- Frontend types: add `cif_restriction_percentage` to `SionPlanningRule`, `PercentageRow`, and `UnitValueRow`
+**Backend Implementation**:
+- `SionPlanningRule`, `SionPlanningPercentageRow`, `SionPlanningUnitValueRow` models: `cif_restriction_percentage` field
+- `sion_planning_execution.py`: `get_effective_cif_restriction()`, `check_cif_restriction()`, `record_planned_cif()` helper functions
+- `incentive.py` serializer: `_validate_cif_restriction()` validates allowed values (2, 3, 5, 10)
+- Migration: `0056_add_cif_restriction_percentage.py`
 
 **Database Tables**:
-- `license_sionplanningrule` — add `cif_restriction_percentage` column
-- `license_sionplanningpercentagerow` — add `cif_restriction_percentage` column
-- `license_sionplanningunitvaluerow` — add `cif_restriction_percentage` column
+- `license_sionplanningrule` — `cif_restriction_percentage` column (Decimal, nullable)
+- `license_sionplanningpercentagerow` — `cif_restriction_percentage` column (Decimal, nullable)
+- `license_sionplanningunitvaluerow` — `cif_restriction_percentage` column (Decimal, nullable)
 
 **Files**:
 - `backend/apps/license/models/core.py` — `SionPlanningRule`, `SionPlanningPercentageRow`, `SionPlanningUnitValueRow`
-- `backend/apps/license/serializers/incentive.py` — `SionPlanningRuleSerializer`
-- `backend/apps/license/services/sion_planning_execution.py` — `_compute_license_new_architecture()`, `add_line()`
-- `frontend/src/pages/planning/LicensePlanningWorkspace.tsx`
-- `frontend/src/pages/planning/AllocationStrategyEditor.tsx`
-- `frontend/src/services/api/planningRuleApi.ts` — types
+- `backend/apps/license/serializers/incentive.py` — `SionPlanningRuleSerializer`, row serializers, `_validate_cif_restriction()`
+- `backend/apps/license/services/sion_planning_execution.py` — `_compute_license_new_architecture()` CIF restriction helpers
+- `backend/apps/license/migrations/0056_add_cif_restriction_percentage.py`
+- `frontend/src/pages/planning/AllocationStrategyEditor.tsx` — CIF restriction dropdown per row
+- `frontend/src/services/api/planningRuleApi.ts` — `cif_restriction_percentage` in types
 
 **Business Rules**:
 - The restriction applies per import item, not per license total
-- "Debited CIF" = sum of BOE RowDetails DEBIT CIF for this item
+- "Debited CIF" = sum of BOE used CIF + unlinked allotment CIF for this item
 - "Allotted CIF" = sum of allotment CIF for this item
 - If restriction is not set (NULL), the item is planned without this cap
 - The restriction is a hard ceiling — the planner skips the item entirely if already exceeded
+- Planned CIF is tracked across rules within a single planning run
 
 **Edge Cases**:
 - Item with zero CIF: restriction ceiling is zero, item is always skipped
-- Multiple rules matching the same item: first rule in priority order applies its restriction; later rules see the item as already claimed
+- Multiple rules matching the same item: CIF restriction is checked per rule/row; `record_planned_cif()` accumulates across rules
 - Restriction change on existing rule: affects future planning runs only, not existing plans
 
 **Acceptance Criteria**:
-- User can select CIF restriction percentage (2%, 3%, 5%, 10%, or None) when editing a planning rule
-- During planning, items exceeding their CIF restriction are skipped with a diagnostic reason
-- Preview shows which items were skipped and why
-- The restriction is persisted and shown in the rule detail view
+- ✓ User can select CIF restriction percentage (2%, 3%, 5%, 10%, or None) when editing a planning rule
+- ✓ During planning, items exceeding their CIF restriction are skipped
+- ✓ The restriction is persisted and shown in the rule editor
+- ✓ Row-level restriction overrides rule-level default

@@ -1458,6 +1458,12 @@ class SionPlanningRule(AuditModel):
         db_index=True,
         help_text='Planning strategy for this rule (null = legacy dispatch path)',
     )
+    cif_restriction_percentage = models.DecimalField(
+        max_digits=4, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(DEC_0), MaxValueValidator(Decimal("100"))],
+        help_text="Max CIF % of each matched import item's total CIF that can be planned "
+                  "(debited + allotted). Allowed values: 2, 3, 5, 10, or NULL (no restriction).",
+    )
 
     class Meta:
         ordering = ("sion_id", "priority", "name", "-version")
@@ -1503,6 +1509,12 @@ class SionPlanningUnitValueRow(AuditModel):
     preferred_unit_price = models.DecimalField(
         max_digits=15, decimal_places=2, validators=[MinValueValidator(DEC_0)]
     )
+    cif_restriction_percentage = models.DecimalField(
+        max_digits=4, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(DEC_0), MaxValueValidator(Decimal("100"))],
+        help_text="Max CIF % of this import item's total CIF that can be planned. "
+                  "Allowed values: 2, 3, 5, 10, or NULL (inherit from rule).",
+    )
     priority = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -1547,6 +1559,12 @@ class SionPlanningPercentageRow(AuditModel):
         max_digits=15, decimal_places=3, null=True, blank=True,
         validators=[MinValueValidator(DEC_000)],
         help_text="Optional theoretical quantity ceiling applied after the percentage split.",
+    )
+    cif_restriction_percentage = models.DecimalField(
+        max_digits=4, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(DEC_0), MaxValueValidator(Decimal("100"))],
+        help_text="Max CIF % of this import item's total CIF that can be planned. "
+                  "Allowed values: 2, 3, 5, 10, or NULL (inherit from rule).",
     )
     priority = models.PositiveIntegerField(default=0)
 

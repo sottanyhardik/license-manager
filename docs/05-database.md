@@ -406,9 +406,9 @@ Versioned, database-driven planning rules for SION auto-allocation.
 | rule_type | varchar(50) | PERCENTAGE_CAP / SPLIT_BY_PERCENTAGE / QUANTITY_CAP |
 | rule_group_id | varchar(120) nullable | Groups related rules |
 | strategy | varchar(30) nullable | STANDARD / SPLIT_BY_UNIT_VALUE / SPLIT_BY_PERCENT |
-| **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+| cif_restriction_percentage | decimal(4,2) nullable | 2/3/5/10 or NULL — CIF restriction per item |
 
-**expression** JSON column details:
+ **expression** JSON column details:
 - Stores an AND/OR/NOT boolean tree with leaf conditions
 - Evaluated by `sion_rule_engine.py` — safe whitelist, no `eval` or SQL injection
 - Depth limit: 12 levels, node limit: 128 nodes
@@ -437,10 +437,12 @@ Versioned, database-driven planning rules for SION auto-allocation.
 - `PRODUCT_DESCRIPTION` → `description`
 - `ITEM_KEY` → `item_key`
 
-**cif_restriction_percentage** (Feature Request):
-- Nullable Decimal field. Allowed values: `2`, `3`, `5`, `10`, or `NULL` (no restriction)
-- When set, the planner checks each matched import item: if `debited_cif + allotted_cif >= item.cif_fc × cif_restriction_percentage / 100`, the item is skipped
+**cif_restriction_percentage** (Implemented):
+- Nullable Decimal(4,2) field. Allowed values: `2`, `3`, `5`, `10`, or `NULL` (no restriction)
+- Row-level value takes precedence over rule-level; NULL inherits from rule
+- When set, the planner checks each matched import item: if `debited_cif + allotted_cif + already_planned_cif >= item.cif_fc × cif_restriction_percentage / 100`, the item is skipped
 - Applies per import item, not per license total
+- Migration: `0056_add_cif_restriction_percentage.py`
 
 **Constraints**:
 - Unique: `(sion, stable_key, version)` where stable_key IS NOT NULL
@@ -460,7 +462,7 @@ Unit-value allocation rows (child of SionPlanningRule).
 | max_unit_price | decimal | ≥ 0, ≥ min_unit_price |
 | preferred_unit_price | decimal | ≥ 0 |
 | priority | int | Default 0 |
-| **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+| cif_restriction_percentage | decimal(4,2) nullable | 2/3/5/10 or NULL — inherits from rule if NULL |
 
 **Constraints**:
 - Unique: `(rule, import_item)`
@@ -478,7 +480,7 @@ Percentage allocation rows (child of SionPlanningRule).
 | unit_price | decimal | ≥ 0 |
 | max_quantity | decimal nullable | ≥ 0 — optional quantity ceiling |
 | priority | int | Default 0 |
-| **cif_restriction_percentage** | **decimal nullable** | **(Feature Request — Not Yet Implemented)** |
+| cif_restriction_percentage | decimal(4,2) nullable | 2/3/5/10 or NULL — inherits from rule if NULL |
 
 **Constraints**:
 - Unique: `(rule, import_item)`

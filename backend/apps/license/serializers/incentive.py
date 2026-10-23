@@ -419,10 +419,31 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
         read_only_fields = ["license"]
 
 
+CIF_RESTRICTION_VALUES = [Decimal("2"), Decimal("3"), Decimal("5"), Decimal("10")]
+
+def _validate_cif_restriction(value, field_name="cif_restriction_percentage"):
+    """Validate cif_restriction_percentage is one of the allowed values or None."""
+    if value is not None and value != "" and value != 0:
+        dec_val = Decimal(str(value))
+        if dec_val not in CIF_RESTRICTION_VALUES:
+            raise serializers.ValidationError(
+                f"{field_name} must be one of 2, 3, 5, 10, or left blank."
+            )
+        return dec_val
+    return None
+
 class SionPlanningUnitValueRowSerializer(serializers.ModelSerializer):
+    cif_restriction_percentage = serializers.DecimalField(
+        max_digits=4, decimal_places=2, required=False, allow_null=True
+    )
+
     class Meta:
         model = SionPlanningUnitValueRow
-        fields = ("id", "import_item", "min_unit_price", "max_unit_price", "preferred_unit_price", "priority")
+        fields = ("id", "import_item", "min_unit_price", "max_unit_price", "preferred_unit_price",
+                  "cif_restriction_percentage", "priority")
+
+    def validate_cif_restriction_percentage(self, value):
+        return _validate_cif_restriction(value, "cif_restriction_percentage")
 
     def validate(self, data):
         minimum = data.get("min_unit_price")
@@ -438,9 +459,17 @@ class SionPlanningUnitValueRowSerializer(serializers.ModelSerializer):
 
 
 class SionPlanningPercentageRowSerializer(serializers.ModelSerializer):
+    cif_restriction_percentage = serializers.DecimalField(
+        max_digits=4, decimal_places=2, required=False, allow_null=True
+    )
+
     class Meta:
         model = SionPlanningPercentageRow
-        fields = ("id", "import_item", "percentage", "unit_price", "max_quantity", "priority")
+        fields = ("id", "import_item", "percentage", "unit_price", "max_quantity",
+                  "cif_restriction_percentage", "priority")
+
+    def validate_cif_restriction_percentage(self, value):
+        return _validate_cif_restriction(value, "cif_restriction_percentage")
 
 
 class SionPlanningRuleSerializer(serializers.ModelSerializer):
@@ -452,13 +481,17 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
     unit_value_rows = SionPlanningUnitValueRowSerializer(many=True, required=False)
     percentage_rows = SionPlanningPercentageRowSerializer(many=True, required=False)
 
+    cif_restriction_percentage = serializers.DecimalField(
+        max_digits=4, decimal_places=2, required=False, allow_null=True
+    )
+
     class Meta:
         model = SionPlanningRule
         fields = (
             "id", "sion", "sion_code", "name", "version", "expression",
             "max_unit_price", "unit", "priority", "is_active", "execution_output",
             "strategy", "import_item", "standard_item_name", "unit_value_rows", "percentage_rows",
-            "percentage_constraint", "rule_type",
+            "percentage_constraint", "rule_type", "cif_restriction_percentage",
             "created_on", "created_by_username", "modified_on",
             "modified_by_username",
         )
@@ -466,6 +499,9 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
             "version", "priority", "created_on", "created_by_username", "modified_on",
             "modified_by_username", "standard_item_name",
         )
+
+    def validate_cif_restriction_percentage(self, value):
+        return _validate_cif_restriction(value, "cif_restriction_percentage")
 
     def validate_expression(self, value):
         from apps.license.services.sion_rule_engine import normalize_expression, validate_expression

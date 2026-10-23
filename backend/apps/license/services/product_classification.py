@@ -63,12 +63,11 @@ E5_PRODUCT_CONDITIONS = [
         "exclude_hsn_prefixes": ["0404", "0406"],
         "exclude_desc_contains": ["0404", "0406"],
     },
-    # DIETARY FIBRE: (HSN 0802 OR desc 0802) AND desc contains DIETARY
+    # DIETARY FIBRE: HSN 0802 OR desc 0802 (no description keyword required)
     {
         "name": "DIETARY FIBRE",
         "hsn_prefixes": ["0802"],
         "desc_contains_any": ["0802"],
-        "desc_contains_all": ["DIETARY"],
         "exclude_hsn_prefixes": [],
         "exclude_desc_contains": [],
     },

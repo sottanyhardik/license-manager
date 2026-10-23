@@ -1658,43 +1658,203 @@ class ItemPivotReportView(APIView):
 
             # Export the exact canonical matrix used by the React pivot.  Do
             # not re-run any plan/usage arithmetic in the spreadsheet path.
+            # Use a regular workbook (not write_only) so we can merge cells
+            # for the SION group header rows.
             if "groups" in report_data:
-                workbook = openpyxl.Workbook(write_only=True)
+                workbook = openpyxl.Workbook()
+                workbook.remove(workbook.active)  # remove default sheet
                 fixed = ["SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF", "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF"]
-                fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY", "DEBITED CIF", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
+                fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY", "DEBITED CIF", "BILLED QTY", "BILLED CIF", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
+                numFields = len(fields)  # 14 sub-columns per item
+                headerFill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+                headerFont = Font(bold=True, size=11)
+                sionHeaderFont = Font(bold=True, size=12)
                 for group_index, group in enumerate(report_data["groups"], 1):
                     notification_num = group['notification_number'] or 'Pivot'
                     safe_notification = notification_num[:24].replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace(':', '-').replace('[', '-').replace(']', '-')
                     sheet = workbook.create_sheet(title=f"{safe_notification}-{group_index}")
-                    sheet.append([f"Notification Number: {group['notification_number']}", group["purchase_status"]["name"], f"{group['license_count']} Licences"])
-                    sheet.append(fixed + [field for item in group["item_groups"] for field in fields])
-                    for index, license_row in enumerate(group["licenses"], 1):
-                        row = [index, license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
-                        for item in group["item_groups"]:
+
+                    # Row 1: Title
+                    titleRow = 1
+                    sheet.cell(row=titleRow, column=1, value=f"Notification Number: {group['notification_number']}")
+                    sheet.cell(row=titleRow, column=2, value=group["purchase_status"]["name"])
+                    sheet.cell(row=titleRow, column=3, value=f"{group['license_count']} Licences")
+
+                    # Row 2: Blank separator
+                    # Row 3: SION group header (merged cells per SION)
+                    # Row 4: Item name header (merged cells per item)
+                    # Row 5: Field sub-headers (HSN, DESCRIPTION, etc.)
+                    # Row 6+: Data rows
+
+                    item_groups = group["item_groups"]
+                    numItems = len(item_groups)
+                    numFixed = len(fixed)
+
+                    # Build SION group spans: list of (sion, startItemIndex, endItemIndex)
+                    sion_spans = []
+                    if numItems > 0:
+                        current_sion = item_groups[0].get("sion", "")
+                        span_start = 0
+                        for i in range(1, numItems):
+                            item_sion = item_groups[i].get("sion", "")
+                            if item_sion != current_sion:
+                                sion_spans.append((current_sion, span_start, i - 1))
+                                current_sion = item_sion
+                                span_start = i
+                        sion_spans.append((current_sion, span_start, numItems - 1))
+
+                    # Row 3: SION group header row
+                    sionRow = 3
+                    # Fixed columns span all 3 rows (SION + Item + Field)
+                    for col_idx, name in enumerate(fixed, 1):
+                        cell = sheet.cell(row=sionRow, column=col_idx, value=name)
+                        cell.font = headerFont
+                        cell.fill = headerFill
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+                    # SION group merged cells
+                    for sion_name, start_item, end_item in sion_spans:
+                        start_col = numFixed + (start_item * numFields) + 1
+                        end_col = numFixed + ((end_item + 1) * numFields)
+                        cell = sheet.cell(row=sionRow, column=start_col, value=f"SION: {sion_name}" if sion_name else "SION: —")
+                        cell.font = sionHeaderFont
+                        cell.fill = PatternFill(start_color="CBD5E1", end_color="CBD5E1", fill_type="solid")
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                        if start_col != end_col:
+                            sheet.merge_cells(start_row=sionRow, start_column=start_col, end_row=sionRow, end_column=end_col)
+
+                    # Row 4: Item name header row
+                    itemRow = 4
+                    for item_idx, item in enumerate(item_groups):
+                        start_col = numFixed + (item_idx * numFields) + 1
+                        end_col = numFixed + ((item_idx + 1) * numFields)
+                        # Build item label with total quantity from totals
+                        total_qty = ""
+                        if group["totals"]["items"].get(item["key"], {}).get("total_qty"):
+                            total_qty = f" ({group['totals']['items'][item['key']]['total_qty']} Kgs)"
+                        cell = sheet.cell(row=itemRow, column=start_col, value=f"{item['name']}{total_qty}")
+                        cell.font = headerFont
+                        cell.fill = headerFill
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                        if start_col != end_col:
+                            sheet.merge_cells(start_row=itemRow, start_column=start_col, end_row=itemRow, end_column=end_col)
+
+                    # Row 5: Field sub-headers
+                    fieldRow = 5
+                    for col_idx, name in enumerate(fixed, 1):
+                        cell = sheet.cell(row=fieldRow, column=col_idx, value=name)
+                        cell.font = headerFont
+                        cell.fill = headerFill
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                    for item_idx in range(numItems):
+                        for field_idx, name in enumerate(fields):
+                            col = numFixed + (item_idx * numFields) + field_idx + 1
+                            cell = sheet.cell(row=fieldRow, column=col, value=name)
+                            cell.font = headerFont
+                            cell.fill = headerFill
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                    # Merge fixed columns across SION + Item rows (rows 3-4)
+                    for col_idx in range(1, numFixed + 1):
+                        sheet.merge_cells(start_row=sionRow, start_column=col_idx, end_row=itemRow, end_column=col_idx)
+
+                    # Data rows start at row 6
+                    dataStartRow = 6
+                    for index, license_row in enumerate(group["licenses"], dataStartRow):
+                        row_data = [index - (dataStartRow - 1), license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
+                        for item in item_groups:
                             cell = license_row["items"].get(item["key"])
-                            row.extend([cell.get(key) if cell else None for key in ("hsn_code", "description", "total_qty", "allotted_qty", "allotted_cif", "debited_qty", "boe_used_cif", "balance_qty", "restriction_percent", "restriction_value", "plan_qty", "planned_cif")])
-                        sheet.append(row)
+                            row_data.extend([cell.get(key) if cell else None for key in ("hsn_code", "description", "total_qty", "allotted_qty", "allotted_cif", "debited_qty", "boe_used_cif", "billed_qty", "billed_cif", "balance_qty", "restriction_percent", "restriction_value", "plan_qty", "planned_cif")])
+                        for col_idx, value in enumerate(row_data, 1):
+                            sheet.cell(row=index, column=col_idx, value=value)
+
+                    # Totals row
                     totals = group["totals"]
-                    total_row = [f"TOTAL — {group['license_count']} LICENCES", None, None, None, totals["total_cif"], totals["debited_cif"], totals["allotted_cif"], totals["planned_cif"], totals["balance_cif"]]
-                    for item in group["item_groups"]:
+                    totalRow = dataStartRow + len(group["licenses"])
+                    total_row_data = [f"TOTAL — {group['license_count']} LICENCES", None, None, None, totals["total_cif"], totals["debited_cif"], totals["allotted_cif"], totals["planned_cif"], totals["balance_cif"]]
+                    for item in item_groups:
                         cell = totals["items"][item["key"]]
-                        total_row.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["allotted_cif"], cell["debited_qty"], cell["boe_used_cif"], cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
-                    sheet.append(total_row)
-                    sheet.append([])
-                    sheet.append(["ITEM SUMMARY", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"])
-                    for item in group.get("item_summary", []):
-                        sheet.append([item["item_name"], item["sion"], item["license_count"], item["total_qty"], item["boe_used_qty"], item["allotted_qty"], item["available_qty"], item["planned_qty"], item["balance_qty"], item["available_cif"], item["planned_cif"], item["balance_cif"]])
+                        total_row_data.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["allotted_cif"], cell["debited_qty"], cell["boe_used_cif"], cell.get("billed_qty"), cell.get("billed_cif"), cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
+                    totalFont = Font(bold=True, size=11)
+                    totalFill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+                    for col_idx, value in enumerate(total_row_data, 1):
+                        cell = sheet.cell(row=totalRow, column=col_idx, value=value)
+                        cell.font = totalFont
+                        cell.fill = totalFill
+
+                    # Item summary section
+                    sheet.cell(row=totalRow + 1, column=1, value="")  # blank row
+                    summaryStartRow = totalRow + 2
+                    summaryHeaders = ["ITEM SUMMARY", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"]
+                    for col_idx, name in enumerate(summaryHeaders, 1):
+                        cell = sheet.cell(row=summaryStartRow, column=col_idx, value=name)
+                        cell.font = headerFont
+                        cell.fill = headerFill
+                    for item_idx, item in enumerate(group.get("item_summary", [])):
+                        r = summaryStartRow + 1 + item_idx
+                        sheet.cell(row=r, column=1, value=item["item_name"])
+                        sheet.cell(row=r, column=2, value=item["sion"])
+                        sheet.cell(row=r, column=3, value=item["license_count"])
+                        sheet.cell(row=r, column=4, value=item["total_qty"])
+                        sheet.cell(row=r, column=5, value=item["boe_used_qty"])
+                        sheet.cell(row=r, column=6, value=item["allotted_qty"])
+                        sheet.cell(row=r, column=7, value=item["available_qty"])
+                        sheet.cell(row=r, column=8, value=item["planned_qty"])
+                        sheet.cell(row=r, column=9, value=item["balance_qty"])
+                        sheet.cell(row=r, column=10, value=item["available_cif"])
+                        sheet.cell(row=r, column=11, value=item["planned_cif"])
+                        sheet.cell(row=r, column=12, value=item["balance_cif"])
                     subtotal = group.get("item_summary_totals", {})
-                    sheet.append(["NOTIFICATION SUBTOTAL", None, subtotal.get("license_count"), subtotal.get("total_qty"), subtotal.get("boe_used_qty"), subtotal.get("allotted_qty"), subtotal.get("available_qty"), subtotal.get("planned_qty"), subtotal.get("balance_qty"), subtotal.get("available_cif"), subtotal.get("planned_cif"), subtotal.get("balance_cif")])
+                    subRow = summaryStartRow + 1 + len(group.get("item_summary", []))
+                    sheet.cell(row=subRow, column=1, value="NOTIFICATION SUBTOTAL")
+                    sheet.cell(row=subRow, column=3, value=subtotal.get("license_count"))
+                    sheet.cell(row=subRow, column=4, value=subtotal.get("total_qty"))
+                    sheet.cell(row=subRow, column=5, value=subtotal.get("boe_used_qty"))
+                    sheet.cell(row=subRow, column=6, value=subtotal.get("allotted_qty"))
+                    sheet.cell(row=subRow, column=7, value=subtotal.get("available_qty"))
+                    sheet.cell(row=subRow, column=8, value=subtotal.get("planned_qty"))
+                    sheet.cell(row=subRow, column=9, value=subtotal.get("balance_qty"))
+                    sheet.cell(row=subRow, column=10, value=subtotal.get("available_cif"))
+                    sheet.cell(row=subRow, column=11, value=subtotal.get("planned_cif"))
+                    sheet.cell(row=subRow, column=12, value=subtotal.get("balance_cif"))
+
                 # ``_Summary`` keeps this additive sheet distinct from the
                 # existing per-notification matrix sheets for consumers that
                 # discover those sheets by name.
                 summary_sheet = workbook.create_sheet(title="TOTAL_Summary")
-                summary_sheet.append(["TOTAL SUMMARY — ALL NOTIFICATIONS", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"])
-                for item in report_data.get("grand_total", {}).get("item_summary", []):
-                    summary_sheet.append([item["item_name"], item["sion"], item["license_count"], item["total_qty"], item["boe_used_qty"], item["allotted_qty"], item["available_qty"], item["planned_qty"], item["balance_qty"], item["available_cif"], item["planned_cif"], item["balance_cif"]])
+                summaryHeaders = ["TOTAL SUMMARY — ALL NOTIFICATIONS", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"]
+                for col_idx, name in enumerate(summaryHeaders, 1):
+                    cell = summary_sheet.cell(row=1, column=col_idx, value=name)
+                    cell.font = headerFont
+                    cell.fill = headerFill
+                for item_idx, item in enumerate(report_data.get("grand_total", {}).get("item_summary", [])):
+                    r = 2 + item_idx
+                    summary_sheet.cell(row=r, column=1, value=item["item_name"])
+                    summary_sheet.cell(row=r, column=2, value=item["sion"])
+                    summary_sheet.cell(row=r, column=3, value=item["license_count"])
+                    summary_sheet.cell(row=r, column=4, value=item["total_qty"])
+                    summary_sheet.cell(row=r, column=5, value=item["boe_used_qty"])
+                    summary_sheet.cell(row=r, column=6, value=item["allotted_qty"])
+                    summary_sheet.cell(row=r, column=7, value=item["available_qty"])
+                    summary_sheet.cell(row=r, column=8, value=item["planned_qty"])
+                    summary_sheet.cell(row=r, column=9, value=item["balance_qty"])
+                    summary_sheet.cell(row=r, column=10, value=item["available_cif"])
+                    summary_sheet.cell(row=r, column=11, value=item["planned_cif"])
+                    summary_sheet.cell(row=r, column=12, value=item["balance_cif"])
                 grand = report_data.get("grand_total", {}).get("item_summary_totals", {})
-                summary_sheet.append(["GRAND TOTAL", None, grand.get("license_count"), grand.get("total_qty"), grand.get("boe_used_qty"), grand.get("allotted_qty"), grand.get("available_qty"), grand.get("planned_qty"), grand.get("balance_qty"), grand.get("available_cif"), grand.get("planned_cif"), grand.get("balance_cif")])
+                grandRow = 2 + len(report_data.get("grand_total", {}).get("item_summary", []))
+                summary_sheet.cell(row=grandRow, column=1, value="GRAND TOTAL")
+                summary_sheet.cell(row=grandRow, column=3, value=grand.get("license_count"))
+                summary_sheet.cell(row=grandRow, column=4, value=grand.get("total_qty"))
+                summary_sheet.cell(row=grandRow, column=5, value=grand.get("boe_used_qty"))
+                summary_sheet.cell(row=grandRow, column=6, value=grand.get("allotted_qty"))
+                summary_sheet.cell(row=grandRow, column=7, value=grand.get("available_qty"))
+                summary_sheet.cell(row=grandRow, column=8, value=grand.get("planned_qty"))
+                summary_sheet.cell(row=grandRow, column=9, value=grand.get("balance_qty"))
+                summary_sheet.cell(row=grandRow, column=10, value=grand.get("available_cif"))
+                summary_sheet.cell(row=grandRow, column=11, value=grand.get("planned_cif"))
+                summary_sheet.cell(row=grandRow, column=12, value=grand.get("balance_cif"))
                 workbook.save(temp_file.name)
                 def canonical_stream():
                     with open(temp_file.name, 'rb') as generated:

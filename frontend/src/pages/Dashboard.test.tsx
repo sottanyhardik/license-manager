@@ -109,6 +109,7 @@ describe("Dashboard operational redesign", () => {
                     rows: [
                         {
                             import_item_id: 34697,
+                            licence_id: 812,
                             licence_number: "3011009039",
                             description: "Automotive Battery-8507",
                             saved_items: ["SEAT ASSEMBLY"],
@@ -122,7 +123,7 @@ describe("Dashboard operational redesign", () => {
 
         expect(await screen.findByText("C969 saved items to review (1)")).toBeInTheDocument();
         expect(screen.getByText(/Nothing has been changed/)).toBeInTheDocument();
-        expect(screen.getByText("3011009039")).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: "3011009039" })).toHaveAttribute("href", "/licenses/812/edit");
         expect(screen.getByText("SEAT ASSEMBLY")).toBeInTheDocument();
         expect(screen.getByText("AUTOMOTIVE BATTERY")).toBeInTheDocument();
         expect(get).toHaveBeenCalledTimes(1);
@@ -136,5 +137,16 @@ describe("Dashboard operational redesign", () => {
 
         await screen.findByText("Urgent alerts");
         expect(screen.queryByText(/C969 saved items to review/)).not.toBeInTheDocument();
+    });
+
+    it("shows a C969 review error without taking down the rest of the dashboard", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({
+            data: { ...dashboardData, c969_link_review: { count: 0, rows: [], error: "C969 link review could not run" } },
+        } as never);
+        renderDashboard();
+
+        expect(await screen.findByRole("alert")).toHaveTextContent("C969 link review could not run");
+        expect(screen.getByText("Urgent alerts")).toBeInTheDocument();
+        expect(screen.getByText("Recent allotments")).toBeInTheDocument();
     });
 });

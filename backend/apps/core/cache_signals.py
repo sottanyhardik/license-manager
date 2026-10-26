@@ -81,6 +81,7 @@ def invalidate_import_item_caches(sender, instance, **kwargs):
         'view:item_report*',
         'view:item_pivot*',
         'view:inventory_balance*',
+        'view:dashboard*',  # C969 link review reads import lines and their saved items
         f'view:license*:{instance.license_id}*',  # Parent license detail
         f'license_balance:{instance.license_id}',  # License balance affected
     ]
@@ -102,6 +103,7 @@ def invalidate_export_item_caches(sender, instance, **kwargs):
         f'view:license*:{instance.license_id}*',
         f'license_balance:{instance.license_id}',
         'view:item_pivot*',
+        'view:dashboard*',  # Export norm class decides which lines the C969 review covers
     ]
 
     for pattern in patterns:
@@ -116,6 +118,7 @@ def invalidate_import_item_m2m_caches(sender, instance, **kwargs):
 
     invalidate_cache('view:item_report*')
     invalidate_cache('view:item_pivot*')
+    invalidate_cache('view:dashboard*')  # Saved item links drive the C969 link review
 
 
 # ============================================================================
@@ -272,6 +275,7 @@ def invalidate_item_name_caches(sender, instance, **kwargs):
         'view:item*',
         'view:item_report*',
         'view:item_pivot*',
+        'view:dashboard*',  # Renaming an item changes its expected C969 classifier
     ]
 
     for pattern in patterns:

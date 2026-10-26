@@ -23,7 +23,7 @@ def c969_link_mismatches(limit=50):
 
     rows = []
     lines = LicenseImportItemsModel.objects.filter(id__in=list(saved)).values(
-        "id", "description", "license__license_number",
+        "id", "description", "license__id", "license__license_number",
     )
     for line in lines:
         expected = classify_c969_product_name(line["description"])
@@ -31,6 +31,7 @@ def c969_link_mismatches(limit=50):
         if expected and stored != [expected]:
             rows.append({
                 "import_item_id": line["id"],
+                "licence_id": line["license__id"],
                 "licence_number": line["license__license_number"],
                 "description": line["description"] or "",
                 "saved_items": stored,

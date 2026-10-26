@@ -44,6 +44,7 @@ def test_wrong_saved_item_is_listed_with_its_expected_item(licence, items):
     assert result["count"] == 1
     assert result["rows"] == [{
         "import_item_id": wrong.pk,
+        "licence_id": licence.pk,
         "licence_number": "LINK-REV-001",
         "description": "Automotive Battery-8507",
         "saved_items": ["SEAT ASSEMBLY"],

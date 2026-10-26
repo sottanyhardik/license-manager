@@ -52,7 +52,9 @@ class DashboardDataView(APIView):
 
         # Build a stable cache key from the user's role set
         roles_key = '_'.join(sorted(user.get_role_codes())) if not is_super else 'superuser'
-        cache_key = f'view:dashboard:{roles_key}'
+        # v2 adds `c969_link_review`. Bump the version whenever the payload shape changes,
+        # so payloads cached before the change are not served. `view:dashboard*` still matches.
+        cache_key = f'view:dashboard:v2:{roles_key}'
 
         cached_data = cache.get(cache_key)
         if cached_data is not None:
@@ -69,8 +71,7 @@ class DashboardDataView(APIView):
                 expiring_context = self._get_expiring_license_context()
                 data['license_stats'] = self._get_license_stats(expiring_context)
                 data['expiring_licenses'] = self._get_expiring_licenses(expiring_context)
-                # Read-only: C969 import lines whose saved item differs from their product name.
-                data['c969_link_review'] = c969_link_mismatches()
+                data['c969_link_review'] = self._get_c969_link_review()
 
             if has(['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER', 'REPORT_VIEWER']):
                 data['allotment_stats'] = self._get_allotment_stats()
@@ -86,6 +87,18 @@ class DashboardDataView(APIView):
                 api_error('Failed to load dashboard data', e, __name__),
                 status=500,
             )
+
+    def _get_c969_link_review(self):
+        """
+        Read-only review of C969 import lines whose saved item differs from the
+        item their product name selects. Nothing is changed here. A failure is
+        isolated: the rest of the dashboard still loads, the error is logged
+        under this module's name, and the card shows the message.
+        """
+        try:
+            return c969_link_mismatches()
+        except Exception as e:
+            return {'count': 0, 'rows': [], **api_error('C969 link review could not run', e, __name__)}
 
     def _get_license_stats(self, expiring_context=None):
         """Get license statistics"""

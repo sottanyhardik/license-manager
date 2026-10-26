@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
     AlertTriangle,
@@ -59,6 +59,7 @@ type ExpiringLicence = {
 };
 type C969LinkReviewRow = {
     import_item_id: number;
+    licence_id: number;
     licence_number: string;
     description: string;
     saved_items: string[];
@@ -67,6 +68,7 @@ type C969LinkReviewRow = {
 type C969LinkReview = {
     count: number;
     rows: C969LinkReviewRow[];
+    error?: string;
 };
 type DashboardStats = {
     licenses: LicenceStats;
@@ -521,6 +523,18 @@ export default function Dashboard() {
             {/* ════════════════════════════════════════════════════════
                 PHASE 2: C969 LINK REVIEW (Read-only, nothing is changed)
                 ════════════════════════════════════════════════════════ */}
+            {canSeeLicenses && c969Review.error && (
+                <div
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-200"
+                    role="alert"
+                >
+                    <AlertTriangle className="size-4 shrink-0" />
+                    <span className="flex-1">
+                        {c969Review.error}. The rest of the dashboard is unaffected; details are in the server log.
+                    </span>
+                </div>
+            )}
+
             {canSeeLicenses && c969Review.count > 0 && (
                 <Card className="overflow-hidden border-amber-300 dark:border-amber-800">
                     <CardHeader className="border-b border-amber-200 bg-amber-50 pb-3 dark:border-amber-900 dark:bg-amber-950/40">
@@ -552,8 +566,14 @@ export default function Dashboard() {
                                         key={row.import_item_id}
                                         className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900/50"
                                     >
-                                        <td className="px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400">
-                                            {row.licence_number}
+                                        <td className="px-4 py-2.5 text-sm font-medium">
+                                            <Link
+                                                to={`/licenses/${row.licence_id}/edit`}
+                                                className="text-blue-600 hover:underline dark:text-blue-400"
+                                                title="Open this licence to correct the saved item"
+                                            >
+                                                {row.licence_number}
+                                            </Link>
                                         </td>
                                         <td className="px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100">
                                             {row.description || "—"}

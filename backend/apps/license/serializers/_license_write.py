@@ -436,8 +436,10 @@ class LicenseWriteMixin:
         if imports is not None:
             from apps.license.signals import update_license_on_import_item_change
 
-            # Use transaction to ensure atomicity
-            with transaction.atomic():
+            # Use transaction to ensure atomicity. Suspend per-item balance
+            # signals while saving items (as create() does); each saved item is
+            # refreshed once below instead of once per signal (O(N) licence recalcs).
+            with transaction.atomic(), suspend_license_flag_recalc():
                 # Lock and get all existing import items to prevent race conditions
                 existing_items = list(instance.import_license.select_for_update().all())
                 existing_items_by_id = {item.id: item for item in existing_items}
@@ -713,6 +715,15 @@ class LicenseWriteMixin:
                             })
                     else:
                         logger.info("No import items to delete - all existing items were updated or are in payload")
+
+                # Refresh derived balances of the items saved above, once each.
+                # Same work the per-save on_commit job did, minus the duplicates.
+                from apps.core.scripts.calculate_balance import update_balance_values
+                for saved_item in LicenseImportItemsModel.objects.filter(license_id=instance.pk):
+                    try:
+                        update_balance_values(saved_item)
+                    except Exception:
+                        logger.exception("Balance refresh failed for import item %s", saved_item.pk)
 
                 logger.info("Import items update complete. Processed %d items, deleted %d items", len(processed_ids), len(items_to_delete) if len(imports) > 0 else 0)
 

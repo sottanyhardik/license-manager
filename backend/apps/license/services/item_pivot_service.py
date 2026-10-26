@@ -4,7 +4,7 @@ This deliberately consumes persisted effective plans and the item-linked usage
 queries.  It is a report projection, not another planning engine.
 """
 from collections import defaultdict
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from apps.license.models import LicenseItemPlan
 from apps.license.services.item_usage import (
@@ -12,7 +12,14 @@ from apps.license.services.item_usage import (
     billed_no_boe_bulk_map,
     billed_no_boe_qty_bulk_map,
 )
-from apps.license.services.product_classification import classify_product, get_product_category_sort_order
+from apps.license.services.c969_product_classifier import (
+    C969_CATEGORY_ORDER,
+    C969_CLASSIFIER_ORDER,
+    C969_GENERIC_CATEGORIES,
+    C969_NORM,
+    UNRECOGNISED,
+)
+from apps.license.services.product_classification import classify_product, pivot_category_sort_key
 
 ZERO_QTY = Decimal("0.000")
 ZERO_CIF = Decimal("0.00")
@@ -20,6 +27,28 @@ ZERO_CIF = Decimal("0.00")
 
 def _decimal(value, default=Decimal("0")):
     return Decimal(str(value if value is not None else default))
+
+
+def _add_balance_fields(row):
+    """Per-item balance CIF and unit price: balance CIF / balance QTY, two decimals.
+
+    Balance CIF is the item's CIF capacity less BOE-used, allotted and billed CIF,
+    the same components that reduce balance QTY. The unit price is shown in the
+    RUTILE block; it is None when no quantity is left.
+    """
+    used_cif = _decimal(row.get("boe_used_cif")) + _decimal(row.get("allotted_cif")) + _decimal(row.get("billed_cif"))
+    balance_cif = max(_decimal(row.get("canonical_item_cif_capacity")) - used_cif, ZERO_CIF)
+    balance_qty = _decimal(row.get("balance_qty"))
+    row["balance_cif"] = _text(balance_cif)
+    row["unit_price"] = _unit_price(balance_cif, balance_qty)
+
+
+def _unit_price(balance_cif, balance_qty):
+    """Balance CIF / balance QTY to two decimals (half up); None when no quantity is left."""
+    qty = _decimal(balance_qty)
+    if qty <= ZERO_QTY:
+        return None
+    return _text((_decimal(balance_cif) / qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _text(value):
@@ -237,8 +266,11 @@ class ItemPivotService:
                 source_items = [item_by_id[source_id] for source_id in source_ids if source_id in item_by_id]
                 # Classify the item into a product category based on HSN and description
                 description_for_class = next((item.description for item in source_items if item.description), item_name)
+                if default_sion == "C969" and not any(item.description for item in source_items) and item_name == "UNMAPPED ITEM":
+                    # C969 lines with no description are NO DESCRIPTION, not the UNMAPPED ITEM placeholder.
+                    description_for_class = ""
                 hsn_for_class = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
-                product_category = classify_product(hsn_for_class, description_for_class)
+                product_category = classify_product(hsn_for_class, description_for_class, default_sion)
                 # Collect all descriptions and HSN codes from source items for display.
                 # Deduplicate by case-insensitive comparison, preserve original casing.
                 source_descs = [item.description.strip() for item in source_items if item.description and item.description.strip()]
@@ -388,7 +420,9 @@ class ItemPivotService:
                 hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
                 sion_str = default_sion
                 # Classify the unplanned item into a product category
-                unplanned_product_category = classify_product(hsn_str, item_name_str)
+                # C969 classifies the raw description so a blank line stays NO DESCRIPTION.
+                unplanned_text = (item.description or "").strip() if default_sion == "C969" else item_name_str
+                unplanned_product_category = classify_product(hsn_str, unplanned_text, default_sion)
                 # Use product category as the key so items with the same
                 # category merge into one column per license.
                 unplanned_key = f"{unplanned_product_category or 'UNCLASSIFIED'}:{sion_str}"
@@ -485,7 +519,9 @@ class ItemPivotService:
                 item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
                 hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
                 sion_str = default_sion
-                unplanned_product_category = classify_product(hsn_str, item_name_str)
+                # C969 classifies the raw description so a blank line stays NO DESCRIPTION.
+                unplanned_text = (item.description or "").strip() if default_sion == "C969" else item_name_str
+                unplanned_product_category = classify_product(hsn_str, unplanned_text, default_sion)
                 unplanned_key = f"{unplanned_product_category or 'UNCLASSIFIED'}:{sion_str}"
                 unplanned_cell = cells.get(unplanned_key)
                 first_item_name_id = None
@@ -525,6 +561,7 @@ class ItemPivotService:
                     continue
                 unique_issues[(license_obj.id, issue.get("canonical_item_id"), issue.get("sion"), issue["type"])] = issue
             issues = list(unique_issues.values())
+            group.setdefault("_licence_objects", []).append(license_obj)
             group["licenses"].append({
                 "license_id": license_obj.id, "license_number": license_obj.license_number,
                 "expiry_date": license_obj.license_expiry_date.isoformat() if license_obj.license_expiry_date else None,
@@ -542,16 +579,17 @@ class ItemPivotService:
 
         groups = []
         for group in output_groups.values():
+            licence_objects = group.pop("_licence_objects", [])
             group["licenses"].sort(key=lambda row: (row["expiry_date"] or "", row["license_number"]))
             group["license_count"] = len(group["licenses"])
             group["issue_license_count"] = sum(1 for row in group["licenses"] if row["issue_count"])
             group["issue_record_count"] = sum(row["issue_count"] for row in group["licenses"])
-            # Sort by product category sort order, then SION, priority, sequence, name
+            # Sort by norm-aware category sort key, then SION, priority, sequence, name
             # Items without a product category sort last
             group["item_groups"] = sorted(
                 group["item_groups"].values(),
                 key=lambda row: (
-                    get_product_category_sort_order(row.get("product_category")),
+                    pivot_category_sort_key(row.get("product_category"), row["sion"]),
                     row.get("product_category") or "ZZZ_UNCLASSIFIED",
                     row["sion"],
                     row["priority"],
@@ -559,6 +597,9 @@ class ItemPivotService:
                     row["name"],
                 )
             )
+            for licence_row in group["licenses"]:
+                for cell in licence_row["items"].values():
+                    _add_balance_fields(cell)
             totals = {
                 "total_cif": sum((_decimal(row["total_cif"]) for row in group["licenses"]), ZERO_CIF),
                 "debited_cif": sum((_decimal(row["debited_cif"]) for row in group["licenses"]), ZERO_CIF),
@@ -571,13 +612,18 @@ class ItemPivotService:
                 key = item["key"]
                 applicable = [row["items"][key] for row in group["licenses"] if key in row["items"]]
                 totals["items"][key] = {
-                    field: _text(sum((_decimal(cell.get(field)) for cell in applicable), ZERO_CIF if field in {"restriction_value", "planned_cif", "boe_used_cif", "allotted_cif", "billed_cif"} else ZERO_QTY))
-                    for field in ("total_qty", "allotted_qty", "allotted_cif", "debited_qty", "billed_qty", "boe_used_cif", "billed_cif", "balance_qty", "restriction_value", "plan_qty", "planned_cif")
+                    field: _text(sum((_decimal(cell.get(field)) for cell in applicable), ZERO_CIF if field in {"restriction_value", "planned_cif", "boe_used_cif", "allotted_cif", "billed_cif", "balance_cif"} else ZERO_QTY))
+                    for field in ("total_qty", "allotted_qty", "allotted_cif", "debited_qty", "billed_qty", "boe_used_cif", "billed_cif", "balance_qty", "balance_cif", "restriction_value", "plan_qty", "planned_cif")
                 }
+                totals["items"][key]["unit_price"] = _unit_price(totals["items"][key]["balance_cif"], totals["items"][key]["balance_qty"])
             group["totals"] = {
                 **{key: _text(value) for key, value in totals.items() if key != "items"},
                 "items": totals["items"],
             }
+            # Per-notification C969 entitlement, so the notification summary matches the total table.
+            group_c969 = _c969_entitlement_report(licence_objects, usage_totals)
+            if group_c969 is not None:
+                group["c969_entitlement"] = group_c969
             groups.append(group)
         groups = sorted(groups, key=lambda row: (row["notification_number"], row["purchase_status"]["name"]))
         # One pure projection is shared by per-notification and complete
@@ -638,12 +684,136 @@ class ItemPivotService:
                 "contributing_licenses": contributing,
                 "licenses": cells,
             })
-        items = sorted(items, key=lambda row: (get_product_category_sort_order(row.get("product_category")), row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row["priority"], row["sequence"], row["item_name"]))
+        items = sorted(items, key=lambda row: (pivot_category_sort_key(row.get("product_category"), row["sion"]), row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row["priority"], row["sequence"], row["item_name"]))
         global_summary = {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         # Aliases make the report contract explicit while preserving the
         # existing consumers during the presentation-only migration.
         grand_projection = project_item_summary(all_licenses)
-        return {"groups": groups, "notification_groups": groups, "summary": global_summary,
+        report = {"groups": groups, "notification_groups": groups, "summary": global_summary,
                 "global_summary": global_summary, "items": items, "item_columns": [{"key": row["key"], "name": row["item_name"], "sion": row["sion"]} for row in items],
                 "grand_total": {"notification_count": len(groups), "license_count": global_summary["license_count"], "summary": global_summary, **grand_projection},
                 "report_version": "canonical-item-pivot-v1"}
+        # C969 gets the flat entitlement table; other norms' output is unchanged.
+        c969_entitlement = _c969_entitlement_report(licenses, usage_totals)
+        if c969_entitlement is not None:
+            report["c969_entitlement"] = c969_entitlement
+        return report
+
+
+# Columns of the flat C969 entitlement table, in display order. Labels follow the
+# report's existing spelling.
+C969_ENTITLEMENT_COLUMNS = (
+    ("hsn_code", "HSN CODE"),
+    ("description", "DESCRIPTION"),
+    ("total_qty", "TOTAL QTY"),
+    ("allotted_qty", "ALLOTTED QTY"),
+    ("allotted_cif", "ALLOTTED CIF"),
+    ("debited_qty", "DEBITED QTY"),
+    ("debited_cif", "DEBITED CIF"),
+    ("balance_qty", "BALANCE QTY"),
+)
+
+_C969_CONFIGURED_CATEGORIES = C969_CLASSIFIER_ORDER + tuple(name for name, _ in C969_GENERIC_CATEGORIES)
+
+
+def c969_balance_qty(total_qty, debited_qty, allotted_qty, billed_qty):
+    """Unplanned-line balance, as in build(): total - debited - allotted - billed, floored at 0."""
+    return max(_decimal(total_qty) - _decimal(debited_qty) - _decimal(allotted_qty) - _decimal(billed_qty), ZERO_QTY)
+
+
+def _c969_entitlement_report(licenses, usage_totals):
+    """One row per C969 product category, built from every C969 import-item line.
+
+    Entitlement comes from the import items, not from plans or allocations, so unplanned
+    and never-used lines are included. Per line the values are the same ones build() uses
+    for an unplanned item: total = item quantity, allotted and debited from usage totals,
+    balance = max(total - debited - allotted - billed, 0). Every configured C969 category
+    is returned, zero where no line exists. The two fallback categories appear only when
+    a line falls in them. Returns None when no licence in the set carries C969.
+    """
+    c969_licences = [
+        licence for licence in licenses
+        if any(e.norm_class_id and e.norm_class.norm_class == C969_NORM for e in licence.export_license.all())
+    ]
+    if not c969_licences:
+        return None
+
+    totals = {}
+    unrecognised_items = []
+
+    def bucket(category):
+        if category not in totals:
+            totals[category] = {
+                "total_qty": ZERO_QTY, "allotted_qty": ZERO_QTY, "allotted_cif": ZERO_CIF,
+                "debited_qty": ZERO_QTY, "debited_cif": ZERO_CIF, "balance_qty": ZERO_QTY,
+                "hsn_codes": set(), "source_descriptions": set(), "licence_ids": set(), "line_count": 0,
+            }
+        return totals[category]
+
+    for category in _C969_CONFIGURED_CATEGORIES:
+        bucket(category)
+
+    for licence in c969_licences:
+        for item in licence.import_license.all():
+            usage = usage_totals.get(item.id, {})
+            boe_qty = usage.get("boe_qty", ZERO_QTY)
+            boe_cif = usage.get("boe_cif", ZERO_CIF)
+            allot_qty = usage.get("allot_qty", ZERO_QTY)
+            allot_cif = usage.get("allot_cif", ZERO_CIF)
+            billed_qty = usage.get("billed_qty", ZERO_QTY)
+            description = (item.description or "").strip()
+            hsn = item.hs_code.hs_code if item.hs_code_id else ""
+            # Classification reads the product name only; HSN is reported, never used.
+            category = classify_product(hsn, description, C969_NORM)
+            row = bucket(category)
+            row["total_qty"] += _decimal(item.quantity)
+            row["allotted_qty"] += allot_qty
+            row["allotted_cif"] += allot_cif
+            row["debited_qty"] += boe_qty
+            row["debited_cif"] += boe_cif
+            row["balance_qty"] += c969_balance_qty(item.quantity, boe_qty, allot_qty, billed_qty)
+            if hsn:
+                row["hsn_codes"].add(hsn)
+            if description:
+                row["source_descriptions"].add(description)
+            row["licence_ids"].add(licence.id)
+            row["line_count"] += 1
+            if category == UNRECOGNISED:
+                unrecognised_items.append({
+                    "import_item_id": item.id,
+                    "serial_number": item.serial_number,
+                    "licence_number": licence.license_number,
+                    "description": item.description or "",
+                    "quantity": _text(_decimal(item.quantity)),
+                    "unit": item.unit or "",
+                    "current_classifiers": sorted(item.items.values_list("name", flat=True)),
+                })
+
+    ordered = list(C969_CATEGORY_ORDER) + [c for c in totals if c not in C969_CATEGORY_ORDER]
+    rows = []
+    for category in ordered:
+        if category not in totals:
+            continue
+        row = totals[category]
+        if category not in _C969_CONFIGURED_CATEGORIES and row["line_count"] == 0:
+            continue
+        rows.append({
+            "category": category,
+            "hsn_code": ", ".join(sorted(row["hsn_codes"])),
+            "description": category,
+            "total_qty": _text(row["total_qty"]),
+            "allotted_qty": _text(row["allotted_qty"]),
+            "allotted_cif": _text(row["allotted_cif"]),
+            "debited_qty": _text(row["debited_qty"]),
+            "debited_cif": _text(row["debited_cif"]),
+            "balance_qty": _text(row["balance_qty"]),
+            "line_count": row["line_count"],
+            "license_count": len(row["licence_ids"]),
+            "source_descriptions": sorted(row["source_descriptions"]),
+        })
+    return {
+        "columns": [{"key": k, "label": label} for k, label in C969_ENTITLEMENT_COLUMNS],
+        "rows": rows,
+        "unrecognised_items": unrecognised_items,
+    }
+

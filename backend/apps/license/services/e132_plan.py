@@ -104,10 +104,11 @@ def _hsn_matches(hsn_digits: str, code: str) -> bool:
 
 
 def _has_word(desc_norm: str, word: str) -> bool:
-    """Whole-word (boundary) match — 'oil' must NOT match 'foil'/'boil', and a
-    numeric code in the description ('7607') must not match inside a longer
-    number. Used where the spec says "the word ..." or matches HSN-in-description.
-    """
+    """Whole-word match for text ('oil' must NOT match 'foil'/'boil').
+    A numeric code is an HSN prefix: it must start a number, so '1513'
+    matches '1513' and '15132110' but not inside '44151000'."""
+    if word.isdigit():
+        return re.search(rf"(?<!\d){re.escape(word)}", desc_norm) is not None
     return re.search(rf"\b{re.escape(word)}\b", desc_norm) is not None
 
 

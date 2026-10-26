@@ -316,6 +316,45 @@ def test_e126_olive_oil_matches_via_hsn_1509(e126_norm):
     assert list(matched) == [expected]
 
 
+@pytest.mark.django_db
+def test_e126_packing_line_with_hsn_44151000_is_not_olive_oil(e126_norm):
+    ItemNameModel.objects.create(name="OLIVE OIL - E126", sion_norm_class=e126_norm)
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E126-PACK-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description="Wooden Sheet / Pallets (HSN Code 44151000) 1,26,957.00",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E126"])
+
+    assert not matched.exists()
+
+
+@pytest.mark.django_db
+def test_e132_packing_line_with_hsn_44151000_is_not_rbd_palmolein(e132_norm):
+    ItemNameModel.objects.create(name="RBD PALMOLEIN OIL - E132", sion_norm_class=e132_norm)
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E132-PACK-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description="Wooden Sheet / Pallets (HSN Code 44151000)",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E132"])
+
+    assert not matched.exists()
+
+
+@pytest.mark.django_db
+def test_e126_olive_oil_description_code_at_number_start_still_matches(e126_norm):
+    expected = ItemNameModel.objects.create(name="OLIVE OIL - E126", sion_norm_class=e126_norm)
+    license_obj = LicenseDetailsModel.objects.create(license_number="MATCH-LIC-E126-OLIVE-DESC-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description="15101000 EXTRA VIRGIN OLIVE OIL",
+    )
+
+    matched = match_import_item_to_items(import_item, ["E126"])
+
+    assert list(matched) == [expected]
+
+
 # ─── Packaging pre-classification (all norms) ──────────────────────────────
 
 
@@ -631,3 +670,123 @@ class TestBulkAutoLinkLicenseItemsPackaging:
         item.refresh_from_db()
         assert not item.items.exists()
         assert not ItemNameModel.objects.filter(name__icontains="HDPE").exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("description, expected_base", [
+    ("Rutile glass formers with borax", "RUTILE"),
+    ("Titanium Dioxide other than Rutile Grade, borax formers", "TITANIUM DIOXIDE"),
+    ("Soda Ash in Soda Ash with rutile formers and borax", "SODA ASH"),
+])
+def test_a3627_rutile_filter_excludes_titanium_dioxide_and_soda_ash(e_norms, description, expected_base):
+    from apps.license.utils.item_matcher import get_item_filters
+
+    license_obj = LicenseDetailsModel.objects.create(license_number="A3627-MATCH-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description=description,
+    )
+    matched = [
+        config["base_name"]
+        for config in get_item_filters()
+        if config["base_name"] != "BORAX"
+        and "A3627" in config["norms"]
+        and LicenseImportItemsModel.objects.filter(id=import_item.id).filter(*config["filters"]).exists()
+    ]
+
+    assert matched == [expected_base]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("hs_code, description, expected_bases", [
+    # Business table: HSN 3206 + RUTILE -> RUTILE, no BORAX needed.
+    ("3206", "RUTILE", ["RUTILE"]),
+    ("32061190", "RUTILE", ["RUTILE"]),
+    # Rutile HSN 32061110 is RUTILE on its own too.
+    ("32061110", "Rutile Grade", ["RUTILE"]),
+    ("3206", "Titanium Dioxide Rutile Grade", ["RUTILE"]),
+    # HSN 3206 + OTHER THAN RUTILE -> TITANIUM DIOXIDE, TiO2 wording not required, never RUTILE.
+    ("3206", "Other Than Rutile Grade", ["TITANIUM DIOXIDE"]),
+    ("3206", "Other Than Rutile Titanium Dioxide", ["TITANIUM DIOXIDE"]),
+    ("32061110", "Other Than Rutile Grade", ["TITANIUM DIOXIDE"]),
+    ("3206", "Titanium Dioxide Other Than Rutile Grade", ["TITANIUM DIOXIDE"]),
+    # "3206" in the description counts as the HSN prefix.
+    ("99999999", "3206 RUTILE", ["RUTILE"]),
+    ("99999999", "3206 Other Than Rutile Grade", ["TITANIUM DIOXIDE"]),
+    # No qualifying HSN/description match: neither new branch fires.
+    ("99999999", "RUTILE", []),
+    ("99999999", "Other Than Rutile Grade", []),
+    # Soda Ash keeps its own rule; the RUTILE branch is excluded by the soda ash exclusion.
+    ("3206", "Soda Ash with rutile formers", ["SODA ASH"]),
+    # Existing BORAX-based branch still works.
+    ("99999999", "Rutile glass formers with borax", ["RUTILE"]),
+])
+def test_a3627_hsn_3206_rutile_table_classification(e_norms, hs_code, description, expected_bases):
+    from apps.license.utils.item_matcher import get_item_filters
+
+    hs_obj, _ = HSCodeModel.objects.get_or_create(hs_code=hs_code)
+    license_obj = LicenseDetailsModel.objects.create(license_number="A3627-RUTILE-TABLE-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, hs_code=hs_obj, description=description,
+    )
+    matched = [
+        config["base_name"]
+        for config in get_item_filters()
+        if config["base_name"] != "BORAX"
+        and "A3627" in config["norms"]
+        and LicenseImportItemsModel.objects.filter(id=import_item.id).filter(*config["filters"]).exists()
+    ]
+
+    assert matched == expected_bases
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("description, expected_olive", [
+    ("PACKING MATERIAL (B) WOODEN SHEET / PALLETS 44151000", False),
+    ("PACKING MATERIAL ITCHS CODE 44150000 WOODEN SHEET", False),
+    ("Olive oil HS 1510 extra virgin", True),
+    ("15101000 extra virgin olive oil", True),
+])
+def test_olive_oil_filter_ignores_hsn_digits_inside_longer_numbers(e_norms, description, expected_olive):
+    from apps.license.utils.item_matcher import get_item_filters
+
+    olive_filters = next(
+        config["filters"] for config in get_item_filters() if config["base_name"] == "OLIVE OIL"
+    )
+    license_obj = LicenseDetailsModel.objects.create(license_number="OLIVE-BOUNDARY-001")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description=description,
+    )
+
+    assert LicenseImportItemsModel.objects.filter(id=import_item.id).filter(*olive_filters).exists() is expected_olive
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("description, expected_base", [
+    ("PP PACKING 7607 ALUMINIUM LAMINATED", "ALUMINIUM FOIL"),
+    ("PP GRANULES PACKING MATERIAL", "PP"),
+])
+def test_hsn_39021000_matches_aluminium_foil_only_with_7607_in_description(description, expected_base):
+    from apps.license.utils.item_matcher import get_item_filters
+    from apps.core.models import HSCodeModel
+
+    license_obj = LicenseDetailsModel.objects.create(license_number="ALU-7607-001")
+    hs_code = HSCodeModel.objects.create(hs_code="39021000")
+    import_item = LicenseImportItemsModel.objects.create(
+        license=license_obj, serial_number=1, description=description, hs_code=hs_code,
+    )
+    matched = [
+        config["base_name"]
+        for config in get_item_filters()
+        if config["base_name"] in {"PP", "ALUMINIUM FOIL"}
+        and LicenseImportItemsModel.objects.filter(id=import_item.id).filter(*config["filters"]).exists()
+    ]
+
+    assert matched == [expected_base]
+
+
+def test_aluminium_foil_entry_covers_a3627_so_7607_rows_are_not_left_unclassified():
+    from apps.license.utils.item_matcher import get_item_filters
+
+    entry = next(config for config in get_item_filters() if config["base_name"] == "ALUMINIUM FOIL")
+
+    assert "A3627" in entry["norms"]

@@ -153,9 +153,9 @@ A3627 = {
     "profile": _profile("A3627", quantity_rounding="FLOOR", quantity_precision=0),
     "rules": [
         {"stable_key": "A3627:RULE:001:RUTILE", "name": "Rutile", "priority": 1,
-         "expression": group("AND", group("OR", leaf("HSN", "STARTS_WITH", "3206"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "glass formers"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "rutile"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "formers")), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "borax")), "max_unit_price": "3.50", "unit": "KG", "output_key": "RUTILE"},
+         "expression": group("AND", group("OR", group("AND", group("OR", leaf("HSN", "STARTS_WITH", "3206"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "3206")), group("OR", leaf("PRODUCT_DESCRIPTION", "WORD_CONTAINS", "rutile"), leaf("PRODUCT_DESCRIPTION", "WORD_CONTAINS", "borax"))), group("AND", group("OR", leaf("PRODUCT_DESCRIPTION", "CONTAINS", "glass formers"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "rutile"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "formers")), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "borax"))), leaf("PRODUCT_DESCRIPTION", "NOT_CONTAINS", "other than"), leaf("PRODUCT_DESCRIPTION", "NOT_CONTAINS", "soda ash")), "max_unit_price": "3.50", "unit": "KG", "output_key": "RUTILE"},
         {"stable_key": "A3627:RULE:002:TITANIUM", "name": "Titanium Dioxide", "priority": 2,
-         "expression": group("AND", leaf("PRODUCT_DESCRIPTION", "CONTAINS", "titanium dioxide"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "other than")), "max_unit_price": "2.00", "unit": "KG", "output_key": "TITANIUM"},
+         "expression": group("OR", group("AND", leaf("PRODUCT_DESCRIPTION", "CONTAINS", "titanium dioxide"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "other than")), group("AND", group("OR", leaf("HSN", "STARTS_WITH", "3206"), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "3206")), leaf("PRODUCT_DESCRIPTION", "CONTAINS", "other than rutile"))), "max_unit_price": "2.00", "unit": "KG", "output_key": "TITANIUM"},
         {"stable_key": "A3627:RULE:003:SODA_ASH", "name": "Soda Ash", "priority": 3,
          "expression": leaf("PRODUCT_DESCRIPTION", "CONTAINS", "soda ash"), "max_unit_price": "0.70", "unit": "KG", "output_key": "SODA_ASH"},
         {"stable_key": "A3627:RULE:004:PP", "name": "PP", "priority": 4,

@@ -10,7 +10,7 @@
       <env name="PATH" value="/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" />
     </envs>
     <option name="SDK_HOME" value="" />
-    <option name="SDK_NAME" value="Python 3.14 (license-manager)" />
+    <option name="SDK_NAME" value="~/Developer/projects/license-manager/.venv" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend" />
     <option name="IS_MODULE_SDK" value="true" />
     <option name="ADD_CONTENT_ROOTS" value="true" />

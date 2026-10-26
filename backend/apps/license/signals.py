@@ -4,14 +4,16 @@ import threading
 from contextlib import contextmanager
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails
-from apps.core.models import CompanyModel
+from apps.core.models import CompanyModel, ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
+from apps.license.services.product_norm_guard import is_olive_oil_item_name_allowed
 from apps.trade.models import LicenseTrade, LicenseTradeLine
 
 
@@ -76,6 +78,24 @@ def _licenses_being_deleted() -> set:
     if not hasattr(_deleting_state, "license_ids"):
         _deleting_state.license_ids = set()
     return _deleting_state.license_ids
+
+
+@receiver(pre_save, sender=ItemNameModel)
+def forbid_olive_oil_on_restricted_norm_item(sender, instance, **kwargs):
+    """Reject storing an Olive Oil item name whose norm class is restricted (A3627, E132)."""
+    norm = instance.sion_norm_class.norm_class if instance.sion_norm_class_id else None
+    if not is_olive_oil_item_name_allowed(instance.name, [norm] if norm else []):
+        raise ValidationError(f"Olive Oil item name {instance.name!r} is not allowed for norm class {norm!r}.")
+
+
+@receiver(m2m_changed, sender=ItemNameModel.norms.through)
+def forbid_olive_oil_on_restricted_norm_link(sender, instance, action, pk_set, **kwargs):
+    """Reject linking an Olive Oil item name to a restricted norm class (A3627, E132)."""
+    if action != "pre_add" or not pk_set:
+        return
+    norms = SionNormClassModel.objects.filter(pk__in=pk_set).values_list("norm_class", flat=True)
+    if not is_olive_oil_item_name_allowed(instance.name, norms):
+        raise ValidationError(f"Olive Oil item name {instance.name!r} cannot be linked to a restricted norm class.")
 
 
 @receiver(pre_delete, sender=LicenseDetailsModel)

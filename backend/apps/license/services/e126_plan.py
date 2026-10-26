@@ -101,8 +101,11 @@ def _hsn_matches(hsn_digits: str, code: str) -> bool:
 
 
 def _has_word(desc_norm: str, word: str) -> bool:
-    """Whole-word (boundary) match — a numeric code in the description
-    ('0802') must not match inside a longer number."""
+    """Whole-word match for text ('oil' must NOT match 'foil'/'boil').
+    A numeric code is an HSN prefix: it must start a number, so '1513'
+    matches '1513' and '15132110' but not inside '44151000'."""
+    if word.isdigit():
+        return re.search(rf"(?<!\d){re.escape(word)}", desc_norm) is not None
     return re.search(rf"\b{re.escape(word)}\b", desc_norm) is not None
 
 
@@ -130,11 +133,11 @@ def _is_pko_signal(hsn: str, desc: str) -> bool:
 
 def _is_olive_oil_signal(hsn: str, desc: str) -> bool:
     """Mirrors item_matcher.py's existing "OLIVE OIL" entry exactly: HSN
-    starts with 1509, OR description contains 1500/1509/1510 as a plain
-    substring (that entry uses `icontains`, not a word-boundary match)."""
+    starts with 1509, OR description has 1500/1509/1510 as an HSN prefix
+    (start of a number, same rule as the item_matcher entry)."""
     if _hsn_matches(hsn, "1509"):
         return True
-    return "1500" in desc or "1509" in desc or "1510" in desc
+    return any(_has_word(desc, code) for code in ("1500", "1509", "1510"))
 
 
 def _rule_priority_2(hsn: str, desc: str) -> tuple[str, str] | None:

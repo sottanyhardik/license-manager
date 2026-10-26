@@ -27,11 +27,85 @@ from apps.license.models import (
     LicenseDetailsModel, LicenseImportItemsModel,
     LicenseExportItemModel, LicenseTransferModel,
 )
+from apps.license.services.a3627_classifier import registry_version
 from apps.license.services.plan_grouping import (
     merge_planned_import_items as _merge_planned_import_items,
     merge_items_for_classification as _merge_items_for_classification,
 )
 from apps.license.views.item_report import _ExcelPassthroughRenderer
+
+# Item-block fields in pivot order (mirrors ItemPivotReport.tsx). RUTILE blocks add UNIT PRICE after BALANCE QTY.
+PIVOT_ITEM_FIELDS = [
+    ("hsn_code", "HSN CODE"), ("description", "DESCRIPTION"), ("total_qty", "TOTAL QTY"),
+    ("allotted_qty", "ALLOTTED QTY"), ("allotted_cif", "ALLOTTED CIF"), ("debited_qty", "DEBITED QTY"),
+    ("boe_used_cif", "DEBITED CIF"), ("billed_qty", "BILLED QTY"), ("billed_cif", "BILLED CIF"),
+    ("balance_qty", "BALANCE QTY"), ("restriction_percent", "RESTRICTION %"), ("restriction_value", "RESTRICTION VAL"),
+    ("plan_qty", "PLAN QTY"), ("planned_cif", "PLANNED CIF"),
+]
+PIVOT_ALWAYS_SHOWN_FIELDS = {"hsn_code", "description"}
+
+# Item tints cycled per item block, as ITEM_BG_COLORS in ItemPivotReport.tsx (rgba over white).
+PIVOT_ITEM_TINTS = [
+    ((59, 130, 246), 0.10), ((16, 185, 129), 0.10), ((249, 115, 22), 0.10), ((139, 92, 246), 0.10),
+    ((236, 72, 153), 0.10), ((234, 179, 8), 0.12), ((6, 182, 212), 0.10), ((107, 114, 128), 0.10),
+]
+
+
+def _pivot_item_fill(item_index):
+    """Solid fill for item block ``item_index``: the browser tint blended over white."""
+    from openpyxl.styles import PatternFill
+
+    (red, green, blue), alpha = PIVOT_ITEM_TINTS[item_index % len(PIVOT_ITEM_TINTS)]
+
+    def blend(channel):
+        return round(255 * (1 - alpha) + channel * alpha)
+
+    colour = f"{blend(red):02X}{blend(green):02X}{blend(blue):02X}"
+    return PatternFill(start_color=colour, end_color=colour, fill_type="solid")
+
+
+def _pivot_has_value(value):
+    if value is None or value == "":
+        return False
+    try:
+        return float(value) != 0
+    except (TypeError, ValueError):
+        return True
+
+
+def _pivot_item_fields(item, group):
+    """(key, label) pairs shown for one item block. A field is dropped when every licence cell and the
+    item total for it are null or 0; HSN CODE and DESCRIPTION always show."""
+    fields = list(PIVOT_ITEM_FIELDS)
+    if item.get("product_category") == "RUTILE":
+        fields = fields[:10] + [("unit_price", "UNIT PRICE")] + fields[10:]
+    total = group["totals"]["items"].get(item["key"]) or {}
+    return [
+        (key, label) for key, label in fields
+        if key in PIVOT_ALWAYS_SHOWN_FIELDS
+        or _pivot_has_value(total.get(key))
+        or any(_pivot_has_value((license_row["items"].get(item["key"]) or {}).get(key)) for license_row in group["licenses"])
+    ]
+
+
+def _fit_sheet_columns(sheet, minimum=12, maximum=40):
+    """Size each column to its longest value so headers and figures are not cut off.
+
+    Merged labels (category headers, merged fixed headers) are skipped: a long label that spans
+    several columns must not widen one of them.
+    """
+    from openpyxl.utils import get_column_letter
+
+    merged_anchors = {merged.start_cell.coordinate for merged in sheet.merged_cells.ranges}
+    longest = {}
+    for row in sheet.iter_rows():
+        for cell in row:
+            if cell.value is None or cell.coordinate in merged_anchors:
+                continue
+            longest[cell.column] = max(longest.get(cell.column, 0), len(str(cell.value)))
+    for column, length in longest.items():
+        sheet.column_dimensions[get_column_letter(column)].width = min(max(length + 2, minimum), maximum)
+
 
 def _safe_int(value, default):
     try:
@@ -415,7 +489,9 @@ class ItemPivotReportView(APIView):
         # and balance-calculation work.  Existing `view:item_pivot*` signal
         # invalidation removes these entries whenever source data changes.
         cache_parts = tuple(sorted((key, tuple(request.GET.getlist(key))) for key in request.GET))
-        cache_key = f"view:item_pivot:{hashlib.sha256(repr(cache_parts).encode()).hexdigest()}"
+        # The classification registry version is part of the key: a changed rule or label
+        # misses the cache at once instead of serving a pivot built by the old rules.
+        cache_key = f"view:item_pivot:{registry_version()}:{hashlib.sha256(repr(cache_parts).encode()).hexdigest()}"
         cached_report = cache.get(cache_key)
         if cached_report is not None:
             return JsonResponse(cached_report, safe=False)
@@ -1664,8 +1740,6 @@ class ItemPivotReportView(APIView):
                 workbook = openpyxl.Workbook()
                 workbook.remove(workbook.active)  # remove default sheet
                 fixed = ["SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF", "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF"]
-                fields = ["HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY", "DEBITED CIF", "BILLED QTY", "BILLED CIF", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF"]
-                numFields = len(fields)  # 14 sub-columns per item
                 headerFill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
                 headerFont = Font(bold=True, size=11)
                 for group_index, group in enumerate(report_data["groups"], 1):
@@ -1690,6 +1764,13 @@ class ItemPivotReportView(APIView):
                     numItems = len(item_groups)
                     numFixed = len(fixed)
 
+                    # Item blocks have different widths (RUTILE adds UNIT PRICE, hidden fields drop out);
+                    # offsets are cumulative.
+                    item_fields = [_pivot_item_fields(item, group) for item in item_groups]
+                    item_widths = [len(fields_for_item) for fields_for_item in item_fields]
+                    item_starts = [sum(item_widths[:i]) for i in range(numItems)]
+                    column_items = [item_idx for item_idx, width in enumerate(item_widths) for _ in range(width)]
+
                     # Build product category spans: list of (category, startItemIndex, endItemIndex)
                     category_spans = []
                     if numItems > 0:
@@ -1703,34 +1784,9 @@ class ItemPivotReportView(APIView):
                                 span_start = i
                         category_spans.append((current_category, span_start, numItems - 1))
 
-                    # Product category colors for Excel
-                    product_category_fills = {
-                        'PKO': PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid"),
-                        'RBD PALMOLEIN OIL': PatternFill(start_color="FED7AA", end_color="FED7AA", fill_type="solid"),
-                        'DWP/SWP': PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid"),
-                        'CHEESE': PatternFill(start_color="FCE7F3", end_color="FCE7F3", fill_type="solid"),
-                        'WPC': PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid"),
-                        'DIETARY FIBRE': PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid"),
-                        'YEAST': PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid"),
-                        'SUGAR': PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid"),
-                        'WHEAT FLOUR': PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid"),
-                        'PAPER': PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid"),
-                        'ALUMINIUM FOIL': PatternFill(start_color="E5E7EB", end_color="E5E7EB", fill_type="solid"),
-                        'CEREALS': PatternFill(start_color="FEFCE8", end_color="FEFCE8", fill_type="solid"),
-                        'PP': PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid"),
-                        'APPLE DRIES': PatternFill(start_color="FCE7F3", end_color="FCE7F3", fill_type="solid"),
-                        'OLIVE OIL': PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid"),
-                        'GLASS BOTTLE': PatternFill(start_color="E0F2FE", end_color="E0F2FE", fill_type="solid"),
-                        'SANITATION': PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid"),
-                        'OTHER CONFECTIONERY INGREDIENTS': PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid"),
-                        'ESSENTIAL OIL': PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid"),
-                        'CITRIC ACID': PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid"),
-                        'FOOD COLOURS': PatternFill(start_color="CCFBF1", end_color="CCFBF1", fill_type="solid"),
-                        'FRUIT COCKTAIL': PatternFill(start_color="FFE4E6", end_color="FFE4E6", fill_type="solid"),
-                    }
 
-                    # Row 1: Product category header row
-                    categoryRow = 1
+                    # Row 2: Product category header row (row 1 carries the notification title)
+                    categoryRow = 2
                     # Fixed columns span 2 rows (Category + Field)
                     for col_idx, name in enumerate(fixed, 1):
                         cell = sheet.cell(row=categoryRow, column=col_idx, value=name)
@@ -1740,58 +1796,64 @@ class ItemPivotReportView(APIView):
 
                     # Product category merged cells
                     for cat_name, start_item, end_item in category_spans:
-                        start_col = numFixed + (start_item * numFields) + 1
-                        end_col = numFixed + ((end_item + 1) * numFields)
+                        start_col = numFixed + item_starts[start_item] + 1
+                        end_col = numFixed + item_starts[end_item] + item_widths[end_item]
                         cell = sheet.cell(row=categoryRow, column=start_col, value=cat_name)
                         cell.font = Font(bold=True, size=11)
-                        cell.fill = product_category_fills.get(cat_name, PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid"))
+                        cell.fill = _pivot_item_fill(start_item)
                         cell.alignment = Alignment(horizontal='center', vertical='center')
                         if start_col != end_col:
                             sheet.merge_cells(start_row=categoryRow, start_column=start_col, end_row=categoryRow, end_column=end_col)
 
-                    # Row 2: Field sub-headers
-                    fieldRow = 2
+                    # Row 3: Field sub-headers
+                    fieldRow = 3
                     for col_idx, name in enumerate(fixed, 1):
                         cell = sheet.cell(row=fieldRow, column=col_idx, value=name)
                         cell.font = headerFont
                         cell.fill = headerFill
                         cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                    for item_idx in range(numItems):
-                        for field_idx, name in enumerate(fields):
-                            col = numFixed + (item_idx * numFields) + field_idx + 1
+                    for item_idx, item in enumerate(item_groups):
+                        for field_idx, (_key, name) in enumerate(item_fields[item_idx]):
+                            col = numFixed + item_starts[item_idx] + field_idx + 1
                             cell = sheet.cell(row=fieldRow, column=col, value=name)
                             cell.font = headerFont
-                            cell.fill = headerFill
+                            cell.fill = _pivot_item_fill(item_idx)
                             cell.alignment = Alignment(horizontal='center', vertical='center')
 
                     # Merge fixed columns across both header rows (rows 1-2)
                     for col_idx in range(1, numFixed + 1):
                         sheet.merge_cells(start_row=categoryRow, start_column=col_idx, end_row=fieldRow, end_column=col_idx)
 
-                    # Data rows start at row 3
-                    dataStartRow = 3
+                    # Data rows start at row 4
+                    dataStartRow = 4
                     for index, license_row in enumerate(group["licenses"], dataStartRow):
                         row_data = [index - (dataStartRow - 1), license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
-                        for item in item_groups:
+                        for item_idx, item in enumerate(item_groups):
                             cell = license_row["items"].get(item["key"])
-                            row_data.extend([cell.get(key) if cell else None for key in ("hsn_code", "description", "total_qty", "allotted_qty", "allotted_cif", "debited_qty", "boe_used_cif", "billed_qty", "billed_cif", "balance_qty", "restriction_percent", "restriction_value", "plan_qty", "planned_cif")])
+                            row_data.extend(cell.get(key) if cell else None for key, _label in item_fields[item_idx])
                         for col_idx, value in enumerate(row_data, 1):
-                            sheet.cell(row=index, column=col_idx, value=value)
+                            cell = sheet.cell(row=index, column=col_idx, value=value)
+                            if col_idx > numFixed:
+                                cell.fill = _pivot_item_fill(column_items[col_idx - numFixed - 1])
 
                     # Totals row
                     totals = group["totals"]
                     totalRow = dataStartRow + len(group["licenses"])
                     total_row_data = [f"TOTAL — {group['license_count']} LICENCES", None, None, None, totals["total_cif"], totals["debited_cif"], totals["allotted_cif"], totals["planned_cif"], totals["balance_cif"]]
-                    for item in item_groups:
+                    for item_idx, item in enumerate(item_groups):
                         cell = totals["items"][item["key"]]
-                        total_row_data.extend([None, None, cell["total_qty"], cell["allotted_qty"], cell["allotted_cif"], cell["debited_qty"], cell["boe_used_cif"], cell.get("billed_qty"), cell.get("billed_cif"), cell["balance_qty"], None, cell["restriction_value"], cell["plan_qty"], cell["planned_cif"]])
+                        # Identity columns and RESTRICTION % carry no item total.
+                        total_row_data.extend(
+                            None if key in ("hsn_code", "description", "restriction_percent") else cell.get(key)
+                            for key, _label in item_fields[item_idx]
+                        )
                     totalFont = Font(bold=True, size=11)
                     totalFill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
                     for col_idx, value in enumerate(total_row_data, 1):
                         cell = sheet.cell(row=totalRow, column=col_idx, value=value)
                         cell.font = totalFont
-                        cell.fill = totalFill
+                        cell.fill = _pivot_item_fill(column_items[col_idx - numFixed - 1]) if col_idx > numFixed else totalFill
 
                     # Item summary section
                     sheet.cell(row=totalRow + 1, column=1, value="")  # blank row
@@ -1829,6 +1891,8 @@ class ItemPivotReportView(APIView):
                     sheet.cell(row=subRow, column=11, value=subtotal.get("planned_cif"))
                     sheet.cell(row=subRow, column=12, value=subtotal.get("balance_cif"))
 
+                _fit_sheet_columns(sheet)
+
                 # ``_Summary`` keeps this additive sheet distinct from the
                 # existing per-notification matrix sheets for consumers that
                 # discover those sheets by name.
@@ -1865,6 +1929,7 @@ class ItemPivotReportView(APIView):
                 summary_sheet.cell(row=grandRow, column=10, value=grand.get("available_cif"))
                 summary_sheet.cell(row=grandRow, column=11, value=grand.get("planned_cif"))
                 summary_sheet.cell(row=grandRow, column=12, value=grand.get("balance_cif"))
+                _fit_sheet_columns(summary_sheet)
                 workbook.save(temp_file.name)
                 def canonical_stream():
                     with open(temp_file.name, 'rb') as generated:

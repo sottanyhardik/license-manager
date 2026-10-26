@@ -164,15 +164,18 @@ def test_item_pivot_excel_is_a_valid_workbook_with_canonical_group_sheet(superus
     assert metadata == [
         "Notification Number: PIVN1", "GE Purchase", "1 Licences",
     ]
-    header = [cell.value for cell in sheet[2]]
-    assert header[:9] == [
+    fixed_header = [cell.value for cell in sheet[2]]
+    assert fixed_header[:9] == [
         "SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF",
         "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF",
     ]
-    assert len(header) == 21
-    assert header[9:] == [
-        "HSN CODE", "DESCRIPTION", "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY",
-        "DEBITED CIF", "BALANCE QTY", "RESTRICTION %", "RESTRICTION VAL", "PLAN QTY", "PLANNED CIF",
+    # Row 3 carries the item field labels. Fields that are null or 0 everywhere are hidden
+    # (this fixture has no allotted, debited, billed or restriction values).
+    field_header = [cell.value for cell in sheet[3]]
+    while field_header and field_header[-1] is None:
+        field_header.pop()
+    assert field_header[9:] == [
+        "HSN CODE", "DESCRIPTION", "TOTAL QTY", "BALANCE QTY", "PLAN QTY", "PLANNED CIF",
     ]
     assert group["license_count"] == 1
 
@@ -186,7 +189,8 @@ def test_item_pivot_excel_data_and_totals_match_the_canonical_json_matrix(superu
 
     workbook = load_workbook(BytesIO(_download_excel(superuser_client)), data_only=True)
     sheet = next(sheet for sheet in workbook.worksheets if sheet.title != "TOTAL_Summary")
-    data_row = [cell.value for cell in sheet[3]]
+    field_header = [cell.value for cell in sheet[3]]
+    data_row = [cell.value for cell in sheet[4]]
     total_row = next(
         [cell.value for cell in row]
         for row in sheet.iter_rows()
@@ -198,14 +202,24 @@ def test_item_pivot_excel_data_and_totals_match_the_canonical_json_matrix(superu
         assert _number(data_row[index]) == _number(license_row[field])
         assert _number(total_row[index]) == _number(group["totals"][field])
 
-    assert data_row[9] == item["hsn_code"]
-    assert data_row[10] == item["description"]
-    for index, field in ((11, "total_qty"), (12, "allotted_qty"), (13, "allotted_cif"), (14, "debited_qty"), (15, "boe_used_cif"), (16, "balance_qty"), (19, "plan_qty"), (20, "planned_cif")):
-        assert _number(data_row[index]) == _number(item[field])
-        assert _number(total_row[index]) == _number(item_total[field])
-    assert data_row[17] is None
-    assert data_row[18] is None
-    assert len(total_row) == len([cell.value for cell in sheet[2]])
+    assert data_row[field_header.index("HSN CODE", 9)] == item["hsn_code"]
+    assert data_row[field_header.index("DESCRIPTION", 9)] == item["description"]
+    item_fields = (
+        ("TOTAL QTY", "total_qty"), ("ALLOTTED QTY", "allotted_qty"), ("ALLOTTED CIF", "allotted_cif"),
+        ("DEBITED QTY", "debited_qty"), ("DEBITED CIF", "boe_used_cif"), ("BILLED QTY", "billed_qty"),
+        ("BILLED CIF", "billed_cif"), ("BALANCE QTY", "balance_qty"), ("RESTRICTION %", "restriction_percent"),
+        ("RESTRICTION VAL", "restriction_value"), ("PLAN QTY", "plan_qty"), ("PLANNED CIF", "planned_cif"),
+    )
+    for label, field in item_fields:
+        if label in field_header[9:]:
+            index = field_header.index(label, 9)
+            assert _number(data_row[index]) == _number(item[field] or 0), label
+            assert _number(total_row[index]) == _number(item_total[field] or 0), label
+        else:
+            # Hidden only because every licence cell and the item total for it are null or 0.
+            assert _number(item.get(field) or 0) == 0, label
+            assert _number(item_total.get(field) or 0) == 0, label
+    assert len(total_row) == len(field_header)
 
 
 @pytest.mark.django_db

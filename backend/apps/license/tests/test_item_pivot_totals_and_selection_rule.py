@@ -93,15 +93,15 @@ def test_excel_total_row_consumes_the_same_canonical_group_totals(superuser_clie
     workbook = load_workbook(BytesIO(_download_excel(superuser_client)), data_only=True)
     sheet = next(ws for ws in workbook.worksheets if ws.title != "TOTAL_Summary")
 
-    # Canonical exporter writes metadata at row 1, headers at row 2, and a
-    # TOTAL row after the group licences. Fixed columns precede each item's
-    # twelve fields; compare by index so repeated labels cannot select another
-    # canonical item column.
-    header = [cell.value for cell in sheet[2]]
+    # Canonical exporter writes metadata at row 1, category headers at row 2,
+    # item field labels at row 3, and a TOTAL row after the group licences.
+    # Item columns are located by label (searching after the fixed columns) so
+    # hidden empty fields cannot shift the comparison onto another column.
+    header = [cell.value for cell in sheet[3]]
     total_row = next([cell.value for cell in row] for row in sheet.iter_rows() if str(row[0].value).startswith("TOTAL —"))
     assert len(total_row) == len(header)
     for index, field in ((4, "total_cif"), (5, "debited_cif"), (6, "allotted_cif"), (7, "planned_cif"), (8, "balance_cif")):
         assert _number(total_row[index]) == _number(group["totals"][field])
     item_totals = next(iter(group["totals"]["items"].values()))
-    assert _number(total_row[19]) == _number(item_totals["plan_qty"])
-    assert _number(total_row[20]) == _number(item_totals["planned_cif"])
+    assert _number(total_row[header.index("PLAN QTY", 9)]) == _number(item_totals["plan_qty"])
+    assert _number(total_row[header.index("PLANNED CIF", 9)]) == _number(item_totals["planned_cif"])

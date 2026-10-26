@@ -7,7 +7,19 @@ import re
 
 from django.db.models import Q
 
+from apps.license.services.product_norm_guard import is_olive_oil_allowed
+
 logger = logging.getLogger(__name__)
+
+
+def _description_hsn_prefix_q(codes):
+    """Description match for HSN-style codes: a code must start a number.
+
+    '1510' matches '15101000' but not the '1510' inside '44151000' (wooden
+    packing material), which previously made packing lines link to Olive Oil
+    and RBD Palmolein Oil.
+    """
+    return Q(description__iregex=r"(^|[^0-9])(" + "|".join(codes) + r")")
 
 
 def get_item_filters():
@@ -29,8 +41,15 @@ def get_item_filters():
             "base_name": "TITANIUM DIOXIDE",
             "norms": ["A3627"],
             "filters": [
-                Q(description__icontains="Titanium Dioxide")
-                & Q(description__icontains="other than")
+                (
+                    (Q(description__icontains="Titanium Dioxide") & Q(description__icontains="other than"))
+                    # HSN 3206 (or "3206" in the description) + "OTHER THAN RUTILE": titanium dioxide
+                    # does not need to be named, and this is never RUTILE.
+                    | (
+                        (Q(hs_code__hs_code__startswith="3206") | Q(description__icontains="3206"))
+                        & Q(description__iregex=r"other\s+than\s+rutile")
+                    )
+                )
             ],
         },
         {
@@ -39,7 +58,7 @@ def get_item_filters():
             "filters": [
                 Q(hs_code__hs_code__startswith="28110000")
                 & Q(description__icontains="Silica")
-                & ~Q(description__icontains="Fumed Silica")
+                & (~Q(description__icontains="Fumed Silica") | Q(description__icontains="other than fumed silica"))
             ],
         },
         {
@@ -55,12 +74,26 @@ def get_item_filters():
             "norms": ["A3627"],
             "filters": [
                 (
-                    Q(hs_code__hs_code__startswith="3206")
-                    | Q(description__icontains="Glass Formers")
-                    | Q(description__icontains="Rutile")
-                    | Q(description__icontains="Formers")
+                    # Rutile HSN 32061190 / 32061110 is RUTILE on its own (the description is not needed).
+                    Q(hs_code__hs_code__startswith="32061190")
+                    | Q(hs_code__hs_code__startswith="32061110")
+                    # HSN 3206 + "RUTILE" in the description is RUTILE on its own.
+                    | ((Q(hs_code__hs_code__startswith="3206") | Q(description__icontains="3206")) & Q(description__icontains="Rutile"))
+                    | (
+                        (
+                            Q(hs_code__hs_code__startswith="3206")
+                            | Q(description__icontains="Glass Formers")
+                            | Q(description__icontains="Rutile")
+                            | Q(description__icontains="Formers")
+                        )
+                        & Q(description__icontains="borax")
+                    )
                 )
-                & Q(description__icontains="borax")
+                # "Titanium Dioxide other than Rutile Grade" and Soda Ash lines
+                # can mention rutile/formers and borax; they belong elsewhere.
+                # Only "other than rutile" excludes: "Silica (other than Fumed Silica)" is a glass former.
+                & ~Q(description__icontains="other than rutile")
+                & ~Q(description__icontains="Soda Ash")
             ],
         },
         {
@@ -414,9 +447,7 @@ def get_item_filters():
             "base_name": "OLIVE OIL",
             "norms": ["E5", "E126"],
             "filters": [
-                Q(description__icontains="1500")
-                | Q(description__icontains="1509")
-                | Q(description__icontains="1510")
+                _description_hsn_prefix_q(["1500", "1509", "1510"])
                 | Q(hs_code__hs_code__startswith="1509")
             ],
         },
@@ -438,7 +469,7 @@ def get_item_filters():
             "norms": ["E132"],
             "filters": [
                 Q(hs_code__hs_code__startswith="1510")
-                | Q(description__icontains="1510")
+                | _description_hsn_prefix_q(["1510"])
             ],
             "is_active": True,
         },
@@ -447,7 +478,7 @@ def get_item_filters():
             "norms": ["E1", "E5", "E126", "E132"],
             "filters": [
                 Q(hs_code__hs_code__startswith="1513")
-                | Q(description__icontains="1513")
+                | _description_hsn_prefix_q(["1513"])
             ],
         },
         {
@@ -613,21 +644,14 @@ def get_item_filters():
         {
             "base_name": "OTHER CONFECTIONERY INGREDIENTS",
             "norms": ["E1"],
+            # Mirrors product_classification.E5_PRODUCT_CONDITIONS: (HSN 0802 OR desc 0802)
+            # AND desc contains CONFECTIONERY OR INGREDIENTS OR NUT.
             "filters": [
-                Q(
-                    Q(description__icontains="other")
-                    | Q(description__icontains="other confectionery ingredients")
-                    | Q(description__icontains="FRUIT FLAVOURS")
-                    | Q(description__icontains="nut & nut products")
-                    | Q(description__icontains="Fruits and Nuts Product")
-                )
-                & Q(
-                    Q(description__icontains="0908")
-                    | Q(description__icontains="0802")
-                    | Q(description__icontains="0806")
-                    | Q(hs_code__hs_code__startswith="0908")
-                    | Q(hs_code__hs_code__startswith="0802")
-                    | Q(hs_code__hs_code__startswith="0806")
+                (Q(hs_code__hs_code__startswith="0802") | Q(description__icontains="0802"))
+                & (
+                    Q(description__icontains="CONFECTIONERY")
+                    | Q(description__icontains="INGREDIENTS")
+                    | Q(description__icontains="NUT")
                 )
             ],
         },
@@ -743,7 +767,7 @@ def get_item_filters():
         },
         {
             "base_name": "ALUMINIUM FOIL",
-            "norms": ["COMMON", "E1", "E5", "E132", "E126"],
+            "norms": ["COMMON", "E1", "E5", "E132", "E126", "A3627"],
             "filters": [
                 Q(hs_code__hs_code__startswith="7607")
                 | Q(description__icontains="7607")
@@ -872,7 +896,7 @@ def classify_packaging_item(hs_code: str | None, description: str | None) -> tup
     is case-insensitive and punctuation-agnostic.
 
     Priority:
-      1. HSN starts with 3902                                     → PP
+      1. HSN starts with 3902 or 4415                             → PP
       2. HSN starts with 3901, or description contains 'HDPE' /
          'HIGH DENSITY POLYETHYLENE'                                → HDPE
       3. description contains 'LLDPE' / 'LINEAR LOW DENSITY
@@ -897,7 +921,8 @@ def classify_packaging_item(hs_code: str | None, description: str | None) -> tup
     if hs.startswith('7607') or '7607' in desc:
         return None
 
-    if hs.startswith('3902'):
+    # HSN 4415 is packing material (wooden sheets / pallets), classed as PP.
+    if hs.startswith('3902') or hs.startswith('4415'):
         return 'PP', 'RULE_PP'
 
     if hs.startswith('3901') or 'HDPE' in desc or 'HIGH DENSITY POLYETHYLENE' in desc:
@@ -1019,7 +1044,10 @@ def bulk_auto_link_license_items(license_instance):
             remaining_unlinked_ids = [iid for iid in unlinked_ids if iid not in item_to_basenames]
 
     for item_config in filter_configs:
-        applicable_norms = [n for n in norm_classes if n in item_config["norms"]]
+        applicable_norms = [
+            n for n in norm_classes
+            if n in item_config["norms"] and is_olive_oil_allowed(n, item_config["base_name"])
+        ]
         if not applicable_norms:
             continue
         combined_q = reduce(or_, item_config["filters"])
@@ -1114,7 +1142,10 @@ def match_import_item_to_items(import_item, license_norm_classes):
 
     for item_config in filters:
         # Check if this item config applies to any of the license norms.
-        applicable_norms = [norm for norm in license_norm_classes if norm in item_config['norms']]
+        applicable_norms = [
+            norm for norm in license_norm_classes
+            if norm in item_config['norms'] and is_olive_oil_allowed(norm, item_config['base_name'])
+        ]
         if not applicable_norms:
             continue
 

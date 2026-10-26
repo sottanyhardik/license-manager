@@ -18,3 +18,39 @@ export function buildItemPivotReportPath({ format, normClass, selectedCompanies 
     if (expiryFrom) params.set("expiry_date_from", expiryFrom); if (expiryTo) params.set("expiry_date_to", expiryTo); if (statuses.length) params.set("purchase_status", statuses.join(","));
     return `reports/item-pivot/?${params.toString()}`;
 }
+
+// Heading of the all-notification total section. Every norm uses this same text.
+export const TOTAL_SUMMARY_TITLE = "TOTAL SUMMARY — ALL NOTIFICATIONS";
+
+export const ITEM_FIELD_KEYS = ['hsn_code','description','total_qty','allotted_qty','allotted_cif','debited_qty','boe_used_cif','billed_qty','billed_cif','balance_qty','restriction_percent','restriction_value','plan_qty','planned_cif'];
+export const ITEM_FIELD_LABELS = ['HSN CODE','DESCRIPTION','TOTAL QTY','ALLOTTED QTY','ALLOTTED CIF','DEBITED QTY','DEBITED CIF','BILLED QTY','BILLED CIF','BALANCE QTY','RESTRICTION %','RESTRICTION VAL','PLAN QTY','PLANNED CIF'];
+
+// RUTILE blocks carry a UNIT PRICE column right after BALANCE QTY: total balance CIF / total balance QTY.
+export function itemFieldKeys(item: any): string[] {
+    if (item?.product_category !== 'RUTILE') return ITEM_FIELD_KEYS;
+    return [...ITEM_FIELD_KEYS.slice(0, 10), 'unit_price', ...ITEM_FIELD_KEYS.slice(10)];
+}
+
+export function itemFieldLabels(item: any): string[] {
+    if (item?.product_category !== 'RUTILE') return ITEM_FIELD_LABELS;
+    return [...ITEM_FIELD_LABELS.slice(0, 10), 'UNIT PRICE', ...ITEM_FIELD_LABELS.slice(10)];
+}
+
+// A field column is hidden for an item block when every licence cell and the item total for it are null or 0.
+// HSN CODE and DESCRIPTION are identity columns and always show.
+export const ALWAYS_SHOWN_ITEM_FIELDS = ['hsn_code', 'description'];
+
+export function hasPivotValue(value: unknown): boolean {
+    return value != null && value !== '' && Number(value) !== 0;
+}
+
+export function visibleItemFields(item: any, group: any): { key: string; label: string }[] {
+    const keys = itemFieldKeys(item);
+    const labels = itemFieldLabels(item);
+    const total = group.totals?.items?.[item.key];
+    return keys
+        .map((key, index) => ({ key, label: labels[index] }))
+        .filter(({ key }) => ALWAYS_SHOWN_ITEM_FIELDS.includes(key)
+            || hasPivotValue(total?.[key])
+            || group.licenses.some((license: any) => hasPivotValue(license.items?.[item.key]?.[key])));
+}

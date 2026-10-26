@@ -107,6 +107,93 @@ def _fit_sheet_columns(sheet, minimum=12, maximum=40):
         sheet.column_dimensions[get_column_letter(column)].width = min(max(length + 2, minimum), maximum)
 
 
+TOTAL_SUMMARY_TITLE = "TOTAL SUMMARY — ALL NOTIFICATIONS"
+# Metric columns of the Item Summary table, in order (matches the on-screen table).
+ITEM_SUMMARY_EXCEL_METRICS = (
+    ("TOTAL QTY", "total_qty"), ("ALLOTTED QTY", "allotted_qty"), ("ALLOTTED CIF", "allotted_cif"),
+    ("DEBITED QTY", "boe_used_qty"), ("DEBITED CIF", "boe_used_cif"), ("BALANCE QTY", "balance_qty"),
+    ("UNIT PRICE", "unit_price"), ("PLAN QTY", "planned_qty"), ("PLANNED CIF", "planned_cif"),
+)
+
+
+def _item_summary_name(category, item_name):
+    """The product category name (RUTILE, ALUMINIUM OXIDE, ...); the item name only when there is none."""
+    return category if category and category != "UNCLASSIFIED" else (item_name or "")
+
+
+def _item_summary_rows_from_matrix(group):
+    """One Item Summary row per matrix item, read from the same totals the matrix shows above it."""
+    totals = (group.get("totals") or {}).get("items", {})
+    rows = []
+    for item in group.get("item_groups", []):
+        total = totals.get(item["key"], {})
+        cells = [lic["items"][item["key"]] for lic in group.get("licenses", []) if item["key"] in lic.get("items", {})]
+        sion_suffix = f" - {item['sion']}"
+        raw_name = item["name"][:-len(sion_suffix)] if item["name"].endswith(sion_suffix) else item["name"]
+        rows.append({
+            "item_name": _item_summary_name(item.get("product_category"), raw_name),
+            "sion": item["sion"],
+            "hsn_codes": list(dict.fromkeys(cell["hsn_code"] for cell in cells if cell.get("hsn_code"))),
+            "license_count": len(cells),
+            "total_qty": total.get("total_qty"), "allotted_qty": total.get("allotted_qty"), "allotted_cif": total.get("allotted_cif"),
+            "boe_used_qty": total.get("debited_qty"), "boe_used_cif": total.get("boe_used_cif"), "balance_qty": total.get("balance_qty"),
+            "unit_price": total.get("unit_price"), "planned_qty": total.get("plan_qty"), "planned_cif": total.get("planned_cif"),
+        })
+    return rows
+
+
+def _item_summary_rows_from_projection(rows):
+    """Backend projection rows (all-notification total), named as on screen, with the SION-rule priority prefix."""
+    named = []
+    for row in rows:
+        name = _item_summary_name(row.get("product_category"), row.get("item_name"))
+        priority = row.get("planning_priority")
+        named.append({**row, "item_name": f"{priority} · {name}" if priority is not None else name})
+    return named
+
+
+def _item_summary_subtotal(rows):
+    """SUBTOTAL of the Item Summary rows. Unit price is weighted by balance QTY over the rows that have one."""
+    subtotal = {
+        field: sum(float(row.get(field) or 0) for row in rows)
+        for field in ("total_qty", "allotted_qty", "allotted_cif", "boe_used_qty", "boe_used_cif", "balance_qty", "planned_qty", "planned_cif")
+    }
+    priced = [row for row in rows if row.get("unit_price") is not None and float(row.get("balance_qty") or 0) > 0]
+    weight = sum(float(row["balance_qty"]) for row in priced)
+    subtotal["unit_price"] = sum(float(row["unit_price"]) * float(row["balance_qty"]) for row in priced) / weight if weight > 0 else None
+    return subtotal
+
+
+def _write_item_summary_table(sheet, start_row, title, rows, subtotal, header_font, header_fill):
+    """Write the Item Summary table: a header row, one row per item, then SUBTOTAL. Returns the next free row."""
+    from openpyxl.styles import Alignment
+
+    headers =[title, "SION", "HSN CODES", "LICENCES"] + [label for label, _field in ITEM_SUMMARY_EXCEL_METRICS]
+    for col_idx, name in enumerate(headers, 1):
+        cell = sheet.cell(row=start_row, column=col_idx, value=name)
+        cell.font = header_font
+        cell.fill = header_fill
+    sheet.cell(row=start_row, column=1).alignment = Alignment(wrap_text=True, vertical='center')
+
+    def metric(value):
+        # Zero and missing values stay blank, as on screen.
+        return float(value) if value not in (None, '') and float(value) != 0 else None
+
+    row_number = start_row + 1
+    for row in rows:
+        sheet.cell(row=row_number, column=1, value=row["item_name"])
+        sheet.cell(row=row_number, column=2, value=row["sion"])
+        sheet.cell(row=row_number, column=3, value=", ".join(row["hsn_codes"]) or None)
+        sheet.cell(row=row_number, column=4, value=row["license_count"])
+        for col_idx, (_label, field) in enumerate(ITEM_SUMMARY_EXCEL_METRICS, 5):
+            sheet.cell(row=row_number, column=col_idx, value=metric(row.get(field)))
+        row_number += 1
+    sheet.cell(row=row_number, column=1, value="SUBTOTAL").font = header_font
+    for col_idx, (_label, field) in enumerate(ITEM_SUMMARY_EXCEL_METRICS, 5):
+        sheet.cell(row=row_number, column=col_idx, value=metric(subtotal.get(field)))
+    return row_number + 1
+
+
 def _safe_int(value, default):
     try:
         return int(value)
@@ -1858,38 +1945,10 @@ class ItemPivotReportView(APIView):
                     # Item summary section
                     sheet.cell(row=totalRow + 1, column=1, value="")  # blank row
                     summaryStartRow = totalRow + 2
-                    summaryHeaders = ["ITEM SUMMARY", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"]
-                    for col_idx, name in enumerate(summaryHeaders, 1):
-                        cell = sheet.cell(row=summaryStartRow, column=col_idx, value=name)
-                        cell.font = headerFont
-                        cell.fill = headerFill
-                    for item_idx, item in enumerate(group.get("item_summary", [])):
-                        r = summaryStartRow + 1 + item_idx
-                        sheet.cell(row=r, column=1, value=item["item_name"])
-                        sheet.cell(row=r, column=2, value=item["sion"])
-                        sheet.cell(row=r, column=3, value=item["license_count"])
-                        sheet.cell(row=r, column=4, value=item["total_qty"])
-                        sheet.cell(row=r, column=5, value=item["boe_used_qty"])
-                        sheet.cell(row=r, column=6, value=item["allotted_qty"])
-                        sheet.cell(row=r, column=7, value=item["available_qty"])
-                        sheet.cell(row=r, column=8, value=item["planned_qty"])
-                        sheet.cell(row=r, column=9, value=item["balance_qty"])
-                        sheet.cell(row=r, column=10, value=item["available_cif"])
-                        sheet.cell(row=r, column=11, value=item["planned_cif"])
-                        sheet.cell(row=r, column=12, value=item["balance_cif"])
-                    subtotal = group.get("item_summary_totals", {})
-                    subRow = summaryStartRow + 1 + len(group.get("item_summary", []))
-                    sheet.cell(row=subRow, column=1, value="NOTIFICATION SUBTOTAL")
-                    sheet.cell(row=subRow, column=3, value=subtotal.get("license_count"))
-                    sheet.cell(row=subRow, column=4, value=subtotal.get("total_qty"))
-                    sheet.cell(row=subRow, column=5, value=subtotal.get("boe_used_qty"))
-                    sheet.cell(row=subRow, column=6, value=subtotal.get("allotted_qty"))
-                    sheet.cell(row=subRow, column=7, value=subtotal.get("available_qty"))
-                    sheet.cell(row=subRow, column=8, value=subtotal.get("planned_qty"))
-                    sheet.cell(row=subRow, column=9, value=subtotal.get("balance_qty"))
-                    sheet.cell(row=subRow, column=10, value=subtotal.get("available_cif"))
-                    sheet.cell(row=subRow, column=11, value=subtotal.get("planned_cif"))
-                    sheet.cell(row=subRow, column=12, value=subtotal.get("balance_cif"))
+                    # Same heading and table as the on-screen "Item Summary — Notification … · …" card.
+                    summaryTitle = f"Item Summary — Notification {group['notification_number']} · {group['purchase_status']['name']}"
+                    notification_rows = _item_summary_rows_from_matrix(group)
+                    _write_item_summary_table(sheet, summaryStartRow, summaryTitle, notification_rows, _item_summary_subtotal(notification_rows), headerFont, headerFill)
 
                 _fit_sheet_columns(sheet)
 
@@ -1897,38 +1956,8 @@ class ItemPivotReportView(APIView):
                 # existing per-notification matrix sheets for consumers that
                 # discover those sheets by name.
                 summary_sheet = workbook.create_sheet(title="TOTAL_Summary")
-                summaryHeaders = ["TOTAL SUMMARY — ALL NOTIFICATIONS", "SION", "LICENCES", "TOTAL QTY", "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY", "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF"]
-                for col_idx, name in enumerate(summaryHeaders, 1):
-                    cell = summary_sheet.cell(row=1, column=col_idx, value=name)
-                    cell.font = headerFont
-                    cell.fill = headerFill
-                for item_idx, item in enumerate(report_data.get("grand_total", {}).get("item_summary", [])):
-                    r = 2 + item_idx
-                    summary_sheet.cell(row=r, column=1, value=item["item_name"])
-                    summary_sheet.cell(row=r, column=2, value=item["sion"])
-                    summary_sheet.cell(row=r, column=3, value=item["license_count"])
-                    summary_sheet.cell(row=r, column=4, value=item["total_qty"])
-                    summary_sheet.cell(row=r, column=5, value=item["boe_used_qty"])
-                    summary_sheet.cell(row=r, column=6, value=item["allotted_qty"])
-                    summary_sheet.cell(row=r, column=7, value=item["available_qty"])
-                    summary_sheet.cell(row=r, column=8, value=item["planned_qty"])
-                    summary_sheet.cell(row=r, column=9, value=item["balance_qty"])
-                    summary_sheet.cell(row=r, column=10, value=item["available_cif"])
-                    summary_sheet.cell(row=r, column=11, value=item["planned_cif"])
-                    summary_sheet.cell(row=r, column=12, value=item["balance_cif"])
-                grand = report_data.get("grand_total", {}).get("item_summary_totals", {})
-                grandRow = 2 + len(report_data.get("grand_total", {}).get("item_summary", []))
-                summary_sheet.cell(row=grandRow, column=1, value="GRAND TOTAL")
-                summary_sheet.cell(row=grandRow, column=3, value=grand.get("license_count"))
-                summary_sheet.cell(row=grandRow, column=4, value=grand.get("total_qty"))
-                summary_sheet.cell(row=grandRow, column=5, value=grand.get("boe_used_qty"))
-                summary_sheet.cell(row=grandRow, column=6, value=grand.get("allotted_qty"))
-                summary_sheet.cell(row=grandRow, column=7, value=grand.get("available_qty"))
-                summary_sheet.cell(row=grandRow, column=8, value=grand.get("planned_qty"))
-                summary_sheet.cell(row=grandRow, column=9, value=grand.get("balance_qty"))
-                summary_sheet.cell(row=grandRow, column=10, value=grand.get("available_cif"))
-                summary_sheet.cell(row=grandRow, column=11, value=grand.get("planned_cif"))
-                summary_sheet.cell(row=grandRow, column=12, value=grand.get("balance_cif"))
+                summary_rows = _item_summary_rows_from_projection(report_data.get("grand_total", {}).get("item_summary", []))
+                _write_item_summary_table(summary_sheet, 1, TOTAL_SUMMARY_TITLE, summary_rows, _item_summary_subtotal(summary_rows), headerFont, headerFill)
                 _fit_sheet_columns(summary_sheet)
                 workbook.save(temp_file.name)
                 def canonical_stream():

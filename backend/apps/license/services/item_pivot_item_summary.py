@@ -39,6 +39,11 @@ def _out(value, places):
     return str(_d(value).quantize(places, rounding=ROUND_HALF_UP))
 
 
+def _unit_price(balance_cif, balance_qty):
+    """Balance CIF / balance QTY to two decimals; None when no quantity is left."""
+    return _out(balance_cif / balance_qty, Decimal("0.01")) if balance_qty > ZERO_QTY else None
+
+
 def project_item_summary(licenses):
     """Aggregate canonical matrix cells by canonical item identity plus SION.
 
@@ -53,13 +58,18 @@ def project_item_summary(licenses):
             key = (canonical_id, sion)
             bucket = buckets.setdefault(key, {
                 "canonical_item_id": canonical_id, "item_name": cell.get("item_name") or item_key,
+                "product_category": cell.get("product_category"),
                 "sion": sion, "hsn_codes": set(), "license_ids": set(), "affected_license_ids": set(),
                 **{field: ZERO_QTY for field in QTY_FIELDS}, **{field: ZERO_CIF for field in CIF_FIELDS},
                 "exception_count": 0, "has_item_cif_cap": False,
-                "priority_candidates": [],
+                "priority_candidates": [], "unit_balance_cif": ZERO_CIF, "unit_balance_qty": ZERO_QTY,
             })
             bucket["license_ids"].add(license_row.get("license_id"))
             bucket["has_item_cif_cap"] = bucket["has_item_cif_cap"] or bool(cell.get("has_item_cif_cap"))
+            # RUTILE is the only block with a unit price (matrix balance CIF / balance QTY).
+            if cell.get("product_category") == "RUTILE":
+                bucket["unit_balance_cif"] += max(_d(cell.get("balance_cif")), ZERO_CIF)
+                bucket["unit_balance_qty"] += max(_d(cell.get("balance_qty")), ZERO_QTY)
             priority = cell.get("planning_priority")
             if priority is not None:
                 bucket["priority_candidates"].append((
@@ -110,11 +120,13 @@ def project_item_summary(licenses):
         )
         row = {
             "canonical_item_id": bucket["canonical_item_id"], "item_name": bucket["item_name"],
+            "product_category": bucket["product_category"],
             "sion": bucket["sion"], "hsn_codes": sorted(bucket["hsn_codes"]),
             "license_count": len(bucket["license_ids"] - {None}),
             **{field: _out(bucket[field], Decimal("0.000")) for field in QTY_FIELDS},
             **{field: _out(bucket[field], Decimal("0.00")) for field in CIF_FIELDS},
             "average_unit_price": _out(planned_cif / planned_qty if planned_qty > ZERO_QTY else ZERO_CIF, Decimal("0.00")),
+            "unit_price": _unit_price(bucket["unit_balance_cif"], bucket["unit_balance_qty"]),
             "exception_count": bucket["exception_count"],
             "affected_license_ids": sorted(value for value in bucket["affected_license_ids"] if value is not None),
             "planning_priority": priority[0] if priority else None,
@@ -148,7 +160,8 @@ def project_item_summary(licenses):
     totals = {field: _out(value, Decimal("0.000") if field in QTY_FIELDS else Decimal("0.00")) for field, value in totals.items()}
     total_qty, total_cif = _d(totals["planned_qty"]), _d(totals["planned_cif"])
     totals.update({"license_count": len({lic.get("license_id") for lic in licenses}), "item_count": len(rows),
-                   "weighted_average_unit_price": _out(total_cif / total_qty if total_qty > ZERO_QTY else ZERO_CIF, Decimal("0.00"))})
+                   "weighted_average_unit_price": _out(total_cif / total_qty if total_qty > ZERO_QTY else ZERO_CIF, Decimal("0.00")),
+                   "unit_price": _unit_price(sum((bucket["unit_balance_cif"] for bucket in buckets.values()), ZERO_CIF), sum((bucket["unit_balance_qty"] for bucket in buckets.values()), ZERO_QTY))})
     if not any(bucket["has_item_cif_cap"] for bucket in buckets.values()):
         totals["available_cif"] = None
         totals["balance_cif"] = None

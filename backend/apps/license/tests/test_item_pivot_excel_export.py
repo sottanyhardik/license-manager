@@ -143,6 +143,17 @@ def _assert_excel_value_matches_json(actual, expected):
         assert _number(actual) == _number(expected)
 
 
+ITEM_SUMMARY_METRIC_HEADERS = [
+    "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY", "DEBITED CIF",
+    "BALANCE QTY", "UNIT PRICE", "PLAN QTY", "PLANNED CIF",
+]
+
+
+def _blank_if_zero(value):
+    # The Excel Item Summary leaves zero values blank, as the on-screen table does.
+    return None if _number(value) == 0 else value
+
+
 def _fixture_group(report):
     return next(group for group in report["groups"] if group["notification_number"] == "PIVN1")
 
@@ -223,23 +234,40 @@ def test_item_pivot_excel_data_and_totals_match_the_canonical_json_matrix(superu
 
 
 @pytest.mark.django_db
+def test_item_pivot_excel_item_summary_header_names_its_notification(superuser_client, pivot_license):
+    workbook = load_workbook(BytesIO(_download_excel(superuser_client)), data_only=True)
+    sheet = next(sheet for sheet in workbook.worksheets if sheet.title != "TOTAL_Summary")
+
+    summary_header = next(
+        [cell.value for cell in row]
+        for row in sheet.iter_rows()
+        if str(row[0].value).startswith("Item Summary")
+    )
+    while summary_header and summary_header[-1] is None:
+        summary_header.pop()
+    assert summary_header[0] == "Item Summary — Notification PIVN1 · GE Purchase"
+    assert summary_header[1:] == ["SION", "HSN CODES", "LICENCES", *ITEM_SUMMARY_METRIC_HEADERS]
+
+
+@pytest.mark.django_db
 def test_item_pivot_excel_total_summary_matches_grand_total_projection(superuser_client, pivot_license):
     report = _report_json(superuser_client)
     workbook = load_workbook(BytesIO(_download_excel(superuser_client)), data_only=True)
     sheet = workbook["TOTAL_Summary"]
 
-    assert [cell.value for cell in sheet[1]] == [
-        "TOTAL SUMMARY — ALL NOTIFICATIONS", "SION", "LICENCES", "TOTAL QTY",
-        "BOE QTY", "ALLOTTED QTY", "AVAILABLE QTY", "PLANNED QTY", "BALANCE QTY",
-        "AVAILABLE CIF", "PLANNED CIF", "BALANCE CIF",
-    ]
-    grand_total = report["grand_total"]
-    grand_total_row = [cell.value for cell in sheet[sheet.max_row]]
-    assert grand_total_row[0] == "GRAND TOTAL"
-    assert grand_total_row[2] == grand_total["license_count"]
-    totals = grand_total["item_summary_totals"]
-    for index, field in ((3, "total_qty"), (4, "boe_used_qty"), (5, "allotted_qty"), (6, "available_qty"), (7, "planned_qty"), (8, "balance_qty"), (9, "available_cif"), (10, "planned_cif"), (11, "balance_cif")):
-        _assert_excel_value_matches_json(grand_total_row[index], totals[field])
+    header = [cell.value for cell in sheet[1]]
+    while header and header[-1] is None:
+        header.pop()
+    assert header == ["TOTAL SUMMARY — ALL NOTIFICATIONS", "SION", "HSN CODES", "LICENCES", *ITEM_SUMMARY_METRIC_HEADERS]
+
+    # One row per grand-total item, then the SUBTOTAL row.
+    body = [[cell.value for cell in row] for row in sheet.iter_rows(min_row=2) if row[0].value not in (None, "")]
+    assert len(body) == len(report["grand_total"]["item_summary"]) + 1
+    subtotal_row = body[-1]
+    assert subtotal_row[0] == "SUBTOTAL"
+    totals = report["grand_total"]["item_summary_totals"]
+    for index, field in ((4, "total_qty"), (5, "allotted_qty"), (6, "allotted_cif"), (7, "boe_used_qty"), (8, "boe_used_cif"), (9, "balance_qty"), (11, "planned_qty"), (12, "planned_cif")):
+        _assert_excel_value_matches_json(subtotal_row[index], _blank_if_zero(totals[field]))
 
 
 @pytest.mark.django_db

@@ -95,3 +95,15 @@ def test_item_summary_uses_rule_priority_and_split_member_order_not_name():
     assert [row["item_name"] for row in result["item_summary"]] == ["ALPHA", "BETA", "ZETA", "UNMATCHED"]
     assert [row["planning_priority"] for row in result["item_summary"]] == [1, 2, 2, None]
     assert result["item_summary"][1]["planning_rule_name"] == "Milk split"
+
+
+def test_unit_price_is_balance_cif_over_balance_qty_for_rutile_only():
+    rutile = {"canonical_item_id": 1, "item_name": "RUTILE", "sion": "A3627", "product_category": "RUTILE", "adjusted_total_qty": 100, "available_qty": 100, "plan_qty": 0, "balance_cif": 160, "balance_qty": 100, "planned_cif": 0}
+    olive = {"canonical_item_id": 2, "item_name": "OLIVE OIL", "sion": "E1", "product_category": "EDIBLE OIL", "adjusted_total_qty": 50, "available_qty": 50, "plan_qty": 0, "balance_cif": 500, "balance_qty": 50, "planned_cif": 0}
+    result = project_item_summary([{"license_id": 1, "items": {"1:A3627": rutile, "2:E1": olive}}])
+
+    rows = {row["item_name"]: row for row in result["item_summary"]}
+    assert rows["RUTILE"]["product_category"] == "RUTILE"
+    assert rows["RUTILE"]["unit_price"] == "1.60"
+    assert rows["OLIVE OIL"]["unit_price"] is None
+    assert result["item_summary_totals"]["unit_price"] == "1.60"

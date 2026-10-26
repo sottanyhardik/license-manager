@@ -98,4 +98,43 @@ describe("Dashboard operational redesign", () => {
         await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
         expect(get).toHaveBeenLastCalledWith("dashboard/");
     });
+
+    it("lists C969 saved-item mismatches for review without changing anything", async () => {
+        const get = vi.mocked(api.get);
+        get.mockResolvedValueOnce({
+            data: {
+                ...dashboardData,
+                c969_link_review: {
+                    count: 1,
+                    rows: [
+                        {
+                            import_item_id: 34697,
+                            licence_number: "3011009039",
+                            description: "Automotive Battery-8507",
+                            saved_items: ["SEAT ASSEMBLY"],
+                            expected_item: "AUTOMOTIVE BATTERY",
+                        },
+                    ],
+                },
+            },
+        } as never);
+        renderDashboard();
+
+        expect(await screen.findByText("C969 saved items to review (1)")).toBeInTheDocument();
+        expect(screen.getByText(/Nothing has been changed/)).toBeInTheDocument();
+        expect(screen.getByText("3011009039")).toBeInTheDocument();
+        expect(screen.getByText("SEAT ASSEMBLY")).toBeInTheDocument();
+        expect(screen.getByText("AUTOMOTIVE BATTERY")).toBeInTheDocument();
+        expect(get).toHaveBeenCalledTimes(1);
+    });
+
+    it("hides the C969 review card when there are no mismatches", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({
+            data: { ...dashboardData, c969_link_review: { count: 0, rows: [] } },
+        } as never);
+        renderDashboard();
+
+        await screen.findByText("Urgent alerts");
+        expect(screen.queryByText(/C969 saved items to review/)).not.toBeInTheDocument();
+    });
 });

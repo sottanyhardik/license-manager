@@ -15,5 +15,6 @@ export const dashboardApiContract = {
         boe_stats: ["total", "pending_invoices", "recent"],
         expiring_licenses: ["license_number", "license_expiry_date", "balance_cif", "days_to_expiry"],
         boe_monthly_trend: ["month", "label", "count", "value"],
+        c969_link_review: ["count", "rows"],
     },
 } as const;

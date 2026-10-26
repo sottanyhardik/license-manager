@@ -57,6 +57,17 @@ type ExpiringLicence = {
     balance_cif?: string | number | null;
     days_to_expiry?: number | null;
 };
+type C969LinkReviewRow = {
+    import_item_id: number;
+    licence_number: string;
+    description: string;
+    saved_items: string[];
+    expected_item: string;
+};
+type C969LinkReview = {
+    count: number;
+    rows: C969LinkReviewRow[];
+};
 type DashboardStats = {
     licenses: LicenceStats;
     allotments: { total: number; recent: RecentAllotment[] };
@@ -204,6 +215,10 @@ export default function Dashboard() {
     const [expiringLicenses, setExpiringLicenses] = useState<ExpiringLicence[]>(
         []
     );
+    const [c969Review, setC969Review] = useState<C969LinkReview>({
+        count: 0,
+        rows: [],
+    });
 
     // Data fetching
     const fetchDashboardData = useCallback(async (isRefresh = false) => {
@@ -219,6 +234,9 @@ export default function Dashboard() {
                 boe: data?.boe_stats || EMPTY_STATS.boe,
             });
             setExpiringLicenses(data?.expiring_licenses || []);
+            setC969Review(
+                data?.c969_link_review || { count: 0, rows: [] }
+            );
             setLastUpdated(new Date());
         } catch {
             setError(true);
@@ -499,6 +517,65 @@ export default function Dashboard() {
                     </div>
                 )}
             </section>
+
+            {/* ════════════════════════════════════════════════════════
+                PHASE 2: C969 LINK REVIEW (Read-only, nothing is changed)
+                ════════════════════════════════════════════════════════ */}
+            {canSeeLicenses && c969Review.count > 0 && (
+                <Card className="overflow-hidden border-amber-300 dark:border-amber-800">
+                    <CardHeader className="border-b border-amber-200 bg-amber-50 pb-3 dark:border-amber-900 dark:bg-amber-950/40">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    C969 saved items to review ({c969Review.count})
+                                </h3>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">
+                                    Nothing has been changed — please review. Each line below has a saved item that differs from the item its product name selects.
+                                </p>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="max-h-[400px] overflow-auto p-0">
+                        <table className="w-full text-sm">
+                            <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
+                                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
+                                    <th className="px-4 py-2.5">License</th>
+                                    <th className="px-4 py-2.5">Import line</th>
+                                    <th className="px-4 py-2.5">Saved item</th>
+                                    <th className="px-4 py-2.5">Expected item</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {c969Review.rows.map((row) => (
+                                    <tr
+                                        key={row.import_item_id}
+                                        className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900/50"
+                                    >
+                                        <td className="px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400">
+                                            {row.licence_number}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100">
+                                            {row.description || "—"}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100">
+                                            {row.saved_items.join(", ") || "—"}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs font-medium text-slate-900 dark:text-slate-100">
+                                            {row.expected_item}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {c969Review.count > c969Review.rows.length && (
+                            <p className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
+                                Showing {c969Review.rows.length} of {c969Review.count}.
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* ════════════════════════════════════════════════════════
                 PHASE 2: EXPIRING SOON TABLE (Full width, scannable)

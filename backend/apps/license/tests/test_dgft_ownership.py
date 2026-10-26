@@ -28,10 +28,15 @@ def _fetch(**overrides):
     return fetch_scrip_ownership(**payload)
 
 
+def _backoff_delays(sleep):
+    # The service also sleeps a sub-2s jitter before each retry; only the backoff delays are asserted.
+    return [c.args[0] for c in sleep.call_args_list if c.args[0] >= 5]
+
+
 def test_fetch_scrip_ownership_posts_sanitized_payload(monkeypatch):
     response = _successful_response()
     post = Mock(return_value=response)
-    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.post", post)
+    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.Session.post", post)
 
     result = _fetch(
         scrip_number=" SCRIP-1 ",
@@ -56,7 +61,7 @@ def test_fetch_scrip_ownership_posts_sanitized_payload(monkeypatch):
 def test_fetch_scrip_ownership_uses_proxy_environment(monkeypatch):
     response = _successful_response()
     post = Mock(return_value=response)
-    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.post", post)
+    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.Session.post", post)
     monkeypatch.setenv("DGFT_PROXY", " socks5://127.0.0.1:1080 ")
 
     result = _fetch(proxy=None)
@@ -70,7 +75,7 @@ def test_fetch_scrip_ownership_uses_proxy_environment(monkeypatch):
 
 def test_fetch_scrip_ownership_missing_required_value_skips_network(monkeypatch):
     post = Mock()
-    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.post", post)
+    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.Session.post", post)
 
     result = _fetch(session_id="   ")
 
@@ -83,24 +88,24 @@ def test_fetch_scrip_ownership_retries_rate_limit(monkeypatch):
     success = _successful_response(status_code=200)
     post = Mock(side_effect=[rate_limited, success])
     sleep = Mock()
-    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.post", post)
+    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.Session.post", post)
     monkeypatch.setattr("apps.license.services.dgft_ownership.time.sleep", sleep)
 
     result = _fetch()
 
     assert result is success
     assert post.call_count == 2
-    sleep.assert_called_once_with(5)
+    assert _backoff_delays(sleep) == [5]
 
 
 def test_fetch_scrip_ownership_returns_none_after_request_errors(monkeypatch):
     post = Mock(side_effect=requests.Timeout("timed out"))
     sleep = Mock()
-    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.post", post)
+    monkeypatch.setattr("apps.license.services.dgft_ownership.requests.Session.post", post)
     monkeypatch.setattr("apps.license.services.dgft_ownership.time.sleep", sleep)
 
     result = _fetch()
 
     assert result is None
     assert post.call_count == 4
-    assert sleep.call_count == 3
+    assert _backoff_delays(sleep) == [5, 10, 20]

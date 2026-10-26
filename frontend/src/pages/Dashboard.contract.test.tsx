@@ -24,6 +24,7 @@ const responseFixture = {
     boe_stats: { total: 5, pending_invoices: 2, recent: [] },
     expiring_licenses: [],
     boe_monthly_trend: [],
+    c969_link_review: { count: 0, rows: [] },
 };
 
 describe("Dashboard API contract", () => {
@@ -47,5 +48,6 @@ describe("Dashboard API contract", () => {
         expect(Object.keys(responseFixture.license_stats)).toEqual(dashboardApiContract.response.license_stats);
         expect(Object.keys(responseFixture.allotment_stats)).toEqual(dashboardApiContract.response.allotment_stats);
         expect(Object.keys(responseFixture.boe_stats)).toEqual(dashboardApiContract.response.boe_stats);
+        expect(Object.keys(responseFixture.c969_link_review)).toEqual(dashboardApiContract.response.c969_link_review);
     });
 });

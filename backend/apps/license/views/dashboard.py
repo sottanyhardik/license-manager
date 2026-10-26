@@ -17,6 +17,7 @@ from apps.allotment.models import AllotmentModel
 from apps.bill_of_entry.models import BillOfEntryModel
 from apps.core.cache_utils import CACHE_TIMEOUT_MEDIUM
 from apps.core.utils.exceptions import api_error
+from apps.license.services.c969_link_review import c969_link_mismatches
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel
 from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
@@ -68,6 +69,8 @@ class DashboardDataView(APIView):
                 expiring_context = self._get_expiring_license_context()
                 data['license_stats'] = self._get_license_stats(expiring_context)
                 data['expiring_licenses'] = self._get_expiring_licenses(expiring_context)
+                # Read-only: C969 import lines whose saved item differs from their product name.
+                data['c969_link_review'] = c969_link_mismatches()
 
             if has(['ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER', 'REPORT_VIEWER']):
                 data['allotment_stats'] = self._get_allotment_stats()

@@ -5,6 +5,7 @@ to shrink it. Inherited first in the MRO, so method resolution — and therefore
 behaviour — is unchanged. Imports are copied from license.py (not imported from
 it) to avoid a circular import.
 """
+import logging
 from collections.abc import Iterable
 
 from apps.core.models import ProductDescriptionModel
@@ -67,6 +68,22 @@ def _apply_sub_table_writes(license_instance, sub_writes):
     for rel, values in sub_writes.items():
         if values:
             model_map[rel].objects.filter(license_id=license_instance.pk).update(**values)
+
+
+def _apply_form_import_items(import_item, items):
+    """Apply the items the licence form sent for one import line.
+
+    The form sends every line's items on each save. A non-empty list that differs
+    from the stored links is the user's explicit correction, so it is applied and
+    logged. An empty list keeps the stored links, so a save never clears a line.
+    """
+    if not items:
+        return
+    wanted = {getattr(item, 'pk', item) for item in items}
+    stored = set(import_item.items.values_list('id', flat=True))
+    if wanted != stored:
+        logging.getLogger(__name__).info("Import item %s: items changed from %s to %s by licence save", import_item.id, sorted(stored), sorted(wanted))
+        import_item.items.set(items)
 
 
 class LicenseWriteMixin:
@@ -523,11 +540,9 @@ class LicenseWriteMixin:
                                     setattr(obj, key, value)
                         obj.save()
 
-                        # Update M2M relationship - only if items is empty
+                        # Apply the items the form sent for this line
                         if isinstance(items_list, list):
-                            # Only update items if no items are currently linked
-                            if not obj.items.exists():
-                                obj.items.set(items_list)
+                            _apply_form_import_items(obj, items_list)
 
                         # Trigger signal to ensure ItemNameModel items are linked
                         try:
@@ -573,11 +588,9 @@ class LicenseWriteMixin:
                                     setattr(obj, key, value)
                         obj.save()
 
-                        # Update M2M relationship - only if items is empty
+                        # Apply the items the form sent for this line
                         if isinstance(items_list, list):
-                            # Only update items if no items are currently linked
-                            if not obj.items.exists():
-                                obj.items.set(items_list)
+                            _apply_form_import_items(obj, items_list)
 
                         # Trigger signal to ensure ItemNameModel items are linked
                         try:
@@ -622,10 +635,9 @@ class LicenseWriteMixin:
                                         setattr(obj, key, value)
                             obj.save()
 
-                            # Update M2M relationship - only if items is empty
+                            # Apply the items the form sent for this line
                             if isinstance(items_list, list):
-                                if not obj.items.exists():
-                                    obj.items.set(items_list)
+                                _apply_form_import_items(obj, items_list)
 
                             processed_ids.add(obj.id)
                             processed_serials.add(obj.serial_number)

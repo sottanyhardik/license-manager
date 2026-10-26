@@ -22,6 +22,7 @@ from apps.license.views.parse_pdf import LicensePdfParseView
 from apps.license.views_actions import LicenseActionViewSet
 from apps.license.views_incentive import IncentiveLicenseViewSet
 from apps.license.views.replan_status import LicenseReplanStatusView
+from apps.license.views.import_item_suggestion import ImportItemSuggestionView
 
 router = routers.DefaultRouter()
 router.register(r"licenses", LicenseDetailsViewSet, basename="licenses")
@@ -39,6 +40,7 @@ router.register(r"planned-report", PlannedReportViewSet, basename="planned-repor
 router.register(r"incentive-licenses", IncentiveLicenseViewSet, basename="incentive-licenses")
 
 urlpatterns = [
+    path("import-item-suggestion/", ImportItemSuggestionView.as_view(), name="import-item-suggestion"),
     # Specific paths must come BEFORE router.urls to avoid conflicts
     # Dashboard unified endpoint
     path("dashboard/", DashboardDataView.as_view(), name="dashboard"),

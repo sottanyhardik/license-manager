@@ -27,6 +27,20 @@ import { openDocument } from "../../utils/documentDownload";
  * - errors: Array of error objects for nested items
  */
 
+// Ask the backend for the item a product description resolves to (the same rules the save uses).
+export async function suggestImportItem(description: string, formData: Record<string, any>) {
+    const normIds = (formData?.export_license || [])
+        .map((row: any) => Number(row?.norm_class))
+        .filter((id: number) => Number.isInteger(id) && id > 0);
+    if (!description?.trim() || normIds.length === 0) return null;
+    try {
+        const { data } = await api.post("import-item-suggestion/", { description, norm_class_ids: normIds });
+        return data?.items?.[0] ?? null;
+    } catch {
+        return null;
+    }
+}
+
 export default function NestedFieldArray({
                                              label,
                                              fields = [],
@@ -215,7 +229,7 @@ export default function NestedFieldArray({
 
             const currentOption = fieldValue ? {value: fieldValue, label: fieldValue} : null;
 
-            const handleDescriptionChange = (selected) => {
+            const handleDescriptionChange = async (selected) => {
                 const newArray = [...value];
 
                 if (selected) {
@@ -227,6 +241,12 @@ export default function NestedFieldArray({
                     // Auto-fill hs_code if available and current hs_code is empty
                     if (selected.hsCode && !item.hs_code) {
                         updates.hs_code = selected.hsCode;
+                    }
+
+                    // Auto-select the item the description resolves to, when the line has none yet.
+                    if (!item.items?.length) {
+                        const suggested = await suggestImportItem(selected.value, formData);
+                        if (suggested) updates.items = [suggested.id];
                     }
 
                     newArray[index] = {
@@ -243,6 +263,18 @@ export default function NestedFieldArray({
                 onChange(newArray);
             };
 
+            // Typed (new) description: same as selecting one, including the item suggestion.
+            const handleDescriptionCreate = async (inputValue) => {
+                const newArray = [...value];
+                const updates: Record<string, any> = { [field.name]: inputValue };
+                if (!item.items?.length) {
+                    const suggested = await suggestImportItem(inputValue, formData);
+                    if (suggested) updates.items = [suggested.id];
+                }
+                newArray[index] = { ...newArray[index], ...updates };
+                onChange(newArray);
+            };
+
             return (
                 <div className={highlightClass ? `${highlightClass} rounded` : ""}>
                     <AsyncCreatableSelect
@@ -253,7 +285,7 @@ export default function NestedFieldArray({
                         value={currentOption}
                         loadOptions={loadDescriptionOptions}
                         onChange={handleDescriptionChange}
-                        onCreateOption={(inputValue) => handleChange(index, field.name, inputValue)}
+                        onCreateOption={(inputValue) => handleDescriptionCreate(inputValue)}
                         placeholder="Type at least 2 characters to search..."
                         isClearable
                         className="react-select-sm"

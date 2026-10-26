@@ -54,3 +54,42 @@ export function visibleItemFields(item: any, group: any): { key: string; label: 
             || hasPivotValue(total?.[key])
             || group.licenses.some((license: any) => hasPivotValue(license.items?.[item.key]?.[key])));
 }
+
+// Item Summary name: the product category (RUTILE, ALUMINIUM OXIDE, ...), because item names can be raw import descriptions.
+export function itemSummaryName(row: { product_category?: string | null; item_name?: string | null }): string {
+    const category = row.product_category;
+    return category && category !== 'UNCLASSIFIED' ? category : (row.item_name || '');
+}
+
+// One Item Summary row per matrix item, read from the same totals the matrix shows above it.
+// The SION suffix is dropped from the fallback name because the SION has its own column.
+export function itemSummaryRowsFromMatrix(group: any): any[] {
+    return (group.item_groups || []).map((item: any) => {
+        const total = group.totals?.items?.[item.key] || {};
+        const cells = (group.licenses || []).map((license: any) => license.items?.[item.key]).filter(Boolean);
+        const sionSuffix = ` - ${item.sion}`;
+        const rawName = item.name?.endsWith(sionSuffix) ? item.name.slice(0, -sionSuffix.length) : item.name;
+        return {
+            item_name: itemSummaryName({ product_category: item.product_category, item_name: rawName }),
+            sion: item.sion,
+            hsn_codes: [...new Set(cells.map((cell: any) => cell.hsn_code).filter(Boolean))],
+            license_count: cells.length,
+            total_qty: total.total_qty, allotted_qty: total.allotted_qty, allotted_cif: total.allotted_cif,
+            boe_used_qty: total.debited_qty, boe_used_cif: total.boe_used_cif, balance_qty: total.balance_qty,
+            unit_price: total.unit_price, planned_qty: total.plan_qty, planned_cif: total.planned_cif,
+        };
+    });
+}
+
+// SUBTOTAL for the Item Summary rows. Unit price is the balance-weighted average of the rows that have one.
+export function itemSummarySubtotal(rows: any[]): Record<string, number | null> {
+    const sum = (key: string) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
+    const priced = rows.filter((row) => row.unit_price != null && Number(row.balance_qty) > 0);
+    const weight = priced.reduce((total, row) => total + Number(row.balance_qty), 0);
+    return {
+        total_qty: sum('total_qty'), allotted_qty: sum('allotted_qty'), allotted_cif: sum('allotted_cif'),
+        boe_used_qty: sum('boe_used_qty'), boe_used_cif: sum('boe_used_cif'), balance_qty: sum('balance_qty'),
+        planned_qty: sum('planned_qty'), planned_cif: sum('planned_cif'),
+        unit_price: weight > 0 ? priced.reduce((total, row) => total + Number(row.unit_price) * Number(row.balance_qty), 0) / weight : null,
+    };
+}

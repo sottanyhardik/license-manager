@@ -257,7 +257,7 @@ const REPORT_DATA = {
     report_date: "2026-01-08",
 };
 
-function mockApi() {
+function mockApi(reportPayload: unknown = REPORT_DATA) {
     mockedApiGet.mockImplementation((url: string) => {
         if (url.startsWith("item-pivot/available-norms/")) {
             return Promise.resolve({ data: [{ norm_class: "E1", description: "Confectionery" }] });
@@ -269,7 +269,7 @@ function mockApi() {
             return Promise.resolve({ data: { results: [] } });
         }
         if (url.startsWith("reports/item-pivot/")) {
-            return Promise.resolve({ data: REPORT_DATA });
+            return Promise.resolve({ data: reportPayload });
         }
         return Promise.resolve({ data: {} });
     });
@@ -508,4 +508,59 @@ describe("ItemPivotReport — Notification/Norm Summary panel (Phase 2B.2B backe
     // mocked notification_summary/norm_summary fixtures (which deliberately
     // diverge from what `licenses` would produce) — a local aggregation
     // engine reading `licenses` instead would fail these assertions.
+});
+
+const ITEM_SUMMARY_RUTILE = {
+    canonical_item_id: 1, item_name: "RUTILE", sion: "A3627", hsn_codes: ["32061190"], license_count: 25,
+    total_qty: "1000.00", allotted_qty: "0.00", allotted_cif: "0.00", boe_used_qty: "200.00", boe_used_cif: "300.00",
+    balance_qty: "800.00", unit_price: "1.60", planned_qty: "100.00", planned_cif: "160.00",
+};
+const ITEM_SUMMARY_OLIVE = {
+    canonical_item_id: 2, item_name: "OLIVE OIL", sion: "E1", hsn_codes: [], license_count: 2,
+    total_qty: "50.00", allotted_qty: "0.00", allotted_cif: "0.00", boe_used_qty: "0.00", boe_used_cif: "0.00",
+    balance_qty: "50.00", unit_price: null, planned_qty: "0.00", planned_cif: "0.00",
+};
+const ITEM_SUMMARY_PAYLOAD = {
+    ...REPORT_DATA,
+    groups: [{
+        notification_number: "NOTIF-1", purchase_status: { id: 1, name: "Global Exim" }, license_count: 0,
+        licenses: [], item_groups: [], totals: { items: {} }, item_summary: [], item_summary_totals: {},
+    }],
+    grand_total: {
+        license_count: 27, item_summary: [ITEM_SUMMARY_RUTILE, ITEM_SUMMARY_OLIVE],
+        item_summary_totals: { total_qty: "1050.00", allotted_qty: "0.00", allotted_cif: "0.00", boe_used_qty: "200.00", boe_used_cif: "300.00", balance_qty: "850.00", unit_price: "1.60", planned_qty: "100.00", planned_cif: "160.00" },
+    },
+};
+
+describe("ItemPivotReport — Item Summary table for non-C969 norms", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockApi(ITEM_SUMMARY_PAYLOAD);
+    });
+
+    it("renders one row per item with a SUBTOTAL row, with the same columns as the notification Item Summary", async () => {
+        render(<ItemPivotReport />);
+        fireEvent.click((await screen.findAllByRole("button", { name: /E1/ }))[0]);
+
+        const heading = await screen.findByText("TOTAL SUMMARY — ALL NOTIFICATIONS");
+        const table = heading.closest("div.mt-4")?.querySelector("table") as HTMLElement;
+        expect(table).not.toBeNull();
+
+        const headerRow = Array.from(table.querySelectorAll("thead tr:first-child th")).map((th) => th.textContent);
+        expect(headerRow).toEqual(["ITEM", "SION", "HSN CODES", "LICENCES", "QUANTITY POSITION", "CIF POSITION"]);
+        const metricRow = Array.from(table.querySelectorAll("thead tr:nth-child(2) th")).map((th) => th.textContent);
+        expect(metricRow).toEqual([
+            "TOTAL QTY", "ALLOTTED QTY", "ALLOTTED CIF", "DEBITED QTY", "DEBITED CIF", "BALANCE QTY", "UNIT PRICE", "PLAN QTY", "PLANNED CIF",
+        ]);
+        expect(screen.queryByText("EXCEPTIONS")).not.toBeInTheDocument();
+        expect(screen.queryByText("AVG PRICE")).not.toBeInTheDocument();
+
+        // Zero values are blank; the subtotal's unit price is RUTILE's, the only priced row.
+        const bodyRows = Array.from(table.querySelectorAll("tbody tr")).map((tr) => Array.from(tr.querySelectorAll("td")).map((td) => td.textContent));
+        expect(bodyRows).toEqual([
+            ["RUTILE", "A3627", "32061190", "25", "1,000.00", "", "", "200.00", "300.00", "800.00", "1.60", "100.00", "160.00"],
+            ["OLIVE OIL", "E1", "—", "2", "50.00", "", "", "", "", "50.00", "", "", ""],
+            ["SUBTOTAL", "1,050.00", "", "", "200.00", "300.00", "850.00", "1.60", "100.00", "160.00"],
+        ]);
+    });
 });

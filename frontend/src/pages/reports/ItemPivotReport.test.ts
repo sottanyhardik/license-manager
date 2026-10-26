@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildItemPivotReportPath, toFiniteNumber, visibleItemFields } from "./itemPivotReportUtils";
+import { buildItemPivotReportPath, itemSummaryName, itemSummaryRowsFromMatrix, itemSummarySubtotal, toFiniteNumber, visibleItemFields } from "./itemPivotReportUtils";
 
 describe("ItemPivotReport helpers", () => {
     it("builds encoded item-pivot report URLs from active filters", () => {
@@ -88,5 +88,51 @@ describe("ItemPivotReport empty field columns", () => {
 
         expect(visibleItemFields(rutile, withPrice).map(({ label }) => label)).toContain("UNIT PRICE");
         expect(visibleItemFields(rutile, withoutPrice).map(({ label }) => label)).not.toContain("UNIT PRICE");
+    });
+});
+
+describe("Item Summary rows from the notification matrix", () => {
+    const group = {
+        item_groups: [{ key: "RUTILE:A3627", name: "RUTILE - A3627", sion: "A3627", product_category: "RUTILE" }],
+        totals: { items: { "RUTILE:A3627": { total_qty: "1000.00", allotted_qty: "0.00", allotted_cif: "0.00", debited_qty: "200.00", boe_used_cif: "300.00", balance_qty: "800.00", unit_price: "2.61", plan_qty: "100.00", planned_cif: "261.00" } } },
+        licenses: [
+            { items: { "RUTILE:A3627": { hsn_code: "32061190" } } },
+            { items: { "RUTILE:A3627": { hsn_code: "32061190" } } },
+            { items: {} },
+        ],
+    };
+
+    it("reads each row from the matrix totals and counts only licences holding the item", () => {
+        const [row] = itemSummaryRowsFromMatrix(group);
+        expect(row).toMatchObject({
+            item_name: "RUTILE", sion: "A3627", hsn_codes: ["32061190"], license_count: 2,
+            total_qty: "1000.00", boe_used_qty: "200.00", boe_used_cif: "300.00", balance_qty: "800.00",
+            unit_price: "2.61", planned_qty: "100.00", planned_cif: "261.00",
+        });
+    });
+
+    it("sums quantities for the SUBTOTAL and takes the unit price from the priced rows only", () => {
+        const [rutile] = itemSummaryRowsFromMatrix(group);
+        const unpriced = { unit_price: null, balance_qty: "50.00", total_qty: "5.00" };
+        const subtotal = itemSummarySubtotal([rutile, unpriced]);
+        expect(subtotal.total_qty).toBe(1005);
+        expect(subtotal.balance_qty).toBe(850);
+        expect(subtotal.unit_price).toBeCloseTo(2.61);
+    });
+});
+
+describe("Item Summary names", () => {
+    it("names a row by its product category instead of a raw import description", () => {
+        const group = {
+            item_groups: [{ key: "ALUMINIUM OXIDE:A3627", name: "(a) Aluminium Oxide 28182000 (b) Zinc Oxide 28170010", sion: "A3627", product_category: "ALUMINIUM OXIDE" }],
+            totals: { items: {} },
+            licenses: [],
+        };
+        expect(itemSummaryRowsFromMatrix(group)[0].item_name).toBe("ALUMINIUM OXIDE");
+    });
+
+    it("falls back to the item name when there is no product category", () => {
+        expect(itemSummaryName({ product_category: "UNCLASSIFIED", item_name: "SOME ITEM" })).toBe("SOME ITEM");
+        expect(itemSummaryName({ product_category: null, item_name: "SOME ITEM" })).toBe("SOME ITEM");
     });
 });

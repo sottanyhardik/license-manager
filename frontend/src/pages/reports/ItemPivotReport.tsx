@@ -20,7 +20,7 @@ import ItemPivotFilters from "./ItemPivotFilters";
 import C969EntitlementTable, { C969GroupSummary } from "./C969EntitlementTable";
 import { openAuthedFile } from "../../utils/documentDownload";
 import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
-import { buildItemPivotReportPath, toFiniteNumber, visibleItemFields, TOTAL_SUMMARY_TITLE, type ItemPivotPathOptions } from "./itemPivotReportUtils";
+import { buildItemPivotReportPath, itemSummaryName, itemSummaryRowsFromMatrix, itemSummarySubtotal, toFiniteNumber, visibleItemFields, TOTAL_SUMMARY_TITLE, type ItemPivotPathOptions } from "./itemPivotReportUtils";
 
 // Default Purchase Status selection on first load — Global Exim, MITC,
 // Conversion (matches the bulk License Balance report's default filter).
@@ -231,25 +231,31 @@ function PivotTotalCells({ group }: { group: any }) {
     })}</>;
 }
 
-function FioriSummary({ summary, groups, grandTotal, onException, showCards = true, showGrandTotal = true }: { summary: any; groups: any[]; grandTotal: any; onException: (item: any, group?: any) => void; showCards?: boolean; showGrandTotal?: boolean }) {
-    // The backend owns the row order.  Prefixing the visible item label makes
-    // that active SION-rule priority auditable without re-sorting in React.
-    const withPriorityLabel = (group: any) => ({
-        ...group,
-        item_summary: (group?.item_summary || []).map((item: any) => ({
-            ...item,
-            item_name: item.planning_priority != null ? `${item.planning_priority} · ${item.item_name}` : item.item_name,
-        })),
-    });
-    groups = groups.map(withPriorityLabel);
-    grandTotal = withPriorityLabel(grandTotal);
+const ITEM_SUMMARY_QUANTITY_COLUMNS = [['total_qty', 'TOTAL QTY'], ['allotted_qty', 'ALLOTTED QTY'], ['allotted_cif', 'ALLOTTED CIF'], ['boe_used_qty', 'DEBITED QTY'], ['boe_used_cif', 'DEBITED CIF'], ['balance_qty', 'BALANCE QTY'], ['unit_price', 'UNIT PRICE']];
+const ITEM_SUMMARY_PLAN_COLUMNS = [['planned_qty', 'PLAN QTY'], ['planned_cif', 'PLANNED CIF']];
+// Zero and missing values read as blank in the item summary table.
+const itemSummaryValue = (value: unknown) => (Number(value) > 0 ? pivotNumber(value, 2) : '');
+
+// Item Summary table for every norm except C969, which renders C969GroupSummary instead.
+// One row per item with a SUBTOTAL row. A notification reads the matrix above it; the all-notification total reads the backend projection.
+function ItemSummaryTable({ group }: { group: any }) {
+    // The backend owns the row order. Prefixing the name with its SION-rule priority keeps that order auditable.
+    const rows = group?.item_groups
+        ? itemSummaryRowsFromMatrix(group)
+        : (group?.item_summary || []).map((row: any) => ({ ...row, item_name: row.planning_priority != null ? `${row.planning_priority} · ${itemSummaryName(row)}` : itemSummaryName(row) }));
+    const subtotal = itemSummarySubtotal(rows);
+    const cellClass = 'border p-2 text-right tabular-nums';
+    return <CardContent className="p-0"><div className="overflow-x-auto"><table className="min-w-[1000px] w-full border-collapse text-xs"><thead className="sticky top-0 z-10 bg-muted"><tr><th rowSpan={2} className="border p-2 text-left">ITEM</th><th rowSpan={2} className="border p-2">SION</th><th rowSpan={2} className="border p-2">HSN CODES</th><th rowSpan={2} className="border p-2">LICENCES</th><th colSpan={ITEM_SUMMARY_QUANTITY_COLUMNS.length} className="border p-2 text-center">QUANTITY POSITION</th><th colSpan={ITEM_SUMMARY_PLAN_COLUMNS.length} className="border p-2 text-center">CIF POSITION</th></tr><tr>{[...ITEM_SUMMARY_QUANTITY_COLUMNS, ...ITEM_SUMMARY_PLAN_COLUMNS].map(([key, label]) => <th key={key} className="border p-2 text-right whitespace-nowrap">{label}</th>)}</tr></thead><tbody>{rows.map((item: any, index: number) => <tr key={`${item.sion}:${item.item_name}:${index}`} className="hover:bg-muted/30"><td className="border p-2 font-semibold">{item.item_name}</td><td className="border p-2 text-center">{item.sion}</td><td className="border p-2">{item.hsn_codes?.join(', ') || '—'}</td><td className="border p-2 text-right">{item.license_count}</td>{[...ITEM_SUMMARY_QUANTITY_COLUMNS, ...ITEM_SUMMARY_PLAN_COLUMNS].map(([key]) => <td key={key} className={cellClass}>{itemSummaryValue(item[key])}</td>)}</tr>)}<tr className="bg-muted font-bold"><td colSpan={4} className="border p-2">SUBTOTAL</td>{[...ITEM_SUMMARY_QUANTITY_COLUMNS, ...ITEM_SUMMARY_PLAN_COLUMNS].map(([key]) => <td key={key} className={cellClass}>{itemSummaryValue(subtotal[key])}</td>)}</tr></tbody></table></div></CardContent>;
+}
+
+function FioriSummary({ summary, groups, grandTotal, showCards = true, showGrandTotal = true }: { summary: any; groups: any[]; grandTotal: any; showCards?: boolean; showGrandTotal?: boolean }) {
     const cards = [
         ['Total Licences', summary?.license_count, 0, 'text-blue-700'], ['Total Licence CIF', summary?.total_cif, 2, 'text-blue-700'],
         ['Actual BOE CIF', summary?.actual_boe_cif, 2, 'text-amber-700'], ['Actual Allotment CIF', summary?.actual_allotment_cif, 2, 'text-amber-700'],
         ['Actual Balance CIF', summary?.actual_balance_cif, 2, 'text-green-700'], ['Effective Planned CIF', summary?.effective_planned_cif, 2, 'text-blue-700'],
         ['Final Balance CIF', summary?.final_balance_cif, 2, 'text-green-700'], ['Coverage %', summary?.planning_coverage_percent, 2, 'text-green-700'],
     ];
-    const Section = ({ title, group, strong = false }: { title: string; group: any; strong?: boolean }) => <Card className={cn("mt-4 rounded-md shadow-none", strong && "border-2 border-primary")}><CardHeader className={cn("border-b py-3", strong ? "bg-primary text-primary-foreground" : "bg-muted/40")}><div><h2 className="text-base font-semibold">{title}</h2><p className="text-xs opacity-80">{group?.license_count ?? 0} Licences · canonical item and SION reconciliation</p></div></CardHeader>{group?.c969_entitlement ? <C969GroupSummary group={group} /> : <CardContent className="p-0"><div className="overflow-x-auto"><table className="min-w-[1120px] w-full border-collapse text-xs"><thead className="sticky top-0 z-10 bg-muted"><tr><th rowSpan={2} className="border p-2 text-left">ITEM</th><th rowSpan={2} className="border p-2">SION</th><th rowSpan={2} className="border p-2">HSN CODES</th><th rowSpan={2} className="border p-2">LICENCES</th><th colSpan={7} className="border p-2 text-center">QUANTITY POSITION</th><th colSpan={5} className="border p-2 text-center">CIF POSITION</th><th rowSpan={2} className="border p-2">EXCEPTIONS</th><th rowSpan={2} className="border p-2">STATUS</th></tr><tr>{['TOTAL QTY','BOE QTY','ALLOTTED QTY','USED QTY','AVAILABLE QTY','PLANNED QTY','BALANCE QTY','USED CIF','AVAILABLE CIF','PLANNED CIF','BALANCE CIF','AVG PRICE'].map(name => <th key={name} className="border p-2 text-right whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{(group?.item_summary || []).map((item: any) => <tr key={`${item.canonical_item_id}:${item.sion}`} className="hover:bg-muted/30"><td className="border p-2 font-semibold">{item.item_name}</td><td className="border p-2 text-center">{item.sion}</td><td className="border p-2">{item.hsn_codes?.join(', ') || '—'}</td><td className="border p-2 text-right">{item.license_count}</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(item[key], 3)}</td>)}{['actual_used_cif','available_cif','planned_cif','balance_cif','average_unit_price'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{(key === 'available_cif' || key === 'balance_cif') && item[key] == null ? '—' : pivotNumber(item[key], 2)}</td>)}<td className="border p-2 text-center">{item.exception_count || '—'}</td><td className="border p-2">{item.exception_count ? <button type="button" onClick={() => onException(item, group)}><Badge variant="destructive">{item.status}</Badge></button> : <Badge variant="secondary">{item.status}</Badge>}</td></tr>)}<tr className="bg-muted font-bold"><td colSpan={4} className="border p-2">SUBTOTAL</td>{['total_qty','boe_used_qty','allotted_qty','actual_used_qty','available_qty','planned_qty','balance_qty'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(group?.item_summary_totals?.[key], 3)}</td>)}{['actual_used_cif','available_cif','planned_cif','balance_cif','weighted_average_unit_price'].map(key => <td key={key} className="border p-2 text-right tabular-nums">{pivotNumber(group?.item_summary_totals?.[key], 2)}</td>)}<td colSpan={2} className="border p-2" /></tr></tbody></table></div></CardContent>}</Card>;
+    const Section = ({ title, group, strong = false }: { title: string; group: any; strong?: boolean }) => <Card className={cn("mt-4 rounded-md shadow-none", strong && "border-2 border-primary")}><CardHeader className={cn("border-b py-3", strong ? "bg-primary text-primary-foreground" : "bg-muted/40")}><div><h2 className="text-base font-semibold">{title}</h2><p className="text-xs opacity-80">{group?.license_count ?? 0} Licences · canonical item and SION reconciliation</p></div></CardHeader>{group?.c969_entitlement ? <C969GroupSummary group={group} /> : <ItemSummaryTable group={group} />}</Card>;
     return <>{showCards && <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">{cards.map(([label, value, digits, color]) => <Card key={String(label)} className="rounded-md shadow-none"><CardContent className="p-3"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><div className={cn('mt-1 text-sm font-bold tabular-nums', color as string)}>{pivotNumber(value, digits as number)}</div></CardContent></Card>)}</div>}{groups.map(group => <Section key={`${group.notification_number}:${group.purchase_status?.name}`} title={`Item Summary — Notification ${group.notification_number} · ${group.purchase_status?.name || 'UNASSIGNED'}`} group={group} />)}{showGrandTotal && grandTotal && <Section title={TOTAL_SUMMARY_TITLE} group={grandTotal} strong />}</>;
 }
 
@@ -322,7 +328,7 @@ export default function ItemPivotReport() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
-    const [reportView, setReportView] = useState<'summary' | 'matrix'>(searchParams.get('view') === 'license-matrix' ? 'matrix' : 'summary');
+    const [reportView] = useState<'summary' | 'matrix'>(searchParams.get('view') === 'license-matrix' ? 'matrix' : 'summary');
     const [activeNotification, setActiveNotification] = useState<string>('total');
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -609,15 +615,6 @@ export default function ItemPivotReport() {
         ...license,
         issues: (license.issues || []).filter(isPositivePivotIssue),
     });
-    const handleSummaryException = (item, group) => {
-        setReportView('matrix');
-        setSearchParams((current) => {
-            const next = new URLSearchParams(current);
-            next.set('view', 'license-matrix'); next.set('item', `${item.canonical_item_id}:${item.sion}`); next.set('exception', item.status); next.set('exceptions_only', '1');
-            if (group?.notification_number) next.set('notification', group.notification_number);
-            return next;
-        });
-    };
     const clearExceptionFilter = () => setSearchParams((current) => { const next = new URLSearchParams(current); ['item', 'exception', 'exceptions_only'].forEach(key => next.delete(key)); return next; });
     useEffect(() => {
         if (reportView === 'matrix' && searchParams.get('item')) document.getElementById(`pivot-item-${searchParams.get('item')}`)?.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
@@ -854,7 +851,7 @@ export default function ItemPivotReport() {
                     )}
 
                     {!loading && activeNormTab && Array.isArray(reportData?.groups) && (
-                        reportData.groups.length ? <>{/* Total first; each notification keeps its concise license, matrix, and item views together. */}<div className="mb-4 flex flex-wrap gap-1 border-b pb-2"><Button variant={activeNotification === 'total' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification('total')}>Total Summary</Button>{reportData.groups.map((group: any) => { const tabId = `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}`; return <Button key={tabId} variant={activeNotification === tabId ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification(tabId)}>Notification {group.notification_number}</Button>; })}</div>{activeNotification === 'total' ? <><FioriSummary summary={reportData.global_summary || reportData.summary} groups={[]} grandTotal={activeNormTab === 'C969' && reportData.c969_entitlement ? null : (reportData.grand_total?.license_count ? reportData.grand_total : null)} onException={handleSummaryException} />{activeNormTab === 'C969' && reportData.c969_entitlement && <C969EntitlementTable data={reportData.c969_entitlement} licenceCount={reportData.grand_total?.license_count} />}</> : reportData.groups.filter((group: any) => `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}` === activeNotification).map((group: any) => <div key={activeNotification} className="space-y-4"><NotificationLicenseSummary group={group} /><CanonicalPivot groups={[group]} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} /><FioriSummary summary={{}} groups={[group]} grandTotal={null} onException={handleSummaryException} showCards={false} showGrandTotal={false} /></div>)}{searchParams.get('exceptions_only') && <Button className="mt-3" variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</> : (
+                        reportData.groups.length ? <>{/* Total first; each notification keeps its concise license, matrix, and item views together. */}<div className="mb-4 flex flex-wrap gap-1 border-b pb-2"><Button variant={activeNotification === 'total' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification('total')}>Total Summary</Button>{reportData.groups.map((group: any) => { const tabId = `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}`; return <Button key={tabId} variant={activeNotification === tabId ? 'default' : 'ghost'} size="sm" onClick={() => setActiveNotification(tabId)}>Notification {group.notification_number}</Button>; })}</div>{activeNotification === 'total' ? <><FioriSummary summary={reportData.global_summary || reportData.summary} groups={[]} grandTotal={activeNormTab === 'C969' && reportData.c969_entitlement ? null : (reportData.grand_total?.license_count ? reportData.grand_total : null)} />{activeNormTab === 'C969' && reportData.c969_entitlement && <C969EntitlementTable data={reportData.c969_entitlement} licenceCount={reportData.grand_total?.license_count} />}</> : reportData.groups.filter((group: any) => `${group.notification_number}:${group.purchase_status?.id ?? group.purchase_status?.name ?? ''}` === activeNotification).map((group: any) => <div key={activeNotification} className="space-y-4"><NotificationLicenseSummary group={group} /><CanonicalPivot groups={[group]} onCondition={handleCanonicalCondition} onTransfer={handleCanonicalTransfer} onReplan={handleCanonicalReplan} onIssue={handleCanonicalIssue} selectedItem={searchParams.get('item')} exceptionOnly={searchParams.get('exceptions_only') === '1'} /><FioriSummary summary={{}} groups={[group]} grandTotal={null} showCards={false} showGrandTotal={false} /></div>)}{searchParams.get('exceptions_only') && <Button className="mt-3" variant="outline" size="sm" onClick={clearExceptionFilter}>Clear Exception Filter</Button>}</> : (
                             <div className="rounded-xl border border-border bg-card py-8 text-center text-muted-foreground sm:py-10 md:py-12">No licences match the selected filters.</div>
                         )
                     )}

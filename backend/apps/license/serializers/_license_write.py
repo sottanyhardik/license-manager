@@ -719,11 +719,13 @@ class LicenseWriteMixin:
                 # Refresh derived balances of the items saved above, once each.
                 # Same work the per-save on_commit job did, minus the duplicates.
                 from apps.core.scripts.calculate_balance import update_balance_values
-                for saved_item in LicenseImportItemsModel.objects.filter(license_id=instance.pk):
-                    try:
-                        update_balance_values(saved_item)
-                    except Exception:
-                        logger.exception("Balance refresh failed for import item %s", saved_item.pk)
+                from apps.license.services.balance_calculator import financial_balance_memo
+                with financial_balance_memo():
+                    for saved_item in LicenseImportItemsModel.objects.filter(license_id=instance.pk):
+                        try:
+                            update_balance_values(saved_item)
+                        except Exception:
+                            logger.exception("Balance refresh failed for import item %s", saved_item.pk)
 
                 logger.info("Import items update complete. Processed %d items, deleted %d items", len(processed_ids), len(items_to_delete) if len(imports) > 0 else 0)
 

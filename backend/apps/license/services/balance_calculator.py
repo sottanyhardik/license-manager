@@ -9,6 +9,8 @@ This module centralizes all balance calculation logic for:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Case, DecimalField, Exists, F, OuterRef, Q, Subquery, Sum, Value, When
@@ -55,6 +57,24 @@ def exclude_hidden(qs):
     diverge.
     """
     return annotate_and_exclude_hidden(qs, boe_field="bill_of_entry")
+
+
+# Per-save memo of financial balances, keyed by licence pk. None outside financial_balance_memo().
+_financial_balance_memo: ContextVar[dict | None] = ContextVar("financial_balance_memo", default=None)
+
+
+@contextmanager
+def financial_balance_memo():
+    """Compute each licence's financial balance once while the block runs.
+
+    Only for a block in which the licences' purchase, trade, BOE, allotment and export rows
+    do not change (for example the item-balance refresh inside a licence save).
+    """
+    token = _financial_balance_memo.set({})
+    try:
+        yield
+    finally:
+        _financial_balance_memo.reset(token)
 
 
 class LicenseBalanceCalculator:
@@ -1550,6 +1570,16 @@ class LicenseBalanceCalculator:
 
     @classmethod
     def calculate_financial_balance(cls, license_obj) -> Decimal:
+        """Financial Available Balance; reused within a financial_balance_memo() block."""
+        memo = _financial_balance_memo.get()
+        if memo is None or license_obj.pk is None:
+            return cls._calculate_financial_balance(license_obj)
+        if license_obj.pk not in memo:
+            memo[license_obj.pk] = cls._calculate_financial_balance(license_obj)
+        return memo[license_obj.pk]
+
+    @classmethod
+    def _calculate_financial_balance(cls, license_obj) -> Decimal:
         """
         Calculate the Financial Available Balance for a license — the
         second of the two Balance Engines (see `calculate_balance`'s

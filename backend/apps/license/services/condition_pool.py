@@ -27,20 +27,21 @@ from typing import Iterable
 from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 
+from apps.license.services.restriction_policy import parse_condition_percentage
+
 DEC_0 = Decimal("0")
 
 
 def _parse_pct(condition_type: str | None) -> Decimal | None:
-    """Return the % as a Decimal for "N%" values, else None."""
-    if not condition_type:
-        return None
-    s = condition_type.strip()
-    if s.endswith("%"):
-        try:
-            return Decimal(s[:-1])
-        except Exception:
-            return None
-    return None
+    """Parse condition labels through the canonical restriction policy.
+
+    Invalid percentage labels fail closed as a zero-value pool. This is
+    deliberate: malformed legacy data must not become unrestricted.
+    """
+    try:
+        return parse_condition_percentage(condition_type)
+    except ValueError:
+        return DEC_0
 
 
 def compute_condition_pools(license_obj) -> dict[str, Decimal]:

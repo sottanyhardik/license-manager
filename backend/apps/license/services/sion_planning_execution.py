@@ -408,6 +408,26 @@ class SionPlanningExecutionService:
             .select_related("hs_code").prefetch_related("items").order_by("pk")
         )
         item_name_ids = {item.pk: {name.pk for name in item.items.all()} for item in import_items}
+        # Percentage condition labels (2%, 3%, 5%, 10%) share a single
+        # licence-level pool. Resolve that pool once and consume it throughout
+        # this planning run; AU is a transfer restriction, not a percentage pool.
+        condition_labels = {
+            str(item.condition_type or "").strip().upper()
+            for item in import_items
+            if str(item.condition_type or "").strip()
+        }
+        if any(label.endswith("%") for label in condition_labels):
+            from apps.license.services.condition_pool import compute_condition_pools
+            raw_condition_pools = compute_condition_pools(license_obj)
+            remaining_condition_pools = {
+                str(label).strip().upper(): Decimal(str(value))
+                for label, value in raw_condition_pools.items()
+            }
+        else:
+            remaining_condition_pools = {}
+        from apps.license.services.restriction_policy import (
+            cap_quantity_to_cif, restriction_cif_limit,
+        )
         total_cif = sum(
             (Decimal(str(value or 0)) for value in LicenseExportItemModel.objects.filter(
                 license=license_obj, norm_class=sion,
@@ -512,7 +532,11 @@ class SionPlanningExecutionService:
 
             grouped = {}
             for item in items:
-                grouped.setdefault(plan_group_key(item), []).append(item)
+                # Equal products with different licence conditions must not be
+                # merged into one allocatable row: AU and each percentage label
+                # have different transfer/pool semantics.
+                condition = str(getattr(item, "condition_type", "") or "").strip().upper()
+                grouped.setdefault((plan_group_key(item), condition), []).append(item)
             return [
                 sorted(group, key=lambda item: (item.serial_number or 0, item.pk))
                 for group in grouped.values()
@@ -549,6 +573,17 @@ class SionPlanningExecutionService:
             # A valid source quantity belongs to its highest-priority rule
             # even where the licence cannot fund its whole theoretical CIF.
             allocated_quantity = min(max(Decimal(str(quantity)), Decimal("0")), remaining_waterfall_qty)
+            # Apply the shared percentage-condition pool before the global CIF
+            # waterfall. If a caller accidentally supplies a mixed-condition
+            # group, fail closed instead of borrowing another item's pool.
+            conditions = {str(getattr(item, "condition_type", "") or "").strip().upper() for item in group}
+            percent_conditions = {value for value in conditions if value.endswith("%")}
+            if percent_conditions:
+                if len(conditions) != 1:
+                    return Decimal("0")
+                condition = next(iter(percent_conditions))
+                pool_remaining = max(remaining_condition_pools.get(condition, Decimal("0")), Decimal("0"))
+                allocated_quantity = cap_quantity_to_cif(allocated_quantity, price, pool_remaining)
             if price > 0 and remaining_waterfall_cif.is_finite():
                 affordable_quantity = (remaining_waterfall_cif / price).quantize(
                     Decimal("0.001"), rounding=ROUND_DOWN,
@@ -589,6 +624,12 @@ class SionPlanningExecutionService:
             # remain explicit provenance rather than being faked by changing
             # the rule price or shrinking the valid quantity.
             allocated_cif = new_planned_cif
+            if percent_conditions and allocated_cif > 0:
+                condition = next(iter(percent_conditions))
+                remaining_condition_pools[condition] = max(
+                    remaining_condition_pools.get(condition, Decimal("0")) - allocated_cif,
+                    Decimal("0"),
+                )
             provenance = {
                 **provenance,
                 "source_item_ids": [item.pk for item in group],
@@ -647,24 +688,23 @@ class SionPlanningExecutionService:
                 return Decimal(str(rule.cif_restriction_percentage))
             return None
 
-        def check_cif_restriction(import_item_id, item_total_cif, restriction_pct):
-            """Check whether planning more for this import item would exceed the CIF restriction.
-            
-            Returns True if the item should be SKIPPED (restriction exceeded).
-            """
+        def remaining_cif_for_restriction(import_item_id, item_total_cif, restriction_pct):
+            """Return the unused CIF budget for an item-level percentage rule."""
             if restriction_pct is None:
-                return False
+                return None
             already_planned = planned_cif_by_import_item.get(import_item_id, Decimal("0"))
-            # Also count historical debited + allotted CIF from actual usage
             historical_cif = Decimal("0")
             for (source_id, _target_id), values in context.actual_usage["mapped"].items():
                 if source_id == import_item_id:
                     historical_cif += values["boe_used_cif"] + values["unlinked_allotment_cif"]
             unmapped = context.actual_usage["unmapped_by_source"].get(import_item_id, {})
             historical_cif += unmapped.get("boe_used_cif", Decimal("0")) + unmapped.get("unlinked_allotment_cif", Decimal("0"))
-            used_cif = already_planned + historical_cif
-            limit = item_total_cif * restriction_pct / Decimal("100")
-            return used_cif >= limit
+            limit = restriction_cif_limit(item_total_cif, restriction_pct)
+            return max(limit - already_planned - historical_cif, Decimal("0"))
+
+        def check_cif_restriction(import_item_id, item_total_cif, restriction_pct):
+            remaining = remaining_cif_for_restriction(import_item_id, item_total_cif, restriction_pct)
+            return remaining is not None and remaining <= 0
 
         def record_planned_cif(import_item_id, cif):
             """Record planned CIF for an import item so subsequent rules can check the restriction."""
@@ -786,9 +826,15 @@ class SionPlanningExecutionService:
                 # rule-match bucket.  Otherwise a zero-available Cocoa Paste
                 # row could visibly carry capacity that actually belongs to a
                 # different Fruit/COCOA source row.
+                rule_restriction_pct = get_effective_cif_restriction(rule)
+                needs_source_level_caps = (
+                    bool(remaining_item_cif)
+                    or rule_restriction_pct is not None
+                    or any(str(getattr(item, "condition_type", "") or "").strip() for item in group)
+                )
                 standard_groups = (
                     ([item] for item in group)
-                    if remaining_item_cif
+                    if needs_source_level_caps
                     else physical_source_groups(group)
                 )
                 allocated = Decimal("0")
@@ -815,6 +861,16 @@ class SionPlanningExecutionService:
                             break
                     if skip_group:
                         continue
+                    if restriction_pct is not None:
+                        remaining_restriction = min((
+                            remaining_cif_for_restriction(
+                                item.pk, Decimal(str(item.cif_fc or 0)), restriction_pct,
+                            ) or Decimal("0")
+                            for item in source_item_group
+                        ), default=Decimal("0"))
+                        source_quantity = cap_quantity_to_cif(
+                            source_quantity, rule.max_unit_price, remaining_restriction,
+                        )
                     allocated_qty = add_line(
                         rule, item_name, source_item_group, source_quantity,
                         rule.max_unit_price,
@@ -863,12 +919,20 @@ class SionPlanningExecutionService:
                     for row, split_quantity in mix:
                         if split_quantity <= 0:
                             continue
-                        # CIF restriction check
+                        # CIF restriction check and cap. Do not drop an item
+                        # with a small remaining allowance if a partial plan fits.
                         restriction_pct = get_effective_cif_restriction(rule, row)
                         item_total_cif = Decimal(str(source_item.cif_fc or 0))
                         if check_cif_restriction(source_item.pk, item_total_cif, restriction_pct):
                             continue
                         planning_price = Decimal(str(row.preferred_unit_price if row.preferred_unit_price > 0 else row.max_unit_price))
+                        restriction_remaining = remaining_cif_for_restriction(
+                            source_item.pk, item_total_cif, restriction_pct,
+                        )
+                        if restriction_remaining is not None:
+                            split_quantity = cap_quantity_to_cif(split_quantity, planning_price, restriction_remaining)
+                        if split_quantity <= 0:
+                            continue
                         allocated = add_line(rule, row.import_item, [source_item], split_quantity, planning_price, {
                             "strategy": "SPLIT_BY_UNIT_VALUE",
                             "quantity_source": "available_import_item_quantity",
@@ -1058,7 +1122,11 @@ class SionPlanningExecutionService:
                         ),
                         "quantity_source": "available_import_group_quantity",
                     }
-                    if remaining_item_cif:
+                    source_has_condition = any(
+                        str(getattr(item, "condition_type", "") or "").strip()
+                        for item in matched_source
+                    )
+                    if remaining_item_cif or restriction_pct is not None or source_has_condition:
                         # The rule may intentionally match a group by HSN or
                         # description, but its financial entitlement is never
                         # a group entitlement in individual-CIF mode. Split
@@ -1085,6 +1153,16 @@ class SionPlanningExecutionService:
                                 )
                             )
                             assigned_source_quantity += source_final_quantity
+                            source_total_cif = Decimal(str(source.cif_fc or 0))
+                            restriction_remaining = remaining_cif_for_restriction(
+                                source.pk, source_total_cif, restriction_pct,
+                            )
+                            if restriction_remaining is not None:
+                                source_final_quantity = cap_quantity_to_cif(
+                                    source_final_quantity,
+                                    solved_member["effective_unit_price"],
+                                    restriction_remaining,
+                                )
                             allocated_qty = add_line(
                                 rule, row.import_item, [source], source_final_quantity,
                                 solved_member["effective_unit_price"], {

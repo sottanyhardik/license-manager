@@ -41,6 +41,15 @@ export default defineConfig([
       sourceType: 'commonjs',
     },
   },
+  // Standalone Playwright route-audit runner.  This is deliberately a Node
+  // CommonJS executable, not browser code bundled by Vite.
+  {
+    files: ['route-browser-test.js'],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: 'commonjs',
+    },
+  },
   // JavaScript / JSX (espree)
   {
     files: ['**/*.{js,jsx}'],
@@ -95,6 +104,18 @@ export default defineConfig([
   // (buttonVariants, badgeVariants) alongside their components.
   {
     files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  // These modules intentionally co-export a context provider/hook and a
+  // pure suggestion helper with their components.  Moving them would add a
+  // circular UI import without improving Vite refresh safety.
+  {
+    files: [
+      'src/context/ParsingStatusContext.tsx',
+      'src/pages/masters/NestedFieldArray.tsx',
+    ],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

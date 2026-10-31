@@ -149,9 +149,12 @@ class TestPlanModeSplitRows:
         assert one_row.status_code == full_page.status_code == 200
         assert len(full_page.data["available_items"]) == 8
         # The status, availability and serializer maps are fixed batches.  A
-        # 16-query cold-request ceiling leaves authentication/metadata room
-        # while rejecting an additional per-plan-line relation lookup.
-        assert len(full_page_queries) <= 16
+        # 17-query cold-request ceiling leaves authentication/metadata room
+        # while rejecting an additional per-plan-line relation lookup.  The
+        # additional fixed batch is ``billed_no_boe_qty_bulk_map``: the
+        # serialized Customs Ledger contract now exposes the quantity, as
+        # well as the CIF, of direct sales without a BOE.
+        assert len(full_page_queries) <= 17
         # Batch loaders and relation prefetches make query volume independent
         # of page rows.  A small allowance covers serializer work only needed
         # when a populated page exposes a second related import item, while

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 /**
  * Responsive Design Test Suite
@@ -105,7 +105,7 @@ describe('Responsive Design Tests', () => {
     });
 
     it('should scale font sizes responsively from mobile to desktop', () => {
-      Object.entries(fontSizeRules).forEach(([key, sizes]) => {
+      Object.entries(fontSizeRules).forEach(([_key, sizes]) => {
         expect(parseFloat(sizes.mobile)).toBeGreaterThan(0);
         expect(parseFloat(sizes.tablet)).toBeGreaterThanOrEqual(parseFloat(sizes.mobile));
       });
@@ -331,7 +331,7 @@ describe('Responsive Design Tests', () => {
         ],
       };
 
-      Object.entries(checklist).forEach(([category, items]) => {
+      Object.entries(checklist).forEach(([_category, items]) => {
         expect(items.length).toBeGreaterThan(0);
       });
     });

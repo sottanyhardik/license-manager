@@ -1,0 +1,18 @@
+flowchart TD
+  A[RB-001 Source inventory] --> C[RB-003 Rule corpus]
+  B[RB-002 Deployment/recovery baseline] --> K[RB-012 Release rehearsal]
+  C --> F[RB-006 Entitlement ledger]
+  D[RB-004 Mapping] --> F
+  E[RB-005 Company scope] --> F
+  F --> G[RB-007 Restrictions and AU]
+  D --> H[RB-008 Trade/reconciliation]
+  F --> H
+  G --> I[RB-009 Compatibility cards]
+  H --> I
+  D --> J[RB-010 Accounting design]
+  E --> J
+  H --> J
+  F --> L[RB-011 Dry migration]
+  H --> L
+  J --> L
+  L --> K

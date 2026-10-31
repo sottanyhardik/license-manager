@@ -93,9 +93,20 @@ class TestSionRuleResolverBasics:
         assert SionRuleResolver.normalize_product_name("palm   kernel   oil") == "PALM KERNEL OIL"
 
     @pytest.mark.django_db
-    def test_resolve_canonical_input_with_legacy_fallback(self):
-        """Fallback to legacy aliases when SionInputAliasConfig not present."""
-        # Without explicit alias config, should use legacy hardcoded aliases
+    def test_resolve_canonical_input_from_global_aliases(self):
+        """Global aliases are the final data-driven lookup tier."""
+        for alias_normalized in ("PKO", "PALM KERNEL OIL"):
+            SionInputAliasConfig.objects.get_or_create(
+                sion=None,
+                output_item=None,
+                alias_normalized=alias_normalized,
+                defaults={
+                    "canonical_input_code": "PKO",
+                    "source_description": "Test global PKO alias",
+                    "is_active": True,
+                },
+            )
+
         mapping = SionRuleResolver.resolve_canonical_input("PKO")
         assert mapping.canonical_code == "PKO"
         assert mapping.is_mapped is True

@@ -36,21 +36,47 @@ class CanonicalPivotSourceTests(TestCase):
         row = next(row for group in report["groups"] for row in group["licenses"] if row["license_id"] == self.license.id)
         return next(iter(row["items"].values()))
 
-    def test_source_items_identify_only_the_planned_import_row(self):
-        self._item(1, "11010000", "Batch A", "50")
+    def test_source_items_merge_planned_and_unplanned_rows_in_the_same_category(self):
+        unplanned = self._item(1, "11010000", "Batch A", "50")
         planned = self._item(2, "11010090", "Batch B", "200")
         LicenseItemPlan.objects.create(license=self.license, import_item=planned, item_name=self.name, planned_quantity=Decimal("150"), planned_cif_fc=Decimal("750"))
         cell = self._cell()
-        assert cell["hsn_code"] == "11010090"
-        assert cell["description"] == "Batch B"
+        assert cell["hsn_code"] == "11010000, 11010090"
+        assert cell["description"] == "Batch A, Batch B"
         source = cell["source_items"]
-        assert len(source) == 1
-        assert source[0]["import_item_id"] == planned.id
-        assert source[0]["serial_number"] == 2
-        assert source[0]["hsn_code"] == "11010090"
-        assert source[0]["description"] == "Batch B"
-        assert Decimal(source[0]["quantity"]) == Decimal("200")
-        assert Decimal(source[0]["available_quantity"]) == Decimal("200")
+        assert {item["import_item_id"] for item in source} == {unplanned.id, planned.id}
+        assert {(item["serial_number"], item["hsn_code"], item["description"]) for item in source} == {
+            (1, "11010000", "Batch A"),
+            (2, "11010090", "Batch B"),
+        }
+        assert Decimal(cell["total_qty"]) == Decimal("250")
+        assert Decimal(cell["plan_qty"]) == Decimal("150")
+        assert Decimal(cell["planned_cif"]) == Decimal("750")
+        assert Decimal(cell["remaining_qty"]) == Decimal("100")
+
+    def test_canonical_v1_response_exposes_grouped_source_lineage_contract(self):
+        item = self._item(1, "11010090", "Canonical source", "25")
+        LicenseItemPlan.objects.create(
+            license=self.license, import_item=item, item_name=self.name,
+            planned_quantity=Decimal("10"), planned_cif_fc=Decimal("50"),
+        )
+
+        report = ItemPivotReportView().generate_report(min_balance=0, license_status="all")
+
+        assert report["report_version"] == "canonical-item-pivot-v1"
+        assert isinstance(report["groups"], list) and report["groups"]
+        row = next(row for group in report["groups"] for row in group["licenses"] if row["license_id"] == self.license.id)
+        cell = next(iter(row["items"].values()))
+        assert cell["source_items"] == [{
+            "import_item_id": item.id,
+            "serial_number": 1,
+            "hsn_code": "11010090",
+            "description": "Canonical source",
+            "quantity": "25.000",
+            "allotted_quantity": "0.000",
+            "debited_quantity": "0.000",
+            "available_quantity": "25.000",
+        }]
 
     def test_same_source_split_lines_sum_plan_pair_once(self):
         item = self._item(1, "04021010", "Milk", "100")
@@ -61,15 +87,18 @@ class CanonicalPivotSourceTests(TestCase):
         assert Decimal(cell["planned_cif"]) == Decimal("318.2")
         assert len(cell["source_items"]) == 1
 
-    def test_distinct_sources_remain_traceable_and_do_not_string_concatenate(self):
+    def test_distinct_sources_remain_traceable_with_joined_display_description(self):
         first = self._item(1, "39021000", "PP A", "100")
         second = self._item(2, "39021000", "PP B", "200")
         for item in (first, second):
             LicenseItemPlan.objects.create(license=self.license, import_item=item, item_name=self.name, planned_quantity=item.quantity, planned_cif_fc=item.quantity)
         cell = self._cell()
         assert cell["hsn_code"] == "39021000"
-        assert cell["description"] == ""
+        # The cell display summarizes its distinct source descriptions; the
+        # source_items list remains the authoritative per-import-item lineage.
+        assert cell["description"] == "PP A, PP B"
         assert {source["import_item_id"] for source in cell["source_items"]} == {first.id, second.id}
+        assert {source["description"] for source in cell["source_items"]} == {"PP A", "PP B"}
         assert Decimal(cell["plan_qty"]) == Decimal("300")
 
 

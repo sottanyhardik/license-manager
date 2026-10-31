@@ -1,4 +1,4 @@
-import { test, expect, devices } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 // Test configuration for different viewport sizes
 const VIEWPORTS = {
@@ -122,7 +122,6 @@ test.describe('Layout and Spacing Checks', () => {
     await page.waitForTimeout(1500);
 
     // Check input fields are visible
-    const inputs = await page.locator('input[type="text"], input[type="email"], input[type="number"], textarea').count();
     // Just verify they exist and page doesn't have horizontal overflow
     const pageWidth = await page.locator('body').evaluate(el => el.clientWidth);
     const pageScrollWidth = await page.locator('body').evaluate(el => el.scrollWidth);

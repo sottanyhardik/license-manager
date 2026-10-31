@@ -1,0 +1,195 @@
+{
+  "audit_version": "0.1-discovery",
+  "repository_url": "https://github.com/sottanyhardik/license-manager",
+  "branch": "codex/baseline-regression",
+  "commit_sha": "d2cb2446ba01e0e23e6ef3570f6449bdd001cf65",
+  "audit_start_date": "2026-10-31",
+  "last_updated": "2026-10-31",
+  "files_discovered": 1545,
+  "files_inspected": 1545,
+  "files_remaining": null,
+  "routes_discovered": null,
+  "routes_documented": null,
+  "apis_discovered": null,
+  "apis_documented": null,
+  "business_rules_discovered": null,
+  "business_rules_verified": null,
+  "exceptions_identified": null,
+  "exceptions_tested": null,
+  "tests_executed": {
+    "frontend_unit": {"total": 544, "passed": 544, "failed": 0, "status": "confirmed local execution after RB-FE-001 test-contract correction"},
+    "frontend_lint": {"status": "Phase 20: npm run lint and strict npm run format:check both pass with zero warnings/errors. The safe batch removed seven unused values and used two documented file-specific React-refresh exceptions; frontend npm test passed 544/544 (78 files)."},
+    "frontend_typecheck": {"status": "passed: current npm run typecheck"},
+    "backend_migration_consistency": {"command": "manage.py makemigrations --check --dry-run", "status": "passed: no changes detected"},
+    "backend_balance_calculator": {"total": 50, "passed": 50, "failed": 0, "status": "isolated TEST_DB_NAME execution"},
+    "backend_full_suite_historical_pre_corrections": {
+      "command": "TEST_DB_NAME=test_lmanagement_codex_rb_be_001_confirmed_20261031_b .venv/bin/python -m pytest --no-cov -q --reuse-db",
+      "test_database": "test_lmanagement_codex_rb_be_001_confirmed_20261031_b",
+      "collected": 3203,
+      "total": 3203,
+      "passed": 3194,
+      "failed": 9,
+      "errors": 0,
+      "skipped": 0,
+      "exit_code": 1,
+      "started_utc": "2026-10-31T08:22:26Z",
+      "ended_utc": "2026-10-31T08:30:06Z",
+      "status": "historical isolated run before the ten focused baseline corrections",
+      "initial_blocker_resolved": "test_parse_pdf_hs_autocreate obsolete fixture import and incomplete authenticated multipart setup"
+    },
+    "backend_full_suite_initial": {
+      "command": "TEST_DB_NAME=test_lmanagement_codex_fullbackend_20261031 .venv/bin/python -m pytest --no-cov -q --reuse-db --junitxml=../tmp/backend-full-initial-20261031.xml --html=../tmp/backend-full-initial-20261031.html --self-contained-html",
+      "test_database": "test_lmanagement_codex_fullbackend_20261031",
+      "collected": 3203,
+      "total": 3203,
+      "passed": 3202,
+      "failed": 1,
+      "errors": 0,
+      "skipped": 0,
+      "exit_code": 1,
+      "started_utc": "2026-10-31T10:01:06.941059+00:00",
+      "duration_seconds": 427.598,
+      "status": "completed isolated Phase 5 run; the one SION global-alias fixture failure was resolved before final verification"
+    },
+    "backend_full_suite_final": {
+      "command": "TEST_DB_NAME=test_lmanagement_codex_fullbackend_final_20261031 .venv/bin/python -m pytest --no-cov -q --reuse-db --junitxml=../tmp/backend-full-final-20261031.xml --html=../tmp/backend-full-final-20261031.html --self-contained-html",
+      "test_database": "test_lmanagement_codex_fullbackend_final_20261031",
+      "collected": 3203,
+      "total": 3203,
+      "passed": 3203,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "exit_code": 0,
+      "started_utc": "2026-10-31T10:09:43.948008+00:00",
+      "duration_seconds": 457.723,
+      "status": "completed green isolated backend regression baseline; JUnit and HTML artifacts retained in tmp/"
+    },
+    "backend_sion_global_alias_fixture": {
+      "test_database": "test_lmanagement_codex_siondiag_20261031",
+      "classification": "order-dependent fixture defect; the resolver's documented global-alias tier is data-driven and no hardcoded legacy fallback exists",
+      "focused_modules": "passed (24/24)",
+      "final_full_suite": "passed (3203/3203)",
+      "migration_consistency": "passed: no changes detected"
+    },
+    "backend_architecture_safe_batch_ar_005": {
+      "test_database": "test_lmanagement_codex_archrefactor_20261031",
+      "classification": "behavior-preserving security hardening; removed raw request/document logging override that delegated directly to super().update",
+      "focused_tests": "passed (25/25): tests/test_api_license.py and apps/license/tests/test_license_items_view.py",
+      "django_check": "passed: no issues",
+      "migration_consistency": "passed: no changes detected"
+    },
+    "backend_architecture_final_suite": {
+      "command": "TEST_DB_NAME=test_lmanagement_codex_archfinal_20261031 .venv/bin/python -m pytest --no-cov -q --reuse-db --junitxml=../tmp/backend-architecture-final-20261031.xml --html=../tmp/backend-architecture-final-20261031.html --self-contained-html",
+      "test_database": "test_lmanagement_codex_archfinal_20261031",
+      "collected": 3203,
+      "passed": 3203,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "exit_code": 0,
+      "started_utc": "2026-10-31T10:27:11.727872+00:00",
+      "duration_seconds": 466.225,
+      "status": "completed after AR-005; JUnit and HTML artifacts retained in tmp/"
+    },
+    "backend_plan_mode_query_budget": {
+      "test_database": "test_lmanagement_codex_querydiag_20261031",
+      "classification": "outdated test contract; required constant serializer batch, not an N+1 regression",
+      "one_row_query_count": 18,
+      "eight_row_query_count": 17,
+      "focused_test": "passed (1/1)",
+      "plan_and_filter_modules": "passed (25/25)",
+      "broader_allotment_suite": "110 passed; 1 independent allocation-pair failure"
+    },
+    "backend_allocation_pair_validation": {
+      "test_database": "test_lmanagement_codex_pairdiag_20261031",
+      "classification": "fixture defect; one-cent CIF difference is an approved rounding tolerance",
+      "original_fixture_result": "HTTP 201; one allocation persisted",
+      "outside_tolerance_control": "HTTP 400 ALLOCATION_PAIR_MISMATCH; no allocation persisted",
+      "focused_test": "passed (1/1)",
+      "related_modules": "passed (47/47)",
+      "broader_allotment_suite": "passed (111/111)"
+    },
+    "backend_a3627_pivot_excel_category": {
+      "test_database": "test_lmanagement_codex_pivotdiag_20261031",
+      "classification": "outdated test helper coordinates after workbook header-layout redesign",
+      "selected_test": "passed (1/1)",
+      "related_pivot_set": "34 passed; one separately scoped RUTILE header-layout failure remains",
+      "workbook_contract": "title row 1; category row 2; field row 3; data from row 4"
+    },
+    "backend_rutile_pivot_excel_header": {
+      "test_database": "test_lmanagement_codex_pivotrutile_20261031",
+      "classification": "outdated test coordinates and fixed field offsets; dynamic optional-field projection is intentional",
+      "selected_test": "passed (1/1)",
+      "related_pivot_set": "passed (40/40)",
+      "workbook_contract": "title row 1; category row 2; field row 3; data from row 4; UNIT PRICE immediately after BALANCE QTY for RUTILE"
+    },
+    "backend_e132_pivot_excel_display_sequence": {
+      "test_database": "test_lmanagement_codex_e132diag_20261031",
+      "classification": "outdated test coordinate; exporter category order matches configured E132 sequence",
+      "selected_test": "passed (1/1)",
+      "e132_display_sequence_module": "passed (27/27)",
+      "related_pivot_export_modules": "passed (39/39)",
+      "migration_consistency": "passed: no changes detected",
+      "workbook_contract": "title row 1; category row 2; field row 3; data from row 4; E132 categories in configured sequence followed by RBD PAL"
+    },
+    "backend_e1_pivot_excel_display_sequence": {
+      "test_database": "test_lmanagement_codex_e1diag_20261031",
+      "classification": "outdated test coordinate; exporter category order matches configured E1 sequence with SUGAR fallback",
+      "selected_test": "passed (1/1)",
+      "e1_display_sequence_module": "passed (23/23)",
+      "related_pivot_export_modules": "passed (61/61)",
+      "migration_consistency": "passed: no changes detected",
+      "workbook_contract": "title row 1; category row 2; field row 3; data from row 4; fixture E1 categories use configured order, followed by fallback SUGAR"
+    },
+    "backend_planned_pivot_source_display": {
+      "test_database": "test_lmanagement_codex_pivotsource_20261031",
+      "classification": "outdated display expectation; source_items retains distinct import-item lineage while display description is an approved joined summary",
+      "selected_test": "passed (1/1 after test rename)",
+      "related_pivot_export_modules": "passed (11/11)",
+      "planned_import_module": "3 passed, 1 separately scoped source-selection failure",
+      "migration_consistency": "passed: no changes detected",
+      "display_contract": "distinct descriptions are case-insensitively deduplicated and comma-joined for the cell display; source_items retains per-import-item IDs, serials, HSNs, descriptions, and quantities"
+    },
+    "backend_planned_pivot_source_selection": {
+      "test_database": "test_lmanagement_codex_pivotselection_20261031",
+      "classification": "legitimate category-level aggregation; stale planned-only expectation",
+      "selected_test": "passed (1/1 after test rename)",
+      "planned_import_module": "passed (4/4)",
+      "related_pivot_export_modules": "passed (24/24)",
+      "migration_consistency": "passed: no changes detected",
+      "source_contract": "planned and unplanned import rows sharing product-category/SION aggregate into one pivot cell; source_items retains each row while physical totals sum and plan values remain from planned rows"
+    },
+    "backend_plan_utilization_description_fallback": {
+      "test_database": "test_lmanagement_codex_planutil_20261031",
+      "classification": "outdated expected response shape after hs_code metadata was added to item_names; description fallback order is unchanged",
+      "selected_test": "passed (1/1)",
+      "plan_utilization_module": "passed (12/12)",
+      "related_detail_pivot_cache_modules": "passed (8/8)",
+      "migration_consistency": "passed: no changes detected",
+      "fallback_contract": "trimmed description; else case-insensitively name-sorted joined item names; else ID:<representative import-item id>; each item_names entry carries id, name, and nullable hs_code"
+    }
+  },
+  "unresolved_critical_findings": ["Server-side company isolation not demonstrated"],
+  "unresolved_high_findings": ["Restriction-rule semantics and official sources require business/domain confirmation", "Production deployment/version and restore capability not verified"],
+  "data_migration_status": "initial_design_baseline_complete; source_migration_graph_and_live_schema_not_verified",
+  "accounting_status": "requirements_and_existing_capability_gap_only",
+  "workstream_statuses": {
+    "architecture_audit": "phase 12/13 initial audit and phase 18 index reconciliation complete; final .claude/index has 1545 files, 9867 symbols and equal 2932-edge forward/reverse static inventories",
+    "database_first_audit": "initial_document_evidence_complete; source_and_live_schema_incomplete",
+    "backend": "initial behavior-preserving architecture batch complete; financial and authorization refactors blocked pending owner decisions",
+    "frontend": "Phase 19 narrow lint configuration batch complete; strict warning cleanup remains out of scope",
+    "database_migration": "not_started",
+    "licence_trade_logic": "requirements_in_progress",
+    "accounting": "requirements_in_progress",
+    "quality": "baseline_partial",
+    "security_performance": "baseline_partial",
+    "infrastructure_release": "not_assessed"
+  },
+  "blockers": [
+    "No authorised production read-only database/schema/backup-restore evidence",
+    "No approved official restriction/AU rule corpus or golden examples",
+    "No CA-approved accounting policy, opening balance or cutover decision"
+  ],
+  "outstanding_approvals": ["company/master-data policy", "restriction/AU semantics", "accounting scope and CA ownership", "maintenance-window/delta strategy"]
+}

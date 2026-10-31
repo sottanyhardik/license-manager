@@ -164,7 +164,8 @@ def test_excel_headers_follow_the_same_e1_order(e1_licence):
     response = ItemPivotReportView().export_to_excel_streaming(min_balance=0, license_status="all")
     workbook = openpyxl.load_workbook(io.BytesIO(b"".join(response.streaming_content)), data_only=True)
     for sheet in workbook.worksheets:
-        headers = [sheet.cell(1, c).value for c in range(10, sheet.max_column + 1) if sheet.cell(1, c).value]
+        # Row 1 is the notification title; row 2 carries merged product-category headers.
+        headers = [sheet.cell(2, c).value for c in range(10, sheet.max_column + 1) if sheet.cell(2, c).value]
         if "APPLE DIES" in headers:
             wanted = [h for h in headers if h in {"OTHER CONFECTIONERY", "APPLE DIES", "PP", "PAPER", "CMC", "SUGAR"}]
             assert wanted == ["OTHER CONFECTIONERY", "APPLE DIES", "PP", "PAPER", "CMC", "SUGAR"]

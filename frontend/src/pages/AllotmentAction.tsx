@@ -529,7 +529,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         try {
             for (const licenseId of licenseIds) {
                 try {
-                    const r = await api.post(`license-actions/${licenseId}/fetch-ownership/`);
+                    await api.post(`license-actions/${licenseId}/fetch-ownership/`);
                     successCount++;
                 } catch (err: any) {
                     failCount++;

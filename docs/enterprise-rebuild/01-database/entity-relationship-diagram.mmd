@@ -1,0 +1,20 @@
+erDiagram
+  COMPANY ||--o{ LICENCE : exporter_or_owner
+  COMPANY ||--o{ BOE : importer
+  COMPANY ||--o{ ALLOTMENT : company
+  LICENCE ||--o{ LICENCE_IMPORT_ITEM : has
+  LICENCE ||--o{ LICENCE_EXPORT_ITEM : has
+  LICENCE ||--|| LICENCE_BALANCE : materialises
+  LICENCE ||--o{ LICENCE_DOCUMENT : attaches
+  LICENCE ||--o{ LICENCE_TRANSFER : records
+  LICENCE_IMPORT_ITEM ||--o{ BOE_ROW : referenced_by
+  BOE ||--o{ BOE_ROW : has
+  ALLOTMENT ||--o{ ALLOTMENT_ITEM : has
+  ALLOTMENT_ITEM ||--o{ BOE_ALLOTMENT_ALLOCATION : consumes
+  BOE_ROW ||--o{ BOE_ALLOTMENT_ALLOCATION : allocates
+  TRADE ||--o{ TRADE_LINE : has
+  TRADE_LINE ||--o{ INVOICE_BOE_ALLOCATION : consumes
+  BOE_ROW ||--o{ INVOICE_BOE_ALLOCATION : allocates
+  BOE ||--o{ RECONCILIATION_LOG : has_history
+
+%% Preliminary diagram derived from existing documentation, not live schema introspection.

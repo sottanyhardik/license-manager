@@ -228,7 +228,9 @@ class TestCanonicalAllocationScenarios:
 
     def test_16_pair_mismatch_rejected(self, api, company):
         item, target = source(company, "16"), allotment(company)
-        response = allocate(api, target, item.pk, "10", "99.99")
+        # A one-cent difference is an accepted rounding tolerance; use a
+        # two-cent mismatch to exercise the rejection boundary.
+        response = allocate(api, target, item.pk, "10", "99.98")
         assert response.status_code == 400 and response.data["errors"][0]["code"] == "ALLOCATION_PAIR_MISMATCH"
 
     def test_17_large_batch(self, api, company):

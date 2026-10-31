@@ -45,7 +45,7 @@ const A11Y_RULES = {
 };
 
 test.describe('Accessibility Framework - WCAG 2.1 AA', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page: _page }) => {
     // Inject axe-core before each test
     // await injectAxe(page);
   });

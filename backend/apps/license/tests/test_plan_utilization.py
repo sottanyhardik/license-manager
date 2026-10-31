@@ -98,8 +98,8 @@ def test_falls_back_to_item_names_then_id_for_description(license_obj):
 
     assert rows[named.id]["description"] == "borax, Rutile"
     assert rows[named.id]["item_names"] == [
-        {"id": borax.id, "name": "borax"},
-        {"id": rutile.id, "name": "Rutile"},
+        {"id": borax.id, "name": "borax", "hs_code": None},
+        {"id": rutile.id, "name": "Rutile", "hs_code": None},
     ]
     assert rows[unnamed.id]["description"] == f"ID:{unnamed.id}"
     assert rows[unnamed.id]["item_names"] == []

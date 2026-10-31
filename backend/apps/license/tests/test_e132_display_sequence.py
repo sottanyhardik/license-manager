@@ -240,8 +240,8 @@ def test_excel_columns_follow_the_same_e132_order(e132_full_licence):
     response = ItemPivotReportView().export_to_excel_streaming(min_balance=0, license_status="all")
     workbook = openpyxl.load_workbook(io.BytesIO(b"".join(response.streaming_content)), data_only=True)
     for sheet in workbook.worksheets:
-        # Row 1 carries the merged product-category headers from column 10 (value on the first cell of each merge).
-        headers = [sheet.cell(1, c).value for c in range(10, sheet.max_column + 1) if sheet.cell(1, c).value]
+        # Row 1 is the notification title; row 2 carries the merged product-category headers.
+        headers = [sheet.cell(2, c).value for c in range(10, sheet.max_column + 1) if sheet.cell(2, c).value]
         if "FOOD FLAVOUR" in headers:
             assert headers == E132_SEQUENCE + ["RBD PAL"]
             assert "CERELS" not in headers and "APPLE DRIES" not in headers

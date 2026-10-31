@@ -1,0 +1,23 @@
+flowchart TD
+  A[RB-001 Source index/file register] --> B[RB-003 Approved rule corpus]
+  A --> C[RB-005 Company scope contract]
+  D[RB-002 Deployment baseline] --> P[RB-016 Release rehearsal]
+  E[RB-004 Field mapping/baseline] --> F[RB-007 Entitlement ledger]
+  B --> F
+  C --> F
+  F --> G[RB-008 Restrictions + AU]
+  E --> H[RB-009 BOE/trade lifecycle]
+  F --> H
+  H --> I[RB-010 Reconciliation]
+  G --> J[RB-011 Frontend parity]
+  I --> J
+  F --> K[RB-012 Reports]
+  H --> K
+  E --> L[RB-013 Accounting policy]
+  C --> L
+  H --> L
+  L --> M[RB-014 Accounting]
+  F --> N[RB-015 Dry migration]
+  H --> N
+  M --> N
+  N --> P

@@ -419,18 +419,15 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
         read_only_fields = ["license"]
 
 
-CIF_RESTRICTION_VALUES = [Decimal("2"), Decimal("3"), Decimal("5"), Decimal("10")]
+from apps.license.services.restriction_policy import validate_cif_restriction_percentage
+
 
 def _validate_cif_restriction(value, field_name="cif_restriction_percentage"):
-    """Validate cif_restriction_percentage is one of the allowed values or None."""
-    if value is not None and value != "" and value != 0:
-        dec_val = Decimal(str(value))
-        if dec_val not in CIF_RESTRICTION_VALUES:
-            raise serializers.ValidationError(
-                f"{field_name} must be one of 2, 3, 5, 10, or left blank."
-            )
-        return dec_val
-    return None
+    """Validate rule editor restrictions through the canonical policy module."""
+    try:
+        return validate_cif_restriction_percentage(value)
+    except (ValueError, ArithmeticError) as exc:
+        raise serializers.ValidationError(str(exc).replace("Restriction percentage", field_name)) from exc
 
 class SionPlanningUnitValueRowSerializer(serializers.ModelSerializer):
     cif_restriction_percentage = serializers.DecimalField(

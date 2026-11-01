@@ -39,6 +39,12 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         params = self.request.query_params
 
+        # Superuser accounts are visible only to superusers. For every other caller
+        # they are absent from list, search, detail, update, delete and password
+        # reset, so a superuser id answers exactly like a missing id.
+        if not self.request.user.is_superuser:
+            qs = qs.exclude(is_superuser=True)
+
         # Search by username or email
         search = params.get('search', '').strip()
         if search:

@@ -76,7 +76,7 @@ export default function AdminLayout({ children }) {
                                 ))}
                             </div>
                             {/* Subtle meta text */}
-                            <span className="hidden text-[10.5px] text-muted-foreground/40 sm:block">
+                            <span className="hidden text-[10.5px] text-muted-foreground sm:block">
                                 License Manager
                             </span>
                         </div>

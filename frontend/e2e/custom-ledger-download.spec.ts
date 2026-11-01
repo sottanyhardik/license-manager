@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 const realBackendEnabled = process.env.LM_REAL_E2E === "1";
 const licence = "3411008090";
 
-test("Custom Ledger action downloads one deterministic native PDF without navigating away", async ({ page }) => {
+test("Custom Ledger action downloads one deterministic native PDF without navigating away", async ({ page }, testInfo) => {
   test.skip(!realBackendEnabled, "Requires the isolated seeded browser harness.");
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -14,14 +14,14 @@ test("Custom Ledger action downloads one deterministic native PDF without naviga
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/dashboard");
   await page.goto("/license-ledger", { waitUntil: "networkidle" });
-  const licenceNumbers = page.getByText("License Numbers", { exact: true }).locator("..").locator("input");
+  const licenceNumbers = page.getByText("Include License Numbers", { exact: true }).locator("..").locator("input");
   await licenceNumbers.fill(licence);
   await licenceNumbers.press("Enter");
   await page.waitForLoadState("networkidle");
   await page.getByText("Loading license-wise ledger").waitFor({ state: "hidden", timeout: 15000 });
   const licenceRow = page.getByText(licence, { exact: true }).first().locator("xpath=ancestor::tr[1]");
   await expect(licenceRow).toBeVisible();
-  const action = licenceRow.getByRole("button", { name: "Custom Ledger PDF" });
+  const action = licenceRow.getByRole("button", { name: `Download custom ledger PDF for ${licence}`, exact: true });
   await expect(action).toBeVisible();
   const requestCount = { value: 0 };
   const pdfResponses: import("@playwright/test").Response[] = [];
@@ -32,8 +32,13 @@ test("Custom Ledger action downloads one deterministic native PDF without naviga
   expect(pdfResponses).toHaveLength(1);
   expect(pdfResponses[0].headers()["content-type"]).toContain("application/pdf");
   expect(page.url()).toContain("/license-ledger");
-  expect(download.suggestedFilename()).toBe(`${licence}-customs-ledger.pdf`);
-  mkdirSync("../artifacts", { recursive: true });
-  await download.saveAs(`../artifacts/${licence}-customs-ledger.pdf`);
+  // Filename contract: backend/apps/license/views/ledger.py custom_ledger_pdf -> f'{license_number}.pdf'.
+  expect(download.suggestedFilename()).toBe(`${licence}.pdf`);
+  // Keep the saved PDF in the per-test output directory (git-ignored test-results/),
+  // not in the tracked repository artifacts/ directory.
+  const saved = testInfo.outputPath(download.suggestedFilename());
+  await download.saveAs(saved);
+  expect(statSync(saved).size).toBeGreaterThan(0);
+  expect(readFileSync(saved).subarray(0, 5).toString()).toBe("%PDF-");
   expect(errors).toEqual([]);
 });

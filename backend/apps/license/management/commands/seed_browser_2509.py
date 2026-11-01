@@ -166,7 +166,7 @@ class Command(BaseCommand):
         port = _get_or_report_conflict(
             PortModel, {"code": "E2E"}, {"name": "E2E Browser Port"}, "port",
         )
-        _get_or_report_conflict(
+        purchase_status = _get_or_report_conflict(
             PurchaseStatus,
             {"code": "E2"},
             {"label": "E2E Browser Purchase Status", "is_active": True, "display_order": 1},
@@ -181,6 +181,7 @@ class Command(BaseCommand):
                 "license_expiry_date": date.today() + timedelta(days=365),
                 "exporter": company,
                 "scheme_code": scheme,
+                "purchase_status": purchase_status,
                 "notification_number": notification,
                 "port": port,
             },
@@ -192,9 +193,10 @@ class Command(BaseCommand):
             license_obj.scheme_code = scheme
             license_obj.notification_number = notification
             license_obj.port = port
+            license_obj.purchase_status = purchase_status
             license_obj.save(update_fields=[
                 "license_date", "license_expiry_date", "exporter", "scheme_code",
-                "notification_number", "port",
+                "notification_number", "port", "purchase_status",
             ])
 
         profile, _ = SionPlanningProfile.objects.get_or_create(
@@ -439,6 +441,7 @@ class Command(BaseCommand):
                     "license_expiry_date": date.today() + timedelta(days=365),
                     "exporter": company,
                     "scheme_code": scheme,
+                    "purchase_status": purchase_status,
                     "notification_number": notification,
                     "port": port,
                 },
@@ -451,9 +454,10 @@ class Command(BaseCommand):
             queue_license.scheme_code = scheme
             queue_license.notification_number = notification
             queue_license.port = port
+            queue_license.purchase_status = purchase_status
             queue_license.save(update_fields=[
                 "license_date", "license_expiry_date", "exporter", "scheme_code",
-                "notification_number", "port",
+                "notification_number", "port", "purchase_status",
             ])
             LicenseExportItemModel.objects.update_or_create(
                 license=queue_license,

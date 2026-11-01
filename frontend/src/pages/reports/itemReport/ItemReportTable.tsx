@@ -213,6 +213,7 @@ export default function ItemReportTable({
                                                 <Select
                                                     isMulti
                                                     isClearable
+                                                    aria-label={`Item names for ${item.product_description || 'item'}`}
                                                     value={(item.item_names || []).map((i: any) => ({
                                                         value: i.id,
                                                         label: i.name

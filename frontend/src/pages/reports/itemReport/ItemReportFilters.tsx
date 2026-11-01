@@ -83,6 +83,8 @@ export default function ItemReportFilters({
     const productDescriptionId = useId();
     const hsnCodeId = useId();
     const itemNameFilterId = useId();
+    const includeCompaniesId = useId();
+    const excludeCompaniesId = useId();
 
     return (
         <div className="row mb-3">
@@ -181,12 +183,13 @@ export default function ItemReportFilters({
                             </div>
 
                             <div>
-                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1">
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={includeCompaniesId}>
                                     <Building2 className="size-3.5" aria-hidden="true" />
                                     Include
                                 </label>
                                 <div style={{minHeight: '32px'}}>
                                     <AsyncSelectField
+                                        inputId={includeCompaniesId}
                                         endpoint="masters/companies/"
                                         labelField="name"
                                         valueField="id"
@@ -200,12 +203,13 @@ export default function ItemReportFilters({
                             </div>
 
                             <div>
-                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1">
+                                <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={excludeCompaniesId}>
                                     <MinusCircle className="size-3.5" aria-hidden="true" />
                                     Exclude
                                 </label>
                                 <div style={{minHeight: '32px'}}>
                                     <AsyncSelectField
+                                        inputId={excludeCompaniesId}
                                         endpoint="masters/companies/"
                                         labelField="name"
                                         valueField="id"

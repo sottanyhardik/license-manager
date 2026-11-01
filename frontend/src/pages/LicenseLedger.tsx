@@ -191,7 +191,7 @@ function LicenseWiseLedger({
                                                         >
                                                             Ledger
                                                         </button>
-                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-xs font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
+                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-xs font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))} aria-label={`Download custom ledger PDF for ${license.license_number}`}>PDF</button>}
                                                     </td>
                                                 </tr>
                                             ))}</tbody>

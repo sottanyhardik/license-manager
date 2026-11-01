@@ -67,7 +67,7 @@ test.describe("isolated data-bearing operational workflows", () => {
     expect(errors).toEqual([]);
   });
 
-  test("real PLAN queue refills from 1–10 to 2–11 and persists the debit", async ({ page }, testInfo) => {
+  test("real PLAN allocation debits the first candidate, keeps the queue, and persists the debit", async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     const failures: string[] = [];
     page.on("console", message => {
@@ -80,7 +80,12 @@ test.describe("isolated data-bearing operational workflows", () => {
     await expect(page.getByText(`Invoice #${queueInvoice}`, { exact: false })).toBeVisible();
     await expect(page.getByText("3411009001", { exact: true })).toBeVisible();
     await expect(page.getByText("3411009010", { exact: true })).toBeVisible();
-    await expect(page.getByText("3411009011", { exact: true })).toBeHidden();
+    // Current contract: the candidate queue is one page of up to 25 eligible licences
+    // (AllotmentAction.tsx pageSize = 25; set deliberately in commit 128417fd, which also
+    // changed the request's page_size from 10 to 25). All 12 seeded candidates fit on one page.
+    // The total is shown by the candidate badge; the range footer renders only when totalPages > 1.
+    await expect(page.getByText("12 items", { exact: true })).toBeVisible();
+    await expect(page.getByText("3411009011", { exact: true })).toBeVisible();
 
     const confirms = page.getByRole("button", { name: "Confirm" });
     const maxButtons = page.getByRole("button", { name: "Max" });
@@ -89,9 +94,9 @@ test.describe("isolated data-bearing operational workflows", () => {
     await confirms.first().click();
     await expect(page.getByText("Successfully allocated 100.000 from 3411009001").first()).toBeVisible();
 
-    // The number remains once in the authoritative allotted-history table,
-    // but is no longer one of the ten actionable queue cards.  The 11th
-    // eligible licence is promoted without reloading the document.
+    // The candidate queue is a single server page of eligible licences; the
+    // seeded 11th licence remains listed after the debit. The debit itself is
+    // asserted through the persisted allotment below, not through card counts.
     await expect(page.getByText("3411009011", { exact: true })).toBeVisible();
     await expect(page.getByText("Allotted Items")).toBeVisible();
     await expectNoDocumentOverflow(page);
@@ -127,7 +132,11 @@ test.describe("isolated data-bearing operational workflows", () => {
     // not mocked responses.  The assertions intentionally keep each page's
     // normal table/empty-state semantics intact.
     for (const [route, evidence] of [
-      ["/licenses", "3411008090"],
+      // Evidence must be a licence the default ACTIVE view shows under either candidate
+      // Null DFIA threshold (200 or 500). 3411008090 has live balance 0 and is correctly
+      // excluded from that view. 3411009011 has live balance 1000 and is not debited by
+      // the PLAN test. See backend test_license_default_active_filter.py.
+      ["/licenses", "3411009011"],
       ["/planning", "Planning"],
       ["/bill-of-entries", "Bill Of Entries"],
       ["/trades", "Trades"],

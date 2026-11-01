@@ -1,0 +1,63 @@
+# Route-by-route V1 redesign register
+
+This is a V1 design specification for all **57 registered route expressions**. It joins the static route/API evidence in the [route workflow map](../09-traceability/frontend-route-workflow-map.md) and exact priority acceptance gates in the [P0/P1 route/API register](../09-traceability/p0-p1-route-api-contract-register.md). It does not claim that proposed layouts or static client gates have been browser-validated or server-authorized.
+
+Evidence labels: **Observed** means the limited, read-only running observation recorded in the route workflow map; **Static** means frontend source and route-register evidence; **Proposed** means a V1 design requirement. Every route remains **Partial** until its individual state, API, authorization and browser acceptance gate is satisfied.
+
+## Shared V1 interaction contract
+
+Every data route uses a loading skeleton when its shape is known; an explanatory empty state; a recoverable error with retained filters/input; an explicit denied state that does not imply server authorization; and a success confirmation with affected records/provenance. Financial, allocation, correction, export, upload and deletion actions require a confirmation describing the effect and a post-action refresh/as-of indicator. Desktop data tables retain aligned financial columns; narrow layouts expose an intentionally designed summary rather than collapsing an unknown table into cards. Keyboard focus must move into and return from dialogs/drawers, and all controls require accessible names.
+
+## Route groups
+
+| UI ID(s) / route(s) | User purpose, static gate and known dependency | Current evidence | Proposed V1 screen and interactions | Required acceptance / dependency |
+| --- | --- | --- | --- | --- |
+| **UI-001–004** `/reports/parle/sion-e{1,e5,e126,e132}` | Compare SION norms; `REPORT_ROLES`; SION-report Axios variants have no conclusively matched route-specific OpenAPI operation. | Static shared `SionNormReport`/test evidence only. | One report shell with explicit norm variant in title/breadcrumb, filter provenance, dense accessible result table, no-result explanation and protected export status. | Bind each variant to a registered/deprecated API contract; test L/E/S/D, parameter fidelity, export failure and role denial. **P1, Partial.** |
+| **UI-005–007** expiring, active and selected-licence downloads | Produce operational XLSX/download output; `REPORT_ROLES`; active/expiring paths are schema gaps, while UI-007 maps to API-292/293 and API-152. | Static report components/tests; no observed download. | Shared export panel: date/day bounds, selected-licence count, applied-filter summary, content type/file name feedback and retry without losing values. | Reconcile legacy report paths; role/direct-download denial, zero result, invalid day/bulk input, blob failure and selected-set parity. **P1, Partial.** |
+| **UI-008–011** item pivot, item, planned and purchase-profit reports | Investigate item/planning/financial output; `REPORT_ROLES`; API-068–072, 277 and 295–298 where registered. | Static local state/tests; pivot E2E is currently failing/limited. | Share table toolbar, task progress/retry, column chooser and export provenance. Inline item edit is visually separate from read-only reporting. | Task queued/failed/retry; zero rows; filter reset; mutation denial; financial totals/provenance and responsive table. **P1, Partial.** |
+| **UI-012–015** `/login`, `/forgot-password`, `/401`, `/403` | Start/recover a session or explain a denial; login/password-reset API-019/024. | **Observed:** login labelled credentials, password visibility, reset and sign-in controls; remaining evidence is static. | Accessible focused auth card with generic reset completion, support/retry guidance and safe return destination. Error pages state next action without leaking policy/token data. | Invalid/locked/throttled/malformed response, generic reset response, sanitized redirect and direct server denial before `/403`. **P1, Partial.** |
+| **UI-016–017** `/`, `/dashboard` | Route users to dashboard; display role-appropriate metrics; dashboard API-050. | Static protected redirect, dashboard states/tests. | Header displays source/as-of time; cards name their measure and support drill-through; incomplete metrics show partial-data state. | Anonymous/wrong-role API result, metric DTO/precision fixture, L/E/S/D and retry without stale numeric presentation. **P1, Partial.** |
+| **UI-018–021** licence list, create/edit and planning | Maintain licence master/evidence and plan entitlement; licence roles; API-119–127, 155, 242, 299–314. | Static `MasterList`/`MasterForm`/planning source and tests. | List has saved filters, manager-only row actions and balance-engine labels. Form stages metadata/document parse/save. Planning splits inventory, rules, proposal and capacity; replan-impacting writes are confirmed. | List/read/mutation policy split; upload/parse cleanup; stale edits; D2 provenance; D3 plan approval; L/E/S/D and role/object cases. **P0/P1, Partial.** |
+| **UI-022–025** allotment list, create/edit and allocation | Create allocations against live capacity; allotment roles; API-003–017. | Static shared form/list and allocation action/test evidence. | Allocation workspace: allotment context, eligible source, proposed debits, remaining quantity/CIF/as-of time and stale-capacity recovery. | Viewer cannot mutate; exact cap, empty eligibility, allocation/release, concurrent/stale rejection, plan isolation and PDF failure. **P0/P1, Partial.** |
+| **UI-026–029** BOE list, create/edit and transfer letter | Record import evidence/generate transfer letter; BOE/TL/account roles; API-035–049. | **Observed:** BOE shell, filter/search/status/export/create/row/pagination controls; mutations static. | List action availability follows server capabilities. Parse/create stages upload → review → commit; correction states downstream effect; transfer letter shows prerequisites/generation/download. | Per-action role matrix; invalid parser file/partial-save cleanup; stale correction/no duplicate debit; hide/restore provenance; protected blob failure. **P1, Partial.** |
+| **UI-030–034** trade list/create/edit and reconciliation | Record commercial evidence/resolve BOE links; trade/BOE/account roles; API-278–291, 333–350. | Static components/tests; selected deep API traces. | Trade separates terms, line/payment evidence and documents. Reconciliation has status tabs with link/merge/note/recalculate effects, before/after audit and retryable failures. | Purchase/sale validation, viewer/manager policy, correction/reversal, dual-role writes, merge atomicity/race, partial failure and D1/D5 boundaries. **P0/P1, Partial.** |
+| **UI-035–037** incentive licence list/create/edit | Manage incentive-licence records; incentive roles; API-056–062 where surfaced. | Static generic components only. | Reuse licence patterns while distinguishing incentive scheme/lifecycle; do not expose generic actions without a matrix. | Resolve dynamic paths/actions/schema, list/filter/empty/export, role denial, validation and correction. **P1, Partial.** |
+| **UI-038–044** ledger upload, ledger, requests, readiness and detail | Upload source ledger, inspect balances, obtain packages; ledger/licence/trade roles; API-074, 092–118, 347. | Static pages/services; selected job/download traces/tests. | One ledger workspace with labelled Customs/Financial figures, as-of source, job timeline, owner-visible requests, breadcrumb and protected-download status. | Invalid file; queued/running/failed/recovered; idempotency; foreign owner; item–licence mismatch; checksum/download failure; D2/D4. **P1, Partial.** |
+| **UI-045–046** licence overview and legacy balance redirect | Investigate licence/route legacy URL; multi-role read gate; API-121–149. | Static overview/redirect source and balance tests. | Header names licence/status/source time and distinct Customs/Financial values. Tabs isolate items, BOEs, allotments, invoices, ledger and documents; mutations state balance/audit effect. | Tab L/E/S/D; absent docs; balance/reversal golden cases; direct action policy; D2; safe redirect. **P0/P1, Partial.** |
+| **UI-047** `/pdf-viewer` | Render authorized document; authenticated gate; protected media API-269. | Static URL-normalization/helper/security tests; no observed viewer. | Bounded viewer displays name/type, loading/error/unsupported state and return context; never exposes a bearer/query token. | Malformed URL, traversal, anonymous/wrong-role/foreign document, blob render failure and D4 posture. **P1, Partial.** |
+| **UI-048–049** settings and profile | Administer users/MDS status or update current profile; superuser/authenticated gates; user/MDS/profile APIs. | Static settings/profile source/tests. | Settings separates system status from user administration; profile is self-scoped with session/error feedback. | Duplicate-admin ownership disposition, MDS unavailable, self-only validation, superuser/user-manager policy and audit effect. **P1/P2, Partial.** |
+| **UI-050–052** dynamic master list/create/edit | Maintain allowed reference entities; generic authenticated/USER_MANAGER gates; API-165–267 depends on entity. | Static list/form/tests. | Entity-aware header, business-use explanation, allowlisted fields, relationship feedback and destructive-warning/audit link. Unknown entity is not-found. | Explicit allowlist/API mapping; per-entity read/write/delete role/object rule, FK/missing/stale row, L/E/S/D. **P1, Partial.** |
+| **UI-053–055** user list/create/edit | Administer user roles/lifecycle; `USER_MANAGER`; API-027–034. | Static user components/tests. | Role matrix explains capability impact; create/edit validates duplicate identity/role; destructive/self/privileged actions require confirmation and audit link. | Direct non-manager denial, self/protected target policy, escalation prevention, password reset/delivery and recovery. **P1, Partial.** |
+| **UI-056** activity log | Read recorded activity; `USER_MANAGER`; activity-log request path. | Static page/local state; no named route test. | Filterable paginated immutable-looking event table labels source/time/actor and best-effort durability until D6. | Read scope, filters/pagination/empty/error, authorization and D6 retention/durability language. **P2, Partial.** |
+| **UI-057** `*` | Safely handle unknown routes; public fallback. | Static `NotFound` only. | Accessible 404 with home/sign-in recovery appropriate to session state; no route/company/document leakage. | Unknown-route response and no sensitive disclosure. **P2, Partial.** |
+
+## Coverage and implementation use
+
+The table explicitly represents every UI-001 through UI-057. It groups only routes sharing a component family or coherent user task; individual route/API IDs remain authoritative in the linked traceability registers. The only running-application observations are the login and BOE-list observations described above. All other current-state claims are static, and every layout/state/accessibility item is **Proposed for V1**.
+
+Implement groups in the order in [the task register](../08-implementation/task-register.md): owner policy and P0 financial/security contracts, shared client foundations, then non-overlapping workflow groups. A route exits Partial only when its linked route/API acceptance row has direct server, browser-state and recovery evidence.
+
+## Exact route coverage index
+
+This index makes the grouped specification auditable. Each identifier is a distinct registered route expression; the referenced row supplies its shared design contract only where the user task/component is materially the same.
+
+| Route IDs | Design row |
+| --- | --- |
+| UI-001, UI-002, UI-003, UI-004 | SION norm reports |
+| UI-005, UI-006, UI-007 | Licence download reports |
+| UI-008, UI-009, UI-010, UI-011 | Item/planned/profit reports |
+| UI-012, UI-013, UI-014, UI-015 | Authentication and access recovery |
+| UI-016, UI-017 | Root redirect and dashboard |
+| UI-018, UI-019, UI-020, UI-021 | Licence and planning |
+| UI-022, UI-023, UI-024, UI-025 | Allotment and allocation |
+| UI-026, UI-027, UI-028, UI-029 | BOE and transfer letter |
+| UI-030, UI-031, UI-032, UI-033, UI-034 | Trade and reconciliation |
+| UI-035, UI-036, UI-037 | Incentive licences |
+| UI-038, UI-039, UI-040, UI-041, UI-042, UI-043, UI-044 | Ledger packages and details |
+| UI-045, UI-046 | Licence overview and legacy balance redirect |
+| UI-047 | Protected PDF viewer |
+| UI-048, UI-049 | Settings and profile |
+| UI-050, UI-051, UI-052 | Dynamic masters |
+| UI-053, UI-054, UI-055 | User administration |
+| UI-056 | Activity history |
+| UI-057 | Not found |

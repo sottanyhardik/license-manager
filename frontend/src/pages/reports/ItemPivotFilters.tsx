@@ -55,6 +55,8 @@ export default function ItemPivotFilters({
     const purchaseStatusId = useId();
     const expiryDateFromId = useId();
     const expiryDateToId = useId();
+    const includeCompaniesId = useId();
+    const excludeCompaniesId = useId();
     const menuPortalTarget = typeof document !== "undefined" ? document.body : undefined;
     const activeFiltersVisible = Boolean(hasActiveFilters);
 
@@ -153,12 +155,13 @@ export default function ItemPivotFilters({
                     </div>
 
                     <div>
-                        <div className="form-label mb-2 flex items-center gap-2 font-bold">
+                        <label htmlFor={includeCompaniesId} className="form-label mb-2 flex items-center gap-2 font-bold">
                             <Building2 className="size-4" aria-hidden="true" />
                             Include Companies
-                        </div>
+                        </label>
                         <div style={{ minHeight: "38px" }}>
                             <AsyncSelectField
+                                inputId={includeCompaniesId}
                                 endpoint="masters/companies/"
                                 labelField="name"
                                 valueField="id"
@@ -172,12 +175,13 @@ export default function ItemPivotFilters({
                     </div>
 
                     <div>
-                        <div className="form-label mb-2 flex items-center gap-2 font-bold">
+                        <label htmlFor={excludeCompaniesId} className="form-label mb-2 flex items-center gap-2 font-bold">
                             <MinusCircle className="size-4" aria-hidden="true" />
                             Exclude Companies
-                        </div>
+                        </label>
                         <div style={{ minHeight: "38px" }}>
                             <AsyncSelectField
+                                inputId={excludeCompaniesId}
                                 endpoint="masters/companies/"
                                 labelField="name"
                                 valueField="id"

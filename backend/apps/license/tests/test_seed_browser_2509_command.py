@@ -49,6 +49,12 @@ def test_seed_browser_2509_creates_idempotent_canonical_fixture(monkeypatch):
     assert license_obj.notification_number == NotificationNumber.objects.get(code="2509")
     assert license_obj.port == PortModel.objects.get(code="E2E")
     assert PurchaseStatus.objects.filter(is_active=True).exists()
+    # The Item Pivot report only lists licences with a purchase status (GE/MI/CO
+    # by default). Without this the browser scenario yields zero rows.
+    assert license_obj.purchase_status == PurchaseStatus.objects.get(code="E2")
+    assert not LicenseDetailsModel.objects.filter(
+        scheme_code__code="E2E2509", purchase_status__isnull=True
+    ).exists()
     plan = LicenseItemPlan.objects.get(license=license_obj, is_active=True)
     assert plan.planned_quantity == Decimal("234.000")
     assert plan.planned_cif_fc == Decimal("2064.12")

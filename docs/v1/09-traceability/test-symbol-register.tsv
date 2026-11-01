@@ -1,0 +1,510 @@
+test_id	symbol	kind	file	line	suite_area	current_run_status	maps_to	audit_status	evidence
+TEST-00001	AccountsAPITestCase	test	backend/apps/accounts/tests.py	17	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00002	MigrateAuthCommandTests	test	backend/apps/accounts/tests.py	142	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00003	RepairUserFKConstraintsCommandTests	test	backend/apps/accounts/tests.py	180	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00004	TestAllotmentItemsLifecycle	test	backend/apps/allotment/tests/test_a1_domain_models.py	14	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00005	TestAuditEvent	test	backend/apps/allotment/tests/test_a1_domain_models.py	148	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00006	TestShortfall	test	backend/apps/allotment/tests/test_a1_domain_models.py	255	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00007	TestAllocationVersion	test	backend/apps/allotment/tests/test_a1_domain_models.py	352	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00008	TestAllocateItemsUsesLiveBalance	test	backend/apps/allotment/tests/test_allocate_items_cif_validation.py	102	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00009	TestE1MixedHsnPlanLinesAreIndependent	test	backend/apps/allotment/tests/test_allocate_items_e1_group_plan_cap.py	80	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00010	TestPlanLineCapIsNotDoubleCounted	test	backend/apps/allotment/tests/test_allocate_items_group_plan_cap.py	64	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00011	TestPlanLineLedgerResidual	test	backend/apps/allotment/tests/test_allocate_items_plan_line_balance.py	119	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00012	TestAllocationInitialization	test	backend/apps/allotment/tests/test_allocation_initialization.py	53	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00013	TestAvailableQuantityFilter	test	backend/apps/allotment/tests/test_available_licenses_filters.py	120	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00014	TestAvailableValueFilterUsesLiveValue	test	backend/apps/allotment/tests/test_available_licenses_filters.py	159	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00015	TestPlanModeSplitRows	test	backend/apps/allotment/tests/test_available_licenses_plan_mode.py	112	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00016	TestPlannedItemNameFilter	test	backend/apps/allotment/tests/test_available_licenses_plan_mode.py	267	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00017	TestPlanModeRangeFilters	test	backend/apps/allotment/tests/test_available_licenses_plan_mode.py	309	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00018	TestCanonicalAllocationScenarios	test	backend/apps/allotment/tests/test_module3_allocation_scenarios.py	69	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00019	BillOfEntryNestedRowUpdateTests	test	backend/apps/bill_of_entry/tests/test_boe_hide_service.py	108	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00020	HideBoeSpansMultipleLicensesTests	test	backend/apps/bill_of_entry/tests/test_boe_hide_service.py	140	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00021	HideBoeBalanceImmediacyTests	test	backend/apps/bill_of_entry/tests/test_boe_hide_service.py	203	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00022	HideBoeIdempotencyTests	test	backend/apps/bill_of_entry/tests/test_boe_hide_service.py	268	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00023	HideBoeReconciliationLogTests	test	backend/apps/bill_of_entry/tests/test_boe_hide_service.py	332	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00024	HideBoesBulkTests	test	backend/apps/bill_of_entry/tests/test_boe_hide_service.py	381	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00025	StartLogThreadReleasesConnectionTests	test	backend/apps/core/tests/test_activity_log_connections.py	15	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00026	TestParseDateSafe	test	backend/apps/core/tests/test_date_utils.py	24	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00027	TestParseDatetimeSafe	test	backend/apps/core/tests/test_date_utils.py	77	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00028	TestFormatDateDisplay	test	backend/apps/core/tests/test_date_utils.py	114	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00029	TestFormatDateIso	test	backend/apps/core/tests/test_date_utils.py	146	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00030	TestIsDateExpired	test	backend/apps/core/tests/test_date_utils.py	167	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00031	TestIsDateInRange	test	backend/apps/core/tests/test_date_utils.py	195	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00032	TestIsDateWithinDays	test	backend/apps/core/tests/test_date_utils.py	246	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00033	TestDateRangeOverlaps	test	backend/apps/core/tests/test_date_utils.py	262	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00034	TestDaysBetween	test	backend/apps/core/tests/test_date_utils.py	306	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00035	TestAddBusinessDays	test	backend/apps/core/tests/test_date_utils.py	333	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00036	TestAddMonths	test	backend/apps/core/tests/test_date_utils.py	361	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00037	TestGetFinancialYear	test	backend/apps/core/tests/test_date_utils.py	371	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00038	TestGetQuarter	test	backend/apps/core/tests/test_date_utils.py	399	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00039	TestIsWeekend	test	backend/apps/core/tests/test_date_utils.py	427	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00040	TestEdgeCases	test	backend/apps/core/tests/test_date_utils.py	451	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00041	TestToDecimal	test	backend/apps/core/tests/test_decimal_utils.py	22	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00042	TestSafeDecimalOperation	test	backend/apps/core/tests/test_decimal_utils.py	70	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00043	TestRoundDecimalDown	test	backend/apps/core/tests/test_decimal_utils.py	99	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00044	TestRoundDecimal	test	backend/apps/core/tests/test_decimal_utils.py	129	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00045	TestDecimalDivision	test	backend/apps/core/tests/test_decimal_utils.py	149	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00046	TestSumDecimals	test	backend/apps/core/tests/test_decimal_utils.py	176	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00047	TestDecimalEncoder	test	backend/apps/core/tests/test_decimal_utils.py	200	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00048	TestFormatDecimal	test	backend/apps/core/tests/test_decimal_utils.py	226	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00049	TestEdgeCases	test	backend/apps/core/tests/test_decimal_utils.py	255	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00050	TestSyncRegistry	test	backend/apps/core/tests/test_master_sync.py	34	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00051	TestDeterministicUid	test	backend/apps/core/tests/test_master_sync.py	76	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00052	TestMasterSyncMixinFields	test	backend/apps/core/tests/test_master_sync.py	109	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00053	TestSyncService	test	backend/apps/core/tests/test_master_sync.py	140	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00054	TestDeleteProtection	test	backend/apps/core/tests/test_master_sync.py	263	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00055	TestTombstone	test	backend/apps/core/tests/test_master_sync.py	323	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00056	TestBatchSync	test	backend/apps/core/tests/test_master_sync.py	345	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00057	TestChangeFeed	test	backend/apps/core/tests/test_master_sync.py	393	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00058	TestDeltaPull	test	backend/apps/core/tests/test_master_sync.py	428	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00059	TestMediaSync	test	backend/apps/core/tests/test_master_sync.py	460	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00060	TestSyncEvent	test	backend/apps/core/tests/test_master_sync.py	505	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00061	TestThreeServerSync	test	backend/apps/core/tests/test_master_sync.py	532	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00062	TestPortDeleteProtection	test	backend/apps/core/tests/test_masterdata_delete_protection.py	61	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00063	TestCompanyDeleteProtection	test	backend/apps/core/tests/test_masterdata_delete_protection.py	117	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00064	TestMasterViewSetApiDeleteProtection	test	backend/apps/core/tests/test_masterdata_delete_protection.py	192	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00065	TestDeleteProtectionRegressionScope	test	backend/apps/core/tests/test_masterdata_delete_protection.py	253	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00066	TestMdsOffUnchanged	test	backend/apps/core/tests/test_mds_write_cutover.py	129	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00067	TestMdsOnCreate	test	backend/apps/core/tests/test_mds_write_cutover.py	158	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00068	TestMdsOnUpdate	test	backend/apps/core/tests/test_mds_write_cutover.py	193	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00069	TestMdsOnDelete	test	backend/apps/core/tests/test_mds_write_cutover.py	211	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00070	TestMdsRejectsWrite	test	backend/apps/core/tests/test_mds_write_cutover.py	237	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00071	TestKeylessRoundTripPayload	test	backend/apps/core/tests/test_mds_write_cutover.py	279	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00072	TestLicenseDocumentAccess	test	backend/apps/core/tests/test_protected_media_view.py	96	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00073	TestBillOfEntryDocumentAccess	test	backend/apps/core/tests/test_protected_media_view.py	128	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00074	TestTradeDocumentAccess	test	backend/apps/core/tests/test_protected_media_view.py	157	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00075	TestAdditionalBusinessDocumentAccess	test	backend/apps/core/tests/test_protected_media_view.py	188	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00076	TestUnaffectedAndOrphanPaths	test	backend/apps/core/tests/test_protected_media_view.py	218	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00077	TestRegressionScopeBeyondTheOriginalLicense	test	backend/apps/core/tests/test_protected_media_view.py	239	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00078	TestParseModifiedOn	test	backend/apps/core/tests/test_reconcile_masters.py	48	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00079	TestReconcileModel	test	backend/apps/core/tests/test_reconcile_masters.py	65	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00080	TestBuildReport	test	backend/apps/core/tests/test_reconcile_masters.py	164	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00081	TestParseInputs	test	backend/apps/core/tests/test_reconcile_masters.py	212	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00082	TestUrlWiring	test	backend/apps/core/tests/test_sync_api.py	60	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00083	TestAuthenticationRequired	test	backend/apps/core/tests/test_sync_api.py	77	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00084	TestPushEndpoint	test	backend/apps/core/tests/test_sync_api.py	119	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00085	TestPullEndpoint	test	backend/apps/core/tests/test_sync_api.py	325	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00086	TestDeleteCheckEndpoint	test	backend/apps/core/tests/test_sync_api.py	437	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00087	TestStatusEndpoint	test	backend/apps/core/tests/test_sync_api.py	589	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00088	TestMediaDownloadEndpoint	test	backend/apps/core/tests/test_sync_api.py	655	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00089	TestConflictLogEndpoint	test	backend/apps/core/tests/test_sync_api.py	751	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00090	TestMalformedPayloads	test	backend/apps/core/tests/test_sync_failures.py	70	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00091	TestUnprocessableEvents	test	backend/apps/core/tests/test_sync_failures.py	161	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00092	TestReplayAndDuplicates	test	backend/apps/core/tests/test_sync_failures.py	317	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00093	TestOutOfOrderConvergence	test	backend/apps/core/tests/test_sync_failures.py	383	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00094	TestEveryRegisteredMasterIsTransportable	test	backend/apps/core/tests/test_sync_failures.py	464	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00095	TestDeleteCheckFailures	test	backend/apps/core/tests/test_sync_failures.py	600	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00096	TestGetMediaInfo	test	backend/apps/core/tests/test_sync_media_transport.py	77	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00097	TestCreateMediaTasks	test	backend/apps/core/tests/test_sync_media_transport.py	118	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00098	TestPendingQueue	test	backend/apps/core/tests/test_sync_media_transport.py	177	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00099	TestProcessMediaTask	test	backend/apps/core/tests/test_sync_media_transport.py	202	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00100	TestDownloadMediaFromPeer	test	backend/apps/core/tests/test_sync_media_transport.py	341	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00101	TestMediaSyncWorker	test	backend/apps/core/tests/test_sync_media_transport.py	401	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00102	TestMediaLifecycleEndToEnd	test	backend/apps/core/tests/test_sync_media_transport.py	535	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00103	TestPushToPeerRequest	test	backend/apps/core/tests/test_sync_transport.py	70	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00104	TestPushToPeerFailures	test	backend/apps/core/tests/test_sync_transport.py	150	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00105	TestPushToAllPeers	test	backend/apps/core/tests/test_sync_transport.py	192	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00106	TestCheckDeleteOnPeers	test	backend/apps/core/tests/test_sync_transport.py	227	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00107	TestSyncFromPeer	test	backend/apps/core/tests/test_sync_transport.py	361	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00108	TestSyncFromAllPeers	test	backend/apps/core/tests/test_sync_transport.py	557	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00109	TestCeleryTasksDisabled	test	backend/apps/core/tests/test_sync_transport.py	590	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00110	TestCeleryTasksEnabled	test	backend/apps/core/tests/test_sync_transport.py	629	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00111	TestChangeFeedRobustness	test	backend/apps/core/tests/test_sync_transport.py	711	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00112	TestSyncBookkeepingModels	test	backend/apps/core/tests/test_sync_transport.py	803	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00113	TestPushedPayloadIsAcceptedByThePeerApi	test	backend/apps/core/tests/test_sync_transport.py	836	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00114	TestCreatePropagationAllDirections	test	backend/apps/core/tests/test_three_server_runtime.py	99	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00115	TestUpdatePropagationAllDirections	test	backend/apps/core/tests/test_three_server_runtime.py	122	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00116	TestDeletePropagationAllDirections	test	backend/apps/core/tests/test_three_server_runtime.py	149	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00117	TestGlobalDeleteProtection	test	backend/apps/core/tests/test_three_server_runtime.py	174	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00118	TestDuplicateReconciliation	test	backend/apps/core/tests/test_three_server_runtime.py	230	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00119	TestConcurrentConflictResolution	test	backend/apps/core/tests/test_three_server_runtime.py	277	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00120	TestOfflineRecovery	test	backend/apps/core/tests/test_three_server_runtime.py	328	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00121	TestRetryIdempotency	test	backend/apps/core/tests/test_three_server_runtime.py	373	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00122	TestABCConvergence	test	backend/apps/core/tests/test_three_server_runtime.py	432	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00123	TestValidatePositiveDecimal	test	backend/apps/core/tests/test_validation.py	25	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00124	TestValidateNonNegativeDecimal	test	backend/apps/core/tests/test_validation.py	79	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00125	TestValidateDateRange	test	backend/apps/core/tests/test_validation.py	104	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00126	TestValidateRequiredFields	test	backend/apps/core/tests/test_validation.py	157	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00127	TestValidateChoice	test	backend/apps/core/tests/test_validation.py	225	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00128	TestValidateUniqueItems	test	backend/apps/core/tests/test_validation.py	267	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00129	TestIsValidEmail	test	backend/apps/core/tests/test_validation.py	314	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00130	TestIsValidPhone	test	backend/apps/core/tests/test_validation.py	358	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00131	TestSanitizeString	test	backend/apps/core/tests/test_validation.py	402	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00132	TestValidateFileExtension	test	backend/apps/core/tests/test_validation.py	461	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00133	TestEdgeCases	test	backend/apps/core/tests/test_validation.py	508	Core	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00134	TestLicenseBalanceCalculator	test	backend/apps/license/tests/test_balance_calculator.py	23	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00135	TestItemBalanceCalculator	test	backend/apps/license/tests/test_balance_calculator.py	293	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00136	TestEdgeCases	test	backend/apps/license/tests/test_balance_calculator.py	669	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00137	TestCalculateDebitLineLevelExclusion	test	backend/apps/license/tests/test_balance_calculator.py	715	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00138	TestAvailableQuantityUsesCurrentQuantityNotOldQuantity	test	backend/apps/license/tests/test_balance_calculator.py	978	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00139	TestOutstandingAllotmentQuantityExclusion	test	backend/apps/license/tests/test_balance_calculator.py	1108	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00140	TestHiddenBoeExclusion	test	backend/apps/license/tests/test_balance_calculator.py	1222	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00141	WriterSplitConsolidationTests	test	backend/apps/license/tests/test_balance_cif_single_source.py	34	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00142	BalanceCifFcPropertyCollapseTests	test	backend/apps/license/tests/test_balance_cif_single_source.py	154	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00143	AvailableValueCalculatedLiveBalanceTests	test	backend/apps/license/tests/test_balance_cif_single_source.py	165	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00144	BalanceCifFcPropertyCollapseRegressionTests	test	backend/apps/license/tests/test_balance_cif_single_source.py	275	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00145	PdfExportReadsStoredAvailableValueTests	test	backend/apps/license/tests/test_balance_cif_single_source.py	302	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00146	BalanceExcelStructureTests	test	backend/apps/license/tests/test_balance_excel_export.py	35	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00147	BalanceExcelCustomsLedgerTests	test	backend/apps/license/tests/test_balance_excel_export.py	169	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00148	BalanceExcelReconciliationSheetTests	test	backend/apps/license/tests/test_balance_excel_export.py	207	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00149	BuildBalanceExcelUnusedLiveBalanceTests	test	backend/apps/license/tests/test_balance_excel_unused_live_balance.py	24	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00150	BalanceLedgerGetTests	test	backend/apps/license/tests/test_balance_ledger_views.py	119	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00151	BoeCandidateDimensionRegressionTests	test	backend/apps/license/tests/test_balance_ledger_views.py	212	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00152	RecalculateViewTests	test	backend/apps/license/tests/test_balance_ledger_views.py	270	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00153	FinancialLedgerGroupingTests	test	backend/apps/license/tests/test_balance_ledger_views.py	300	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00154	CustomsLedgerTests	test	backend/apps/license/tests/test_balance_ledger_views.py	454	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00155	FinancialLedgerOpeningBalanceGateTests	test	backend/apps/license/tests/test_balance_ledger_views.py	703	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00156	HiddenBoeOpeningBalanceGateTests	test	backend/apps/license/tests/test_balance_ledger_views.py	783	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00157	CustomsLedgerShowHiddenTests	test	backend/apps/license/tests/test_balance_ledger_views.py	980	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00158	TimelineTests	test	backend/apps/license/tests/test_balance_ledger_views.py	1072	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00159	WarningManagementTests	test	backend/apps/license/tests/test_balance_ledger_views.py	1152	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00160	HideBoeRestoreBoeViewTests	test	backend/apps/license/tests/test_balance_ledger_views.py	1496	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00161	LicenseLifecycleScenarioTests	test	backend/apps/license/tests/test_balance_ledger_views.py	1704	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00162	BalancePdfEndpointTests	test	backend/apps/license/tests/test_balance_pdf_endpoint.py	15	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00163	Ledger03CifAttributionTests	test	backend/apps/license/tests/test_bl_ledger_03_cif_attribution.py	19	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00164	Ledger03SiblingScopeTests	test	backend/apps/license/tests/test_bl_ledger_03_sibling_scope.py	14	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00165	SingleBoeSingleRowInvoiceLinkedTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	78	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00166	SingleBoeMultipleRowsInvoiceLinkedTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	106	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00167	MultiItemBoePartialCandidateGapTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	131	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00168	NoInvoiceLinkageRegressionTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	174	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00169	MultipleBoesOneInvoiceTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	195	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00170	LegacyAutoMigratedLinkageTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	227	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00171	ReconciliationCandidateLinkageTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	257	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00172	CalculateBalanceUnaffectedTests	test	backend/apps/license/tests/test_boe_invoice_representation.py	297	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00173	CanonicalLedgerPerformanceTests	test	backend/apps/license/tests/test_canonical_ledger_performance.py	19	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00174	CanonicalLedgerServiceTestBase	test	backend/apps/license/tests/test_canonical_ledger_service.py	39	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00175	TestGoldenSingleItem	test	backend/apps/license/tests/test_canonical_planning.py	141	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00176	TestGoldenMultipleItems	test	backend/apps/license/tests/test_canonical_planning.py	207	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00177	TestGoldenPriorityOrdering	test	backend/apps/license/tests/test_canonical_planning.py	257	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00178	TestGoldenQuantityBoundaries	test	backend/apps/license/tests/test_canonical_planning.py	317	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00179	TestGoldenZeroQuantity	test	backend/apps/license/tests/test_canonical_planning.py	401	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00180	TestGoldenDecimalQuantity	test	backend/apps/license/tests/test_canonical_planning.py	449	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00181	TestGoldenCompanyIsolation	test	backend/apps/license/tests/test_canonical_planning.py	497	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00182	TestGoldenLicenseIsolation	test	backend/apps/license/tests/test_canonical_planning.py	545	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00183	TestLiveBalanceIsRespected	test	backend/apps/license/tests/test_canonical_planning.py	594	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00184	TestForceReplan	test	backend/apps/license/tests/test_canonical_planning.py	640	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00185	TestWritesAreTransactional	test	backend/apps/license/tests/test_canonical_planning.py	708	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00186	TestBaselineSnapshot	test	backend/apps/license/tests/test_canonical_planning.py	761	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00187	TestInputValidation	test	backend/apps/license/tests/test_canonical_planning.py	776	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00188	TestNoLegacyPlannerReferences	test	backend/apps/license/tests/test_canonical_planning.py	837	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00189	TestCrossOutputParityOptionC	test	backend/apps/license/tests/test_cross_output_parity_option_c.py	42	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00190	CustomLedgerPdfTests	test	backend/apps/license/tests/test_custom_ledger_pdf.py	13	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00191	ExpiringLicensesLiveBalanceTests	test	backend/apps/license/tests/test_dashboard_balance_cif.py	21	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00192	DashboardQueryRegressionTests	test	backend/apps/license/tests/test_dashboard_balance_cif.py	110	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00193	TestPriorityOrder	test	backend/apps/license/tests/test_e126_plan.py	16	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00194	TestFixedPrices	test	backend/apps/license/tests/test_e126_plan.py	23	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00195	TestNuts	test	backend/apps/license/tests/test_e126_plan.py	30	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00196	TestPkoAndOliveOil	test	backend/apps/license/tests/test_e126_plan.py	54	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00197	TestHsnMatching	test	backend/apps/license/tests/test_e126_plan.py	92	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00198	TestNullAndBlankSafe	test	backend/apps/license/tests/test_e126_plan.py	101	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00199	TestCaseInsensitiveAndTrim	test	backend/apps/license/tests/test_e126_plan.py	118	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00200	TestNoDoubleCounting	test	backend/apps/license/tests/test_e126_plan.py	127	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00201	TestAggregation	test	backend/apps/license/tests/test_e126_plan.py	142	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00202	TestPerItemPlanning	test	backend/apps/license/tests/test_e126_plan.py	175	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00203	TestBalanceCap	test	backend/apps/license/tests/test_e126_plan.py	191	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00204	TestPkoOliveSplit	test	backend/apps/license/tests/test_e126_plan.py	226	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00205	TestPkoOliveWastageRebalance	test	backend/apps/license/tests/test_e126_plan.py	309	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00206	TestPriorityOrder	test	backend/apps/license/tests/test_e132_plan.py	14	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00207	TestFixedPrices	test	backend/apps/license/tests/test_e132_plan.py	21	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00208	TestNuts	test	backend/apps/license/tests/test_e132_plan.py	31	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00209	TestYeast	test	backend/apps/license/tests/test_e132_plan.py	58	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00210	TestExplicitCheese	test	backend/apps/license/tests/test_e132_plan.py	78	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00211	TestRbd	test	backend/apps/license/tests/test_e132_plan.py	100	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00212	TestPkoAndCheeseStrict	test	backend/apps/license/tests/test_e132_plan.py	115	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00213	TestAluminium	test	backend/apps/license/tests/test_e132_plan.py	150	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00214	TestHsnMatching	test	backend/apps/license/tests/test_e132_plan.py	173	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00215	TestNullAndBlankSafe	test	backend/apps/license/tests/test_e132_plan.py	182	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00216	TestCaseInsensitiveAndTrim	test	backend/apps/license/tests/test_e132_plan.py	199	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00217	TestNoDoubleCounting	test	backend/apps/license/tests/test_e132_plan.py	208	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00218	TestAggregation	test	backend/apps/license/tests/test_e132_plan.py	224	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00219	TestPerItemPlanning	test	backend/apps/license/tests/test_e132_plan.py	258	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00220	TestBalanceCap	test	backend/apps/license/tests/test_e132_plan.py	274	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00221	TestVegOilSplit	test	backend/apps/license/tests/test_e132_plan.py	309	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00222	TestVegOilWastageRebalance	test	backend/apps/license/tests/test_e132_plan.py	409	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00223	TestClassifyE5Item	test	backend/apps/license/tests/test_e5_plan.py	44	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00224	TestFixedRateSteps	test	backend/apps/license/tests/test_e5_plan.py	127	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00225	TestSpecialValidation	test	backend/apps/license/tests/test_e5_plan.py	163	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00226	TestMilkPerItemNoAveraging	test	backend/apps/license/tests/test_e5_plan.py	222	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00227	TestWheatFlourMopUp	test	backend/apps/license/tests/test_e5_plan.py	329	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00228	TestBalanceRecalculation	test	backend/apps/license/tests/test_e5_plan.py	344	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00229	TestAutoPlanFloorAndThreshold	test	backend/apps/license/tests/test_e5_plan.py	403	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00230	TestConfiguredSplitAllocation	test	backend/apps/license/tests/test_e5_plan.py	439	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00231	FinancialLedgerExportDTOTests	test	backend/apps/license/tests/test_financial_ledger_export_dto.py	10	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00232	P0_IDORRetrieveEndpointTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	37	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00233	P0_IDORLedgerDetailEndpointTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	195	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00234	P0_DataLeakageSummaryEndpointTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	252	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00235	P0_DataLeakageSearchEndpointTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	288	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00236	P0_DataLeakageAvailableForSaleEndpointTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	323	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00237	P1_AggregationDataLeakageCompanyWiseTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	374	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00238	P1_AggregationDataLeakageLicenseWiseTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	410	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00239	SuperuserBypassTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	445	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00240	UserWithoutCompanyTest	test	backend/apps/license/tests/test_idor_fixes_p0_p1.py	475	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00241	IndividualItemCifOverrideActionTests	test	backend/apps/license/tests/test_individual_item_cif_override_action.py	9	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00242	TestINRReconciliationGoldenCase	test	backend/apps/license/tests/test_inr_reconciliation_golden_case.py	51	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00243	TestClassifyPackagingItem	test	backend/apps/license/tests/test_item_matcher.py	361	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00244	TestExtractGsmRange	test	backend/apps/license/tests/test_item_matcher.py	428	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00245	TestMatchImportItemToItemsPackaging	test	backend/apps/license/tests/test_item_matcher.py	458	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00246	TestBulkAutoLinkLicenseItemsPackaging	test	backend/apps/license/tests/test_item_matcher.py	579	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00247	A3627PivotCategoryTests	test	backend/apps/license/tests/test_item_pivot_a3627_classifiers.py	13	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00248	ItemPivotBalanceConsistencyTests	test	backend/apps/license/tests/test_item_pivot_balance_consistency.py	29	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00249	CanonicalPivotSourceTests	test	backend/apps/license/tests/test_item_pivot_planned_import_item.py	14	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00250	TestLedgerAPICanonicalMigration	test	backend/apps/license/tests/test_ledger_api_canonical_migration.py	25	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00251	TestLedgerAPINoFinancialLogic	test	backend/apps/license/tests/test_ledger_api_canonical_migration.py	296	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00252	AvailableForSaleLiveBalanceTests	test	backend/apps/license/tests/test_ledger_available_for_sale_live_balance.py	22	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00253	TestBalanceFormulaOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	109	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00254	TestCompanyIsolationOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	210	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00255	TestCommissionTreatmentOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	271	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00256	TestEdgeCasesOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	343	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00257	TestDecimalPrecisionOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	423	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00258	TestTransactionOrderingOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	455	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00259	TestAPIContractOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	495	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00260	TestCrossOutputParityOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	579	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00261	TestP0DefectRegressionOption_C	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	641	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00262	TestGoldenDatasetScenarios	test	backend/apps/license/tests/test_ledger_characterization_option_c.py	702	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00263	DualRunVerificationTests	test	backend/apps/license/tests/test_ledger_dual_run.py	18	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00264	TestGoldenLedgerPurchaseRow	test	backend/apps/license/tests/test_ledger_golden.py	178	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00265	TestGoldenLedgerSaleRow	test	backend/apps/license/tests/test_ledger_golden.py	226	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00266	TestGoldenLedgerCurrentBalance	test	backend/apps/license/tests/test_ledger_golden.py	284	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00267	TestGoldenLedgerProfitLoss	test	backend/apps/license/tests/test_ledger_golden.py	335	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00268	TestGoldenLedgerAPIResponse	test	backend/apps/license/tests/test_ledger_golden.py	391	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00269	TestGoldenLedgerUIValues	test	backend/apps/license/tests/test_ledger_golden.py	457	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00270	TestGoldenLedgerPDFValues	test	backend/apps/license/tests/test_ledger_golden.py	515	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00271	TestGoldenLedgerExcelValues	test	backend/apps/license/tests/test_ledger_golden.py	569	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00272	CanonicalLedgerLiveBalanceTests	test	backend/apps/license/tests/test_ledger_pdf_live_balance.py	21	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00273	CanonicalLedgerPdfSemanticParityTests	test	backend/apps/license/tests/test_ledger_pdf_live_balance.py	76	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00274	CanonicalLedgerPdfPerformanceTests	test	backend/apps/license/tests/test_ledger_pdf_live_balance.py	260	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00275	TestLedgerReconciliationMatrixSmokingGun	test	backend/apps/license/tests/test_ledger_reconciliation_smoking_gun.py	19	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00276	LicenseLedgerSecurityTestCase	test	backend/apps/license/tests/test_ledger_security.py	21	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00277	LicenseSaveImportItemsTests	test	backend/apps/license/tests/test_licence_save_import_items.py	18	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00278	LicenseAdvancedFiltersLiveBalanceTests	test	backend/apps/license/tests/test_license_advanced_filters_live_balance.py	28	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00279	ExportItemPartialUpdateTests	test	backend/apps/license/tests/test_license_export_item_partial_update.py	26	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00280	ImportItemPartialUpdateTests	test	backend/apps/license/tests/test_license_export_item_partial_update.py	166	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00281	TestLicenseInvoiceRelations	test	backend/apps/license/tests/test_license_invoice_relations.py	17	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00282	FreshLicenseLedgerFilterTests	test	backend/apps/license/tests/test_license_ledger_filters_fresh.py	41	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00283	LicenseListBalanceConsistencyTests	test	backend/apps/license/tests/test_license_list_balance_consistency.py	30	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00284	LicenseOverviewAllotmentsViewTests	test	backend/apps/license/tests/test_license_overview_allotments_view.py	19	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00285	LicenseOverviewBoesViewTests	test	backend/apps/license/tests/test_license_overview_boes_view.py	22	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00286	LicenseOverviewInvoiceLedgerViewTests	test	backend/apps/license/tests/test_license_overview_invoice_ledger_view.py	22	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00287	LicenseOverviewItemsViewTests	test	backend/apps/license/tests/test_license_overview_items_view.py	20	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00288	LicenseOverviewSummaryViewTests	test	backend/apps/license/tests/test_license_overview_summary_view.py	21	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00289	TestLicensePlanPresentationBasicStructure	test	backend/apps/license/tests/test_license_plan_presentation_service.py	147	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00290	TestLicensePlanPresentationPlannedSemantics	test	backend/apps/license/tests/test_license_plan_presentation_service.py	207	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00291	TestLicensePlanPresentationSplitItems	test	backend/apps/license/tests/test_license_plan_presentation_service.py	297	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00292	TestLicensePlanPresentationOverPlanned	test	backend/apps/license/tests/test_license_plan_presentation_service.py	390	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00293	TestLicensePlanPresentationBOEExclusion	test	backend/apps/license/tests/test_license_plan_presentation_service.py	445	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00294	TestLicensePlanPresentationBatchQueries	test	backend/apps/license/tests/test_license_plan_presentation_service.py	513	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00295	TestLicensePlanPresentationAggregates	test	backend/apps/license/tests/test_license_plan_presentation_service.py	570	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00296	TestLicensePlanPresentationEdgeCases	test	backend/apps/license/tests/test_license_plan_presentation_service.py	639	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00297	TestLicensePlanPresentationPerformance	test	backend/apps/license/tests/test_license_plan_presentation_service.py	730	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00298	Test1LicenseWithPurchaseBill	test	backend/apps/license/tests/test_license_purchase_and_sion.py	177	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00299	Test2LicenseWithoutPurchaseBill	test	backend/apps/license/tests/test_license_purchase_and_sion.py	225	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00300	Test3NoPurchaseBillFilterReturnsFalse	test	backend/apps/license/tests/test_license_purchase_and_sion.py	273	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00301	Test4PurchasedLicenseExcludedFromNoPurchaseMode	test	backend/apps/license/tests/test_license_purchase_and_sion.py	339	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00302	Test5NoPurchaseBillLicenseMarkedStatus	test	backend/apps/license/tests/test_license_purchase_and_sion.py	379	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00303	Test6PurchaseOutsideDateRangeStillCounts	test	backend/apps/license/tests/test_license_purchase_and_sion.py	413	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00304	Test7NoPurchaseNotEliminatedByDateFilter	test	backend/apps/license/tests/test_license_purchase_and_sion.py	455	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00305	Test8SionNullReturnsNA	test	backend/apps/license/tests/test_license_purchase_and_sion.py	497	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00306	Test9SionEmptyStringReturnsNA	test	backend/apps/license/tests/test_license_purchase_and_sion.py	544	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00307	Test10SionValidValueDisplayed	test	backend/apps/license/tests/test_license_purchase_and_sion.py	590	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00308	Test11SionInDbButUIShowsNAIsBug	test	backend/apps/license/tests/test_license_purchase_and_sion.py	643	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00309	Test12UIMatchesAPIValues	test	backend/apps/license/tests/test_license_purchase_and_sion.py	701	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00310	Test13APIMatchesPDFValues	test	backend/apps/license/tests/test_license_purchase_and_sion.py	763	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00311	Test14APIMatchesExcelValues	test	backend/apps/license/tests/test_license_purchase_and_sion.py	808	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00312	Test15LicenseWiseMatchesCanonical	test	backend/apps/license/tests/test_license_purchase_and_sion.py	851	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00313	Test16CompanyWiseMatchesCanonicalScoped	test	backend/apps/license/tests/test_license_purchase_and_sion.py	892	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00314	TestMilkConfigConstants	test	backend/apps/license/tests/test_milk_planner.py	21	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00315	TestPlanMilk0404Only	test	backend/apps/license/tests/test_milk_planner.py	35	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00316	TestPlanMilk3502Only	test	backend/apps/license/tests/test_milk_planner.py	94	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00317	TestPlanMilkMixedRunsSequentially	test	backend/apps/license/tests/test_milk_planner.py	111	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00318	TestPlanMilkEdgeCases	test	backend/apps/license/tests/test_milk_planner.py	125	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00319	TestOutputItemPersistence	test	backend/apps/license/tests/test_output_item_persistence.py	13	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00320	TestP0DefectRegressionOptionC	test	backend/apps/license/tests/test_p0_defect_regression_option_c.py	68	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00321	ParsePdfHSCodeAutoCreateTestCase	test	backend/apps/license/tests/test_parse_pdf_hs_autocreate.py	13	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00322	TestCanonicalInputResolver	test	backend/apps/license/tests/test_percentage_existing_usage_filtering.py	162	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00323	TestPercentageExistingUsageFiltering	test	backend/apps/license/tests/test_percentage_existing_usage_filtering.py	204	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00324	TestValidateGroupPlanLines	test	backend/apps/license/tests/test_plan_grouping.py	231	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00325	TestValidateFreshPlanLines	test	backend/apps/license/tests/test_plan_grouping.py	289	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00326	PlanNormsCommandLiveBalanceTests	test	backend/apps/license/tests/test_plan_norms_command_live_balance.py	24	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00327	PlanNormsCommandModeTests	test	backend/apps/license/tests/test_plan_norms_command_modes.py	10	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00328	PlannedQuantitySerializerTests	test	backend/apps/license/tests/test_planned_quantity_serializer.py	22	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00329	TestPlanningWritePathConsolidation	test	backend/apps/license/tests/test_planning_single_entry_point.py	49	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00330	TestPlanLicensesEndpointRemoved	test	backend/apps/license/tests/test_planning_single_entry_point.py	210	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00331	QueryBreakdownTest	test	backend/apps/license/tests/test_query_breakdown.py	17	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00332	ReadPathRegressionTest	test	backend/apps/license/tests/test_read_path_regression.py	15	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00333	TestLicenseReplanRequests	test	backend/apps/license/tests/test_replan_requests.py	18	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00334	TestConfigurationValidation	test	backend/apps/license/tests/test_roundtrip_acceptance.py	33	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00335	TestMultiRuleConfiguration	test	backend/apps/license/tests/test_roundtrip_acceptance.py	164	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00336	TestLicenseConfiguration	test	backend/apps/license/tests/test_roundtrip_acceptance.py	270	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00337	TestConfigurationIsolation	test	backend/apps/license/tests/test_roundtrip_acceptance.py	337	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00338	TestIdempotency	test	backend/apps/license/tests/test_roundtrip_acceptance.py	390	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00339	SaleTradeQuantityConsumptionTests	test	backend/apps/license/tests/test_sale_trade_quantity_consumption.py	18	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00340	TestLicense3411008090Shortage	test	backend/apps/license/tests/test_shortage_3411008090.py	27	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00341	TestShortageDoesNotAffectOtherInputs	test	backend/apps/license/tests/test_shortage_3411008090.py	202	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00342	TestActualPersistenceNotTargeted	test	backend/apps/license/tests/test_shortage_3411008090.py	257	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00343	TestShortageIntegration	test	backend/apps/license/tests/test_shortage_integration.py	11	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00344	TestAllotmentItemSignal	test	backend/apps/license/tests/test_signals.py	63	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00345	TestRowDetailsSignal	test	backend/apps/license/tests/test_signals.py	114	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00346	TestLicenseTradeLineSignal	test	backend/apps/license/tests/test_signals.py	155	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00347	TestSnapshotExporterNameSignal	test	backend/apps/license/tests/test_signals.py	198	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00348	TestLicenseSignalHelpers	test	backend/apps/license/tests/test_signals.py	237	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00349	TestGenericNormIntegration	test	backend/apps/license/tests/test_sion_generic_integration.py	112	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00350	TestSionRuleResolverBasics	test	backend/apps/license/tests/test_sion_generic_rule_engine.py	84	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00351	TestDataDrivenAliasResolution	test	backend/apps/license/tests/test_sion_generic_rule_engine.py	126	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00352	TestGenericRuleResolution	test	backend/apps/license/tests/test_sion_generic_rule_engine.py	184	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00353	TestSplitRuleValidation	test	backend/apps/license/tests/test_sion_generic_rule_engine.py	302	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00354	TestGenericNormSupport	test	backend/apps/license/tests/test_sion_generic_rule_engine.py	352	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00355	TestProductClassification	test	backend/apps/license/tests/test_sion_percentage_feature.py	74	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00356	TestE126PercentageCaps	test	backend/apps/license/tests/test_sion_percentage_feature.py	117	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00357	TestE132PercentageCaps	test	backend/apps/license/tests/test_sion_percentage_feature.py	151	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00358	TestCapacityValidation	test	backend/apps/license/tests/test_sion_percentage_feature.py	185	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00359	TestRemainingCapacityCalculation	test	backend/apps/license/tests/test_sion_percentage_feature.py	222	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00360	TestStrategySerializerValidation	test	backend/apps/license/tests/test_sion_planning_rule_redesign.py	51	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00361	TestPercentageRuleVersionedUpdate	test	backend/apps/license/tests/test_sion_planning_rule_redesign.py	150	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00362	TestAutoPlanning	test	backend/apps/license/tests/test_sion_planning_rule_redesign.py	228	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00363	TestSplitByPercentageStrategy	test	backend/apps/license/tests/test_split_by_percent_strategy.py	127	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00364	TestSplitByPercentageComplete	test	backend/apps/license/tests/test_split_by_percentage_complete.py	23	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00365	TestSplitByPercentageBasics	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	56	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00366	TestSplitByPercentageCIF	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	141	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00367	TestSplitByPercentageExistingUsage	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	206	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00368	TestSplitByPercentageNoErrors	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	224	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00369	TestSplitByPercentageCIFDoubleDeduction	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	255	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00370	TestSplitByPercentageGlobalization	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	288	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00371	TestSplitByPercentageValidation	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	331	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00372	TestSplitByPercentageSkippedNoMatch	test	backend/apps/license/tests/test_split_by_percentage_planner_complete.py	355	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00373	TestPercentageAllocationBasics	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	18	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00374	TestPercentageAllocationThreeWay	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	64	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00375	TestDecimalPrecision	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	108	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00376	TestValidation	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	140	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00377	TestPercentageRowStructure	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	182	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00378	TestMultipleLicenseAllocation	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	216	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00379	TestAllocationWithBalanceCIF	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	245	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00380	TestSaveAndReload	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	263	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00381	TestStrategyIndependence	test	backend/apps/license/tests/test_split_by_percentage_with_unit_price.py	290	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00382	TestBasicPercentageEntitlements	test	backend/apps/license/tests/test_split_percentage_requirements.py	15	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00383	TestRequirementsWithExistingUtilization	test	backend/apps/license/tests/test_split_percentage_requirements.py	41	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00384	TestInvariants	test	backend/apps/license/tests/test_split_percentage_requirements.py	184	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00385	TestNutProductsReserve	test	backend/apps/license/tests/test_split_percentage_requirements.py	221	License	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00386	InvoiceBOEAllocationTests	test	backend/apps/reconciliation/tests/test_allocation_service.py	53	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00387	BOEAllotmentAllocationTests	test	backend/apps/reconciliation/tests/test_allocation_service.py	305	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00388	ReverseAllocationDispatcherTests	test	backend/apps/reconciliation/tests/test_allocation_service.py	564	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00389	BackfillBoeAllocationsCommandTests	test	backend/apps/reconciliation/tests/test_backfill_boe_allocations_command.py	20	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00390	BoeLinkReconcilerTests	test	backend/apps/reconciliation/tests/test_boe_link_reconciler.py	31	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00391	CheckAllocationHealthCommandTests	test	backend/apps/reconciliation/tests/test_check_allocation_health_command.py	23	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00392	ExternalInvoiceLinkTests	test	backend/apps/reconciliation/tests/test_external_invoice_service.py	21	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00393	MissingBoeQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	113	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00394	MissingInvoiceQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	156	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00395	DuplicateDebitsQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	174	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00396	CifComparisonQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	226	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00397	MultiBoeMultiInvoiceQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	260	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00398	DuplicateBoesQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	292	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00399	SummaryQueryTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	333	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00400	ReconciliationWriteActionTests	test	backend/apps/reconciliation/tests/test_reconciliation.py	347	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00401	TaskModelTests	test	backend/apps/tasks/tests.py	7	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00402	TestPairedTradeCifValidation	test	backend/apps/trade/tests/test_paired_trade_serializer.py	12	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00403	TradeExportColumnsTests	test	backend/apps/trade/tests/test_trade_export.py	31	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00404	TestTradeListQueryBudget	test	backend/apps/trade/tests/test_trade_list_query_budget.py	14	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00405	CounterpartCopyTests	test	backend/apps/trade/tests/test_trade_service.py	37	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00406	ParseDateStrictTests	test	backend/apps/trade/tests/test_trade_service.py	97	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00407	GetPrefilledInvoiceNumberTests	test	backend/apps/trade/tests/test_trade_service.py	128	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00408	BuildTradeSummaryTests	test	backend/apps/trade/tests/test_trade_service.py	222	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00409	LinkTradesTests	test	backend/apps/trade/tests/test_trade_service.py	270	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00410	StampBoeInvoiceFromTradeHiddenGuardTests	test	backend/apps/trade/tests/test_trade_service.py	349	Backend domain	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00411	TestAuthentication	test	backend/tests/test_all_conditions.py	78	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00412	TestLicenseEndpoints	test	backend/tests/test_all_conditions.py	160	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00413	TestBillOfEntryEndpoints	test	backend/tests/test_all_conditions.py	224	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00414	TestTradeEndpoints	test	backend/tests/test_all_conditions.py	272	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00415	TestAllotmentEndpoints	test	backend/tests/test_all_conditions.py	303	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00416	TestDashboard	test	backend/tests/test_all_conditions.py	355	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00417	TestLicenseBalanceCalculator	test	backend/tests/test_all_conditions.py	371	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00418	TestItemBalanceCalculator	test	backend/tests/test_all_conditions.py	523	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00419	TestAllotmentAPI	test	backend/tests/test_api_allotment.py	15	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00420	TestBillOfEntryAPI	test	backend/tests/test_api_boe.py	17	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00421	TestBOEIntegration	test	backend/tests/test_api_boe.py	149	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00422	TestCompanyAPI	test	backend/tests/test_api_core.py	11	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00423	TestPortAPI	test	backend/tests/test_api_core.py	68	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00424	TestExchangeRateAPI	test	backend/tests/test_api_core.py	94	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00425	APIIntegrationTestBase	test	backend/tests/test_api_integration.py	16	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00426	TestLicenseAPIIntegration	test	backend/tests/test_api_integration.py	34	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00427	TestAllotmentAPIIntegration	test	backend/tests/test_api_integration.py	124	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00428	TestMasterDataAPIIntegration	test	backend/tests/test_api_integration.py	193	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00429	TestAuthenticationIntegration	test	backend/tests/test_api_integration.py	227	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00430	TestExportAPIIntegration	test	backend/tests/test_api_integration.py	287	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00431	TestValidationIntegration	test	backend/tests/test_api_integration.py	335	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00432	TestPerformanceIntegration	test	backend/tests/test_api_integration.py	389	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00433	TestConcurrencyIntegration	test	backend/tests/test_api_integration.py	419	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00434	TestErrorHandlingIntegration	test	backend/tests/test_api_integration.py	457	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00435	TestLicenseAPI	test	backend/tests/test_api_license.py	18	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00436	TestLicenseItemAPI	test	backend/tests/test_api_license.py	544	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00437	TestLicenseLedgerUpload	test	backend/tests/test_api_license.py	566	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00438	TestLicenseDocumentsUpload	test	backend/tests/test_api_license.py	588	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00439	TestTradeAPI	test	backend/tests/test_api_trade.py	12	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00440	TestTradeBillOfSupply	test	backend/tests/test_api_trade.py	83	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00441	TestLicenseLedgerAPI	test	backend/tests/test_api_trade.py	101	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00442	LicenseActionAuthorizationTests	test	backend/tests/test_authorization_permissions.py	18	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00443	MasterDataAuthorizationTests	test	backend/tests/test_authorization_permissions.py	38	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00444	CompanyPermissionAuthorizationTests	test	backend/tests/test_authorization_permissions.py	136	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00445	BOEPdfParseAuthorizationTests	test	backend/tests/test_authorization_permissions.py	441	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00446	DirectReportAuthorizationTests	test	backend/tests/test_authorization_permissions.py	474	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00447	TradeNestedAuthorizationTests	test	backend/tests/test_authorization_permissions.py	532	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00448	URLRoutingRegressionTests	test	backend/tests/test_url_routing.py	26	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00449	TestAuth	test	master-data-service/masters/tests/test_api.py	30	MDS	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00450	TestBulkUpsert	test	master-data-service/masters/tests/test_api.py	65	MDS	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00451	TestDeleteByKey	test	master-data-service/masters/tests/test_api.py	94	MDS	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00452	TestDeltaAndEtag	test	master-data-service/masters/tests/test_api.py	134	MDS	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00453	TestChangeFeed	test	master-data-service/masters/tests/test_api.py	167	MDS	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00454	GetMetaTests	test	mds-client/tests/test_client.py	21	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00455	DeltaPaginationTests	test	mds-client/tests/test_client.py	33	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00456	ETagShortCircuitTests	test	mds-client/tests/test_client.py	69	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00457	BulkUpsertTests	test	mds-client/tests/test_client.py	92	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00458	DeleteByKeyTests	test	mds-client/tests/test_client.py	110	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00459	ChangeFeedTests	test	mds-client/tests/test_client.py	140	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00460	FailureModeTests	test	mds-client/tests/test_client.py	165	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00461	ClientSettingsTests	test	mds-client/tests/test_client.py	198	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00462	DefaultMdsModelsTests	test	mds-client/tests/test_model_map.py	18	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00463	MirrorUpsertTests	test	mds-client/tests/test_sync.py	43	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00464	KeylessFKResolutionTests	test	mds-client/tests/test_sync.py	105	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00465	ETagShortCircuitSyncTests	test	mds-client/tests/test_sync.py	159	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00466	ChangeFeedDeleteTests	test	mds-client/tests/test_sync.py	187	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00467	SyncAllTests	test	mds-client/tests/test_sync.py	203	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00468	WriteMasterTests	test	mds-client/tests/test_sync.py	223	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00469	DeleteMasterTests	test	mds-client/tests/test_sync.py	250	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00470	TestLicenseAPI	test	tests/e2e/qa_api_detailed.py	54	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00471	TestLedgerAPI	test	tests/e2e/qa_api_detailed.py	114	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00472	TestReportAPI	test	tests/e2e/qa_api_detailed.py	144	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00473	TestAllotmentAPI	test	tests/e2e/qa_api_detailed.py	190	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00474	TestBOEAPI	test	tests/e2e/qa_api_detailed.py	209	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00475	TestTradeAPI	test	tests/e2e/qa_api_detailed.py	238	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00476	TestAuthorizationAPI	test	tests/e2e/qa_api_detailed.py	257	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00477	TestDataConsistency	test	tests/e2e/qa_api_detailed.py	275	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00478	TestAuthentication	test	tests/e2e/qa_comprehensive.py	123	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00479	TestPages	test	tests/e2e/qa_comprehensive.py	201	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00480	TestForms	test	tests/e2e/qa_comprehensive.py	238	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00481	TestDataIntegrity	test	tests/e2e/qa_comprehensive.py	288	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00482	TestResponsiveness	test	tests/e2e/qa_comprehensive.py	310	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00483	TestAllRoutes	test	tests/e2e/qa_comprehensive_routes.py	189	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00484	TestPhase10Concurrency	test	tests/e2e/qa_phase10_concurrency.py	248	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00485	TestPhase11Responsive	test	tests/e2e/qa_phase11_responsive.py	204	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00486	TestPhase12	test	tests/e2e/qa_phase12_accessibility.py	71	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00487	TestPhase14	test	tests/e2e/qa_phase14_pdf_content.py	112	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00488	TestExcelCSVExports	test	tests/e2e/qa_phase15_excel_csv_content.py	203	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00489	TestExportCounts	test	tests/e2e/qa_phase15_excel_csv_content.py	624	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00490	TestExportConfiguration	test	tests/e2e/qa_phase15_excel_csv_content.py	667	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00491	TestPhase16RealCRUD	test	tests/e2e/qa_phase16_real_crud.py	284	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00492	TestPhase17DataConsistency	test	tests/e2e/qa_phase17_data_consistency.py	291	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00493	TestPhase18	test	tests/e2e/qa_phase18_business_calculations.py	166	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00494	TestPhase19NegativeWorkflows	test	tests/e2e/qa_phase19_negative_workflows.py	257	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00495	TestPhase1Extended	test	tests/e2e/qa_phase1_extended.py	136	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00496	TestPhase20	test	tests/e2e/qa_phase20_session_expiration.py	5	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00497	TestPhase21Performance	test	tests/e2e/qa_phase21_performance.py	208	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00498	TestPhase22	test	tests/e2e/qa_phase22_complete_routes.py	68	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00499	TestPhase2And3	test	tests/e2e/qa_phase2_workflows.py	277	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00500	TestPhase4CRUD	test	tests/e2e/qa_phase4_crud.py	350	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00501	TestPhase4FormStructure	test	tests/e2e/qa_phase4_crud_v2.py	218	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00502	TestPhase4CompleteWorkflows	test	tests/e2e/qa_phase4_workflow_complete.py	289	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00503	TestPhase5APIExports	test	tests/e2e/qa_phase5_api_exports.py	271	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00504	TestPhase5And6	test	tests/e2e/qa_phase5_exports.py	39	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00505	TestPhase5PDFAndExports	test	tests/e2e/qa_phase5_pdf_exports.py	350	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00506	TestPhase6ErrorHandling	test	tests/e2e/qa_phase6_error_handling.py	310	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00507	TestPhase7And8	test	tests/e2e/qa_phase7_8_critical.py	339	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00508	TestPhase9CRUDPersistence	test	tests/e2e/qa_phase9_crud_persistence.py	317	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv
+TEST-00509	TestRoutesCritical	test	tests/e2e/qa_route_browser_test.py	203	Other	To reconcile	To reconcile	Partial	.claude/index/symbols.tsv

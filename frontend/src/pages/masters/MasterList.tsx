@@ -832,16 +832,16 @@ export default function MasterList() {
                     <>
                         <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel" aria-label="Export to Excel">
                             <FileSpreadsheet className="size-3.5" aria-hidden="true" />
-                            <span className="hidden sm:inline">Excel</span>
+                            <span className="sr-only sm:not-sr-only">Excel</span>
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} title="Export to PDF" disabled={pdfLoading} aria-label={pdfLoading ? "Generating PDF export" : "Export to PDF"}>
                             {pdfLoading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
-                            <span className="hidden sm:inline">{pdfLoading ? "Generating…" : "PDF"}</span>
+                            <span className="sr-only sm:not-sr-only">{pdfLoading ? "Generating…" : "PDF"}</span>
                         </Button>
                         {entityName === 'bill-of-entries' && (
                             <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel" aria-label="Download port-wise BOE Excel">
                                 <FileSpreadsheet className="size-3.5" aria-hidden="true" />
-                                <span className="hidden sm:inline">Port Excel</span>
+                                <span className="sr-only sm:not-sr-only">Port Excel</span>
                             </Button>
                         )}
                         {entityName === 'bill-of-entries' && (
@@ -874,7 +874,7 @@ export default function MasterList() {
                                 }}
                             >
                                 <RefreshCw className="size-3.5" />
-                                <span className="hidden sm:inline">Fetch All</span>
+                                <span className="sr-only sm:not-sr-only">Fetch All</span>
                             </Button>
                         )}
                         {canWrite && (
@@ -893,7 +893,7 @@ export default function MasterList() {
                                     }}
                                 >
                                     <Plus className="size-3.5" />
-                                    <span className="hidden sm:inline">Add New</span>
+                                    <span className="sr-only sm:not-sr-only">Add New</span>
                                 </Link>
                             </Button>
                         )}

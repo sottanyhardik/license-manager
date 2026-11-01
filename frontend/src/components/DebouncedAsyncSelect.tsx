@@ -44,7 +44,8 @@ export default function DebouncedAsyncSelect({
     formatLabel = null,
     className = "",
     loadOnMount = false,
-    debounceDelay = 300
+    debounceDelay = 300,
+    inputId = undefined,
 }) {
     // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
@@ -175,6 +176,7 @@ export default function DebouncedAsyncSelect({
     return (
         <div className="position-relative">
             <AsyncSelect
+                inputId={inputId}
                 cacheOptions
                 defaultOptions={loadOnMount}
                 loadOptions={loadOptions}

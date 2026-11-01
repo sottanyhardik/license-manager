@@ -40,9 +40,9 @@ test.describe('Responsive Design Testing', () => {
     test.describe(`Viewport: ${viewport.name}`, () => {
       test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-      for (const page of PAGES_TO_TEST) {
-        test(`${page.name} - ${viewport.name} - No horizontal overflow`, async ({ page }) => {
-          await page.goto(`http://localhost:5175${page.path}`, {
+      for (const pageCase of PAGES_TO_TEST) {
+        test(`${pageCase.name} - ${viewport.name} - No horizontal overflow`, async ({ page }) => {
+          await page.goto(pageCase.path, {
             waitUntil: 'domcontentloaded',
             timeout: 30000
           }).catch(() => {
@@ -53,8 +53,8 @@ test.describe('Responsive Design Testing', () => {
           await page.waitForTimeout(1500);
 
           // Check for horizontal overflow
-          const htmlElement = await page.locator('html').first();
-          const bodyElement = await page.locator('body').first();
+          const htmlElement = page.locator('html').first();
+          const bodyElement = page.locator('body').first();
 
           const htmlScrollWidth = await htmlElement.evaluate(el => el.scrollWidth);
           const htmlClientWidth = await htmlElement.evaluate(el => el.clientWidth);
@@ -66,8 +66,8 @@ test.describe('Responsive Design Testing', () => {
           expect(bodyScrollWidth).toBeLessThanOrEqual(bodyClientWidth + 1);
         });
 
-        test(`${page.name} - ${viewport.name} - Screenshot`, async ({ page }) => {
-          await page.goto(`http://localhost:5175${page.path}`, {
+        test(`${pageCase.name} - ${viewport.name} - Screenshot`, async ({ page }) => {
+          await page.goto(pageCase.path, {
             waitUntil: 'domcontentloaded',
             timeout: 30000
           }).catch(() => {
@@ -79,7 +79,7 @@ test.describe('Responsive Design Testing', () => {
 
           // Take screenshot
           await page.screenshot({
-            path: `./responsive-screenshots/${viewportKey}-${page.path.replace(/\//g, '-')}.png`,
+            path: `./responsive-screenshots/${viewportKey}-${pageCase.path.replace(/\//g, '-')}.png`,
             fullPage: false
           });
         });
@@ -90,11 +90,29 @@ test.describe('Responsive Design Testing', () => {
 
 test.describe('Layout and Spacing Checks', () => {
   test('Dashboard - Mobile: No overflow on filter section', async ({ page }) => {
+    // The app authenticates from localStorage (src/context/AuthContext.tsx), not
+    // the `sessionid` cookie used by beforeEach. Seed the same keys and mock the
+    // API so the session is not rejected, as authenticated-shell.responsive.spec.ts does.
+    const user = { id: 1, username: 'responsive-test', first_name: 'Responsive', last_name: 'Test', is_superuser: true, roles: ['LICENSE_MANAGER'] };
+    await page.addInitScript((seedUser) => {
+      localStorage.setItem('access', 'responsive-test-access-token');
+      localStorage.setItem('refresh', 'responsive-test-refresh-token');
+      localStorage.setItem('user', JSON.stringify(seedUser));
+    }, user);
+    await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname.endsWith('/auth/me/')) {
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify(user) });
+        return;
+      }
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ results: [], count: 0 }) });
+    });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:5175/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
-    // Check all elements are within viewport
-    const elements = await page.locator('[role="main"]').first().boundingBox();
+    // Check that all elements are within the viewport. AdminLayout renders a semantic <main>
+    // with no role attribute, so `[role="main"]` never matches; select the element.
+    const elements = await page.locator('main').first().boundingBox();
     if (elements) {
       expect(elements.width).toBeLessThanOrEqual(390 + 1); // Allow 1px for rounding
     }
@@ -102,14 +120,14 @@ test.describe('Layout and Spacing Checks', () => {
 
   test('License List - Tablet: Table scrolls horizontally, not page', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('http://localhost:5175/licenses', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.goto('/licenses', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
     await page.waitForTimeout(1500);
 
     // Check table container has scroll, not page
-    const tableContainer = await page.locator('table').first();
+    const tableContainer = page.locator('table').first();
     if (await tableContainer.count() > 0) {
-      const parent = await tableContainer.locator('xpath=..').first();
+      const parent = tableContainer.locator('xpath=..').first();
       const overflow = await parent.evaluate(el => window.getComputedStyle(el).overflowX);
       expect(['auto', 'scroll']).toContain(overflow);
     }
@@ -117,7 +135,7 @@ test.describe('Layout and Spacing Checks', () => {
 
   test('Forms - Mobile: Input fields are full width or appropriately sized', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:5175/licenses/create', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.goto('/licenses/create', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
     await page.waitForTimeout(1500);
 
@@ -132,10 +150,10 @@ test.describe('Layout and Spacing Checks', () => {
 test.describe('Regression Tests', () => {
   test('Navigation bar is accessible on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:5175/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
     // Check nav is visible and clickable
-    const nav = await page.locator('nav, [role="navigation"]').first();
+    const nav = page.locator('nav, [role="navigation"]').first();
     if (await nav.count() > 0) {
       const isVisible = await nav.isVisible();
       expect(isVisible).toBeTruthy();
@@ -144,7 +162,7 @@ test.describe('Regression Tests', () => {
 
   test('Filter panels stack on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:5175/licenses', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.goto('/licenses', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
     await page.waitForTimeout(1500);
 
@@ -156,7 +174,7 @@ test.describe('Regression Tests', () => {
 
   test('Buttons and controls are appropriately sized for touch (min 44px)', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:5175/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
     // Check buttons have reasonable size
     const buttons = await page.locator('button').all();

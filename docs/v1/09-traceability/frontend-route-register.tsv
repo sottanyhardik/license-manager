@@ -1,0 +1,58 @@
+component_id	route	page_component	client_authorization	api_dependencies	states_verified	existing_tests	audit_status	recommended_action	priority	evidence
+UI-001	/reports/parle/sion-e1	SionE1	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-002	/reports/parle/sion-e5	SionE5	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-003	/reports/parle/sion-e126	SionE126	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-004	/reports/parle/sion-e132	SionE132	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-005	/reports/expiring-licenses	ExpiringLicenses	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-006	/reports/active-licenses	ActiveLicenses	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-007	/reports/download-license	DownloadLicense	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-008	/reports/item-pivot	ItemPivotReport	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-009	/reports/item-report	ItemReport	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-010	/reports/planned-report	PlannedReport	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-011	/reports/license-purchase-profit	LicensePurchaseProfitReport	REPORT_ROLES	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx REPORT_ROUTES
+UI-012	/login	Login	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-013	/forgot-password	PasswordReset	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-014	/401	Unauthorized	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-015	/403	Forbidden	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-016	/	ProtectedRoute	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-017	/dashboard	ProtectedRoute	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-018	/licenses	MasterList	"LICENSE_MANAGER", "LICENSE_VIEWER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-019	/licenses/create	MasterForm	LICENSE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-020	/licenses/:id/edit	MasterForm	LICENSE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-021	/planning	LicensePlanningWorkspace	LICENSE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-022	/allotments	MasterList	"ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-023	/allotments/create	MasterForm	ALLOTMENT_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-024	/allotments/:id/edit	MasterForm	ALLOTMENT_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-025	/allotments/:id/allocate	AllotmentAction	ALLOTMENT_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-026	/bill-of-entries	MasterList	"BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE", "ACCOUNT_ACCESS"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-027	/bill-of-entries/create	MasterForm	BOE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-028	/bill-of-entries/:id/edit	MasterForm	BOE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-029	/bill-of-entries/:id/generate-transfer-letter	BOETransferLetter	"BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-030	/trades	MasterList	"TRADE_MANAGER", "TRADE_VIEWER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-031	/trades/create	TradeForm	TRADE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-032	/trades/:id/edit	TradeForm	TRADE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-033	/reconciliation	ReconciliationPanel	"BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-034	/reconciliation-issues	ReconciliationIssues	"TRADE_MANAGER", "TRADE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "ACCOUNT_ACCESS", "TL_GENERATE"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-035	/incentive-licenses	MasterList	"INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-036	/incentive-licenses/create	MasterForm	INCENTIVE_LICENSE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-037	/incentive-licenses/:id/edit	MasterForm	INCENTIVE_LICENSE_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-038	/ledger-upload	LedgerUpload	"LICENSE_MANAGER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-039	/license-ledger	LicenseLedger	"LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-040	/license-ledger/download-requests	LicenseDownloadRequests	"LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-041	/license-ledger/download-requests/:requestId	LicenseDownloadRequestDetail	"LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-042	/license-ledger/package-readiness/:jobId	LicenseLedgerPackageReadiness	"LICENSE_MANAGER", "TRADE_MANAGER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-043	/license-ledger/:licenseId/:itemId	LicenseLedgerDetail	"LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-044	/license-ledger/:licenseId	LicenseLedgerDetail	"LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-045	/licenses/:id/overview	LicenseOverviewPage	"LICENSE_MANAGER", "LICENSE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-046	/licenses/:id/balance	RedirectToLicenseOverview	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-047	/pdf-viewer	ProtectedRoute	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-048	/settings	Settings	Superuser	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-049	/profile	Profile	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-050	/masters/:entity	MasterList	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-051	/masters/:entity/create	MasterForm	"USER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-052	/masters/:entity/:id/edit	MasterForm	"USER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-053	/admin/users	UserList	"USER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-054	/admin/users/create	UserForm	"USER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-055	/admin/users/:id/edit	UserForm	"USER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-056	/admin/activity-log	ActivityLog	"USER_MANAGER"	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx
+UI-057	*	NotFound	Authenticated	To reconcile	Static only	To reconcile	Partial	Map route/API/states	P1	AppRoutes.tsx

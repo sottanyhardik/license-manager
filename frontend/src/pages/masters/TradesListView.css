@@ -4,10 +4,12 @@
     color: var(--tb-text-secondary) !important;
 }
 
-/* Button uses Radix Slot for its Add New link.  The existing broad `a` reset
-   can otherwise inherit the page foreground.  :has keeps this repair limited
-   to the rendered Trades route. */
-body:has(.trades-list-view) .page-actions a[data-slot="button"] {
+/* The Add New link is rendered by MasterList (Radix Slot on a Button), not
+   inside a `.page-actions` wrapper, so that wrapper cannot scope this repair.
+   Match the link by its route target instead.  The default button variant is
+   blue-600 with white text; the global `a` reset can otherwise inherit the page
+   foreground (#1a2332 on #155dfc, 3:1).  :has keeps the rule to the Trades route. */
+body:has(.trades-list-view) a[data-slot="button"][href="/trades/create"] {
     color: var(--primary-foreground) !important;
 }
 

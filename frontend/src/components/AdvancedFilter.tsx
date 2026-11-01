@@ -112,6 +112,8 @@ export default function AdvancedFilter({
     const renderFilterField = (fieldName, config) => {
         const filterType = config.type || "exact";
         const label = config.label || humanize(fieldName);
+        // Each control is named by its field so its <Label htmlFor> resolves.
+        const controlId = `af-${fieldName}`;
 
         // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
         const Col = ({ wide = false, children }) => <FilterField wide={wide}>{children}</FilterField>;
@@ -120,8 +122,8 @@ export default function AdvancedFilter({
             case "icontains":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder={`Search ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                        <Input id={controlId} placeholder={`Search ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
                     </Col>
                 );
 
@@ -131,6 +133,8 @@ export default function AdvancedFilter({
                 return (
                     <Col key={fieldName} wide>
                         <DateRangeFilter
+                            fromId={`${controlId}-from`}
+                            toId={`${controlId}-to`}
                             label={`${label} Range`}
                             fromValue={fromValue}
                             toValue={toValue}
@@ -146,14 +150,14 @@ export default function AdvancedFilter({
                 const maxField = config.max_field || `${fieldName}_max`;
                 return (
                     <Col key={fieldName} wide>
-                        <Label className="mb-2">{label} Range</Label>
+                        <Label id={`${controlId}-label`} className="mb-2">{label} Range</Label>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <Input type="number" step="0.01" placeholder="Min" value={filterValues[minField] || ""} onChange={(e) => handleFilterChange(minField, e.target.value)} />
+                                <Input type="number" step="0.01" aria-label={`${label} minimum`} placeholder="Min"value={filterValues[minField] || ""} onChange={(e) => handleFilterChange(minField, e.target.value)} />
                                 <p className="mt-1 text-xs text-muted-foreground">Min</p>
                             </div>
                             <div>
-                                <Input type="number" step="0.01" placeholder="Max" value={filterValues[maxField] || ""} onChange={(e) => handleFilterChange(maxField, e.target.value)} />
+                                <Input type="number" step="0.01" aria-label={`${label} maximum`} placeholder="Max"value={filterValues[maxField] || ""} onChange={(e) => handleFilterChange(maxField, e.target.value)} />
                                 <p className="mt-1 text-xs text-muted-foreground">Max</p>
                             </div>
                         </div>
@@ -167,8 +171,8 @@ export default function AdvancedFilter({
                     const selected = opts.find((o) => o.value === filterValues[fieldName]) || null;
                     return (
                         <Col key={fieldName}>
-                            <Label className="mb-2">{label}</Label>
-                            <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
+                            <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                            <Select inputId={controlId} options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
                         </Col>
                     );
                 }
@@ -177,8 +181,8 @@ export default function AdvancedFilter({
                     const isAll = cur === "all" || (!cur && cur !== "True" && cur !== "False");
                     return (
                         <Col key={fieldName}>
-                            <Label className="mb-2 block">{label}</Label>
-                            <div className="flex gap-2">
+                            <Label id={`${controlId}-label`} className="mb-2 block">{label}</Label>
+                            <div role="group" aria-labelledby={`${controlId}-label`} className="flex gap-2">
                                 {[{ val: "all", lbl: "All", cls: "secondary" }, { val: "True", lbl: "Yes", cls: "success" }, { val: "False", lbl: "No", cls: "danger" }].map(({ val, lbl, cls }) => {
                                     const active = val === "all" ? isAll : cur === val || cur === (val === "True");
                                     return (
@@ -186,7 +190,7 @@ export default function AdvancedFilter({
                                             key={val}
                                             type="button"
                                             onClick={() => handleFilterChange(fieldName, val, true)}
-                                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/15 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
+                                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? (cls === "success" ? "border-success bg-success/15 text-success" : cls === "danger" ? "border-destructive bg-destructive/15 text-destructive" : "border-primary bg-primary/10 text-primary") : "border-border bg-card text-muted-foreground hover:bg-muted"}`}
                                         >{lbl}</button>
                                     );
                                 })}
@@ -196,8 +200,8 @@ export default function AdvancedFilter({
                 }
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder={`Exact ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                        <Input id={controlId} placeholder={`Exact ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
                     </Col>
                 );
             }
@@ -205,8 +209,8 @@ export default function AdvancedFilter({
             case "in":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder="Comma-separated values" value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                        <Input id={controlId} placeholder="Comma-separated values" value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
                         <p className="mt-1 text-xs text-muted-foreground">Enter values separated by commas</p>
                     </Col>
                 );
@@ -214,8 +218,8 @@ export default function AdvancedFilter({
             case "fk":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} inputId={controlId} />
                     </Col>
                 );
 
@@ -223,13 +227,13 @@ export default function AdvancedFilter({
                 const bgChoices = (config.choices || []).map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
                 return (
                     <Col key={fieldName} wide>
-                        <Label className="mb-2 block">{label}</Label>
-                        <div className="flex flex-wrap gap-2">
+                        <Label id={`${controlId}-label`} className="mb-2 block">{label}</Label>
+                        <div role="group" aria-labelledby={`${controlId}-label`} className="flex flex-wrap gap-2">
                             {bgChoices.map((choice, idx) => {
                                 const active = filterValues[fieldName] === choice.value || (!filterValues[fieldName] && choice.value === "");
                                 const colorCls = choice.value === "" ? "" : choice.value === "YES" ? "border-destructive text-destructive" : choice.value === "NO" ? "border-success text-success" : choice.value === "PARTIAL" ? "border-warning text-warning" : "";
                                 return (
-                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/15 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
+                                    <button key={idx} type="button" onClick={() => handleFilterChange(fieldName, choice.value, true)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${active ? "bg-primary/10 border-primary text-primary" : `bg-card ${colorCls || "border-border text-muted-foreground"} hover:bg-muted`}`}>
                                         {choice.label}
                                     </button>
                                 );
@@ -248,8 +252,9 @@ export default function AdvancedFilter({
                 }
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
                         <Select
+                            inputId={controlId}
                             options={choiceOpts}
                             value={selectedChoices}
                             onChange={(selected) => handleFilterChange(fieldName, selected ? selected.map((s) => s.value).join(",") : "", true)}
@@ -265,16 +270,16 @@ export default function AdvancedFilter({
             case "exclude_fk":
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                        <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} inputId={controlId} />
                     </Col>
                 );
 
             default:
                 return (
                     <Col key={fieldName}>
-                        <Label className="mb-2">{label}</Label>
-                        <Input placeholder={`Filter ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
+                        <Label htmlFor={controlId} className="mb-2">{label}</Label>
+                        <Input id={controlId} placeholder={`Filter ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
                     </Col>
                 );
         }

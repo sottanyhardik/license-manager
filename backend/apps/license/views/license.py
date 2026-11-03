@@ -1,9 +1,12 @@
 # license/views/license.py
 import logging
 from decimal import Decimal
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import BooleanField, DateField, DecimalField, ForeignKey, IntegerField, Prefetch
 from django.utils import timezone
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -18,7 +21,7 @@ from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, Advan
 from apps.core.filtersets import LicenseFilterSet
 from apps.core.views.master_view import MasterViewSet
 from apps.license.models import LicenseDetailsModel, LicenseDocumentModel
-from apps.license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
+from apps.license.serializers import LicenseDetailsSerializer, LicenseListSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
     LicenseDocumentSerializer
 from apps.license.serializers.license import IndividualItemCifOverrideSerializer
 from apps.license.views.active_dfia_report import add_active_dfia_report_action
@@ -160,8 +163,6 @@ _LicenseDetailsViewSetBase = MasterViewSet.create_viewset(
             "purchase_status",
             "condition_sheet",
         ],
-        # Put the licence closest to expiry first, then keep the order stable.
-        "ordering": ["license_expiry_date", "license_number"],
         "nested_field_defs": license_nested_field_defs,
         "nested_list_display": {
             "export_license": ["norm_class_label", "fob_inr", "cif_fc", "cif_inr"],
@@ -251,7 +252,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
     filterset_class = LicenseFilterSet
     filter_backends = [CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
     search_fields = ['license_number', 'file_number', 'exporter__name']
-    ordering_fields = ['license_date', 'license_expiry_date', 'balance_cif', 'exporter__name', 'license_number']
+    # Database columns only. `balance_cif` is a property, not a field, so
+    # ordering by it raised FieldError (HTTP 500); live balance is not sortable.
+    ordering_fields = ['license_date', 'license_expiry_date', 'exporter__name', 'license_number']
+    # Default order when the request has no `ordering` param: closest expiry
+    # first, then licence number. `id` is the final tie-breaker.
+    ordering = ['license_expiry_date', 'license_number', 'id']
 
     @action(detail=True, methods=['patch'], url_path='individual-item-cif-override')
     def individual_item_cif_override(self, request, pk=None):
@@ -289,6 +295,12 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             "old_individual_item_cif_override": old_value,
         })
 
+    def get_serializer_class(self):
+        # List rows carry the accordion header's summary. Every other action keeps the detail shape.
+        if self.action == 'list':
+            return LicenseListSerializer
+        return super().get_serializer_class()
+
     def paginate_queryset(self, queryset):
         """
         Stash the current page's license ids so `get_serializer_context()`
@@ -313,6 +325,9 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # get_balance_cif`'s docstring; the list view must show the
             # SAME "Balance CIF" as everywhere else in the app.
             context['live_balance_map'] = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(page_ids)
+            # The accordion header's Available CIF: the canonical figure the licence workspace shows.
+            from apps.license.services.licence_balance_report import available_cif_by_licence
+            context['canonical_available_map'] = available_cif_by_licence(page_ids)
 
         # The generic MasterViewSet export action serializes each object while
         # building the workbook.  Supply the one batch-calculated map prepared
@@ -642,14 +657,118 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # read the prefetch cache (zero per-row queries) instead of calling
             # .exists() + .all()[:1] which fired 2 queries per row.
             qs = qs.prefetch_related('license_documents')
+            if self.action == 'list':
+                # The row serializer also reads each licence's export-line norm
+                # classes (get_norm_class) and its transfers (latest_transfer,
+                # which reads `transfers_for_list` in the same order when set).
+                # Scoped to list: other actions reuse this queryset and their
+                # query budgets are asserted elsewhere.
+                from apps.license.models import LicenseTransferModel
+                qs = qs.prefetch_related(
+                    'export_license__norm_class',
+                    Prefetch(
+                        'transfers',
+                        queryset=LicenseTransferModel.objects.order_by('-transfer_date', '-id'),
+                        to_attr='transfers_for_list',
+                    ),
+                )
 
         return qs
+
+    # Id-valued filters: one id, or a comma-separated list (also `name[]`).
+    _ID_FILTER_PARAMS = frozenset({
+        'exporter', 'exclude_exporter', 'port', 'exclude_port',
+        'purchase_status', 'export_license__norm_class',
+    })
+    # Date bounds read by the generic date_range branch, in every spelling it accepts.
+    _DATE_BOUND_PARAMS = frozenset(
+        f'{field}{suffix}'
+        for field in ('license_date', 'license_expiry_date')
+        for suffix in ('_from', '_to', '_from[]', '_to[]', '__gte', '__lte')
+    )
+    # Live balance bounds, read in apply_advanced_filters below.
+    _LIVE_BALANCE_PARAMS = frozenset({'balance__balance_cif_min', 'balance__balance_cif_max'})
+
+    @staticmethod
+    def _parse_finite_decimal(raw):
+        """Decimal converter for the live balance bounds; NaN and Infinity are rejected."""
+        try:
+            value = Decimal(raw)
+        except ArithmeticError:  # Decimal('abc') raises InvalidOperation
+            raise DjangoValidationError('Enter a finite decimal number.')
+        if not value.is_finite():
+            raise DjangoValidationError('Enter a finite decimal number.')
+        return value
+
+    @staticmethod
+    def _boolean_converter(field):
+        """Accept the yes/no and 0/1 spellings the generic filter maps, else the field's own rule."""
+        def convert(raw):
+            if raw.lower() not in ('true', '1', 'yes', 'false', '0', 'no'):
+                field.to_python(raw)
+        return convert
+
+    def _validate_filter_params(self, params):
+        """Reject malformed id, date and balance query params with a field-level 400.
+
+        Each value goes through the same Django converter the ORM would apply,
+        so every value that filtered correctly before still does. Values the
+        ORM could not convert (``exporter=abc``, ``license_date__gte=2026-13-45``,
+        ``balance__balance_cif_min=abc``) used to surface as a 500 and are now
+        reported under their own parameter name. Empty values are ignored, as
+        the generic filters already ignore them.
+
+        Splitting follows the generic filters: a comma splits a value, while an
+        ``name[]`` array element is taken whole.
+        """
+        config_keys = set(self.filter_config)
+        generic_fields = {
+            f.name: f for f in LicenseDetailsModel._meta.concrete_fields
+            if isinstance(f, (ForeignKey, IntegerField, DecimalField, DateField, BooleanField))
+            and f.name not in config_keys
+        }
+        errors = {}
+        for name, raw_values in params.lists():
+            base = name[:-2] if name.endswith('[]') else name
+            is_array = name != base
+            if base in self._ID_FILTER_PARAMS:
+                converter = IntegerField().to_python
+            elif name in self._DATE_BOUND_PARAMS:
+                converter = DateField().to_python
+            elif name in self._LIVE_BALANCE_PARAMS:
+                converter = self._parse_finite_decimal
+            elif name in generic_fields:
+                field = generic_fields[name]
+                converter = (self._boolean_converter(field) if isinstance(field, BooleanField)
+                             else field.to_python)
+            else:
+                continue
+
+            for raw in raw_values:
+                if is_array and base in self._ID_FILTER_PARAMS:
+                    values = [raw]
+                elif not raw:
+                    continue
+                elif ',' in raw and name not in self._DATE_BOUND_PARAMS and name not in self._LIVE_BALANCE_PARAMS:
+                    values = [v.strip() for v in raw.split(',') if v.strip()]
+                else:
+                    values = [raw]
+                for value in values:
+                    try:
+                        converter(value)
+                    except DjangoValidationError as exc:
+                        errors.setdefault(name, []).extend(exc.messages)
+
+        if errors:
+            raise ValidationError(errors)
 
     def apply_advanced_filters(self, qs, params, filter_config):
         """Override to add custom logic for is_expired and is_null with default values."""
         from datetime import date
         from decimal import Decimal
         from django.db.models import Q
+
+        self._validate_filter_params(params)
 
         # Get default filters
         default_filters = getattr(self, "default_filters", {})
@@ -703,6 +822,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                 # Show non-null licenses: live balance >= 200
                 matching_ids = [i for i in candidate_ids if live_balance_by_license.get(i, Decimal('0')) >= 200]
                 qs = qs.filter(id__in=matching_ids)
+
+        # `is_active` is the administrative flag (`flags.is_active`). The
+        # dashboard's Active link uses it. Absent or "all" applies no filter.
+        is_active_value = params.get('is_active', '').lower()
+        if is_active_value in ("true", "1"):
+            qs = qs.filter(Q(flags__is_active=True) | Q(flags__isnull=True))
+        elif is_active_value in ("false", "0"):
+            qs = qs.filter(flags__is_active=False)
 
         # Handle is_planned filter - based on whether the license has a manual
         # utilization plan (i.e. at least one LicenseItemPlan row). This mirrors

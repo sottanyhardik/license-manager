@@ -4,10 +4,25 @@ import { describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
+import { v3Fixture } from "@/components/dashboard/fixtures";
 import Dashboard from "./Dashboard";
-import { dashboardApiContract } from "./dashboardContract";
+import { dashboardApiContract, DASHBOARD_SECTION_ROLES } from "./dashboardContract";
 
 vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
+vi.mock("recharts", async () => {
+    const React = await import("react");
+    const Container = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+    return {
+        ResponsiveContainer: Container,
+        BarChart: Container,
+        Bar: () => null,
+        Cell: () => null,
+        CartesianGrid: () => null,
+        XAxis: () => null,
+        YAxis: () => null,
+        Tooltip: () => null,
+    };
+});
 
 const permissions = {
     user: null,
@@ -18,19 +33,20 @@ const permissions = {
     canManageUsers: vi.fn(() => true),
 };
 
-const responseFixture = {
-    license_stats: { total: 12, active: 9, expired: 2, null_dfia: 1, expiring_soon: 3 },
-    allotment_stats: { total: 7, recent: [] },
-    boe_stats: { total: 5, pending_invoices: 2, recent: [] },
-    expiring_licenses: [],
-    boe_monthly_trend: [],
-    c969_link_review: { count: 0, rows: [] },
-};
+describe("Dashboard API contract v3", () => {
+    it("freezes the endpoint, verb, query parameters and section keys", () => {
+        expect(dashboardApiContract.version).toBe(3);
+        expect(dashboardApiContract.endpoint).toBe("dashboard/");
+        expect(dashboardApiContract.method).toBe("GET");
+        expect(dashboardApiContract.queryParameters).toEqual(["company_id", "date_from", "date_to", "refresh"]);
+        expect([...dashboardApiContract.sections].sort()).toEqual(Object.keys(v3Fixture).sort());
+    });
 
-describe("Dashboard API contract", () => {
-    it("freezes the single dashboard request path, verb, parameters, and response shape", async () => {
+    it("requests the endpoint with no parameters on first load", async () => {
         const get = vi.mocked(api.get);
-        get.mockResolvedValueOnce({ data: responseFixture } as never);
+        get.mockImplementation(async (url: string) =>
+            (url === "masters/companies/" ? { data: { results: [] } } : { data: v3Fixture }) as never,
+        );
 
         render(
             <MemoryRouter>
@@ -40,14 +56,13 @@ describe("Dashboard API contract", () => {
             </MemoryRouter>,
         );
 
-        await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
-        expect(get).toHaveBeenCalledWith(dashboardApiContract.endpoint);
-        expect(dashboardApiContract.method).toBe("GET");
-        expect(dashboardApiContract.queryParameters).toEqual([]);
-        expect(Object.keys(responseFixture)).toEqual(Object.keys(dashboardApiContract.response));
-        expect(Object.keys(responseFixture.license_stats)).toEqual(dashboardApiContract.response.license_stats);
-        expect(Object.keys(responseFixture.allotment_stats)).toEqual(dashboardApiContract.response.allotment_stats);
-        expect(Object.keys(responseFixture.boe_stats)).toEqual(dashboardApiContract.response.boe_stats);
-        expect(Object.keys(responseFixture.c969_link_review)).toEqual(dashboardApiContract.response.c969_link_review);
+        await waitFor(() => expect(get).toHaveBeenCalledWith(dashboardApiContract.endpoint, { params: undefined }));
+    });
+
+    it("keeps role gates aligned with the backend role lists", () => {
+        expect(DASHBOARD_SECTION_ROLES.licence).toEqual(["LICENSE_MANAGER", "LICENSE_VIEWER", "REPORT_VIEWER"]);
+        expect(DASHBOARD_SECTION_ROLES.allotment).toEqual(["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER", "REPORT_VIEWER"]);
+        expect(DASHBOARD_SECTION_ROLES.boe).toEqual(["BOE_MANAGER", "BOE_VIEWER", "ACCOUNT_ACCESS", "REPORT_VIEWER"]);
+        expect(DASHBOARD_SECTION_ROLES.invoice).toEqual(["TRADE_MANAGER", "TRADE_VIEWER", "ACCOUNT_ACCESS", "REPORT_VIEWER"]);
     });
 });

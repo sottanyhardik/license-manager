@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoBasicSemanticViolations, expectNoSeriousOrCriticalAxeViolations } from "./accessibilityHelpers";
+import { v3Fixture as dashboardV3Payload } from "../src/components/dashboard/fixtures";
 
 const localUser = {
   id: 1,
@@ -26,13 +27,7 @@ async function mockAuthenticatedDashboard(page: Page) {
     if (pathname.endsWith("/dashboard/")) {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({
-          license_stats: { total: 42, active: 36, expired: 2, null_dfia: 1, expiring_soon: 3 },
-          allotment_stats: { total: 18, recent: [] },
-          boe_stats: { total: 27, pending_invoices: 4, recent: [] },
-          expiring_licenses: [],
-          boe_monthly_trend: [],
-        }),
+        body: JSON.stringify(dashboardV3Payload),
       });
       return;
     }

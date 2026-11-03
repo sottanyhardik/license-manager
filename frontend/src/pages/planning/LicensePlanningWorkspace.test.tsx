@@ -50,7 +50,7 @@ describe("SION planning workspace", () => {
     await userEvent.click(screen.getByRole("button", { name: "View items for LIC-42" })); expect(screen.getByText("#1 Sugar rule")).toBeInTheDocument(); expect(screen.getByText(/HSN: 1701/)).toBeInTheDocument();
   });
   it("previews saved active rules without planning and opens the canonical license plan", async () => {
-    render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><Routes><Route path="/planning" element={<LicensePlanningWorkspace />} /><Route path="/licenses/:id/overview" element={<p>Canonical license plan</p>} /></Routes></MemoryRouter>);
+    render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><Routes><Route path="/planning" element={<LicensePlanningWorkspace />} /><Route path="/licenses" element={<p>Canonical license plan</p>} /></Routes></MemoryRouter>);
     const previewButton = await screen.findByRole("button", { name: "Preview Impact" }); await waitFor(() => expect(previewButton).toBeEnabled()); await userEvent.click(previewButton);
     await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "NEW")); expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled(); await userEvent.click(await screen.findByRole("button", { name: "View Plan" })); expect(await screen.findByText("Canonical license plan")).toBeInTheDocument();
   });

@@ -4,9 +4,12 @@ import { toast } from "sonner";
 
 import api from "@/api/axios";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { extractApiError } from "@/pages/license-overview/licenseOverviewHelpers";
 import { licenseOverviewKeys } from "@/pages/license-overview/useLicenseOverviewSummary";
 import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
+import { LICENSE_LIST_QUERY_ROOT } from "@/pages/licenses/useLicenseListQuery";
+import { refreshLicenceWorkspace } from "@/pages/licenses/workspace/licenceWorkspaceQueries";
 
 interface IndividualItemCifSwitchProps {
     licenseId: string | number;
@@ -33,6 +36,9 @@ export default function IndividualItemCifSwitch({ licenseId, override, canWrite,
         void queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(id) });
         void queryClient.invalidateQueries({ queryKey: ["license-allotment-candidates", id] });
         void queryClient.invalidateQueries({ queryKey: ["licenses"] });
+        // The workspace balance and the list's collapsed balance both change with the mode.
+        void refreshLicenceWorkspace(queryClient, Number(licenseId));
+        void queryClient.invalidateQueries({ queryKey: LICENSE_LIST_QUERY_ROOT });
     }, [licenseId, queryClient]);
 
     const onCheckedChange = useCallback(async (next: boolean) => {
@@ -55,9 +61,11 @@ export default function IndividualItemCifSwitch({ licenseId, override, canWrite,
     }, [canWrite, invalidateConsumers, isSaving, licenseId, queryClient]);
 
     return (
-        <div className={className} aria-live="polite">
-            <div className="flex items-center gap-2">
+        <div className={cn("flex flex-none flex-col", className)} aria-live="polite">
+            <div className="flex flex-none items-center gap-2 whitespace-nowrap">
                 <Switch
+                    // The global 44px mobile minimum for buttons would stretch the switch. Its 40x24px target is enough.
+                    className="shrink-0 min-h-0!"
                     checked={checked}
                     onCheckedChange={onCheckedChange}
                     disabled={!canWrite || isSaving}

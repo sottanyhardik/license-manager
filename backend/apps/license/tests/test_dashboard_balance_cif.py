@@ -1,21 +1,31 @@
 """
-Regression coverage: the Dashboard's "expiring licenses" card must show the
-same live Balance CIF the Customs Ledger/Balance Engine show, not the
-denormalized `LicenseBalance.balance_cif` cache — see `_get_expiring_licenses`
-in `apps/license/views/dashboard.py`.
+Regression coverage: the Dashboard's expiring-licence drill-down and expiry
+count must use the same live financial balance the Balance Engine shows, not
+the denormalized `LicenseBalance.balance_cif` cache — see
+`apps.license.services.dashboard_summary._licence_snapshot`.
 """
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from apps.core.models import HeadSIONNormsModel, SionNormClassModel
 from apps.license.models import LicenseBalance, LicenseDetailsModel, LicenseExportItemModel
+from apps.license.services import dashboard_summary as summary
 from apps.license.services.balance_calculator import LicenseBalanceCalculator
-from apps.license.views.dashboard import DashboardDataView
 
 from .test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
+
+
+def _scope():
+    return summary.DashboardScope(as_of=date.today())
+
+
+def _expiring_rows():
+    return summary._licence_snapshot(_scope())["expiring_licences"]
 
 
 class ExpiringLicensesLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCase):
@@ -32,24 +42,16 @@ class ExpiringLicensesLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCas
 
         # Simulate a stale cache — bypass the recalculation signal so the
         # stored column disagrees with the live formula. Kept above the
-        # view's own `balance__balance_cif__gte=100` filter threshold so
-        # this isolates the DISPLAY discrepancy, not the filter.
+        # usable-balance threshold so this isolates the DISPLAY discrepancy.
         LicenseBalance.objects.filter(license=license_obj).update(balance_cif=Decimal("500.00"))
 
-        results = DashboardDataView()._get_expiring_licenses()
-        row = next(r for r in results if r["license_number"] == license_obj.license_number)
+        row = next(r for r in _expiring_rows() if r["license_number"] == license_obj.license_number)
 
-        self.assertEqual(row["balance_cif"], float(live_balance))
-        self.assertNotEqual(row["balance_cif"], 500.00)
+        self.assertEqual(row["balance_cif"], summary.money(live_balance))
+        self.assertNotEqual(row["balance_cif"], "500.00")
 
     def test_expiring_licenses_filter_uses_live_balance_not_stale_cache(self):
-        """BL-LEDGER-02: `_get_expiring_licenses` used to filter
-        `balance__balance_cif__gte=100` at the DB level (a cached column)
-        before ever computing the live balance for display. A license
-        whose live balance is >= $100 but whose cache is stale below $100
-        would be wrongly excluded entirely; one whose live balance is
-        below $100 but whose cache is stale above would be wrongly
-        included. Both must now be decided by the live figure."""
+        """BL-LEDGER-02: the usable-balance filter must be decided by the live figure."""
         company = self.make_company()
 
         included = self.make_license(company)
@@ -70,13 +72,12 @@ class ExpiringLicensesLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCas
         self.assertEqual(LicenseBalanceCalculator.calculate_balance(excluded), Decimal("0.00"))
         LicenseBalance.objects.filter(license=excluded).update(balance_cif=Decimal("9000.00"))
 
-        results = DashboardDataView()._get_expiring_licenses()
-        numbers = {r["license_number"] for r in results}
+        numbers = {r["license_number"] for r in _expiring_rows()}
         self.assertIn(included.license_number, numbers, "Live balance >= 100 must be included")
         self.assertNotIn(excluded.license_number, numbers, "Live balance 0 must be excluded")
 
-    def test_expiring_count_stat_uses_live_balance_not_stale_cache(self):
-        """Same fix, applied to `_get_license_stats`'s `expiring_soon` count."""
+    def test_expiring_count_uses_live_balance_not_stale_cache(self):
+        """The expiring-usable count is decided by the live balance, like the drill-down."""
         company = self.make_company()
 
         counted = self.make_license(company)
@@ -101,19 +102,14 @@ class ExpiringLicensesLiveBalanceTests(LicenseBalanceLedgerFixtureMixin, TestCas
             flags__is_active=True,
         ).exclude(pk__in=[counted.pk, not_counted.pk]).count()
 
-        stats = DashboardDataView()._get_license_stats()
+        portfolio = summary._licence_snapshot(_scope())["portfolio"]
         # Only `counted` (live balance >= 100) should add to the baseline;
         # `not_counted` (live balance 0) must not, regardless of its stale cache.
-        self.assertEqual(stats["expiring_soon"], before_count + 1)
+        self.assertEqual(portfolio["expiring_usable_30d"], before_count + 1)
 
 
 class DashboardQueryRegressionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
-    """Query budgets for the dashboard's request-local read paths.
-
-    The financial-balance service has its own documented bulk-query budget;
-    these tests isolate the dashboard ORM work so a future related-manager
-    call cannot reintroduce an N+1 query for every expiring licence.
-    """
+    """Query budgets for the dashboard's read paths. Each budget is independent of the row count."""
 
     def test_expiring_license_rows_use_the_prefetched_norms(self):
         company = self.make_company()
@@ -127,17 +123,23 @@ class DashboardQueryRegressionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
             LicenseExportItemModel.objects.create(license=license_obj, norm_class=norm)
             licenses.append(license_obj)
 
-        balances = {license_obj.id: Decimal("100.00") for license_obj in licenses}
+        components = {
+            license_obj.id: {
+                "credit": Decimal("100.00"), "opening": Decimal("100.00"), "purchase": Decimal("0"),
+                "sale": Decimal("0"), "boe": Decimal("0"), "allotment": Decimal("0"),
+                "raw": Decimal("100.00"), "available": Decimal("100.00"),
+            }
+            for license_obj in licenses
+        }
         with patch.object(
             LicenseBalanceCalculator,
-            "calculate_financial_balance_for_licenses",
-            return_value=balances,
+            "calculate_financial_components_for_licenses",
+            return_value=components,
         ):
-            # One candidate query plus one targeted export/norm prefetch.
-            # Before the regression fix the related-manager filter below
-            # executed an additional query for every displayed licence.
-            with self.assertNumQueries(2):
-                rows = DashboardDataView()._get_expiring_licenses()
+            # Licence rows (1) + the expiring licences (1) + their prefetched export/norm rows (1).
+            # The norms must not add a query per displayed licence.
+            with self.assertNumQueries(3):
+                rows = summary._licence_snapshot(_scope())["expiring_licences"]
 
         self.assertEqual([row["license_number"] for row in rows], [
             license_obj.license_number for license_obj in licenses
@@ -149,8 +151,12 @@ class DashboardQueryRegressionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.make_boe(company, number="DASHBOARD-TREND-ONE")
         self.make_boe(company, number="DASHBOARD-TREND-TWO")
 
-        with self.assertNumQueries(1):
-            trend = DashboardDataView()._get_boe_monthly_trend()
+        with CaptureQueriesContext(connection) as queries:
+            trend = summary.build_boe_activity(summary.DashboardScope(as_of=date.today(), company=company))[
+                "monthly_trend"
+            ]
 
+        grouped = [q["sql"] for q in queries.captured_queries if "date_trunc" in q["sql"].lower()]
+        self.assertEqual(len(grouped), 1, "monthly trend must be a single grouped query")
         self.assertEqual(len(trend), 6)
         self.assertEqual(sum(row["count"] for row in trend), 2)

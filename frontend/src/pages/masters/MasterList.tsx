@@ -23,7 +23,6 @@ import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
-import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
@@ -139,9 +138,6 @@ export default function MasterList() {
     // License Balance Modal state
     const [showBalanceModal, setShowBalanceModal] = useState(false);
     const [selectedLicenseId, setSelectedLicenseId] = useState(null);
-
-    // Tracks license IDs currently fetching ownership from DGFT
-    const [fetchingOwnershipIds, setFetchingOwnershipIds] = useState<Set<number>>(() => new Set());
 
     // Ownership details modal state
     const [showOwnershipModal, setShowOwnershipModal] = useState(false);
@@ -520,21 +516,6 @@ export default function MasterList() {
     const invalidateList = useCallback(() => {
         qc.invalidateQueries({ queryKey: ['entity-list', entityName] });
     }, [qc, entityName]);
-
-    // Fetch DGFT ownership for a single license — extracted from inline card
-    const handleFetchOwnership = useCallback(async (item: { id: number; license_number?: string }) => {
-        setFetchingOwnershipIds(prev => { const n = new Set(prev); n.add(item.id); return n; });
-        try {
-            const r = await api.post(`license-actions/${item.id}/fetch-ownership/`);
-            const owner = r.data?.current_owner?.name || '—';
-            toast.success(`Ownership updated: ${owner} (${r.data?.transfers_count ?? 0} transfers)`);
-            invalidateList();
-        } catch (err: any) {
-            toast.error(err?.response?.data?.error || err?.message || 'Failed to fetch ownership');
-        } finally {
-            setFetchingOwnershipIds(prev => { const n = new Set(prev); n.delete(item.id); return n; });
-        }
-    }, [invalidateList]);
 
     useEffect(() => {
         if (!linkModalTrade) return;
@@ -1143,24 +1124,6 @@ export default function MasterList() {
                             onDelete={handleDelete}
                             expandedAllotments={expandedAllotments}
                             toggleAllotment={toggleAllotment}
-                        />
-                    )}
-
-                    {/* Licenses — extracted to dedicated component */}
-                    {entityName === 'licenses' && (
-                        <LicensesTable
-                            loading={loading}
-                            data={data}
-                            canWrite={canWrite}
-                            entityName={entityName}
-                            filterParams={filterParams}
-                            currentPage={currentPage}
-                            pageSize={pageSize}
-                            navigate={navigate}
-                            onDelete={handleDelete}
-                            fetchingOwnershipIds={fetchingOwnershipIds}
-                            onFetchOwnership={handleFetchOwnership}
-                            invalidateList={invalidateList}
                         />
                     )}
 

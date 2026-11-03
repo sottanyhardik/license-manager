@@ -842,9 +842,14 @@ class LicenseDetailsModel(AuditModel):
 
     @cached_property
     def latest_transfer(self):
-        qs = self.transfers.order_by("-transfer_date", "-id")
-        if qs.exists():
-            return qs.first()
+        # The licence list prefetches `transfers_for_list` with this same
+        # ordering (LicenseDetailsViewSet.get_queryset); reuse it when present
+        # so a page costs no per-row query. Otherwise take the first row.
+        transfers = getattr(self, "transfers_for_list", None)
+        if transfers is None:
+            transfers = list(self.transfers.order_by("-transfer_date", "-id")[:1])
+        if transfers:
+            return transfers[0]
         if self.current_owner:
             return f"Current Owner is {self.current_owner.name}"
         return "Data Not Found"

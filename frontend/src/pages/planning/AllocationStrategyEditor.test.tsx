@@ -68,7 +68,7 @@ describe("AllocationStrategyEditor", () => {
         render(<AllocationStrategyEditor sionId={7} value={{ strategy: "SPLIT_BY_PERCENT", percentage_rows: [] }} onChange={onChange} />);
         await userEvent.click(screen.getByRole("button", { name: "+ Add Item" }));
         expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-            percentage_rows: [{ import_item: 0, percentage: "0", unit_price: "0" }],
+            percentage_rows: [{ import_item: 0, percentage: "0", unit_price: "0", cif_restriction_percentage: null }],
         }));
     });
 

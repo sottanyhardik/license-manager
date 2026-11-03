@@ -892,6 +892,21 @@ class LicenseBalanceCalculator:
         )
 
     @staticmethod
+    def get_allotment_rows_for_allotments(allotment_ids):
+        """
+        Allotment-scoped sibling of `get_allotment_rows_bulk`: the same
+        annotation chain (`_annotate_allotment_contribution`), filtered by
+        `allotment_id__in` instead of licence. The dashboard's allotment
+        activity is scoped by company and date, not by licence.
+
+        Args:
+            allotment_ids: iterable or queryset of AllotmentModel pks.
+        """
+        return LicenseBalanceCalculator._annotate_allotment_contribution(
+            AllotmentItems.objects.filter(allotment_id__in=allotment_ids)
+        )
+
+    @staticmethod
     def get_outstanding_allotment_totals(import_item) -> tuple[Decimal, Decimal]:
         """
         `(outstanding_qty, outstanding_cif)` for ONE licence item — the
@@ -1651,6 +1666,62 @@ class LicenseBalanceCalculator:
         return balance if balance >= DEC_0 else DEC_0
 
     @classmethod
+    def calculate_financial_components_for_licenses(cls, license_ids) -> dict:
+        """
+        Per-licence breakdown of the Financial Available Balance, batched
+        exactly like `calculate_financial_balance_for_licenses`. That method
+        is now a projection of this one, so the two cannot diverge.
+
+        Returns `{license_id: {...}}` with Decimal values:
+            credit    - authorised CIF (`calculate_credit`)
+            opening   - Opening Balance (`calculate_opening_balance`)
+            purchase  - Purchase CIF (`calculate_purchase_credit`)
+            sale      - SALE-trade CIF (`calculate_trade`)
+            boe       - unallocated BOE debit (`calculate_debit`)
+            allotment - outstanding allotments (`calculate_allotment`)
+            raw       - opening + purchase - sale - boe - allotment, quantized
+                        to 2 dp, before the floor (may be negative)
+            available - max(raw, 0): the Financial Available Balance
+
+        Every id in `license_ids` gets an entry; a missing component is DEC_0.
+        """
+        ids = list(license_ids)
+        if not ids:
+            return {}
+
+        credit_map = cls.calculate_credit_for_licenses(ids)
+        # Compute purchase credit ONCE and share it with the opening-balance
+        # gate, which needs the same map — it used to issue the identical
+        # aggregate a second time.
+        purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
+        opening_map = cls.calculate_opening_balance_for_licenses(
+            ids, purchase_credit_map=purchase_credit_map
+        )
+        sale_debit_map = cls.calculate_trade_for_licenses(ids)
+        boe_debit_map = cls.calculate_debit_for_licenses(ids)
+        allotment_map = cls.calculate_allotment_for_licenses(ids)
+
+        result = {}
+        for lid in ids:
+            opening = opening_map.get(lid, DEC_0)
+            purchase = purchase_credit_map.get(lid, DEC_0)
+            sale = sale_debit_map.get(lid, DEC_0)
+            boe = boe_debit_map.get(lid, DEC_0)
+            allotment = allotment_map.get(lid, DEC_0)
+            raw = quantize_2dp(opening + purchase - sale - boe - allotment)
+            result[lid] = {
+                "credit": credit_map.get(lid, DEC_0),
+                "opening": opening,
+                "purchase": purchase,
+                "sale": sale,
+                "boe": boe,
+                "allotment": allotment,
+                "raw": raw,
+                "available": raw if raw >= DEC_0 else DEC_0,
+            }
+        return result
+
+    @classmethod
     def calculate_financial_balance_for_licenses(cls, license_ids) -> dict:
         """
         Batched sibling of `calculate_financial_balance` — Financial
@@ -1671,33 +1742,8 @@ class LicenseBalanceCalculator:
             components simply contribute `DEC_0`/`False`, matching
             `calculate_balance_for_licenses`'s own convention).
         """
-        ids = list(license_ids)
-        if not ids:
-            return {}
-
-        # Compute purchase credit ONCE and share it with the opening-balance
-        # gate, which needs the same map — it used to issue the identical
-        # aggregate a second time.
-        purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
-        opening_map = cls.calculate_opening_balance_for_licenses(
-            ids, purchase_credit_map=purchase_credit_map
-        )
-        sale_debit_map = cls.calculate_trade_for_licenses(ids)
-        boe_debit_map = cls.calculate_debit_for_licenses(ids)
-        allotment_map = cls.calculate_allotment_for_licenses(ids)
-
-        result = {}
-        for lid in ids:
-            balance = (
-                opening_map.get(lid, DEC_0)
-                + purchase_credit_map.get(lid, DEC_0)
-                - sale_debit_map.get(lid, DEC_0)
-                - boe_debit_map.get(lid, DEC_0)
-                - allotment_map.get(lid, DEC_0)
-            )
-            balance = quantize_2dp(balance)
-            result[lid] = balance if balance >= DEC_0 else DEC_0
-        return result
+        components = cls.calculate_financial_components_for_licenses(license_ids)
+        return {lid: row["available"] for lid, row in components.items()}
 
 
 class ItemBalanceCalculator:

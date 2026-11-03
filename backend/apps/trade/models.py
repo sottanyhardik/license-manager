@@ -473,6 +473,46 @@ class LicenseTrade(AuditModel):
         self.recompute_totals()
 
 
+class TradeUtilisationClassification(models.Model):
+    """Explicit, auditable utilisation treatment for one trade.
+
+    INTERNAL marks a group-company transfer. Its lines stay in every ledger and drill-down, flagged
+    and totalled separately, but it does not count as external licence utilisation and does not
+    change entitlement. Only an authorised record can make a trade INTERNAL. A trade with no record
+    is EXTERNAL, which is how every trade is treated today.
+
+    REVIEW marks a trade whose status is not yet verified. It is shown as a flag and changes no
+    arithmetic. Invoices and BOEs are never edited by this record.
+    """
+
+    CLASS_INTERNAL = "INTERNAL"
+    CLASS_EXTERNAL = "EXTERNAL"
+    CLASS_REVIEW = "REVIEW"
+    CLASS_CHOICES = (
+        (CLASS_INTERNAL, "Internal group-company trade"),
+        (CLASS_EXTERNAL, "External trade"),
+        (CLASS_REVIEW, "Review required"),
+    )
+
+    trade = models.OneToOneField(
+        LicenseTrade, on_delete=models.PROTECT, related_name="utilisation_classification",
+    )
+    classification = models.CharField(max_length=16, choices=CLASS_CHOICES, db_index=True)
+    reason = models.TextField(help_text="Why the trade has this classification. Required.")
+    evidence = models.TextField(blank=True, default="", help_text="Source documents or confirmations relied on.")
+    authorised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="trade_utilisation_classifications",
+    )
+    authorised_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("trade_id",)
+
+    def __str__(self) -> str:
+        return f"Trade[{self.trade_id}] {self.classification}"
+
+
 class SaleClassificationDecision(models.Model):
     """Append-only authorised business decision for a canonical sale invoice."""
     DECISIONS = ((LicenseTrade.FINAL_PARTY_FINAL, "Final party"), (LicenseTrade.FINAL_PARTY_INTERMEDIATE, "Interlinked"), (LicenseTrade.FINAL_PARTY_NOT_APPLICABLE, "Not applicable"))

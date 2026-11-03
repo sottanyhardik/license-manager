@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactElement } from "react";
-import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "../layout/AdminLayout";
@@ -21,6 +21,8 @@ const Dashboard = lazyLoadWithRetry(() => import("../pages/Dashboard"));
 const Settings = lazyLoadWithRetry(() => import("../pages/Settings"));
 const Profile = lazyLoadWithRetry(() => import("../pages/Profile"));
 const MasterList = lazyLoadWithRetry(() => import("../pages/masters/MasterList"));
+const LicenseListPage = lazyLoadWithRetry(() => import("../pages/licenses/LicenseListPage"));
+const LicenceBalanceRoutes = lazyLoadWithRetry(() => import("../pages/licence-balances/LicenceBalanceRoutes"));
 const MasterForm = lazyLoadWithRetry(() => import("../pages/masters/MasterForm"));
 const AllotmentAction = lazyLoadWithRetry(() => import("../pages/AllotmentAction"));
 const BOETransferLetter = lazyLoadWithRetry(() => import("../pages/BOETransferLetter"));
@@ -46,15 +48,13 @@ const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
 const LicenseLedgerPackageReadiness = lazyLoadWithRetry(() => import("../pages/LicenseLedgerPackageReadiness"));
 const LicenseDownloadRequests = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequests"));
 const LicenseDownloadRequestDetail = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequestDetail"));
-const LicenseOverviewPage = lazy(() => import("../pages/license-overview/LicenseOverviewPage"));
 const LicensePlanningWorkspace = lazy(() => import("../pages/planning/LicensePlanningWorkspace"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 
-/** Old `/licenses/:id/balance` bookmarks/links redirect to the new Overview page — explicit absolute target (built from the route's own `:id` param) rather than a relative `Navigate` path, so the destination is unambiguous. */
-function RedirectToLicenseOverview() {
-    const { id } = useParams<{ id: string }>();
+/** `/masters/licenses` moved to `/licenses`. The query string moves with it, so list filters survive. */
+function RedirectToLicenseList() {
     const location = useLocation();
-    return <Navigate to={`/licenses/${id}/overview${location.search}`} replace />;
+    return <Navigate to={{ pathname: "/licenses", search: location.search }} replace />;
 }
 
 const REPORT_ROUTES: [string, ReactElement][] = [
@@ -106,7 +106,13 @@ export default function AppRoutes() {
                 {/* License CRUD */}
                 <Route path="/licenses" element={
                     <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER"]}>
-                        <AdminLayout><MasterList /></AdminLayout>
+                        <AdminLayout><LicenseListPage /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                {/* Licence item balances: list at /licence-balances, detail at /licence-balances/:licenceId */}
+                <Route path="/licence-balances/*" element={
+                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER"]}>
+                        <AdminLayout><LicenceBalanceRoutes /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/licenses/create" element={
@@ -264,14 +270,10 @@ export default function AppRoutes() {
                     </ProtectedRoute>
                 } />
 
-                {/* License Overview dashboard — replaces the old Balance Workspace */}
-                <Route path="/licenses/:id/overview" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER"]}>
-                        <AdminLayout><LicenseOverviewPage /></AdminLayout>
-                    </ProtectedRoute>
-                } />
-                {/* Old bookmarks/links to the retired Balance Workspace redirect here. */}
-                <Route path="/licenses/:id/balance" element={<RedirectToLicenseOverview />} />
+                {/* Retired licence overview (LicenseOverviewPage, files kept pending removal). Old links now land on the licence list. */}
+                <Route path="/licenses/:id/overview" element={<RedirectToLicenseList />} />
+                {/* Old bookmarks/links to the retired Balance Workspace redirect to the same inline workspace. */}
+                <Route path="/licenses/:id/balance" element={<RedirectToLicenseList />} />
 
                 {/* PDF Viewer */}
                 <Route path="/pdf-viewer" element={
@@ -293,6 +295,7 @@ export default function AppRoutes() {
                 } />
 
                 {/* Master CRUD */}
+                <Route path="/masters/licenses" element={<RedirectToLicenseList />} />
                 <Route path="/masters/:entity" element={
                     <ProtectedRoute>
                         <AdminLayout><MasterList /></AdminLayout>

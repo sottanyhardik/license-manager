@@ -9,6 +9,7 @@ from .license import (
     LicenseTransferSerializer,
     LicensePurchaseSerializer,
     LicenseDetailsSerializer,
+    LicenseListSerializer,
 )
 from .incentive import (
     IncentiveLicenseSerializer,
@@ -26,7 +27,7 @@ from .ledger import (
 __all__ = [
     "SafeDateTimeField", "LicenseExportItemSerializer", "LicenseImportItemSerializer",
     "LicenseDocumentSerializer", "LicenseTransferSerializer", "LicensePurchaseSerializer",
-    "LicenseDetailsSerializer", "IncentiveLicenseSerializer", "LicenseItemPlanSerializer",
+    "LicenseDetailsSerializer", "LicenseListSerializer", "IncentiveLicenseSerializer", "LicenseItemPlanSerializer",
     "SionPlanningRuleSerializer",
     "CanonicalLedgerSerializer", "TransactionSerializer", "CompanyUtilizationSerializer",
     "TotalsSerializer", "LedgerSummarySerializer",

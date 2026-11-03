@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 from apps.core.models import HeadSIONNormsModel, ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 
-CACHE_KEY = "view:dashboard:v2:superuser"
+CACHE_KEY = "view:dashboard:v4:superuser:all:all:all"
 
 
 @pytest.fixture(autouse=True)
@@ -63,12 +63,12 @@ def test_dashboard_lists_the_wrong_link_with_its_licence_id(client, wrong_link):
 
 
 def test_a_review_failure_does_not_break_the_rest_of_the_dashboard(client, wrong_link):
-    with patch("apps.license.views.dashboard.c969_link_mismatches", side_effect=RuntimeError("boom")):
+    with patch("apps.license.services.dashboard_summary.c969_link_mismatches", side_effect=RuntimeError("boom")):
         response = client.get(reverse("license:dashboard"))
 
     assert response.status_code == 200
     body = response.json()
-    assert "license_stats" in body
+    assert "licence_portfolio" in body
     assert body["c969_link_review"] == {"count": 0, "rows": [], "error": "C969 link review could not run"}
 
 

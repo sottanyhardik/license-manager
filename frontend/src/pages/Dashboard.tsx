@@ -1,884 +1,261 @@
-import React, { useCallback, useContext, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import {
-    AlertTriangle,
-    ArrowRight,
-    CheckCircle2,
-    Clock,
-    FileSpreadsheet,
-    FileText,
-    FileX,
-    Hourglass,
-    Inbox,
-    Network,
-    Plus,
-    ReceiptText,
-    RefreshCw,
-    RotateCcw,
-} from "lucide-react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, RotateCcw } from "lucide-react";
+
 import api from "../api/axios";
 import { AuthContext } from "../context/AuthContext";
-import PageHeader from "@/components/PageHeader";
-import AlertCard from "@/components/AlertCard";
-import StatCard from "@/components/StatCard";
-import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { formatDashboardDate } from "@/utils/dashboardDate";
+import { REPORT_ROLES } from "@/routes/authorizationRoles";
+import AllotmentActivity, { ALLOTMENT_CARD_CLASS } from "@/components/dashboard/AllotmentActivity";
+import AttentionCentre from "@/components/dashboard/AttentionCentre";
+import { buildAttentionRows } from "@/components/dashboard/attention";
+import BoeActivity, { BOE_CARD_CLASS } from "@/components/dashboard/BoeActivity";
+import C969ReviewTable from "@/components/dashboard/C969ReviewTable";
+import DashboardHeader, { type CompanyOption } from "@/components/dashboard/DashboardHeader";
+import DashboardSection from "@/components/dashboard/DashboardSection";
+import FinancialOverview from "@/components/dashboard/FinancialOverview";
+import InvoiceActivity from "@/components/dashboard/InvoiceActivity";
+import KpiRow from "@/components/dashboard/KpiRow";
+import LicencePortfolio from "@/components/dashboard/LicencePortfolio";
+import QuickActions, { type QuickActionPermissions } from "@/components/dashboard/QuickActions";
+import { licenceList } from "@/components/dashboard/dashboardLinks";
+import { useDashboardData } from "@/components/dashboard/useDashboardData";
+import { formatClockTime } from "@/components/dashboard/formatters";
+import { presetToDates, type RangePreset } from "@/components/dashboard/scope";
+import { DASHBOARD_SECTION_ROLES, type DashboardResponse } from "./dashboardContract";
 
-type LicenceStats = {
-    total: number;
-    active: number;
-    expired: number;
-    null_dfia: number;
-    expiring_soon: number;
-};
-type RecentBoe = {
-    id: string | number;
-    bill_of_entry_number?: string | null;
-    bill_of_entry_date?: string | null;
-    company_name?: string | null;
-};
-type RecentAllotment = {
-    id: string | number;
-    modified_on?: string | null;
-    created_at?: string | null;
-    item_name?: string | null;
-    required_quantity?: string | number | null;
-    cif_fc?: string | number | null;
-};
-type ExpiringLicence = {
-    license_number: string;
-    license_expiry_date?: string | null;
-    balance_cif?: string | number | null;
-    days_to_expiry?: number | null;
-};
-type C969LinkReviewRow = {
-    import_item_id: number;
-    licence_id: number;
-    licence_number: string;
-    description: string;
-    saved_items: string[];
-    expected_item: string;
-};
-type C969LinkReview = {
-    count: number;
-    rows: C969LinkReviewRow[];
-    error?: string;
-};
-type DashboardStats = {
-    licenses: LicenceStats;
-    allotments: { total: number; recent: RecentAllotment[] };
-    boe: { total: number; pending_invoices: number; recent: RecentBoe[] };
-};
+const SECTION_HEADING = "text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400";
 
-const EMPTY_STATS: DashboardStats = {
-    licenses: { total: 0, active: 0, expired: 0, null_dfia: 0, expiring_soon: 0 },
-    allotments: { total: 0, recent: [] },
-    boe: { total: 0, pending_invoices: 0, recent: [] },
-};
+const BOE_QUICK_ROLES = ["BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"] as const;
 
-const EXPIRY_WINDOW_DAYS = 30;
-const EXPIRY_CRITICAL_DAYS = 7;
-const EXPIRY_WARNING_DAYS = 15;
-
-// Utility functions
-const rowNav = (fn: () => void) => ({
-    onClick: fn,
-    role: "button",
-    tabIndex: 0,
-    onKeyDown: (event: React.KeyboardEvent) => {
-        if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            fn();
-        }
-    },
-});
-
-function SkeletonStat() {
-    return (
-        <div className="flex min-h-[76px] items-center gap-3 rounded-lg border border-border/70 bg-card px-3.5 py-3">
-            <Skeleton className="size-9 rounded-lg" />
-            <div className="flex-1 space-y-2">
-                <Skeleton className="h-2.5 w-3/5" />
-                <Skeleton className="h-6 w-2/5" />
-            </div>
-        </div>
-    );
-}
-
-function SkeletonAlertCard() {
-    return (
-        <div className="space-y-3 rounded-lg border border-border/70 bg-card px-4 py-4">
-            <div className="flex items-center gap-2.5">
-                <Skeleton className="size-7 rounded-md" />
-                <Skeleton className="h-4 w-32" />
-            </div>
-            <div className="space-y-2">
-                <Skeleton className="h-7 w-12" />
-                <Skeleton className="h-3 w-20" />
-            </div>
-        </div>
-    );
-}
-
-function parseDashboardDate(value?: string | null) {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function displayDate(value?: string | null) {
-    return formatDashboardDate(value);
-}
-
-function displayMoney(value?: string | number | null) {
-    if (value == null || value === "") return "—";
-    const number = Number(value);
-    return Number.isFinite(number)
-        ? `$${number.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          })}`
-        : "—";
-}
-
-function displayQuantity(value?: string | number | null) {
-    if (value == null || value === "") return "—";
-    const number = Number(value);
-    return Number.isFinite(number)
-        ? number.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-          })
-        : "—";
-}
-
-function getExpiryDays(licenseExpiryDate?: string | null, daysToExpiry?: number | null): number {
-    if (daysToExpiry != null) return daysToExpiry;
-    const date = parseDashboardDate(licenseExpiryDate);
-    if (!date) return 0;
-    return Math.ceil((date.getTime() - Date.now()) / 86400000);
-}
-
-function getExpiryBadgeVariant(
-    days: number
-): "destructive" | "default" | "secondary" {
-    if (days <= 0) return "destructive";
-    if (days <= EXPIRY_CRITICAL_DAYS) return "destructive";
-    if (days <= EXPIRY_WARNING_DAYS) return "default";
-    return "secondary";
-}
-
+/**
+ * Dashboard page: layout, scope state and role gates. Every figure comes from
+ * `useDashboardData`; this component computes none.
+ */
 export default function Dashboard() {
-    const navigate = useNavigate();
     const { hasAnyRole, isSuperAdmin } = useContext(AuthContext);
+    const superuser = isSuperAdmin();
+    const allowed = (roles: readonly string[]) => superuser || hasAnyRole([...roles]);
 
-    // Permission checks
-    const canSeeAllotments =
-        isSuperAdmin() ||
-        hasAnyRole([
-            "ALLOTMENT_MANAGER",
-            "ALLOTMENT_VIEWER",
-            "REPORT_VIEWER",
-        ]);
-    const canSeeBOE =
-        isSuperAdmin() ||
-        hasAnyRole([
-            "BOE_MANAGER",
-            "BOE_VIEWER",
-            "ACCOUNT_ACCESS",
-            "TL_GENERATE",
-            "REPORT_VIEWER",
-        ]);
-    const canSeeLicenses =
-        isSuperAdmin() ||
-        hasAnyRole([
-            "LICENSE_MANAGER",
-            "LICENSE_VIEWER",
-            "TRADE_MANAGER",
-            "TRADE_VIEWER",
-            "REPORT_VIEWER",
-        ]);
-    const canCreateAllotments =
-        isSuperAdmin() || hasAnyRole(["ALLOTMENT_MANAGER"]);
-    const canCreateBOE = isSuperAdmin() || hasAnyRole(["BOE_MANAGER"]);
+    const canLicence = allowed(DASHBOARD_SECTION_ROLES.licence);
+    const canAllotment = allowed(DASHBOARD_SECTION_ROLES.allotment);
+    const canBoe = allowed(DASHBOARD_SECTION_ROLES.boe);
+    const canInvoice = allowed(DASHBOARD_SECTION_ROLES.invoice);
 
-    // State
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [error, setError] = useState(false);
-    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-    const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
-    const [expiringLicenses, setExpiringLicenses] = useState<ExpiringLicence[]>(
-        []
-    );
-    const [c969Review, setC969Review] = useState<C969LinkReview>({
-        count: 0,
-        rows: [],
+    const [companyId, setCompanyId] = useState<number | null>(null);
+    const [preset, setPreset] = useState<RangePreset>("all");
+    const [search, setSearch] = useState("");
+
+    const range = useMemo(() => presetToDates(preset, new Date()), [preset]);
+    const { data, refreshing, failed, lastRefreshed, refresh, retrying, retrySection } = useDashboardData({
+        companyId,
+        dateFrom: range.date_from,
+        dateTo: range.date_to,
     });
 
-    // Data fetching
-    const fetchDashboardData = useCallback(async (isRefresh = false) => {
-        if (isRefresh) setRefreshing(true);
-        else setLoading(true);
-        setError(false);
-        try {
-            const { data } = await api.get("dashboard/");
-            setStats({
-                licenses: data?.license_stats || EMPTY_STATS.licenses,
-                allotments:
-                    data?.allotment_stats || EMPTY_STATS.allotments,
-                boe: data?.boe_stats || EMPTY_STATS.boe,
+    const anySection = canLicence || canAllotment || canBoe || canInvoice;
+    const [companies, setCompanies] = useState<CompanyOption[]>([]);
+    const [companiesUnavailable, setCompaniesUnavailable] = useState(false);
+    useEffect(() => {
+        if (!anySection) return;
+        let active = true;
+        api.get("masters/companies/", { params: { page_size: 200 } })
+            .then(({ data: body }) => {
+                if (!active) return;
+                const results = Array.isArray(body?.results) ? body.results : [];
+                setCompanies(results.map((company: { id: number; name: string }) => ({ id: company.id, name: company.name })));
+            })
+            .catch(() => {
+                if (active) setCompaniesUnavailable(true);
             });
-            setExpiringLicenses(data?.expiring_licenses || []);
-            setC969Review(
-                data?.c969_link_review || { count: 0, rows: [] }
-            );
-            setLastUpdated(new Date());
-        } catch {
-            setError(true);
-            toast.error("Failed to load dashboard data");
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }, []);
+        return () => {
+            active = false;
+        };
+    }, [anySection]);
 
-    React.useEffect(() => {
-        void fetchDashboardData();
-    }, [fetchDashboardData]);
+    const payload: DashboardResponse | null = data;
+    const isLoading = payload === null;
+    const showLicence = canLicence && (isLoading || payload.licence_portfolio !== undefined);
+    const showAllotment = canAllotment && (isLoading || payload.allotment_activity !== undefined);
+    const showBoe = canBoe && (isLoading || payload.boe_activity !== undefined);
+    const showInvoice = canInvoice && (isLoading || payload.invoice_activity !== undefined);
+    const asOf = payload?.meta.as_of ?? null;
+    const notifications = payload ? buildAttentionRows(payload.attention, companyId) : null;
 
-    // Computed values
-    const today = new Date();
-    const dateLabel = today.toLocaleDateString("en-GB", {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-    });
-    const lastUpdatedLabel = lastUpdated
-        ? new Intl.DateTimeFormat("en-GB", {
-              hour: "2-digit",
-              minute: "2-digit",
-          }).format(lastUpdated)
-        : "Not updated";
+    const quickActions: QuickActionPermissions = {
+        newLicence: allowed(["LICENSE_MANAGER"]),
+        newAllotment: allowed(["ALLOTMENT_MANAGER"]),
+        newBoe: allowed(["BOE_MANAGER"]),
+        newInvoice: allowed(["TRADE_MANAGER"]),
+        reconciliation: allowed(BOE_QUICK_ROLES),
+        reports: allowed(REPORT_ROLES),
+    };
 
-    // Navigation helpers
-    const goExpiringSoon = useCallback(() => {
-        const start = new Date().toISOString().split("T")[0];
-        const end = new Date(
-            Date.now() + EXPIRY_WINDOW_DAYS * 864e5
-        )
-            .toISOString()
-            .split("T")[0];
-        navigate(
-            `/licenses?is_expired=False&is_null=False&license_expiry_date__gte=${start}&license_expiry_date__lte=${end}`
-        );
-    }, [navigate]);
-
-    const headerActions = (
-        <div className="dashboard-page-actions flex flex-wrap items-center justify-end gap-3">
-            <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void fetchDashboardData(true)}
-                disabled={refreshing || loading}
-                aria-label="Refresh dashboard data"
-            >
-                <RefreshCw
-                    className={cn(
-                        "size-4",
-                        (refreshing || loading) && "animate-spin"
-                    )}
-                />
-                {refreshing ? "Refreshing" : "Refresh"}
+    const errorBanner = failed ? (
+        <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-200"
+        >
+            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+            <span className="flex-1">
+                {payload
+                    ? `Some dashboard data may be unavailable. The last successful result is still shown (updated ${formatClockTime(lastRefreshed)}).`
+                    : "The dashboard could not be loaded."}
+            </span>
+            <Button variant="secondary" size="sm" onClick={refresh}>
+                <RotateCcw className="size-3.5" aria-hidden="true" />
+                Retry
             </Button>
-            {canCreateAllotments && (
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => navigate("/allotments/create")}
-                >
-                    <Plus className="size-4" />
-                    New Allotment
-                </Button>
-            )}
-            {canCreateBOE && (
-                <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => navigate("/bill-of-entries/create")}
-                >
-                    <Plus className="size-4" />
-                    New BOE
-                </Button>
-            )}
         </div>
+    ) : null;
+
+    const header = (
+        <DashboardHeader
+        asOf={asOf}
+        asOfTimezone={payload?.meta.as_of_timezone ?? null}
+        lastRefreshed={lastRefreshed}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        companies={companies}
+        companiesUnavailable={companiesUnavailable}
+        companyId={companyId}
+        onCompanyChange={setCompanyId}
+        preset={preset}
+        onPresetChange={setPreset}
+        search={search}
+        onSearchChange={setSearch}
+        notifications={notifications}
+    />
     );
+
+    if (payload === null && failed) {
+        return (
+            <section className="dashboard-page space-y-6" aria-label="Dashboard overview">
+                {header}
+                {errorBanner}
+            </section>
+        );
+    }
 
     return (
-        <section
-            className="dashboard-page space-y-8"
-            aria-label="Dashboard overview"
-            aria-busy={loading}
-        >
-            {/* ── Page Header ─────────────────────────────────────────── */}
-            <PageHeader
-                pretitle="Home"
-                title="Dashboard"
-                description={
-                    <span>
-                        {dateLabel}{" "}
-                        <span className="mx-1 text-border">•</span>{" "}
-                        <span aria-live="polite">
-                            {refreshing
-                                ? "Refreshing…"
-                                : `Updated ${lastUpdatedLabel}`}
-                        </span>
-                    </span>
-                }
-                actions={headerActions}
-            />
+        <section className="dashboard-page space-y-6" aria-label="Dashboard overview" aria-busy={isLoading || refreshing || undefined}>
+            {header}
 
-            {/* ── Error State ─────────────────────────────────────────── */}
-            {error && (
-                <div
-                    className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-200"
-                    role="alert"
-                >
-                    <AlertTriangle className="size-4 shrink-0" />
-                    <span className="flex-1">
-                        Some dashboard data may be unavailable.
-                        {lastUpdated && " The last successful result is still shown."}
-                    </span>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        className="ml-auto shrink-0"
-                        onClick={() => void fetchDashboardData(true)}
-                    >
-                        <RotateCcw className="size-3.5" />
-                        Retry
-                    </Button>
+            {errorBanner}
+
+            <QuickActions permissions={quickActions} />
+
+            {(showLicence || showAllotment || showBoe || showInvoice) && (
+                <KpiRow
+                    loading={isLoading}
+                    showLicence={showLicence}
+                    showAllotment={showAllotment}
+                    showBoe={showBoe}
+                    financial={payload?.financial}
+                    portfolio={payload?.licence_portfolio}
+                    allotmentTotal={payload?.allotment_activity && !("error" in payload.allotment_activity) ? payload.allotment_activity.total : null}
+                    boeTotal={payload?.boe_activity && !("error" in payload.boe_activity) ? payload.boe_activity.total : null}
+                    companyId={companyId}
+                />
+            )}
+
+            {(isLoading || payload) && (
+                <div className={showLicence ? "grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]" : "grid grid-cols-1 gap-6"}>
+                    {payload ? (
+                        <AttentionCentre
+                            items={payload.attention}
+                            notMonitored={payload.not_monitored}
+                            exceptions={payload.licence_exceptions}
+                            companyId={companyId}
+                        />
+                    ) : (
+                        <DashboardSection title="Attention required" loading />
+                    )}
+                    {showLicence && (
+                        <DashboardSection
+                            id="dashboard-financial"
+                            title="Financial overview"
+                            description="Authorised to available CIF, in USD (FC). Values come from the balance engine."
+                            loading={isLoading}
+                            error={payload?.financial && "error" in payload.financial ? payload.financial.error : null}
+                        >
+                            {payload?.financial && !("error" in payload.financial) && (
+                                <FinancialOverview financial={payload.financial} licencesHref={licenceList({ is_expired: "all" }, companyId)} />
+                            )}
+                        </DashboardSection>
+                    )}
                 </div>
             )}
 
-            {/* ════════════════════════════════════════════════════════
-                PHASE 2: URGENT ALERTS (Red zone)
-                ════════════════════════════════════════════════════════ */}
-            {canSeeLicenses && (
-                <section
-                    className="space-y-4"
-                    aria-labelledby="urgent-alerts-title"
-                >
-                    <div className="space-y-1">
-                        <h2
-                            id="urgent-alerts-title"
-                            className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                        >
-                            Urgent alerts
-                        </h2>
-                    </div>
-
-                    {loading ? (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {Array.from({ length: 3 }, (_, index) => (
-                                <SkeletonAlertCard key={index} />
-                            ))}
-                        </div>
+            {showLicence && (
+                <section aria-labelledby="dashboard-licence-title" className="space-y-4">
+                    <h2 id="dashboard-licence-title" className={SECTION_HEADING}>
+                        Licence portfolio
+                    </h2>
+                    {isLoading ? (
+                        <DashboardSection title="Expiring licences" loading />
                     ) : (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {/* Expiring < 7 days */}
-                            <AlertCard
-                                icon={AlertTriangle}
-                                title="Expiring soon"
-                                description="Critical (< 7 days)"
-                                count={expiringLicenses.filter(
-                                    (lic) =>
-                                        getExpiryDays(
-                                            lic.license_expiry_date,
-                                            lic.days_to_expiry
-                                        ) <= EXPIRY_CRITICAL_DAYS &&
-                                        getExpiryDays(
-                                            lic.license_expiry_date,
-                                            lic.days_to_expiry
-                                        ) > 0
-                                ).length}
-                                tone="danger"
-                                onViewAll={goExpiringSoon}
+                        <>
+                            <LicencePortfolio
+                                portfolio={payload.licence_portfolio}
+                                expiring={payload.expiring_licences}
+                                asOf={payload.meta.as_of}
+                                companyId={companyId}
+                                search={search}
                             />
-
-                            {/* Missing DGFT */}
-                            <AlertCard
-                                icon={FileX}
-                                title="Missing DGFT"
-                                description="Require data entry"
-                                count={stats.licenses.null_dfia}
-                                tone="danger"
-                                onViewAll={() =>
-                                    navigate(
-                                        "/licenses?is_null=True&is_expired=all"
-                                    )
-                                }
-                            />
-
-                            {/* Pending invoices */}
-                            {canSeeBOE && (
-                                <AlertCard
-                                    icon={FileSpreadsheet}
-                                    title="Pending invoices"
-                                    description="Awaiting follow-up"
-                                    count={stats.boe.pending_invoices}
-                                    tone="warning"
-                                    onViewAll={() =>
-                                        navigate("/bill-of-entries")
-                                    }
-                                />
-                            )}
-                        </div>
+                            <C969ReviewTable review={payload.c969_link_review} search={search} />
+                        </>
                     )}
                 </section>
             )}
 
-            {/* ════════════════════════════════════════════════════════
-                PHASE 2: KPI SNAPSHOT (Yellow/Green zone)
-                ════════════════════════════════════════════════════════ */}
-            <section className="space-y-4" aria-labelledby="snapshot-title">
-                <div className="space-y-1">
-                    <h2
-                        id="snapshot-title"
-                        className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                    >
-                        Snapshot
-                    </h2>
-                </div>
-
-                {loading ? (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                        {Array.from({ length: 4 }, (_, index) => (
-                            <SkeletonStat key={index} />
+            {(showAllotment || showBoe) && (
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                    {showAllotment &&
+                        (isLoading ? (
+                            <DashboardSection title="Allotment activity" className={ALLOTMENT_CARD_CLASS} loading />
+                        ) : (
+                            <AllotmentActivity
+                                section={payload.allotment_activity}
+                                search={search}
+                                allotmentsHref="/allotments"
+                                retrying={retrying.has("allotment_activity")}
+                                onRetry={() => retrySection("allotment_activity")}
+                            />
                         ))}
-                    </div>
+                    {showBoe &&
+                        (isLoading ? (
+                            <DashboardSection title="BOE activity" className={BOE_CARD_CLASS} loading />
+                        ) : (
+                            <BoeActivity
+                                section={payload.boe_activity}
+                                search={search}
+                                retrying={retrying.has("boe_activity")}
+                                onRetry={() => retrySection("boe_activity")}
+                            />
+                        ))}
+                </div>
+            )}
+
+            {showInvoice &&
+                (isLoading ? (
+                    <DashboardSection title="Invoice activity" loading />
                 ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                        {canSeeLicenses && (
-                            <>
-                                <StatCard
-                                    compact
-                                    label="Active"
-                                    value={stats.licenses.active}
-                                    icon={CheckCircle2}
-                                    tone="success"
-                                    onClick={() =>
-                                        navigate(
-                                            "/licenses?is_expired=False&is_null=False"
-                                        )
-                                    }
-                                />
-                                <StatCard
-                                    compact
-                                    label="Expired"
-                                    value={stats.licenses.expired}
-                                    icon={AlertTriangle}
-                                    tone="danger"
-                                    onClick={() =>
-                                        navigate(
-                                            "/licenses?is_expired=True&is_null=all"
-                                        )
-                                    }
-                                />
-                            </>
-                        )}
-                        {canSeeAllotments && (
-                            <StatCard
-                                compact
-                                label="Allotments"
-                                value={stats.allotments.total}
-                                icon={Network}
-                                tone="info"
-                                onClick={() => navigate("/allotments")}
-                            />
-                        )}
-                        {canSeeBOE && (
-                            <StatCard
-                                compact
-                                label="BOE"
-                                value={stats.boe.total}
-                                icon={ReceiptText}
-                                tone="primary"
-                                onClick={() =>
-                                    navigate("/bill-of-entries?is_invoice=all")
-                                }
-                            />
-                        )}
-                    </div>
-                )}
-            </section>
+                    <InvoiceActivity
+                        section={payload.invoice_activity}
+                        search={search}
+                        retrying={retrying.has("invoice_activity")}
+                        onRetry={() => retrySection("invoice_activity")}
+                    />
+                ))}
 
-            {/* ════════════════════════════════════════════════════════
-                PHASE 2: C969 LINK REVIEW (Read-only, nothing is changed)
-                ════════════════════════════════════════════════════════ */}
-            {canSeeLicenses && c969Review.error && (
-                <div
-                    className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/30 dark:bg-red-950/30 dark:text-red-200"
-                    role="alert"
-                >
-                    <AlertTriangle className="size-4 shrink-0" />
-                    <span className="flex-1">
-                        {c969Review.error}. The rest of the dashboard is unaffected; details are in the server log.
-                    </span>
-                </div>
-            )}
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+                Notes: BOE and invoice links open the unfiltered lists. Activity date presets use your local date, while the as-of date is UTC.
+            </p>
 
-            {canSeeLicenses && c969Review.count > 0 && (
-                <Card className="overflow-hidden border-amber-300 dark:border-amber-800">
-                    <CardHeader className="border-b border-amber-200 bg-amber-50 pb-3 dark:border-amber-900 dark:bg-amber-950/40">
-                        <div className="flex items-start gap-3">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                    C969 saved items to review ({c969Review.count})
-                                </h3>
-                                <p className="text-xs text-slate-600 dark:text-slate-400">
-                                    Nothing has been changed — please review. Each line below has a saved item that differs from the item its product name selects.
-                                </p>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="max-h-[400px] overflow-auto p-0">
-                        <table className="w-full text-sm">
-                            <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
-                                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                                    <th className="px-4 py-2.5">License</th>
-                                    <th className="px-4 py-2.5">Import line</th>
-                                    <th className="px-4 py-2.5">Saved item</th>
-                                    <th className="px-4 py-2.5">Expected item</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {c969Review.rows.map((row) => (
-                                    <tr
-                                        key={row.import_item_id}
-                                        className="border-t border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900/50"
-                                    >
-                                        <td className="px-4 py-2.5 text-sm font-medium">
-                                            <Link
-                                                to={`/licenses/${row.licence_id}/edit`}
-                                                className="text-blue-600 hover:underline dark:text-blue-400"
-                                                title="Open this licence to correct the saved item"
-                                            >
-                                                {row.licence_number}
-                                            </Link>
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100">
-                                            {row.description || "—"}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100">
-                                            {row.saved_items.join(", ") || "—"}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-xs font-medium text-slate-900 dark:text-slate-100">
-                                            {row.expected_item}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {c969Review.count > c969Review.rows.length && (
-                            <p className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
-                                Showing {c969Review.rows.length} of {c969Review.count}.
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* ════════════════════════════════════════════════════════
-                PHASE 2: EXPIRING SOON TABLE (Full width, scannable)
-                ════════════════════════════════════════════════════════ */}
-            {canSeeLicenses && expiringLicenses.length > 0 && (
-                <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
-                    <CardHeader className="border-b border-slate-200 pb-3 dark:border-slate-800">
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                    Expiring soon
-                                </h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    Next {EXPIRY_WINDOW_DAYS} days (
-                                    {expiringLicenses.length} records)
-                                </p>
-                            </div>
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={goExpiringSoon}
-                            >
-                                View all
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="max-h-[400px] overflow-auto p-0">
-                        <table className="w-full text-sm">
-                            <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
-                                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                                    <th className="px-4 py-2.5">License</th>
-                                    <th className="px-4 py-2.5">Expiry</th>
-                                    <th className="px-4 py-2.5 text-right">
-                                        Balance
-                                    </th>
-                                    <th className="px-4 py-2.5 text-right">
-                                        Days
-                                    </th>
-                                    <th className="px-4 py-2.5">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {expiringLicenses.map((lic) => {
-                                    const days = getExpiryDays(
-                                        lic.license_expiry_date,
-                                        lic.days_to_expiry
-                                    );
-                                    const badgeVariant =
-                                        getExpiryBadgeVariant(days);
-                                    return (
-                                        <tr
-                                            key={lic.license_number}
-                                            className="border-t border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900/50 dark:focus-visible:bg-slate-900"
-                                            {...rowNav(() =>
-                                                navigate(
-                                                    `/licenses?search=${lic.license_number}`
-                                                )
-                                            )}
-                                        >
-                                            <td className="px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400">
-                                                {lic.license_number}
-                                            </td>
-                                            <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
-                                                {displayDate(
-                                                    lic.license_expiry_date
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums text-slate-900 dark:text-slate-100">
-                                                {displayMoney(lic.balance_cif)}
-                                            </td>
-                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums text-slate-900 dark:text-slate-100">
-                                                {days <= 0
-                                                    ? "Expired"
-                                                    : `${days}d`}
-                                            </td>
-                                            <td className="px-4 py-2.5">
-                                                <Badge
-                                                    variant={badgeVariant}
-                                                >
-                                                    {days <= 0
-                                                        ? "Expired"
-                                                        : `${days} days`}
-                                                </Badge>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* ════════════════════════════════════════════════════════
-                PHASE 2: ACTIVITY GRID (Recent BOE + Allotments)
-                ════════════════════════════════════════════════════════ */}
-            {(canSeeBOE || canSeeAllotments) && (
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    {/* Recent BOE Entries */}
-                    {canSeeBOE && (
-                        <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
-                            <CardHeader className="border-b border-slate-200 pb-3 dark:border-slate-800">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                            Recent BOE entries
-                                        </h3>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                                            Latest{" "}
-                                            {stats.boe.recent.length} records
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                            navigate("/bill-of-entries")
-                                        }
-                                    >
-                                        View all
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="max-h-[300px] overflow-auto p-0">
-                                {stats.boe.recent.length ? (
-                                    <table className="w-full text-sm">
-                                        <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
-                                            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                                                <th className="px-4 py-2.5">
-                                                    BOE #
-                                                </th>
-                                                <th className="px-4 py-2.5">
-                                                    Date
-                                                </th>
-                                                <th className="px-4 py-2.5">
-                                                    Importer
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {stats.boe.recent.map((boe) => (
-                                                <tr
-                                                    key={boe.id}
-                                                    className="border-t border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900/50 dark:focus-visible:bg-slate-900"
-                                                    {...rowNav(() =>
-                                                        navigate(
-                                                            `/bill-of-entries/${boe.id}/edit`
-                                                        )
-                                                    )}
-                                                >
-                                                    <td className="px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400">
-                                                        {boe.bill_of_entry_number ||
-                                                            "—"}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
-                                                        {displayDate(
-                                                            boe.bill_of_entry_date
-                                                        )}
-                                                    </td>
-                                                    <td
-                                                        className="max-w-[170px] truncate px-4 py-2.5 text-xs text-slate-900 dark:text-slate-100"
-                                                        title={
-                                                            boe.company_name ??
-                                                            undefined
-                                                        }
-                                                    >
-                                                        {boe.company_name ||
-                                                            "—"}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <EmptyState
-                                        icon={Inbox}
-                                        title="No recent BOE records"
-                                        size="default"
-                                    />
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Recent Allotments */}
-                    {canSeeAllotments && (
-                        <Card className="overflow-hidden border-slate-200 dark:border-slate-800">
-                            <CardHeader className="border-b border-slate-200 pb-3 dark:border-slate-800">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                            Recent allotments
-                                        </h3>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                                            Latest{" "}
-                                            {stats.allotments.recent.length}{" "}
-                                            records
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                            navigate("/allotments")
-                                        }
-                                    >
-                                        View all
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="max-h-[300px] overflow-auto p-0">
-                                {stats.allotments.recent.length ? (
-                                    <table className="w-full text-sm">
-                                        <thead className="sticky top-0 z-10 bg-slate-50 backdrop-blur dark:bg-slate-900/50">
-                                            <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                                                <th className="px-4 py-2.5">
-                                                    Date
-                                                </th>
-                                                <th className="px-4 py-2.5">
-                                                    Item
-                                                </th>
-                                                <th className="px-4 py-2.5 text-right">
-                                                    Qty
-                                                </th>
-                                                <th className="px-4 py-2.5 text-right">
-                                                    Value
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {stats.allotments.recent.map(
-                                                (allotment) => (
-                                                    <tr
-                                                        key={allotment.id}
-                                                        className="border-t border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900/50 dark:focus-visible:bg-slate-900"
-                                                        {...rowNav(() =>
-                                                            navigate(
-                                                                `/allotments/${allotment.id}/allocate`
-                                                            )
-                                                        )}
-                                                    >
-                                                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">
-                                                            {displayDate(
-                                                                allotment.modified_on ||
-                                                                    allotment.created_at
-                                                            )}
-                                                        </td>
-                                                        <td
-                                                            className="max-w-[200px] truncate px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100"
-                                                            title={
-                                                                allotment.item_name ??
-                                                                undefined
-                                                            }
-                                                        >
-                                                            {allotment.item_name ||
-                                                                "—"}
-                                                        </td>
-                                                        <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-900 dark:text-slate-100">
-                                                            {displayQuantity(
-                                                                allotment.required_quantity
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-2.5 text-right text-sm tabular-nums text-slate-900 dark:text-slate-100">
-                                                            {displayMoney(
-                                                                allotment.cif_fc
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                )
-                                            )}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <EmptyState
-                                        icon={Inbox}
-                                        title="No recent allotments"
-                                        size="default"
-                                    />
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
+            {!anySection && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Your account has no dashboard sections. Ask an administrator for a role that includes a dashboard view.
+                </p>
             )}
         </section>
     );

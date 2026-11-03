@@ -8,6 +8,7 @@ from apps.core.models import ItemNameModel, ProductDescriptionModel, SchemeCode,
 from apps.core.serializers import HSCodeSerializer, SionNormClassNestedSerializer
 from apps.core.serializers.fields import IndianDateField
 from apps.license.serializers._license_write import LicenseWriteMixin  # write-path mixin
+from apps.license.services.licence_status import licence_status
 from apps.license.models import (
     LicenseDetailsModel,
     LicenseExportItemModel,
@@ -1044,6 +1045,33 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
 # ============================================================================
 # License Plan Presentation Serializers (read-only)
 # ============================================================================
+
+class LicenseListSerializer(LicenseDetailsSerializer):
+    """
+    One row of `GET licenses/`: the detail fields plus the summary the licence
+    accordion header shows. The status comes from the stored flags. The available
+    CIF is the canonical figure, batched once per page by the view
+    (`canonical_available_map`). Detail, create and update keep their own shape.
+    """
+
+    current_owner_name = serializers.SerializerMethodField()
+    licence_status_code = serializers.SerializerMethodField()
+    licence_status_label = serializers.SerializerMethodField()
+    available_cif = serializers.SerializerMethodField()
+
+    def get_current_owner_name(self, obj):
+        owner = obj.current_owner
+        return owner.name if owner else None
+
+    def get_licence_status_code(self, obj):
+        return licence_status(obj)[0]
+
+    def get_licence_status_label(self, obj):
+        return licence_status(obj)[1]
+
+    def get_available_cif(self, obj):
+        return self.context.get("canonical_available_map", {}).get(obj.id)
+
 
 class PlanLinePresentationSerializer(serializers.Serializer):
     """

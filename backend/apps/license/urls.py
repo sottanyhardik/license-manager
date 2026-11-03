@@ -10,6 +10,15 @@ from apps.license.views.item_pivot_report import ItemPivotViewSet, ItemPivotRepo
 from apps.license.views.item_report import ItemReportViewSet, ItemReportView
 from apps.license.views.planned_report import PlannedReportViewSet, PlannedReportView
 from apps.license.views.license_purchase_profit_report import LicensePurchaseProfitReportView
+from apps.license.views.licence_balance_views import (
+    LicenceBalanceListView,
+    LicenceBalanceDetailView,
+    LicenceItemDrilldownView,
+    LicenceSourceReconciliationView,
+    LicenceItemMovementsView,
+    LicenceTransactionsView,
+    LicenceInvoiceLedgerView,
+)
 from apps.license.views.inventory_balance_report import InventoryBalanceReportView
 from apps.license.views.inventory_balance_viewset import InventoryBalanceViewSet
 from apps.license.views.license_items import LicenseItemViewSet
@@ -47,6 +56,14 @@ urlpatterns = [
     # License PDF parse (DFIA licence copy → prefill License form)
     path("licenses/parse-pdf/", LicensePdfParseView.as_view(), name="licenses-parse-pdf"),
     path("licenses/<str:license_id>/replan-status/", LicenseReplanStatusView.as_view(), name="license-replan-status"),
+    # Canonical licence item balance report (read-only; see licence_balance_report)
+    path("licence-balances/", LicenceBalanceListView.as_view(), name="licence-balances"),
+    path("licence-balances/<int:license_id>/", LicenceBalanceDetailView.as_view(), name="licence-balance-detail"),
+    path("licence-balances/<int:license_id>/items/<int:item_id>/", LicenceItemMovementsView.as_view(), name="licence-item-movements"),
+    path("licence-balances/<int:license_id>/items/<int:item_id>/drilldown/", LicenceItemDrilldownView.as_view(), name="licence-item-drilldown"),
+    path("licence-balances/<int:license_id>/transactions/", LicenceTransactionsView.as_view(), name="licence-transactions"),
+    path("licence-balances/<int:license_id>/source-reconciliation/", LicenceSourceReconciliationView.as_view(), name="licence-source-reconciliation"),
+    path("licence-balances/<int:license_id>/invoice-ledger/", LicenceInvoiceLedgerView.as_view(), name="licence-invoice-ledger"),
     # Ledger Upload endpoint
     path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
     # Ledger Task Status endpoint

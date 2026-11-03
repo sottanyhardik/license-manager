@@ -186,11 +186,12 @@ test.describe("licence overview balance route accessibility mock", () => {
     await expect(overviewTab).toBeFocused();
     // Use the tab's native keyboard activation rather than relying on a
     // particular roving-focus implementation detail of the tabs primitive.
-    const boesTab = page.getByRole("tab", { name: "BOEs" });
-    await boesTab.focus();
-    await expect(boesTab).toBeFocused();
+    // The BOEs tab is no longer a tab: its information is in Items & Balance.
+    const itemsTab = page.getByRole("tab", { name: "Items & Balance" });
+    await itemsTab.focus();
+    await expect(itemsTab).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\?tab=boes$/);
+    await expect(page).toHaveURL(/\?tab=items$/);
     await expectNoPageOverflow(page);
     expect(errors).toEqual([]);
   });

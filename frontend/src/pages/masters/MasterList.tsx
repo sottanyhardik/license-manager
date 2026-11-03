@@ -583,6 +583,30 @@ export default function MasterList() {
     };
 
     const handleDelete = async (item) => {
+        // A paired trade cannot be deleted directly (the server refuses it).
+        // Delete it through the unpair endpoint, which keeps the counterpart
+        // as a standalone trade.
+        if (entityName === 'trades' && (item.counterpart_id || item.counterpart_info)) {
+            const counterpartLabel = item.direction === 'SALE' ? 'Purchase' : 'Sale';
+            const thisLabel = item.direction === 'SALE' ? 'Sale' : 'Purchase';
+            const confirmedUnpair = await confirmDangerousAction(
+                `Delete ${thisLabel} and unlink`,
+                `This ${thisLabel} is paired with a linked ${counterpartLabel}. Delete this ${thisLabel} and unlink it, and keep the ${counterpartLabel} as a standalone trade?`,
+            );
+            if (!confirmedUnpair) {
+                return;
+            }
+            try {
+                await api.post(`trades/${item.id}/unpair-and-delete/`);
+                toast.success(`${thisLabel} deleted; linked ${counterpartLabel} kept`);
+                invalidateList();
+                return;
+            } catch (err) {
+                toast.error(err.response?.data?.error || err.response?.data?.detail || 'Failed to delete trade');
+                return;
+            }
+        }
+
         const confirmed = await confirmDelete('this record');
         if (!confirmed) {
             return;

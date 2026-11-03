@@ -23,6 +23,8 @@ from .services.trade_service import (
     copy_sale_to_purchase,
     copy_purchase_to_sale,
     CounterpartValidationError,
+    PairDeletionError,
+    unpair_and_delete_trade,
 )
 
 
@@ -606,6 +608,27 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         except CounterpartValidationError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self._counterpart_payload(source, counterpart, created), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='unpair-and-delete')
+    def unpair_and_delete(self, request, pk=None):
+        """Delete this trade and unlink its counterpart, which stays as a standalone trade.
+
+        The only supported way to remove a paired trade; a plain DELETE is refused.
+        """
+        trade = self.get_object()
+        if self._mds_active(LicenseTrade):
+            return Response(
+                {'error': 'Trade deletes are not routed through MDS; this action is unavailable.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        try:
+            deleted_id, kept_id, audit_id = unpair_and_delete_trade(trade.id, request.user)
+        except PairDeletionError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {'deleted': True, 'deleted_id': deleted_id, 'kept_counterpart_id': kept_id, 'audit_id': audit_id},
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=['get'])
     def counterpart(self, request, pk=None):

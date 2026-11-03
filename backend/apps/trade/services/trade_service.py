@@ -304,10 +304,77 @@ def _copy_to_counterpart(source_id: int, *, source_direction: str, user=None):
         destination.save(update_fields=['counterpart', 'modified_on'])
         TradePairAudit.objects.create(
             pair_uuid=pair_uuid, source=source, counterpart=destination,
+            source_trade_id=source.id, counterpart_trade_id=destination.id,
             action='COPIED', user=user if getattr(user, 'is_authenticated', False) else None,
             occurred_at=timezone.now(),
         )
         return source, destination, True
+
+
+class PairDeletionError(ValueError):
+    """A trade cannot be unpaired-and-deleted in its current state."""
+
+
+def unpair_and_delete_trade(trade_id: int, user=None):
+    """Delete one side of a Sale<->Purchase pair; the other side stays standalone.
+
+    A plain DELETE is refused for paired trades (``prevent_single_counterpart_delete``).
+    This is the audited route: both sides are unlinked in one transaction, the
+    reciprocal line links are cleared first so the CASCADE on
+    ``LicenseTradeLine.counterpart_line`` cannot remove the surviving side's
+    lines, and an audit row keeps the ids and invoice numbers.
+
+    Returns ``(deleted_trade_id, kept_counterpart_id, audit_id)``.
+    """
+    from apps.trade.models import LicenseTrade, LicenseTradeLine, TradePairAudit
+
+    actor = user if getattr(user, 'is_authenticated', False) else None
+    with transaction.atomic():
+        trade = (LicenseTrade.objects.select_for_update(of=('self',))
+                 .select_related('counterpart')
+                 .get(pk=trade_id))
+        if not trade.counterpart_id:
+            raise PairDeletionError('This trade is not paired. Delete it directly instead.')
+        other = (LicenseTrade.objects.select_for_update(of=('self',))
+                 .get(pk=trade.counterpart_id))
+
+        pair_uuid = trade.transaction_pair_uuid or other.transaction_pair_uuid or uuid4()
+        detail = {
+            'deleted': {
+                'invoice_number': trade.invoice_number, 'direction': trade.direction,
+                'total_amount': str(trade.total_amount),
+            },
+            'kept': {
+                'invoice_number': other.invoice_number, 'direction': other.direction,
+                'total_amount': str(other.total_amount),
+            },
+        }
+
+        # 1. Break the reciprocal line links before anything is deleted.
+        LicenseTradeLine.objects.filter(trade__in=[trade, other]).update(
+            counterpart_line=None, transaction_pair_uuid=None,
+        )
+        # 2. Break the header links both ways (OneToOne counterpart is PROTECT),
+        #    and drop the copy provenance so the source can be deleted later
+        #    (copied_from is PROTECT).  The surviving trade becomes standalone.
+        LicenseTrade.objects.filter(pk=trade.pk).update(counterpart=None, transaction_pair_uuid=None)
+        LicenseTrade.objects.filter(pk=other.pk).update(
+            counterpart=None, transaction_pair_uuid=None,
+            copied_from=None, copied_from_type='', modified_on=timezone.now(),
+        )
+
+        audit = TradePairAudit.objects.create(
+            pair_uuid=pair_uuid, source=None, counterpart=None,
+            source_trade_id=trade.id, counterpart_trade_id=other.id,
+            action='UNPAIRED_DELETED', user=actor, detail=detail,
+        )
+
+        # 3. The in-memory instance still carries the old link; clear it so the
+        #    pre_delete guard sees the trade as unpaired.
+        trade.counterpart = None
+        trade.counterpart_id = None
+        trade.delete()
+        return trade_id, other.id, audit.id
 
 
 def sync_to_counterpart(trade_id: int, user=None):

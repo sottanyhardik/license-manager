@@ -666,10 +666,22 @@ class LicenseTradePayment(models.Model):
 
 
 class TradePairAudit(models.Model):
-    """Append-only audit record for paired commercial-document operations."""
+    """Append-only audit record for paired commercial-document operations.
+
+    The FKs are SET_NULL so an audited trade can be deleted (see
+    ``unpair_and_delete_trade``) without losing the record. The plain integer
+    ids and ``detail`` snapshot keep the audit meaningful after that delete.
+    """
     pair_uuid = models.UUIDField(db_index=True)
-    source = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name='pair_audit_as_source')
-    counterpart = models.ForeignKey(LicenseTrade, on_delete=models.PROTECT, related_name='pair_audit_as_counterpart')
+    source = models.ForeignKey(
+        LicenseTrade, on_delete=models.SET_NULL, null=True, blank=True, related_name='pair_audit_as_source'
+    )
+    counterpart = models.ForeignKey(
+        LicenseTrade, on_delete=models.SET_NULL, null=True, blank=True, related_name='pair_audit_as_counterpart'
+    )
+    source_trade_id = models.BigIntegerField(null=True, blank=True)
+    counterpart_trade_id = models.BigIntegerField(null=True, blank=True)
+    detail = models.JSONField(default=dict, blank=True)
     action = models.CharField(max_length=32)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     occurred_at = models.DateTimeField(auto_now_add=True)

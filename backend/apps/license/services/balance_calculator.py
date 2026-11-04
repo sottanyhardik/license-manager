@@ -1547,7 +1547,7 @@ class LicenseBalanceCalculator:
 
     @classmethod
     def calculate_opening_balance_for_licenses(
-        cls, license_ids, purchase_credit_map=None
+        cls, license_ids, purchase_credit_map=None, credit_map=None
     ) -> dict:
         """
         Batched sibling of `calculate_opening_balance` — same 3-way gate,
@@ -1565,7 +1565,10 @@ class LicenseBalanceCalculator:
         ids = list(license_ids)
         if not ids:
             return {}
-        credit_map = cls.calculate_credit_for_licenses(ids)
+        # A caller that already holds the export-CIF map passes it in, so the
+        # identical aggregate is not issued a second time for one request.
+        if credit_map is None:
+            credit_map = cls.calculate_credit_for_licenses(ids)
         hidden_map = cls.calculate_hidden_boe_debit_total_for_licenses(ids)
         has_purchase_map = cls.has_purchase_for_licenses(ids)
         if purchase_credit_map is None:
@@ -1692,10 +1695,10 @@ class LicenseBalanceCalculator:
         credit_map = cls.calculate_credit_for_licenses(ids)
         # Compute purchase credit ONCE and share it with the opening-balance
         # gate, which needs the same map — it used to issue the identical
-        # aggregate a second time.
+        # aggregate a second time. The export-CIF map is shared the same way.
         purchase_credit_map = cls.calculate_purchase_credit_for_licenses(ids)
         opening_map = cls.calculate_opening_balance_for_licenses(
-            ids, purchase_credit_map=purchase_credit_map
+            ids, purchase_credit_map=purchase_credit_map, credit_map=credit_map
         )
         sale_debit_map = cls.calculate_trade_for_licenses(ids)
         boe_debit_map = cls.calculate_debit_for_licenses(ids)

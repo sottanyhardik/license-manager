@@ -289,6 +289,10 @@ class LicenseBalanceLedgerBuilder:
         }
 
         opening_balance = license_obj.opening_balance  # = calculate_credit(): total export CIF
+        # Financial Opening CIF: the gated opening (three-branch rule), exposed
+        # additively so consumers can reference the single authoritative figure.
+        # Existing rows and fields are unchanged.
+        financial_opening_cif = LicenseBalanceCalculator.calculate_opening_balance(license_obj)
         # Total raw CIF of BOE debits marked "hidden" (previous-owner
         # utilisation, see `OTH_INVOICE_MARKER`). Zero for every licence
         # with no hidden BOEs, which is what keeps this change additive/
@@ -686,6 +690,7 @@ class LicenseBalanceLedgerBuilder:
 
         summary = {
             'opening_balance': opening_balance,
+            'financial_opening_cif': financial_opening_cif,
             'hidden_boe_total': hidden_total,
             # `hidden_total + previous_owner_purchase_component` when
             # has_hidden, else 0 — the exact debit rendered as the

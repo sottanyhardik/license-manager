@@ -1625,6 +1625,14 @@ class SionPlanningExecutionService:
                         "unattributed_utilisation_cif": norm_budget.unattributed_utilisation_cif,
                         "waterfall_trace": [],
                         "budget_trace": [list(item) for item in norm_budget.trace],
+                        # Every evaluated licence gets exactly one write_result on persist,
+                        # matching SKIPPED_NO_MATCH and fully-utilised licences. No write
+                        # occurs for a blocked licence; the status records that outcome.
+                        "write_result": {
+                            "license_id": license_obj.pk,
+                            "status": norm_budget.status,
+                            "reason": norm_budget.reason,
+                        },
                     })
                     continue
                 new_plan_cif_ceiling = norm_budget.ceiling

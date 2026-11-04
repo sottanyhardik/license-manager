@@ -46,8 +46,11 @@ LICENSE_NUMBER = "3411008090"
 ALLOTMENT_INVOICE = "E2E-ALLOTMENT-2509"
 AVAILABLE_CIF = Decimal("2066.75")
 UNIT_PRICE = Decimal("8.821")
-MAX_QUANTITY = Decimal("234.000")
-MAX_CIF = Decimal("2064.12")
+# Planning budget = export-manifest CIF for the SION norm minus canonical utilisation.
+# No outstanding allotment items exist when planning runs, so the full export entitlement
+# is plannable: 2066.75 CIF at 8.821/kg = 234.325 kg. The former 2064.12 was the legacy balance.
+MAX_QUANTITY = Decimal("234.325")
+MAX_CIF = AVAILABLE_CIF
 QUEUE_ITEM_NAME = "E2E QUEUE MATERIAL 2509"
 QUEUE_INVOICE = "E2E-QUEUE-2509"
 QUEUE_LICENSE_START = 2510
@@ -216,7 +219,7 @@ class Command(BaseCommand):
                 "name": "E2E ALUMINIUM FOIL 2509",
                 "execution_output": "E2E ALUMINIUM FOIL 2509",
                 "import_item": item_name,
-                "expression": {"field": "DESCRIPTION", "operator": "CONTAINS", "value": "ALUMINIUM FOIL"},
+                "expression": {"field": "PRODUCT_DESCRIPTION", "operator": "CONTAINS", "value": "ALUMINIUM FOIL"},
                 "max_unit_price": UNIT_PRICE,
                 "unit": "kg",
                 "priority": 1,
@@ -233,7 +236,7 @@ class Command(BaseCommand):
                 "name": QUEUE_ITEM_NAME,
                 "execution_output": QUEUE_ITEM_NAME,
                 "import_item": queue_item_name,
-                "expression": {"field": "DESCRIPTION", "operator": "CONTAINS", "value": "E2E QUEUE"},
+                "expression": {"field": "PRODUCT_DESCRIPTION", "operator": "CONTAINS", "value": "E2E QUEUE"},
                 "max_unit_price": Decimal("10.000"),
                 "unit": "kg",
                 "priority": 2,

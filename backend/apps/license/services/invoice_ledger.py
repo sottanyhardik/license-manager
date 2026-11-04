@@ -66,6 +66,9 @@ class LedgerRow:
     related_boes: list = field(default_factory=list)
     classification: str = "EXTERNAL"  # INTERNAL rows are listed but never counted as external
     classification_reason: str = ""
+    # One transaction class, derived in apps.trade.services.internal_transfers, and the counterpart of an internal transfer.
+    transaction_class: str = "EXTERNAL_SALE"
+    counterpart: Optional[dict] = None
 
     def contribution_cif(self) -> Decimal:
         if self.type in (CREDIT_NOTE, DEBIT_NOTE) and self.matched_original is None:
@@ -103,6 +106,8 @@ class LedgerRow:
             "source": self.source,
             "classification": self.classification,
             "classification_reason": self.classification_reason,
+            "transaction_class": self.transaction_class,
+            "counterpart": self.counterpart,
         }
 
     def _effect(self) -> str:
@@ -205,6 +210,21 @@ def build_invoice_ledger(rows: list[LedgerRow], canonical_sale_cif: Optional[Dec
 # Database loader
 # ---------------------------------------------------------------------------
 
+def _counterpart_payload(match) -> dict:
+    """The other side of an internal transfer: its trade, invoice, seller, buyer and the evidence used."""
+    from apps.trade.models import LicenseTrade
+
+    other = LicenseTrade.objects.select_related("from_company", "to_company").get(pk=match.counterpart_trade_id)
+    return {
+        "trade_id": other.id,
+        "invoice": other.invoice_number,
+        "direction": other.direction,
+        "seller": other.from_company.name if other.from_company_id else "",
+        "buyer": other.to_company.name if other.to_company_id else "",
+        "basis": match.basis,
+    }
+
+
 def load_invoice_ledger(license_id: int):
     """Read the licence's trade lines and match credit and debit notes. Read-only."""
     from apps.license.models import LicenseExportItemModel, LicenseImportItemsModel
@@ -260,6 +280,12 @@ def load_invoice_ledger(license_id: int):
         if record is not None and record.classification == TradeUtilisationClassification.CLASS_INTERNAL:
             row.classification = "INTERNAL"
             row.classification_reason = record.reason
+        from apps.trade.services.internal_transfers import transaction_class
+
+        row_class, match = transaction_class(trade, record.classification if record is not None else None)
+        row.transaction_class = row_class
+        if match is not None:
+            row.counterpart = _counterpart_payload(match)
         if note_type in (CREDIT_NOTE, DEBIT_NOTE):
             row.sign = -1 if note_type == CREDIT_NOTE else 1
             candidates = list(

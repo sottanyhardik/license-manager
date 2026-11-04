@@ -11,6 +11,7 @@ export default function DebouncedSearchInput({
     onChange,
     delay = 500,
     placeholder = "Search...",
+    ariaLabel = "",
     className = "",
     style = {},
     showPendingIndicator = true,
@@ -37,6 +38,7 @@ export default function DebouncedSearchInput({
                 type="text"
                 className={`flex h-10 w-full rounded-lg border border-input bg-card px-3 py-2 pl-9 text-sm shadow-sm outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring ${className}`}
                 placeholder={placeholder}
+                aria-label={ariaLabel || placeholder}
                 value={localValue}
                 onChange={(e) => setLocalValue(e.target.value)}
                 style={style}

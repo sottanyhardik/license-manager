@@ -116,6 +116,10 @@ export interface LedgerRow {
   holder_company: string;
   classification?: "EXTERNAL" | "INTERNAL";
   classification_reason?: string;
+  /** EXTERNAL_SALE, EXTERNAL_PURCHASE, INTERNAL_TRANSFER, INTERNAL_TRANSFER_PURCHASE, UNMATCHED_INTERNAL_TRANSACTION or REVIEW_REQUIRED. */
+  transaction_class?: string;
+  /** The other side of an internal transfer, when one is established. Null otherwise. */
+  counterpart?: { trade_id: number; invoice: string; direction: string; seller: string; buyer: string; basis: string } | null;
   sale_cif: Decimal;
   purchase_cif: Decimal;
   sale_bill_inr: Decimal;

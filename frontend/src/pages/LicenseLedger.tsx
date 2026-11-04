@@ -15,7 +15,7 @@ import DateRangeFilter from '@/components/DateRangeFilter';
 import ActiveFilters, { type ActiveFilterItem } from '@/components/ActiveFilters';
 import { getCurrentFinancialYearRange, getPreviousFinancialYearRange } from '../utils/dateRangePresets';
 import { buildLicenseLedgerParams, defaultLicenseLedgerFilters, type LicenseLedgerFilters } from './licenseLedgerFilters';
-import { normalizeLicenseWiseData, type LicenseWiseData } from './licenseLedgerData';
+import { isDfiaKey, licenceKey, normalizeLicenseWiseData, type LedgerMetrics, type LicenseWiseData } from './licenseLedgerData';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,22 +74,22 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
                         <span className="hidden text-xs text-primary-foreground/80 lg:inline">Expiry: {license.expiry_date}</span>
                         {license.sion_norms && <span className="hidden text-xs text-primary-foreground/80 lg:inline">SION: {license.sion_norms}</span>}
                         {license.transactions[0] && (
-                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-xs font-semibold underline underline-offset-2 hover:text-primary-foreground/80">Details</button>
+                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}?license_type=${encodeURIComponent(license.license_type)}`)} className="ml-auto text-xs font-semibold underline underline-offset-2 hover:text-primary-foreground/80">Details</button>
                         )}
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse text-xs">
                             <thead className="sticky top-0 z-10">
                                 <tr className="border-b bg-muted/70 text-left text-muted-foreground">
-                                    <th className="px-2.5 py-1.5 font-semibold">Company</th>
-                                    <th className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">SION</th>
-                                    <th className="px-2.5 py-1.5 font-semibold">Date</th>
-                                    <th className="hidden px-2.5 py-1.5 font-semibold sm:table-cell">Counterparty</th>
-                                    <th className="px-2.5 py-1.5 font-semibold">Invoice</th>
-                                    <th className="px-2.5 py-1.5 font-semibold">Type</th>
-                                    <th className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">Product</th>
-                                    <th className="px-2.5 py-1.5 text-right font-semibold">FC Amount</th>
-                                    <th className="px-2.5 py-1.5 text-right font-semibold">INR Amount</th>
+                                    <th scope="col" className="px-2.5 py-1.5 font-semibold">Company</th>
+                                    <th scope="col" className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">SION</th>
+                                    <th scope="col" className="px-2.5 py-1.5 font-semibold">Date</th>
+                                    <th scope="col" className="hidden px-2.5 py-1.5 font-semibold sm:table-cell">Counterparty</th>
+                                    <th scope="col" className="px-2.5 py-1.5 font-semibold">Invoice</th>
+                                    <th scope="col" className="px-2.5 py-1.5 font-semibold">Type</th>
+                                    <th scope="col" className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">Product</th>
+                                    <th scope="col" className="px-2.5 py-1.5 text-right font-semibold">FC Amount</th>
+                                    <th scope="col" className="px-2.5 py-1.5 text-right font-semibold">INR Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -145,7 +145,7 @@ function LicenseWiseLedger({
         <div className="space-y-2 p-2 sm:p-3" data-testid="company-sion-ledger">
                 {company_groups.map((company) => (
                     <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-md border border-border">
-                        <h2 className="flex items-center gap-2 bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
+                        <h2 className="flex items-center gap-2 border-b bg-muted px-3 py-1.5 text-xs font-bold text-foreground">
                             <Building2 className="size-4" aria-hidden="true" />{company.company_name}
                         </h2>
                         <div className="space-y-2 p-2 sm:p-3">
@@ -161,20 +161,21 @@ function LicenseWiseLedger({
                                     <div className="overflow-x-auto">
                                         <table className="w-full border-collapse text-xs">
                                             <thead><tr className="border-y bg-primary/5 text-left">
-                                                <th className="px-2.5 py-1"><span className="sr-only">Select</span></th>
-                                                <th className="px-2.5 py-1 font-semibold">License</th>
-                                                <th className="hidden px-2.5 py-1 font-semibold lg:table-cell">Type</th>
-                                                <th className="hidden px-2.5 py-1 font-semibold sm:table-cell">Date</th>
-                                                <th className="hidden px-2.5 py-1 font-semibold lg:table-cell">1st Pur</th>
-                                                <th className="px-2.5 py-1 text-right font-semibold">Balance</th>
-                                                <th className="px-2.5 py-1 text-right font-semibold">Purchase</th>
-                                                <th className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">Sale</th>
-                                                <th className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">P/L</th>
-                                                <th className="px-2.5 py-1" />
+                                                <th scope="col" className="px-2.5 py-1"><span className="sr-only">Select</span></th>
+                                                <th scope="col" className="px-2.5 py-1 font-semibold">License</th>
+                                                <th scope="col" className="hidden px-2.5 py-1 font-semibold lg:table-cell">Type</th>
+                                                <th scope="col" className="hidden px-2.5 py-1 font-semibold sm:table-cell">Date</th>
+                                                <th scope="col" className="hidden px-2.5 py-1 font-semibold lg:table-cell">1st Pur</th>
+                                                <th scope="col" className="px-2.5 py-1 text-right font-semibold">Balance</th>
+                                                <th scope="col" className="px-2.5 py-1 text-right font-semibold">Purchase</th>
+                                                <th scope="col" className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">Sale</th>
+                                                <th scope="col" className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">P/L</th>
+                                                <th scope="col" className="px-2.5 py-1"><span className="sr-only">Actions</span></th>
+                                                <th scope="col" className="px-2.5 py-1" />
                                             </tr></thead>
                                             <tbody>{sion.licenses.map((license) => (
                                                 <tr key={license.license_id} className={cn("border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive")}>
-                                                    <td className="px-2.5 py-1"><input type="checkbox" checked={selectedLicenseIds.has(String(license.license_id))} onChange={() => onToggleLicense(String(license.license_id))} aria-label={`Select licence ${license.license_number}`} /></td>
+                                                    <td className="px-2.5 py-1"><label className="inline-flex h-[24px] w-[24px] cursor-pointer items-center justify-center"><input type="checkbox" className="h-[24px] w-[24px] m-0 cursor-pointer" checked={selectedLicenseIds.has(licenceKey(license))} disabled={license.license_type !== 'DFIA'} title={license.license_type !== 'DFIA' ? 'Packages support DFIA licences only' : undefined} onChange={() => onToggleLicense(licenceKey(license))} aria-label={`Select licence ${license.license_number}`} /></label></td>
                                                     <td className="px-2.5 py-1 font-semibold text-xs">{license.license_number}{!license.has_purchase_bill && <span className="ml-1.5 rounded bg-destructive px-1 py-0.5 text-[9px] font-bold text-destructive-foreground">NO BILL</span>}</td>
                                                     <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{license.license_type}</td>
                                                     <td className="hidden px-2.5 py-1 text-xs sm:table-cell">{license.license_date}</td>
@@ -186,12 +187,12 @@ function LicenseWiseLedger({
                                                     <td className="px-2.5 py-1 text-right">
                                                         <button
                                                             type="button"
-                                                            className="text-xs font-semibold text-primary hover:underline"
-                                                            onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}
+                                                            className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center px-1 text-xs font-semibold text-primary hover:underline"
+                                                            onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}?license_type=${encodeURIComponent(license.license_type)}`)}
                                                         >
                                                             Ledger
                                                         </button>
-                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-xs font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
+                                                        {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 inline-flex min-h-[24px] min-w-[24px] items-center justify-center px-1 text-xs font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
                                                     </td>
                                                 </tr>
                                             ))}</tbody>
@@ -206,9 +207,9 @@ function LicenseWiseLedger({
                         </div>
                     </section>
                 ))}
-                {grand_total && company_groups.length > 1 && (
-                    <div className="flex flex-wrap justify-end gap-3 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
-                        <span>{grand_total.license_count} licenses</span>
+                {grand_total && (
+                    <div className="flex flex-wrap justify-end gap-3 rounded-md border bg-muted px-3 py-1.5 text-xs font-bold text-foreground">
+                        <span>{data.pagination?.paginated ? 'All filtered · ' : ''}{data.metrics ? `${formatIndianNumber(data.metrics.total_licences, 0)} licences · ` : ''}{grand_total.license_count} licence–company rows</span>
                         <span>Pur {fmt(grand_total.total_purchase_bill_inr)}</span>
                         <span>Sale {fmt(grand_total.total_sale_bill_inr)}</span>
                         <span>P/L {fmt(grand_total.total_profit_loss_inr)}</span>
@@ -235,7 +236,7 @@ function LicenseWiseLedger({
                     {/* ── License header bar ─────────────────────────── */}
                     <div className="flex flex-wrap items-center gap-2 bg-primary px-3 py-1.5 text-xs">
                         <label className="flex size-6 cursor-pointer items-center justify-center rounded bg-white/15" title={`Select ${lic.license_number}`}>
-                            <input type="checkbox" className="size-4" checked={selectedLicenseIds.has(String(lic.license_id))} onChange={() => onToggleLicense(String(lic.license_id))} aria-label={`Select licence ${lic.license_number}`} />
+                            <label className="inline-flex h-[24px] w-[24px] cursor-pointer items-center justify-center"><input type="checkbox" className="h-[24px] w-[24px] m-0 cursor-pointer" checked={selectedLicenseIds.has(licenceKey(lic))} disabled={lic.license_type !== 'DFIA'} title={lic.license_type !== 'DFIA' ? 'Packages support DFIA licences only' : undefined} onChange={() => onToggleLicense(licenceKey(lic))} aria-label={`Select licence ${lic.license_number}`} /></label>
                         </label>
                         <span className="flex items-center gap-1 font-bold text-primary-foreground">
                             <FileText className="size-3.5 shrink-0" aria-hidden="true" />
@@ -251,7 +252,7 @@ function LicenseWiseLedger({
                         {lic.companies[0]?.company_id != null && (
                             <button
                                 type="button"
-                                onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}`)}
+                                onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}?license_type=${encodeURIComponent(lic.license_type)}`)}
                                 aria-label={`View ledger for ${lic.license_number}`}
                                 className="ml-auto flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/25"
                             >
@@ -262,7 +263,7 @@ function LicenseWiseLedger({
                         <button
                             type="button"
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/25"
-                            onClick={() => onDownloadLicense(String(lic.license_id))}
+                            onClick={() => onDownloadLicense(licenceKey(lic))}
                             aria-label="Download license package"
                         >
                             <FileSpreadsheet className="size-3.5" aria-hidden="true" />
@@ -370,7 +371,7 @@ function LicenseWiseLedger({
 
 // ─── Summary stat item ─────────────────────────────────────────────────────────
 
-function SummaryItem({ label, value, tone }: { label: string; value: string; tone?: "primary" | "success" | "warning" | "danger" }) {
+function SummaryItem({ label, value, tone, hint }: { label: string; value: string; tone?: "primary" | "success" | "warning" | "danger"; hint?: string }) {
     const toneClass = {
         primary: "text-primary",
         success: "text-success",
@@ -378,7 +379,7 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
         danger: "text-destructive",
     }[tone ?? "primary"] ?? "text-foreground";
     return (
-        <div className="py-1.5 text-center">
+        <div className="py-1.5 text-center" title={hint}>
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
             <div className={cn("text-xs font-bold tabular-nums", toneClass)}>{value}</div>
         </div>
@@ -387,6 +388,59 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+// ─── Licence status & CIF metrics ─────────────────────────────────────────────
+// Sourced from the backend `metrics` block over the complete filtered
+// collection. CIF (USD, licence-balance engine) and ledger money are separate
+// cards; they are never combined. Negative available CIF is shown, not floored.
+
+function LedgerMetricsStrip({ metrics }: { metrics: LedgerMetrics }) {
+    const available = metrics.cif.available;
+    const cards: Array<{ label: string; value: string; tone: "primary" | "success" | "warning" | "danger"; hint: string }> = [
+        { label: "Licences", value: formatIndianNumber(metrics.total_licences, 0), tone: "primary",
+          hint: "Distinct licences in the filtered result (each licence counted once)." },
+        { label: "Original CIF (USD)", value: `$${formatIndianNumber(metrics.cif.original, 2)}`, tone: "primary",
+          hint: "USD. Original CIF from the licence master, DFIA licences only (canonical licence-balance engine)." },
+        { label: "Utilised CIF (USD)", value: `$${formatIndianNumber(metrics.cif.utilised, 2)}`, tone: "warning",
+          hint: "USD. Original CIF minus Available CIF. BOE, allotment and billed components are counted once (canonical engine)." },
+        {
+            label: "Available CIF (USD)",
+            value: available < 0 ? `-$${formatIndianNumber(Math.abs(available), 2)}` : `$${formatIndianNumber(available, 2)}`,
+            tone: available < 0 ? "danger" : "success",
+            hint: "USD. Original CIF minus Utilised CIF. Negative values are over-utilisation and are shown, not floored to zero.",
+        },
+        { label: "Sold", value: formatIndianNumber(metrics.sold_licences, 0), tone: "primary",
+          hint: "Sold status YES: fully sold. DFIA is derived from canonical sales against the ledger balance; incentive uses the stored sold_status." },
+        { label: "Partially sold", value: formatIndianNumber(metrics.partially_sold_licences, 0), tone: "warning",
+          hint: "Sold status PARTIAL: some quantity sold and a positive balance remains." },
+        { label: "Expired", value: formatIndianNumber(metrics.expired_licences, 0), tone: "warning",
+          hint: "Licence expiry date is before the as-of date shown in the header." },
+        { label: "Over-utilised (CIF)", value: formatIndianNumber(metrics.cif_over_utilised_licences, 0), tone: metrics.cif_over_utilised_licences > 0 ? "danger" : "success",
+          hint: "Confirmed DFIA CIF over-utilisation (canonical engine status OVER_UTILISED). Not an INR ledger figure." },
+        { label: "Needs review", value: formatIndianNumber(metrics.review_required_licences, 0), tone: metrics.review_required_licences > 0 ? "warning" : "success",
+          hint: "Engine exceptions that are NOT confirmed over-utilisation: REVIEW_REQUIRED, OVER_ALLOCATED, UNMAPPED_ITEM." },
+        { label: "Incentive negative", value: formatIndianNumber(metrics.incentive_negative_balance_licences, 0), tone: metrics.incentive_negative_balance_licences > 0 ? "danger" : "success",
+          hint: "Incentive licences whose INR ledger balance is below zero. This is not a CIF figure." },
+    ];
+    return (
+        <Card className="mb-4">
+            <CardHeader className="border-b px-3 py-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold">Licence status &amp; CIF</span>
+                    <span className="text-[10px] text-muted-foreground">All filtered licences · as of {metrics.as_of}</span>
+                    {metrics.cif.unavailable_count > 0 && (
+                        <Badge variant="outline" className="ml-auto py-0 text-[9px]">
+                            {metrics.cif.unavailable_count} without CIF figure
+                        </Badge>
+                    )}
+                </div>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-x-2 px-3 py-1 sm:grid-cols-4 lg:grid-cols-5">
+                {cards.map(card => <SummaryItem key={card.label} label={card.label} value={card.value} tone={card.tone} hint={card.hint} />)}
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function LicenseLedger() {
     const navigate = useNavigate();
     const [summary, setSummary] = useState<Record<string, Record<string, number>> | null>(null);
@@ -394,6 +448,8 @@ export default function LicenseLedger() {
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
     const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
     const [selectedLicenseIds, setSelectedLicenseIds] = useState<Set<string>>(() => new Set());
+    // Every DFIA licence in the FILTERED result (all pages), from the server's license_ids.
+    const [filteredDfiaKeys, setFilteredDfiaKeys] = useState<string[]>([]);
     const [packageDownloading, setPackageDownloading] = useState(false);
     const [packageJob, setPackageJob] = useState<LicenseLedgerPackageJob | null>(null);
     const [downloadState, setDownloadState] = useState<DownloadState | null>(null);
@@ -403,6 +459,12 @@ export default function LicenseLedger() {
     const managerRef = useRef<SequentialPackageDownloadManager | null>(null);
     const params = buildLicenseLedgerParams(filters);
     const paramsKey = params.toString();
+    // Page state is tied to the filter key, so any filter change returns to page 1
+    // without an extra request.
+    const [pageState, setPageState] = useState<{ key: string; page: number }>({ key: '', page: 1 });
+    const [pageSize, setPageSize] = useState(50);
+    const page = pageState.key === paramsKey ? pageState.page : 1;
+    const selectionFilterKeyRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (!packageJob?.status_url || ["completed", "partial_failed", "failed"].includes(packageJob.status)) return;
@@ -435,10 +497,7 @@ export default function LicenseLedger() {
     useEffect(() => {
         const version = ++requestVersion.current;
         setCompanyWiseLoading(true);
-        Promise.all([
-            api.get(`license-ledger/license-wise/?${paramsKey}`),
-            api.get(`license-ledger/summary/?${paramsKey}`),
-        ]).then(async ([ledgerResponse, summaryResponse]) => {
+        api.get(`license-ledger/license-wise/?${paramsKey}&page=${page}&page_size=${pageSize}`).then(async (ledgerResponse) => {
             if (version !== requestVersion.current) return;
             const rawLedger = ledgerResponse.data;
             const rawLicenses = isRecord(rawLedger) && Array.isArray(rawLedger.licenses) ? rawLedger.licenses : [];
@@ -471,14 +530,21 @@ export default function LicenseLedger() {
             } : rawLedger;
             const normalized = normalizeLicenseWiseData(enrichedLedger);
             setCompanyWiseData(normalized);
-            // Bulk package download is the primary ledger workflow.  Start
-            // with every currently visible licence selected; changing a
-            // filter intentionally creates a new visible selection.
-            const visible = normalized.company_groups?.length
-                ? normalized.company_groups.flatMap(company => company.sion_groups.flatMap(group => group.licenses))
-                : normalized.licenses;
-            setSelectedLicenseIds(new Set(visible.map(license => String(license.license_id))));
-            setSummary(summaryResponse.data);
+            setFilteredDfiaKeys((normalized.license_ids ?? []).filter(isDfiaKey));
+            // Totals come from this same response (one collection build per filter change).
+            setSummary(isRecord(rawLedger) && isRecord(rawLedger.summary) ? rawLedger.summary as Record<string, Record<string, number>> : null);
+            // Bulk package download is the primary ledger workflow: every licence in
+            // the FILTERED collection starts selected (license_ids spans all pages).
+            // The selection resets only when the filters change; paging keeps choices.
+            if (selectionFilterKeyRef.current !== paramsKey) {
+                selectionFilterKeyRef.current = paramsKey;
+                // Older servers omit `license_ids`: fall back to the rows they did return.
+                const fallbackRows = normalized.company_groups?.length
+                    ? normalized.company_groups.flatMap(company => company.sion_groups.flatMap(group => group.licenses))
+                    : normalized.licenses;
+                const ids = (normalized.license_ids ?? fallbackRows.map(licenceKey)).filter(isDfiaKey);
+                setSelectedLicenseIds(new Set(ids));
+            }
         }).catch(error => {
             if (version !== requestVersion.current) return;
             toast.error(getApiErrorMessage(error, 'Failed to load License Ledger.'));
@@ -486,7 +552,8 @@ export default function LicenseLedger() {
         }).finally(() => {
             if (version === requestVersion.current) setCompanyWiseLoading(false);
         });
-    }, [paramsKey]);
+    }, [paramsKey, page, pageSize]);
+
 
     const updateFilter = <K extends keyof LicenseLedgerFilters>(key: K, value: LicenseLedgerFilters[K]) =>
         setFilters(previous => ({ ...previous, [key]: value }));
@@ -496,6 +563,11 @@ export default function LicenseLedger() {
         ...previous, purchaseDateFrom: '', purchaseDateTo: '',
     }));
     const clearAllFilters = () => setFilters(defaultLicenseLedgerFilters());
+    const changePage = (nextPage: number) => setPageState({ key: paramsKey, page: Math.max(1, nextPage) });
+    const changePageSize = (size: number) => {
+        setPageSize(size);
+        setPageState({ key: paramsKey, page: 1 });
+    };
 
     const runExport = async (format: 'pdf' | 'xlsx') => {
         if (exporting) return;
@@ -563,9 +635,12 @@ export default function LicenseLedger() {
     const visibleLicenses = normalizedLedger.company_groups?.length
         ? normalizedLedger.company_groups.flatMap(company => company.sion_groups.flatMap(group => group.licenses))
         : normalizedLedger.licenses;
-    const visibleLicenseCount = normalizedLedger.company_groups?.reduce(
-        (count, company) => count + company.sion_groups.reduce((subtotal, group) => subtotal + group.licenses.length, 0), 0,
-    ) ?? visibleLicenses.length;
+    // Paginated: the count is the whole filtered collection (exports cover it all).
+    const visibleLicenseCount = normalizedLedger.pagination?.paginated
+        ? normalizedLedger.pagination.count
+        : normalizedLedger.company_groups?.reduce(
+            (count, company) => count + company.sion_groups.reduce((subtotal, group) => subtotal + group.licenses.length, 0), 0,
+        ) ?? visibleLicenses.length;
 
     return (
         <>
@@ -588,21 +663,34 @@ export default function LicenseLedger() {
                             disabled={visibleLicenses.length === 0}
                             onClick={() => setSelectedLicenseIds(previous => {
                                 const next = new Set(previous);
-                                const visibleIds = visibleLicenses.map(license => String(license.license_id));
+                                const visibleIds = visibleLicenses.filter(license => license.license_type === 'DFIA').map(licenceKey);
                                 const allSelected = visibleIds.every(id => next.has(id));
                                 visibleIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
                                 return next;
                             })}
-                            title={visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Deselect all visible licenses' : 'Select all visible licenses'}
+                            title={visibleLicenses.filter(license => license.license_type === 'DFIA').every(license => selectedLicenseIds.has(licenceKey(license))) ? 'Deselect all visible licenses' : 'Select all visible licenses'}
                         >
-                            <span className="hidden sm:inline">{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear Visible' : 'Select Visible'}</span>
-                            <span className="sm:hidden">{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear' : 'Select'}</span>
+                            <span className="hidden sm:inline">{visibleLicenses.filter(license => license.license_type === 'DFIA').every(license => selectedLicenseIds.has(licenceKey(license))) ? 'Clear Visible' : 'Select Visible'}</span>
+                            <span className="sm:hidden">{visibleLicenses.filter(license => license.license_type === 'DFIA').every(license => selectedLicenseIds.has(licenceKey(license))) ? 'Clear' : 'Select'}</span>
                         </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={filteredDfiaKeys.length === 0 || packageDownloading}
+                            onClick={() => setSelectedLicenseIds(new Set(filteredDfiaKeys))}
+                            title="Select every DFIA licence in the filtered result, across all pages. Packages are DFIA-only."
+                        >
+                            Select all {filteredDfiaKeys.length} DFIA (all pages)
+                        </Button>
+                        {/* Selection spans every filtered licence, not just this page. */}
+                        <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
+                            {selectedLicenseIds.size} of {visibleLicenseCount} selected
+                        </span>
                         <Button
                             size="sm"
                             disabled={packageDownloading || selectedLicenseIds.size === 0}
                             onClick={() => downloadPackage([...selectedLicenseIds])}
-                            aria-label="Choose destination folder and start package download"
+                            aria-label="Choose Folder & Start package download"
                         >
                             {packageDownloading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Choose Folder & Start</span>
@@ -637,7 +725,7 @@ export default function LicenseLedger() {
                             disabled={exporting !== null || visibleLicenseCount === 0}
                             onClick={() => runExport('pdf')}
                             title="Preview as PDF"
-                            aria-label="Preview license ledger as PDF"
+                            aria-label="Preview PDF: license ledger"
                         >
                             {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Preview PDF</span>
@@ -649,7 +737,7 @@ export default function LicenseLedger() {
                             disabled={exporting !== null || visibleLicenseCount === 0}
                             onClick={() => runExport('xlsx')}
                             title="Download as Excel"
-                            aria-label="Download license ledger as Excel"
+                            aria-label="Download Excel: license ledger"
                         >
                             {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="size-3.5" aria-hidden="true" />}
                             <span className="hidden sm:inline">Download Excel</span>
@@ -738,7 +826,7 @@ export default function LicenseLedger() {
                         <div>
                             <label className="mb-1 block text-xs font-semibold text-muted-foreground">Search</label>
                             <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
-                                placeholder="License # or exporter..." />
+                                placeholder="License # or exporter..." ariaLabel="Search by licence number or exporter" />
                         </div>
                         <div className="flex items-center gap-2 pt-7">
                             <Switch id="ledger-active-only" checked={filters.activeOnly} onCheckedChange={(value) => updateFilter('activeOnly', value)} />
@@ -797,6 +885,9 @@ export default function LicenseLedger() {
                 onRemoveFilter={(key) => updateFilter(key as keyof LicenseLedgerFilters, defaultLicenseLedgerFilters()[key as keyof LicenseLedgerFilters])}
                 onClearAll={clearAllFilters}
             />
+
+            {/* Hidden while loading so a previous filter's figures never sit beside new rows. */}
+            {companyWiseData?.metrics && !companyWiseLoading && <LedgerMetricsStrip metrics={companyWiseData.metrics} />}
 
             {/* ── Summary cards ──────────────────────────────────── */}
             {summary && (
@@ -889,6 +980,28 @@ export default function LicenseLedger() {
                             title="No data"
                             description="No trades found for the current filters"
                         />
+                    )}
+                    {companyWiseData?.pagination?.paginated && (
+                        <nav aria-label="License ledger pages" className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-1.5 text-xs">
+                            <span role="status" aria-live="polite" className="tabular-nums text-muted-foreground">
+                                Page <span aria-current="page">{companyWiseData.pagination.page}</span> of {companyWiseData.pagination.total_pages} · {companyWiseData.pagination.count} licences
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1 text-muted-foreground">
+                                    Rows
+                                    <select
+                                        className="rounded border bg-background px-1 py-0.5 text-xs"
+                                        value={pageSize}
+                                        onChange={(event) => changePageSize(Number(event.target.value))}
+                                        aria-label="Licences per page"
+                                    >
+                                        {[25, 50, 100, 200].map(size => <option key={size} value={size}>{size}</option>)}
+                                    </select>
+                                </label>
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={companyWiseData.pagination.page <= 1 || companyWiseLoading} onClick={() => changePage(companyWiseData.pagination!.page - 1)} aria-label="Previous page">Previous</Button>
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={!companyWiseData.pagination.has_next || companyWiseLoading} onClick={() => changePage(companyWiseData.pagination!.page + 1)} aria-label="Next page">Next</Button>
+                            </div>
+                        </nav>
                     )}
                 </CardContent>
             </Card>

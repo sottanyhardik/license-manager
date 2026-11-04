@@ -103,6 +103,9 @@ def test_operational_reconciliation_excludes_superseded_plan_rows(
     """Historical replaced plans must not create a false CIF overdraw."""
     license_obj = license_with_split_serials
     source = license_obj.import_license.order_by("pk").first()
+    # The authorised CIF is the import item's CIF: the canonical balance reads it, so the planning balance does too.
+    source.cif_fc = Decimal("100.00")
+    source.save(update_fields=["cif_fc"])
     LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100.00"))
     active = LicenseItemPlan.objects.create(
         license=license_obj,
@@ -131,3 +134,30 @@ def test_operational_reconciliation_excludes_superseded_plan_rows(
     assert reconciliation["total_accounted_cif"] == "5.00"
     assert reconciliation["overdrawn_cif"] == "0"
     assert active.is_active is True
+
+
+def test_planning_balance_is_the_canonical_balance_less_only_new_planned_cif(viewer, license_with_split_serials):
+    """Planning shows the canonical licence balance and deducts only new planned CIF: never negatives hidden, never double counted."""
+    license_obj = license_with_split_serials
+    source = license_obj.import_license.order_by("pk").first()
+    source.cif_fc = Decimal("100.00")
+    source.save(update_fields=["cif_fc"])
+    LicenseExportItemModel.objects.create(license=license_obj, cif_fc=Decimal("100.00"))
+    LicenseItemPlan.objects.create(
+        license=license_obj,
+        import_item=source,
+        planned_quantity=Decimal("120.000"),
+        unit_price=Decimal("1.00"),
+        planned_cif_fc=Decimal("120.00"),
+    )
+
+    response = _client_for_user(viewer).get(reverse("license:licenses-detail", args=[license_obj.pk]))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["planning_balance_cif"]["raw_balance_cif"] == "100.00"
+    reconciliation = response.data["operational_reconciliation"]
+    assert reconciliation["cif_balance_basis"] == "CANONICAL_AVAILABLE"
+    assert reconciliation["actual_balance_cif"] == "100.00"
+    # Over-planned by 20: the negative is visible, not floored to zero.
+    assert reconciliation["final_balance_cif"] == "-20.00"
+    assert reconciliation["overdrawn_cif"] == "20.00"

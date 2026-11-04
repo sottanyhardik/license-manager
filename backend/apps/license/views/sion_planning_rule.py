@@ -1,9 +1,10 @@
 import logging
 import re
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max, Q
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
@@ -23,6 +24,9 @@ from apps.license.services.sion_rule_engine import (
     SionRulePlanningService, SionRulePriorityService,
 )
 from apps.license.services.scoped_sion_planning import ScopedPlanningError, ScopedSionPlanningService
+from apps.license.services.planning_operations import (
+    failed_request_licences, planning_dashboard, replan_batch_status, rule_version_chain,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +230,101 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             "sion", "created_by", "modified_by",
         ).all()
 
+    @staticmethod
+    def _rule_validation_errors(rule):
+        """Canonical save-time checks, applied to a stored rule without changing it."""
+        serializer = SionPlanningRuleSerializer(instance=rule, data={}, partial=True)
+        if serializer.is_valid():
+            return []
+        messages = []
+        for value in serializer.errors.values():
+            items = value if isinstance(value, list) else [value]
+            messages.extend(str(item) for item in items)
+        return messages
+
+    @action(detail=False, methods=("get",), url_path="dashboard")
+    def dashboard(self, request):
+        """Workbench KPIs computed from the canonical rule and job tables."""
+        return Response(planning_dashboard(validator=self._rule_validation_errors))
+
+    @action(detail=True, methods=("get",), url_path="versions")
+    def versions(self, request, pk=None):
+        """Every version of this rule, oldest first, with the fields each changed."""
+        rule = self.get_object()
+        return Response({
+            "rule_id": rule.pk,
+            "stable_key": rule.stable_key,
+            "history_scope": "STABLE_KEY" if rule.stable_key else "LEGACY_NAME",
+            "versions": rule_version_chain(rule),
+        })
+
+    @staticmethod
+    def _request_ids_from(values):
+        if not isinstance(values, (list, tuple)) or not values or len(values) > 500:
+            return None
+        try:
+            return [int(value) for value in values]
+        except (TypeError, ValueError):
+            return None
+
+    @action(detail=False, methods=("get",), url_path="plan-batch-status")
+    def plan_batch_status(self, request):
+        """Aggregate status of a plan-sion batch (request ids as returned by plan-sion)."""
+        raw = [part for part in request.query_params.get("request_ids", "").split(",") if part.strip()]
+        ids = self._request_ids_from(raw)
+        if ids is None:
+            return Response(
+                {"code": "INVALID_REQUEST_IDS", "detail": "request_ids must be 1-500 integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(replan_batch_status(ids))
+
+    @action(detail=False, methods=("post",), url_path="plan-batch-retry")
+    def plan_batch_retry(self, request):
+        """Requeue only the failed licences of an earlier batch, as one new batch."""
+        ids = self._request_ids_from(request.data.get("request_ids"))
+        if ids is None:
+            return Response(
+                {"code": "INVALID_REQUEST_IDS", "detail": "request_ids must be 1-500 integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        plan = failed_request_licences(ids)
+        from apps.license.services.replan_requests import request_license_replan
+        batch_id = str(uuid.uuid4())
+        retry_ids = []
+        for item in plan["retry"]:
+            # Coalescing protects against a retry racing an active request for
+            # the same licence: the active row is reused, not duplicated.
+            row = request_license_replan(
+                license_id=item["license_id"],
+                reason="manual_plan_batch_retry",
+                scope=item["scope"],
+                sion_id=item["sion_id"],
+                source_model="sion_planning_rule.plan_batch_retry",
+                source_pk=batch_id,
+                dispatch=False,
+                batch_id=batch_id,
+                initiated_by=request.user,
+            )
+            retry_ids.append(row.pk)
+        if retry_ids:
+            from apps.license.tasks import replan_sion_batch
+            transaction.on_commit(lambda ids_=list(retry_ids): replan_sion_batch.delay(ids_))
+        self._audit("SION_REPLAN_RETRY_QUEUED", extra={
+            "batch_id": batch_id, "source_request_ids": ids, "retry_request_ids": retry_ids,
+            "skipped": plan["skipped"],
+        })
+        return Response(
+            {
+                "batch_id": batch_id,
+                "retry_request_ids": retry_ids,
+                "skipped": plan["skipped"],
+                "unknown_request_ids": plan["unknown_request_ids"],
+                "planning_state": "REPLAN_PENDING" if retry_ids else "NOTHING_TO_RETRY",
+            },
+            status=status.HTTP_202_ACCEPTED if retry_ids else status.HTTP_200_OK,
+        )
+
     @action(detail=False, methods=("get",), url_path="import-items")
     def import_items(self, request):
         """Search active import items belonging to one exact SION norm."""
@@ -320,9 +419,11 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         values = serializer.validated_data
         with transaction.atomic():
             priority = SionRulePriorityService.next_priority(values["sion"].pk)
+            # A stable key links every later version of this rule (history and
+            # compare).  Legacy rows keep their null key; see rule_version_chain.
             rule = serializer.save(
                 version=1, priority=priority, created_by=self.request.user,
-                modified_by=self.request.user,
+                modified_by=self.request.user, stable_key=str(uuid.uuid4()),
             )
         self._audit("RULE_CREATED", rule=rule)
 
@@ -339,39 +440,53 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             for field in (
                 "name", "expression", "max_unit_price", "unit", "is_active",
                 "execution_output", "import_item", "strategy",
+                # Writable API fields: omitting these from the new version
+                # silently reset them to model defaults on every edit.
+                "percentage_constraint", "rule_type", "cif_restriction_percentage",
             )
         }
-        with transaction.atomic():
-            SionRulePriorityService._lock_sion(current.sion_id)
-            current.is_active = False
-            current.modified_by = request.user
-            current.save(update_fields=("is_active", "modified_on", "modified_by"))
-            created = SionPlanningRule.objects.create(
-                **values, sion=current.sion, stable_key=current.stable_key,
-                priority=current.priority,
-                version=current.version + 1,
-                created_by=request.user, modified_by=request.user,
+        try:
+            with transaction.atomic():
+                SionRulePriorityService._lock_sion(current.sion_id)
+                current.is_active = False
+                current.modified_by = request.user
+                current.save(update_fields=("is_active", "modified_on", "modified_by"))
+                created = SionPlanningRule.objects.create(
+                    **values, sion=current.sion, stable_key=current.stable_key,
+                    priority=current.priority,
+                    version=current.version + 1,
+                    created_by=request.user, modified_by=request.user,
+                )
+                if not created.is_active:
+                    SionRulePriorityService.normalize(current.sion_id)
+                if unit_value_rows is None:
+                    unit_value_rows = [
+                        {"import_item": row.import_item, "min_unit_price": row.min_unit_price,
+                         "max_unit_price": row.max_unit_price, "preferred_unit_price": row.preferred_unit_price,
+                         "cif_restriction_percentage": row.cif_restriction_percentage,
+                         "priority": row.priority}
+                        for row in current.unit_value_rows.all()
+                    ]
+                if percentage_rows is None:
+                    percentage_rows = [
+                        {"import_item": row.import_item, "percentage": row.percentage,
+                         "unit_price": row.unit_price, "max_quantity": row.max_quantity,
+                         "cif_restriction_percentage": row.cif_restriction_percentage,
+                         "priority": row.priority}
+                        for row in current.percentage_rows.all()
+                    ]
+                for row_data in unit_value_rows:
+                    created.unit_value_rows.create(**row_data)
+                for row_data in percentage_rows:
+                    created.percentage_rows.create(**row_data)
+        except IntegrityError:
+            # Name/version or active-priority collisions (for example, reactivating
+            # a rule whose slot was reassigned) must be a client conflict, not a 500.
+            return Response(
+                {"code": "RULE_VERSION_CONFLICT",
+                 "detail": "This rule conflicts with another active or versioned rule. Reload and retry."},
+                status=status.HTTP_409_CONFLICT,
             )
-            if not created.is_active:
-                SionRulePriorityService.normalize(current.sion_id)
-            if unit_value_rows is None:
-                unit_value_rows = [
-                    {"import_item": row.import_item, "min_unit_price": row.min_unit_price,
-                     "max_unit_price": row.max_unit_price, "preferred_unit_price": row.preferred_unit_price,
-                     "priority": row.priority}
-                    for row in current.unit_value_rows.all()
-                ]
-            if percentage_rows is None:
-                percentage_rows = [
-                    {"import_item": row.import_item, "percentage": row.percentage,
-                     "unit_price": row.unit_price, "max_quantity": row.max_quantity,
-                     "priority": row.priority}
-                    for row in current.percentage_rows.all()
-                ]
-            for row_data in unit_value_rows:
-                created.unit_value_rows.create(**row_data)
-            for row_data in percentage_rows:
-                created.percentage_rows.create(**row_data)
         event = (
             "RULE_DEACTIVATED" if not created.is_active
             else "RULE_ACTIVATED" if not was_active
@@ -589,6 +704,7 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
             return Response({"code": "LICENSE_NOT_FOUND", "detail": "One or more licenses are unavailable."}, status=status.HTTP_404_NOT_FOUND)
 
         from apps.license.services.replan_requests import request_license_replan
+        batch_id = str(uuid.uuid4())
         requests = [
             request_license_replan(
                 license_id=license_obj.pk,
@@ -598,13 +714,16 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
                 source_model="sion_planning_rule.plan_sion",
                 source_pk=identifiers["sion_id"],
                 dispatch=False,
+                batch_id=batch_id,
+                initiated_by=request.user,
             )
             for license_obj in licenses
         ]
         from apps.license.tasks import replan_sion_batch
         transaction.on_commit(lambda request_ids=[row.pk for row in requests]: replan_sion_batch.delay(request_ids))
-        self._audit("SION_REPLAN_QUEUED", sion_id=identifiers["sion_id"], extra={"license_ids": [row.pk for row in licenses], "request_ids": [row.pk for row in requests]})
+        self._audit("SION_REPLAN_QUEUED", sion_id=identifiers["sion_id"], extra={"batch_id": batch_id, "license_ids": [row.pk for row in licenses], "request_ids": [row.pk for row in requests]})
         return Response({
+            "batch_id": batch_id,
             "sion_id": identifiers["sion_id"],
             "mode": identifiers["mode"],
             "planning_state": "REPLAN_PENDING",

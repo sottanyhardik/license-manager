@@ -106,9 +106,9 @@ class DuplicateDeductionTests(PreviousOwnerFixture):
         self._allotment(self.item, cif="100", qty="100", boes=[boe])
         drill = self.drill()
         self.assertEqual(drill["boes"]["totals"]["debited_cif"], "60.00")
-        self.assertEqual(drill["allotments"]["totals"]["outstanding_cif"], "40.00")
-        # 1000 - 60 (BOE) - 40 (allotment residue). Not 1000 - 60 - 100.
-        self.assertEqual(drill["canonical"]["cif"]["available"], "900.00")
+        self.assertEqual(drill["allotments"]["totals"]["outstanding_cif"], "0.00")
+        # 1000 - 60 (BOE). The allotment's 40 difference is ignored. Not 1000 - 60 - 100, not 1000 - 60 - 40.
+        self.assertEqual(drill["canonical"]["cif"]["available"], "940.00")
         self.assertEqual(drill["reconciliation"]["status"], RECONCILED)
 
     def test_overlap_of_sale_allocation_and_allotment_deducts_each_part_once(self):

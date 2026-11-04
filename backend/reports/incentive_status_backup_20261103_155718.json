@@ -1,0 +1,72 @@
+[
+  {
+    "licence_id": 6,
+    "licence_number": "2512015763",
+    "before": {
+      "sold_value": "2025036.00",
+      "balance_value": "-1012518.00",
+      "sold_status": "YES"
+    },
+    "after": {
+      "sold_value": "1012518.00",
+      "balance_value": "0.00",
+      "sold_status": "YES"
+    }
+  },
+  {
+    "licence_id": 7,
+    "licence_number": "2510033793",
+    "before": {
+      "sold_value": "77263.00",
+      "balance_value": "0.00",
+      "sold_status": "NO"
+    },
+    "after": {
+      "sold_value": "77263.00",
+      "balance_value": "0.00",
+      "sold_status": "YES"
+    }
+  },
+  {
+    "licence_id": 8,
+    "licence_number": "2511042684",
+    "before": {
+      "sold_value": "72110.00",
+      "balance_value": "0.00",
+      "sold_status": "NO"
+    },
+    "after": {
+      "sold_value": "72110.00",
+      "balance_value": "0.00",
+      "sold_status": "YES"
+    }
+  },
+  {
+    "licence_id": 15,
+    "licence_number": "2601000178",
+    "before": {
+      "sold_value": "3372319.00",
+      "balance_value": "-1630180.00",
+      "sold_status": "YES"
+    },
+    "after": {
+      "sold_value": "1742139.00",
+      "balance_value": "0.00",
+      "sold_status": "YES"
+    }
+  },
+  {
+    "licence_id": 16,
+    "licence_number": "2601000174",
+    "before": {
+      "sold_value": "2093802.00",
+      "balance_value": "-1046901.00",
+      "sold_status": "YES"
+    },
+    "after": {
+      "sold_value": "1046901.00",
+      "balance_value": "0.00",
+      "sold_status": "YES"
+    }
+  }
+]

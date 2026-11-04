@@ -208,13 +208,16 @@ class AllotmentTests(ReportFixture):
         self.assertEqual(item.cif["allotted"], "150.00")
         self.assertEqual(item.cif["available"], "850.00")
 
-    def test_allotment_partly_converted_to_boe_keeps_residue(self):
+    def test_allotment_linked_to_a_boe_ignores_the_cif_difference(self):
         trade, line = self._sale(invoice="LGL-1", cif="10", qty="10")
         boe, _ = self._boe("AB-1", cif="60", qty="60")
         self._allotment(self.item, cif="100", qty="100", boes=[boe])
         item = self.item_report(self.report())
-        # BOE 60 is on this item and linked to the allotment → residue 40.
-        self.assertEqual(item.cif["allotted"], "40.00")
+        # The BOE's 60 is the utilisation. The 40 difference from the original 100 is ignored:
+        # not reserved, not outstanding, not a debit. Available is 1000 - 60 (BOE) - 10 (sale).
+        self.assertEqual(item.cif["debited"], "60.00")
+        self.assertEqual(item.cif["allotted"], "0.00")
+        self.assertEqual(item.cif["available"], "930.00")
 
     def test_allotment_linked_to_boe_on_another_licence_is_flagged(self):
         other_licence = self._licence("03" + str(uuid.uuid4().int)[:8])

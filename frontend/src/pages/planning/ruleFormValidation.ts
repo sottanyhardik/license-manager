@@ -103,8 +103,16 @@ export function validatePlanningRule(
     if (strategy === "SPLIT_BY_PERCENT") {
         const rows = allocation?.percentage_rows ?? [];
         if (!rows.length) errors.percentage_rows = "Add at least one import item";
-        else if (Math.abs(rows.reduce((sum, row) => sum + Number(row.percentage || 0), 0) - 100) > 0.001) {
-            errors.percentage_rows = "Percentages must total 100%";
+        else {
+            // Validate the exact 2-decimal values the save payload sends
+            // (see LicensePlanningWorkspace), in integer hundredths.  A float
+            // sum with a tolerance accepted 33.333 + 33.333 + 33.334, which the
+            // payload then rounds to 99.99 and the backend rejects.
+            const hundredths = rows.reduce(
+                (sum, row) => sum + Math.round(Number(Number(row.percentage || 0).toFixed(2)) * 100),
+                0,
+            );
+            if (hundredths !== 10000) errors.percentage_rows = "Percentages must total 100%";
         }
         const ids = rows.map((row) => row.import_item).filter(Boolean);
         if (new Set(ids).size !== ids.length) errors.percentage_rows = "Each import item may only be selected once";

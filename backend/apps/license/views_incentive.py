@@ -29,6 +29,9 @@ class IncentiveLicenseViewSetClass(MasterViewSet):
     """Custom ViewSet for IncentiveLicense with sold status filtering"""
     permission_classes = [IncentiveLicensePermission]
     filterset_class = IncentiveLicenseFilter
+    # Default list order (newest licence first), matching Meta.ordering on the
+    # model. The generic MasterViewSet otherwise falls back to pk order.
+    ordering = ['-license_date', 'license_number']
 
     def get_queryset(self):
         """Return all incentive licenses without default filtering"""
@@ -93,6 +96,22 @@ IncentiveLicenseViewSet = IncentiveLicenseViewSetClass.create_viewset(
                 'notes',
             ],
             'ordering': ['-license_date', 'license_number'],
+            # Explicit sortable columns. The bare 'ordering' list above only
+            # contained two names, so sorting by any other column was silently
+            # ignored.
+            'ordering_fields': [
+                'license_number',
+                'license_type',
+                'license_date',
+                'license_expiry_date',
+                'license_value',
+                'sold_value',
+                'balance_value',
+                'sold_status',
+                'is_active',
+                'exporter__name',
+                'port_code__name',
+            ],
             'field_meta': {
                 'license_type': {
                     'type': 'select',

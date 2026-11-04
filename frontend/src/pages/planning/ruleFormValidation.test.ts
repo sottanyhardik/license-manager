@@ -31,3 +31,31 @@ describe("unit-value rule validation", () => {
         expect(errors.unit_value_rows).toBe("Price ranges overlap");
     });
 });
+
+describe("split-by-percent rule validation", () => {
+    it("rejects rows that total 100% only before 2-decimal rounding", () => {
+        const errors = validatePlanningRule(rule, {
+            strategy: "SPLIT_BY_PERCENT",
+            percentage_rows: [
+                { import_item: 1, percentage: "33.333", unit_price: "1" },
+                { import_item: 2, percentage: "33.333", unit_price: "1" },
+                { import_item: 3, percentage: "33.334", unit_price: "1" },
+            ],
+        });
+
+        expect(errors.percentage_rows).toBe("Percentages must total 100%");
+    });
+
+    it("accepts rows that total exactly 100% at 2 decimals", () => {
+        const errors = validatePlanningRule(rule, {
+            strategy: "SPLIT_BY_PERCENT",
+            percentage_rows: [
+                { import_item: 1, percentage: "33.33", unit_price: "1" },
+                { import_item: 2, percentage: "33.33", unit_price: "1" },
+                { import_item: 3, percentage: "33.34", unit_price: "1" },
+            ],
+        });
+
+        expect(errors.percentage_rows).toBeUndefined();
+    });
+});

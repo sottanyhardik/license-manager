@@ -110,6 +110,13 @@ export interface ItemRow {
   previous_owner_debit_cif: Decimal;
   previous_owner_debit_qty: Decimal;
   customers: CustomerRow[];
+  /** "LICENCE" (licence-level control) or "ITEM" (Individual Item CIF ON). Decided by the backend. */
+  cif_control?: "LICENCE" | "ITEM";
+  /**
+   * The Available CIF this row shows, from the backend. Under licence-level control it is the licence's
+   * balance, identical on every row and never summed. Under item-level control it is the item's own balance.
+   */
+  available_cif_display?: Decimal;
 }
 
 export interface LicenceDetail extends LicenceSummary {

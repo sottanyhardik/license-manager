@@ -1254,6 +1254,13 @@ class LicenseReplanRequest(models.Model):
     last_error = models.TextField(blank=True, default="")
     last_error_code = models.CharField(max_length=100, blank=True, default="")
     last_error_message = models.TextField(blank=True, default="")
+    # Batch identity for user-initiated bulk actions (plan-sion, retry).  Both
+    # are nullable/defaulted so existing ledger rows remain valid.
+    batch_id = models.CharField(max_length=36, blank=True, default="", db_index=True)
+    initiated_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     class Meta:
         ordering = ("-requested_at", "-pk")
@@ -2081,6 +2088,24 @@ class LicenseTransferModel(models.Model):
 # -----------------------------
 # Incentive License (RODTEP/ROSTL/MEIS)
 # -----------------------------
+def derive_sold_status(sold_value, balance_value) -> str:
+    """
+    The one incentive-licence sold-status rule (used by the cache writer and
+    by the serializer so the UI can never disagree with the stored value):
+
+      * NO      — nothing sold (sold == 0)
+      * YES     — balance <= 0 (fully sold, or over-sold: balance stays negative)
+      * PARTIAL — some sold and a positive balance remains
+    """
+    sold = Decimal("0.00") if sold_value is None else Decimal(sold_value)
+    balance = Decimal("0.00") if balance_value is None else Decimal(balance_value)
+    if sold == 0:
+        return "NO"
+    if balance <= 0:
+        return "YES"
+    return "PARTIAL"
+
+
 class IncentiveLicense(AuditModel):
     """
     Model for incentive-based licenses: RODTEP, ROSTL, MEIS
@@ -2142,6 +2167,9 @@ class IncentiveLicense(AuditModel):
     notes = models.TextField(null=True, blank=True)
 
     admin_search_fields = ("license_number", "exporter__name")
+    # Derived from SALE lines by update_sold_status(). Editing them in the admin
+    # is silently overwritten on save, so they are read-only there.
+    admin_readonly_fields = ("sold_value", "balance_value", "sold_status")
 
     class Meta:
         ordering = ("-license_date", "license_number")
@@ -2166,44 +2194,56 @@ class IncentiveLicense(AuditModel):
             from dateutil.relativedelta import relativedelta
             self.license_expiry_date = self.license_date + relativedelta(years=2)
 
-        # Calculate balance if license_value changed
-        if self.license_value is not None:
-            self.balance_value = self.license_value - self.sold_value
-
-        super().save(*args, **kwargs)
+        # sold/balance/status are derived from trade lines, never trusted from
+        # the in-memory instance: a stale instance must not write them back.
+        # update_sold_status() runs after the row is saved, in the same
+        # transaction, and is the only writer of those three fields.
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if self.pk is not None:
+                self.update_sold_status()
 
     def update_sold_status(self):
         """
-        Update sold_value, balance_value, and sold_status based on related trades.
-        Call this method after trade changes.
-        """
-        from django.db.models import Sum
-        from decimal import Decimal
+        Canonical recalculation of the denormalised sale cache.
 
-        # Calculate sold value from SALE trades
-        sold = self.trade_lines.filter(
-            trade__direction='SALE'
-        ).aggregate(
-            total=Sum('license_value')
-        )['total'] or Decimal('0.00')
+        Writes ``sold_value``, ``balance_value`` and ``sold_status`` from the
+        licence's SALE lines (``SALE_LINE_FILTERS``: direction SALE and not a
+        linked trade). Pure derivation: ``balance = license_value - sold`` and
+        ``derive_sold_status``. Negative balances are kept, never clamped.
+
+        Row-locked (``select_for_update``) so concurrent sales serialise. Each
+        recalculation sums committed lines after the lock is held, so the last
+        writer always includes every sale.
+
+        Signals on IncentiveTradeLine and LicenseTrade call this for every
+        affected licence. It is idempotent.
+        """
+        from apps.license.services.license_profit import SALE_LINE_FILTERS
+        from apps.trade.models import IncentiveTradeLine
+
+        if self.pk is None:
+            return None
+
+        with transaction.atomic():
+            locked = IncentiveLicense.objects.select_for_update().only("pk", "license_value").get(pk=self.pk)
+            sold = (
+                IncentiveTradeLine.objects.filter(incentive_license_id=self.pk, **SALE_LINE_FILTERS)
+                .aggregate(total=Sum("license_value"))["total"]
+                or Decimal("0.00")
+            )
+            balance = locked.license_value - sold
+            status = derive_sold_status(sold, balance)
+            IncentiveLicense.objects.filter(pk=self.pk).update(
+                sold_value=sold,
+                balance_value=balance,
+                sold_status=status,
+            )
 
         self.sold_value = sold
-        self.balance_value = self.license_value - self.sold_value
-
-        # Determine sold status
-        if self.sold_value == Decimal('0.00'):
-            self.sold_status = 'NO'
-        elif self.balance_value <= Decimal('0.00'):
-            self.sold_status = 'YES'
-        else:
-            self.sold_status = 'PARTIAL'
-
-        # Use update() to avoid triggering signals
-        IncentiveLicense.objects.filter(pk=self.pk).update(
-            sold_value=self.sold_value,
-            balance_value=self.balance_value,
-            sold_status=self.sold_status
-        )
+        self.balance_value = balance
+        self.sold_status = status
+        return status
 
     def get_sold_value(self):
         """Get cached sold value (deprecated - use sold_value field directly)"""

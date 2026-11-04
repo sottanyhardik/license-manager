@@ -30,6 +30,7 @@ from apps.license.services.licence_balance_report import (
     ZERO,
     _index,
     _internal_sales_by_trade,
+    allotment_link,
     _item_inputs,
     _item_report,
     _load,
@@ -441,8 +442,10 @@ def _allotment_section(item, data, debit_rows, allot_residue, has_sales, withhel
         a_c = Decimal(ai.cif_fc or 0)
         a_q = Decimal(ai.qty or 0)
         out_c, out_q, elsewhere = residue[ai.id]
-        boe_c = a_c - out_c
-        boe_q = a_q - out_q
+        # BOE-linked figures come from the one shared definition, never from original minus outstanding.
+        link = allotment_link(ai, data, debit_rows)
+        boe_c = link.boe_linked_cif
+        boe_q = link.boe_linked_qty
         if elsewhere:
             status = "REVIEW REQUIRED"
         elif not bids:

@@ -81,7 +81,8 @@ describe("LicenseLedger fresh filters", () => {
         expect(screen.getByPlaceholderText(/license # or exporter/i)).toBeInTheDocument();
         // Verify API defaults
         const expectedFy = getFinancialYearRange();
-        for (const prefix of ["license-ledger/license-wise/", "license-ledger/summary/"]) {
+        // Totals now travel with the license-wise response (one collection build per filter change).
+        for (const prefix of ["license-ledger/license-wise/"]) {
             const params = queryFor(prefix);
             expect(params.get("license_type")).toBe("ALL");
             expect(params.get("ordering")).toBe("-license_date");
@@ -123,9 +124,9 @@ describe("LicenseLedger fresh filters", () => {
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "RODTEP" }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("RODTEP"));
-        fireEvent.click(screen.getByRole("button", { name: /preview.*pdf/i }));
+        fireEvent.click(screen.getByRole("button", { name: /preview pdf.*license ledger/i }));
         await waitFor(() => expect(mockedPreviewPdf).toHaveBeenCalled());
-        fireEvent.click(screen.getByRole("button", { name: /download.*excel/i }));
+        fireEvent.click(screen.getByRole("button", { name: /download excel.*license ledger/i }));
         await waitFor(() => expect(mockedDownloadExcel).toHaveBeenCalled());
         const pdfParams = mockedPreviewPdf.mock.calls[0][0].params;
         const excelParams = mockedDownloadExcel.mock.calls[0][0].params;
@@ -160,14 +161,13 @@ describe("LicenseLedger fresh filters", () => {
 
         await waitFor(() => {
             expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("ALL_INCENTIVE");
-            expect(queryFor("license-ledger/summary/").get("license_type")).toBe("ALL_INCENTIVE");
         });
     });
 
     it("opens the retained detail route and normalizes malformed rows", async () => {
         render(<LicenseLedger />);
         fireEvent.click(await screen.findByRole("button", { name: /view ledger for LIC-2436/i }));
-        expect(navigate).toHaveBeenCalledWith("/license-ledger/2436/766");
+        expect(navigate).toHaveBeenCalledWith("/license-ledger/2436/766?license_type=DFIA");
         expect(normalizeLicenseWiseData({ licenses: [null, { license_id: "", companies: [] }] })).toEqual({ licenses: [] });
     });
 
@@ -190,7 +190,7 @@ describe("LicenseLedger fresh filters", () => {
         const downloadButton = screen.getByRole("button", { name: /choose.*folder.*start/i });
         expect(downloadButton).toBeEnabled();
         fireEvent.click(downloadButton);
-        await waitFor(() => expect(mockedCreatePackage).toHaveBeenCalledWith(["2522", "2523"], expect.any(String), expect.any(String)));
+        await waitFor(() => expect(mockedCreatePackage).toHaveBeenCalledWith(["DFIA:2522", "DFIA:2523"], expect.any(String), expect.any(String)));
         expect(mockedCreatePackage).toHaveBeenCalledTimes(1);
         // Downloading is a blob action: it must not navigate, clear the visible
         // selection, or cause the ledger filters/data to be replaced.
@@ -235,6 +235,6 @@ describe("LicenseLedger fresh filters", () => {
         expect(screen.getByText(/^Total$/, { selector: "span" })).toBeInTheDocument();
 
         fireEvent.click(screen.getAllByRole("button", { name: /^Ledger$/i })[0]);
-        expect(navigate).toHaveBeenCalledWith("/license-ledger/1/766");
+        expect(navigate).toHaveBeenCalledWith("/license-ledger/1/766?license_type=DFIA");
     });
 });

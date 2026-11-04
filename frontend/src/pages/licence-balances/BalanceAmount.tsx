@@ -53,7 +53,6 @@ export default function BalanceAmount({
   // shown red or badged as over-utilised by its own sign.
   const licenceControl = kind === "cif" && block?.cif_control === "LICENCE";
   const overUtilised = overUtilisedBadge && field === "available" && !licenceControl && block?.is_over_utilised === true;
-  const showControlLabel = licenceControl && field === "available";
 
   return (
     <span
@@ -68,11 +67,6 @@ export default function BalanceAmount({
         {unit ? ` ${unit}` : ""}
       </span>
       {overUtilised ? <Badge variant="destructive">Over-utilised</Badge> : null}
-      {showControlLabel ? (
-        <Badge variant="outline" title="The licence's pooled CIF decides over-utilisation. This item figure is attribution.">
-          Licence-level CIF control
-        </Badge>
-      ) : null}
     </span>
   );
 }

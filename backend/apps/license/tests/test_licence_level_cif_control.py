@@ -12,6 +12,7 @@ from apps.license.services.licence_balance_report import (
     LICENCE_CIF_UNVERIFIED_FLAG,
     LICENCE_CONTROL_STATUS,
     build_licence_balance_reports,
+    serialise_licence_detail,
     serialise_licence_summary,
 )
 from apps.license.tests.test_licence_balance_report import ReportFixture
@@ -176,3 +177,31 @@ class LicenceLevelCifControlTests(ReportFixture):
         on = serialise_licence_summary(self._report())
         self.assertEqual(on["cif_control"], "ITEM")
         self.assertIsNone(on["cif_scenarios"])
+
+    # Row display: the Available CIF each Items & Balance row shows ---------
+
+    def test_off_every_row_displays_the_same_licence_available_cif(self):
+        second, _trade = self._second_item_over_on_cif_and_qty()
+        self._mode(None)
+
+        rows = serialise_licence_detail(self._report())["items"]
+
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            self.assertEqual(row["cif_control"], "LICENCE")
+            self.assertEqual(row["available_cif_display"], "800.00")
+        # The display is one licence balance, so it is not a per-item amount.
+        by_item = {row["item_id"]: row for row in rows}
+        self.assertEqual(by_item[second.id]["cif"]["available"], "-200.00")
+        self.assertEqual(by_item[second.id]["qty"]["available"], "-200.000")
+
+    def test_on_each_row_displays_its_own_available_cif(self):
+        second, _trade = self._second_item_over_on_cif_and_qty()
+        self._mode(True)
+
+        rows = {row["item_id"]: row for row in serialise_licence_detail(self._report())["items"]}
+
+        self.assertEqual(rows[self.item.id]["cif_control"], "ITEM")
+        self.assertEqual(rows[self.item.id]["available_cif_display"], "1000.00")
+        self.assertEqual(rows[second.id]["cif_control"], "ITEM")
+        self.assertEqual(rows[second.id]["available_cif_display"], "-200.00")

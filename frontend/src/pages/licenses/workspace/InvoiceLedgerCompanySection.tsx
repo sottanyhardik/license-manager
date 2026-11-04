@@ -280,6 +280,17 @@ function LedgerCell({
               INTERNAL TRADE
             </span>
           ) : null}
+          {row.counterpart ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {row.transaction_class === "INTERNAL_TRANSFER_PURCHASE" ? "Internal transfer purchase" : "Internal transfer sale"}
+              {" · "}counterpart {row.counterpart.invoice} ({row.counterpart.direction.toLowerCase()}, trade {row.counterpart.trade_id})
+            </p>
+          ) : null}
+          {row.transaction_class === "UNMATCHED_INTERNAL_TRANSACTION" ? (
+            <span className="mt-1 inline-block rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold tracking-wide text-amber-900">
+              UNMATCHED INTERNAL — REVIEW
+            </span>
+          ) : null}
           {!SETTLED_STATUSES.has(row.status) && (
             <p className="mt-1 flex items-start gap-1 text-xs font-medium text-foreground">
               <TriangleAlert aria-hidden="true" className="mt-px size-3.5 shrink-0 text-warning" />

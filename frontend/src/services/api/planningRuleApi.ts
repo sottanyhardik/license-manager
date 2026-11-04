@@ -215,3 +215,59 @@ export async function autoPlanLicense(licenseId: number): Promise<AutoPlanRespon
         throw error;
     }
 }
+
+/* ----- Planning operations: dashboard, rule history, batch tracking ----- */
+
+export type PlanningDashboard = {
+    totals: { norms: number; norms_with_active_rules: number; active_rules: number; inactive_rules: number; draft_rules: number | null; validation_errors: number; warnings: number };
+    last_rule_change: { modified_on: string | null; modified_by: string | null; rule_id: number | null };
+    jobs: { pending: number; failed: number; last_successful_execution: string | null; last_requested: string | null };
+    norms: Array<{ sion_id: number; norm_class: string; description: string; active_rules: number; inactive_rules: number; max_rule_version: number; validation_errors: number; warnings: number; last_modified_on: string | null }>;
+};
+
+export type ReplanBatchError = { request_id: number; license_id: number; license_number: string | null; sion_id: number | null; error_code: string; error_message: string; attempts: number };
+export type ReplanBatchState = "RUNNING" | "SUCCEEDED" | "PARTIAL_FAILURE" | "FAILED";
+export type ReplanBatchStatus = {
+    state: ReplanBatchState; requested: number; processed: number; succeeded: number; failed: number; skipped: number; active: number;
+    partial_failures: number; unknown_request_ids: number[]; initiated_by: string | null; started_at: string | null; completed_at: string | null;
+    errors: ReplanBatchError[]; request_ids: number[];
+};
+
+export async function fetchPlanningDashboard(): Promise<PlanningDashboard> {
+    return (await api.get("sion-planning-rules/dashboard/")).data;
+}
+export async function fetchReplanBatchStatus(requestIds: number[]): Promise<ReplanBatchStatus> {
+    return (await api.get("sion-planning-rules/plan-batch-status/", { params: { request_ids: requestIds.join(",") } })).data;
+}
+export async function retryReplanBatch(requestIds: number[]): Promise<{ batch_id: string; retry_request_ids: number[]; skipped: Array<{ request_id: number; reason: string }>; planning_state: string }> {
+    return (await api.post("sion-planning-rules/plan-batch-retry/", { request_ids: requestIds })).data;
+}
+
+/**
+ * Poll a batch until it leaves RUNNING.  A batch is only reported complete by
+ * the server's aggregate state; callers must not treat queuing as success.
+ */
+export async function waitForReplanBatch(
+    requestIds: number[],
+    options: {
+        fetchStatus?: (ids: number[]) => Promise<ReplanBatchStatus>;
+        intervalMs?: number;
+        maxWaitMs?: number;
+        sleep?: (ms: number) => Promise<void>;
+        now?: () => number;
+        onProgress?: (status: ReplanBatchStatus) => void;
+    } = {},
+): Promise<{ status: ReplanBatchStatus; timedOut: boolean }> {
+    const fetchStatus = options.fetchStatus ?? fetchReplanBatchStatus;
+    const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    const now = options.now ?? (() => Date.now());
+    const intervalMs = options.intervalMs ?? 2000;
+    const deadline = now() + (options.maxWaitMs ?? 5 * 60 * 1000);
+    for (;;) {
+        const status = await fetchStatus(requestIds);
+        options.onProgress?.(status);
+        if (status.state !== "RUNNING") return { status, timedOut: false };
+        if (now() >= deadline) return { status, timedOut: true };
+        await sleep(intervalMs);
+    }
+}

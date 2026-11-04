@@ -92,7 +92,7 @@ export default function ActiveFilters({
               {onRemove && (
                 <button
                   onClick={() => onRemove(filter.key)}
-                  className="ml-1 inline-flex items-center rounded hover:bg-black/10 dark:hover:bg-white/10 p-0.5"
+                  className="ml-1 inline-flex min-h-[24px] min-w-[24px] items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 p-0.5"
                   title={`Remove ${filter.label} filter`}
                   aria-label={`Remove ${filter.label} filter`}
                 >
@@ -131,10 +131,10 @@ export default function ActiveFilters({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Filter className="size-4 text-muted-foreground" aria-hidden="true" />
-          <h3 className="text-sm font-semibold text-foreground">
+          <h2 className="text-sm font-semibold text-foreground">
             Active Filters
             {showCount && <span className="ml-2 text-xs font-normal text-muted-foreground">({count})</span>}
-          </h3>
+          </h2>
         </div>
         {onClearAll && (
           <Button
@@ -163,7 +163,7 @@ export default function ActiveFilters({
             {onRemove && (
               <button
                 onClick={() => onRemove(filter.key)}
-                className="ml-1.5 inline-flex items-center rounded hover:bg-muted p-1"
+                className="ml-1.5 inline-flex min-h-[24px] min-w-[24px] items-center justify-center rounded hover:bg-muted p-1"
                 title={`Remove ${filter.label} filter`}
                 aria-label={`Remove ${filter.label} filter: ${filter.value}`}
               >

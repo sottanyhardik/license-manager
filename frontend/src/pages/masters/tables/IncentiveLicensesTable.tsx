@@ -83,7 +83,9 @@ export default function IncentiveLicensesTable({
                 const expiryDate = parseMasterDisplayDate(item.license_expiry_date);
                 const isExpired = Boolean(expiryDate && expiryDate < new Date());
 
-                // Status → Tailwind class sets
+                // Status → Tailwind class sets. Only an explicit "NO" from the
+                // backend means Available; a missing or unrecognised flag must
+                // never be shown as Available (a sold licence could be hidden there).
                 const statusConfig = item.sold_status === "YES"
                     ? {
                         card: "border-l-destructive",
@@ -96,11 +98,17 @@ export default function IncentiveLicensesTable({
                             badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
                             label: "Partial",
                         }
-                        : {
-                            card: "border-l-emerald-500",
-                            badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-                            label: "Available",
-                        };
+                        : item.sold_status === "NO"
+                            ? {
+                                card: "border-l-emerald-500",
+                                badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+                                label: "Available",
+                            }
+                            : {
+                                card: "border-l-muted-foreground",
+                                badge: "bg-muted text-muted-foreground ring-1 ring-border",
+                                label: "Unknown",
+                            };
 
                 return (
                     <article

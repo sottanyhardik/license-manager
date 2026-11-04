@@ -8,6 +8,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from apps.core.models import ItemNameModel
+from apps.license.models.core import derive_sold_status
 from apps.core.serializers.fields import IndianDateField
 from apps.license.models import (
     IncentiveLicense, LicenseItemPlan, LicenseImportItemsModel, SionPlanningRule,
@@ -45,14 +46,7 @@ class IncentiveLicenseSerializer(serializers.ModelSerializer):
 
     def get_sold_status(self, obj):
         """Get sold status: YES (fully sold), NO (not sold), PARTIAL (partially sold)"""
-        sold_value = obj.sold_value or DECIMAL_ZERO
-        balance_value = obj.balance_value or DECIMAL_ZERO
-
-        if sold_value == DECIMAL_ZERO:
-            return 'NO'
-        if balance_value <= DECIMAL_ZERO:
-            return 'YES'
-        return 'PARTIAL'
+        return derive_sold_status(obj.sold_value, obj.balance_value)
 
     def to_representation(self, instance):
         """Add formatted dates and display names"""
@@ -519,9 +513,40 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Unsupported planning unit.")
         return normalized
 
+    def _effective_planning_fields(self, data):
+        """Return the state a save will actually store: supplied values, else stored ones.
+
+        On PATCH/PUT the view keeps the stored strategy and any stored rows that
+        the request omits, so validation must check that final state.  Checking
+        only the request body let a partial update skip the strategy rules
+        (sum-to-100, overlaps, same-SION) while still persisting the rows.
+        """
+        effective = dict(data)
+        inst = self.instance
+        if "strategy" not in effective:
+            effective["strategy"] = inst.strategy
+        if "import_item" not in effective:
+            effective["import_item"] = inst.import_item
+        if "unit_value_rows" not in effective:
+            effective["unit_value_rows"] = [
+                {"import_item": row.import_item, "min_unit_price": row.min_unit_price,
+                 "max_unit_price": row.max_unit_price,
+                 "preferred_unit_price": row.preferred_unit_price, "priority": row.priority}
+                for row in inst.unit_value_rows.all()
+            ]
+        if "percentage_rows" not in effective:
+            effective["percentage_rows"] = [
+                {"import_item": row.import_item, "percentage": row.percentage,
+                 "unit_price": row.unit_price, "max_quantity": row.max_quantity,
+                 "priority": row.priority}
+                for row in inst.percentage_rows.all()
+            ]
+        return effective
+
     def validate(self, data):
-        strategy = data.get("strategy")
-        sion = data.get("sion") or (self.instance.sion if self.instance else None)
+        checked = self._effective_planning_fields(data) if self.instance is not None else data
+        strategy = checked.get("strategy")
+        sion = checked.get("sion") or (self.instance.sion if self.instance else None)
 
         # Reject old "output_item" key
         if "output_item" in self.initial_data or "output_item_id" in self.initial_data:
@@ -536,7 +561,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
 
         # STANDARD: require import_item (1:1), reject other rows
         if strategy == "STANDARD":
-            import_item = data.get("import_item")
+            import_item = checked.get("import_item")
             if not import_item:
                 raise serializers.ValidationError(
                     {"strategy": "STANDARD strategy requires import_item."}
@@ -546,14 +571,14 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
                     {"import_item": "Import item does not belong to this SION."},
                     code="IMPORT_ITEM_NOT_ALLOWED_FOR_SION",
                 )
-            if data.get("unit_value_rows") or data.get("percentage_rows"):
+            if checked.get("unit_value_rows") or checked.get("percentage_rows"):
                 raise serializers.ValidationError(
                     {"strategy": "STANDARD strategy does not use unit_value_rows or percentage_rows."}
                 )
 
         # SPLIT_BY_UNIT_VALUE: require ≥1 rows, validate SION + bounds
         elif strategy == "SPLIT_BY_UNIT_VALUE":
-            unit_value_rows = data.get("unit_value_rows") or []
+            unit_value_rows = checked.get("unit_value_rows") or []
             if not unit_value_rows:
                 raise serializers.ValidationError(
                     {"unit_value_rows": "SPLIT_BY_UNIT_VALUE requires at least one row."}
@@ -583,7 +608,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
 
         # SPLIT_BY_PERCENT: require ≥1 rows, total==100, validate SION
         elif strategy == "SPLIT_BY_PERCENT":
-            percentage_rows = data.get("percentage_rows") or []
+            percentage_rows = checked.get("percentage_rows") or []
             if not percentage_rows:
                 raise serializers.ValidationError(
                     {"percentage_rows": "SPLIT_BY_PERCENT requires at least one row."}

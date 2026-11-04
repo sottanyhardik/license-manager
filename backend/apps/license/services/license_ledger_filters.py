@@ -188,8 +188,12 @@ def _apply_database_filters(filters, authorization_company_id):
     return dfia, incentive
 
 
-def build_filtered_license_ledger_data(params, *, authorization_company_id=None, license_ref=None):
-    """Build one filtered canonical collection shared by UI, PDF and Excel."""
+def build_filtered_license_ledger_data(params, *, authorization_company_id=None, license_ref=None, include_metrics=False):
+    """Build one filtered canonical collection shared by UI, PDF and Excel.
+
+    ``include_metrics`` adds the summary-card ``metrics`` block, computed over the
+    complete filtered collection.  Only list endpoints need it; exports do not.
+    """
     if license_ref is not None:
         refs = [license_ref]
         first_dates = {}
@@ -214,12 +218,23 @@ def build_filtered_license_ledger_data(params, *, authorization_company_id=None,
             (incentive_types[key], key): value for key, value in incentive_dates.items() if key in incentive_types
         }}
 
+    # One collection-level preload instead of ~8 queries per licence. The per-licence
+    # engine calls are unchanged; the batch only supplies the same rows.
+    # Batches are chunked so memory stays bounded for very large collections: each
+    # chunk preloads its own licences, and every licence is built from its chunk.
+    from apps.license.services.canonical_ledger_batch import LedgerBatch
+    chunk_size = 250
+    batches = (
+        [LedgerBatch.for_licences(refs[i:i + chunk_size]) for i in range(0, len(refs), chunk_size)]
+        if license_ref is None else []
+    )
     licenses = [CanonicalLedgerService.build_canonical_ledger_dataset(
         license_id,
         license_type,
         first_purchase_date=first_dates.get((license_type, license_id)),
         company_id=filters.company_id,
-    ) for license_id, license_type in refs]
+        batch=batches[index // chunk_size] if batches else None,
+    ) for index, (license_id, license_type) in enumerate(refs)]
     if filters.min_balance is not None:
         # The collection's eligibility filter is Financial Available Balance,
         # not the presentation ledger's running total.  The latter intentionally
@@ -240,9 +255,13 @@ def build_filtered_license_ledger_data(params, *, authorization_company_id=None,
     key = (lambda row: row["summary"]["current_balance"]) if balance_sort else (lambda row: (row.get("license_date") is not None, row.get("license_date")))
     licenses.sort(key=key, reverse=filters.ordering.startswith("-"))
     company_groups = CanonicalLedgerService.build_collection_company_groups(licenses)
-    return {
+    collection = {
         "licenses": licenses,
         "summary": CanonicalLedgerService.build_collection_summary(licenses),
         "company_groups": company_groups,
         "grand_total": CanonicalLedgerService.build_collection_grand_total(company_groups),
     }
+    if include_metrics:
+        from apps.license.services.license_ledger_metrics import build_ledger_metrics
+        collection["metrics"] = build_ledger_metrics(licenses)
+    return collection

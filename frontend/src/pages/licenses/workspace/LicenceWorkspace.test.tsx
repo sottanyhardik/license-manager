@@ -314,12 +314,12 @@ describe("licence workspace: page state", () => {
 });
 
 describe("licence workspace: navigation", () => {
-  it("shows only Overview, Items & Balance, Invoices & Sales and Reconciliation", async () => {
+  it("shows Overview, Planning, Items & Balance, Invoices & Sales and Reconciliation, in that order", async () => {
     await renderOpen();
     await screen.findByRole("heading", { name: "Licence workspace" });
 
     const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
-    expect(tabs).toEqual(["Overview", "Items & Balance", "Invoices & Sales", "Reconciliation"]);
+    expect(tabs).toEqual(["Overview", "Planning", "Items & Balance", "Invoices & Sales", "Reconciliation"]);
     expect(screen.queryByRole("tab", { name: "BOEs" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Allotments" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Ledger" })).not.toBeInTheDocument();
@@ -330,7 +330,9 @@ describe("licence workspace: navigation", () => {
 
     screen.getByRole("tab", { name: "Overview" }).focus();
     await user.keyboard("{ArrowRight}");
+    expect(await screen.findByRole("tab", { name: "Planning" })).toHaveAttribute("aria-selected", "true");
 
+    await user.keyboard("{ArrowRight}");
     expect(await screen.findByRole("tab", { name: "Items & Balance" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("licence-workspace")).toBeInTheDocument();
   });

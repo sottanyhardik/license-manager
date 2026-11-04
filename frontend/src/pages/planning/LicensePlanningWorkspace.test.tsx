@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LicensePlanningWorkspace from "./LicensePlanningWorkspace";
@@ -8,7 +8,7 @@ import { planningPath } from "./planningPath";
 import * as rulesApi from "@/services/api/planningRuleApi";
 
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn().mockResolvedValue({ data: [{ id: 6, norm_class: "E1" }, { id: 7, norm_class: "E5" }] }) } }));
-vi.mock("@/services/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), searchSionImportItems: vi.fn(), fetchSionImportItem: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn(), previewScopedSionPlan: vi.fn(), saveScopedSionPlan: vi.fn() }));
+vi.mock("@/services/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), searchSionImportItems: vi.fn(), fetchSionImportItem: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn(), previewScopedSionPlan: vi.fn(), saveScopedSionPlan: vi.fn(), fetchPlanningDashboard: vi.fn(), fetchReplanBatchStatus: vi.fn(), retryReplanBatch: vi.fn(), waitForReplanBatch: vi.fn() }));
 
 const rule = { id: 4, sion: 7, name: "Sugar rule", expression: { operator: "AND" as const, conditions: [{ field: "HSN" as const, comparator: "CONTAINS" as const, value: "1701" }] }, max_unit_price: "2.70", unit: "KG", priority: 10, is_active: true, strategy: "STANDARD" as const, import_item: 101, standard_item_name: "Sugar - E5", unit_value_rows: [], percentage_rows: [], version: 1 };
 const preview = { sion: "E5", mode: "NEW" as const, rules_processed: 1, summary: { licenses_matched: 1, licenses_new: 0, licenses_changed: 1, licenses_unchanged: 0, licenses_shortage: 0, rules_processed: 1 }, licenses: [{ license_id: 42, license_number: "LIC-42", sion: "E5", matched_item_count: 1, matched_rule_count: 1, matched_rule_priorities: [1], existing_plan_summary: "10 KG", proposed_plan_summary: "12 KG", existing_plan: {}, proposed_plan: {}, change_status: "CHANGE" as const, has_shortage: false, status: "FEASIBLE", items: [{ item_id: 1, rule_priority: 1, rule_name: "Sugar rule", item_name: "Sugar", hsn_code: "1701", unit: "KG", available_qty: "10.000", existing_planned_qty: "8.000", proposed_planned_qty: "10.000", max_unit_price: "2.70" }] }], conflicts: [] };
@@ -18,7 +18,7 @@ const renderWorkspace = (entry = "/planning?sion=E5") => {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[entry]}><LicensePlanningWorkspace /></MemoryRouter></QueryClientProvider>);
 };
 const ready = () => screen.findByRole("button", { name: "Select rule Sugar rule" });
-const openEdit = async () => { await ready(); await userEvent.click(screen.getByRole("button", { name: "Edit Rule" })); return screen.findByLabelText("Rule editor"); };
+const openEdit = async () => { await ready(); await userEvent.click(screen.getByRole("button", { name: "Edit" })); return screen.findByLabelText("Rule editor"); };
 
 describe("SION planning workspace", () => {
   beforeEach(() => {
@@ -29,6 +29,7 @@ describe("SION planning workspace", () => {
     vi.mocked(rulesApi.updateSionPlanningRule).mockResolvedValue(rule);
     vi.mocked(rulesApi.testSionPlanningRule).mockResolvedValue(preview);
     vi.mocked(rulesApi.previewSavedSionRules).mockResolvedValue(preview);
+    vi.mocked(rulesApi.fetchPlanningDashboard).mockResolvedValue({ totals: { norms: 2, norms_with_active_rules: 1, active_rules: 1, inactive_rules: 0, draft_rules: null, validation_errors: 0, warnings: 0 }, last_rule_change: { modified_on: null, modified_by: null, rule_id: null }, jobs: { pending: 0, failed: 0, last_successful_execution: null, last_requested: null }, norms: [] });
   });
   it("preserves optional license context in the route", () => expect(planningPath(42, "/licenses")).toBe("/planning?license_id=42&origin=%2Flicenses"));
   it("uses accessible norm tabs and opens selected detail", async () => {
@@ -44,23 +45,47 @@ describe("SION planning workspace", () => {
     fireEvent.change(screen.getByLabelText("Search rules"), { target: { value: "nothing" } }); expect(screen.getByText("No rules match this search.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Search rules"), { target: { value: "sugar" } }); expect(screen.getByRole("button", { name: "Select rule Sugar rule" })).toHaveAttribute("aria-current", "true");
   });
-  it("validates a saved rule and renders the authoritative backend preview", async () => {
-    renderWorkspace(); await ready(); await userEvent.click(screen.getByRole("button", { name: "Validate" }));
-    await waitFor(() => expect(rulesApi.testSionPlanningRule).toHaveBeenCalledWith(4)); expect(await screen.findByLabelText("License planning preview")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "View items for LIC-42" })); expect(screen.getByText("#1 Sugar rule")).toBeInTheDocument(); expect(screen.getByText(/HSN: 1701/)).toBeInTheDocument();
+  it("header exposes New Rule and one Plan Licences menu holding exactly the three planning operations", async () => {
+    renderWorkspace(); await ready();
+    expect(screen.getByRole("button", { name: "New Rule" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More planning actions" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Plan Licences" }));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((item) => item.textContent)).toEqual(["Plan expired licences", "Plan licences expiring soon", "Re-plan all eligible licences"]);
   });
-  it("previews saved active rules without planning and opens the canonical license plan", async () => {
-    render(<MemoryRouter initialEntries={["/planning?sion=E5"]}><Routes><Route path="/planning" element={<LicensePlanningWorkspace />} /><Route path="/licenses" element={<p>Canonical license plan</p>} /></Routes></MemoryRouter>);
-    const previewButton = await screen.findByRole("button", { name: "Preview Impact" }); await waitFor(() => expect(previewButton).toBeEnabled()); await userEvent.click(previewButton);
-    await waitFor(() => expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "NEW")); expect(rulesApi.planSavedSionRules).not.toHaveBeenCalled(); await userEvent.click(await screen.findByRole("button", { name: "View Plan" })); expect(await screen.findByText("Canonical license plan")).toBeInTheDocument();
+  it("does not expose Validate, Preview Impact, Version History, Audit Log or Export Rules", async () => {
+    renderWorkspace(); await ready();
+    expect(screen.queryByRole("button", { name: "Validate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Preview Impact" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Version History" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Audit Log" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Plan Licences" }));
+    expect(await screen.findByRole("menuitem", { name: "Plan expired licences" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Export rules|Version history/i })).not.toBeInTheDocument();
+    expect(rulesApi.testSionPlanningRule).not.toHaveBeenCalled();
+    expect(rulesApi.previewSavedSionRules).not.toHaveBeenCalled();
   });
-  it("disables planning actions without an active saved rule", async () => {
+  it("Plan expired licences calls the original ALL / EXPIRED planning request only", async () => {
+    vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" }); renderWorkspace(); await ready();
+    await userEvent.click(screen.getByRole("button", { name: "Plan Licences" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Plan expired licences" }));
+    await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL", undefined, "EXPIRED"));
+    expect(rulesApi.planSavedSionRules).toHaveBeenCalledTimes(1);
+  });
+  it("Plan licences expiring soon calls the original ALL / EXPIRING_SOON planning request only", async () => {
+    vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" }); renderWorkspace(); await ready();
+    await userEvent.click(screen.getByRole("button", { name: "Plan Licences" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Plan licences expiring soon" }));
+    await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL", undefined, "EXPIRING_SOON"));
+    expect(rulesApi.planSavedSionRules).toHaveBeenCalledTimes(1);
+  });
+  it("disables Plan Licences without an active saved rule", async () => {
     vi.mocked(rulesApi.fetchSionPlanningRules).mockResolvedValue([{ ...rule, is_active: false }]); renderWorkspace();
-    expect(await screen.findByRole("button", { name: "Preview Impact" })).toBeDisabled(); await userEvent.click(screen.getByRole("button", { name: "More planning actions" })); expect(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })).toHaveAttribute("data-disabled");
+    expect(await screen.findByRole("button", { name: "Plan Licences" })).toBeDisabled();
   });
   it("confirms Force All and submits ALL mode", async () => {
     vi.mocked(rulesApi.planSavedSionRules).mockResolvedValue({ status: "COMPLETED" }); renderWorkspace(); await ready();
-    await userEvent.click(screen.getByRole("button", { name: "More planning actions" })); await userEvent.click(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })); expect(screen.getByRole("alertdialog", { name: "Force re-plan E5?" })).toBeInTheDocument(); await userEvent.click(screen.getByRole("button", { name: "Force All" })); await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL")); expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "ALL");
+    await userEvent.click(screen.getByRole("button", { name: "Plan Licences" })); await userEvent.click(await screen.findByRole("menuitem", { name: "Re-plan all eligible licences" })); expect(screen.getByRole("alertdialog", { name: "Force re-plan E5?" })).toBeInTheDocument(); await userEvent.click(screen.getByRole("button", { name: "Force All" })); await waitFor(() => expect(rulesApi.planSavedSionRules).toHaveBeenCalledWith(7, "ALL")); expect(rulesApi.previewSavedSionRules).toHaveBeenCalledWith(7, "ALL");
   });
   it("keeps invalid new drafts unsaved", async () => {
     renderWorkspace(); await ready(); await userEvent.click(screen.getByRole("button", { name: "New Rule" })); expect(await screen.findByLabelText("Rule editor")).toBeInTheDocument(); expect(screen.getByLabelText("Maximum unit price")).toHaveAttribute("aria-invalid", "true"); expect(screen.getByRole("button", { name: "Save Changes" })).toBeDisabled();

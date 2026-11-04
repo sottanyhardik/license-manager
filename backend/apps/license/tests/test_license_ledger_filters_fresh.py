@@ -26,7 +26,7 @@ class _Ids:
         return list(self.values)
 
 
-def _dataset(license_id, license_type, first_purchase_date=None, company_id=None):
+def _dataset(license_id, license_type, first_purchase_date=None, company_id=None, batch=None):
     balances = {1: Decimal("5000"), 2: Decimal("3000"), 3: Decimal("1000")}
     return {
         "license_id": license_id,
@@ -39,6 +39,13 @@ def _dataset(license_id, license_type, first_purchase_date=None, company_id=None
 
 
 class FreshLicenseLedgerFilterTests(SimpleTestCase):
+    def setUp(self):
+        # These tests mock the per-licence builder, so the collection-level batch
+        # (which would run database preload queries) is disabled for them.
+        batch_patch = patch("apps.license.services.canonical_ledger_batch.LedgerBatch.for_licences", return_value=None)
+        batch_patch.start()
+        self.addCleanup(batch_patch.stop)
+
     def test_license_type_contract_uses_model_choices(self):
         self.assertEqual(
             LICENSE_LEDGER_TYPE_VALUES,

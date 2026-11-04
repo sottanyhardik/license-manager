@@ -6,7 +6,6 @@ import type { LicenceDetail } from "@/pages/licence-balances/types";
 
 /** Features the workspace does not have yet. Listed so nobody mistakes them for empty data. */
 const NOT_YET_AVAILABLE = [
-  { name: "Planning", detail: "Planned allocation and plan revisions." },
   { name: "History", detail: "Ownership history and transfer records." },
   { name: "Purchases and transfers", detail: "Purchase and transfer records for this licence." },
   { name: "Financial ledger", detail: "The CIF transaction ledger across all items." },

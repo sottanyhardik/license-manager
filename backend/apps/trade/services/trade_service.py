@@ -148,16 +148,21 @@ def link_trades(trade_pk: int, partner_pk: Optional[int]):
     """
     from apps.trade.models import LicenseTrade
 
+    from apps.trade.models import recalculate_incentive_licences_for_trades
+
     trade = LicenseTrade.objects.get(pk=trade_pk)
 
     # ---- Unlink ----
     if partner_pk is None:
         old_partner_id = trade.linked_trade_id
-        LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=None)
-        if old_partner_id:
-            LicenseTrade.objects.filter(
-                pk=old_partner_id, linked_trade=trade.pk
-            ).update(linked_trade=None)
+        with transaction.atomic():
+            LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=None)
+            if old_partner_id:
+                LicenseTrade.objects.filter(
+                    pk=old_partner_id, linked_trade=trade.pk
+                ).update(linked_trade=None)
+            # queryset updates fire no signals, so refresh sale caches explicitly
+            recalculate_incentive_licences_for_trades([trade.pk, old_partner_id])
         trade.refresh_from_db()
         return trade
 
@@ -171,17 +176,19 @@ def link_trades(trade_pk: int, partner_pk: Optional[int]):
     except LicenseTrade.DoesNotExist:
         raise PartnerTradeNotFound(f"Partner trade {partner_pk} not found")
 
-    # ---- Clear stale links ----
+    # ---- Clear stale links, set new link (one transaction, caches refreshed) ----
     old_trade_partner = trade.linked_trade_id
     old_partner_partner = partner.linked_trade_id
-    if old_trade_partner and old_trade_partner != partner.pk:
-        LicenseTrade.objects.filter(pk=old_trade_partner).update(linked_trade=None)
-    if old_partner_partner and old_partner_partner != trade.pk:
-        LicenseTrade.objects.filter(pk=old_partner_partner).update(linked_trade=None)
-
-    # ---- Set new link ----
-    LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=partner)
-    LicenseTrade.objects.filter(pk=partner.pk).update(linked_trade=trade)
+    with transaction.atomic():
+        if old_trade_partner and old_trade_partner != partner.pk:
+            LicenseTrade.objects.filter(pk=old_trade_partner).update(linked_trade=None)
+        if old_partner_partner and old_partner_partner != trade.pk:
+            LicenseTrade.objects.filter(pk=old_partner_partner).update(linked_trade=None)
+        LicenseTrade.objects.filter(pk=trade.pk).update(linked_trade=partner)
+        LicenseTrade.objects.filter(pk=partner.pk).update(linked_trade=trade)
+        recalculate_incentive_licences_for_trades(
+            [trade.pk, partner.pk, old_trade_partner, old_partner_partner]
+        )
 
     trade.refresh_from_db()
     return trade

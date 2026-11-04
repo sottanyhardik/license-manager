@@ -87,11 +87,94 @@ export type LedgerCompanyGroup = {
     total_profit_loss_inr: number;
 };
 
+/** Summary-card metrics over the complete filtered collection (never a page). */
+export type LedgerMetrics = {
+    as_of: string;
+    total_licences: number;
+    sold_licences: number;
+    partially_sold_licences: number;
+    expired_licences: number;
+    /** Confirmed CIF over-utilisation (DFIA; canonical engine status OVER_UTILISED). */
+    cif_over_utilised_licences: number;
+    /** Engine status REVIEW_REQUIRED: needs review, never counted as confirmed. */
+    review_required_licences: number;
+    /** Incentive licences with a negative INR ledger balance (not a CIF figure). */
+    incentive_negative_balance_licences: number;
+    /** CIF figures in USD from the canonical licence-balance engine (DFIA only). */
+    cif: {
+        currency: string;
+        licence_count: number;
+        unavailable_count: number;
+        original: number;
+        utilised: number;
+        available: number;
+    };
+};
+
+export type LedgerPagination = {
+    count: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+    has_next: boolean;
+    paginated: boolean;
+};
+
 export type LicenseWiseData = {
     licenses: LicenseWiseEntry[];
     company_groups?: LedgerCompanyGroup[];
     grand_total?: LedgerGroupTotals;
+    metrics?: LedgerMetrics;
+    pagination?: LedgerPagination;
+    /** Every licence id in the filtered collection (not just this page). */
+    license_ids?: string[];
 };
+
+/**
+ * Composite licence identity. DFIA and incentive licences can share a numeric id,
+ * so every selection, key and package reference uses 'TYPE:ID'.
+ */
+export function licenceKey(license: { license_type: string | number; license_id: string | number }): string {
+    return `${String(license.license_type)}:${String(license.license_id)}`;
+}
+
+/** Packages and bulk actions support DFIA licences only. */
+export function isDfiaKey(key: string): boolean {
+    return key.startsWith('DFIA:');
+}
+
+function normalizeMetrics(value: Record<string, unknown>): LedgerMetrics {
+    const cif = isRecord(value.cif) ? value.cif : {};
+    return {
+        as_of: normalizeText(value.as_of, '-'),
+        total_licences: toFiniteNumber(value.total_licences),
+        sold_licences: toFiniteNumber(value.sold_licences),
+        partially_sold_licences: toFiniteNumber(value.partially_sold_licences),
+        expired_licences: toFiniteNumber(value.expired_licences),
+        cif_over_utilised_licences: toFiniteNumber(value.cif_over_utilised_licences),
+        review_required_licences: toFiniteNumber(value.review_required_licences),
+        incentive_negative_balance_licences: toFiniteNumber(value.incentive_negative_balance_licences),
+        cif: {
+            currency: normalizeText(cif.currency, 'USD'),
+            licence_count: toFiniteNumber(cif.licence_count),
+            unavailable_count: toFiniteNumber(cif.unavailable_count),
+            original: toFiniteNumber(cif.original),
+            utilised: toFiniteNumber(cif.utilised),
+            available: toFiniteNumber(cif.available),
+        },
+    };
+}
+
+function normalizePagination(value: Record<string, unknown>): LedgerPagination {
+    return {
+        count: toFiniteNumber(value.count),
+        page: Math.max(1, toFiniteNumber(value.page) || 1),
+        page_size: Math.max(1, toFiniteNumber(value.page_size) || 1),
+        total_pages: Math.max(1, toFiniteNumber(value.total_pages) || 1),
+        has_next: value.has_next === true,
+        paginated: value.paginated === true,
+    };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
@@ -185,5 +268,8 @@ export function normalizeLicenseWiseData(value: unknown): LicenseWiseData {
             return [{ license_id: normalizeId(licenseId, 'unknown-license'), license_number: normalizeText(license.license_number, 'Unknown license'), license_date: normalizeText(license.license_date, '-'), expiry_date: normalizeText(license.expiry_date, '-'), license_type: normalizeText(license.license_type, 'UNKNOWN'), sion_norms: normalizeText(license.sion_norms), transactions, purchase_total: toFiniteNumber(summary.total_purchase), sale_total: toFiniteNumber(summary.total_sale), purchase_bill_total: toFiniteNumber(summary.total_purchase_bill_inr) || fallbackPurchaseTotal, sale_bill_total: toFiniteNumber(summary.total_sale_bill_inr) || fallbackSaleTotal, current_balance: toFiniteNumber(summary.current_balance), profit_loss: toFiniteNumber(summary.total_profit_loss) || companies.reduce((total, company) => total + company.profit_loss, 0), companies }];
         }), ...(rawCompanyGroups.length > 0 ? { company_groups } : {}),
         ...(rawGrandTotal ? { grand_total: { license_count: toFiniteNumber(rawGrandTotal.license_count), total_purchase_bill_inr: toFiniteNumber(rawGrandTotal.total_purchase_bill_inr), total_sale_bill_inr: toFiniteNumber(rawGrandTotal.total_sale_bill_inr), total_balance: toFiniteNumber(rawGrandTotal.total_balance), total_profit_loss_inr: toFiniteNumber(rawGrandTotal.total_profit_loss_inr) } } : {}),
+        ...(isRecord(value) && isRecord(value.metrics) ? { metrics: normalizeMetrics(value.metrics) } : {}),
+        ...(isRecord(value) && isRecord(value.pagination) ? { pagination: normalizePagination(value.pagination) } : {}),
+        ...(isRecord(value) && Array.isArray(value.license_ids) ? { license_ids: value.license_ids.map((id) => String(id)) } : {}),
     };
 }

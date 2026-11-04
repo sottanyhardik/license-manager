@@ -20,6 +20,10 @@ from apps.license.models import LicenseDetailsModel, IncentiveLicense
 
 logger = logging.getLogger(__name__)
 
+# Licence-type prefixes accepted in a composite 'TYPE:REF' key (same set as _authorized_license).
+_COMPOSITE_LICENCE_TYPES = frozenset({'DFIA', 'INCENTIVE', 'ALL_INCENTIVE', 'RODTEP', 'ROSTL', 'MEIS'})
+
+
 class LicenseLedgerViewSet(viewsets.GenericViewSet):
     """
     Unified ledger view for both DFIA and Incentive licenses.
@@ -51,7 +55,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
                 raise ValidationError({'license_ids': 'Select a valid number of licences.'})
             licences, seen = [], set()
             for value in normalized:
-                kind, licence = self._authorized_license(request, value)
+                ref, requested_type = self._parse_licence_ref(value)
+                kind, licence = self._authorized_license(request, ref, requested_type)
                 if kind != 'DFIA': raise ValidationError({'license_ids': 'Only DFIA licences are supported.'})
                 if licence.pk not in seen: licences.append(licence); seen.add(licence.pk)
             idem = (request.headers.get('Idempotency-Key') or request.data.get('idempotency_key') or '').strip()[:255]
@@ -200,7 +205,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         resolved = []
         resolved_primary_keys = set()
         for license_id in normalized_ids:
-            found_type, license_obj = self._authorized_license(request, str(license_id))
+            ref, requested_type = self._parse_licence_ref(license_id)
+            found_type, license_obj = self._authorized_license(request, ref, requested_type)
             if found_type != 'DFIA':
                 raise ValidationError({'license_ids': 'Package generation currently supports DFIA licences only.'})
             # A primary key and licence number can identify the same row.  It
@@ -470,6 +476,24 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         """Preserve the router's established per-license endpoint."""
         return self.ledger_detail(request, pk=pk)
 
+    @staticmethod
+    def _parse_licence_ref(value):
+        """Split a composite 'TYPE:REF' licence key, or return a bare reference.
+
+        A composite key pins the licence type, so a DFIA id can never resolve to an
+        incentive licence that shares its numeric primary key. Bare references keep
+        the established AUTO lookup for existing clients.
+        """
+        text = str(value).strip()
+        if ':' in text:
+            licence_type, ref = text.split(':', 1)
+            prefix = licence_type.strip().upper()
+            # Split only on a known licence-type prefix. A licence number that merely
+            # contains a colon (e.g. '0310:123') stays a bare reference.
+            if prefix in _COMPOSITE_LICENCE_TYPES and ref.strip():
+                return ref.strip(), prefix
+        return text, 'AUTO'
+
     def _authorized_license(self, request, license_ref, license_type='AUTO'):
         """Resolve a license for an already-authorized ledger user."""
         from rest_framework.exceptions import APIException, ValidationError
@@ -562,6 +586,8 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         Get canonical summary statistics for every authorized ledger licence.
         """
         from apps.license.services.license_ledger_export import build_license_ledger_data
+        # Contract is frozen to {dfia, incentive}; summary-card metrics are served by
+        # `license-wise` (same filtered collection, one build per filter change).
         return Response(build_license_ledger_data(
             request.query_params,
         )['summary'])
@@ -616,10 +642,15 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         The collection is role-authorized and accepts the public ledger filters.
         """
         from apps.license.services.license_ledger_export import build_license_ledger_data
-        collection = build_license_ledger_data(
-            request.query_params,
+        from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+        collection = build_license_ledger_data(request.query_params, include_metrics=True)
+        datasets, pagination = self._paginate_collection(request, collection['licenses'])
+        # Paginated mode: company subtotals describe the rows on this page, so the
+        # table adds up. Unpaginated mode keeps the full collection's hierarchy.
+        company_groups = (
+            CanonicalLedgerService.build_collection_company_groups(datasets)
+            if pagination['paginated'] else collection['company_groups']
         )
-        datasets = collection['licenses']
         return Response({'licenses': [{
             'license_id': data['license_id'],
             'license_number': data['license_number'],
@@ -636,9 +667,48 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
         } for data in datasets],
             # Canonical reporting hierarchy. The UI consumes this verbatim;
             # the flat license-wise shape remains for detail compatibility.
-            'company_groups': collection['company_groups'],
+            # Grand total, metrics and `license_ids` always describe the FULL filtered
+            # collection; `licenses` and (when paginated) `company_groups` are the page.
+            'company_groups': company_groups,
             'grand_total': collection['grand_total'],
+            'metrics': collection['metrics'],
+            # Composite keys 'TYPE:ID' so DFIA and incentive rows can never be confused.
+            'license_ids': [f"{row['license_type']}:{row['license_id']}" for row in collection['licenses']],
+            # Same block as GET summary/, computed from this request's collection so the
+            # client needs one request per filter change instead of two.
+            'summary': collection['summary'],
+            'pagination': pagination,
         })
+
+    @staticmethod
+    def _paginate_collection(request, datasets):
+        """Optional server-side pagination of the licence rows.
+
+        Without ``page``/``page_size`` the full collection is returned, exactly as
+        before.  Exports never call this, so they always receive complete data.
+        """
+        from math import ceil
+        from rest_framework.exceptions import ValidationError
+
+        raw_page = request.query_params.get('page')
+        raw_size = request.query_params.get('page_size')
+        total = len(datasets)
+        if raw_page is None and raw_size is None:
+            return datasets, {'count': total, 'page': 1, 'page_size': total, 'total_pages': 1,
+                              'has_next': False, 'paginated': False}
+        try:
+            page = int(raw_page or 1)
+            size = int(raw_size or 50)
+        except ValueError:
+            raise ValidationError({'page': 'page and page_size must be whole numbers.'})
+        if page < 1 or not 1 <= size <= 200:
+            raise ValidationError({'page': 'page must be at least 1 and page_size between 1 and 200.'})
+        start = (page - 1) * size
+        return datasets[start:start + size], {
+            'count': total, 'page': page, 'page_size': size,
+            'total_pages': max(1, ceil(total / size)), 'has_next': start + size < total,
+            'paginated': True,
+        }
 
     @action(detail=False, methods=['get'], url_path='export')
     def export(self, request):

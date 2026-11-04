@@ -200,6 +200,11 @@ export interface PlanningEditorProps {
     licenseId: string | number;
     licenseNumber: string;
     balanceCif?: number;
+    /**
+     * The licence's canonical available CIF from the balance engine. When given, it replaces the stored
+     * balance cache on load, so Planning shows the same balance as the rest of the licence workspace.
+     */
+    canonicalBalanceCif?: number | null;
     canWrite: boolean;
     /** Called after every successful per-row save so the parent can refresh its data. */
     onSaved?: () => void;
@@ -509,7 +514,7 @@ function InlineEditor({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PlanningEditor({
-    licenseId, licenseNumber: _licenseNumber, balanceCif = 0, canWrite, onSaved,
+    licenseId, licenseNumber: _licenseNumber, balanceCif = 0, canonicalBalanceCif = null, canWrite, onSaved,
 }: PlanningEditorProps) {
     const [loading, setLoading]           = useState(false);
     const [isPlanning, setIsPlanning]     = useState(false);
@@ -716,7 +721,9 @@ export default function PlanningEditor({
 
             setGroups(built);
             setSavedGroups(cloneGroups(built));
-            setPoolBalance(Number(license?.balance_cif ?? balanceCif) || 0);
+            // Canonical Available CIF is the only planning balance. A missing canonical value
+            // fails closed to zero; the legacy balance_cif is never substituted.
+            setPoolBalance(canonicalBalanceCif != null ? Number(canonicalBalanceCif) : 0);
             const exportItems = Array.isArray(license?.export_license) ? license.export_license : [];
             const totalCif = exportItems.reduce(
                 (sum: number, item: { cif_fc?: string | number | null }) => sum + Number(item.cif_fc ?? 0),
@@ -726,7 +733,7 @@ export default function PlanningEditor({
             setEditingGroupId(null);
         } catch { toast.error("Failed to load plan data"); }
         finally { setLoading(false); }
-    }, [licenseId, balanceCif]);
+    }, [licenseId, balanceCif, canonicalBalanceCif]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -983,7 +990,7 @@ export default function PlanningEditor({
                 <SummaryCard label="Actual BOE CIF" value={fmtUsd(operational?.actual_boe_cif ?? 0)} variant="muted" />
                 <SummaryCard label="Actual Allotment CIF" value={fmtUsd(operational?.actual_allotment_cif ?? 0)} variant="muted" />
                 <SummaryCard label="Total Actual Used CIF" value={fmtUsd(operational?.total_actual_cif ?? 0)} variant="muted" />
-                <SummaryCard label="Actual Balance CIF" value={fmtUsd(operational?.actual_balance_cif ?? 0)} variant="success" tooltip="Licence Total CIF minus actual BOE and allotment CIF. This is the CIF available before new planning." />
+                <SummaryCard label="Actual Balance CIF" value={fmtUsd(operational?.actual_balance_cif ?? 0)} variant="success" tooltip="The licence's canonical available CIF: the balance before new planning. BOE, allotment and sale utilisation are already deducted." />
                 <SummaryCard label="New Planned CIF" value={fmtUsd(operational?.new_planned_cif ?? totals.effectiveCif)} variant="primary" />
                 <SummaryCard label="Total Accounted CIF" value={fmtUsd(operational?.total_accounted_cif ?? 0)} variant="primary" />
                 <SummaryCard label="Final Balance CIF" value={fmtUsd(operational?.final_balance_cif ?? operational?.balance_cif ?? 0)} variant="success" />

@@ -17,7 +17,8 @@ describe("BalanceAmount under licence-level CIF control", () => {
     const { container } = render(<BalanceAmount block={licenceControlledItem} field="available" kind="cif" />);
 
     expect(screen.getByText("-59,388.22")).toBeInTheDocument();
-    expect(screen.getByText("Licence-level CIF control")).toBeInTheDocument();
+    // The label is the row's CIF Control column, not part of the figure.
+    expect(screen.queryByText("Licence-level CIF control")).not.toBeInTheDocument();
     expect(screen.queryByText("Over-utilised")).not.toBeInTheDocument();
     expect(container.querySelector(".text-destructive")).toBeNull();
   });
@@ -36,11 +37,6 @@ describe("BalanceAmount under licence-level CIF control", () => {
     expect(screen.queryByText("Over-utilised")).not.toBeInTheDocument();
   });
 
-  it("keeps the label off the non-available columns", () => {
-    render(<BalanceAmount block={licenceControlledItem} field="invoiced" kind="cif" />);
-
-    expect(screen.queryByText("Licence-level CIF control")).not.toBeInTheDocument();
-  });
 });
 
 describe("status labels for licence-level CIF control", () => {

@@ -384,6 +384,15 @@ class SionPlanningExecutionService:
         live_balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
             [row.pk for row in licenses]
         )
+        # The non-negative budget above is unchanged.  The signed balance is
+        # read separately so an over-utilised licence (negative raw CIF) is blocked
+        # explicitly instead of looking identical to a licence with zero CIF left.
+        raw_components = LicenseBalanceCalculator.calculate_financial_components_for_licenses(
+            [row.pk for row in licenses]
+        )
+        for row in licenses:
+            component = raw_components.get(row.pk) or {}
+            row._raw_financial_balance = component.get("raw", live_balances.get(row.pk, Decimal("0")))
         # The live financial balance is the absolute planning budget.  History
         # reconciliation provides a second safety cap, but must never replace
         # the currently available CIF: a zero live balance cannot generate a
@@ -1595,28 +1604,32 @@ class SionPlanningExecutionService:
                 # license balance is an independent absolute cap, so use the
                 # lower value.  This makes zero Actual Balance CIF fail closed
                 # even for Force All / New Only runs.
-                from apps.license.models import LicenseExportItemModel
-                opening_operational_cif = sum((
-                    cls._decimal(value) for value in LicenseExportItemModel.objects.filter(
-                        license=license_obj, norm_class=sion,
-                    ).values_list("cif_fc", flat=True)
-                ), Decimal("0"))
-                # Export-manifest CIF is a gross entitlement.  Historical
-                # BOE/unlinked-allotment CIF is authoritative and consumes it
-                # exactly once before the new-plan waterfall begins.
-                from apps.license.services.planning_usage_reconciliation import aggregate_license_usage
-                historical_usage = aggregate_license_usage(license_obj.pk)
-                actual_debited_cif = sum((
-                    bucket["boe_used_cif"] + bucket["unlinked_allotment_cif"]
-                    for bucket in historical_usage["mapped"].values()
-                ), Decimal("0")) + sum((
-                    row["cif_fc"] for row in historical_usage["unmapped_usage"]
-                ), Decimal("0"))
-                reconciled_cif_ceiling = max(opening_operational_cif - actual_debited_cif, Decimal("0"))
-                new_plan_cif_ceiling = min(
-                    effective_balance_cif,
-                    reconciled_cif_ceiling,
-                )
+                # Single authoritative planning budget (planning_financial_budget):
+                # Original = export-manifest CIF for this SION norm; utilisation = canonical
+                # BOE + outstanding allotment + billed-without-BOE, attributed conservatively.
+                # Neither the legacy balance nor import-item CIF is an input.
+                from apps.license.services.planning_financial_budget import planning_budget_for_licence_norm
+                norm_budget = planning_budget_for_licence_norm(license_obj.pk, sion.pk)
+                if norm_budget.status is not None:
+                    # Fail closed and explicitly: no lines are generated and nothing is
+                    # written for this licence, so an existing plan is not replaced.
+                    results.append({
+                        "license_id": license_obj.pk,
+                        "license_number": license_obj.license_number,
+                        "lines": [],
+                        "status": norm_budget.status,
+                        "reason": norm_budget.reason,
+                        "over_utilised_cif": norm_budget.over_utilised_cif,
+                        "opening_operational_cif": norm_budget.export_cif,
+                        "attributed_cif": norm_budget.attributed_cif,
+                        "unattributed_utilisation_cif": norm_budget.unattributed_utilisation_cif,
+                        "waterfall_trace": [],
+                        "budget_trace": [list(item) for item in norm_budget.trace],
+                    })
+                    continue
+                new_plan_cif_ceiling = norm_budget.ceiling
+                opening_operational_cif = norm_budget.export_cif
+                actual_debited_cif = norm_budget.attributed_cif + norm_budget.unattributed_utilisation_cif
                 lines, remaining, planning_metadata = cls._compute_license(
                     license_obj, sion, preview=not persist, force_plan=force_plan,
                     operational_balance_cif=new_plan_cif_ceiling,
@@ -1707,18 +1720,31 @@ class SionPlanningExecutionService:
             "already_planned": sum(
                 row.get("status") == "SKIPPED_ALREADY_PLANNED" for row in raw_results
             ),
+            # Blocked licences (financial controls) are excluded from planning, so they
+            # are counted here alongside skipped ones and listed in excluded_licenses.
             "skipped_count": sum(
-                str(row.get("status", "")).startswith("SKIPPED") for row in raw_results
+                str(row.get("status", "")).startswith(("SKIPPED", "BLOCKED")) for row in raw_results
             ),
             "failed_count": 0,
+            # Over-utilised licences are excluded too, and carry the excess so the
+            # operator sees why no plan was produced (never a silent zero budget).
             "excluded_licenses": [
                 {
                     "license_id": row["license_id"],
                     "license_number": row.get("license_number"),
                     "reason": row["status"],
+                    **({"over_utilised_cif": str(row["over_utilised_cif"])}
+                       if row.get("status") == "BLOCKED_OVER_UTILISED" else {}),
                 }
-                for row in raw_results if row.get("status") == "SKIPPED_NO_MATCH"
+                for row in raw_results
+                if row.get("status") in (
+                    "SKIPPED_NO_MATCH", "BLOCKED_OVER_UTILISED", "BLOCKED_NOT_COMPUTED",
+                    "BLOCKED_NO_ENTITLEMENT", "BLOCKED_NO_AVAILABLE_CIF",
+                )
             ],
+            "over_utilised_count": sum(
+                row.get("status") == "BLOCKED_OVER_UTILISED" for row in raw_results
+            ),
             "matched_items": sum(len(row.get("lines", ())) for row in raw_results),
             "summary": {
                 "rules": len(rules),

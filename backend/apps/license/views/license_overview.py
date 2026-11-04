@@ -21,7 +21,6 @@ read-only actions.
 """
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound
 
 from apps.license.views.license_balance_ledger import _json_safe
 
@@ -97,10 +96,11 @@ def add_license_overview_actions(viewset_class):
         from apps.license.services.norm_plan import detect_norm
         from apps.license.services.plan_utilization import plan_utilization_rows
 
+        # Access is governed by the viewset's role permission, like every other
+        # overview action.  The former per-company gate compared against
+        # ``user.company_id``, which the User model does not have, so every
+        # non-superuser received 404 on the Planning tab's data.
         license_obj = self.get_object()
-        user = request.user
-        if not user.is_superuser and license_obj.exporter_id != getattr(user, "company_id", None):
-            raise NotFound("License not found.")
 
         # CRITICAL: Explicitly prefetch the export_license.norm_class relationship
         # so detect_norm() can access it without lazy evaluation

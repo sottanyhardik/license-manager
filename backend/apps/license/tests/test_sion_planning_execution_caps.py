@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from apps.core.models import HSCodeModel, HeadSIONNormsModel, ItemNameModel, SionNormClassModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, SionPlanningRule
+from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, SionPlanningRule
 
 from apps.license.services.sion_planning_execution import (
     ResolvedPlannerConfiguration,
@@ -84,6 +84,8 @@ def test_null_and_false_skip_the_individual_item_snapshot(monkeypatch, override)
     licence = LicenseDetailsModel.objects.create(
         license_number=f"LEGACY-CIF-{head.pk}", individual_item_cif_override=override,
     )
+    # Planning entitlement is the export-manifest CIF for this SION norm.
+    LicenseExportItemModel.objects.create(license=licence, norm_class=sion, cif_fc=Decimal("100000.00"))
     SionPlanningRule.objects.create(
         sion=sion, name="legacy", expression={}, max_unit_price=Decimal("1.00"), priority=1,
     )
@@ -118,6 +120,8 @@ def test_individual_item_snapshot_is_keyed_by_import_row_not_shared_hsn(monkeypa
     licence = LicenseDetailsModel.objects.create(
         license_number=f"SOURCE-PK-CIF-{head.pk}", individual_item_cif_override=True,
     )
+    # Planning entitlement is the export-manifest CIF for this SION norm.
+    LicenseExportItemModel.objects.create(license=licence, norm_class=sion, cif_fc=Decimal("100000.00"))
     SionPlanningRule.objects.create(
         sion=sion, name="source identity", expression={}, max_unit_price=Decimal("1.00"), priority=1,
     )

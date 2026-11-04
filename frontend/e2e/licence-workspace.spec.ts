@@ -310,11 +310,11 @@ test.describe("licence workspace: accordion header and page state", () => {
 
   // ─── Workspace content (behaviour unchanged) ─────────────────────────────
 
-  test("the workspace shows only the four tabs, in order", async ({ page }) => {
+  test("the workspace shows Overview, Planning, Items & Balance, Invoices & Sales and Reconciliation, in order", async ({ page }) => {
     const problems = watchForProblems(page);
     await openLicence(page, LICENCE_NUMBER);
     const tabs = page.getByRole("tablist", { name: "Licence sections" }).getByRole("tab");
-    await expect(tabs).toHaveText(["Overview", "Items & Balance", "Invoices & Sales", "Reconciliation"]);
+    await expect(tabs).toHaveText(["Overview", "Planning", "Items & Balance", "Invoices & Sales", "Reconciliation"]);
     expect(problems).toEqual([]);
   });
 

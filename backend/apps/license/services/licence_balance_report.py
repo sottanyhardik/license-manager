@@ -372,23 +372,53 @@ def _item_inputs(item, data):
             if trade_id not in sales_by_trade:
                 cross.append((rd, trade_id))
 
-    # Allotment residue (D-1 §3.4): full amount if no BOE link, else max(0, amount - BOE matched on item).
-    # Each entry: (allotment_id, allotment_item_id, cif, qty, linked_boe_not_on_this_item).
+    # Each entry: (allotment_id, allotment_item_id, outstanding cif, outstanding qty, linked_boe_not_on_this_item).
     allot_residue = []
     for ai in data["allot_by_item"].get(item.id, []):
-        bids = data["allotment_boes"].get(ai.allotment_id, set())
-        a_cif = Decimal(ai.cif_fc or 0)
-        a_qty = Decimal(ai.qty or 0)
-        if not bids:
-            allot_residue.append((ai.allotment_id, ai.id, a_cif, a_qty, False))
-            continue
-        matched_c = sum((Decimal(r.cif_fc or 0) for r in debit_rows if r.bill_of_entry_id in bids), ZERO)
-        matched_q = sum((Decimal(r.qty or 0) for r in debit_rows if r.bill_of_entry_id in bids), ZERO)
-        # A BOE linked to the allotment that debits a different licence (or none of this item) is a review case.
-        elsewhere = matched_c == ZERO
-        allot_residue.append((ai.allotment_id, ai.id, max(ZERO, a_cif - min(a_cif, matched_c)), max(ZERO, a_qty - min(a_qty, matched_q)), elsewhere))
+        link = allotment_link(ai, data, debit_rows)
+        allot_residue.append((ai.allotment_id, ai.id, link.outstanding_cif, link.outstanding_qty, link.elsewhere))
 
     return sales_by_trade, debit_rows, links, cross, allot_residue
+
+
+@dataclass(frozen=True)
+class AllotmentLink:
+    """How one allotment item is converted to BOEs on its item.
+
+    `boe_linked_*` is the valid, current BOE-linked amount on this item. It is the utilisation.
+    `outstanding_cif` is always zero once a BOE on this item is linked. The difference between the original
+    allotment CIF and the BOE-linked CIF is ignored everywhere: it is not reserved, not outstanding and not a
+    debit. Quantity keeps its own rule, which is unchanged.
+    """
+
+    original_cif: Decimal
+    original_qty: Decimal
+    boe_linked_cif: Decimal
+    boe_linked_qty: Decimal
+    outstanding_cif: Decimal
+    outstanding_qty: Decimal
+    elsewhere: bool
+
+
+def allotment_link(ai, data, debit_rows) -> AllotmentLink:
+    """The one definition of an allotment's BOE conversion, shared by the balance, the drill-down and the workspace."""
+    a_cif = Decimal(ai.cif_fc or 0)
+    a_qty = Decimal(ai.qty or 0)
+    bids = data["allotment_boes"].get(ai.allotment_id, set())
+    if not bids:
+        # No BOE link: the whole allotment is reserved for the customer (D-1 §3.4).
+        return AllotmentLink(a_cif, a_qty, ZERO, ZERO, a_cif, a_qty, False)
+    matched_c = sum((Decimal(r.cif_fc or 0) for r in debit_rows if r.bill_of_entry_id in bids), ZERO)
+    matched_q = sum((Decimal(r.qty or 0) for r in debit_rows if r.bill_of_entry_id in bids), ZERO)
+    # A BOE linked to the allotment that debits a different licence (or none of this item) is a review case.
+    # It keeps the whole allotment outstanding, as before.
+    if matched_c == ZERO:
+        return AllotmentLink(a_cif, a_qty, ZERO, ZERO, a_cif, max(ZERO, a_qty - min(a_qty, matched_q)), True)
+    boe_c = min(a_cif, matched_c)
+    boe_q = min(a_qty, matched_q)
+    # CIF: the difference is ignored, so nothing is outstanding once a BOE on this item is linked.
+    # Quantity: unchanged rule, the quantity not matched by a BOE stays outstanding.
+    return AllotmentLink(a_cif, a_qty, boe_c, boe_q, ZERO, max(ZERO, a_qty - boe_q), False)
 
 
 def _measure_inputs(measure, sales_by_trade, debit_rows, links, allot_residue):
@@ -507,7 +537,20 @@ def _item_report(item, data, license_number, cif_control=CIF_CONTROL_ITEM):
 
     if cross:
         out.flags.append("CROSS_ITEM")
-    if sales_by_trade and allot_residue and any(c or q for _a, _ai, c, q, _e in allot_residue):
+    # An internal transfer consumes nothing, so the item's final external sale decides utilisation. When the item
+    # has an internal transfer but no external sale recorded, that end of the chain is unknown: REVIEW, not RECONCILED.
+    if internal_sales and not sales_by_trade:
+        out.flags.append("INTERNAL_TRANSFER_NO_EXTERNAL_SALE")
+    # An external sale to a group company with no matched purchase: REVIEW, and still counted until resolved.
+    if any(tid in data.get("unmatched_group_sale_ids", set()) for tid in sales_by_trade):
+        out.flags.append("UNMATCHED_INTERNAL_TRANSACTION")
+    # The overlap flag is raised by each measure's own outstanding allotment only. A CIF difference that is
+    # ignored (already BOE-linked) therefore never reaches quantity status, and quantity never depends on CIF.
+    overlap_by_measure = {
+        "cif": bool(sales_by_trade) and any(c for _a, _ai, c, _q, _e in allot_residue),
+        "qty": bool(sales_by_trade) and any(q for _a, _ai, _c, q, _e in allot_residue),
+    }
+    if overlap_by_measure["cif"] or overlap_by_measure["qty"]:
         out.flags.append("ALLOT_AND_SALE_OVERLAP_UNVERIFIED")
     if any(e for _a, _ai, _c, _q, e in allot_residue):
         out.flags.append("ALLOTMENT_LINKED_BOE_NOT_ON_ITEM")
@@ -518,10 +561,11 @@ def _item_report(item, data, license_number, cif_control=CIF_CONTROL_ITEM):
         original = original_cif if measure == "cif" else original_qty
         try:
             sales, boes, link_objs, allot = _measure_inputs(measure, sales_by_trade, debit_rows, links, allot_residue)
+            measure_flags = [f for f in out.flags if f != "ALLOT_AND_SALE_OVERLAP_UNVERIFIED" or overlap_by_measure[measure]]
             result = build_item_balance(
                 measure=measure, original=original, sales=sales, boes=boes, links=link_objs,
                 outstanding_allotment=allot, unit=item.unit if measure == "qty" else None,
-                extra_flags=list(out.flags),
+                extra_flags=measure_flags,
             )
             payload = {
                 "original": _qty(result.original) if measure == "qty" else _money(result.original),
@@ -645,6 +689,24 @@ def _apply_licence_cif_control(report: LicenceReport, unverified: set, alternati
     report.summary_cif["is_over_utilised"] = over
 
 
+def _unmatched_group_sale_ids(data) -> set:
+    """External sales between two registered group companies that have no matched purchase.
+
+    They stay in utilisation for now (nothing is classified silently) and are flagged for review.
+    Matching uses the persisted COPIED pair or the same invoice, parties, date and lines. See
+    apps.trade.services.internal_transfers.
+    """
+    from apps.trade.services.internal_transfers import is_group_transfer, match_counterpart_purchase
+
+    internal = data.get("internal_trade_ids", set())
+    trades = {}
+    for lines in data["lines_by_item"].values():
+        for line in lines:
+            if line.trade_id not in internal and line.trade_id not in trades and is_group_transfer(line.trade):
+                trades[line.trade_id] = line.trade
+    return {tid for tid, trade in trades.items() if match_counterpart_purchase(trade) is None}
+
+
 def _index(data):
     """Group loaded rows by item so per-item classification is a dictionary lookup."""
     data["lines_by_item"] = defaultdict(list)
@@ -671,6 +733,7 @@ def build_licence_balance_reports(license_ids, *, include_legacy: bool = True, i
         # Evidence runs only: treat these trades as internal without writing a classification record.
         data["internal_trade_ids"] = set(internal_trade_ids)
     _index(data)
+    data["unmatched_group_sale_ids"] = _unmatched_group_sale_ids(data)
 
     items_by_licence = defaultdict(list)
     for item in data["items"]:
@@ -703,6 +766,14 @@ def build_licence_balance_reports(license_ids, *, include_legacy: bool = True, i
                 "available": _money(total.available), "is_over_utilised": total.is_over_utilised,
                 "status": total.status,
             }
+        elif not report.items:
+            # No SION items: no authorised item CIF, so nothing is utilised. Stated as an exception, not left blank.
+            report.summary_cif = {
+                "original": _money(ZERO), "debited": _money(ZERO), "allotted": _money(ZERO), "invoiced": _money(ZERO),
+                "invoiced_boe_covered": _money(ZERO), "available": _money(ZERO), "is_over_utilised": False,
+                "status": REVIEW_REQUIRED,
+            }
+            report.flags.append("NO_SION_ITEMS")
         else:
             report.summary_cif = {"status": OVER_ALLOCATED if any(i.status == OVER_ALLOCATED for i in report.items) else REVIEW_REQUIRED}
 
@@ -837,8 +908,24 @@ def available_cif_by_licence(license_ids) -> dict:
 
 def serialise_licence_detail(report: LicenceReport):
     payload = serialise_licence_summary(report)
-    payload["items"] = [serialise_item(i) for i in report.items]
+    payload["items"] = [_with_cif_display(serialise_item(i), report) for i in report.items]
     return payload
+
+
+def _with_cif_display(item_payload: dict, report: LicenceReport) -> dict:
+    """Attach the Available CIF each item row displays, decided here so the frontend never chooses a source.
+
+    Licence-level control: every row shows the licence's own available CIF. It is one balance, not an
+    allocation, so it is the same value on every row and must never be summed across rows.
+    Item-level control (Individual Item CIF ON): each row shows its own available CIF.
+    """
+    if report.cif_control == CIF_CONTROL_LICENCE:
+        item_payload["cif_control"] = CIF_CONTROL_LICENCE
+        item_payload["available_cif_display"] = report.summary_cif.get("available")
+    else:
+        item_payload["cif_control"] = CIF_CONTROL_ITEM
+        item_payload["available_cif_display"] = item_payload["cif"].get("available")
+    return item_payload
 
 
 def serialise_item(item: ItemReport, *, include_movements: bool = False):
@@ -971,9 +1058,10 @@ def build_licence_transactions(license_id):
             ai = next(a for a in data["allot_by_item"].get(item.id, []) if a.id == ai_id)
             cif = Decimal(ai.cif_fc or 0)
             qty = Decimal(ai.qty or 0)
-            covered = cif - residue_c
+            # BOE-linked CIF is the utilisation. The difference from the original is ignored, never outstanding.
+            covered = allotment_link(ai, data, debit_rows).boe_linked_cif
             status = "LINKED BOE ON ANOTHER LICENCE / ITEM (review)" if elsewhere else (
-                "PARTLY CONVERTED TO BOE" if covered > ZERO else "OUTSTANDING")
+                "LINKED TO BOE" if covered > ZERO else "OUTSTANDING")
             if sales_by_trade and residue_c > ZERO:
                 status += "; same item has a sale (overlap unverified)"
             allotments.append({

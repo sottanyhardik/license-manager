@@ -866,3 +866,36 @@ class TestNoLegacyPlannerReferences:
             if any(legacy in name for legacy in self.LEGACY_MODULES)
         )
         assert offenders == [], f"canonical planning must not import legacy planners: {offenders}"
+
+    def test_canonical_module_has_no_dynamic_legacy_references(self):
+        """The AST import check above cannot see a string-built import such as
+        ``import_module("apps.license.services." + "planner_factory")``, which
+        silently survived a deleted engine and broke ``planning-norms`` with a
+        ModuleNotFoundError.  Reject dynamic imports and legacy module names in
+        any non-docstring string literal."""
+        import ast
+        import inspect
+
+        from apps.license.services import canonical_planning_service as mod
+
+        tree = ast.parse(inspect.getsource(mod))
+        docstring_ids = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                body = node.body
+                if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                    docstring_ids.add(id(body[0].value))
+
+        dynamic_calls = [
+            node.lineno for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and getattr(node.func, "id", getattr(node.func, "attr", "")) == "import_module"
+        ]
+        literal_offenders = sorted(
+            node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and id(node) not in docstring_ids
+            and any(legacy in node.value for legacy in self.LEGACY_MODULES)
+        )
+        assert dynamic_calls == [], f"dynamic imports are forbidden (lines {dynamic_calls})"
+        assert literal_offenders == [], f"legacy planner names in code: {literal_offenders}"

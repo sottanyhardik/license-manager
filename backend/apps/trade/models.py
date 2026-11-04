@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
 from django.core.exceptions import ValidationError
-from django.db.models.signals import pre_delete, post_save
+from django.db.models.signals import pre_delete, post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -468,9 +468,13 @@ class LicenseTrade(AuditModel):
     def save(self, *args, **kwargs) -> None:
         if self.invoice_date is None:
             self.invoice_date = timezone.now().date()
-        super().save(*args, **kwargs)
-        # keep totals consistent even if header saved first
-        self.recompute_totals()
+        # Lock order: trade row, then incentive licence rows (taken by post_save).
+        # IncentiveTradeLine.save uses the same order.
+        with transaction.atomic():
+            _lock_trade_row(self.pk)
+            super().save(*args, **kwargs)
+            # keep totals consistent even if header saved first
+            self.recompute_totals()
 
 
 class TradeUtilisationClassification(models.Model):
@@ -678,10 +682,13 @@ class IncentiveTradeLine(models.Model):
         # Auto-calculate amount_inr if not manually set
         if not self.amount_inr or self.amount_inr == 0:
             self.amount_inr = self.compute_amount()
-        super().save(*args, **kwargs)
-        if self.trade_id:
-            # Recompute trade totals
-            self.trade.recompute_totals()
+        # Lock order: trade row, then licence rows (post_save). Same order as LicenseTrade.save.
+        with transaction.atomic():
+            _lock_trade_row(self.trade_id)
+            super().save(*args, **kwargs)
+            if self.trade_id:
+                # Recompute trade totals
+                self.trade.recompute_totals()
 
 
 # -----------------------------------------------------------------------------
@@ -825,21 +832,112 @@ def prevent_single_counterpart_delete(sender, instance, **kwargs):
         raise ValidationError('This trade has a linked counterpart. Use the audited pair-deletion workflow.')
 
 
+def _recalculate_incentive_licences(license_ids):
+    """
+    Recalculate the sold cache for each licence id (ignores None).
+
+    Licences are processed in pk order, so two concurrent recalculations over
+    overlapping licence sets always take their row locks in the same order and
+    cannot deadlock on each other.
+    """
+    from apps.license.models import IncentiveLicense
+
+    ids = {i for i in license_ids if i}
+    if not ids:
+        return
+    for licence in IncentiveLicense.objects.filter(pk__in=ids).order_by('pk'):
+        licence.update_sold_status()
+
+
+def recalculate_incentive_licences_for_trades(trade_ids):
+    """
+    Recalculate every incentive licence that has a line on one of *trade_ids*.
+
+    Used by the trade-link service, which changes ``linked_trade`` with queryset
+    updates. Those updates fire no signals, so the caches must be refreshed here.
+    """
+    ids = [t for t in trade_ids if t]
+    if not ids:
+        return
+    _recalculate_incentive_licences(
+        IncentiveTradeLine.objects.filter(trade_id__in=ids)
+        .values_list('incentive_license_id', flat=True)
+        .distinct()
+    )
+
+
+def _lock_trade_row(trade_id):
+    """Take the trade row lock. Callers take the trade lock before any licence lock."""
+    if trade_id:
+        LicenseTrade.objects.select_for_update().filter(pk=trade_id).only('pk').first()
+
+
+@receiver(pre_delete, sender=LicenseTrade)
+def capture_incentive_licences_affected_by_delete(sender, instance, **kwargs):
+    """
+    Deleting a trade nulls ``linked_trade`` on its partners (SET_NULL). That is a
+    queryset update with no signal, so capture the partners' incentive licences now
+    and recalculate them after the delete.
+    """
+    partner_ids = set(
+        LicenseTrade.objects.filter(linked_trade_id=instance.pk).values_list('pk', flat=True)
+    )
+    if instance.linked_trade_id:
+        partner_ids.add(instance.linked_trade_id)
+    instance._affected_incentive_license_ids = list(
+        IncentiveTradeLine.objects.filter(trade_id__in=partner_ids)
+        .values_list('incentive_license_id', flat=True)
+        .distinct()
+    )
+
+
+@receiver(post_delete, sender=LicenseTrade)
+def recalculate_incentive_licences_after_delete(sender, instance, **kwargs):
+    _recalculate_incentive_licences(getattr(instance, '_affected_incentive_license_ids', []))
+
+
+@receiver(pre_save, sender=IncentiveTradeLine)
+def remember_previous_incentive_licence(sender, instance, **kwargs):
+    """Capture the licence a saved line used to point at, so a move recalculates both."""
+    instance._previous_incentive_license_id = None
+    if instance.pk:
+        instance._previous_incentive_license_id = (
+            IncentiveTradeLine.objects.filter(pk=instance.pk)
+            .values_list('incentive_license_id', flat=True)
+            .first()
+        )
+
+
 @receiver(post_save, sender=IncentiveTradeLine)
-def update_incentive_license_on_trade_line_save(sender, instance, **kwargs):
+def recalculate_incentive_licence_on_trade_line_save(sender, instance, **kwargs):
     """
-    When an IncentiveTradeLine is saved, update the related IncentiveLicense sold status.
-    Only update if this is a SALE trade.
+    Any line save (any direction) recalculates the licence it now points at and
+    the one it pointed at before. The canonical writer applies the SALE rule,
+    so PURCHASE lines leave the status unchanged.
     """
-    if instance.incentive_license and instance.trade.direction == 'SALE':
-        instance.incentive_license.update_sold_status()
+    _recalculate_incentive_licences([
+        instance.incentive_license_id,
+        getattr(instance, '_previous_incentive_license_id', None),
+    ])
 
 
-@receiver(pre_delete, sender=IncentiveTradeLine)
-def update_incentive_license_on_trade_line_delete(sender, instance, **kwargs):
+@receiver(post_delete, sender=IncentiveTradeLine)
+def recalculate_incentive_licence_on_trade_line_delete(sender, instance, **kwargs):
     """
-    When an IncentiveTradeLine is deleted, update the related IncentiveLicense sold status.
-    Only update if this is a SALE trade.
+    Recalculate after the row is gone. The previous pre_delete hook still
+    counted the deleted line, which left stale sold values (over-counts).
+    post_delete also runs for cascades from a deleted LicenseTrade.
     """
-    if instance.incentive_license and instance.trade.direction == 'SALE':
-        instance.incentive_license.update_sold_status()
+    _recalculate_incentive_licences([instance.incentive_license_id])
+
+
+@receiver(post_save, sender=LicenseTrade)
+def recalculate_incentive_licences_on_trade_save(sender, instance, **kwargs):
+    """A trade edit (e.g. direction change) can flip whether its lines are sales."""
+    if not instance.pk:
+        return
+    _recalculate_incentive_licences(
+        IncentiveTradeLine.objects.filter(trade_id=instance.pk)
+        .values_list('incentive_license_id', flat=True)
+        .distinct()
+    )

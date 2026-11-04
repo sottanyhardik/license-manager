@@ -262,7 +262,10 @@ def test_retained_collection_endpoints_work_without_filter_parameters(authentica
     assert set(summary.json()) == {"dfia", "incentive"}
     assert license_wise.status_code == 200
     payload = license_wise.json()
-    assert set(payload) == {"licenses", "company_groups", "grand_total"}
+    # Established keys must remain. Additive keys (metrics, pagination, license_ids)
+    # are backward-compatible and are allowed.
+    assert {"licenses", "company_groups", "grand_total"} <= set(payload)
+    assert set(payload) <= {"licenses", "company_groups", "grand_total", "metrics", "pagination", "license_ids", "summary"}
     assert isinstance(payload["company_groups"], list)
     assert "total_profit_loss_inr" in payload["grand_total"]
 

@@ -431,7 +431,10 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             for row in plan_utilization_rows(instance)
         ]
         from apps.license.services.planning_tolerances import effective_planning_balance_cif
-        raw_planning_balance = Decimal(str(instance.get_balance_cif or 0))
+        # The licence's canonical available CIF is the one balance every planning figure starts from.
+        from apps.license.services.licence_balance_report import build_licence_balance_reports
+        canonical_available = build_licence_balance_reports([instance.pk], include_legacy=False)[instance.pk].summary_cif.get('available')
+        raw_planning_balance = Decimal(canonical_available) if canonical_available is not None else Decimal('0')
         effective_planning_balance = effective_planning_balance_cif(raw_planning_balance)
         data['planning_balance_cif'] = {
             'raw_balance_cif': str(raw_planning_balance),
@@ -468,18 +471,21 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             for plan_id, planned_cif in plan_rows
         ), Decimal('0'))
         accounted_cif = actual_boe_cif + actual_allotment_cif + new_plan_cif
-        actual_balance_cif = max(gross_cif - actual_boe_cif - actual_allotment_cif, Decimal('0'))
+        # Canonical available CIF already deducts BOE and allotment utilisation, so the planning balance is the
+        # canonical figure less only the new planned CIF. Subtracting BOE and allotment again would double count.
+        actual_balance_cif = raw_planning_balance
+        final_balance_cif = raw_planning_balance - new_plan_cif
         data['operational_reconciliation'] = {
-            'cif_balance_basis': 'GROSS_EXPORT_ENTITLEMENT', 'license_total_cif': str(gross_cif),
+            'cif_balance_basis': 'CANONICAL_AVAILABLE', 'license_total_cif': str(gross_cif),
             'actual_boe_cif': str(actual_boe_cif), 'actual_allotment_cif': str(actual_allotment_cif),
             'total_actual_cif': str(actual_boe_cif + actual_allotment_cif),
             # Opening pool for new planning; it deliberately excludes all
             # future/planned rows so actual CIF is never deducted twice.
             'actual_balance_cif': str(actual_balance_cif),
             'new_reconciled_planned_cif': str(new_plan_cif), 'new_planned_cif': str(new_plan_cif),
-            'total_accounted_cif': str(accounted_cif), 'final_balance_cif': str(max(gross_cif-accounted_cif, Decimal('0'))),
-            'balance_cif': str(max(gross_cif-accounted_cif, Decimal('0'))),
-            'overdrawn_cif': str(max(accounted_cif-gross_cif, Decimal('0'))),
+            'total_accounted_cif': str(accounted_cif), 'final_balance_cif': str(final_balance_cif),
+            'balance_cif': str(final_balance_cif),
+            'overdrawn_cif': str(max(-final_balance_cif, Decimal('0'))),
             'aggregation_level': 'leaf LicenseItemPlan rows; parent groups are not added again',
         }
 

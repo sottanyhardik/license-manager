@@ -74,8 +74,8 @@ describe("useLicenceWorkspaceState", () => {
 });
 
 describe("asWorkspaceTab", () => {
-  it("keeps the four tabs and falls back to Overview for anything else", () => {
-    expect(WORKSPACE_TABS).toEqual(["overview", "items", "invoices", "reconciliation"]);
+  it("keeps the five tabs, Planning after Overview, and falls back to Overview for anything else", () => {
+    expect(WORKSPACE_TABS).toEqual(["overview", "planning", "items", "invoices", "reconciliation"]);
     for (const tab of WORKSPACE_TABS) expect(asWorkspaceTab(tab)).toBe(tab);
     expect(asWorkspaceTab("boes")).toBe("overview");
     expect(asWorkspaceTab("ledger")).toBe("overview");

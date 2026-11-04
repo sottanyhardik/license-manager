@@ -18,8 +18,8 @@ interface ItemBalanceTableProps {
 /** Each figure group is a quantity column, then a CIF column: quantity always comes first. */
 const GROUPS: { field: AmountField; label: string }[] = [
   { field: "original", label: "Original" },
-  { field: "debited", label: "Used through BOEs (debited)" },
-  { field: "allotted", label: "Reserved for customers (allotted)" },
+  { field: "debited", label: "Used through BOEs" },
+  { field: "allotted", label: "Reserved for Customers" },
   { field: "invoiced", label: "Invoiced" },
   { field: "available", label: "Available" },
 ];
@@ -31,8 +31,8 @@ const DRILLABLE: Partial<Record<AmountField, { group: DrilldownGroup; name: stri
   invoiced: { group: "invoices", name: "invoice details" },
 };
 
-/** Expand, SR, Item, HS code, Unit, five CIF/quantity pairs, Status. */
-const COLUMN_COUNT = 1 + 4 + GROUPS.length * 2 + 1;
+/** SR, Item, HS Code, Unit, five quantity and CIF pairs, CIF Control, Status. The expand control sits in the SR cell. */
+const COLUMN_COUNT = 4 + GROUPS.length * 2 + 2;
 const CELL = "px-3 py-1.5 align-top";
 const GROUP_CELL = "px-3 py-1.5 text-right align-top";
 
@@ -51,6 +51,30 @@ function hasFigure(block: BalanceBlock | undefined, field: AmountField, kind: Dr
   if (kind === "qty" && (unitUnverified || block?.status === "UNIT_UNVERIFIED")) return false;
   const value = block?.[field];
   return value !== null && value !== undefined && value.trim() !== "";
+}
+
+/**
+ * The Available CIF a row displays. Under licence-level control it is the licence's own balance, which the
+ * backend sends to every row. It is one figure and is never summed. Under item-level control it is the item's own.
+ */
+function displayedAvailableCif(item: ItemRow): BalanceBlock {
+  if (item.cif_control !== "LICENCE" || item.available_cif_display === undefined) return item.cif;
+  return { status: item.cif.status, available: item.available_cif_display, is_over_utilised: false };
+}
+
+function CifControlCell({ item }: { item: ItemRow }) {
+  if (item.cif_control === "LICENCE") {
+    return (
+      <span
+        className="whitespace-nowrap text-xs"
+        title="The licence's available CIF is shown on every row. Item CIF is attribution, not a limit."
+      >
+        Licence-level CIF control
+      </span>
+    );
+  }
+  if (item.cif_control === "ITEM") return <span className="whitespace-nowrap text-xs">Individual item CIF</span>;
+  return <span className="text-muted-foreground">{NOT_COMPUTED}</span>;
 }
 
 function UnitCell({ item }: { item: ItemRow }) {
@@ -101,18 +125,16 @@ export default function ItemBalanceTable({ licenceId, items, onOpenLedger }: Ite
           <caption className="sr-only">Item balances for this licence. CIF is in USD.</caption>
           <thead className="bg-muted/50 text-xs text-muted-foreground">
             <tr>
-              <th scope="col" rowSpan={2} className="w-10 px-2 py-2">
-                <span className="sr-only">Sources</span>
-              </th>
               <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">SR</th>
               <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">Item</th>
-              <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">HS code</th>
+              <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">HS Code</th>
               <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">Unit</th>
               {GROUPS.map((group) => (
                 <th key={group.field} scope="colgroup" colSpan={2} className="px-3 py-2 text-center font-medium">
                   {group.label}
                 </th>
               ))}
+              <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">CIF Control</th>
               <th scope="col" rowSpan={2} className="px-3 py-2 text-left font-medium">Status</th>
             </tr>
             <tr>
@@ -131,19 +153,21 @@ export default function ItemBalanceTable({ licenceId, items, onOpenLedger }: Ite
               return (
                 <Fragment key={item.item_id}>
                   <tr className="border-t transition-colors hover:bg-muted/30">
-                    <td className="px-2 py-2 align-top">
-                      <button
-                        type="button"
-                        aria-expanded={isOpen}
-                        aria-controls={detailsId(item.item_id)}
-                        aria-label={`${isOpen ? "Hide" : "Show"} sources for SR ${item.sr}`}
-                        onClick={() => toggle(item.item_id)}
-                        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer"
-                      >
-                        {isOpen ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
-                      </button>
+                    <td className={cn(CELL, "whitespace-nowrap font-medium")}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          aria-expanded={isOpen}
+                          aria-controls={detailsId(item.item_id)}
+                          aria-label={`${isOpen ? "Hide" : "Show"} sources for SR ${item.sr}`}
+                          onClick={() => toggle(item.item_id)}
+                          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 cursor-pointer"
+                        >
+                          {isOpen ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
+                        </button>
+                        {item.sr}
+                      </span>
                     </td>
-                    <td className={cn(CELL, "whitespace-nowrap font-medium")}>{item.sr}</td>
                     <td className={CELL}>
                       {/* Truncated to one line. The full text stays in the DOM, so the tooltip and screen readers have it. */}
                       <span className="block max-w-[18rem] truncate" title={item.description}>
@@ -179,6 +203,7 @@ export default function ItemBalanceTable({ licenceId, items, onOpenLedger }: Ite
                               item={item}
                               field={group.field}
                               kind="cif"
+                              block={group.field === "available" ? displayedAvailableCif(item) : undefined}
                               drillable={drillable && hasFigure(item.cif, group.field, "cif", unitUnverified) ? drillable : undefined}
                               onOpen={(drillGroup, opener) => setDrill({ itemId: item.item_id, group: drillGroup, opener })}
                             />
@@ -186,6 +211,9 @@ export default function ItemBalanceTable({ licenceId, items, onOpenLedger }: Ite
                         </Fragment>
                       );
                     })}
+                    <td className={CELL}>
+                      <CifControlCell item={item} />
+                    </td>
                     <td className={CELL}>
                       <StatusReasonsButton status={item.status} flags={item.flags} subject={`SR ${item.sr}`} />
                     </td>
@@ -225,13 +253,15 @@ interface FigureCellProps {
   item: ItemRow;
   field: AmountField;
   kind: DrilldownMeasure;
+  /** The figure to show. Defaults to the item's own block for this measure. */
+  block?: BalanceBlock;
   drillable: { group: DrilldownGroup; name: string } | undefined;
   onOpen: (group: DrilldownGroup, opener: HTMLElement) => void;
 }
 
 /** A figure. A debited, allotted or invoiced figure with a value is a button that opens its drawer. */
-function FigureCell({ item, field, kind, drillable, onOpen }: FigureCellProps) {
-  const block = kind === "cif" ? item.cif : item.qty;
+function FigureCell({ item, field, kind, block: blockOverride, drillable, onOpen }: FigureCellProps) {
+  const block = blockOverride ?? (kind === "cif" ? item.cif : item.qty);
   const unitUnverified = item.unit_status === "UNIT_UNVERIFIED";
   const amount = (
     <BalanceAmount

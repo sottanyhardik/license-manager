@@ -42,6 +42,7 @@ for model_name, model in app.models.items():
                                                                                'admin_list_display_links') else ()
     model_admin.list_editable = model.admin_list_editable if hasattr(model, 'admin_list_editable') else ()
     model_admin.search_fields = model.admin_search_fields if hasattr(model, 'admin_search_fields') else ()
+    model_admin.readonly_fields = getattr(model, 'admin_readonly_fields', ())
     model_admin.list_filter = model.list_filter if hasattr(model, 'list_filter') else ()
     try:
         admin.site.register(model, model_admin)

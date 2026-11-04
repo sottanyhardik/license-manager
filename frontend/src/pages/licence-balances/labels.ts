@@ -42,6 +42,10 @@ const FLAG_EXPLANATIONS: Record<string, string> = {
     "Over-linked excess whose sale has both previous-owner and current-owner BOEs; the excess owner is not determined — review",
   OVER_UTILISED: "Available is negative",
   LEGACY_BALANCE_DIFFERS: "Legacy balance engine disagrees with the reconciled figure — review",
+  UNMATCHED_INTERNAL_TRANSACTION:
+    "A sale to another group company has no matching purchase record, so it is not yet classed as internal. It still counts until reviewed",
+  INTERNAL_TRANSFER_NO_EXTERNAL_SALE:
+    "An internal transfer is recorded on this item, but no final external sale is recorded here — review where the goods went",
   LICENCE_CIF_DEPENDS_ON_UNVERIFIED_SALE:
     "The licence CIF result depends on whether an unverified sale is external or internal — review",
 };

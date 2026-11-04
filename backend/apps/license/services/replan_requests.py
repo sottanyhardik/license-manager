@@ -29,16 +29,31 @@ def _publish_after_commit(request_id: int) -> None:
         logger.exception("Could not publish durable replan request %s; recovery will retry", request_id)
 
 
-def _coalesce_locked(*, license_obj, reason: str, scope: str, sion_id: int | None, source_model: str = "", source_pk: str = ""):
+def _coalesce_locked(*, license_obj, reason: str, scope: str, sion_id: int | None, source_model: str = "", source_pk: str = "", batch_id: str = "", initiated_by=None):
     active = LicenseReplanRequest.objects.filter(license_id=license_obj.pk, status__in=_ACTIVE).first()
     if active:
         active.source_revision = license_obj.planning_source_revision
         active.reason = reason
         active.source_model = source_model or active.source_model
         active.source_pk = str(source_pk or active.source_pk)
-        active.scope, active.sion_id = scope, sion_id
+        # The coalesced row is the only pending work item for this licence, so
+        # it must cover every request merged into it.  Overwriting its scope
+        # silently dropped the earlier SION's work (A pending, B requested ->
+        # only B ran).  A licence-wide replan is a superset of any SION scope,
+        # so widen to LICENSE whenever the requested work is not identical.
+        if active.scope == LicenseReplanRequest.SCOPE_SION and (
+            scope != LicenseReplanRequest.SCOPE_SION or sion_id != active.sion_id
+        ):
+            active.scope, active.sion_id = LicenseReplanRequest.SCOPE_LICENSE, None
+        elif active.scope == LicenseReplanRequest.SCOPE_LICENSE:
+            pass
+        else:
+            active.scope, active.sion_id = scope, sion_id
+        if batch_id:
+            active.batch_id = batch_id
+            active.initiated_by = initiated_by
         active.trigger_count = F("trigger_count") + 1
-        active.save(update_fields=["source_revision", "reason", "source_model", "source_pk", "scope", "sion_id", "trigger_count"])
+        active.save(update_fields=["source_revision", "reason", "source_model", "source_pk", "scope", "sion_id", "trigger_count", "batch_id", "initiated_by"])
         active.refresh_from_db(fields=["trigger_count", "source_revision"])
         return active, False
     try:
@@ -53,6 +68,7 @@ def _coalesce_locked(*, license_obj, reason: str, scope: str, sion_id: int | Non
             request = LicenseReplanRequest.objects.create(
                 license_id=license_obj.pk, reason=reason, source_revision=license_obj.planning_source_revision,
                 source_model=source_model, source_pk=str(source_pk or ""), scope=scope, sion_id=sion_id,
+                batch_id=batch_id or "", initiated_by=initiated_by,
                 status=LicenseReplanRequest.STATUS_PENDING,
             )
         return request, True
@@ -60,7 +76,7 @@ def _coalesce_locked(*, license_obj, reason: str, scope: str, sion_id: int | Non
         return LicenseReplanRequest.objects.get(license_id=license_obj.pk, status__in=_ACTIVE), False
 
 
-def request_license_replan(*, license_id: int, reason: str, scope: str = LicenseReplanRequest.SCOPE_LICENSE, sion_id: int | None = None, source_model: str = "", source_pk: str | int | None = None, dispatch: bool = True) -> LicenseReplanRequest:
+def request_license_replan(*, license_id: int, reason: str, scope: str = LicenseReplanRequest.SCOPE_LICENSE, sion_id: int | None = None, source_model: str = "", source_pk: str | int | None = None, dispatch: bool = True, batch_id: str = "", initiated_by=None) -> LicenseReplanRequest:
     """Create/coalesce a request without changing a source generation.
 
     ``dispatch=False`` is for the explicit HTTP Auto Plan action, which runs
@@ -75,7 +91,7 @@ def request_license_replan(*, license_id: int, reason: str, scope: str = License
         raise ValueError("SION scope requires sion_id; LICENSE scope must not include it")
     with transaction.atomic():
         license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=license_id)
-        request, created = _coalesce_locked(license_obj=license_obj, reason=reason, scope=scope, sion_id=sion_id, source_model=source_model, source_pk=str(source_pk or ""))
+        request, created = _coalesce_locked(license_obj=license_obj, reason=reason, scope=scope, sion_id=sion_id, source_model=source_model, source_pk=str(source_pk or ""), batch_id=batch_id, initiated_by=initiated_by)
         if created and dispatch:
             transaction.on_commit(lambda request_id=request.pk: _publish_after_commit(request_id))
         return request

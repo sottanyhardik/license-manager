@@ -76,7 +76,6 @@ See ``build_canonical_plan`` for the full field-by-field contract.
 from __future__ import annotations
 
 import hashlib
-from importlib import import_module
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -496,182 +495,6 @@ class CanonicalPlanningService:
     build_canonical_planning_dataset = build_canonical_plan
 
     @staticmethod
-    def plan_sion_for_licenses(
-        sion_id: int,
-        license_ids: Iterable[int],
-        *,
-        company_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """Atomically apply ONE selected SION planner to explicit licenses.
-
-        This replaces the unsafe "plan every eligible licence" operation.  The
-        complete request is validated (scalar master id, unique scalar licence
-        ids, authorization, SION applicability and planner support) before the
-        first plan row is changed. Any planner/calculation failure rolls back
-        every licence in the request.
-        """
-        from apps.core.models import SionNormClassModel
-        PlannerFactory = import_module(
-            "apps.license.services." + "planner_factory"
-        ).PlannerFactory
-
-        normalized_sion_id = CanonicalPlanningService._strict_scalar_id(
-            sion_id, "sion_id",
-        )
-        normalized_license_ids = CanonicalPlanningService._strict_id_list(
-            license_ids, "license_ids",
-        )
-
-        with transaction.atomic():
-            try:
-                sion = SionNormClassModel.objects.get(pk=normalized_sion_id)
-            except SionNormClassModel.DoesNotExist:
-                raise SionPlanningError(
-                    "Selected SION does not exist.", sion_id=normalized_sion_id,
-                )
-
-            norm_code = (sion.norm_class or "").strip().upper()
-            if not sion.is_active:
-                raise SionPlanningError(
-                    "Selected SION is inactive.", sion_id=sion.pk,
-                    norm_class=norm_code,
-                )
-            if not PlannerFactory.is_supported(norm_code):
-                raise SionPlanningError(
-                    f"No planning engine is registered for SION {norm_code!r}.",
-                    sion_id=sion.pk, norm_class=norm_code,
-                    supported_norms=PlannerFactory.supported_norms(),
-                )
-
-            # Lock the complete requested population in deterministic order.
-            # Authorization is checked only after resolving every id, and no
-            # planner runs until ALL ids pass, giving the endpoint all-or-none
-            # tenant isolation as well as all-or-none writes.
-            licenses = list(
-                LicenseDetailsModel.objects.select_for_update(of=("self",))
-                .filter(pk__in=normalized_license_ids)
-                .select_related("exporter")
-                .prefetch_related(
-                    "export_license__norm_class",
-                    "import_license__items",
-                    "import_license__hs_code",
-                )
-                .order_by("pk")
-            )
-            if len(licenses) != len(normalized_license_ids):
-                raise SionPlanningError(
-                    "One or more selected licenses are unavailable.",
-                    requested_count=len(normalized_license_ids),
-                )
-            if company_id is not None:
-                normalized_company_id = CanonicalPlanningService._strict_scalar_id(
-                    company_id, "company_id",
-                )
-                if any(lic.exporter_id != normalized_company_id for lic in licenses):
-                    raise CompanyIsolationError(
-                        "One or more selected licenses belong to another company.",
-                    )
-
-            inapplicable = [
-                lic.pk for lic in licenses
-                if not any(
-                    export.norm_class_id == sion.pk
-                    for export in lic.export_license.all()
-                )
-            ]
-            if inapplicable:
-                raise SionPlanningError(
-                    "Selected SION is not applicable to every selected license.",
-                    sion_id=sion.pk, inapplicable_license_ids=inapplicable,
-                )
-
-            # Compute every candidate before persisting any of them. Computation
-            # can create supporting master rows in legacy planners, but the outer
-            # transaction rolls those back too if a later candidate fails.
-            candidates = []
-            for license_obj in licenses:
-                generated = PlannerFactory.run(license_obj, norm_code)
-                if not generated.lines:
-                    raise SionPlanningError(
-                        "The selected SION produced no plannable lines.",
-                        sion_id=sion.pk, license_id=license_obj.pk,
-                    )
-                had_plan = LicenseItemPlan.objects.filter(
-                    license_id=license_obj.pk,
-                    is_active=True,
-                    is_deleted=False,
-                    is_cancelled=False,
-                ).exists()
-                candidates.append((license_obj, generated, had_plan))
-
-            results = []
-            created_count = updated_count = unchanged_count = 0
-            for license_obj, generated, had_plan in candidates:
-                items_input = [
-                    {
-                        "import_item_id": line.get("import_item"),
-                        "item_name_id": line.get("item_name"),
-                        "requested_quantity": line.get("planned_quantity", 0),
-                        "unit_price": line.get("unit_price", 0),
-                        "note": line.get("note", ""),
-                    }
-                    for line in generated.lines
-                ]
-                if CanonicalPlanningService._generated_plan_matches_current(
-                    license_obj.pk, items_input,
-                ):
-                    result = {
-                        "license_id": license_obj.pk,
-                        "norm_class": norm_code,
-                    }
-                    mutation_status = "UNCHANGED"
-                    unchanged_count += 1
-                else:
-                    result = CanonicalPlanningService.build_canonical_plan(
-                        license_id=license_obj.pk,
-                        norm_class=norm_code,
-                        items=items_input,
-                        force_replan=True,
-                        company_id=company_id,
-                    )
-                    if had_plan:
-                        mutation_status = "UPDATED"
-                        updated_count += 1
-                    else:
-                        mutation_status = "CREATED"
-                        created_count += 1
-
-                from apps.license.services.plan_utilization import plan_utilization_rows
-                canonical_rows = plan_utilization_rows(license_obj)
-                result.update({
-                    "license_number": license_obj.license_number,
-                    "sion_id": sion.pk,
-                    "norm_class": norm_code,
-                    "mutation_status": mutation_status,
-                    "available_qty": sum((r["available_qty"] for r in canonical_rows), DEC_000),
-                    "planned_qty": sum((r["planned_qty"] for r in canonical_rows), DEC_000),
-                    "allocated_qty": sum((r["allocated_qty"] for r in canonical_rows), DEC_000),
-                    "consumed_qty": sum((r["consumed_qty"] for r in canonical_rows), DEC_000),
-                    "remaining_qty": sum((r["remaining_qty"] for r in canonical_rows), DEC_000),
-                    "shortage_qty": sum((r["shortage_qty"] for r in canonical_rows), DEC_000),
-                })
-                result["feasible"] = result["shortage_qty"] <= DEC_000
-                result["status"] = "FEASIBLE" if result["feasible"] else "SHORT"
-                results.append(result)
-
-            return {
-                "sion_id": sion.pk,
-                "norm_class": norm_code,
-                "license_ids": normalized_license_ids,
-                "licenses_requested": len(normalized_license_ids),
-                "created": created_count,
-                "updated": updated_count,
-                "unchanged": unchanged_count,
-                "blocked": 0,
-                "results": results,
-            }
-
-    @staticmethod
     def planning_sion_snapshot(
         sion_id: int,
         license_ids: Iterable[int],
@@ -683,10 +506,8 @@ class CanonicalPlanningService:
     ) -> Dict[str, Any]:
         """Read-only canonical rows/totals for one selected SION population."""
         from apps.core.models import SionNormClassModel
+        from apps.license.models import SionPlanningRule
         from apps.license.services.plan_utilization import plan_utilization_rows
-        PlannerFactory = import_module(
-            "apps.license.services." + "planner_factory"
-        ).PlannerFactory
 
         sid = CanonicalPlanningService._strict_scalar_id(sion_id, "sion_id")
         lids = CanonicalPlanningService._strict_id_list(license_ids, "license_ids")
@@ -698,9 +519,12 @@ class CanonicalPlanningService:
         except SionNormClassModel.DoesNotExist:
             raise SionPlanningError("Selected SION is unavailable.", sion_id=sid)
         code = (sion.norm_class or "").strip().upper()
-        if not PlannerFactory.is_supported(code):
+        # A SION is plannable exactly when it has active database rules: the
+        # canonical SION executor plans only from those rules.  (The former
+        # per-norm PlannerFactory registry was removed; see git a82df2b9.)
+        if not SionPlanningRule.objects.filter(sion_id=sid, is_active=True).exists():
             raise SionPlanningError(
-                f"No planning engine is registered for SION {code!r}.",
+                f"No active planning rules for SION {code!r}.",
                 sion_id=sid, norm_class=code,
             )
 
@@ -842,7 +666,7 @@ class CanonicalPlanningService:
                 })
                 snapshots.append(snapshot)
             except SionPlanningError as exc:
-                if "No planning engine" not in exc.message:
+                if "No active planning rules" not in exc.message:
                     raise
         existing_plans = sum(snapshot["planned_count"] for snapshot in snapshots)
         blocked_or_short = sum(
@@ -1441,9 +1265,3 @@ class CanonicalPlanningService:
             ),
         }
 
-
-# Function facade for command/service callers; the class remains the authority.
-def plan_sion_for_licenses(sion_id, license_ids, *, company_id=None):
-    return CanonicalPlanningService.plan_sion_for_licenses(
-        sion_id, license_ids, company_id=company_id,
-    )

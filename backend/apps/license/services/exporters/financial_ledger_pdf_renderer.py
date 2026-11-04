@@ -202,7 +202,7 @@ def _render_list(elements, canonical_data, styles) -> None:
                 _number(sion_group.get("total_profit_loss_inr")),
             ])
             elements.append(_table(
-                rows, [19*mm, 12*mm, 15*mm, 18*mm, 21*mm, 18*mm, 21*mm, 21*mm, 20*mm],
+                rows, [19*mm, 12*mm, 15*mm, 18*mm, 21*mm, 23*mm, 26*mm, 26*mm, 25*mm],
                 numeric_from=5, total_row=len(rows)-1,
             ))
             elements.append(Spacer(1, 3 * mm))
@@ -220,7 +220,7 @@ def _render_list(elements, canonical_data, styles) -> None:
     grand_total = canonical_data.get("grand_total")
     if grand_total:
         rows = [["", "Licenses", "Balance ($)", "Purchase (INR)", "Sale (INR)", "P/L (INR)"], [
-            "GRAND TOTAL", str(grand_total.get("license_count", 0)),
+            "GRAND TOTAL", str(len(canonical_data.get("licenses") or [])),  # distinct licences, not licence×company rows
             _number(grand_total.get("total_balance")),
             _number(grand_total.get("total_purchase_bill_inr")),
             _number(grand_total.get("total_sale_bill_inr")),

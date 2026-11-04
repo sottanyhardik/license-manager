@@ -50,8 +50,11 @@ def test_seed_browser_2509_creates_idempotent_canonical_fixture(monkeypatch):
     assert license_obj.port == PortModel.objects.get(code="E2E")
     assert PurchaseStatus.objects.filter(is_active=True).exists()
     plan = LicenseItemPlan.objects.get(license=license_obj, is_active=True)
-    assert plan.planned_quantity == Decimal("234.000")
-    assert plan.planned_cif_fc == Decimal("2064.12")
+    # Planning budget = export-manifest CIF for the SION norm minus canonical utilisation.
+    # Export manifest is 2066.75 and this fixture has no utilisation, so the full entitlement
+    # is plannable (234.325 kg at 8.821/kg). The former 2064.12 was the superseded legacy balance.
+    assert plan.planned_quantity == Decimal("234.325")
+    assert plan.planned_cif_fc == Decimal("2066.75")
     assert plan.allocation_provenance["canonical_unit_price"] == "8.821"
     assert plan.planning_rule == SionPlanningRule.objects.get(stable_key="E2E2509:RULE:001")
     assert SionPlanningProfile.objects.get(stable_key="E2E2509:PROFILE").is_active

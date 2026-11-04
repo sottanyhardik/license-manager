@@ -285,14 +285,17 @@ export default function LicenseLedgerDetail() {
     const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
 
     const queryParams = new URLSearchParams(location.search);
-    const licenseType = queryParams.get('license_type') || (location.state as Record<string, unknown>)?.license_type || 'DFIA';
+
+    // Only an explicit type (URL or navigation state) is sent; legacy URLs keep the backend's
+    // AUTO lookup instead of being forced to DFIA. Computed here so the effect depends on it.
+    const explicitType = queryParams.get('license_type') || (location.state as Record<string, unknown> | null)?.license_type || undefined;
 
     useEffect(() => {
         const fetchLedgerDetail = async () => {
             setLoading(true);
             setError(null);
             try {
-                const url = buildLedgerDetailPath(licenseId, itemId);
+                const url = buildLedgerDetailPath(licenseId, itemId, explicitType);
                 if (!url) { setLedger(null); setError('Missing license ledger identifier'); return; }
                 const response = await api.get(url);
                 const normalizedLedger = normalizeLedgerDetail(response.data);
@@ -305,7 +308,7 @@ export default function LicenseLedgerDetail() {
             }
         };
         fetchLedgerDetail();
-    }, [licenseId, licenseType, itemId]);
+    }, [licenseId, explicitType, itemId]);
 
     const formatDate = (dateStr: unknown): string => {
         if (!dateStr) return '-';

@@ -25,7 +25,7 @@ from apps.accounts.permissions import AllotmentPermission
 from apps.allotment.models import AllotmentModel, AllotmentItems
 from apps.core.utils.exceptions import api_error, _safe_int
 from apps.allotment.serializers import AllotmentSerializer
-from apps.license.models import LicenseImportItemsModel
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.serializers import LicenseImportItemSerializer
 from apps.license.services.effective_cif_mode import effective_source_row_cif_available
 
@@ -1113,6 +1113,27 @@ class AllotmentActionViewSet(ViewSet):
                 'error': 'This allotment is already fully allocated.',
             }, status=status.HTTP_400_BAD_REQUEST)
         allocations = request.data.get('allocations', [])
+        # Lock every affected licence BEFORE any import-row lock, in pk order.
+        # Two concurrent requests on different rows of one licence each read
+        # the same licence-wide CIF balance, so both could pass the ceiling.
+        # Taking the licence after a row lock deadlocks: this request's own
+        # writes recalculate sibling rows, which the other request holds.  A
+        # single lock order (allotment -> licence -> rows) avoids that cycle.
+        requested_item_ids = []
+        for entry in allocations if isinstance(allocations, list) else []:
+            try:
+                requested_item_ids.append(int(entry.get('item_id')))
+            except (AttributeError, TypeError, ValueError):
+                continue
+        if requested_item_ids:
+            affected_licence_ids = sorted(set(
+                LicenseImportItemsModel.objects.filter(pk__in=requested_item_ids).values_list('license_id', flat=True)
+            ))
+            if affected_licence_ids:
+                list(
+                    LicenseDetailsModel.objects.select_for_update(of=('self',))
+                    .filter(pk__in=affected_licence_ids).order_by('pk').values_list('pk', flat=True)
+                )
         if not isinstance(allocations, list) or not allocations:
             return Response(
                 {'code': 'INVALID_ALLOCATIONS', 'error': 'allocations must be a non-empty list.'},
@@ -1426,12 +1447,22 @@ class AllotmentActionViewSet(ViewSet):
                 # Split plan lines are distinct ledger identities.  Merging
                 # a Cheese debit into an existing PKO row would overwrite the
                 # FK and silently reassign historical usage.
+                # Basis is part of the row identity.  PLAN rows keep
+                # plan_line NULL (the legacy FK is never written), so an
+                # ACTUAL lookup that matched on plan_line__isnull alone would
+                # fold an ACTUAL debit into a PLAN row, rewrite its basis, and
+                # silently release that plan capacity.
                 if allocation_basis == DebitBasis.PLAN:
                     existing_query = existing_query.filter(
+                        allocation_basis=DebitBasis.PLAN,
                         planning_target_item_id=locked_plan_line.item_name_id,
                     )
                 else:
-                    existing_query = existing_query.filter(plan_line__isnull=True)
+                    existing_query = existing_query.filter(
+                        allocation_basis=DebitBasis.ACTUAL,
+                        planning_target_item__isnull=True,
+                        plan_line__isnull=True,
+                    )
                 existing = existing_query.first()
 
                 if existing:

@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => {
     // Hashed chunks are immutable and may still be requested by tabs that were
     // open while a new version is deployed.  Keep them until an explicit
     // release cleanup so those tabs can finish loading lazy routes.
-    emptyOutDir: false,
+    emptyOutDir: true,  // deploy artifact: never ship stale chunks from earlier builds
     manifest: false,
     // Optimize chunk size
     chunkSizeWarningLimit: 1000,

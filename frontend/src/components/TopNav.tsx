@@ -260,7 +260,7 @@ export default function TopNav() {
                         type="button"
                         className="tb-nav-theme-toggle w-auto gap-2 px-3 text-xs text-muted-foreground/70 transition-colors hover:bg-muted/50 rounded-lg"
                         onClick={openCmd}
-                        aria-label="Search (⌘K)"
+                        aria-label="Search ⌘K"
                         title="Search ⌘K"
                     >
                         <Search className="size-4" aria-hidden="true" />

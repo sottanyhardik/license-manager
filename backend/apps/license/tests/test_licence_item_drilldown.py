@@ -187,14 +187,15 @@ class AllotmentDrilldownTests(DrilldownFixture):
         self.assertTrue(row["linked_boes"][0]["on_this_item"])
         self.assert_reconciled(drill)
 
-    def test_allotment_partly_covered_keeps_residue_outstanding(self):
+    def test_allotment_linked_to_a_boe_has_no_outstanding_cif_difference(self):
         boe, _ = self._boe("P-1", cif="60", qty="60")
         self._allotment(self.item, cif="100", qty="100", boes=[boe])
         drill = self.drill()
         row = drill["allotments"]["rows"][0]
-        self.assertEqual(row["status"], "PARTIALLY LINKED")
-        self.assertEqual((row["original_cif"], row["boe_linked_cif"], row["outstanding_cif"]), ("100.00", "60.00", "40.00"))
-        self.assertEqual(drill["allotments"]["totals"]["outstanding_cif"], "40.00")
+        # The difference (40) is ignored: linked to a BOE on this item, so it is LINKED, not PARTIALLY LINKED.
+        self.assertEqual(row["status"], "LINKED")
+        self.assertEqual((row["original_cif"], row["boe_linked_cif"], row["outstanding_cif"]), ("100.00", "60.00", "0.00"))
+        self.assertEqual(drill["allotments"]["totals"]["outstanding_cif"], "0.00")
         self.assert_reconciled(drill)
 
     def test_allotment_with_several_boes_lists_each_beneath_it(self):
@@ -205,7 +206,7 @@ class AllotmentDrilldownTests(DrilldownFixture):
         row = drill["allotments"]["rows"][0]
         self.assertEqual({b["boe_number"] for b in row["linked_boes"]}, {"W-1", "W-2"})
         self.assertEqual(row["boe_linked_cif"], "50.00")
-        self.assertEqual(row["outstanding_cif"], "50.00")
+        self.assertEqual(row["outstanding_cif"], "0.00")
         self.assert_reconciled(drill)
 
     def test_allotment_linked_to_a_boe_on_another_licence_needs_review(self):

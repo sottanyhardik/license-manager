@@ -6,6 +6,28 @@ Status: **Rule stated; calculation implemented as pure code** (`backend/apps/lic
 
 Every licence item (SR line, with its SION norm) carries two independent balances: **CIF** and **quantity**. Each is calculated from its own source records. CIF is never derived from quantity, or the reverse.
 
+### 1.1 Original CIF — business definition (ratified)
+
+**Original CIF is the original CIF entitlement granted or endorsed on the import licence** (the licence item's `cif_fc`).
+
+- It is **not** adjusted automatically by purchase credits (licence purchases) or trade debits (licence sales). Those movements are reflected only through the utilisation components below and the sale/purchase records.
+- Purchase-credit and trade-debit treatment is an open business question, tracked separately. Until it is formally decided, the production calculator does not change Original CIF for them, and no consumer is migrated between calculation engines on the basis of assumptions.
+- The approved D-1 engine `backend/apps/license/services/financial_position.py` remains a separate pure calculator. It is not used by production consumers and must not be wired in without a formal business decision on the same adjustments.
+
+Pinned by test: `backend/apps/license/tests/test_cif_utilisation_formula.py::TestOriginalCifDefinition`.
+
+Module dependency map, verification evidence and open findings: `modernization-dependency-map.md`.
+
+Component mapping to the approved three-part utilisation statement (for CIF, same arithmetic for quantity):
+
+| Approved statement | Production component | Meaning |
+|---|---|---|
+| BOE CIF | Debited (uncovered BOE + over-linked excess) plus BOE-covered portion through links | Every BOE amount counted once |
+| ALLOTMENT CIF | Allotted | Outstanding allotment not represented by a BOE |
+| BILLED CIF WITHOUT BOE | Invoiced − BOE-covered | Part of each invoice not represented by any BOE link |
+
+Utilised = BOE CIF + ALLOTMENT CIF + BILLED CIF WITHOUT BOE, and Available = Original CIF − Utilised. Verified numerically in `test_cif_utilisation_formula.py`.
+
 ## 2. The four mutually exclusive components
 
 | Component | Meaning | Source records |

@@ -21,11 +21,45 @@ from django.db.models.functions import Coalesce
 
 from apps.core.constants import DEC_0, DEC_000
 
-# Match calculate_balance.py's "allotted" filter exactly.
+# Match calculate_balance.py's "allotted" filter exactly.  Used for the
+# LICENCE balance: an allotment linked to a BOE is represented there by BOE
+# CIF, so its allotment CIF must not be counted again.
 _ALLOTTED_FILTER = Q(
     allotment__bill_of_entry__isnull=True,
     allotment__type="AT",
 )
+
+# Plan capacity usage.  A plan line's quantity and CIF are consumed by the
+# allotment rows that were planned against it, whether or not a BOE is later
+# linked.  Excluding BOE-linked rows here (as _ALLOTTED_FILTER does for the
+# licence balance) silently released plan capacity the moment a BOE was linked,
+# allowing the same planned quantity to be allocated twice.
+_PLAN_USAGE_FILTER = Q(allotment__type="AT")
+
+
+def _plan_projection(original_qty, original_cif, used_qty, used_cif) -> dict:
+    """Single arithmetic for plan capacity, used by singleton and bulk helpers.
+
+    ``remaining_*`` keeps the existing capacity semantics (never negative, so
+    callers can use it as an allocatable ceiling).  The ``raw_remaining_*``
+    values are the signed residuals, and ``over_utilised`` reports any overrun
+    explicitly instead of hiding it at zero.
+    """
+    raw_qty = original_qty - used_qty
+    raw_cif = original_cif - used_cif
+    return {
+        "original_quantity": original_qty,
+        "used_quantity": used_qty,
+        "remaining_quantity": max(DEC_000, raw_qty),
+        "raw_remaining_quantity": raw_qty,
+        "original_cif_fc": original_cif,
+        "used_cif_fc": used_cif,
+        "remaining_cif_fc": max(DEC_0, raw_cif),
+        "raw_remaining_cif_fc": raw_cif,
+        "over_utilised": raw_qty < 0 or raw_cif < 0,
+        "over_utilised_quantity": max(DEC_000, -raw_qty),
+        "over_utilised_cif_fc": max(DEC_0, -raw_cif),
+    }
 
 # A plan is allocatable only while it is its current lifecycle version.
 # Every consumer of original/used/remaining capacity must share this exact
@@ -115,7 +149,7 @@ def plan_line_status_for(plan_line) -> dict | None:
     # deletes and recreates all plan rows.
     from apps.license.services.plan_grouping import group_ids_of
     used = AllotmentItems.objects.filter(
-        _ALLOTTED_FILTER,
+        _PLAN_USAGE_FILTER,
         item_id__in=group_ids_of(plan_line.import_item),
         planning_target_item_id=plan_line.item_name_id,
         allocation_basis="PLAN",
@@ -125,16 +159,7 @@ def plan_line_status_for(plan_line) -> dict | None:
     )
     original_qty = Decimal(str(plan_line.planned_quantity or DEC_000))
     original_cif = Decimal(str(plan_line.planned_cif_fc or DEC_0))
-    used_qty = used["q"] or DEC_000
-    used_cif = used["v"] or DEC_0
-    return {
-        "original_quantity": original_qty,
-        "used_quantity": used_qty,
-        "remaining_quantity": max(DEC_000, original_qty - used_qty),
-        "original_cif_fc": original_cif,
-        "used_cif_fc": used_cif,
-        "remaining_cif_fc": max(DEC_0, original_cif - used_cif),
-    }
+    return _plan_projection(original_qty, original_cif, used["q"] or DEC_000, used["v"] or DEC_0)
 
 
 def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
@@ -161,7 +186,7 @@ def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
     item_ids = [source.id for source in sources]
     target_ids = {line.item_name_id for line in plan_lines}
     debits = AllotmentItems.objects.filter(
-        _ALLOTTED_FILTER, allocation_basis="PLAN", item_id__in=item_ids,
+        _PLAN_USAGE_FILTER, allocation_basis="PLAN", item_id__in=item_ids,
         planning_target_item_id__in=target_ids,
     ).values("item_id", "planning_target_item_id").annotate(
         q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),
@@ -177,10 +202,7 @@ def plan_line_status_for_many(plan_lines) -> dict[int, dict]:
         used_cif = sum((debit_map.get((item_id, line.item_name_id), (DEC_000, DEC_0))[1] for item_id in group_ids), DEC_0)
         original_qty = Decimal(str(line.planned_quantity or DEC_000))
         original_cif = Decimal(str(line.planned_cif_fc or DEC_0))
-        result[line.pk] = {"original_quantity": original_qty, "used_quantity": used_qty,
-                           "remaining_quantity": max(DEC_000, original_qty - used_qty),
-                           "original_cif_fc": original_cif, "used_cif_fc": used_cif,
-                           "remaining_cif_fc": max(DEC_0, original_cif - used_cif)}
+        result[line.pk] = _plan_projection(original_qty, original_cif, used_qty, used_cif)
     return result
 
 
@@ -472,7 +494,7 @@ def plan_status_for_items(items) -> dict:
     from apps.allotment.models import AllotmentItems
     allotted_by_item: dict[int, tuple] = {}
     for r in (
-        AllotmentItems.objects.filter(_ALLOTTED_FILTER, item_id__in=all_gids)
+        AllotmentItems.objects.filter(_PLAN_USAGE_FILTER, item_id__in=all_gids)
         .values("item_id")
         .annotate(
             q=Coalesce(Sum("qty"), Value(DEC_000), output_field=DecimalField()),

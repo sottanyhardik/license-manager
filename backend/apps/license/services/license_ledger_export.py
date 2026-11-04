@@ -67,10 +67,11 @@ def enrich_invoice_documents(canonical_data: dict, *, user, base_url="") -> dict
     return canonical_data
 
 
-def build_license_ledger_data(query_params=None, *, company_id=None, license_ref=None) -> dict:
+def build_license_ledger_data(query_params=None, *, company_id=None, license_ref=None, include_metrics=False) -> dict:
     """Return the shared filtered canonical collection for UI and exporters."""
     data = build_filtered_license_ledger_data(
         query_params or {}, authorization_company_id=company_id, license_ref=license_ref,
+        include_metrics=include_metrics,
     )
     # Presentation context only.  A filtered list can legitimately contain a
     # single licence, so renderers must not guess the requested design from the

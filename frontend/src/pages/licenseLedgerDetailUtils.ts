@@ -14,12 +14,16 @@ function encodeLedgerPathSegment(value: unknown): string | null {
     return normalized ? encodeURIComponent(normalized) : null;
 }
 
-export function buildLedgerDetailPath(id: unknown, companyId?: unknown): string | null {
+export function buildLedgerDetailPath(id: unknown, companyId?: unknown, licenseType?: unknown): string | null {
     const safeId = encodeLedgerPathSegment(id);
     if (!safeId) return null;
     const params = new URLSearchParams();
     const safeCompanyId = normalizeText(companyId);
     if (safeCompanyId) params.append('company', safeCompanyId);
+    // Send the licence type whenever it is known, so DFIA and incentive records that
+    // share a numeric id can never be confused. Omitted when unknown (legacy URLs).
+    const safeType = normalizeText(licenseType);
+    if (safeType) params.append('license_type', safeType);
     const queryString = params.toString();
     return `license-ledger/${safeId}/ledger_detail/${queryString ? `?${queryString}` : ''}`;
 }

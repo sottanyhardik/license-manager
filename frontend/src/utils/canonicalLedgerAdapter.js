@@ -16,12 +16,15 @@ import api from '../api/axios';
  * Fetch canonical ledger data from API for a given license ID.
  *
  * @param {string | number} licenseId - The license ID or license number
+ * @param {string} [licenseType] - Licence type ('DFIA', 'RODTEP', ...). Sent whenever known so
+ *   a numeric id shared by a DFIA and an incentive licence can never resolve to the wrong record.
  * @returns {Promise<Object>} Canonical ledger response from API
  * @throws {Error} If API call fails
  */
-export async function fetchCanonicalLedger(licenseId) {
+export async function fetchCanonicalLedger(licenseId, licenseType) {
     try {
-        const url = `license-ledger/${encodeURIComponent(licenseId)}/ledger_detail/`;
+        const typeQuery = licenseType ? `?license_type=${encodeURIComponent(String(licenseType))}` : '';
+        const url = `license-ledger/${encodeURIComponent(licenseId)}/ledger_detail/${typeQuery}`;
         const response = await api.get(url);
         return response.data;
     } catch (error) {

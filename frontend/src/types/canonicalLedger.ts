@@ -152,9 +152,10 @@ export type ProfitState = 'PROFIT' | 'LOSS' | 'BREAK_EVEN' | 'UNAVAILABLE';
  *                      (licence value added, increases balance)
  *
  * ⚠ TWO CURRENCIES, NEVER MIXED ⚠
- *   `total_sale` / `total_purchase` / `opening_balance` / `current_balance` /
- *   `total_profit_loss`                     → `balance_currency` (USD for DFIA)
- *   `total_sale_bill_inr` / `total_purchase_bill_inr` → `bill_currency` (always INR)
+ *   `total_sale` / `total_purchase` / `opening_balance` / `current_balance`
+ *                                            → `balance_currency` (USD for DFIA)
+ *   `total_sale_bill_inr` / `total_purchase_bill_inr` / `total_profit_loss`
+ *                                            → INR (`profit_currency` = 'INR')
  * Never add or compare figures across these two groups.
  *
  * Backend identities:

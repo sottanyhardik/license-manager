@@ -7,6 +7,7 @@ import InvoicesTab from "./InvoicesTab";
 import LicenceWorkspaceHeader, { type DataState } from "./LicenceWorkspaceHeader";
 import type { LicenceListActions } from "./LicenceWorkspaceActions";
 import ItemsTab from "./ItemsTab";
+import LicencePlanningTab from "./LicencePlanningTab";
 import OverviewTab from "./OverviewTab";
 import ReconciliationTab from "./ReconciliationTab";
 import { refreshLicenceWorkspace, useLicenceHeader, useWorkspaceDetail } from "./licenceWorkspaceQueries";
@@ -106,6 +107,16 @@ export default function LicenceWorkspace({
         <TabsContent value="overview" className="pt-3">
           {detailGate((ready) => (
             <OverviewTab detail={ready} />
+          ))}
+        </TabsContent>
+        <TabsContent value="planning" className="pt-3">
+          {detailGate((ready) => (
+            <LicencePlanningTab
+              licenceId={licenceId}
+              licenceNumber={header?.license_number ?? ready.licence_number ?? null}
+              canWrite={canWrite}
+              canonicalBalanceCif={ready.cif.available == null ? null : Number(ready.cif.available)}
+            />
           ))}
         </TabsContent>
         <TabsContent value="items" className="pt-3">

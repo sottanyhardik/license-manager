@@ -32,6 +32,9 @@ describe("LicenseLedgerDetail helpers", () => {
     it("builds safe ledger-detail API paths from route params", () => {
         expect(buildLedgerDetailPath("LIC/1", " 42 ")).toBe("license-ledger/LIC%2F1/ledger_detail/?company=42");
         expect(buildLedgerDetailPath("0311051362")).toBe("license-ledger/0311051362/ledger_detail/");
+        // A known licence type is sent so a shared numeric id resolves to the right record.
+        expect(buildLedgerDetailPath("0311051362", undefined, "RODTEP")).toBe("license-ledger/0311051362/ledger_detail/?license_type=RODTEP");
+        expect(buildLedgerDetailPath("0311051362", "42", "DFIA")).toBe("license-ledger/0311051362/ledger_detail/?company=42&license_type=DFIA");
         expect(buildLedgerDetailPath(" ", "42")).toBeNull();
     });
 

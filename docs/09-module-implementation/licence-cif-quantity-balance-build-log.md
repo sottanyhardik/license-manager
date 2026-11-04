@@ -408,6 +408,267 @@ Evidence licences:
 2. Trade 633 (0311051322). Unclassified. Classifying it changes the figure but not the OVER-UTILISED result, which holds in both scenarios.
 3. Confirm the base-and-alternative scenario rule and the REVIEW outcome for licences whose result depends on an unverified sale.
 
+## Milestone 18 — Items & Balance: licence-level CIF on every row (Individual Item CIF OFF)
+
+**Change.** The Items & Balance table now has the spec's 16 columns: SR, Item, HS Code, Unit, then Quantity before CIF for Original, Used through BOEs, Reserved for Customers, Invoiced and Available, then CIF Control and Status. The expand control moved into the SR cell, so it no longer takes a column.
+
+- **OFF (`cif_control` LICENCE).** Every row's Available CIF is the licence's canonical available CIF, the same value on every row. The CIF Control column reads "Licence-level CIF control". Nothing is summed across rows.
+- **ON (`cif_control` ITEM).** Each row shows its own available CIF, labelled "Individual item CIF".
+- **Quantity** is unchanged: each row keeps its own available quantity.
+- **Attribution** (Original, Used through BOEs, Reserved for Customers, Invoiced CIF) is unchanged and still shown per item.
+
+**Where the value comes from.** The backend decides it. `serialise_licence_detail` adds `cif_control` and `available_cif_display` to each item row (`_with_cif_display` in `licence_balance_report.py`). The frontend passes the value through and does not choose a source. Existing keys are unchanged.
+
+**Verification.**
+- Backend, `test_licence_level_cif_control.py`: 12 of 12 pass. New: OFF rows show the same licence value; ON rows show their own; the display covers both modes.
+- Frontend, Vitest over `src/pages/licence-balances` and `src/pages/licenses/workspace`: 216 of 216 pass, including new `ItemBalanceTable.test.tsx` (9 tests: the 16-column structure, the same licence value on every row without summing, the label on every row, quantity per item, ON behaviour, the expand control). `tsc` and ESLint are clean.
+- Browser, `e2e/licence-cif-control.spec.ts`: 2 of 2 pass. 0311051362 (OFF): every row's Available CIF equals the licence value read from the page's own detail response, each row is labelled, each quantity matches its item, SR 3 is "Review required", and SR 12's invoiced CIF matches its payload. 2411004858 (ON) keeps the item-level badge.
+- Browser, existing `licence-balances.spec.ts` and `licence-workspace.spec.ts`: 24 of 24 pass.
+
+**Not done.**
+1. **Reconciliation.** It still compares per-item attribution, not the licence balance.
+2. **PDF and Excel exports.** They still use the legacy engine and do not follow the licence-level display.
+3. **Individual item available CIF under OFF.** It is no longer shown in the row. It remains in the movement ledger and drill-downs.
+
+## Milestone 19 — Allotment CIF difference ignored
+
+**Rule.** The difference between an allotment's original CIF and its valid, current BOE-linked CIF on the same item is ignored in every financial calculation. Only the BOE-linked CIF counts, and it counts once: through the BOE debit if uncovered, or through the sale that covers it.
+
+**Where it is implemented.** One helper, `allotment_link` (with `AllotmentLink`) in `licence_balance_report.py`. The engine (`_item_inputs`), the item drill-down (`_allotment_section`) and the workspace transactions (`build_licence_transactions`) all use it. The old `original − residue` subtraction no longer exists anywhere.
+
+- **Linked on this item (matched CIF > 0).** Outstanding CIF is zero. BOE-linked CIF is the matched amount, capped at the original. Status is LINKED.
+- **Unlinked.** Unchanged: the full allotment is reserved (D-1).
+- **Linked only to a BOE on another item or licence.** Unchanged: full amount outstanding, REVIEW REQUIRED.
+- **Quantity.** Unchanged. Outstanding quantity still follows the quantity rule.
+
+**Overlap flag, per measure.** `ALLOT_AND_SALE_OVERLAP_UNVERIFIED` was raised by CIF or quantity residue and then applied to both measures. It now applies to each measure only from its own residue, so quantity status no longer depends on CIF.
+
+**Reconciliation.** Same database, before and after. The before state is a counterfactual: the same engine with only the allotment rule reverted (throwaway script, nothing in the repository changed). The earlier snapshot could not be used, because the database had changed since it was taken. Results across 222 licences and 2,377 items:
+
+- Every item's available CIF moved by exactly its old linked residue. Zero mismatches.
+- Quantity amounts did not change anywhere.
+- Quantity status changed for 26 items (REVIEW REQUIRED to RECONCILED), because the overlap flag came from CIF. See decision 2.
+- ON licences: one licence (0811016174) and two items changed. The rule applies in ON mode too.
+
+**Example, licence 0311051362, SR 3 (allotments ALLOT-7186 and ALLOT-7297).**
+
+| | Before | After |
+|---|---:|---:|
+| Original allotment CIF | 14,900.36 | 14,900.36 (reference only) |
+| BOE-linked CIF | 14,838.57 | 14,838.57 |
+| Outstanding / reserved CIF | 61.79 | 0.00 |
+| Item available CIF | −14,900.36 | −14,838.57 |
+| Licence available CIF | 1,006.98 | 1,068.77 |
+| Item status | REVIEW REQUIRED | RECONCILED |
+
+The drawer's allotment rows are LINKED with no flags, and the reconciliation is RECONCILED.
+
+**Tests.**
+- New `test_allotment_cif_difference_ignored.py`: 12 of 12 pass. Covers the exact regression values, the drawer, no reservation or debit, licence available unchanged in both modes, no review, multiple allotments, single counting when the BOE is sold, superseded allocations, cancelled allotments, unlinked (unchanged), elsewhere-linked (unchanged), and agreement between balance, drawer and licence.
+- Four existing tests asserted the difference (for example "outstanding 40.00"). They are updated to the new rule and renamed.
+- Frontend: 216 of 216 Vitest tests pass in the licence-balance and workspace folders. No frontend source changed.
+- Browser, live: 26 of 26 pass across `licence-cif-control`, `licence-balances` and `licence-workspace`. The example-licence spec now reads the reserved CIF and the status from the payload.
+- Backend, `apps/license`, `apps/trade`, `apps/bill_of_entry`, `apps/reconciliation`, `apps/allotment`: 2,589 passed, 10 failed. Eight are the pre-existing set in Milestone 16. The other two are in `apps/allotment` (see below).
+
+**The two `apps/allotment` failures.** Neither reaches the code changed here. The allotment app has no import path into the modified modules; I checked the transitive imports. Both are unrelated to the difference:
+- `test_16_pair_mismatch_rejected` expects a mismatch at a 0.01 CIF difference. The pair check accepts differences up to and including 0.01, so this is a test and code disagreement that existed before this turn.
+- `test_plan_candidate_query_count_is_constant_for_a_paginated_response` reports 17 queries against a ceiling of 16. I haven't traced this to a cause. It is not in a path I changed.
+
+**Decisions to confirm.**
+1. **Item 3's review status is gone.** The earlier spec said item 3 should keep its review. Its only trigger was the 61.79 difference, and this spec forbids a review from the difference. If you want it kept, a separate genuine reason must be defined.
+2. **26 quantity statuses changed** (REVIEW REQUIRED to RECONCILED), for the reason above.
+3. **Unlinked allotments keep the full reservation** under D-1. The spec's wording would drop them.
+4. **Elsewhere-linked allotments** stay REVIEW REQUIRED.
+
+**Not done in this milestone.**
+- **Legacy stored figures and exports.** The stored `allotted_value`, the Overview summary, the dashboard KPI, the materialised views, and the PDF, Excel and CSV exports still use the legacy `LicenseBalanceCalculator`. That path already excludes BOE-linked allotments, and its per-item outstanding figure agrees with the new canonical figure for 2,365 of 2,377 items. The 12 that differ are the unlinked and elsewhere cases above. I did not change those paths or verify the exported files end to end.
+- **Reconciliation** still reflects the canonical engine, so it now agrees with the new allotment figure.
+
+## Milestone 20 — Single source of truth: attempt, revert and what remains
+
+**Outcome: not completed. The single-source migration was attempted, broke 154 tests, and was reverted. The repository is back to the Milestone 19 state (10 pre-existing failures).**
+
+**What was attempted.**
+- The legacy `LicenseBalanceCalculator` licence and per-item balance entry points were made to delegate to the canonical engine.
+- `update_balance_values` (the stored-field writer) read canonical figures.
+- A refresh command wrote the canonical figures into the stored item fields and the licence balance cache.
+
+**Why it was reverted.** Allocation and planning read the stored available CIF, and their test fixtures keep the authorised CIF on the licence balance or export items, not on the import item. The canonical engine reads import items, so those fixtures showed 0.00 available and refused every allocation: 154 failures. A live check found the same convention in only 6 of 222 licences, and none of those has a positive canonical figure, so production allocation is not affected by the data. The conflict is the fixture convention, and it needs a decision before the migration can continue. Changing allocation capacity to canonical is not a decision I should make alone.
+
+**Database state (important).**
+- The refresh wrote canonical values into the stored item fields and the licence caches of the dev database before the revert. The values those fields held before the refresh were not captured, so I could not restore them byte for byte.
+- The stored fields and caches were then recomputed with the restored legacy writer (`update_balance_values` and `update_balance_cif`). They now hold legacy values computed from the current data, which may differ from what they held before this turn where the stored values were stale.
+- No transaction, BOE, allotment or invoice was changed.
+
+**Kept.**
+- `NO_SION_ITEMS`: licence 0911012569 has no import items and no export items. Its canonical summary is now an explicit exception (0.00, REVIEW REQUIRED, flag `NO_SION_ITEMS`) instead of a missing value.
+
+**Reverted.** `balance_calculator.py`, `calculate_balance.py`, the refresh command, the batched canonical helpers, and the React quantity change in `CustomsLedgerSection.tsx`. The React change displayed the stored quantity, which the legacy writer computes differently from the React formula it replaced, so it was not a verified equivalence. Patches are in `/tmp/migration_backup/`.
+
+**Still legacy (not migrated).**
+- Financial, customs and timeline ledgers behind the PDF and Excel exports (`LicenseBalanceLedgerBuilder`). The Excel balance lines show the canonical figure, but the ledger rows above them are legacy.
+- Dashboard financial bridge (`dashboard_summary`), which sums legacy components.
+- Overview snapshot licence CIF (`balance_snapshot`), which uses the customs formula.
+- Reconciliation debit logic (`reconciliation/services/queries.py`, `boe_link_reconciler.py`, `allocation_service.py`).
+- Allocation and planning caps (`allocation_service`, `validation_service`, `sion_planning_execution`).
+- Restriction and condition pools. The canonical engine has no equivalent, and the stored `available_value` used to apply the pool rule.
+- Frontend `CustomsLedgerSection` quantity arithmetic, and the sums in `AllotmentsTab` and `BoesTab`.
+
+**Decision needed before continuing.** Confirm that the authorised CIF for allocation and planning is the import item's CIF (the canonical rule). If yes, the 154 fixtures are updated to match and the migration continues. If not, the canonical engine needs an authorised-CIF source that covers the export and balance records, and that is a rule change, not an implementation detail.
+
+## Milestone 21 — GST/26-27/017: internal transfer pairs
+
+**Root cause.** GST/26-27/017 is a transfer from VISION GURUKRUPA BUILDCON LLP to LABDHI GLOBAL LLP, recorded as a SALE (633) and a PURCHASE copy (634) joined by one persisted COPIED pair (`TradePairAudit` id 2, pair_uuid 8d8b5838-7619-4417-a050-5cb42164af47). Neither side had a classification record, so the SALE counted as external utilisation on four licences (806,565.19 CIF across SR 1 of 0311051322, 0311051531, 0311054696 and 3111005758). The purchase never counted: the canonical engine reads sales only.
+
+**The 68,041.47 on SR 3 of 0311051531 is not this invoice.** It is sale 663 (LGL/2026-27/0092, LABDHI → GOLDEN AGRI), an external sale covered by BOE 28057, counted once. It involves no GST/26-27/017 line.
+
+**Chain established from persisted records.**
+- Authorisation: KHYATI GLOBAL VENTURES → VISION purchases of each SR 1 item's authorised CIF (for example 619, 620, 621).
+- Internal transfer: VISION → LABDHI GLOBAL, sale 633 and copy 634.
+- No external sale of these SR 1 items is recorded anywhere downstream.
+
+**Internal pairs classified (both sides, explicit records, authoriser hardik, pair UUID as evidence).**
+
+| Pair (TradePairAudit) | Sale | Purchase | Companies | Licences affected |
+|---|---|---|---|---|
+| 2 GST/26-27/017 | 633 | 634 | VISION → LABDHI GLOBAL | 0311051322, 0311051531, 0311054696, 3111005758 |
+| 3 SC/2026-27/0001 | 637 | 636 | Sambhav → LABDHI GLOBAL | 5611004885 |
+| 4 GST/26-27/021 | 638 | 635 | VISION → Sambhav | 5611004885 |
+| 6 04/25-26 | 651 | 639 | NEELKANTH → LABDHI GLOBAL | 3111006003 |
+| 8 LGL/2026-27/0101 | 683 | 684 | LABDHI GLOBAL → NEELKANTH | 10 licences (0311049075, 0311049077, 0311054431, 0311054432, 0311054433, 0311054442, 0311054443, 0311054446, 0311054451, 0311055304) |
+
+**Recorded as REVIEW REQUIRED (no arithmetic change).**
+- Pairs 1 (623/624) and 5 (644/645): LABDHI MERCANTILE LLP, whose group membership is not in the approved list.
+- Pair 7 (661, LGL/2026-27/0091): external sale to APHRODITE FOODS LLP, with a copy whose counterpart was deleted (`UNPAIRED_DELETED`).
+
+**Group membership is not persisted.** `CompanyModel` has no group field, so the internal test uses the companies named in the approved chain, plus the persisted COPIED pair. Company names and equal amounts alone were not used.
+
+**Canonical effect (before and after, same database, all 222 licences).** Sixteen licences changed. No quantity or CIF changed on any other licence.
+
+| Licence | Available CIF before | After | Status |
+|---|---:|---:|---|
+| 0311051531 | −225,979.73 | 12,765.98 | REVIEW → RECONCILED |
+| 0311051322 | −335,999.92 | 190.35 | REVIEW (unchanged) |
+| 0311054696 | −123,535.76 | 147.73 | REVIEW → RECONCILED |
+| 3111005758 | −107,945.72 | 0.00 | REVIEW → RECONCILED |
+| 3111006003 | −68,498.54 | 35,707.16 | REVIEW → RECONCILED |
+| 5611004885 | −338,967.19 | 17.59 | REVIEW → RECONCILED |
+| 0311054433 | −52,364.64 | 347,635.36 | REVIEW (unchanged) |
+| 0311054442 | 179,216.69 | 719,216.69 | REVIEW (unchanged) |
+| 0311055304 | 302,352.23 | 1,442,352.23 | RECONCILED (unchanged) |
+
+Other changed licences: 0311049075, 0311049077, 0311054431, 0311054432, 0311054443, 0311054446, 0311054451.
+
+Negative balances stay negative. 0311054432 remains at −41,437.04 after the change.
+
+**Quantity effect.** Ten items changed quantity. Every change comes from trade 683 (LGL/2026-27/0101), whose lines are the only sales on those items. The internal rule excludes an internal sale from quantity as well as CIF.
+
+**Consequence that needs your decision.** For 11 items, the only sale is internal, and no final external sale is recorded. Their entitlement now shows as available, which is up to 1,140,000 USD on 0311055304. That is right only if the goods are still held in the group. The canonical engine now flags these 11 items `INTERNAL_TRANSFER_NO_EXTERNAL_SALE` and shows REVIEW REQUIRED, so they are not reported as reconciled. Affected items (11): 0311051322 SR 1, 0311051531 SR 1, 0311054696 SR 1, 3111005758 SR 1, 5611004885 SR 1, 3111006003 SR 1, 0311054442 SR 3, 0311054443 SR 3, 0311054446 SR 3, 0311054451 SR 3, 0311055304 SR 3. Confirm each one's final external sale or accept the REVIEW state.
+
+**Files changed.**
+- `backend/apps/license/services/licence_balance_report.py`: flag `INTERNAL_TRANSFER_NO_EXTERNAL_SALE`.
+- `frontend/src/pages/licence-balances/labels.ts`: label for the new flag.
+- `backend/apps/license/tests/test_internal_transfer_pairs.py`: 9 new tests.
+- `frontend/e2e/internal-transfer-gst017.spec.ts`: 2 new live browser checks.
+- Trade classification records only (15 rows). No trade, line, BOE, allocation or invoice record was edited.
+
+**Tests and checks.**
+- Backend, new and related modules (`test_internal_transfer_pairs`, `test_internal_trade_exclusion`, `test_licence_balance_report`, `test_licence_level_cif_control`, `test_allotment_cif_difference_ignored`): 82 of 82 pass.
+- Backend, full run (license, trade, bill_of_entry, reconciliation, allotment, core): 3,297 pass, 10 fail. The 10 are the same pre-existing failures as before, and none is new.
+- Frontend, Vitest over licence-balances, licence workspace and license-overview: 222 of 222 pass. `tsc` and ESLint are clean.
+- Browser, live (0311051531): the Items & Balance figures come from the canonical payload, and the INTERNAL flag appears (2 of 2 pass). Invoices & Sales shows INTERNAL TRADE on both sides of GST/26-27/017.
+
+**Exports are still not canonical.** Across all 222 licences, the Excel "Current Available Balance" agrees with the canonical figure for 52 and differs for 170. Examples: 0311054432 shows +67,984.27 against a canonical −41,437.04, and 3111003827 shows −77,457.95 against 90.35. The export uses the legacy ledger, which is the open item from Milestone 20. I did not run the PDF or CSV checks.
+
+**Not built.** The expandable relationship view and the full classification set (EXTERNAL SALE, EXTERNAL PURCHASE, LINKED/COVERED, CANCELLED/REVERSED) are not in the UI. The ledger still shows only the INTERNAL TRADE badge.
+
+## Milestone 22 — Planning tab restored in the Licence Workspace
+
+**Why it was missing.** The Planning tab belonged to the retired licence overview (`/licenses/:id/overview`, `LicenseOverviewPage`), which hosted the licence planning editor. Commit `34d7b967` replaced that page with the four-tab workspace and its `WORKSPACE_TABS` list, which had no Planning entry. The overview route now redirects to the list. Nothing was deleted: `PlanningEditor` and the planning API were kept.
+
+**What was restored.**
+- `workspaceTabs.ts`: `planning` sits directly after Overview, labelled "Planning".
+- `LicencePlanningTab.tsx` (new): renders the existing `PlanningEditor` lazily, keyed by licence ID, with the workspace's `canWrite` and the licence number. The loading region is `PlanningTabLoading`.
+- `LicenceWorkspace.tsx`: renders the tab after the workspace balance has loaded, so the editor never shows a stale balance.
+- `PlanningEditor.tsx`: optional `canonicalBalanceCif` prop. When the parent passes it, the pool balance comes from the canonical engine rather than the stored cache. Other callers are unchanged.
+- `OverviewTab.tsx`: Planning removed from the "Not yet available" list.
+- Backend `views/license.py`, planning block of the licence detail: `planning_balance_cif.raw_balance_cif` and `operational_reconciliation.actual_balance_cif` are the canonical available CIF. `final_balance_cif` is the canonical balance less only the new planned CIF, so negatives are shown instead of floored, and BOE and allotment are not deducted twice. `cif_balance_basis` is now `CANONICAL_AVAILABLE`.
+- Tooltip on "Actual Balance CIF" updated to the canonical definition.
+
+**Reused, not duplicated.** `PlanningEditor`, `licenseApi` (`fetchLicense`, `fetchItemPlans`, `bulkUpsertItemPlans`, `deleteItemPlan`), `planningRuleApi.autoPlanLicense`, the `license-item-plans/` viewset (already filtered by licence and scoped to authorised licences), and the `licenses/<id>/auto-plan/` action. No planning model or endpoint was added.
+
+**Not changed.** The planning engine's own caps (`sion_planning_execution`, `planning_usage_reconciliation`) still read their own figures. This is the same open allocation and planning decision from Milestone 20, not a display issue.
+
+**Tests.**
+- Frontend, `LicencePlanningTab.test.tsx` (new, 4 tests): loads the selected licence's records; switching licences shows only the new licence's records; read-only users get the permission message and no write action; the loading region has an accessible name.
+- Frontend, updated for five tabs: the tab-order list, the arrow-key path (Overview → Planning → Items & Balance), and the pure tab list.
+- Frontend, full Vitest suite: 980 of 980 pass across 112 files. `tsc` and ESLint clean.
+- Backend, new `test_planning_balance_is_the_canonical_balance_less_only_new_planned_cif`: the planning balance is canonical, a deficit is shown, and only new plans are deducted. `test_license_detail_plan_utilization` now gives the licence its authorised CIF on the import item, the convention the canonical engine reads.
+- Backend, full regression (isolated test database): 3,345 pass, 12 fail. Ten are the known pre-existing set. Two are planning-engine tests affected by concurrent uncommitted work (see below).
+- Browser, live (isolated servers, read-only), 3 of 3 pass:
+  - Tab order is Overview, Planning, Items & Balance, Invoices & Sales, Reconciliation.
+  - Licence 0311054050 (3 plan lines, positive canonical balance): the editor shows each plan record the API returns, and its "Actual Balance CIF" equals the canonical available CIF.
+  - Switching between Planning and Items & Balance keeps the same licence.
+  - Licence 0311053224 (5 plan lines, negative canonical balance): the "Final Balance CIF" is negative as displayed, not floored.
+
+**Decisions and conflicts.**
+1. **Reload.** Your brief asks that a browser refresh keeps the selected licence and tab. Milestone 15 made a reload close the open licence, and the existing workspace spec asserts it. I kept the approved behaviour and did not change it. Changing it is a product decision.
+2. **Concurrent planning-engine work.** `backend/apps/license/services/sion_planning_execution.py` has uncommitted changes that are not mine (an over-utilisation block and a raw-balance path). `test_planning_tolerances` and `test_seed_browser_2509` failed in the full run and pass when run on their own. They depend on that in-progress work and on test order.
+3. **Plan data changed during this session.** Active plan lines went from 73 (44 licences) at the start of the milestone to 58 at the end, and licence 0311045177 went from 3 lines to none. I wrote no plan rows. A `pytest apps/core apps/accounts apps/license` process (PID 32799) was running against the same test database at the same time and collided with my first full run. I could not check which process removed the rows, and this needs your review.
+
+## Milestone 23 — LML/2026-27/0023: group internal transfers, unmatched review, transaction classes
+
+**The regression case.** Licence 0311049585, SR 1 (Polypropylene Granules, HS 39021000). Its invoiced figures were 269,702.32 CIF and 368,353.150 kg, and it was OVER-UTILISED at −47,342.32 CIF and −45,383.000 kg. The item's authorised CIF is 222,360.00 and its quantity is 322,970.150 kg.
+
+**Transaction chain (all persisted).**
+- **Authorisation:** purchase NI/2025-26/116, NAVKAR INDUSTRIES → LABDHI MERCANTILE LLP (259), CIF 222,360.00.
+- **Sale 197** (LML/2025-26/0125), external, LABDHI MERCANTILE → MALAY EXPORTS: 174,240.00 CIF, 198,000 kg, covered by BOEs 7650222 and 7650224.
+- **Sale 614** (LML/2026-27/0023), group → group, LABDHI MERCANTILE → LABDHI GLOBAL: 48,120.00 CIF, 124,970.150 kg, no BOE. Its quantity is exactly the remainder after sale 197 (322,970.150 − 198,000 = 124,970.150).
+- **Purchase 615** (same invoice, same date, same parties, identical line): LABDHI GLOBAL's purchase record. It has no `COPIED` audit row, so the match is on persisted record content.
+- **Sale 655** (LGL/2026-27/0086), external, LABDHI GLOBAL → MERUSHI: 46,574.32 CIF, 44,783 kg, covered by BOE 4054587.
+- **Sale 672** (LGL/2026-27/0097), external, LABDHI GLOBAL → SIGMA: 768.00 CIF, 600 kg, covered by BOE 4457719.
+
+**Classification applied.** Sale 614 and purchase 615 are INTERNAL. Sales 197, 655 and 672 are external, and their utilisation is counted once through their BOEs.
+
+**Before and after (item 37689, licence 0311049585).**
+
+| | Before | After |
+|---|---:|---:|
+| Invoiced CIF | 269,702.32 | 221,582.32 |
+| Invoiced quantity | 368,353.150 kg | 243,383.000 kg |
+| Available CIF | −47,342.32 (OVER-UTILISED) | 777.68 (RECONCILED) |
+| Available quantity | −45,383.000 kg | 79,587.150 kg |
+
+The 221,582.32 is 174,240.00 + 46,574.32 + 768.00. The 79,587.150 kg is the stock still held by the group, and it is correct only if the goods were not sold externally elsewhere.
+
+**What the engine does now.**
+- **Group membership** is by registered company ID (`apps/trade/services/internal_transfers.py`): 881 LABDHI GLOBAL, 766 LABDHI MERCANTILE, 866 NEELKANTH IMPEX, 1037 Sambhav Corporation, 885 VISION GURUKRUPA BUILDCON LLP. Similar names (SAMBHAV PAPERS, VISION VANIJYA, VISION) are excluded. Membership is not stored in the database.
+- **Matching** is evidence only, and it uses persisted data: a `COPIED` pair, or the same invoice number, parties, date and identical lines. Equal amounts or names never match.
+- **Transaction class** is derived in one function (`transaction_class`): INTERNAL_TRANSFER, INTERNAL_TRANSFER_PURCHASE, EXTERNAL_SALE, EXTERNAL_PURCHASE, UNMATCHED_INTERNAL_TRANSACTION, REVIEW_REQUIRED. The ledger row carries `transaction_class` and the `counterpart` (trade, invoice, seller, buyer, basis).
+- **Unmatched rule.** A group-to-group sale with no matched purchase is flagged `UNMATCHED_INTERNAL_TRANSACTION` and stays counted until reviewed. It is not silently external and not discarded. Ten sales are flagged: 79, 84, 85, 157, 215, 373, 389, 534, 547, 569.
+
+**Classification applied across the group.** I applied the same matching standard to every group-to-group pair that matches on persisted records. These are the pairs where the sale and its purchase share invoice number, parties, date and identical lines, plus the pairs that have a `COPIED` audit row:
+
+- New INTERNAL: 614/615 (LML/2026-27/0023), 608/609 (LML/2026-27/0022), 350/390 (LGL/2026-27/0001), 365/366 (012/25-26), 367/211 (GST/25-26/005), 384/385 (LML/2026-27/0003).
+- REVIEW → INTERNAL, after your confirmation that LABDHI MERCANTILE LLP is a group company: 623/624 (LML/2026-27/0024) and 644/645 (LML/2026-27/0026).
+- Already INTERNAL from Milestone 21: 633/634, 635/638, 636/637, 639/651, 683/684.
+- REVIEW unchanged: 661 (APHRODITE copy with a deleted counterpart).
+
+**The classification table was empty again.** When I started this work, all 15 classification rows from Milestone 21 were gone. The table's sequence had never advanced. Migration `0011_trade_utilisation_classification` had been applied again at 15:14:49 UTC, which recreates the table. The database also holds a migration `0011_tradepairaudit_survive_trade_delete` that is not in this checkout, so another checkout is migrating the same database. I did not find which process did it. I re-recorded every decision from Milestones 21 and 23 with the same reasons and evidence, and I recorded the 614/615 pair as a new decision. The table now holds 27 rows. Until the database is isolated, these records can be lost again.
+
+**Effect on licences (28 licences changed; none of them had their quantity or CIF changed by anything else).** Largest changes: 0311054442 +540,000, 0311055304 +1,140,000, 0311054433 +400,000, 0811016790 OVER-UTILISED → REVIEW REQUIRED (−451,031.88 → 362,968.11), 0811016774 −461,464.94 → 273,390.55. The rest are listed in `/tmp/lml0023_before.json` and `/tmp/lml0023_after.json`. These movements are the internal rule applied to each pair. Most of them leave the item in REVIEW REQUIRED, because the receiving company has no recorded external sale for those goods (`INTERNAL_TRANSFER_NO_EXTERNAL_SALE`).
+
+**Accounting integrity.** The only database writes were 27 `TradeUtilisationClassification` rows. No trade, trade line, BOE, allocation, allotment or invoice was edited, and the historical values are unchanged. Internal rows stay in every company ledger with their amounts, and they are excluded from the external totals. The company external totals therefore change by the transferred amounts. I did not check the company-level summary numbers before and after, so that is a verification gap.
+
+**Exports.** The Excel "Current Available Balance" for 0311049585 is 777.68, which matches the canonical figure. Across all 222 licences, Excel agrees with the canonical figure for 57 and differs for 165. The export still uses the legacy ledger, which is the open item from Milestone 20. I did not run the PDF or CSV checks.
+
+**Tests and checks.**
+- Backend: `test_group_internal_transfers.py` (17 tests) plus the internal-transfer, ledger and balance modules: 82 of 82 pass. The full backend run passes 3,412, with 10 failures in the known pre-existing set.
+- Frontend: full Vitest run 980 of 980; TypeScript clean; ESLint clean on the changed files.
+- Browser, live (0311049585): Items & Balance shows the canonical available CIF in the SR 1 row. Invoices & Sales labels both sides of LML/2026-27/0023 as INTERNAL TRADE, with the counterpart and trade IDs.
+
+**Not built.** The full five-way transaction classification in the UI (EXTERNAL SALE, EXTERNAL PURCHASE, LINKED/COVERED, CANCELLED/REVERSED) and the expandable relationship view are not done. The drawer does not yet show the counterpart.
+
 ## 6. Unresolved issues and decisions
 
 1. **Legacy engine versus canonical report.** For most licences with sales or purchases the two figures differ. Decision needed: which one the product shows for "balance", and whether the legacy engine's allotment and purchase rules are retired.

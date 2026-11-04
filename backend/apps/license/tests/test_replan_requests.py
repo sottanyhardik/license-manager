@@ -398,9 +398,16 @@ class TestLicenseReplanRequests(LicenseBalanceLedgerFixtureMixin, TestCase):
         ) as planner:
             result = replan_license_task.run(request.pk)
 
-        assert result["status"] == LicenseReplanRequest.STATUS_SUCCEEDED
+        # Both norms are attempted, but a failed norm means the licence is NOT
+        # planned for this revision: the row must not finish as SUCCEEDED.
+        assert result["status"] == LicenseReplanRequest.STATUS_FAILED
         assert [call.args[0] for call in planner.call_args_list] == [11, 22]
         assert result["failures"] == [{"sion_id": 11, "error": "invalid norm", "error_code": "RuntimeError"}]
+        request.refresh_from_db()
+        assert request.status == LicenseReplanRequest.STATUS_FAILED
+        assert request.last_error_code == "PARTIAL_NORM_FAILURE"
+        assert "SION 11" in request.last_error_message
+        assert request.planned_revision is None
 
     def test_allotment_and_boe_changes_enqueue_without_inline_planning(self):
         from decimal import Decimal

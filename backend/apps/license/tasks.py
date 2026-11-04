@@ -149,7 +149,10 @@ def dispatch_replan_requests(request_ids: list[int]):
     return {"dispatched": dispatched}
 
 
-@shared_task(name="planning.replan_sion_batch", queue=QUEUE, acks_late=True, reject_on_worker_lost=True)
+# The batch runs its licences inline, so the per-licence limits do not apply.
+# A hard limit bounds the worker; a killed batch leaves RUNNING rows that the
+# recovery task re-dispatches after STALE_RUNNING_AFTER.
+@shared_task(name="planning.replan_sion_batch", queue=QUEUE, acks_late=True, reject_on_worker_lost=True, time_limit=3600)
 def replan_sion_batch(request_ids: list[int]):
     """Run one SION-wide user request serially, in the supplied licence order."""
     results = []
@@ -263,6 +266,25 @@ def replan_license_task(self, request_id: int):
                     "replacement_request_id": replacement.pk,
                     **summary,
                 }
+
+            if summary["failures"]:
+                # A licence whose norm failed is NOT planned for this revision.
+                # Recording SUCCEEDED here (and advancing planning_applied_revision)
+                # told the UI the licence was CURRENT while a norm was missing.
+                # The row stays FAILED with every norm failure, so it can be
+                # retried explicitly and the revision is not acknowledged.
+                failure_text = "; ".join(f"SION {item.get('sion_id')}: {item.get('error_code')}" for item in summary["failures"])
+                request.status, request.completed_at = LicenseReplanRequest.STATUS_FAILED, timezone.now()
+                request.result = summary
+                request.last_error_code = "PARTIAL_NORM_FAILURE"
+                request.last_error_message = f"{len(summary['failures'])} norm(s) failed: {failure_text}"
+                request.last_error = request.last_error_message
+                request.save(update_fields=["status", "completed_at", "result", "last_error", "last_error_code", "last_error_message"])
+                logger.warning(
+                    "license_replan_partial_failure request=%s license=%s failures=%s",
+                    request.pk, request.license_id, len(summary["failures"]),
+                )
+                return {"status": request.status, "request_id": request_id, **summary}
 
             request.status, request.completed_at = LicenseReplanRequest.STATUS_SUCCEEDED, timezone.now()
             request.planned_revision, request.result = request.started_source_revision, summary

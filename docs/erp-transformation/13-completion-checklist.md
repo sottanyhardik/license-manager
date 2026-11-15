@@ -21,10 +21,10 @@ _Last updated: 2026-11-15 · branch `feature/version5`_
 |---|---|---|
 | frontend lint | ❌ 3 errors | ✅ (9 pre-existing warnings) |
 | frontend typecheck / build | ✅ / ✅ | ✅ / ✅ |
-| frontend vitest | ❌ 1/544 | ✅ 544/544 |
+| frontend vitest | ❌ 1/544 | ✅ 546/546 |
 | backend check / migrations | ✅ / ✅ | ✅ / ✅ |
 | backend `tests/` | ❌ 5 failed / 232 | ✅ 237/237 |
-| backend app-level | ❌ collection error (0 run) | ❌ 7 failed / 2,700 passed — triage |
+| backend app-level | ❌ collection error (0 run) | 🟡 2,707 passed / 2 failed — both await OD-21 (5 stale tests fixed `b2bbbf99`) |
 | MDS pytest | ❌ (no local role) | ✅ |
 | mds-client | ❌ (env leak) | ✅ 25/25 |
 
@@ -32,7 +32,7 @@ _Last updated: 2026-11-15 · branch `feature/version5`_
 
 | Phase | Status | Notes |
 |---|---|---|
-| P0 Baseline | 🟡 in progress | gate fixes `5c509493`; triage of 7 hidden failures in progress (2,707 pass / 2 fail) |
+| P0 Baseline | 🟡 in progress | gate fixes `5c509493`; 5 stale tests fixed `b2bbbf99`; 2 await OD-21 |
 | OD-10 ledger Current Balance | ✅ done | `ea029f1d` — BUSINESS-RULE CHANGE, audited, 150/150 sampled licences = engine |
 | P1 Safe performance | ⏳ | ready to start (no owner input needed) |
 | P2 Canonical balance engine | ⛔ blocked | OD-10, OD-01, OD-02 |

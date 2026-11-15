@@ -44,5 +44,6 @@ Durable one-liners are mirrored in `.claude/memory/decisions.md`.
 | OD-18 | Activity-log retention window/archive | P7 | — |
 | OD-19 | Retire the 3 unused, incorrect materialized views; status of `ebrc_*`/`eScrap_*` tables | P7 | Retire MVs |
 | OD-20 | BOE natural key (number+date vs +port); credit rows with NULL BOE (87% of RowDetails) business key | P7 constraints | — |
+| OD-21 | **Item-pivot cell merging**: since `ff021e74`/`29cfed00`/`0a155e89` (Oct 23) one pivot cell joins descriptions/HSNs with commas and rolls UNPLANNED import rows of the same category into the planned cell's sources and totals (e.g. total_qty 250 = planned 200 + unplanned 50). Contradicts `test_item_pivot_planned_import_item.py` ("only the planned import row", "do not string-concatenate") | Green app-level suite; pivot quantities | Decide whether unplanned rows belong in the planned cell's totals; if not, fix merge; if yes, update the 2 tests |
 
 Additional owner decisions surfaced by 03/04/05/07 are appended to section B by those reports' "Conflicts" sections and consolidated in `00-executive-assessment.md`.

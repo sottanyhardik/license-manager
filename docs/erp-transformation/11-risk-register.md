@@ -12,7 +12,7 @@ Severity = impact × likelihood (H/M/L). Owner decisions referenced from 12 §B.
 | R-BL-05 | ARO allotment filter never matches (`'ARO'` vs stored `'AR'`) | M | `core/scripts/calculate_balance.py:55-56` | OD-12 (fix changes stored numbers) | Open |
 | R-BL-06 | Allotment write-path validates against stale float/truncated stored qty | M | `allotment/views_actions.py:1341`; 5,996 items differ | P3 after OD-13 | Open |
 | R-QA-01 | App-level suite not collected in CI since 2026-10-08 | H | collection ImportError | Fixed `5c509493` | **Closed** |
-| R-QA-02 | 7 hidden failures in item-pivot/plan outputs may be real regressions | M | gate-all-2 log | Triage (stale vs regression) | In progress |
+| R-QA-02 | 7 hidden failures in item-pivot/plan outputs may be real regressions | M | gate-all-2 log | 5 stale → fixed `b2bbbf99`; 2 → OD-21 | Open — owner decision |
 | R-QA-03 | No test runs `build()` on a licence with BOEs/allotments | H | 04 | Characterization tests (P0) | Open |
 | R-QA-04 | Local DB has 0 trades / 0 allocations → trade & allocation paths unmeasured | M | 03, 07 | Sanitised snapshot (OD-17) or factories | Open |
 | R-DB-01 | ORM CASCADE can delete BOE rows/allotments when masters are deleted | H | 03 §1/§8 | `PROTECT` migration (OD-16) | Open — owner decision |

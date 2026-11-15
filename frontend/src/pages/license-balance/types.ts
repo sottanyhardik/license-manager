@@ -130,6 +130,10 @@ export interface FinancialLedgerSummary {
     total_trade_debit: number;
     computed_balance: number;
     engine_balance: number;
+    /** Trade-only running total (opening + purchases − sales; no BOE or
+     * allotment term). Informational — NOT the available balance (OD-10).
+     * null when the backend had no canonical dataset. */
+    trade_running_balance?: number | null;
     difference: number;
     mismatched: boolean;
     tolerance: number;

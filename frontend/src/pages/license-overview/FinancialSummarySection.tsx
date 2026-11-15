@@ -20,6 +20,10 @@ export default function FinancialSummarySection({ summary }: FinancialSummarySec
         ...(summary.total_trade_debit > 0 ? ([["Total Trade Debits", fmtNum(summary.total_trade_debit)]] as [string, string][]) : []),
         ["Current Available Balance", fmtNum(summary.computed_balance)],
         ["Licence Balance Engine", fmtNum(summary.engine_balance)],
+        // OD-10: trade-only total shown separately, never as the available balance.
+        ...(summary.has_trading_activity && summary.trade_running_balance != null
+            ? ([["Trade Running Balance (purchases − sales)", fmtNum(summary.trade_running_balance)]] as [string, string][])
+            : []),
         ["Difference", fmtNum(summary.difference)],
         ["Tolerance", fmtNum(summary.tolerance)],
     ];

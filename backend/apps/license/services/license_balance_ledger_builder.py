@@ -664,12 +664,18 @@ class LicenseBalanceLedgerBuilder:
         computed_balance = quantize_2dp(running)
         computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
 
-        # Phase 4E-D: Use canonical final balance if provided (CanonicalLedgerService)
-        if canonical_data is not None:
-            canonical_final_balance = quantize_2dp(
-                canonical_data.get('license_running_balance', DEC_0)
-            )
-            computed_balance = canonical_final_balance
+        # OD-10 (owner decision 2026-11-15): the Current Balance row is the
+        # Balance Engine figure (computed row-by-row above, cross-checked
+        # against `engine_balance`). The canonical dataset's
+        # `license_running_balance` is a TRADE-ONLY total (opening +
+        # purchases - sales; no BOE/allotment term). Phase 4E-D (7fd7104d)
+        # used it to overwrite this row, inflating the balance of every
+        # BOE/allotment-utilised licence. It is exposed separately as
+        # `trade_running_balance` and never replaces the Current Balance.
+        trade_running_balance = (
+            quantize_2dp(canonical_data.get('license_running_balance', DEC_0))
+            if canonical_data is not None else None
+        )
 
         difference = abs(computed_balance - engine_balance)
         mismatched = difference > TOLERANCE
@@ -701,6 +707,9 @@ class LicenseBalanceLedgerBuilder:
             'total_trade_debit': total_trade_debit,
             'computed_balance': computed_balance,
             'engine_balance': engine_balance,
+            # Additive (OD-10): trade-only running total, labelled separately.
+            # None when no canonical dataset was supplied.
+            'trade_running_balance': trade_running_balance,
             'difference': difference,
             'mismatched': mismatched,
             'tolerance': TOLERANCE,
@@ -1602,15 +1611,16 @@ class LicenseBalanceLedgerBuilder:
         exclude hidden BOEs regardless of this flag; only the Customs
         Ledger's audit view can ever render them.
 
-        Phase 4E-D: Fetches canonical data once and threads to all builders
-        for authoritative balance values.
+        Fetches the canonical TRADE dataset once; it supplies only the
+        informational `trade_running_balance` (OD-10). The Current Balance is
+        always the Balance Engine figure, never the canonical trade total.
         """
         from apps.license.services.canonical_ledger_service import CanonicalLedgerService
 
         alloc_map = boe_invoice_allocation_map(license_obj)
         ext_map = boe_external_invoice_map(license_obj)
 
-        # Phase 4E-D: Fetch canonical dataset once (single authoritative source)
+        # Canonical trade dataset (informational trade-only total; see OD-10)
         try:
             canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
                 license_id=license_obj.id,

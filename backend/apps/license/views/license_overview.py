@@ -119,7 +119,9 @@ def add_license_overview_actions(viewset_class):
             "raw_balance_cif": raw_balance,
             "effective_balance_cif": effective_balance,
             "balance_cif_ignored_by_tolerance": raw_balance != effective_balance,
-            "planner_cif_exhausted": effective_balance == Decimal("0"),
+            # OD-01: balance is signed; an over-utilised licence is exhausted
+            # for planning (same result as before OD-01; audit H1 pending).
+            "planner_cif_exhausted": effective_balance <= Decimal("0"),
         })
         return Response(_json_safe(data))
 

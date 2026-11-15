@@ -183,7 +183,10 @@ def plan_utilization_rows(
             group["splits"].extend(member_plan.get("splits", []))
 
     license_balance_cif = _dec(getattr(license_obj, "get_balance_cif", DEC_0), DEC_0)
-    effective_license_balance_cif = effective_planning_balance_cif(license_balance_cif)
+    # OD-01: balance is signed; planning status keeps its pre-OD-01 input
+    # (non-negative) until the owner decides otherwise (H1 in the OD-01 audit).
+    from apps.license.services.planning_tolerances import plannable_capacity_cif
+    effective_license_balance_cif = effective_planning_balance_cif(plannable_capacity_cif(license_balance_cif))
     rows: List[Dict[str, Any]] = []
     for key in order:
         group = groups[key]

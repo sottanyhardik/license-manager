@@ -1636,9 +1636,9 @@ class LicenseBalanceCalculator:
             license_obj: LicenseDetailsModel instance
 
         Returns:
-            Financial Available Balance as Decimal (minimum 0), quantized
-            to 2 decimal places — same floor-at-0/quantize convention as
-            `calculate_balance`.
+            Financial Available Balance as Decimal, quantized to 2 decimal
+            places. SIGNED (OD-01): negative = over-utilised; unlike the
+            customs engine `calculate_balance`, it is not floored at 0.
         """
         opening = cls.calculate_opening_balance(license_obj)
         purchase_credit = cls.calculate_purchase_credit(license_obj)
@@ -1647,8 +1647,9 @@ class LicenseBalanceCalculator:
         allotment = cls.calculate_allotment(license_obj)
 
         balance = opening + purchase_credit - sale_debit - boe_debit - allotment
-        balance = quantize_2dp(balance)
-        return balance if balance >= DEC_0 else DEC_0
+        # OD-01 (owner, 2026-11-15): signed result — a negative value is real
+        # over-utilisation and must never be floored to 0.
+        return quantize_2dp(balance)
 
     @classmethod
     def calculate_financial_balance_for_licenses(cls, license_ids) -> dict:
@@ -1695,8 +1696,8 @@ class LicenseBalanceCalculator:
                 - boe_debit_map.get(lid, DEC_0)
                 - allotment_map.get(lid, DEC_0)
             )
-            balance = quantize_2dp(balance)
-            result[lid] = balance if balance >= DEC_0 else DEC_0
+            # OD-01: signed, never floored (see `_calculate_financial_balance`).
+            result[lid] = quantize_2dp(balance)
         return result
 
 

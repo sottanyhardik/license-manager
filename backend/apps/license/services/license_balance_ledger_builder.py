@@ -661,8 +661,8 @@ class LicenseBalanceLedgerBuilder:
         # summary`'s `customs_ledger_balance`/`previous_owner_utilisation`,
         # never folded into THIS mismatch check).
         engine_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
+        # OD-01: signed — negative = over-utilised, never floored.
         computed_balance = quantize_2dp(running)
-        computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
 
         # OD-10 (owner decision 2026-11-15): the Current Balance row is the
         # Balance Engine figure (computed row-by-row above, cross-checked
@@ -710,6 +710,9 @@ class LicenseBalanceLedgerBuilder:
             # Additive (OD-10): trade-only running total, labelled separately.
             # None when no canonical dataset was supplied.
             'trade_running_balance': trade_running_balance,
+            # Additive (OD-01): explicit over-utilisation flag for the signed
+            # `computed_balance` (negative = utilised more than available).
+            'is_over_utilised': computed_balance < DEC_0,
             'difference': difference,
             'mismatched': mismatched,
             'tolerance': TOLERANCE,

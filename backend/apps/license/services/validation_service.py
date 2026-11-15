@@ -157,6 +157,9 @@ class LicenseValidationService:
                 available_balance = license_obj.get_balance_cif
         else:
             available_balance = license_obj.get_balance_cif
+        # OD-01: capacity check uses the non-negative planning capacity.
+        from apps.license.services.planning_tolerances import plannable_capacity_cif
+        available_balance = plannable_capacity_cif(available_balance)
 
         if available_balance < required:
             return False, f"Insufficient balance. Available: {available_balance}, Required: {required}"

@@ -833,10 +833,9 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         get_serializer_context`) and passes it via `self.context
         ['live_balance_map']`; fall back to the stored column only if no
         batch map was supplied (e.g. this serializer used outside that
-        viewset's `list`/`retrieve` flow). Clamp negatives to zero so this
-        matches the live calculator's semantics exactly (it returns
-        max(balance, 0)); the stored column can hold a negative-zero that
-        would otherwise serialize as '-0.00'."""
+        viewset's `list`/`retrieve` flow). SIGNED (OD-01): a negative value is
+        over-utilisation and is returned as-is; only an exact zero is
+        normalised so a negative-zero never serializes as '-0.00'."""
         from decimal import Decimal
         live_map = self.context.get('live_balance_map')
         if live_map is not None:
@@ -845,7 +844,8 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             bal = obj.balance_cif
         if bal is None:
             return bal
-        return bal if bal > 0 else Decimal('0.00')
+        # OD-01: signed (negative = over-utilised); only normalise -0.00.
+        return Decimal('0.00') if bal == 0 else bal
 
     def __init__(self, *args, **kwargs):
         """
@@ -943,9 +943,9 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         from decimal import Decimal
 
         def _clamp(value):
-            # The live calculator can yield a negative-zero that serializes
-            # as '-0.00' — clamp to a plain zero.
-            if value is not None and value <= 0:
+            # OD-01: keep the sign (negative = over-utilised). Only normalise
+            # a negative-zero, which would serialize as '-0.00'.
+            if value is not None and value == 0:
                 return Decimal('0.00')
             return value
 

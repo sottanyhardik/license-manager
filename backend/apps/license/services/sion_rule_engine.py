@@ -337,7 +337,9 @@ class SionRulePlanningService:
         )
         results, conflicts = [], []
         for license_obj in licenses:
-            license_balance = balances.get(license_obj.pk, Decimal("0"))
+            # OD-01: rules evaluate planning capacity (never negative).
+            from apps.license.services.planning_tolerances import plannable_capacity_cif
+            license_balance = plannable_capacity_cif(balances.get(license_obj.pk, Decimal("0")))
             matched, shadowed = [], []
             for item in license_obj.import_license.all():
                 if str(item.unit).casefold() != str(rule.unit).casefold():

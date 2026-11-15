@@ -33,6 +33,23 @@ def effective_planning_balance_cif(value) -> Decimal:
     return value
 
 
+def plannable_capacity_cif(value) -> Decimal:
+    """Planning BUDGET/CAPACITY derived from the signed financial balance.
+
+    OD-01 (owner, 2026-11-15): `calculate_financial_balance` /
+    `get_balance_cif` are SIGNED - a negative value is real over-utilisation
+    and is displayed as such. Capacity for NEW planning/allocation cannot be
+    negative, so planners use this instead of the raw balance: negative -> 0,
+    any other value returned unchanged (no tolerance applied here - callers
+    that use the sub-500 tolerance compose it with
+    `effective_planning_balance_cif` themselves). Before OD-01 the engine
+    itself floored at 0, so planning inputs are exactly unchanged by this.
+    Use ONLY for budgets/ceilings, never for display.
+    """
+    value = _decimal(value)
+    return value if value > Decimal("0") else Decimal("0.00")
+
+
 def apply_remaining_plan_tolerance(quantity, cif) -> tuple[Decimal, Decimal]:
     """Ignore a strictly-positive final plan residual below 100 quantity.
 

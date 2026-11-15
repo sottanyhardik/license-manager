@@ -90,7 +90,9 @@ def _validate_plan_line_cap(item, planned_quantity, planned_cif_fc, *, exclude_p
         t=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )["t"]
     new_license_cif = existing_license_cif + planned_cif_fc
-    balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
+    # OD-01: validate against planning capacity (signed balance -> >= 0).
+    from apps.license.services.planning_tolerances import plannable_capacity_cif
+    balance_cif = plannable_capacity_cif(Decimal(str(license_obj.get_balance_cif or 0)))
     if new_license_cif > balance_cif:
         raise ValidationError({
             "planned_cif_fc": (

@@ -9,6 +9,7 @@ CIF reconciliation) ahead of the original Export/Import/BOE/Allotment tables
 ("the Customs Ledger"), plus a Final Reconciliation Summary at the end. See
 `_build_financial_ledger_elements` / `_build_final_reconciliation_elements`.
 """
+import logging
 from decimal import Decimal
 from apps.license.services.license_balance_ledger_builder import (
     boe_invoice_allocation_map,
@@ -96,7 +97,17 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
         return Paragraph('' if text is None else str(text), child_cell_style_r)
 
     ext_map = boe_external_invoice_map(license_obj)
-    ledger_rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(license_obj, alloc_map, ext_map)
+    from apps.license.services.canonical_ledger_service import CanonicalLedgerService
+    try:
+        canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=license_obj.id, license_type='DFIA'
+        )
+    except Exception:
+        logging.getLogger(__name__).exception('canonical ledger dataset failed for licence %s', license_obj.id)
+        canonical_data = None  # trade_running_balance then stays None (row omitted)
+    ledger_rows, summary = LicenseBalanceLedgerBuilder.build_financial_ledger(
+        license_obj, alloc_map, ext_map, canonical_data=canonical_data
+    )
 
     header_row = [
         'Sr', 'Txn Date', 'Txn Type', 'Doc Number', 'BOE Number', 'BOE Date',
@@ -221,6 +232,10 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
         ['Difference', f"${fmt_money(summary['difference'])}"],
         ['Tolerance', f"${fmt_money(summary['tolerance'])}"],
     ]
+    if summary.get('has_trading_activity') and summary.get('trade_running_balance') is not None:
+        summary_rows.append(['Trade Running Balance (purchases − sales)', f"${fmt_money(summary['trade_running_balance'])}"])
+    if summary.get('is_over_utilised'):
+        summary_rows.append(['Over-utilised', 'YES'])  # OD-01 explicit flag
     summary_table_data = [[Paragraph(lbl, summary_style), Paragraph(val, summary_val_style)] for lbl, val in summary_rows]
     summary_table = Table(summary_table_data, colWidths=[200 * mm, 75 * mm])
     summary_style_cmds = [

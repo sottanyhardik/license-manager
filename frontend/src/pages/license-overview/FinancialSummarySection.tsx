@@ -38,6 +38,14 @@ export default function FinancialSummarySection({ summary }: FinancialSummarySec
                             <td className="px-3 py-2 text-right font-medium tabular-nums">{value}</td>
                         </tr>
                     ))}
+                    {summary.is_over_utilised && (
+                        <tr className="border-t border-border/60">
+                            <td className="px-3 py-2 text-muted-foreground">Utilisation</td>
+                            <td className="px-3 py-2 text-right">
+                                <Badge variant="destructive">OVER-UTILISED</Badge>
+                            </td>
+                        </tr>
+                    )}
                     <tr className="border-t border-border/60">
                         <td className="px-3 py-2 text-muted-foreground">Status</td>
                         <td className="px-3 py-2 text-right">

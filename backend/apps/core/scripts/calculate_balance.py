@@ -156,7 +156,11 @@ def calculate_available_value(instance):
 
         if all_others_zero_cif and instance.serial_number == 1:
             live_balance = LicenseBalanceCalculator.calculate_financial_balance(instance.license)
-            return round(to_float(live_balance), 2)
+            # OD-01 made the licence balance signed; this value is persisted on
+            # the ITEM (stored available_value), and item-level figures stay
+            # non-negative until the item-level decision (OD-13). Keep the
+            # historical floor here explicitly.
+            return round(max(to_float(live_balance), 0.0), 2)
 
     return round(to_float(instance.available_value_calculated), 2)
 

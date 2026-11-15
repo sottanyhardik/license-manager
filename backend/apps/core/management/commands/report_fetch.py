@@ -112,7 +112,9 @@ def fetch_debited(import_item):
 
 def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen_other, found_other, not_found):
     for dfia in list_exclude:
-        if dfia.get_balance_cif >= 0:
+        # Legacy: before OD-01 the balance was floored, so this was always
+        # true; keep including over-utilised (negative) licences.
+        if max(dfia.get_balance_cif, 0) >= 0:
             try:
                 if dfia.get_norm_class == 'E5':
                     dict_data = {

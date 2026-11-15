@@ -183,7 +183,9 @@ class LicenseFilterSet(BaseFilterSet):
         if value:
             return queryset.filter(balance__balance_cif__gt=0)
         else:
-            return queryset.filter(balance__balance_cif=0)
+            # OD-01: the cached balance is signed; "no balance" keeps including
+            # over-utilised (negative) licences, as when they were floored to 0.
+            return queryset.filter(balance__balance_cif__lte=0)
 
     def filter_purchase_status(self, queryset, name, value):
         """Filter by single or comma-separated purchase status IDs or codes."""

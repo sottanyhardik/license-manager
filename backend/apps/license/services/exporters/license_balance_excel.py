@@ -5,6 +5,7 @@ Extracted verbatim from ``LicenseDetailsViewSet.balance_excel``,
 clean-architecture refactor. The viewset now only resolves inputs and delegates
 here; behaviour is unchanged.
 """
+import logging
 def build_balance_excel_unused(license_obj):
     """Original full balance Excel — kept for reference, no longer exposed."""
     from django.http import HttpResponse
@@ -493,10 +494,18 @@ def _write_financial_ledger_sheet(wb, rows, summary):
         ('Difference', summary['difference']),
         ('Tolerance', summary['tolerance']),
     ]
+    if summary.get('has_trading_activity') and summary.get('trade_running_balance') is not None:
+        summary_rows.append(('Trade Running Balance (purchases − sales)', summary['trade_running_balance']))
+    if summary.get('is_over_utilised'):
+        # OD-01: explicit flag next to the (negative) Current Available Balance.
+        summary_rows.append(('Over-utilised', 'YES'))
     for label, value in summary_rows:
         ws.cell(row=r, column=1, value=label).font = Font(bold=True)
-        vcell = ws.cell(row=r, column=2, value=float(value))
-        vcell.number_format = '#,##0.00'
+        if isinstance(value, str):  # flag rows (e.g. 'Over-utilised')
+            vcell = ws.cell(row=r, column=2, value=value)
+        else:
+            vcell = ws.cell(row=r, column=2, value=float(value))
+            vcell.number_format = '#,##0.00'
         r += 1
 
     r += 1
@@ -573,8 +582,11 @@ def _write_customs_ledger_sheet(wb, rows, summary):
     ]
     for label, value in summary_rows:
         ws.cell(row=r, column=1, value=label).font = Font(bold=True)
-        vcell = ws.cell(row=r, column=2, value=float(value))
-        vcell.number_format = '#,##0.00'
+        if isinstance(value, str):  # flag rows (e.g. 'Over-utilised')
+            vcell = ws.cell(row=r, column=2, value=value)
+        else:
+            vcell = ws.cell(row=r, column=2, value=float(value))
+            vcell.number_format = '#,##0.00'
         if summary['mismatched'] and label == 'Difference':
             ws.cell(row=r, column=1).fill = MISMATCH_FILL
             ws.cell(row=r, column=2).fill = MISMATCH_FILL
@@ -1188,15 +1200,21 @@ def build_balance_excel(license_obj, show_hidden=False):
     from apps.license.services.canonical_ledger_service import CanonicalLedgerService
 
     # Fetch canonical dataset once (Phase 4E-D: single authoritative source)
-    canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
-        license_id=license_obj.id,
-        license_type='DFIA'
-    )
+    try:
+        canonical_data = CanonicalLedgerService.build_canonical_ledger_dataset(
+            license_id=license_obj.id,
+            license_type='DFIA'
+        )
+    except Exception:
+        logging.getLogger(__name__).exception('canonical ledger dataset failed for licence %s', license_obj.id)
+        # Same fallback as LicenseBalanceLedgerBuilder.build(): canonical data
+        # only feeds the informational trade_running_balance (OD-10).
+        canonical_data = None
 
     # Build balance map: transaction_id → running_balance
     canonical_balance_map = {
         txn['id']: txn['license_running_balance']
-        for txn in canonical_data.get('transactions', [])
+        for txn in (canonical_data or {}).get('transactions', [])
     }
 
     alloc_map = boe_invoice_allocation_map(license_obj)

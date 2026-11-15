@@ -237,7 +237,15 @@ function deriveStatus(item: LicenseListItem): {
             badge: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
         };
     }
-    if (balance <= 0) {
+    // OD-01: a negative (signed) balance is over-utilisation, shown distinctly.
+    if (balance < 0) {
+        return {
+            label: "Over-utilised",
+            dot: "bg-destructive",
+            badge: "bg-destructive/10 text-destructive ring-1 ring-destructive/20",
+        };
+    }
+    if (balance === 0) {
         return {
             label: "Exhausted",
             dot: "bg-muted-foreground/60",
@@ -588,8 +596,8 @@ function TransactionsTab({
                     <div className="font-semibold tabular-nums">${fmtNum(ledger.total_value)}</div>
                 </div>
                 <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">License Balance</span>
-                    <div className="font-semibold tabular-nums text-primary">${fmtNum(ledger.license_running_balance ?? ledger.available_balance ?? 0)}</div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trade Running Balance</span>
+                    <div className="font-semibold tabular-nums text-primary">${fmtNum(ledger.license_running_balance ?? 0  /* OD-10: never fall back to an Available-CIF alias under the trade label */)}</div>
                 </div>
                 <div>
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transactions</span>

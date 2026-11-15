@@ -134,6 +134,8 @@ export interface FinancialLedgerSummary {
      * allotment term). Informational — NOT the available balance (OD-10).
      * null when the backend had no canonical dataset. */
     trade_running_balance?: number | null;
+    /** OD-01: true when the signed `computed_balance` is negative. */
+    is_over_utilised?: boolean;
     difference: number;
     mismatched: boolean;
     tolerance: number;

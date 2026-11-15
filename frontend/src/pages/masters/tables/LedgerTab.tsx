@@ -229,7 +229,8 @@ function BoeSection({ boes, openingCif }: { boes: BoeEntry[]; openingCif: number
     let running = openingCif;
     const withBalance = sorted.map((b) => {
         running -= Number(b.cif_fc || 0);
-        return { ...b, running_balance: Math.max(0, running) };
+        // OD-01: no floor — a negative running balance is over-utilisation.
+        return { ...b, running_balance: running };
     });
 
     const totalCif = boes.reduce((s, b) => s + (Number(b.cif_fc) || 0), 0);

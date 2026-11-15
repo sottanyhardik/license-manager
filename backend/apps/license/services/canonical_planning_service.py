@@ -306,7 +306,9 @@ class CanonicalPlanningService:
             CanonicalPlanningService._assert_item_names_exist(normalized)
 
             # LIVE balance (Module 1). Never the cached balance_cif column.
-            opening_balance = quantize_cif(license_obj.get_balance_cif or DEC_0)
+            # OD-01: signed balance -> non-negative planning budget.
+            from apps.license.services.planning_tolerances import plannable_capacity_cif
+            opening_balance = quantize_cif(plannable_capacity_cif(license_obj.get_balance_cif or DEC_0))
 
             if not force_replan and CanonicalPlanningService._is_already_planned(
                 license_obj, opening_balance,

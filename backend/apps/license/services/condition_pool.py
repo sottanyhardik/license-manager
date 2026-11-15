@@ -262,7 +262,9 @@ def _resolve_available_value(item, balance_map: dict, pools_map: dict, attribute
     if not item.license_id:
         return DEC_0
 
-    license_balance = balance_map.get(item.license_id, DEC_0)
+    # OD-01: the pool is planning capacity, never negative.
+    from apps.license.services.planning_tolerances import plannable_capacity_cif
+    license_balance = plannable_capacity_cif(balance_map.get(item.license_id, DEC_0))
     cond = (item.condition_type or "").strip()
 
     if cond.endswith("%"):

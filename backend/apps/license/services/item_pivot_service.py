@@ -161,6 +161,10 @@ class ItemPivotService:
     def build(cls, licenses):
         licenses = list(licenses)
         ids = [license_obj.id for license_obj in licenses]
+        # OD-02: the licence row's Balance CIF is THE canonical financial
+        # Available CIF (signed, OD-01) — never a local formula.
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        canonical_balance_by_license = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
         plans = list(
             LicenseItemPlan.objects.filter(
                 license_id__in=ids,
@@ -588,7 +592,7 @@ class ItemPivotService:
                 "transfer_available": bool(getattr(license_obj, "latest_transfer", None)),
                 "latest_transfer": str(getattr(license_obj, "latest_transfer", "") or ""),
                 "total_cif": _text(total_cif), "debited_cif": _text(debited_cif), "allotted_cif": _text(allotted_cif),
-                "planned_cif": _text(planned_cif), "balance_cif": _text(max(total_cif - debited_cif - allotted_cif, ZERO_CIF)), "items": cells,
+                "planned_cif": _text(planned_cif), "balance_cif": _text(canonical_balance_by_license.get(license_obj.id, ZERO_CIF)), "items": cells,
                 "issues": issues, "issue_count": len(issues),
                 "highest_issue": min(issues, key=lambda issue: 0 if issue["severity"] == "critical" else 1)["type"] if issues else None,
             })

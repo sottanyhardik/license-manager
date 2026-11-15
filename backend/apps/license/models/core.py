@@ -1082,8 +1082,14 @@ class LicenseImportItemsModel(models.Model):
         cond = (self.condition_type or "").strip()
 
         # Percentage condition — pool-based shared limit.
+        # OD-01 made the licence balance signed; ITEM-level available value
+        # stays non-negative until OD-13 (parity with condition_pool's bulk
+        # path, which clamps via plannable_capacity_cif).
+        def licence_capacity():
+            return max(LicenseBalanceCalculator.calculate_financial_balance(self.license), DEC_0)
+
         if cond.endswith("%"):
-            license_balance = LicenseBalanceCalculator.calculate_financial_balance(self.license)
+            license_balance = licence_capacity()
             from apps.license.services.condition_pool import remaining_for_condition
             remaining = remaining_for_condition(self.license, cond)
             if remaining is None:
@@ -1096,7 +1102,7 @@ class LicenseImportItemsModel(models.Model):
         from apps.license.services.balance_calculator import ItemBalanceCalculator
         if ItemBalanceCalculator.has_item_attributed_cif(self):
             return ItemBalanceCalculator.calculate_item_attributed_balance(self)
-        return LicenseBalanceCalculator.calculate_financial_balance(self.license)
+        return licence_capacity()
 
     @cached_property
     def license_expiry(self) -> Optional[date]:
@@ -2367,11 +2373,12 @@ class LicenseBalance(models.Model):
         primary_key=True,
         related_name="balance",
     )
+    # OD-01: cached copy of the SIGNED financial balance (negative =
+    # over-utilised), so no non-negative validator.
     balance_cif = models.DecimalField(
         max_digits=15,
         decimal_places=2,
         default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
     )
     ledger_date = models.DateField(null=True, blank=True)
 

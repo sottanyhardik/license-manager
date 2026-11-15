@@ -1587,9 +1587,13 @@ class SionPlanningExecutionService:
                         Decimal(str(ItemBalanceCalculator.calculate_item_balance(item))), Decimal("0"),
                     )
             for license_obj in licenses:
-                from apps.license.services.planning_tolerances import effective_planning_balance_cif
+                from apps.license.services.planning_tolerances import (
+                    effective_planning_balance_cif, plannable_capacity_cif,
+                )
                 raw_balance_cif = cls._decimal(live_balances[license_obj.pk])
-                effective_balance_cif = effective_planning_balance_cif(raw_balance_cif)
+                # OD-01: signed balance -> non-negative planning capacity
+                # (same sub-500 tolerance as before).
+                effective_balance_cif = plannable_capacity_cif(effective_planning_balance_cif(raw_balance_cif))
                 # The export/history reconciliation identifies the maximum
                 # entitlement remaining under this SION.  The actual live
                 # license balance is an independent absolute cap, so use the

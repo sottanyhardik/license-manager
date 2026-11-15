@@ -234,7 +234,9 @@ def _update_all_import_items_available_value(license_instance):
         # (balance_cif is no longer a field on LicenseDetailsModel.)
         if hasattr(license_instance, "balance") and license_instance.balance is not None:
             license_instance.balance.refresh_from_db(fields=["balance_cif"])
-        license_balance = license_instance.balance_cif or DEC_0
+        # OD-01: cached licence balance is signed; the stored ITEM available
+        # value stays non-negative until OD-13.
+        license_balance = max(license_instance.balance_cif or DEC_0, DEC_0)
 
         # One-shot computation of remaining pools for every %-condition on
         # this licence (handles 0 groups too — returns an empty dict).

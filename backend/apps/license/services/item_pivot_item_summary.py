@@ -55,9 +55,11 @@ def project_item_summary(licenses):
         for item_key, cell in (license_row.get("items") or {}).items():
             canonical_id = cell.get("canonical_item_id")
             sion = cell.get("sion") or ""
-            key = (canonical_id, sion)
+            # OD-21: planned and unplanned cells of one canonical item stay separate rows.
+            planning_state = cell.get("planning_state") or ("unplanned" if cell.get("priority_source") == "unplanned" else "planned")
+            key = (canonical_id, sion, planning_state)
             bucket = buckets.setdefault(key, {
-                "canonical_item_id": canonical_id, "item_name": cell.get("item_name") or item_key,
+                "canonical_item_id": canonical_id, "item_name": cell.get("item_name") or item_key, "planning_state": planning_state,
                 "product_category": cell.get("product_category"),
                 "sion": sion, "hsn_codes": set(), "license_ids": set(), "affected_license_ids": set(),
                 **{field: ZERO_QTY for field in QTY_FIELDS}, **{field: ZERO_CIF for field in CIF_FIELDS},
@@ -120,7 +122,7 @@ def project_item_summary(licenses):
         )
         row = {
             "canonical_item_id": bucket["canonical_item_id"], "item_name": bucket["item_name"],
-            "product_category": bucket["product_category"],
+            "product_category": bucket["product_category"], "planning_state": bucket["planning_state"],
             "sion": bucket["sion"], "hsn_codes": sorted(bucket["hsn_codes"]),
             "license_count": len(bucket["license_ids"] - {None}),
             **{field: _out(bucket[field], Decimal("0.000")) for field in QTY_FIELDS},
@@ -151,7 +153,7 @@ def project_item_summary(licenses):
     # API order is authoritative: active SION-rule priority, then configured
     # split-member order.  Unmatched rows intentionally follow all matched.
     rows.sort(key=lambda row: (
-        row["sion"], row["planning_priority"] is None,
+        row["sion"], row["planning_state"] == "unplanned", row["planning_priority"] is None,
         row["planning_priority"] if row["planning_priority"] is not None else 999999,
         row["priority_item_order"] if row["priority_item_order"] is not None else 999999,
         (row["item_name"] or "").casefold(), row["canonical_item_id"] or -1,

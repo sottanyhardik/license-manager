@@ -66,6 +66,51 @@ def _positive_issue(issue):
     )
 
 
+# OD-21 (2026-11-15): planned and unplanned import rows are never merged into
+# one pivot cell.  ``planning_state`` is carried on every cell / column so
+# consumers can tell them apart; unplanned columns use a distinct key suffix.
+PLANNED = "planned"
+UNPLANNED = "unplanned"
+
+
+def _unplanned_key(product_category, sion):
+    return f"{product_category or 'UNCLASSIFIED'}:{sion}:{UNPLANNED}"
+
+
+def _unique_texts(values):
+    """Stripped, non-empty values, de-duplicated case-insensitively, first spelling kept."""
+    seen, unique = set(), []
+    for value in values:
+        text = (value or "").strip()
+        if text and text.casefold() not in seen:
+            seen.add(text.casefold())
+            unique.append(text)
+    return unique
+
+
+def _cell_identity(source_items, planning_state):
+    """(hsn_code, description) shown on a pivot cell built from ``source_items``.
+
+    A single distinct value is shown as-is.  For a *planned* cell, several
+    distinct values are ambiguous and are left blank (``""``) — never glued
+    together; ``source_items`` carries each source's own HSN/description.
+    Returns ``None`` for the description when no source has one, so the caller
+    may apply its own fallback.  Unplanned-only cells keep the comma-joined
+    display (ff021e74) since they never touch a planned cell (OD-21).
+    """
+    hsns = _unique_texts(row.get("hsn_code") for row in source_items)
+    descriptions = _unique_texts(row.get("description") for row in source_items)
+
+    def pick(values):
+        if len(values) == 1:
+            return values[0]
+        if not values:
+            return None
+        return ", ".join(values) if planning_state == UNPLANNED else ""
+
+    return pick(hsns) or "", pick(descriptions)
+
+
 def _merge_plan_cell(existing, candidate):
     """Coalesce plan lines targeting one canonical pivot identity.
 
@@ -75,6 +120,11 @@ def _merge_plan_cell(existing, candidate):
     plan fields sum, while source usage/entitlement is counted once for a
     repeated source and once per distinct source.
     """
+    # OD-21: planned and unplanned rows are separate pivot cells.  Their keys
+    # differ, so a cross-state merge would be a programming error that
+    # double-counts or mislabels quantities; fail loudly instead.
+    if existing.get("planning_state", PLANNED) != candidate.get("planning_state", PLANNED):
+        raise ValueError("Item pivot: planned and unplanned rows must not share a cell (OD-21)")
     existing_sources = {row["import_item_id"]: row for row in existing.get("source_items", [])}
     candidate_sources = {row["import_item_id"]: row for row in candidate.get("source_items", [])}
     new_source_ids = set(candidate_sources) - set(existing_sources)
@@ -98,29 +148,9 @@ def _merge_plan_cell(existing, candidate):
         if existing.get("available_cif") is not None and candidate.get("available_cif") is not None:
             existing["available_cif"] = _text(_decimal(existing["available_cif"]) + _decimal(candidate["available_cif"]))
 
-    hsn_codes = [row.get("hsn_code") for row in existing["source_items"] if row.get("hsn_code")]
-    descriptions = [row.get("description") for row in existing["source_items"] if row.get("description")]
-    # Normalize descriptions: strip whitespace and ignore case for deduplication.
-    # If all descriptions are the same after normalization, show one; otherwise join with comma.
-    if hsn_codes:
-        unique_hsns = list(dict.fromkeys(hs.strip() for hs in hsn_codes if hs.strip()))
-        existing["hsn_code"] = unique_hsns[0] if len(unique_hsns) == 1 else ", ".join(unique_hsns)
-    else:
-        existing["hsn_code"] = ""
-    if descriptions:
-        # Normalize by stripping whitespace and lowercasing for comparison
-        normalized = [desc.strip() for desc in descriptions if desc.strip()]
-        # Deduplicate while preserving order; ignore case for comparison
-        seen = set()
-        unique_descs = []
-        for desc in normalized:
-            key = desc.lower()
-            if key not in seen:
-                seen.add(key)
-                unique_descs.append(desc)
-        existing["description"] = unique_descs[0] if len(unique_descs) == 1 else ", ".join(unique_descs)
-    else:
-        existing["description"] = ""
+    hsn_code, description = _cell_identity(existing["source_items"], existing.get("planning_state", PLANNED))
+    existing["hsn_code"] = hsn_code
+    existing["description"] = description or ""
     return existing
 
 
@@ -247,6 +277,13 @@ class ItemPivotService:
             allotted_cif = sum((usage_totals[item.id]["allot_cif"] for item in import_items), ZERO_CIF)
             cells = {}
             planned_cif = ZERO_CIF
+            # Column (item_group) entries in cell-creation order; registered on
+            # the licence's group once that group is known below.
+            column_entries = []
+            # Every import row a plan draws from (its import_item plus any
+            # provenance source rows).  Such a row is planned and must never
+            # also appear as an unplanned cell (OD-21: no double counting).
+            planned_import_item_ids = set()
 
             # Look up CIF restriction map for this license's SION norm
             license_cif_restriction_map = cif_restriction_by_sion_item.get(default_sion, {})
@@ -271,19 +308,18 @@ class ItemPivotService:
                     description_for_class = ""
                 hsn_for_class = next((item.hs_code.hs_code for item in source_items if item.hs_code_id), "")
                 product_category = classify_product(hsn_for_class, description_for_class, default_sion)
-                # Collect all descriptions and HSN codes from source items for display.
-                # Deduplicate by case-insensitive comparison, preserve original casing.
-                source_descs = [item.description.strip() for item in source_items if item.description and item.description.strip()]
-                seen_desc = set()
-                unique_descs = []
-                for d in source_descs:
-                    if d.lower() not in seen_desc:
-                        seen_desc.add(d.lower())
-                        unique_descs.append(d)
-                display_description = unique_descs[0] if len(unique_descs) == 1 else (", ".join(unique_descs) if unique_descs else item_name)
-                source_hsns = [item.hs_code.hs_code.strip() for item in source_items if item.hs_code_id and item.hs_code.hs_code and item.hs_code.hs_code.strip()]
-                unique_hsns = list(dict.fromkeys(hs for hs in source_hsns if hs))
-                display_hsn = unique_hsns[0] if len(unique_hsns) == 1 else (", ".join(unique_hsns) if unique_hsns else "")
+                # Display identity comes only from this plan's own (planned)
+                # source rows; distinct values are blank, never concatenated
+                # (OD-21).  A plan with no source description shows its name.
+                display_hsn, display_description = _cell_identity(
+                    [
+                        {"hsn_code": item.hs_code.hs_code if item.hs_code_id else "", "description": item.description}
+                        for item in source_items
+                    ],
+                    PLANNED,
+                )
+                if display_description is None:
+                    display_description = item_name
                 # The matrix key uses product category so items with the same
                 # category (e.g. DIETARY FIBRE) merge into one column per license.
                 # A canonical item with two SIONs must remain two cells.
@@ -362,7 +398,7 @@ class ItemPivotService:
                 available_cif = max(item_cif_cap - max(source_used_cif, ZERO_CIF), ZERO_CIF) if has_item_cif_cap else None
                 candidate_cell = {
                     "canonical_item_id": plan.item_name_id, "item_name": item_name, "sion": sion,
-                    "product_category": product_category,
+                    "product_category": product_category, "planning_state": PLANNED,
                     "hsn_code": display_hsn, "description": display_description, "total_qty": _text(adjusted_total_qty),
                     # A pivot cell is a projection of particular import rows,
                     # not a substitute for them.  Keep the precise source
@@ -404,15 +440,17 @@ class ItemPivotService:
                     _merge_plan_cell(cells[key], candidate_cell)
                     if key in cells else candidate_cell
                 )
-                # Add the column to the licence's notification/company group
-                # after its identity is known below.
+                planned_import_item_ids.add(plan.import_item_id)
+                planned_import_item_ids.update(item.id for item in source_items)
+                # Registered per plan under this plan's own key (previously a
+                # stale loop variable registered only the last plan's column).
+                column_entries.append({"key": key, "canonical_item_id": plan.item_name_id, "name": item_name, "sion": sion, "product_category": product_category, "planning_state": PLANNED, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
 
             # Build zero-plan cells for import items not covered by any active
             # plan so the pivot report shows the full licence contents — even
             # items with available quantity 0 or no plan at all.
-            # Use product category as the key so unplanned items merge with
-            # planned items in the same category (e.g. DIETARY FIBRE).
-            planned_import_item_ids = {plan.import_item_id for plan in plans_by_license[license_obj.id]}
+            # OD-21: unplanned rows of one product category share their own
+            # unplanned column and never merge into the planned cell.
             for item in import_items:
                 if item.id in planned_import_item_ids:
                     continue
@@ -425,7 +463,7 @@ class ItemPivotService:
                 unplanned_product_category = classify_product(hsn_str, unplanned_text, default_sion)
                 # Use product category as the key so items with the same
                 # category merge into one column per license.
-                unplanned_key = f"{unplanned_product_category or 'UNCLASSIFIED'}:{sion_str}"
+                unplanned_key = _unplanned_key(unplanned_product_category, sion_str)
                 first_item_name_id = None
                 for attached in item.items.all():
                     first_item_name_id = attached.id
@@ -452,7 +490,7 @@ class ItemPivotService:
                 # same product category key, otherwise create a new one.
                 unplanned_candidate = {
                     "canonical_item_id": first_item_name_id, "item_name": item_name_str, "sion": sion_str,
-                    "product_category": unplanned_product_category,
+                    "product_category": unplanned_product_category, "planning_state": UNPLANNED,
                     "hsn_code": hsn_str, "description": item_name_str,
                     "total_qty": _text(item_total_qty),
                     "source_items": [
@@ -491,6 +529,7 @@ class ItemPivotService:
                     _merge_plan_cell(cells[unplanned_key], unplanned_candidate)
                     if unplanned_key in cells else unplanned_candidate
                 )
+                column_entries.append({"key": unplanned_key, "canonical_item_id": first_item_name_id, "name": item_name_str, "sion": sion_str, "product_category": unplanned_product_category, "planning_state": UNPLANNED, "priority": 999999, "sequence": item.id})
 
             notification = license_obj.notification_number.code if license_obj.notification_number_id else "Unknown"
             # Purchase status is the report's grouping dimension.  Exporter,
@@ -503,32 +542,8 @@ class ItemPivotService:
             group = output_groups[group_key]
             group["notification_number"] = notification
             group["purchase_status"] = {"id": purchase_status_id, "name": purchase_status_name}
-            for plan in plans_by_license[license_obj.id]:
-                provenance = plan.allocation_provenance or {}
-                name = (plan.item_name.name if plan.item_name_id else provenance.get("canonical_item_name")) or "UNMAPPED ITEM"
-                sion = provenance.get("sion") or default_sion
-                # Use the same product category key as the cells dict
-                plan_cell = cells.get(key)
-                plan_product_category = plan_cell.get("product_category") if plan_cell else None
-                group["item_groups"].setdefault(key, {"key": key, "canonical_item_id": plan.item_name_id, "name": name, "sion": sion, "product_category": plan_product_category, "priority": plan.planning_rule_priority or 999999, "sequence": plan.id})
-            # Register unplanned items in item_groups so they appear as columns
-            # in the report matrix even when no plan exists for them.
-            for item in import_items:
-                if item.id in planned_import_item_ids:
-                    continue
-                item_name_str = (item.description or "").strip() or "UNMAPPED ITEM"
-                hsn_str = item.hs_code.hs_code if item.hs_code_id else ""
-                sion_str = default_sion
-                # C969 classifies the raw description so a blank line stays NO DESCRIPTION.
-                unplanned_text = (item.description or "").strip() if default_sion == "C969" else item_name_str
-                unplanned_product_category = classify_product(hsn_str, unplanned_text, default_sion)
-                unplanned_key = f"{unplanned_product_category or 'UNCLASSIFIED'}:{sion_str}"
-                unplanned_cell = cells.get(unplanned_key)
-                first_item_name_id = None
-                for attached in item.items.all():
-                    first_item_name_id = attached.id
-                    break
-                group["item_groups"].setdefault(unplanned_key, {"key": unplanned_key, "canonical_item_id": first_item_name_id, "name": item_name_str, "sion": sion_str, "product_category": unplanned_product_category, "priority": 999999, "sequence": item.id})
+            for entry in column_entries:
+                group["item_groups"].setdefault(entry["key"], entry)
             issues = []
             for item_key, cell in cells.items():
                 adjusted_qty = _decimal(cell["adjusted_total_qty"])
@@ -559,7 +574,8 @@ class ItemPivotService:
             for issue in issues:
                 if not _positive_issue(issue):
                     continue
-                unique_issues[(license_obj.id, issue.get("canonical_item_id"), issue.get("sion"), issue["type"])] = issue
+                issue["planning_state"] = cells[issue["item_key"]].get("planning_state", PLANNED)
+                unique_issues[(license_obj.id, issue.get("canonical_item_id"), issue.get("sion"), issue["planning_state"], issue["type"])] = issue
             issues = list(unique_issues.values())
             group.setdefault("_licence_objects", []).append(license_obj)
             group["licenses"].append({
@@ -592,6 +608,7 @@ class ItemPivotService:
                     pivot_category_sort_key(row.get("product_category"), row["sion"]),
                     row.get("product_category") or "ZZZ_UNCLASSIFIED",
                     row["sion"],
+                    row.get("planning_state") == UNPLANNED,
                     row["priority"],
                     row["sequence"],
                     row["name"],
@@ -670,7 +687,7 @@ class ItemPivotService:
             status = "over_utilized" if actual_contributing else ("over_planned" if contributing else ("planned" if planned_qty else "available"))
             items.append({
                 "key": key, "item_name": row["name"], "sion": row["sion"],
-                "product_category": row.get("product_category"),
+                "product_category": row.get("product_category"), "planning_state": row.get("planning_state", PLANNED),
                 "priority": row["priority"], "sequence": row["sequence"],
                 "hsn_codes": sorted({cell["hsn_code"] for cell in cells if cell.get("hsn_code")}),
                 "license_count": len(cells), "total_qty": _text(total_qty), "boe_used_qty": _text(boe_qty),
@@ -684,13 +701,13 @@ class ItemPivotService:
                 "contributing_licenses": contributing,
                 "licenses": cells,
             })
-        items = sorted(items, key=lambda row: (pivot_category_sort_key(row.get("product_category"), row["sion"]), row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row["priority"], row["sequence"], row["item_name"]))
+        items = sorted(items, key=lambda row: (pivot_category_sort_key(row.get("product_category"), row["sion"]), row.get("product_category") or "ZZZ_UNCLASSIFIED", row["sion"], row.get("planning_state") == UNPLANNED, row["priority"], row["sequence"], row["item_name"]))
         global_summary = {key: _text(value) if isinstance(value, Decimal) else value for key, value in summary.items()}
         # Aliases make the report contract explicit while preserving the
         # existing consumers during the presentation-only migration.
         grand_projection = project_item_summary(all_licenses)
         report = {"groups": groups, "notification_groups": groups, "summary": global_summary,
-                "global_summary": global_summary, "items": items, "item_columns": [{"key": row["key"], "name": row["item_name"], "sion": row["sion"]} for row in items],
+                "global_summary": global_summary, "items": items, "item_columns": [{"key": row["key"], "name": row["item_name"], "sion": row["sion"], "planning_state": row["planning_state"]} for row in items],
                 "grand_total": {"notification_count": len(groups), "license_count": global_summary["license_count"], "summary": global_summary, **grand_projection},
                 "report_version": "canonical-item-pivot-v1"}
         # C969 gets the flat entitlement table; other norms' output is unchanged.

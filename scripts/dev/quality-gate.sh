@@ -71,7 +71,8 @@ gate_mds_inner() {
 }
 gate_mds_client() {
   py_ok || { skip "mds-client (runtests)" "Python >= 3.14 required"; return; }
-  run "mds-client: runtests" mds-client "$PY" runtests.py
+  # CI runs this in a fresh job; drop settings exported by earlier gates (mds.settings leaks otherwise).
+  run "mds-client: runtests" mds-client env -u DJANGO_SETTINGS_MODULE "$PY" runtests.py
 }
 for area in "$@"; do
   case $area in

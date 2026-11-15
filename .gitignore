@@ -32,6 +32,8 @@ staticfiles/
 # Database backups and sensitive data
 *.sql
 *.csv
+# Synthetic (fictional) ICEGATE ledger fixtures used by backend/tests/test_ledger_parser.py
+!backend/tests/fixtures/ledgers/*.csv
 remote_db_backup_*.sql
 
 # Node

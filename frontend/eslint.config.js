@@ -35,7 +35,8 @@ const unusedVarsConfig = {
 export default defineConfig([
   globalIgnores(['dist', 'playwright-report', 'test-results']),
   {
-    files: ['jest.config.js'],
+    // Standalone Node (CommonJS) scripts, not part of the SPA bundle
+    files: ['jest.config.js', 'route-browser-test.js'],
     languageOptions: {
       globals: globals.node,
       sourceType: 'commonjs',

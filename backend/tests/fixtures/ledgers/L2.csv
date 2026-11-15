@@ -1,0 +1,18 @@
+Indian Customs EDI System,,
+Itemwise Ledger,,
+
+Regn.No.,R2001,Regn.Date,01/04/2025 ,Lic.No.,310834974 ,Lic.Date,01/04/2025 
+RANo.,RA01,RA Date,01/04/2025 ,Port,INTST1
+IEC,923456789 ,Scheme,26 ,Notification,025/2023 ,Currency,USD
+Tot.Duty,,CIF INR,510000.00 ,Qty,600.000 ,CIF FC,6000.00 
+Credit-,1 ,Item 1,510000.00 ,6000.00 ,600.000 ,,,,
+Debit-,1 ,Item 1,51000.00 ,600.00 ,60.000 ,,9000004 ,10/07/2025 ,INTST1
+,,
+Regn.No.,R2002,Regn.Date,01/04/2025 ,Lic.No.,310835522 ,Lic.Date,01/04/2025 
+RANo.,RA01,RA Date,01/04/2025 ,Port,INTST1
+IEC,923456789 ,Scheme,26 ,Notification,025/2023 ,Currency,USD
+Tot.Duty,,CIF INR,340000.00 ,Qty,400.000 ,CIF FC,4000.00 
+Credit-,1 ,Item 1,255000.00 ,3000.00 ,300.000 ,,,,
+Credit-,2 ,Item 2,85000.00 ,1000.00 ,100.000 ,,,,
+Debit-,2 ,Item 2,8500.00 ,100.00 ,10.000 ,,9000005 ,11/07/2025 ,INTST1
+,,

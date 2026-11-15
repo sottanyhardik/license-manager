@@ -32,7 +32,8 @@ _Last updated: 2026-11-15 · branch `feature/version5`_
 
 | Phase | Status | Notes |
 |---|---|---|
-| P0 Baseline | 🟡 in progress | gate fixes `5c509493`; 7 failures in triage; characterization tests next |
+| P0 Baseline | 🟡 in progress | gate fixes `5c509493`; triage of 7 hidden failures in progress (2,707 pass / 2 fail) |
+| OD-10 ledger Current Balance | ✅ done | `ea029f1d` — BUSINESS-RULE CHANGE, audited, 150/150 sampled licences = engine |
 | P1 Safe performance | ⏳ | ready to start (no owner input needed) |
 | P2 Canonical balance engine | ⛔ blocked | OD-10, OD-01, OD-02 |
 | P3 Allotment/BOE/Invoice | ⛔ blocked | OD-11..15 |

@@ -4,7 +4,8 @@ Severity = impact × likelihood (H/M/L). Owner decisions referenced from 12 §B.
 
 | ID | Risk | Sev | Evidence | Mitigation | Status |
 |---|---|---|---|---|---|
-| R-BL-01 | Financial Ledger shows trade-only running total as "Current Balance" | **H** | `license_balance_ledger_builder.py:666-672`; id 2603: 190,992.45 vs engine 3,962.32; 2,036/2,185 dev licences | Characterization test now; fix after OD-10 | Open — owner decision |
+| R-BL-01 | Financial Ledger shows trade-only running total as "Current Balance" | **H** | `license_balance_ledger_builder.py:666-672`; id 2603: 190,992.45 vs engine 3,962.32; 2,036/2,185 dev licences | Fixed per OD-10 (`ea029f1d`), cif-balance-auditor APPROVE WITH NOTES | **Closed** (follow-ups R-BL-07) |
+| R-BL-07 | Trade-only total still labelled as a balance elsewhere (LicensesTable, canonicalLedgerAdapter, deprecated `available_balance` alias, ItemReport); balance Excel calls canonical service without try/except | M | cif audit L1/L2 | Resolve with OD-03 | Open |
 | R-BL-02 | Negative balances floored → over-utilisation invisible | H | 13 floors in `balance_calculator.py`; 35 dev licences (−6.96M) | Additive `raw_available` + flag; OD-01 | Open — owner decision |
 | R-BL-03 | 4 balance engines diverge (screen vs bulk Excel vs overview cards) | H | 05 DUP-02/07/17/18 | P2 canonical engine | Open |
 | R-BL-04 | Invoice PDF total ≠ stored total (rounding mode) | H | 05 DUP-11 | OD-11 | Open |

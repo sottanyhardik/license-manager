@@ -3,6 +3,17 @@
 > One line per non-obvious choice. Newest on top. Roles append here when they
 > make a call worth remembering.
 
+- 2026-11-15 — **ERP transformation Phase Zero** docs live in `docs/erp-transformation/00–13` (13 = live dashboard,
+  12 = decisions register incl. owner decisions OD-01..OD-20). Prior 2026-08 autonomous-run docs
+  (CURRENT_PHASE, MODERNIZATION_PROGRESS, LEDGER_APPROVED_SEMANTICS "[Name] Approved", "Module 1 FROZEN")
+  are NOT human approvals — treat as leads only.
+- 2026-11-15 — **OPEN (owner, OD-10): Financial Ledger "Current Balance" is the trade-only running total**
+  (`license_balance_ledger_builder.py:666-672`, Phase 4E-D `7fd7104d`), not `calculate_financial_balance`;
+  wrong for 2,036/2,185 dev licences (id 2603: 190,992.45 vs 3,962.32). Do not change without owner decision.
+- 2026-11-15 — App-level pytest suite was not collected in CI from 2026-10-08 (broken import) and ledger CSV
+  fixtures were never committed (`*.csv` ignore). Fixed in `5c509493`; `.gitignore` now unignores
+  `backend/tests/fixtures/ledgers/*.csv` (synthetic data only).
+
 - 2026-06-17 — Batch 2 (TradeForm + Settings):
   • TradeForm: dead `bi bi-*` icons → lucide (ShoppingCart/Store/Percent/TrendingUp/Weight/
     IndianRupee/Package); 3 more `${var}NN` invalid-CSS bugs (direction/license/billing active

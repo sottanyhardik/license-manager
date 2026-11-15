@@ -1,0 +1,56 @@
+# Local DEVELOPMENT services only: PostgreSQL 16 + Redis 7 (same majors as CI).
+# Django, Celery and Vite run natively (PyCharm / scripts/dev-start.sh) — they
+# are intentionally NOT containerised.
+#
+# Credentials come from the git-ignored .env.local (scripts/dev/init-local-env.sh):
+#   docker compose --env-file .env.local up -d        (scripts/dev-start.sh does this)
+# Ports are bound to 127.0.0.1 only. Never point this at production data.
+# Docs: docs/development-environment/DATABASE-SETUP.md
+name: license-manager
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: lm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LM_DB_NAME:-lmanagement}
+      POSTGRES_USER: ${LM_DB_USER:-lmanagement}
+      POSTGRES_PASSWORD: ${LM_DB_PASSWORD:?set LM_DB_PASSWORD in .env.local (scripts/dev/init-local-env.sh)}
+      # Consumed by docker/postgres/initdb/10-master-data.sh on FIRST init only.
+      MDS_DB_NAME: ${MDS_DB_NAME:-master_data}
+      MDS_DB_USER: ${MDS_DB_USER:-master_data}
+      MDS_DB_PASSWORD: ${MDS_DB_PASSWORD:?set MDS_DB_PASSWORD in .env.local (scripts/dev/init-local-env.sh)}
+      TZ: Asia/Kolkata
+    ports:
+      - "127.0.0.1:${LM_PG_PORT:-5432}:5432"
+    volumes:
+      - lm_pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./backups/db:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7
+    container_name: lm-redis
+    restart: unless-stopped
+    # AOF persistence so queued Celery tasks/results survive a container restart.
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    ports:
+      - "127.0.0.1:${LM_REDIS_PORT:-6379}:6379"
+    volumes:
+      - lm_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  lm_pgdata:
+  lm_redisdata:

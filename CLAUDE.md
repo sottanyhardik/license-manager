@@ -1,6 +1,6 @@
 # License Manager — Claude Code project instructions
 
-Django 6 / DRF / Python 3.14 / Postgres 16 / Redis / Celery backend (`backend/`),
+Django 6 / DRF / Python 3.14  / Postgres (CI: 16, local dev: 18) / Redis / Celery backend (`backend/`),
 React 19 + TypeScript 5.9 + Vite + Tailwind v4 + shadcn SPA (`frontend/`),
 Django master-data service (`master-data-service/`) and its Python client
 (`mds-client/`). Domain: Indian DGFT import/export licences (DFIA/Advance),

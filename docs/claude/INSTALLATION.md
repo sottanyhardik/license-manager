@@ -18,7 +18,7 @@ cd ~/PycharmProjects/license-manager
 bash scripts/dev/bootstrap-macos.sh            # add --with-ecc-plugin for the full ECC plugin
 ```
 
-It installs Homebrew (asks for your password), node@24, gh, uv, postgresql@16, redis, ripgrep and jq.
+It installs Homebrew (asks for your password), node@24, gh, uv, postgresql@18, redis, ripgrep and jq.
 It also creates `.venv-3.14` with backend/MDS test deps, runs `npm ci`, and creates the local
 `lmanagement` and `master_data` databases (same credentials as CI, local only). Finally it installs
 the PyCharm Claude Code plugin if PyCharm is closed.

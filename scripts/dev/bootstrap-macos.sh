@@ -1,76 +1,68 @@
-#!/bin/bash
-# One-time developer-machine bootstrap for the License Manager (macOS, Apple Silicon).
-# Run it yourself in Terminal (it needs your password once, for Homebrew):
-#     bash scripts/dev/bootstrap-macos.sh [--with-ecc-plugin] [--skip-db]
-# Idempotent: safe to re-run. Installs only LOCAL dev tooling; touches no remote system.
+#!/usr/bin/env bash
+# One-time workstation bootstrap for Apple Silicon macOS. Idempotent; safe to re-run.
+# Installs only what is missing. Never touches databases or deploy config.
+#
+#   1. uv + Python 3.14 (arm64, user space)        → ~/.local/bin, ~/.local/share/uv
+#   2. Node.js 24 LTS (arm64, user space)          → ~/.local/node
+#   3. Homebrew CLI tools from ./Brewfile          (needs Homebrew — see below)
+#   4. backend/.venv + master-data-service/.venv from the pinned requirements
+#   5. frontend: npm ci
+#   6. local env files (scripts/dev/init-local-env.sh)
+#
+# Homebrew and Docker Desktop's first launch need your macOS password, so they are
+# NOT automated here. Install Homebrew first (official command):
+#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-WITH_ECC_PLUGIN=0; SKIP_DB=0
-for a in "$@"; do case $a in --with-ecc-plugin) WITH_ECC_PLUGIN=1;; --skip-db) SKIP_DB=1;; esac; done
-step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+cd "$ROOT"
+export PATH="$HOME/.local/bin:$HOME/.local/node/bin:/opt/homebrew/bin:$PATH"
+[ "$(uname -m)" = arm64 ] || { echo "expected Apple Silicon (arm64)"; exit 1; }
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
-step "1/9 Xcode command line tools"
-xcode-select -p >/dev/null 2>&1 || { xcode-select --install; echo "Re-run this script after the CLT installer finishes."; exit 1; }
-
-step "2/9 Homebrew"
-if ! command -v brew >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/brew ]; then
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# 1. uv + Python 3.14
+if ! command -v uv >/dev/null; then
+  v=$(curl -fsSL https://api.github.com/repos/astral-sh/uv/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+  f=uv-aarch64-apple-darwin.tar.gz
+  (cd "$TMP" && curl -fsSLO "https://github.com/astral-sh/uv/releases/download/$v/$f" \
+     && curl -fsSLO "https://github.com/astral-sh/uv/releases/download/$v/$f.sha256" \
+     && shasum -a 256 -c "$f.sha256" && tar xzf "$f")
+  mkdir -p ~/.local/bin && cp "$TMP"/uv-aarch64-apple-darwin/uv{,x} ~/.local/bin/
 fi
-eval "$(/opt/homebrew/bin/brew shellenv)"
-
-step "3/9 CLI toolchain (node 24, gh, uv, postgres 16, redis, ripgrep, jq)"
-brew install node@24 gh uv postgresql@16 redis ripgrep jq
-brew link --overwrite --force node@24 >/dev/null 2>&1 || true
-
-step "4/9 Shell PATH (~/.zshrc)"
-touch ~/.zshrc
-add_line() { grep -qxF "$1" ~/.zshrc || echo "$1" >> ~/.zshrc; }
-add_line 'eval "$(/opt/homebrew/bin/brew shellenv)"'
-add_line 'export PATH="$HOME/.local/bin:/opt/homebrew/opt/node@24/bin:/opt/homebrew/opt/postgresql@16/bin:$PATH"'
-export PATH="$HOME/.local/bin:/opt/homebrew/opt/node@24/bin:/opt/homebrew/opt/postgresql@16/bin:$PATH"
-
-step "5/9 Claude Code (native installer already present at ~/.local/bin/claude?)"
-if ! command -v claude >/dev/null 2>&1; then curl -fsSL https://claude.ai/install.sh | bash; fi
-claude --version
-
-step "6/9 Python 3.14 venv (.venv-3.14) + backend/MDS test deps — matches CI"
 uv python install 3.14
-[ -d "$ROOT/.venv-3.14" ] || uv venv "$ROOT/.venv-3.14" --python 3.14
-uv pip install --python "$ROOT/.venv-3.14/bin/python" -r "$ROOT/backend/requirements-test.txt"
-uv pip install --python "$ROOT/.venv-3.14/bin/python" -r "$ROOT/master-data-service/requirements-test.txt"
-uv pip install --python "$ROOT/.venv-3.14/bin/python" "Django>=6" requests
-echo "In PyCharm: Settings → Python Interpreter → Add → Existing → $ROOT/.venv-3.14/bin/python"
+PY314=$(uv python find 3.14)
+command -v ruff >/dev/null || uv tool install ruff
 
-step "7/9 Frontend deps (npm ci)"
-(cd "$ROOT/frontend" && npm ci)
-
-if [ $SKIP_DB -eq 0 ]; then
-  step "8/9 Local Postgres 16 + Redis, CI-identical dev/test databases"
-  brew services start postgresql@16
-  brew services start redis
-  for i in $(seq 1 20); do pg_isready -q -h localhost && break; sleep 1; done
-  mk() { # role/db name
-    psql -h localhost -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$1'" | grep -q 1 \
-      || psql -h localhost -d postgres -c "CREATE ROLE $1 LOGIN PASSWORD '$1' CREATEDB"
-    psql -h localhost -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$1'" | grep -q 1 \
-      || psql -h localhost -d postgres -c "CREATE DATABASE $1 OWNER $1"
-  }
-  mk lmanagement; mk master_data
-else
-  step "8/9 skipped databases (--skip-db)"
+# 2. Node 24
+if ! ~/.local/node/bin/node -v 2>/dev/null | grep -q '^v24\.'; then
+  base=https://nodejs.org/dist/latest-v24.x
+  (cd "$TMP" && curl -fsSLO "$base/SHASUMS256.txt" \
+     && f=$(grep -oE 'node-v24[0-9.]+-darwin-arm64\.tar\.gz' SHASUMS256.txt | head -1) \
+     && curl -fsSLO "$base/$f" && grep " $f\$" SHASUMS256.txt | shasum -a 256 -c - && tar xzf "$f" \
+     && rm -rf ~/.local/node && mv "${f%.tar.gz}" ~/.local/node)
 fi
 
-step "9/9 Claude Code integrations"
-PYCHARM="/Applications/PyCharm.app/Contents/MacOS/pycharm"
-if pgrep -xq pycharm; then
-  echo "PyCharm is running — install the plugin from Settings → Plugins → Marketplace → 'Claude Code', then restart."
-elif [ -x "$PYCHARM" ]; then
-  "$PYCHARM" installPlugins com.anthropic.code.plugin || echo "Install 'Claude Code' from Settings → Plugins → Marketplace."
-fi
-if [ $WITH_ECC_PLUGIN -eq 1 ]; then
-  # Full ECC plugin (71 agents / 314 skills / Node hooks). Project scope only, minimal hook profile.
-  (cd "$ROOT" && claude plugin marketplace add https://github.com/affaan-m/ECC && claude plugin install ecc@ecc --scope project)
-fi
+# 3. Homebrew tools
+if command -v brew >/dev/null; then brew bundle --file="$ROOT/Brewfile"
+else echo "!! Homebrew not installed — skipping Brewfile (gh, fd, fzf, direnv, libpq, redis-cli)."; fi
 
-step "Done. Verify with: sh scripts/dev/doctor.sh && sh scripts/dev/quality-gate.sh all"
-echo "Open a NEW terminal (or 'source ~/.zshrc') so PATH changes apply."
+# 4. Python venvs (pinned manifests are authoritative; gunicorn pin mirrors master-data-service/requirements-prod.txt)
+mkvenv() { # dir requirements
+  if [ -x "$1/.venv/bin/python" ] && "$1/.venv/bin/python" -c 'import sys; sys.exit(sys.version_info < (3,14))'; then :; else
+    [ -e "$1/.venv" ] && mv "$1/.venv" "$1/.venv.bak-$(date +%Y%m%d%H%M%S)"
+    "$PY314" -m venv "$1/.venv"
+  fi
+  "$1/.venv/bin/python" -m pip install -q --upgrade pip
+  uv pip install -q -r "$1/$2" --python "$1/.venv/bin/python"
+}
+mkvenv backend requirements-test.txt
+uv pip install -q gunicorn==23.0.0 --python backend/.venv/bin/python
+mkvenv master-data-service requirements-test.txt
+
+# 5. Frontend
+(cd frontend && npm ci)
+
+# 6. Env files
+scripts/dev/init-local-env.sh
+
+echo
+echo "Bootstrap done. Next: open Docker Desktop once, then scripts/dev-start.sh --migrate && scripts/dev-check.sh --gates all"

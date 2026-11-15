@@ -118,3 +118,6 @@ Desktop.ini
 # ============================================================
 # END OF FILE
 # ============================================================
+
+# Committed template (no secrets) — see scripts/dev/init-local-env.sh
+!.env.example

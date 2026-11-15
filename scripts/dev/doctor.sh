@@ -1,7 +1,7 @@
 #!/bin/sh
 # Environment doctor — read-only health check of the Claude + JetBrains + toolchain setup.
 ROOT=$(cd "$(dirname "$0")/../.." && pwd); cd "$ROOT" || exit 1
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/opt/node@24/bin:/opt/homebrew/opt/postgresql@16/bin:$PATH"
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/opt/node@24/bin:/opt/homebrew/opt/postgresql@18/bin:$PATH"
 ok=0; bad=0
 chk() { if eval "$2" >/dev/null 2>&1; then echo "  OK    $1"; ok=$((ok+1)); else echo "  MISS  $1  → $3"; bad=$((bad+1)); fi; }
 echo "Toolchain"
@@ -13,7 +13,7 @@ chk "uv"                        "command -v uv"                                 
 chk "Python 3.14 venv"          "$ROOT/.venv-3.14/bin/python -c 'import sys; assert sys.version_info>=(3,14)'" "bootstrap step 6"
 chk "Django in 3.14 venv"       "$ROOT/.venv-3.14/bin/python -c 'import django; assert django.VERSION[0]>=6'" "bootstrap step 6"
 chk "frontend node_modules"     "test -d frontend/node_modules"                      "cd frontend && npm ci"
-chk "Postgres on localhost:5432" "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(1); sys.exit(s.connect_ex(('localhost',5432)))\"" "brew services start postgresql@16"
+chk "Postgres on localhost:5432" "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(1); sys.exit(s.connect_ex(('localhost',5432)))\"" "brew services start postgresql@18"
 chk "Redis on localhost:6379"   "python3 -c \"import socket,sys; s=socket.socket(); s.settimeout(1); sys.exit(s.connect_ex(('localhost',6379)))\"" "brew services start redis"
 echo "JetBrains"
 chk "PyCharm installed"         "test -d /Applications/PyCharm.app"                  "install PyCharm"

@@ -2,12 +2,13 @@
 # Local quality gates — mirrors .github/workflows/ci.yml (the authoritative spec).
 # Usage: scripts/dev/quality-gate.sh [frontend|backend|mds|mds-client|all] ...
 # Exit code: 0 = every gate ran and passed; 1 = a gate failed; 3 = nothing failed but a gate could not run.
-# Env: PYTHON (default: .venv-3.14/bin/python, then .venv/bin/python, then python3)
+# Env: PYTHON (default: backend/.venv, .venv-3.14, .venv, then python3)
+#      MDS_PYTHON (default: master-data-service/.venv, else PYTHON)
 #      DB_* / MDS_DB_* override the CI defaults — must point at a LOCAL database.
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT" || exit 1
-export PATH="$HOME/.local/bin:$HOME/.local/node/bin:/opt/homebrew/bin:/opt/homebrew/opt/postgresql@16/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/node/bin:/opt/homebrew/bin:/opt/homebrew/opt/postgresql@18/bin:$PATH"
 [ $# -eq 0 ] && set -- all
 FAIL=0; SKIP=0; REPORT=""
 note() { REPORT="$REPORT
@@ -20,7 +21,7 @@ run() { # name, dir, cmd...
 skip() { note "NOT RUN  $1 — $2"; SKIP=1; }
 
 pick_python() {
-  for p in "${PYTHON:-}" "$ROOT/.venv-3.14/bin/python" "$ROOT/.venv/bin/python" python3; do
+  for p in "${PYTHON:-}" "$ROOT/backend/.venv/bin/python" "$ROOT/.venv-3.14/bin/python" "$ROOT/.venv/bin/python" python3; do
     [ -n "$p" ] && command -v "$p" >/dev/null 2>&1 && { echo "$p"; return; }
   done
 }
@@ -50,7 +51,14 @@ gate_backend() {
   run "backend: pytest tests/"    backend "$PY" -m pytest tests/ -p no:cacheprovider
   run "backend: app-level tests"  backend "$PY" -m pytest apps/license/tests apps/core/tests --import-mode=importlib -p no:cacheprovider
 }
-gate_mds() {
+gate_mds() { # MDS has its own venv (separate CI job); restore PY for later gates.
+  _PY_SAVED=$PY
+  MPY="${MDS_PYTHON:-}"; [ -z "$MPY" ] && [ -x "$ROOT/master-data-service/.venv/bin/python" ] && MPY="$ROOT/master-data-service/.venv/bin/python"
+  PY="${MPY:-$PY}"
+  gate_mds_inner
+  PY=$_PY_SAVED
+}
+gate_mds_inner() {
   py_ok || { skip "mds (migrations/pytest)" "Python >= 3.14 required"; return; }
   export DJANGO_SETTINGS_MODULE=mds.settings
   export SECRET_KEY="${SECRET_KEY_TEST:-ci-not-a-secret-key-for-tests-only}"

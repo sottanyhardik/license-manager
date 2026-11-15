@@ -1,102 +1,78 @@
-# Software Documentation Agent
+# License Manager — Claude Code project instructions
 
-Your goal is to reverse engineer this application and produce complete
-documentation so another AI can rebuild it from scratch.
+Django 6 / DRF / Python 3.14 / Postgres 16 / Redis / Celery backend (`backend/`),
+React 19 + TypeScript 5.9 + Vite + Tailwind v4 + shadcn SPA (`frontend/`),
+Django master-data service (`master-data-service/`) and its Python client
+(`mds-client/`). Domain: Indian DGFT import/export licences (DFIA/Advance),
+SION norms, allotments, bills of entry (BOE), trades/invoices, CIF balances.
 
-## Code index — MANDATORY: consult BEFORE reading or editing any source
+Previous version of this file (documentation-only mode) is backed up in
+`.claude/backups/2026-11-15-pre-ecc/CLAUDE.md`; its rules now live in
+`.claude/rules/documentation-mode.md` and apply when working in `docs/`.
 
-A self-maintaining map of the whole codebase lives in `.claude/index/`. It is
-rebuilt automatically at **zero chat-token cost**: the `SessionStart` hook
-re-scans changed source at the start of every chat, and the `PostToolUse` hook
-refreshes it after every edit. The index is therefore always current, but it is
-**not** dumped into context (that would waste ~7k tokens/session) — you read it
-on demand with `grep`, paying only for the few lines you actually look up.
+## 1. Index first — MANDATORY before reading/editing source (every chat + every subagent)
 
-**Rule for every chat AND every subagent:** before you read or edit any source
-file — and before you answer a question about the code — orient yourself from the
-index first (grep it), then open source only for the specific file+lines you
-actually need. Never dive straight into source without checking the index. This
-applies to all specialist agents, not just the main chat.
+`.claude/index/` is rebuilt automatically (SessionStart + PostToolUse hooks, zero chat tokens).
+Never read the tables whole — grep them:
 
-How to use it (the tables are for `grep`, never read them whole):
+- Symbol → file:line: `grep -i "Name" .claude/index/symbols.tsv`
+- Blast radius (who imports X): `grep '^path' .claude/index/dependents.tsv` (forward: `imports.tsv`)
+- Area shape: grep the relevant section of `.claude/index/CODE_MAP.md`
+- Rebuild manually: `python3 .claude/index/build_index.py`
 
-- **Find any symbol** (class/function/method/route/component):
-  `grep -i "Name" .claude/index/symbols.tsv` → gives `file` and `line`.
-- **Blast radius before changing a file** (who imports it):
-  `grep '^path' .claude/index/dependents.tsv` (forward: `imports.tsv`).
-- **See a file/area's shape:** skim `.claude/index/CODE_MAP.md` (grep or read the
-  relevant section only — don't read the whole file unless you need to).
-- Read source only for the specific file+lines you need.
+Then read only the file+line ranges you need. Do not re-scan the repo.
 
-See `.claude/index/README.md` for details. Do not hand-edit the generated
-`manifest.json` / `symbols.tsv` / `CODE_MAP.md` (they are rebuilt on every edit
-and at session start); run `python3 .claude/index/build_index.py` to rebuild.
+## 2. Business logic is critical infrastructure
 
-## Specialist agents
+CIF/balance math, allotment/BOE/invoice reconciliation, API response shapes and
+permissions must never change silently. Canonical rule and code map:
+`.claude/rules/business-rules.md` (auto-loads for backend balance code). Any
+change touching them → `cif-balance-auditor` review + tests, and an explicit
+"BUSINESS-RULE CHANGE" note in the final report. Unresolved conflicts between the
+stated rule and the code are escalated to the human, never "fixed" unilaterally.
 
-A full senior (25-yr) product org lives in `.claude/agents/` — leadership &
-architecture (`tech-lead`, `solutions-architect`, `product-manager`), engineering
-(`backend-engineer`, `frontend-engineer`, `refactor-specialist`,
-`performance-engineer`, `data-engineer`), data & design (`data-scientist`,
-`product-designer`, `ux-researcher`), and quality/ops/docs (`qa-test-engineer`,
-`security-auditor`, `code-reviewer`, `devops-sre`, `technical-writer`). They all
-consult the code index first and follow the quality gates in `.claude/rules.md`.
-See `.claude/agents/README.md`. Note: the engineer/refactor/design/ops agents *do*
-modify source for active development, which is intentional and supersedes the
-doc-only rule above for development tasks; `technical-writer` edits only `docs/`.
+## 3. Orchestration protocol (substantial tasks)
 
-## Rules
+Full detail: `docs/claude/ORCHESTRATION.md`. Short form:
 
-- Never modify source code.
-- Read every file.
-- Identify features instead of files.
-- Cross-reference controllers, services, models, routes and UI.
-- Document business logic.
-- Explain code in plain English.
-- Generate Mermaid diagrams.
-- Generate markdown documentation.
+1. Clarify requirements (`product-manager` if vague) → 2. consult memory
+   (`.claude/memory/`) + index → 3. plan (`tech-lead`; `solutions-architect` /
+   `django-architect` / `react-architect` for design) → 4. `engineering-manager`
+   assigns work with **file ownership** (one owner per file; parallel agents get
+   disjoint files or `isolation: "worktree"`) → 5. implement (specialists, in
+   parallel where independent) → 6. integrate → 7. quality gates
+   (`scripts/dev/quality-gate.sh`) → 8. `security-auditor`, `performance-engineer`,
+   domain auditors as relevant → 9. independent `code-reviewer` (+ ECC
+   language reviewers) → 10. fix → 11. update docs + `.claude/memory/` →
+   12. final report (`/report` format).
 
-## Output Structure
+Small tasks (a few tool calls): just do them — don't spawn agents.
 
-docs/
+Model routing: `haiku` for lookups/exploration, `sonnet` for implementation and
+reviews, `opus` for architecture, domain auditing and the final integration.
 
-01-project-overview.md
-02-architecture.md
-03-features.md
-04-api.md
-05-database.md
-06-business-rules.md
-07-user-flows.md
-08-security.md
-09-integrations.md
-10-rebuild-spec.md
+## 4. Quality gates (authoritative spec: `.github/workflows/ci.yml`)
 
-## For every feature
+`scripts/dev/quality-gate.sh [frontend|backend|mds|mds-client|all]` runs the same
+commands as CI. A task is not done until the relevant gates ran; report the real
+output — if a gate could not run (missing toolchain/DB), say so explicitly.
 
-Document:
+## 5. Autonomy and safety boundaries
 
-Purpose
+Allowed without asking: read/edit app code, write tests, run dev/test/lint/build
+commands, local migrations against the **local dev/test DB only**, plans, reviews,
+temporary worktrees, local commits on a feature branch when the user asked for the work.
 
-Entry Points
+Always ask first: `git push`, merges into `develop`/`master`, rebases/resets/force
+operations, deleting branches, anything under `backend/deploy`/`scripts/deploy*`
+or touching servers, production/remote databases, dependency additions, data
+deletion/irreversible data operations. Never print or commit secrets (`.env*`,
+`backend/.env_dgft`, keys). Details: `.claude/rules/safety.md`.
 
-Files
+## 6. Where things are
 
-Dependencies
-
-Database Tables
-
-APIs
-
-Business Rules
-
-User Flow
-
-Validation Rules
-
-Permissions
-
-Potential Edge Cases
-
-Acceptance Criteria
-
-Generate Mermaid diagrams whenever applicable.
+- Agents: `.claude/agents/` (roster: `.claude/agents/README.md`)
+- Rules: `.claude/rules/` (project) + `.claude/rules/ecc/` (vendored ECC, lower precedence)
+- Skills: `.claude/skills/` · Commands: `.claude/commands/` (`/orchestrate`, `/quality-gate`, `/cif-audit`, `/review-diff`, `/report`, `/remember`, `/session-summary`)
+- Project memory: `.claude/memory/` (index: `.claude/memory/README.md`)
+- Setup/troubleshooting: `docs/claude/INSTALLATION.md`, `docs/claude/TROUBLESHOOTING.md`

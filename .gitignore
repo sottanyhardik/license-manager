@@ -92,3 +92,15 @@ server-envs/
 # DFIA PDF copies — stored on disk, not tracked in git
 backend/DFIA_COPY/
 .codex/
+
+# Claude dev environment (2026-11-15)
+.venv-3.14/
+.claude/memory/session-log.md
+.claude/settings.local.json
+.claude/worktrees/
+
+# Local dev environment (scripts/dev-*.sh, docker-compose.yml)
+.venv/
+.env.local
+.env.*.local
+/logs/

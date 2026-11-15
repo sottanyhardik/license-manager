@@ -1,0 +1,1 @@
+ECC (everything-claude-code) d2ef2680594f9a17526a6e1a2e18b3d242c5d17b — vendored 2026-11-15, MIT, Copyright (c) 2026 Affaan Mustafa

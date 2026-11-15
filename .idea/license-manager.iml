@@ -34,8 +34,9 @@
       <excludeFolder url="file://$MODULE_DIR$/backups" />
       <excludeFolder url="file://$MODULE_DIR$/backend/media" />
       <excludeFolder url="file://$MODULE_DIR$/backend/DFIA_COPY" />
+      <excludeFolder url="file://$MODULE_DIR$/master-data-service/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="~/Developer/projects/license-manager/backend/.venv" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="~/PycharmProjects/license-manager/backend/.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

@@ -1,5 +1,129 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git switch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git stash:*)",
+      "Bash(git worktree:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git blame:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(sed -n:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(python3 .claude/index/build_index.py:*)",
+      "Bash(sh scripts/dev/quality-gate.sh:*)",
+      "Bash(scripts/dev/quality-gate.sh:*)",
+      "Bash(sh scripts/dev/doctor.sh:*)",
+      "Bash(scripts/dev/doctor.sh:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python manage.py check:*)",
+      "Bash(python manage.py makemigrations:*)",
+      "Bash(python manage.py migrate:*)",
+      "Bash(python manage.py showmigrations:*)",
+      "Bash(python runtests.py:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx playwright test:*)",
+      "mcp__pycharm__get_file_problems",
+      "mcp__pycharm__get_project_modules",
+      "mcp__pycharm__get_project_dependencies",
+      "mcp__pycharm__get_run_configurations",
+      "mcp__pycharm__git_status",
+      "mcp__pycharm__get_all_open_file_paths",
+      "mcp__pycharm__search_symbol",
+      "mcp__pycharm__get_symbol_info",
+      "mcp__pycharm__search_text",
+      "mcp__pycharm__search_regex",
+      "mcp__pycharm__lint_files"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git tag:*)",
+      "Bash(git branch -d:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh release:*)",
+      "Bash(pip install:*)",
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(brew install:*)",
+      "Bash(docker:*)",
+      "Bash(psql:*)",
+      "Bash(python manage.py shell:*)",
+      "Bash(python manage.py dbshell:*)",
+      "Bash(rm -rf:*)",
+      "mcp__pycharm__execute_sql_query",
+      "mcp__pycharm__execute_cross_db_query",
+      "mcp__pycharm__import_data",
+      "mcp__pycharm__execute_run_configuration"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)",
+      "Bash(python manage.py flush:*)",
+      "Read(./.env)",
+      "Read(./backend/.env)",
+      "Read(./backend/.env_dgft)",
+      "Read(./frontend/.env.production)",
+      "Read(./master-data-service/.env)",
+      "Read(~/.ssh/**)"
+    ]
+  },
+  "env": {
+    "ECC_HOOK_PROFILE": "minimal",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000"
+  },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_bash.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
@@ -17,6 +141,16 @@
           {
             "type": "command",
             "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/index/hook_session.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/session_end.sh\""
           }
         ]
       }

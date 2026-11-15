@@ -64,3 +64,15 @@
   via Agent/Workflow/skills.
 - Design system: shadcn `new-york`, base color `slate`, CSS variables on.
   Icons standardized on `lucide-react`. Toasts converging on `sonner`.
+- 2026-11-15 — **Claude + ECC + JetBrains environment.** Curated ECC v2.2.3 subset vendored into
+  `.claude/` (12 agents, 18 skills, path-scoped rules) instead of the full `ecc@ecc` plugin: the full
+  plugin adds 314 skill descriptions to every session and its hooks require Node (not installed at the
+  time). Full plugin remains opt-in: `bootstrap-macos.sh --with-ecc-plugin` (project scope, `ECC_HOOK_PROFILE=minimal`).
+  ECC's 80%-coverage, git-workflow and hook rules were intentionally not adopted (conflict with this repo).
+- 2026-11-15 — CLAUDE.md switched from documentation-only to development mode; the doc spec lives in
+  `.claude/rules/documentation-mode.md` (scoped to `docs/**`). Backup: `.claude/backups/2026-11-15-pre-ecc/`.
+- 2026-11-15 — **OPEN (owner decision needed): negative CIF balances.** Product rule says preserve
+  negative balances and flag over-utilisation; `LicenseBalanceCalculator.calculate_balance()` and
+  `_calculate_financial_balance()` both floor at 0. Also, the stated 5-term rule (BOE + ALLOTMENT +
+  BILLED-WITHOUT-BOE) maps onto the financial engine, not the customs engine. Agents must not change
+  either until decided. See `.claude/rules/business-rules.md`.

@@ -1,103 +1,74 @@
-# Specialist Agents
+# Agent roster — License Manager engineering org
 
-A team of senior (25-years-experience) subagents for developing the License
-Manager. They are **built on top of the code index** (`.claude/index/`): every
-agent is required to `grep` the index (`symbols.tsv`, `dependents.tsv`,
-`imports.tsv`, `CODE_MAP.md`) **before** reading source — so they locate code and
-size refactor blast radius cheaply instead of re-reading the tree.
+40 agents: 16 original project agents (kept as they were, except that `code-reviewer` and
+`security-auditor` are now limited to read-only tools), 12 vendored ECC agents (each with a
+project-context section appended), and 12 new ones. Original README backed up at
+`.claude/backups/2026-11-15-pre-ecc/agents/README.md`. Orchestration:
+`docs/claude/ORCHESTRATION.md`.
 
-## Roster (the org)
+Legend: **RO** = read-only tools (Read/Grep/Glob/Bash) · **RW** = full tools · model in brackets.
+Origin: P = project original, E = vendored ECC (MIT), N = new 2026-11-15.
 
-A full product org, the way a large software company staffs one. All 16 are
-senior (25-yr) and index-first.
+## Leadership
+| Role requested | Agent | Access | Origin |
+|---|---|---|---|
+| Principal Architect | `solutions-architect` [inherit] | RW (design/ADR) | P |
+| Tech Lead | `tech-lead` [inherit] | RW | P |
+| Engineering Manager / orchestrator | `engineering-manager` [opus] | RW | N |
+| Product Manager | `product-manager` [inherit] | RW (specs) | P |
 
-**Leadership & architecture**
+## Backend
+| Django Architect | `django-architect` [opus] | RW (docs/design) | N |
+|---|---|---|---|
+| Django Backend Engineer | `backend-engineer` [inherit] | RW | P |
+| Database Engineer | `data-engineer` [inherit] + `database-reviewer` [sonnet] | RW / RO | P / E |
+| API Engineer | `api-engineer` [sonnet] | RW | N |
+| Performance Engineer | `performance-engineer` [inherit] | RW | P |
+| Build/migration fixer | `django-build-resolver` [sonnet] | RW | E |
 
-| Agent | Use it for | Edits code? |
-|-------|-----------|:-----------:|
-| `tech-lead` | Plan & coordinate multi-part work; decompose, size risk, delegate | plans, delegates |
-| `solutions-architect` | System design, boundaries, ADRs, trade-offs, scalability | ❌ designs/advises |
-| `product-manager` | Requirements, user stories, acceptance criteria, scope, edge cases | ❌ specs only |
+## Frontend
+| React Architect | `react-architect` [opus] | RW (docs/design) | N |
+|---|---|---|---|
+| React Engineer | `frontend-engineer` [inherit] | RW | P |
+| UI/UX Designer | `product-designer` (visual) + `ux-researcher` (flows) [inherit] | RW | P |
+| Accessibility Specialist | `a11y-architect` [sonnet] | RW | E |
+| Build fixer | `react-build-resolver` [sonnet] | RW | E |
 
-**Engineering**
+## Data
+| Data Engineer | `data-engineer` [inherit] | RW | P |
+|---|---|---|---|
+| Analytics Engineer | `data-scientist` [inherit] (reporting correctness, pivots, exports) | RW | P |
+| Reconciliation Specialist | `reconciliation-specialist` [sonnet] | RW | N |
 
-| Agent | Use it for | Edits code? |
-|-------|-----------|:-----------:|
-| `backend-engineer` | Django/DRF/Postgres: models, viewsets, serializers, services, migrations | ✅ |
-| `frontend-engineer` | React 19/TS/Tailwind/shadcn: components, pages, hooks, forms, tables | ✅ |
-| `refactor-specialist` | Behavior-preserving restructuring driven by the dependency graph | ✅ |
-| `performance-engineer` | Profile & fix slow queries/N+1, indexes, caching, renders, bundle | ✅ |
-| `data-engineer` | DGFT/SION/rates pipelines, ETL, schema/index design, data migrations | ✅ |
+## Quality
+| QA Engineer | `qa-test-engineer` [inherit] | RW | P |
+|---|---|---|---|
+| Test Automation Engineer | `test-automation-engineer` [sonnet] (+ `tdd-guide`, `pr-test-analyzer`) | RW | N / E |
+| Security Auditor | `security-auditor` [inherit] | **RO** | P |
+| Code Reviewer | `code-reviewer` [inherit] + `django-reviewer`, `python-reviewer`, `typescript-reviewer`, `react-reviewer`, `silent-failure-hunter` [sonnet] | RO | P / E |
+| DevOps/SRE | `devops-sre` [inherit] | RW (deploys still need approval) | P |
+| Refactoring | `refactor-specialist` [inherit] | RW | P |
+| Code exploration | `code-explorer` [sonnet] | RO | E |
 
-**Data & design**
+## Business domain (all read-only auditors)
+| Licence Domain Expert | `licence-domain-expert` [opus] | RO | N |
+|---|---|---|---|
+| CIF Balance Auditor | `cif-balance-auditor` [opus] | RO | N |
+| BOE Reconciliation Auditor | `boe-reconciliation-auditor` [opus] | RO | N |
+| Invoice Auditor | `invoice-auditor` [sonnet] | RO | N |
+| DGFT/DFIA Business Rules Auditor | `dgft-dfia-rules-auditor` [opus] | RO | N |
 
-| Agent | Use it for | Edits code? |
-|-------|-----------|:-----------:|
-| `data-scientist` | Analytics, reporting/balance-math validation, anomalies, forecasting | ❌ analyses |
-| `product-designer` | Visual design, design system, tokens, layout, dark mode, polish | ✅ (UI) |
-| `ux-researcher` | User flows, usability, interaction, form/table UX, accessibility (AA) | ✅ (UX) |
+## Documentation
+| Technical Writer | `technical-writer` [inherit] | docs/ only | P |
+|---|---|---|---|
+| Architecture Documenter | `architecture-documenter` [sonnet] | docs/ only | N |
 
-**Quality, ops & docs**
+## Deliberately not created (would duplicate)
+- ECC `architect`/`planner` → covered by `solutions-architect` + `tech-lead`
+- ECC `code-reviewer`, `security-reviewer`, `performance-optimizer`, `refactor-cleaner`, `doc-updater` → project equivalents already exist
+- Separate "Analytics Engineer" and "UI/UX Designer" files → mapped to existing agents above
 
-| Agent | Use it for | Edits code? |
-|-------|-----------|:-----------:|
-| `qa-test-engineer` | Write/extend tests, reproduce bugs, characterization tests, verify | ✅ (tests) |
-| `security-auditor` | RBAC/auth/access-control/data-exposure review | ❌ read-only |
-| `code-reviewer` | Pre-merge diff review for correctness & missed callers | ❌ read-only |
-| `devops-sre` | Deploy scripts, nginx/SSL, systemd, backups, health, rollback | ✅ (ops) |
-| `technical-writer` | `docs/` (features/API/DB/flows), Mermaid diagrams, keep docs in sync | ✅ (docs only) |
-
-## How to invoke
-
-- **Directly:** ask for a specific agent — e.g. *"Use the refactor-specialist to
-  decompose MasterForm.tsx"* — or the main assistant dispatches via the Agent tool
-  with `subagent_type: "refactor-specialist"`.
-- **Coordinated:** ask the `tech-lead` to own a larger task; it plans against the
-  index and delegates focused briefs to the specialists, then runs a
-  `code-reviewer` pass before declaring done.
-- **In parallel:** independent specialists can run concurrently (e.g. backend +
-  frontend on separate slices). The tech-lead sequences what must be serial.
-
-A typical end-to-end feature flow:
-
-```
-product-manager      (problem → stories + acceptance criteria)
-solutions-architect  (design + boundaries + staged plan)
-tech-lead            (impact map from the graph → delegate)
-   ├─ backend-engineer    (API/model/service)     ┐
-   ├─ frontend-engineer   (UI + data wiring)       │ parallel where independent
-   ├─ product-designer    (visual/design system)   │
-   └─ ux-researcher       (flow/usability/a11y)    ┘
-performance-engineer (measure & optimize hot paths, if relevant)
-qa-test-engineer     (tests / verify)
-security-auditor     (if auth/RBAC/data-exposure touched)
-code-reviewer        (pre-merge diff + graph caller check)
-technical-writer     (update docs/ + diagrams)
-```
-
-Data/ops tracks run similarly: `data-engineer` (pipelines/schema) with
-`data-scientist` (validate the numbers); `devops-sre` (ship it, with rollback).
-Pick only the agents a task needs — most tasks use two or three, not all sixteen.
-
-## Shared rules every agent follows
-
-1. **Index-first** — grep `.claude/index/*` before reading source (token-cheap).
-2. **Preserve business logic** — no behavior/API/auth/data-flow change unless the
-   task says so; flag any behavior change.
-3. **Quality gates before "done"** — frontend `npm run lint && npm run typecheck &&
-   npm run build`; backend `py_compile` + targeted `pytest` (or
-   `scripts/testing/run-tests.sh` for a broader pass). Report results honestly.
-4. **Conventions** — follow `.claude/rules.md` (lucide-only icons, sonner over
-   react-toastify, design tokens over hex, reuse `ui/*`).
-5. **No unattended outward actions** — agents do not commit/push/merge; the human
-   confirms anything hard to reverse.
-
-## Note on `CLAUDE.md`
-
-The root `CLAUDE.md` was written for a **documentation** task and says "Never
-modify source code." These development agents intentionally *can* modify source
-(that is the point of active development/refactoring). Use the read-only agents
-(`security-auditor`, `code-reviewer`) and the `tech-lead` planning mode when you
-want analysis without edits; use the engineer/refactor agents when you want
-changes. If you want the whole team kept strictly read-only, say so and the edit
-capability can be removed from their tool lists.
+## Contract every agent follows
+Index-first context loading · edits only the files it owns in the brief · Output format defined
+in its file · escalates business-rule, API contract, permission, and "ask first" safety items ·
+reports gate results honestly. Domain paths changed → the matching domain auditor must review.

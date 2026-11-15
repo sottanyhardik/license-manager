@@ -1,6 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Celery: worker" type="PythonConfigurationType" factoryName="Python">
     <module name="license-manager" />
+    <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
@@ -10,12 +11,14 @@
       <env name="PATH" value="/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" />
     </envs>
     <option name="SDK_HOME" value="" />
-    <option name="SDK_NAME" value="~/Developer/projects/license-manager/.venv" />
+    <option name="SDK_NAME" value="~/Developer/projects/license-manager/backend/.venv" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend" />
     <option name="IS_MODULE_SDK" value="true" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+    <option name="RUN_TOOL" value="" />
+    <option name="RUN_AS_SCRIPT" value="false" />
     <option name="SCRIPT_NAME" value="celery" />
     <option name="PARAMETERS" value="-A lmanagement worker --pool=solo -l info" />
     <option name="SHOW_COMMAND_LINE" value="false" />

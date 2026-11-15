@@ -3,6 +3,16 @@
 > One line per non-obvious choice. Newest on top. Roles append here when they
 > make a call worth remembering.
 
+- 2026-11-15 — **OWNER APPROVED (binding):** OD-01 negative Available CIF shown + `is_over_utilised` (floor-at-0 to be
+  removed); OD-02 `calculate_financial_balance` canonical, customs figure = `customs_available_cif`; OD-03 one licence-wide
+  running balance, COMMISSION excluded; OD-04 single-tenant; OD-05 keep MDS as separate service; OD-06 investigate secrets
+  first (no history rewrite); OD-07 additive `/api/v1/` + HttpOnly refresh cookie behind flag; OD-08 approve §A / archive
+  §B / review §C; OD-09 drf-spectacular + pip-audit adopt, no new form libs; OD-21 item pivot planned/unplanned separate.
+  OD-11..OD-20 still OPEN. Register: `docs/erp-transformation/12-decisions-register.md` §B0.
+- 2026-11-16 — Implemented: OD-01/02/10 `1437b381` (financial balance signed; planners use
+  `plannable_capacity_cif`; item-level + customs floors kept pending owner), OD-21 `91407568`, OD-09 CI gates `6f586184`.
+  OD-06 found DB dumps (hashes/sessions/JWT) + a DB password in pushed git history -> rotation decision pending.
+
 - 2026-11-15 — **ERP transformation Phase Zero** docs live in `docs/erp-transformation/00–13` (13 = live dashboard,
   12 = decisions register incl. owner decisions OD-01..OD-20). Prior 2026-08 autonomous-run docs
   (CURRENT_PHASE, MODERNIZATION_PROGRESS, LEDGER_APPROVED_SEMANTICS "[Name] Approved", "Module 1 FROZEN")

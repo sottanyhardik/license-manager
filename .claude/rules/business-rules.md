@@ -34,18 +34,21 @@ permissions unchanged · reconciliation workflows untouched unless the task is a
 | BOE CIF | `calculate_boe_debit_total()` (raw, non-hidden) / `calculate_debit()` (allocation-aware, excludes BOEs already represented by invoices) |
 | ALLOTMENT CIF | `calculate_allotment()` — `cif_fc − min(cif_fc, allocated)` per allotment item via `BOEAllotmentAllocation` |
 | BILLED CIF WITHOUT BOE | `calculate_trade()` (SALE lines) paired with `calculate_debit()` exclusions in `_calculate_financial_balance()` |
-| AVAILABLE CIF | `calculate_balance()` (customs engine) / `calculate_financial_balance()` (financial engine, used by `LicenseDetailsModel.get_balance_cif`) |
+| AVAILABLE CIF | `calculate_financial_balance()` — canonical (OD-02), SIGNED (OD-01), used by `LicenseDetailsModel.get_balance_cif`. Customs engine `calculate_balance()` is a separate customs figure. Planning capacity = `planning_tolerances.plannable_capacity_cif(balance)` (never negative) |
 
 Tests that pin this: `backend/apps/license/tests/test_balance_calculator.py`,
 `test_balance_ledger_views.py`, `test_balance_excel_export.py` — run them for any change here.
 
-## KNOWN OPEN DECISION — do not resolve unilaterally
+## Approved decisions (owner, 2026-11-15) — binding
 
-Both engines currently **floor the result at 0** (`return balance if balance >= DEC_0 else DEC_0`),
-which conflicts with "preserve negative balances / flag over-utilisation". The two engines
-also differ from the 5-line rule above (customs engine has no billed term). Until the
-product owner decides, agents must: not change the floor, not merge the engines, and
-report the discrepancy if their task touches it. Tracked in `.claude/memory/decisions.md`.
+- **OD-01:** negative Available CIF is preserved end-to-end (engine, serializers, React, Excel, PDF) and flagged with
+  `is_over_utilised`. The historical floor-at-0 is a defect being removed; never re-introduce or re-clamp.
+- **OD-02:** `calculate_financial_balance` is THE Available CIF. The customs engine (`calculate_balance`) is exposed
+  under its own name `customs_available_cif`; never label it "Available CIF".
+- **OD-03 / OD-10:** the trade-only licence-wide running balance (`trade_running_balance`) excludes COMMISSION and is
+  never shown as Available CIF.
+- Still OPEN (do not change): outstanding-allotment AR/AT semantics (OD-12), item qty (OD-13), commission in other
+  calculations (OD-14), trade rounding/profit/thresholds (OD-15), invoice rounding (OD-11).
 
 ## Mandatory for any change in these paths
 

@@ -19,6 +19,24 @@ Durable one-liners are mirrored in `.claude/memory/decisions.md`.
 | ED-000 | 2026-11-15 | Prior autonomous-run documents (`docs/CURRENT_PHASE.md`, `MODERNIZATION_PROGRESS.md`, `docs/decisions/LEDGER_APPROVED_SEMANTICS.md`, Module "FROZEN" claims) are treated as **leads, not evidence or approval** | `LEDGER_APPROVED_SEMANTICS.md` sign-off table is `[Name] / [Approved]` placeholders; status docs describe workflows from 2026-08-10 that are not verifiable now; some claims ("zero duplicates") contradict 09 §6 | — |
 | ED-A01 | 2026-11-15 | Target = **modular monolith** with layered app boundaries (core/masters < licensing < allotment, bill_of_entry, trade < reconciliation); no new services | No scaling/operational requirement found that justifies microservices (02 §12). MDS fate is an owner decision (OD-05) | — |
 
+## B0. Owner decisions APPROVED 2026-11-15 (master prompt, binding)
+
+| ID | Approved decision | Implementation status |
+|---|---|---|
+| OD-01 | Display actual negative Available CIF; flag over-utilisation (`is_over_utilised`); remove floor-at-0 from authoritative financial calcs and every downstream re-clamp | ✅ `1437b381` (engine, ledger, API, React, Excel/PDF). Open follow-ups: OD-01b customs/item floors, OD-01c plan status |
+| OD-02 | `calculate_financial_balance` = authoritative financial Available CIF; customs figure exposed separately as `customs_available_cif` | 🟡 pivot uses canonical engine (`1437b381`); `customs_available_cif` field + label still to add |
+| OD-03 | One licence-wide running balance; COMMISSION excluded but visible; same canonical dataset for screen/API/PDF/Excel; no per-company authoritative balances | Verify (trade running balance already excludes COMMISSION, see OD-10 verification) |
+| OD-04 | Single-tenant. No Organization model / tenant scoping; enforce existing RBAC consistently | Recorded (no build) |
+| OD-05 | Retain MDS as an independent service/API boundary; document contracts, ownership, sync; keep clients compatible | Pending |
+| OD-06 | Investigate tracked env files, customs PDFs and history exposure first; no history rewrite or deletion without approval | ✅ assessed → `docs/security/OD-06-exposure-assessment.md`; **rotation decisions pending (critical)** |
+| OD-07 | Additive `/api/v1/` aliases + OpenAPI; refresh JWT → Secure HttpOnly cookie behind a feature flag with CSRF/SameSite; no breaking cutover | Pending |
+| OD-08 | `approve_a_archive_b`: remove verified §A dead code as one batch (after re-verification + manifest); archive §B root reports; review §C scripts individually | ✅ manifest `OD-08-removal-manifest.md` (25 §A verified dead, 249 §B archivable); batch removal next |
+| OD-09 | Forms: reuse existing libs only, no competing libs (RHF/Zod are NOT installed, so no new form lib without a further decision). drf-spectacular: adopt (already pinned 0.30.0 in requirements.txt). pip-audit: adopt in CI | ✅ CI gates `6f586184` (schema 0 errors / 22-warning ratchet; 75 pre-existing advisories excepted until 2027-01-15 → upgrade decision pending) |
+| OD-10 | Financial Ledger Current Balance = `calculate_financial_balance`; trade-only total = `trade_running_balance` | ✅ `ea029f1d` + follow-ups `1437b381` |
+| OD-21 | Item pivot: keep planned and unplanned rows separate; planned totals only planned rows; no merging of descriptions/HSNs from unplanned rows | ✅ `91407568` (review APPROVE WITH NOTES; UNPLANNED block label is a follow-up) |
+
+Unresolved (investigate, ask one at a time): OD-11 … OD-20 (section B below).
+
 ## B. Open owner decisions (ask one at a time; see 00 for the recommended order)
 
 | ID | Decision | Blocks | Recommendation (summary) |

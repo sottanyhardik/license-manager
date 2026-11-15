@@ -1,0 +1,4 @@
+# CI-only tooling for the backend. NOT a runtime dependency: not referenced by
+# requirements.txt / requirements-test.txt and never installed in production.
+# Install with: pip install -r requirements-ci.txt
+pip-audit==2.10.1

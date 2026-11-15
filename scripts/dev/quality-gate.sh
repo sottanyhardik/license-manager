@@ -48,6 +48,7 @@ gate_backend() {
   port_open "$DB_HOST" "$DB_PORT" || { skip "backend (check/migrations/pytest)" "Postgres not reachable on $DB_HOST:$DB_PORT (scripts/dev/services.sh start)"; return; }
   run "backend: manage.py check"  backend "$PY" manage.py check
   run "backend: migrations check" backend "$PY" manage.py makemigrations --check --dry-run
+  run "backend: openapi schema"   backend sh ../scripts/dev/openapi_gate.sh "$PY"
   run "backend: pytest tests/"    backend "$PY" -m pytest tests/ -p no:cacheprovider
   run "backend: app-level tests"  backend "$PY" -m pytest apps/license/tests apps/core/tests --import-mode=importlib -p no:cacheprovider
 }
@@ -74,11 +75,17 @@ gate_mds_client() {
   # CI runs this in a fresh job; drop settings exported by earlier gates (mds.settings leaks otherwise).
   run "mds-client: runtests" mds-client env -u DJANGO_SETTINGS_MODULE "$PY" runtests.py
 }
+gate_audit() { # pip-audit needs network (OSV/PyPI advisories); CI job: dependency-audit
+  py_ok || { skip "audit (pip-audit)" "Python >= 3.14 required"; return; }
+  "$PY" -m pip_audit --version >/dev/null 2>&1 || { skip "audit (pip-audit)" "pip-audit not installed (pip install -r backend/requirements-ci.txt)"; return; }
+  run "audit: pip-audit backend" . "$PY" scripts/security/pip_audit_gate.py --scope backend -r backend/requirements.txt
+  run "audit: pip-audit mds"     . "$PY" scripts/security/pip_audit_gate.py --scope mds -r master-data-service/requirements-prod.txt
+}
 for area in "$@"; do
   case $area in
-    frontend) gate_frontend;; backend) gate_backend;; mds) gate_mds;; mds-client) gate_mds_client;;
-    all) gate_frontend; gate_backend; gate_mds; gate_mds_client;;
-    *) echo "unknown area: $area (frontend|backend|mds|mds-client|all)"; exit 64;;
+    frontend) gate_frontend;; backend) gate_backend;; mds) gate_mds;; mds-client) gate_mds_client;; audit) gate_audit;;
+    all) gate_frontend; gate_backend; gate_mds; gate_mds_client; gate_audit;;
+    *) echo "unknown area: $area (frontend|backend|mds|mds-client|audit|all)"; exit 64;;
   esac
 done
 printf '\n=== QUALITY GATE SUMMARY (python: %s)%s\n' "$PY" "$REPORT"

@@ -353,7 +353,10 @@ def render_plan_utilization_section(
             'splits': _grp['splits'],
         })
     _g_rem_qty = _g_avail - _g_planned_qty
-    _g_rem_cif = license_balance - _g_planned_cif
+    # Planning capacity is clamped at 0 (matches plan_utilization's planner balance);
+    # the signed licence balance is still shown in the 'Balance CIF $' cell below.
+    _plan_balance = max(license_balance, 0)
+    _g_rem_cif = _plan_balance - _g_planned_cif
 
     # ── Section header ────────────────────────────────────────────────────
     ws.merge_cells(f'A{r}:I{r}')
@@ -399,7 +402,7 @@ def render_plan_utilization_section(
     r += 1
 
     # ── Per-group rows (+ split sub-rows) ──────────────────────────────────
-    _running_cif = license_balance
+    _running_cif = _plan_balance
     for _idx, _pr in enumerate(_plan_data_rows):
         _rf = None if _idx % 2 == 0 else ALT_FILL
         _running_cif -= _pr['pcif']

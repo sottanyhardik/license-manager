@@ -1,0 +1,34 @@
+# Security & Configuration Audit (read-only)
+
+Date: 2026-11-16. Scope: settings, auth, permissions, SQLi, media, deps, nginx/compose, secrets in git.
+No secret values were read. "Auth/AC change" = fix alters authentication or access-control behaviour -> needs owner approval, NOT implemented.
+
+## Findings
+
+| # | Sev | Finding | Evidence | Fix | Auth/AC change? |
+|---|-----|---------|----------|-----|-----------------|
+| 1 | CRITICAL | Env files tracked in git: `.env`, `backend/.env_dgft`, `frontend/.env`, `frontend/.env.production` (not gitignored; `git check-ignore` empty). History contains them. Contents NOT inspected. | `git ls-files` | `git rm --cached`, add to .gitignore, rotate every secret/DGFT credential they hold (names only known by owner), consider history rewrite (needs approval; destructive). | No (but rotation invalidates sessions/JWTs if SECRET_KEY rotated) |
+| 2 | HIGH | 210 licence PDFs (217 MB) tracked: `backend/DFIA_COPY/*.pdf` (business/PII docs in repo history, clone bloat). | `git ls-files backend/DFIA_COPY` | Untrack + ignore, move to private storage; history purge optional. | No |
+| 3 | HIGH | Prod DB dumps in `~/lm_backups` (`live*_lmanagement_*.dump`, ~15 MB, mode 644, outside repo, not tracked). World-readable on shared machine. | `ls -la ~/lm_backups` | chmod 600/dir 700, encrypt at rest, delete when no longer needed; never commit. | No |
+| 4 | HIGH | `nginx-http-only.conf:26-28` (and `nginx-http-only-tractor.conf` likely same) serve `/media/` publicly with `Cache-Control public`: unauthenticated download of licence/BOE/invoice files. TLS conf `nginx-license-manager.conf:68-73` correctly uses internal `/protected-media/`. Also http-only conf has no TLS/HSTS and hardcodes IP/duckdns hosts. | nginx-http-only.conf:2-3,26-28 | Remove public alias; use X-Accel internal location; redirect 80->443. Requires `MEDIA_X_ACCEL_REDIRECT` env set (settings.py:255 defaults empty = Django streams, still authed). | YES (restricts access) |
+| 5 | HIGH | Frontend prod deps: 1 critical (dompurify), 4 high (axios, brace-expansion, follow-redirects, source-map-js), 1 moderate (fflate). axios prototype-pollution/ReDoS advisories (range <1.20.0). | `npm audit --omit=dev` | `npm audit fix` / bump axios, dompurify (review changelogs; dependency bump needs approval). | No |
+| 6 | MED | Anonymous invoice document endpoint: `AllowAny`, bearer-capability URL; mitigated by hashed token, expiry, 2-view cap, audit, company/doc checks. Residual: token in URL (logs/referrer), anon accepted if token leaks. | apps/trade/views_invoice_documents.py:41,75-79 | Keep; ensure access logs scrub path, add `Referrer-Policy: no-referrer`, `Cache-Control: no-store` on the FileResponse. | Only if anon is disallowed |
+| 7 | MED | `access_token` query-param JWT auth (GET/HEAD on path keywords like generate-pdf, balance-report): tokens land in nginx/gunicorn logs, history, referrers. Access tokens 30 min (ACCESS_TOKEN_MINUTES, settings.py:334); revocation list `RevokedAccessToken` checked (authentication.py:70-77); refresh rotates+blacklists (settings.py:338-339), 7-day refresh. Path match is substring (`keyword in path`), broader than needed. | apps/core/authentication.py:27-62 | Replace with short-lived single-use download tickets (as invoices do); strip `access_token` from nginx log format. | YES |
+| 8 | MED | Insecure defaults: dev SECRET_KEY fallback (settings.py:40-44), cookie-secure/SSL-redirect/HSTS default False (72-77). Mitigated by production validation block (settings.py:90-103) which rejects default key, DEBUG, localhost hosts. DEBUG default False (45), ALLOWED_HOSTS explicit (61-65). | settings.py | Confirm validator runs in prod (`IS_PRODUCTION` set) and env sets all flags; no change needed otherwise. | No |
+| 9 | MED | CSRF disabled for API via `DisableCSRFForAPIMiddleware` (settings.py:163) while `SessionAuthentication` stays in DRF defaults (272-278) and `CORS_ALLOW_CREDENTIALS=True` (439). Cookie-session requests to /api could be CSRF-able if middleware exempts them; SessionAuth enforces its own CSRF in DRF, so risk is limited. | settings.py:163,272-278,439 | Verify middleware only exempts JWT-bearer requests; or drop SessionAuth outside admin. | YES |
+| 10 | MED | Throttling: global UserRate/Burst throttles exist (settings.py:295-317); login 10/min, password_reset 5/hr scopes defined. Anonymous 300/h. `NUM_PROXIES: 1` placed at REST_FRAMEWORK level (correct) - verify nginx is the only proxy else X-Forwarded-For spoofing bypasses limits. | settings.py:295-320 | Verify scopes are applied to login/reset views. | No |
+| 11 | LOW | Permissions coverage: only AllowAny uses are login (accounts/views/auth.py:17), password reset request/confirm (password.py:32,80), health (core/views/health.py:20), invoice doc (above). All appropriate. Default permission is IsAuthenticated (settings.py:281). `inventory_balance_viewset.py:23` docstring says AllowAny but code uses `ReportPermission` (line 30): stale docstring. | grep | Fix docstring. | No |
+| 12 | LOW | SQL injection: no `.raw()`/`.extra()`/RawSQL in app code. `cursor.execute(f"...")` in materialized_views.py:284,304 use `view_name` validated against fixed allow-list (304 via `_validate_materialized_view_name`; 284 iterates constant names). 410/447 parametrised. audit_database_integrity.py:240,251 use quoted identifiers (mgmt command). Not exploitable from requests. | grep | Optional: validate in drop path too. | No |
+| 13 | LOW | `ProtectedMediaView` confines path via realpath and per-role check (apps/core/views/media.py:102-135) - sound. DEBUG-only `serve` of /media/ (urls.py:62-68) is fine with DEBUG False. | media.py | none | No |
+| 14 | LOW | Compose: Postgres/Redis bound to 127.0.0.1 (good), passwords via required env vars (no hardcoded creds). Redis has no password; `postgres:16`/`redis:7` unpinned minors. Nginx: X-XSS-Protection deprecated, no CSP, `Referrer-Policy no-referrer-when-downgrade`, HSTS only in TLS conf (missing `preload`), hardcoded server IPs/domains in confs. | docker-compose.yml:25,44; nginx-license-manager.conf:113-117 | Add CSP, tighten referrer policy, parametrise hosts. | No |
+| 15 | INFO | `pip-audit` not installed in backend/.venv: Python dependency audit NOT RUN. | - | Owner to install/run pip-audit in CI. | No |
+
+## Prioritised remediation
+1. Untrack + rotate secrets from env files (#1); owner decides on history rewrite.
+2. Remove public `/media/` in http-only nginx confs / serve only over TLS with internal location (#4) - approval needed.
+3. Fix npm vulns (dompurify critical, axios) (#5).
+4. Lock down ~/lm_backups perms/encryption (#3); untrack DFIA_COPY (#2).
+5. Review query-param JWT (#7) and CSRF middleware scope (#9) - approval needed.
+6. Run pip-audit; minor hardening (#6, #14).
+
+Nothing implemented; only this file written.

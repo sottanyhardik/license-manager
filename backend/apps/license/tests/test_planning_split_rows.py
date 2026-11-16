@@ -122,3 +122,23 @@ def test_write_split_sub_rows_returns_zero_for_no_visible_splits():
         name_col=1, price_col=2, badge_col=3, qty_col=5, cif_col=7,
     )
     assert written == 0
+
+
+def test_plan_utilization_section_clamps_planning_capacity_for_negative_balance():
+    """Owner rule 2026-11-16: licence balance is shown signed, but planning
+    capacity (Remaining CIF / running CIF) is clamped at 0 like the planner UI."""
+    from openpyxl import Workbook
+
+    from apps.license.services.exporters.planning_split_rows import (
+        render_plan_utilization_section,
+    )
+
+    ws = Workbook().active
+    totals = {}
+    render_plan_utilization_section(
+        ws, 1, license_obj=None, license_balance=-400.0,
+        plan_map={}, groups=[], totals_out=totals,
+    )
+    values = [c.value for row in ws.iter_rows() for c in row if c.value is not None]
+    assert "$-400.00" in values  # signed balance displayed
+    assert totals["remaining_cif"] == 0  # no negative planning capacity

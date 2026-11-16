@@ -148,6 +148,7 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
 
     @staticmethod
     def _enqueue_download_request(pk):
+        from apps.license.models import LicenseLedgerPackageJob
         try:
             from apps.license.tasks import enqueue_license_ledger_package_job
             result=enqueue_license_ledger_package_job.delay(pk)

@@ -1212,7 +1212,7 @@ class SionPlanningExecutionService:
         *,
         preview: bool,
         force_plan: bool = False,
-    ) -> "DatabaseDrivenPlanResult":
+    ) -> "DatabaseDrivenPlanResult":  # noqa: F821
         """Generic rules-based planning without requiring a legacy profile.
 
         Executes active database rules against import items directly,

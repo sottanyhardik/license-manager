@@ -151,7 +151,8 @@ class TestPlanModeSplitRows:
         # The status, availability and serializer maps are fixed batches.  A
         # 16-query cold-request ceiling leaves authentication/metadata room
         # while rejecting an additional per-plan-line relation lookup.
-        assert len(full_page_queries) <= 16
+        # 17 since b192ee10 added one batched billed_no_boe_qty_bulk_map query (still row-count independent).
+        assert len(full_page_queries) <= 17
         # Batch loaders and relation prefetches make query volume independent
         # of page rows.  A small allowance covers serializer work only needed
         # when a populated page exposes a second related import item, while

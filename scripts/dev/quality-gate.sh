@@ -49,7 +49,8 @@ gate_backend() {
   run "backend: manage.py check"  backend "$PY" manage.py check
   run "backend: migrations check" backend "$PY" manage.py makemigrations --check --dry-run
   run "backend: pytest tests/"    backend "$PY" -m pytest tests/ -p no:cacheprovider
-  run "backend: app-level tests"  backend "$PY" -m pytest apps/license/tests apps/core/tests --import-mode=importlib -p no:cacheprovider
+  run "backend: flake8 (undefined names)" backend "$PY" -m flake8 .
+  run "backend: app-level tests"  backend "$PY" -m pytest apps --import-mode=importlib -p no:cacheprovider
 }
 gate_mds() { # MDS has its own venv (separate CI job); restore PY for later gates.
   _PY_SAVED=$PY

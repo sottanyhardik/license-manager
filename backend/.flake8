@@ -1,0 +1,4 @@
+[flake8]
+# Undefined-name gate only (NameError class of bugs). Not a style linter.
+select = F821,F822,F823
+exclude = .venv,venv,migrations,node_modules,staticfiles,htmlcov,__pycache__

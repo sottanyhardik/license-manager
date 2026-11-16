@@ -226,9 +226,10 @@ class TestCanonicalAllocationScenarios:
         response = allocate(api, allotment(company), 999999999, "1")
         assert response.status_code == 400 and "not found" in response.data["errors"][0]["error"].lower()
 
+    # d89d9d91 made CIF mismatch tolerant to +/-0.01, so use a 0.02 delta to stay a real mismatch.
     def test_16_pair_mismatch_rejected(self, api, company):
         item, target = source(company, "16"), allotment(company)
-        response = allocate(api, target, item.pk, "10", "99.99")
+        response = allocate(api, target, item.pk, "10", "99.98")
         assert response.status_code == 400 and response.data["errors"][0]["code"] == "ALLOCATION_PAIR_MISMATCH"
 
     def test_17_large_batch(self, api, company):

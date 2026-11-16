@@ -43,34 +43,37 @@ app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 app.conf.beat_schedule = {
     # Sync all licenses daily at 12:00 AM IST (6:30 PM UTC previous day)
     # IST = UTC + 5:30, so 12:00 AM IST = 6:30 PM UTC (18:30)
-    "sync-licenses-daily-midnight-ist": {
-        "task": "license.tasks.sync_all_licenses",
-        "schedule": crontab(minute=30, hour=18),  # 18:30 UTC = 12:00 AM IST
-        "args": (),
-        "options": {
-            "expires": 3600,  # Task expires after 1 hour
-        }
-    },
+    # DISABLED 2026-11-16: task name not registered anywhere (no implementation); re-enable once implemented.
+    # "sync-licenses-daily-midnight-ist": {
+    #     "task": "license.tasks.sync_all_licenses",
+    #     "schedule": crontab(minute=30, hour=18),  # 18:30 UTC = 12:00 AM IST
+    #     "args": (),
+    #     "options": {
+    #         "expires": 3600,  # Task expires after 1 hour
+    #     }
+    # },
 
     # Update balances twice daily: 11 AM and 8 PM IST
     # 11 AM IST = 5:30 AM UTC (5:30)
     # 8 PM IST = 2:30 PM UTC (14:30)
-    "update-balances-11am-ist": {
-        "task": "identify_licenses_needing_update",
-        "schedule": crontab(minute=30, hour=5),  # 5:30 AM UTC = 11:00 AM IST
-        "args": (),
-        "options": {
-            "expires": 3600,  # Task expires after 1 hour
-        }
-    },
-    "update-balances-8pm-ist": {
-        "task": "identify_licenses_needing_update",
-        "schedule": crontab(minute=30, hour=14),  # 2:30 PM UTC = 8:00 PM IST
-        "args": (),
-        "options": {
-            "expires": 3600,  # Task expires after 1 hour
-        }
-    },
+    # DISABLED 2026-11-16: task name not registered anywhere (no implementation); re-enable once implemented.
+    # "update-balances-11am-ist": {
+    #     "task": "identify_licenses_needing_update",
+    #     "schedule": crontab(minute=30, hour=5),  # 5:30 AM UTC = 11:00 AM IST
+    #     "args": (),
+    #     "options": {
+    #         "expires": 3600,  # Task expires after 1 hour
+    #     }
+    # },
+    # DISABLED 2026-11-16: task name not registered anywhere (no implementation); re-enable once implemented.
+    # "update-balances-8pm-ist": {
+    #     "task": "identify_licenses_needing_update",
+    #     "schedule": crontab(minute=30, hour=14),  # 2:30 PM UTC = 8:00 PM IST
+    #     "args": (),
+    #     "options": {
+    #         "expires": 3600,  # Task expires after 1 hour
+    #     }
+    # },
 
     # NOTE: DGFT's WAF blocks our DigitalOcean server IPs (403), so we don't
     # schedule `core.tasks.fetch_exchange_rates` on Celery beat here.  Instead,
@@ -79,14 +82,15 @@ app.conf.beat_schedule = {
     # other servers.  See: scripts/imports/fetch-and-push-rates.sh
 
     # Cleanup old task records every hour
-    "cleanup-old-tasks-hourly": {
-        "task": "cleanup_old_task_records",
-        "schedule": crontab(minute=0),  # Every hour at :00
-        "args": (),
-        "options": {
-            "expires": 3600,  # Task expires after 1 hour
-        }
-    },
+    # DISABLED 2026-11-16: task name not registered anywhere (no implementation); re-enable once implemented.
+    # "cleanup-old-tasks-hourly": {
+    #     "task": "cleanup_old_task_records",
+    #     "schedule": crontab(minute=0),  # Every hour at :00
+    #     "args": (),
+    #     "options": {
+    #         "expires": 3600,  # Task expires after 1 hour
+    #     }
+    # },
     # Durable outbox-style recovery for a process crash between database
     # commit and broker publish.  Work is bounded inside the task.
     "recover-pending-license-replans-every-5-min": {

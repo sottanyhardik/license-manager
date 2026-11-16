@@ -2371,7 +2371,6 @@ class LicenseBalance(models.Model):
         max_digits=15,
         decimal_places=2,
         default=DEC_0,
-        validators=[MinValueValidator(DEC_0)],
     )
     ledger_date = models.DateField(null=True, blank=True)
 

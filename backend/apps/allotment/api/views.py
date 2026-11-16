@@ -1,0 +1,399 @@
+# allotment/views.py
+from django.db import transaction
+from rest_framework import status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from apps.accounts.permissions import AllotmentPermission
+from apps.allotment.models import AllotmentModel
+from apps.allotment.api.serializers import AllotmentSerializer
+from apps.allotment.services.audit_service import record_allotment_deleted
+from apps.allotment.api.views_export import add_grouped_export_action
+from apps.core.constants import ROW_TYPE_CHOICES
+from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
+from apps.core.filtersets import AllotmentFilterSet
+from apps.core.views.master_view import MasterViewSet
+from django_filters.rest_framework import DjangoFilterBackend
+
+
+def _get_active_usd_rate():
+    """Get the active (latest) USD to INR exchange rate"""
+    from apps.core.models import ExchangeRateModel
+    try:
+        latest_rate = ExchangeRateModel.objects.order_by('-date').first()
+        if latest_rate:
+            return float(latest_rate.usd)
+    except Exception:
+        pass
+    return None
+
+
+# Nested field definitions for AllotmentDetails.  Allocation/source economics
+# stay read-only here; only the canonical planning target can be selected.
+allotment_nested_field_defs = {
+    "allotment_details": [
+        {"name": "id", "type": "text", "label": "ID", "read_only": True, "show_in_list": False, "allow_add": False, "allow_remove": False},
+        {"name": "license_number", "type": "text", "label": "License Number", "read_only": True},
+        {"name": "serial_number", "type": "text", "label": "Serial Number", "read_only": True},
+        {"name": "product_description", "type": "text", "label": "Description", "read_only": True},
+        {"name": "qty", "type": "number", "label": "Quantity", "read_only": True},
+        {"name": "cif_fc", "type": "number", "label": "CIF (FC)", "read_only": True},
+        {"name": "cif_inr", "type": "number", "label": "CIF (INR)", "read_only": True},
+        {"name": "exporter", "type": "text", "label": "Exporter", "read_only": True},
+        {"name": "license_date", "type": "date", "label": "License Date", "read_only": True},
+        {"name": "license_expiry", "type": "date", "label": "License Expiry", "read_only": True},
+    ]
+}
+
+AllotmentViewSet = MasterViewSet.create_viewset(
+    AllotmentModel,
+    AllotmentSerializer,
+    config={
+        "search": ["item_name", "company__name", "invoice", "bl_detail",
+                   "allotment_details__item__license__license_number"],
+        "filter": {
+            "license_number": {"type": "text", "label": "License Number"},
+            "company": {"type": "fk", "fk_endpoint": "/masters/companies/", "label_field": "name"},
+            "exclude_company": {"type": "exclude_fk", "fk_endpoint": "/masters/companies/", "label_field": "name",
+                                "filter_field": "company"},
+            "port": {"type": "fk", "fk_endpoint": "/masters/ports/", "label_field": "name"},
+            "exclude_port": {"type": "exclude_fk", "fk_endpoint": "/masters/ports/", "label_field": "name",
+                             "filter_field": "port"},
+            "type": {"type": "choice", "choices": list(ROW_TYPE_CHOICES)},
+            "estimated_arrival_date": {"type": "date_range"},
+            "modified_on": {"type": "date_range"},
+            # This is deliberately exposed as an exact boolean selector rather
+            # than inferred from allocation status.  The list endpoint already
+            # owns the `all` / `True` / `False` BOE contract.
+            "is_boe": {"type": "exact", "label": "BOE"},
+            "is_allotted": {"type": "exact"},
+        },
+        "list_display": [
+            "modified_on",
+            "item_name",
+            "planning_target_item",
+            "company__name",
+            "port__name",
+            "required_quantity",
+            "unit_value_per_unit",
+            "required_value",
+            "estimated_arrival_date",
+            "is_approved",
+            "invoice",
+            "dfia_list"
+        ],
+        "form_fields": [
+            "company",
+            "type",
+            "port",
+            "item_name",
+            "planning_target_item",
+            "required_quantity",
+            "cif_inr",
+            "exchange_rate",
+            "cif_fc",
+            "unit_value_per_unit",
+            "invoice",
+            "estimated_arrival_date",
+            "bl_detail",
+            "is_boe",
+            "is_approved",
+        ],
+        "ordering": ["estimated_arrival_date"],
+        "inline_editable": ["is_approved"],
+        "nested_field_defs": allotment_nested_field_defs,
+        "nested_list_display": {
+            "allotment_details": [
+                "license_number",
+                "serial_number",
+                "product_description",
+                "qty",
+                "cif_fc",
+                "cif_inr",
+                "license_date",
+                "license_expiry",
+                "planning_target_item_name",
+                "planning_mapping_status",
+            ]
+        },
+        "field_meta": {
+            "company": {
+                "type": "fk",
+                "fk_endpoint": "/masters/companies/",
+                "label_field": "name",
+                "required": True
+            },
+            "item_name": {
+                "type": "text",
+                "required": True,
+                "label": "Item Name"
+            },
+            "planning_target_item": {"type": "fk", "fk_endpoint": "/masters/item-names/?is_active=true", "label_field": "name"},
+            "port": {
+                "type": "fk",
+                "fk_endpoint": "/masters/ports/",
+                "label_field": "name"
+            },
+            "related_company": {
+                "type": "fk",
+                "fk_endpoint": "/masters/companies/",
+                "label_field": "name"
+            },
+            "type": {
+                "type": "select",
+                "choices": list(ROW_TYPE_CHOICES),
+                "default": "AT"  # Default to Allotment
+            },
+            "exchange_rate": {
+                "type": "number",
+                "default": _get_active_usd_rate()  # Default to active USD to INR rate
+            },
+            "is_approved": {
+                "type": "boolean",
+                "widget": "switch",
+                "label": "Approved"
+            },
+        }
+    }
+)
+
+# Add grouped export functionality
+AllotmentViewSet = add_grouped_export_action(AllotmentViewSet)
+
+# Add permission classes and filter backends
+AllotmentViewSet.permission_classes = [AllotmentPermission]
+AllotmentViewSet.filterset_class = AllotmentFilterSet
+AllotmentViewSet.filter_backends = [DjangoFilterBackend, CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter]
+AllotmentViewSet.search_fields = ['item_name', 'company__name', 'invoice', 'bl_detail', 'port__name']
+AllotmentViewSet.ordering_fields = ['estimated_arrival_date', 'modified_on', 'company__name', 'item_name']
+
+# Add default filters and performance optimizations
+original_get_queryset = AllotmentViewSet.get_queryset
+
+
+def custom_get_queryset_with_defaults(self):
+    """Override to apply default filters and performance optimizations"""
+    from decimal import Decimal
+    from django.db.models import Count, DecimalField, Exists, ExpressionWrapper, F, OuterRef, Prefetch, Q, Sum, Value
+    from django.db.models.functions import Coalesce, Greatest
+
+    # The generic advanced filter runs before this view's domain-specific BOE
+    # modes.  ``all`` and ``false_or_current`` are valid Allotments values,
+    # but not BooleanField values; hide them from the generic layer and apply
+    # their established semantics below.
+    raw_request = self.request._request
+    original_get = raw_request.GET
+    is_boe_mode = original_get.get("is_boe", "")
+    if is_boe_mode.lower() in {"all", "false_or_current"}:
+        filtered_get = original_get.copy()
+        filtered_get.pop("is_boe", None)
+        raw_request.GET = filtered_get
+    try:
+        qs = original_get_queryset(self)
+    finally:
+        raw_request.GET = original_get
+
+    # Add select_related for FK fields to avoid N+1 queries
+    qs = qs.select_related('company', 'port', 'related_company', 'planning_target_item')
+    decimal_output = DecimalField(max_digits=15, decimal_places=2)
+    # These are display projections only.  The allocation write path retains
+    # its canonical ledger validation; list serialization must not issue an
+    # aggregate query for every card.
+    from apps.allotment.models import AllotmentItems
+    from apps.bill_of_entry.models import BillOfEntryModel
+    from apps.license.models import LicenseItemPlan
+
+    qs = qs.annotate(
+        # Preserve the legacy serializer contract, which derives is_boe from
+        # the reverse relation rather than trusting the denormalized flag.
+        _list_is_boe=Exists(BillOfEntryModel.objects.filter(allotment=OuterRef("pk"))),
+        _list_allotted_quantity=Coalesce(Sum('allotment_details__qty'), Value(Decimal('0'), output_field=decimal_output), output_field=decimal_output),
+        _list_allotted_value=Coalesce(Sum('allotment_details__cif_fc'), Value(Decimal('0'), output_field=decimal_output), output_field=decimal_output),
+        _list_allotted_items_count=Count('allotment_details', distinct=True),
+        _list_allocated_licenses_count=Count('allotment_details__item__license', distinct=True),
+    ).annotate(
+        _list_balanced_quantity=Greatest(
+            ExpressionWrapper(F('required_quantity') - F('_list_allotted_quantity'), output_field=decimal_output),
+            Value(Decimal('0'), output_field=decimal_output),
+            output_field=decimal_output,
+        )
+    )
+
+    # Join all one-to-one/detail relations into the already-required detail
+    # batch.  Only plan lines remain a collection prefetch; splitting every
+    # scalar relation into its own batch was fixed-cost but unnecessarily
+    # expensive on each page.
+    detail_queryset = AllotmentItems.objects.select_related(
+        'item__hs_code',
+        'item__license__purchase_status',
+        'item__license__ownership__current_owner',
+        'item__license__balance',
+        'item__license__exporter',
+        'item__license__port',
+    ).prefetch_related(
+        Prefetch(
+            'item__utilization_plans',
+            queryset=LicenseItemPlan.objects.select_related('item_name'),
+        ),
+    )
+    qs = qs.prefetch_related(
+        Prefetch('allotment_details', queryset=detail_queryset),
+        Prefetch(
+            'planning_target_item__plan_lines',
+            queryset=LicenseItemPlan.objects.select_related('import_item__license').prefetch_related(
+                'import_item__license__export_license__norm_class'
+            ),
+        ),
+    )
+
+    params = self.request.query_params
+
+    # Don't apply default filters for retrieve/update/delete operations (detail views)
+    # Check if this is a detail operation by looking at the action or if pk is in kwargs
+    action = getattr(self, 'action', None)
+    kwargs = getattr(self, 'kwargs', {})
+
+    # For detail views (retrieve, update, delete), skip all default filters
+    if action in ['retrieve', 'update', 'partial_update', 'destroy'] or kwargs.get('pk'):
+        # For detail views, return all records without default filters
+        return qs
+
+    # Handle is_boe filter (only for list views)
+    is_boe_param = params.get('is_boe', '')
+
+    if is_boe_param == 'false_or_current':
+        # Special case for BOE edit: include current BOE's allotments
+        current_boe_allotments = params.get('current_boe_allotments', '')
+        if current_boe_allotments:
+            allotment_ids = [int(id) for id in current_boe_allotments.split(',') if id.isdigit()]
+            # Show allotments that either don't have BOE OR are in the current BOE
+            qs = qs.filter(Q(is_boe=False) | Q(id__in=allotment_ids))
+        else:
+            qs = qs.filter(is_boe=False)
+    elif is_boe_param in ['false', 'False', '0']:
+        # Explicitly filter for is_boe=False
+        qs = qs.filter(is_boe=False)
+    elif is_boe_param in ['true', 'True', '1']:
+        # Explicitly filter for is_boe=True
+        qs = qs.filter(is_boe=True)
+    elif is_boe_param.lower() == 'all':
+        # Show all records - no filtering by is_boe
+        pass
+    elif 'is_boe' not in params:
+        # Default: Not BOE (only if not specified)
+        qs = qs.filter(is_boe=False)
+
+    # Apply default filters only if the user hasn't specified these filters
+    if 'type' not in params:
+        qs = qs.filter(type='AT')  # Default: Allotment type
+
+    # Handle is_allotted filter - skip if "all"
+    is_allotted_param = params.get('is_allotted', '')
+    if is_allotted_param.lower() != 'all' and 'is_allotted' not in params:
+        qs = qs.filter(is_allotted=True)  # Default: Allotted
+
+    return qs
+
+
+AllotmentViewSet.get_queryset = custom_get_queryset_with_defaults
+
+# Override create to inject exchange_rate default in metadata
+original_create = AllotmentViewSet.create
+
+
+def custom_create_with_defaults(self, request, *args, **kwargs):
+    """Override create to add exchange_rate default to metadata"""
+    response = original_create(self, request, *args, **kwargs)
+
+    # If this is a GET request to the create endpoint (for metadata), add exchange_rate default
+    if request.method == 'GET' and hasattr(response, 'data') and 'metadata' in response.data:
+        exchange_rate_default = _get_active_usd_rate()
+        if exchange_rate_default and 'fields' in response.data['metadata']:
+            if 'exchange_rate' in response.data['metadata']['fields']:
+                response.data['metadata']['fields']['exchange_rate']['default'] = exchange_rate_default
+
+    return response
+
+
+AllotmentViewSet.create = custom_create_with_defaults
+
+
+# Add copy action
+@action(detail=True, methods=['post'], url_path='copy')
+def copy_allotment(self, request, pk=None):
+    """
+    Copy an allotment without invoice number and allotment items.
+    Creates a new allotment with the same data except invoice and allotment_details.
+    """
+    try:
+        # Get the original allotment
+        original = self.get_object()
+
+        # Create a copy without invoice and allotment items
+        copied_data = {
+            'company': original.company_id,
+            'type': original.type,
+            'required_quantity': original.required_quantity,
+            'unit_value_per_unit': original.unit_value_per_unit,
+            'cif_fc': original.cif_fc,
+            'cif_inr': original.cif_inr,
+            'exchange_rate': original.exchange_rate,
+            'item_name': original.item_name,
+            'contact_person': original.contact_person,
+            'contact_number': original.contact_number,
+            'estimated_arrival_date': original.estimated_arrival_date,
+            'bl_detail': original.bl_detail,
+            'port': original.port_id if original.port else None,
+            'related_company': original.related_company_id if original.related_company else None,
+            'is_approved': False,  # Reset approval status
+        }
+
+        # Remove None values
+        copied_data = {k: v for k, v in copied_data.items() if v is not None}
+
+        # Create new allotment using serializer
+        serializer = AllotmentSerializer(data=copied_data, context={'request': request})
+        if serializer.is_valid():
+            new_allotment = serializer.save()
+            return Response(
+                AllotmentSerializer(new_allotment, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+AllotmentViewSet.copy_allotment = copy_allotment
+
+
+# Add destroy action
+def destroy_allotment(self, request, pk=None):
+    """
+    Delete an allotment.
+    """
+    try:
+        # Get object directly from model without filters
+        with transaction.atomic():
+            allotment = AllotmentModel.objects.get(pk=pk)
+            record_allotment_deleted(allotment, getattr(request, 'user', None))
+            allotment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except AllotmentModel.DoesNotExist:
+        return Response(
+            {'error': 'AllotmentModel matching query does not exist.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+AllotmentViewSet.destroy = destroy_allotment

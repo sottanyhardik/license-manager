@@ -1,8 +1,8 @@
 # allotment/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from apps.allotment.views import AllotmentViewSet
-from apps.allotment.views_actions import AllotmentActionViewSet
+from apps.allotment.api.views import AllotmentViewSet
+from apps.allotment.api.views_actions import AllotmentActionViewSet
 
 app_name = "allotment"
 

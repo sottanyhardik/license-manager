@@ -72,3 +72,19 @@ Origin: P = project original, E = vendored ECC (MIT), N = new 2026-11-15.
 Index-first context loading · edits only the files it owns in the brief · Output format defined
 in its file · escalates business-rule, API contract, permission, and "ask first" safety items ·
 reports gate results honestly. Domain paths changed → the matching domain auditor must review.
+
+## ERP orchestration agents (added 2026-11-16, queue-bound — `/erp-orchestrator`)
+Thin wrappers that reuse the protocols above and add the worktree/ownership contract
+(`.claude/orchestration/AGENT_OWNERSHIP.md`). Use them only for queued tasks; use the originals for ad-hoc work.
+
+| Agent | Access | Model | Wraps |
+|---|---|---|---|
+| `erp-backend` | RW (owned files, task worktree) | sonnet | `backend-engineer` |
+| `erp-frontend` | RW | sonnet | `frontend-engineer` |
+| `erp-database` | RW | sonnet | `data-engineer` |
+| `erp-security` | RW | sonnet | `security-auditor` knowledge |
+| `erp-qa` | RW (tests only) | sonnet | `qa-test-engineer` |
+| `erp-performance` | RW | sonnet | `performance-engineer` |
+| `erp-architect` | RO + read-only Bash guard | opus | architects |
+| `erp-reviewer` | RO + read-only Bash guard | opus | `code-reviewer` |
+| `erp-security-reviewer` | RO + read-only Bash guard | opus | `security-auditor` |

@@ -7,6 +7,39 @@ cd backend && source ../.venv/bin/activate
 
 ---
 
+## Accounts App: OD-06 incident response
+
+Both commands are dry runs by default and print counts only. They change data only with
+`--execute --reason "<ticket>"`, inside one transaction, and audit to `core.ActivityLog` (module
+`security`). Run them only as a step of `docs/security/OD-06-rotation-runbook.md`, and only after
+owner approval.
+
+### `force_password_reset`
+Sets an unusable password on the selected accounts. That forces the reset flow, voids old
+reset links, and logs out sessions through the session-hash check. It also blacklists their
+outstanding refresh JWTs.
+```bash
+python manage.py force_password_reset --joined-on-or-before 2025-12-17           # dry run
+python manage.py force_password_reset --usernames-file /secure/exposed-users.txt # dry run
+python manage.py force_password_reset --joined-on-or-before 2025-12-17 \
+    --include-superusers --execute --reason "OD-06 rotation"
+```
+- `--joined-on-or-before YYYY-MM-DD` and `--usernames-file PATH` can be combined (union).
+  2025-12-17 is the date of the latest dump commit `58fa4691`, taken from git metadata.
+- Superusers are skipped (and counted) unless you pass `--include-superusers`.
+- The output reports the number of selected accounts without an email. They cannot self-serve
+  a reset, so an admin must set their password.
+
+### `invalidate_all_sessions`
+Deletes every `django_session` row and blacklists every outstanding refresh JWT.
+`--flush-expired` also deletes expired outstanding tokens.
+```bash
+python manage.py invalidate_all_sessions                                   # dry run
+python manage.py invalidate_all_sessions --flush-expired --execute --reason "OD-06 rotation"
+```
+
+---
+
 ## License App
 
 ### `update_license_ownership`

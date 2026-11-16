@@ -22,6 +22,8 @@ NC='\033[0m'
 : "${HEALTH_APP_PATH:?HEALTH_APP_PATH is required}"
 : "${HEALTH_KNOWN_HOSTS_FILE:?HEALTH_KNOWN_HOSTS_FILE is required}"
 [[ -r "$HEALTH_KNOWN_HOSTS_FILE" ]] || { echo "HEALTH_KNOWN_HOSTS_FILE must be readable." >&2; exit 2; }
+# Optional: HEALTH_DB_PASS — app DB role password for the table-count probe
+# (skipped with a warning when unset; never hard-code it here).
 
 IFS=',' read -r -a SERVER_NAMES <<< "$HEALTH_SERVER_NAMES"
 IFS=',' read -r -a SERVER_HOSTS <<< "$HEALTH_SERVER_HOSTS"
@@ -138,13 +140,19 @@ check_server() {
         ((fail++))
     fi
 
-    PG_TABLES=$(ssh_run "$host" "PGPASSWORD=lmanagement psql -U lmanagement -d lmanagement -t -c 'SELECT count(*) FROM information_schema.tables WHERE table_schema='\''public'\'';' 2>/dev/null | tr -d ' '")
-    if [ -n "$PG_TABLES" ] && [ "$PG_TABLES" -gt 0 ] 2>/dev/null; then
-        ok "Database has $PG_TABLES tables"
-        ((pass++))
-    else
-        warn "Could not count tables (DB may be empty or misconfigured)"
+    # OD-06: the DB password comes from HEALTH_DB_PASS (never hard-coded).
+    if [ -z "${HEALTH_DB_PASS:-}" ]; then
+        warn "HEALTH_DB_PASS not set - skipping table count"
         ((warn_count++))
+    else
+        PG_TABLES=$(ssh_run "$host" "PGPASSWORD=$(printf '%q' "$HEALTH_DB_PASS") psql -U lmanagement -d lmanagement -t -c 'SELECT count(*) FROM information_schema.tables WHERE table_schema='\''public'\'';' 2>/dev/null | tr -d ' '")
+        if [ -n "$PG_TABLES" ] && [ "$PG_TABLES" -gt 0 ] 2>/dev/null; then
+            ok "Database has $PG_TABLES tables"
+            ((pass++))
+        else
+            warn "Could not count tables (DB may be empty or misconfigured)"
+            ((warn_count++))
+        fi
     fi
 
     # Check pending migrations

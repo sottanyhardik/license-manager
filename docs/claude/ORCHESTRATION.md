@@ -45,6 +45,9 @@ flowchart TD
 3. When packages have to touch overlapping areas in parallel (e.g. two migration-heavy changes), give each
    `isolation: "worktree"`. The integrator then applies them one at a time, re-running gates after each.
    Worktrees live under `.claude/worktrees/` (git-ignored) and are removed with `git worktree remove` once merged locally.
+   **Update 2026-11-16:** native `isolation: "worktree"` can branch from the default branch (`develop`) instead of
+   the session HEAD, and `git worktree remove/prune` is now owner-only (deny rule + hook). For ERP work use
+   `/erp-orchestrator`, which creates pinned worktrees from the approved SHA. See `.claude/orchestration/README.md`.
 4. Migrations: only one package per Django app creates migrations per round. This avoids conflicting `00NN_` numbers.
 
 ## Model routing

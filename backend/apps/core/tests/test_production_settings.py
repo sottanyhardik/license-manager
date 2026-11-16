@@ -1,6 +1,7 @@
 """Process-level tests for the fail-closed production settings contract."""
 
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -64,7 +65,7 @@ def _valid_production_environment(**overrides: str) -> dict[str, str]:
         "SECURE_HSTS_PRELOAD": "True",
         "DB_NAME": "license_manager_staging",
         "DB_USER": "license_manager",
-        "DB_PASS": "non-secret-placeholder",
+        "DB_PASS": secrets.token_urlsafe(24),
         "DB_HOST": "postgres.staging.invalid",
         "DB_PORT": "5432",
         "REDIS_URL": "redis://redis.staging.invalid:6379/14",

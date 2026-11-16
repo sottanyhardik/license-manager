@@ -35,6 +35,22 @@ staticfiles/
 # Synthetic (fictional) ICEGATE ledger fixtures used by backend/tests/test_ledger_parser.py
 !backend/tests/fixtures/ledgers/*.csv
 remote_db_backup_*.sql
+# Required DB recipe (password supplied at run time via psql -v; OD-06)
+!backend/setup/reset_lmanagement.sql
+
+# OD-06 (2026-11-16): targeted rules. Matches audited in
+# docs/security/OD-06-remediation-manifest.md section 5 (0 tracked files matched
+# unless noted there). Ignoring does NOT untrack anything already tracked.
+# Postgres dump formats seen in history:
+*.dump
+*.pgsql
+*.psql
+lmanagement*.backup
+# DGFT browser-session secrets (template: backend/.env_dgft.example)
+.env_dgft
+# Playwright e2e outputs and licence document copies (existing tracked files stay tracked)
+/artifacts/
+/adf/
 
 # Node
 node_modules/

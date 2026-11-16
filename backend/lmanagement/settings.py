@@ -37,14 +37,27 @@ except ImportError:
 # ---------------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------------
-_DEFAULT_DEV_SECRET_KEY = "local-dev-only-secret-key-change-for-production-7f8e6d5c4b3a2910"
+from lmanagement.security_config import (  # noqa: E402  (stdlib-only module)
+    DEFAULT_DEV_DB_PASSWORD as _DEFAULT_DEV_DB_PASSWORD,
+    DEFAULT_DEV_SECRET_KEY as _DEFAULT_DEV_SECRET_KEY,
+    evaluate_production_secrets as _evaluate_production_secrets,
+)
+
+# OD-06: optional out-of-repo file of sha256 digests of known-exposed secrets.
+# The repository ships no digests. See docs/security/OD-06-rotation-runbook.md.
+SECURITY_SECRET_DENYLIST_FILE = os.getenv("SECURITY_SECRET_DENYLIST_FILE", "").strip()
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     _DEFAULT_DEV_SECRET_KEY,
 )
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"   # PRODUCTION DEFAULT: False
-DEPLOYMENT_ENV = os.getenv("DJANGO_ENVIRONMENT", "development").lower()
-IS_PRODUCTION = DEPLOYMENT_ENV in {"production", "prod"}
+DEPLOYMENT_ENV = os.getenv("DJANGO_ENVIRONMENT", "development").strip().lower()
+# Fail closed (OD-06 security review M1): only an explicitly NON-production
+# name disables production hardening. A typo ("producton"), stray whitespace
+# or any unknown name (e.g. "staging") is treated as production, so the
+# secret guard can never be skipped silently. Unset still means development.
+_NON_PRODUCTION_ENVS = {"development", "dev", "local", "test", "testing", "ci"}
+IS_PRODUCTION = DEPLOYMENT_ENV not in _NON_PRODUCTION_ENVS
 
 # DGFT scrip-ownership lookup.  Values are loaded from ``.env_dgft`` locally
 # (or normal process environment in deployed environments).  The session and
@@ -86,11 +99,21 @@ def _validate_production_security() -> None:
     """
     if not IS_PRODUCTION:
         return
-    errors = []
-    if DEBUG:
-        errors.append("DEBUG must be False")
-    if SECRET_KEY == _DEFAULT_DEV_SECRET_KEY or len(SECRET_KEY) < 32:
-        errors.append("DJANGO_SECRET_KEY must be a non-default secret of at least 32 characters")
+    # DEBUG, SECRET_KEY and DB password rules are shared with the Django system
+    # checks (lmanagement/checks.py, ``manage.py check --deploy``). Messages
+    # never include secret values.
+    errors = [
+        f"{finding.id}: {finding.message}"
+        for finding in _evaluate_production_secrets(
+            secret_key=SECRET_KEY,
+            db_password=DATABASES["default"]["PASSWORD"],
+            db_user=DATABASES["default"]["USER"],
+            db_name=DATABASES["default"]["NAME"],
+            debug=DEBUG,
+            denylist_path=SECURITY_SECRET_DENYLIST_FILE,
+            repo_root=BASE_DIR.parent,
+        )
+    ]
     if not ALLOWED_HOSTS or any(host in {"localhost", "127.0.0.1", "*"} for host in ALLOWED_HOSTS):
         errors.append("ALLOWED_HOSTS must contain only explicit production hosts")
     if not (SECURE_SSL_REDIRECT and SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE):
@@ -106,7 +129,7 @@ def _validate_production_security() -> None:
         for name, default in (
             ("DB_NAME", "lmanagement"),
             ("DB_USER", "lmanagement"),
-            ("DB_PASS", "lmanagement"),
+            ("DB_PASS", _DEFAULT_DEV_DB_PASSWORD),
             ("DB_HOST", "localhost"),
             ("REDIS_URL", "redis://127.0.0.1:6379/0"),
         )
@@ -203,7 +226,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("DB_NAME", "lmanagement"),
         "USER": os.getenv("DB_USER", "lmanagement"),
-        "PASSWORD": os.getenv("DB_PASS", "lmanagement"),
+        "PASSWORD": os.getenv("DB_PASS", _DEFAULT_DEV_DB_PASSWORD),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", "5432"),
     }

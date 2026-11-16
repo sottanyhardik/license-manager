@@ -1,4 +1,4 @@
-$ PGPASSWORD=lmanagement psql -h localhost -U lmanagement -d lmanagement -f sql.sql (query 2)
+$ PGPASSWORD=<redacted> psql -h localhost -U lmanagement -d lmanagement -f sql.sql (query 2)
 
  license_id | license_number | license_expiry_date | stored_is_expired | import_item_id | available_quantity | available_value
 ------------+----------------+---------------------+--------------------+----------------+---------------------+-----------------

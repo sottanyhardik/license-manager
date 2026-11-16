@@ -24,10 +24,13 @@ SERVER_HOSTS=("django@143.110.252.201" "django@139.59.92.226" "django@165.232.18
 # Database configurations (common for all servers)
 REMOTE_DB_NAME="lmanagement"
 REMOTE_DB_USER="lmanagement"
-REMOTE_DB_PASS="lmanagement"
+# OD-06: passwords come from the environment only (never commit them).
+#   export REMOTE_DB_PASS=...   # remote app DB role
+#   export LOCAL_DB_PASS=...    # local DB role (falls back to DB_PASS)
+REMOTE_DB_PASS="${REMOTE_DB_PASS:-}"
 LOCAL_DB_NAME="lmanagement"
 LOCAL_DB_USER="lmanagement"
-LOCAL_DB_PASS="lmanagement"
+LOCAL_DB_PASS="${LOCAL_DB_PASS:-${DB_PASS:-}}"
 BACKUP_DIR="$PROJECT_ROOT/backups"
 
 # Selected server (will be set by user)
@@ -63,6 +66,15 @@ print_info() {
 
 print_warning() {
     echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+# Fail with a clear message when a required DB password variable is unset.
+require_db_pass() {
+    local name="$1"
+    if [ -z "${!name}" ]; then
+        print_error "$name is not set. Export it in your shell (never commit it), e.g. export $name='...'"
+        exit 2
+    fi
 }
 
 # Function: Ensure local PostgreSQL is running, auto-recovering from a stale
@@ -125,6 +137,7 @@ ensure_local_postgres() {
 
 # Function: Ensure the local application role exists (create if missing)
 ensure_local_role() {
+    require_db_pass LOCAL_DB_PASS
     local exists
     exists=$(psql -U drushahardiksottany -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$LOCAL_DB_USER';" 2>/dev/null)
     if [ "$exists" = "1" ]; then
@@ -190,6 +203,7 @@ show_usage() {
 
 # Function: Create backup on remote server
 backup_remote_db() {
+    require_db_pass REMOTE_DB_PASS
     print_header "📦 Creating Remote Database Backup"
 
     BACKUP_FILE="backup_$(date +%Y%m%d_%H%M%S).sql"
@@ -209,6 +223,7 @@ backup_remote_db() {
 
 # Function: Download database from remote
 download_db() {
+    require_db_pass REMOTE_DB_PASS
     print_header "⬇️  Downloading Database from Remote Server"
 
     # Create backup directory if it doesn't exist
@@ -260,6 +275,7 @@ download_db() {
 
 # Function: Restore database from backup file
 restore_db() {
+    require_db_pass LOCAL_DB_PASS
     local BACKUP_FILE=$1
 
     if [ -z "$BACKUP_FILE" ]; then
@@ -332,6 +348,7 @@ restore_db() {
 
 # Function: Sync database (download + restore in one command)
 sync_db() {
+    require_db_pass REMOTE_DB_PASS; require_db_pass LOCAL_DB_PASS
     print_header "🔄 Syncing Database from Remote to Local"
 
     # Download
@@ -499,11 +516,13 @@ COMMAND=$1
 
 case $COMMAND in
     backup)
+        require_db_pass REMOTE_DB_PASS
         select_server
         mkdir -p "$BACKUP_DIR"
         backup_remote_db
         ;;
     download)
+        require_db_pass REMOTE_DB_PASS
         select_server
         download_db
         ;;
@@ -511,6 +530,7 @@ case $COMMAND in
         restore_db $2
         ;;
     sync)
+        require_db_pass REMOTE_DB_PASS; require_db_pass LOCAL_DB_PASS
         select_server
         sync_db
         ;;

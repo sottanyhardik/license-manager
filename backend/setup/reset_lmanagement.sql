@@ -1,11 +1,20 @@
 -- reset_lmanagement.sql
+
+-- OD-06: the role password is supplied at run time, never stored here:
+--   psql -v db_password="$DB_PASS" -f <this file>
+\if :{?db_password}
+\else
+  \echo 'ERROR: db_password is not set. Run with: psql -v db_password="$DB_PASS" -f <file>'
+  \quit
+\endif
+
 -- Drop the database and role (if they exist), recreate them,
 -- set some sensible defaults, and grant privileges.
 
 DROP DATABASE IF EXISTS lmanagement;
 DROP ROLE IF EXISTS lmanagement;
 
-CREATE USER lmanagement WITH PASSWORD 'lmanagement';
+CREATE USER lmanagement WITH PASSWORD :'db_password';
 CREATE DATABASE lmanagement OWNER lmanagement;
 
 -- Set defaults for the role

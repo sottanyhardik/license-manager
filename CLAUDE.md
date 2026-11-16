@@ -76,3 +76,13 @@ deletion/irreversible data operations. Never print or commit secrets (`.env*`,
 - Skills: `.claude/skills/` · Commands: `.claude/commands/` (`/orchestrate`, `/quality-gate`, `/cif-audit`, `/review-diff`, `/report`, `/remember`, `/session-summary`)
 - Project memory: `.claude/memory/` (index: `.claude/memory/README.md`)
 - Setup/troubleshooting: `docs/claude/INSTALLATION.md`, `docs/claude/TROUBLESHOOTING.md`
+
+## 7. ERP orchestration (queued, worktree-pinned) — added 2026-11-16
+
+`/erp-orchestrator <request>` runs ERP work through `.claude/orchestration/README.md`: queue
+`.claude/state/queue.json` via `python3 .claude/orchestration/bin/orch.py` (states, file ownership,
+≤4 implementation / ≤2 read-only agents), `erp-*` agents, and pinned worktrees from the approved base SHA.
+Never use native `isolation: "worktree"` for ERP tasks, because it can branch from `develop`. Decisions: read-only
+`.claude/state/decisions-snapshot.md` → canonical `docs/erp-transformation/12-decisions-register.md`
+(OD-11…OD-20 stay open). Approvals: `.claude/orchestration/APPROVAL_POLICY.md`. Model access via
+JetBrains Central: `.claude/orchestration/CENTRAL_CLI.md`.

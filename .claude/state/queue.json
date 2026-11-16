@@ -1,0 +1,454 @@
+{
+  "schema_version": 1,
+  "description": "ERP orchestration task queue. Edit only through .claude/orchestration/bin/orch.py. Policy: .claude/orchestration/README.md",
+  "approved_base": {
+    "branch": "feature/version5",
+    "sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+    "recorded": "2026-11-16",
+    "note": "HEAD at orchestration setup. Owner must re-approve before moving. Parent working tree carries uncommitted OD-06 work that is NOT in this commit."
+  },
+  "limits": {
+    "max_implementation_agents": 4,
+    "max_readonly_reviewers": 2,
+    "max_concurrent_full_quality_gates": 1,
+    "max_concurrent_migrations": 1
+  },
+  "agents": {
+    "implementation": [
+      "erp-backend",
+      "erp-frontend",
+      "erp-database",
+      "erp-security",
+      "erp-qa",
+      "erp-performance"
+    ],
+    "readonly": [
+      "erp-architect",
+      "erp-reviewer",
+      "erp-security-reviewer",
+      "cif-balance-auditor",
+      "boe-reconciliation-auditor",
+      "invoice-auditor",
+      "dgft-dfia-rules-auditor"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T-013",
+      "title": "AUTHZ-02: block USER_MANAGER from editing/resetting superusers",
+      "agent": "erp-security",
+      "skills": [
+        "erp-security-review",
+        "regression-first",
+        "django-backend"
+      ],
+      "owned_files": [
+        "backend/apps/accounts/views/user_management.py",
+        "backend/apps/accounts/serializers.py",
+        "backend/apps/accounts/permissions.py",
+        "backend/apps/accounts/tests/test_authz02_superuser_protection.py"
+      ],
+      "depends_on": [],
+      "base_sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+      "target_branch": "orch/T-013",
+      "worktree": ".claude/worktrees/T-013",
+      "test_database": "test_lm_t013",
+      "acceptance_criteria": [
+        "non-superuser USER_MANAGER gets 403 on update/partial_update/destroy/reset-password of a superuser",
+        "USER_MANAGER cannot set is_superuser/is_staff",
+        "superuser behaviour unchanged; existing contract tests pass"
+      ],
+      "decision_refs": [],
+      "review": {
+        "status": "approved",
+        "reviewers": [
+          "erp-security-reviewer"
+        ],
+        "findings": [
+          {
+            "at": "2026-11-16T09:17:03+05:30",
+            "by": "erp-security-reviewer",
+            "note": "APPROVE WITH NOTES: no crit/high; LOW: loose status asserts, log not in ActivityLog; MED advisory roles allowlist (out of scope)"
+          }
+        ]
+      },
+      "state": "integration",
+      "created": "2026-11-16T09:11:24+05:30",
+      "updated": "2026-11-16T09:17:03+05:30",
+      "notes": [
+        {
+          "at": "2026-11-16T09:11:25+05:30",
+          "note": "owner approved AUTHZ-02 2026-11-16"
+        },
+        {
+          "at": "2026-11-16T09:14:24+05:30",
+          "note": "verify OK; 48 passed (orchestrator rerun)"
+        },
+        {
+          "at": "2026-11-16T09:17:03+05:30",
+          "note": "integrating into feature/erp-implementation (uncommitted)"
+        }
+      ]
+    },
+    {
+      "id": "T-009",
+      "title": "Direct tests: plannable_capacity_cif + planner fed negative balance (14 \u00a7E gap)",
+      "agent": "erp-qa",
+      "skills": [
+        "regression-first",
+        "python-testing"
+      ],
+      "owned_files": [
+        "backend/apps/license/tests/test_plannable_capacity_direct.py"
+      ],
+      "depends_on": [],
+      "base_sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+      "target_branch": "orch/T-009",
+      "worktree": ".claude/worktrees/T-009",
+      "test_database": "test_lm_t009",
+      "acceptance_criteria": [
+        "unit tests pin plannable_capacity_cif for negative/zero/positive/None",
+        "one planner entry point fed a negative balance plans zero capacity"
+      ],
+      "decision_refs": [
+        "OD-01"
+      ],
+      "review": {
+        "status": "not-started",
+        "reviewers": [],
+        "findings": []
+      },
+      "state": "running",
+      "created": "2026-11-16T10:11:46+05:30",
+      "updated": "2026-11-16T10:11:47+05:30",
+      "notes": [
+        {
+          "at": "2026-11-16T10:11:47+05:30",
+          "note": "approved roadmap item"
+        }
+      ]
+    },
+    {
+      "id": "T-011",
+      "title": "MDS service contract/ownership/sync doc (OD-05)",
+      "agent": "erp-qa",
+      "skills": [],
+      "owned_files": [
+        "docs/architecture/MDS_SERVICE_CONTRACT.md"
+      ],
+      "depends_on": [],
+      "base_sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+      "target_branch": "orch/T-011",
+      "worktree": ".claude/worktrees/T-011",
+      "test_database": "test_lm_t_011",
+      "acceptance_criteria": [
+        "documents endpoints, client usage, data ownership per master, sync flow, failure modes, with file:line evidence"
+      ],
+      "decision_refs": [
+        "OD-05"
+      ],
+      "review": {
+        "status": "not-started",
+        "reviewers": [],
+        "findings": []
+      },
+      "state": "running",
+      "created": "2026-11-16T10:11:46+05:30",
+      "updated": "2026-11-16T10:11:49+05:30",
+      "notes": [
+        {
+          "at": "2026-11-16T10:11:49+05:30",
+          "note": "approved roadmap item"
+        }
+      ]
+    },
+    {
+      "id": "T-020",
+      "title": "BOE workspace list+detail endpoints (additive, query-budgeted)",
+      "agent": "erp-backend",
+      "skills": [
+        "django-backend",
+        "regression-first",
+        "financial-ledger",
+        "django-tdd"
+      ],
+      "owned_files": [
+        "backend/apps/bill_of_entry/urls.py",
+        "backend/apps/bill_of_entry/views/workspace.py",
+        "backend/apps/bill_of_entry/services/workspace_service.py",
+        "backend/apps/bill_of_entry/tests/test_boe_workspace_api.py"
+      ],
+      "depends_on": [],
+      "base_sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+      "target_branch": "orch/T-020",
+      "worktree": ".claude/worktrees/T-020",
+      "test_database": "test_lm_t_020",
+      "acceptance_criteria": [
+        "GET /api/bill-of-entries/workspace/ and /<pk>/workspace-detail/ match .claude/state/boe-workspace-contract.md",
+        "Existing /api/bill-of-entries/ endpoints unchanged; boe.py and serializers.py not edited",
+        "Query count fixed (<=8) for page_size 25 and 100; detail fixed count",
+        "financial_available_cif from calculate_financial_balance_for_licenses, signed"
+      ],
+      "decision_refs": [
+        "OD-01",
+        "OD-02"
+      ],
+      "review": {
+        "status": "not-started",
+        "reviewers": [],
+        "findings": []
+      },
+      "state": "running",
+      "created": "2026-11-16T10:17:46+05:30",
+      "updated": "2026-11-16T10:17:47+05:30",
+      "notes": []
+    },
+    {
+      "id": "T-021",
+      "title": "BOE baseline+workspace query/latency measurement, EXPLAIN, index analysis",
+      "agent": "erp-performance",
+      "skills": [
+        "performance-review",
+        "postgres-patterns",
+        "django-tdd"
+      ],
+      "owned_files": [
+        "backend/apps/bill_of_entry/tests/test_boe_workspace_perf.py",
+        "backend/apps/bill_of_entry/tests/boe_workspace_fixtures.py"
+      ],
+      "depends_on": [],
+      "base_sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+      "target_branch": "orch/T-021",
+      "worktree": ".claude/worktrees/T-021",
+      "test_database": "test_lm_t_021",
+      "acceptance_criteria": [
+        "Baseline query count + latency for existing list/detail recorded at page_size 25/100",
+        "Query-budget tests for workspace endpoints per contract (may fail until T-020 integrated)",
+        "EXPLAIN ANALYZE on local dev DB; index recommendation with evidence, no migration"
+      ],
+      "decision_refs": [],
+      "review": {
+        "status": "not-started",
+        "reviewers": [],
+        "findings": []
+      },
+      "state": "blocked",
+      "created": "2026-11-16T10:17:46+05:30",
+      "updated": "2026-11-16T10:17:58+05:30",
+      "notes": [
+        {
+          "at": "2026-11-16T10:17:58+05:30",
+          "note": "concurrency limit (stale T-009/T-011 running); resumes after T-020 implement"
+        }
+      ]
+    },
+    {
+      "id": "T-022",
+      "title": "React one-page BOE workspace (table, filters, KPIs, drawer, actions)",
+      "agent": "erp-frontend",
+      "skills": [
+        "react-frontend",
+        "react-patterns",
+        "react-performance",
+        "react-testing",
+        "frontend-a11y"
+      ],
+      "owned_files": [
+        "frontend/src/pages/boe-workspace/",
+        "frontend/src/routes/AppRoutes.tsx",
+        "frontend/src/routes/config.js"
+      ],
+      "depends_on": [],
+      "base_sha": "e6dfc9b7cd74e0cdd485e90bbaa4c87e73011a31",
+      "target_branch": "orch/T-022",
+      "worktree": ".claude/worktrees/T-022",
+      "test_database": "test_lm_t_022",
+      "acceptance_criteria": [
+        "Workspace page per contract; server-side pagination/filter/sort; debounced search",
+        "Drawer lazy-loads detail; targeted invalidation; no per-row requests",
+        "Existing BOE routes unchanged; lint, typecheck, vitest pass"
+      ],
+      "decision_refs": [],
+      "review": {
+        "status": "not-started",
+        "reviewers": [],
+        "findings": []
+      },
+      "state": "running",
+      "created": "2026-11-16T10:17:46+05:30",
+      "updated": "2026-11-16T10:17:59+05:30",
+      "notes": []
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-11-16",
+      "task": "-",
+      "event": "queue-initialised",
+      "note": "orchestration setup; no ERP feature tasks queued"
+    },
+    {
+      "at": "2026-11-16T09:11:24+05:30",
+      "task": "T-013",
+      "event": "added"
+    },
+    {
+      "at": "2026-11-16T09:11:24+05:30",
+      "task": "T-013",
+      "event": "pending->ready",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T09:11:25+05:30",
+      "task": "T-013",
+      "event": "worktree-created",
+      "note": "/Users/drushahardiksottany/PycharmProjects/license-manager/.claude/worktrees/T-013"
+    },
+    {
+      "at": "2026-11-16T09:11:25+05:30",
+      "task": "T-013",
+      "event": "ready->running",
+      "note": "owner approved AUTHZ-02 2026-11-16"
+    },
+    {
+      "at": "2026-11-16T09:14:24+05:30",
+      "task": "T-013",
+      "event": "running->review",
+      "note": "verify OK; 48 passed (orchestrator rerun)"
+    },
+    {
+      "at": "2026-11-16T09:17:03+05:30",
+      "task": "T-013",
+      "event": "review:approved",
+      "note": "APPROVE WITH NOTES: no crit/high; LOW: loose status asserts, log not in ActivityLog; MED advisory roles allowlist (out of scope)"
+    },
+    {
+      "at": "2026-11-16T09:17:03+05:30",
+      "task": "T-013",
+      "event": "review->integration",
+      "note": "integrating into feature/erp-implementation (uncommitted)"
+    },
+    {
+      "at": "2026-11-16T10:11:46+05:30",
+      "task": "T-009",
+      "event": "added"
+    },
+    {
+      "at": "2026-11-16T10:11:46+05:30",
+      "task": "T-011",
+      "event": "added"
+    },
+    {
+      "at": "2026-11-16T10:11:46+05:30",
+      "task": "T-009",
+      "event": "pending->ready",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:11:47+05:30",
+      "task": "T-009",
+      "event": "worktree-created",
+      "note": "/Users/drushahardiksottany/PycharmProjects/license-manager/.claude/worktrees/T-009"
+    },
+    {
+      "at": "2026-11-16T10:11:47+05:30",
+      "task": "T-009",
+      "event": "ready->running",
+      "note": "approved roadmap item"
+    },
+    {
+      "at": "2026-11-16T10:11:47+05:30",
+      "task": "T-011",
+      "event": "pending->ready",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:11:49+05:30",
+      "task": "T-011",
+      "event": "worktree-created",
+      "note": "/Users/drushahardiksottany/PycharmProjects/license-manager/.claude/worktrees/T-011"
+    },
+    {
+      "at": "2026-11-16T10:11:49+05:30",
+      "task": "T-011",
+      "event": "ready->running",
+      "note": "approved roadmap item"
+    },
+    {
+      "at": "2026-11-16T10:17:46+05:30",
+      "task": "T-020",
+      "event": "added"
+    },
+    {
+      "at": "2026-11-16T10:17:46+05:30",
+      "task": "T-021",
+      "event": "added"
+    },
+    {
+      "at": "2026-11-16T10:17:46+05:30",
+      "task": "T-022",
+      "event": "added"
+    },
+    {
+      "at": "2026-11-16T10:17:46+05:30",
+      "task": "T-020",
+      "event": "pending->ready",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:17:47+05:30",
+      "task": "T-020",
+      "event": "worktree-created",
+      "note": "/Users/drushahardiksottany/PycharmProjects/license-manager/.claude/worktrees/T-020"
+    },
+    {
+      "at": "2026-11-16T10:17:47+05:30",
+      "task": "T-020",
+      "event": "ready->running",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:17:47+05:30",
+      "task": "T-021",
+      "event": "pending->ready",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:17:48+05:30",
+      "task": "T-021",
+      "event": "worktree-created",
+      "note": "/Users/drushahardiksottany/PycharmProjects/license-manager/.claude/worktrees/T-021"
+    },
+    {
+      "at": "2026-11-16T10:17:48+05:30",
+      "task": "T-021",
+      "event": "ready->running",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:17:48+05:30",
+      "task": "T-022",
+      "event": "pending->ready",
+      "note": ""
+    },
+    {
+      "at": "2026-11-16T10:17:49+05:30",
+      "task": "T-022",
+      "event": "worktree-created",
+      "note": "/Users/drushahardiksottany/PycharmProjects/license-manager/.claude/worktrees/T-022"
+    },
+    {
+      "at": "2026-11-16T10:17:58+05:30",
+      "task": "T-021",
+      "event": "running->blocked",
+      "note": "concurrency limit (stale T-009/T-011 running); resumes after T-020 implement"
+    },
+    {
+      "at": "2026-11-16T10:17:59+05:30",
+      "task": "T-022",
+      "event": "ready->running",
+      "note": ""
+    }
+  ],
+  "updated": "2026-11-16T10:17:59+05:30"
+}

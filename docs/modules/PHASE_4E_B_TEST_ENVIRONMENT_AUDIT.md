@@ -43,7 +43,7 @@ TESTING: true
 SECRET_KEY: ci-not-a-secret-key-for-tests-only
 DB_NAME: lmanagement
 DB_USER: lmanagement
-DB_PASS: lmanagement
+DB_PASS: <local test DB password>
 DB_HOST: localhost
 DB_PORT: 5432
 REDIS_URL: redis://localhost:6379/0
@@ -158,7 +158,7 @@ export TESTING=true
 export DB_HOST=localhost
 export DB_NAME=lmanagement
 export DB_USER=lmanagement
-export DB_PASS=lmanagement
+export DB_PASS="<local test DB password>"
 export REDIS_URL=redis://localhost:6379/0
 
 .venv/bin/python manage.py migrate

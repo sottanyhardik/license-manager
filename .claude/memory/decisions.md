@@ -3,6 +3,11 @@
 > One line per non-obvious choice. Newest on top. Roles append here when they
 > make a call worth remembering.
 
+- 2026-11-16 — **OWNER APPROVED amended OD-06 package**: repo-side/local only. Hard-cut SECRET_KEY (never put the
+  compromised key in SECRET_KEY_FALLBACKS; SimpleJWT has no SIGNING_KEY, so rotation kills all JWTs). Targeted
+  .gitignore only after auditing matches. No secret fingerprints in code. Reset/cleanup commands built, NOT run.
+  NOT approved: prod rotation (owner/ops), history rewrite, push/deploy, PDF deletion, running cleanup. Deployment
+  scripts are reviewed by the owner; the bash guard hook stays respected (it also blocks their names in commands).
 - 2026-11-15 — **OWNER APPROVED (binding):** OD-01 negative Available CIF shown + `is_over_utilised` (floor-at-0 to be
   removed); OD-02 `calculate_financial_balance` canonical, customs figure = `customs_available_cif`; OD-03 one licence-wide
   running balance, COMMISSION excluded; OD-04 single-tenant; OD-05 keep MDS as separate service; OD-06 investigate secrets

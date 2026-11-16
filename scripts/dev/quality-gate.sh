@@ -1,10 +1,11 @@
 #!/bin/sh
 # Local quality gates — mirrors .github/workflows/ci.yml (the authoritative spec).
-# Usage: scripts/dev/quality-gate.sh [frontend|backend|mds|mds-client|all] ...
+# Usage: scripts/dev/quality-gate.sh [frontend|backend|mds|mds-client|audit|all] ...
 # Exit code: 0 = every gate ran and passed; 1 = a gate failed; 3 = nothing failed but a gate could not run.
 # Env: PYTHON (default: backend/.venv, .venv-3.14, .venv, then python3)
 #      MDS_PYTHON (default: master-data-service/.venv, else PYTHON)
 #      DB_* / MDS_DB_* override the CI defaults — must point at a LOCAL database.
+#      AUDIT_VENV isolated pip-audit venv (default: ~/.cache/license-manager/pip-audit-venv; CI-only tool)
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT" || exit 1
@@ -76,10 +77,25 @@ gate_mds_client() {
   run "mds-client: runtests" mds-client env -u DJANGO_SETTINGS_MODULE "$PY" runtests.py
 }
 gate_audit() { # pip-audit needs network (OSV/PyPI advisories); CI job: dependency-audit
+  # OD-09: pip-audit is CI-only tooling. It runs from its OWN isolated venv
+  # (outside the repo, never the backend runtime venv), pinned by
+  # backend/requirements-ci.txt. Override the location with AUDIT_VENV.
   py_ok || { skip "audit (pip-audit)" "Python >= 3.14 required"; return; }
-  "$PY" -m pip_audit --version >/dev/null 2>&1 || { skip "audit (pip-audit)" "pip-audit not installed (pip install -r backend/requirements-ci.txt)"; return; }
-  run "audit: pip-audit backend" . "$PY" scripts/security/pip_audit_gate.py --scope backend -r backend/requirements.txt
-  run "audit: pip-audit mds"     . "$PY" scripts/security/pip_audit_gate.py --scope mds -r master-data-service/requirements-prod.txt
+  AUDIT_VENV="${AUDIT_VENV:-$HOME/.cache/license-manager/pip-audit-venv}"
+  want=$(sed -n 's/^pip-audit==\([0-9.][0-9.]*\).*/\1/p' backend/requirements-ci.txt | head -1)
+  [ -n "$want" ] || { note "FAIL     audit (pip-audit) — no pinned pip-audit version in backend/requirements-ci.txt"; FAIL=1; return; }
+  APY="$AUDIT_VENV/bin/python"
+  have=$("$APY" -m pip_audit --version 2>/dev/null | awk '{print $2}')
+  if [ "$have" != "$want" ]; then
+    printf '\n=== audit: provisioning isolated pip-audit %s venv (%s)\n' "$want" "$AUDIT_VENV"
+    { "$PY" -m venv --clear "$AUDIT_VENV" && "$APY" -m pip install -q --upgrade pip \
+        && "$APY" -m pip install -q -r backend/requirements-ci.txt; } \
+      || { skip "audit (pip-audit)" "could not provision the isolated pip-audit venv (network?)"; return; }
+    have=$("$APY" -m pip_audit --version 2>/dev/null | awk '{print $2}')
+    [ "$have" = "$want" ] || { note "FAIL     audit (pip-audit) — isolated venv has pip-audit '$have', expected $want"; FAIL=1; return; }
+  fi
+  run "audit: pip-audit backend" . "$APY" scripts/security/pip_audit_gate.py --scope backend -r backend/requirements.txt
+  run "audit: pip-audit mds"     . "$APY" scripts/security/pip_audit_gate.py --scope mds -r master-data-service/requirements-prod.txt
 }
 for area in "$@"; do
   case $area in

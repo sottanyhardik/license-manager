@@ -38,6 +38,8 @@ import {
     X,
     XCircle,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { licenseDetailKey, licenseDetailQuery } from "@/pages/license-overview/useLicenseDetail";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,7 +49,6 @@ import {
     bulkUpsertItemPlans,
     deleteItemPlan,
     fetchItemPlans,
-    fetchLicense,
 } from "@/api/licenseApi";
 import { autoPlanLicense } from "@/api/planningRuleApi";
 
@@ -559,12 +560,20 @@ export default function PlanningEditor({
 
     // ── Load ─────────────────────────────────────────────────────────────────
 
+    const queryClient = useQueryClient();
+    const markLicenceStale = useCallback(() => {
+        // Stale-only (no refetch): load() below refetches and refreshes the shared entry.
+        void queryClient.invalidateQueries({ queryKey: licenseDetailKey(licenseId), exact: true, refetchType: "none" });
+    }, [queryClient, licenseId]);
+
     const load = useCallback(async () => {
         if (!licenseId) return;
         setLoading(true);
         try {
             const [license, rawPlans] = await Promise.all([
-                fetchLicense(licenseId),
+                // Shared cache entry (`licenses/:id/`): reuses the overview page's
+                // fetch when fresh; mutations mark it stale first (see markLicenceStale).
+                queryClient.fetchQuery(licenseDetailQuery(licenseId)),
                 fetchItemPlans(licenseId),
             ]);
             const reconciliation = (license as { operational_reconciliation?: Record<string, string | number> }).operational_reconciliation;
@@ -729,7 +738,7 @@ export default function PlanningEditor({
             setEditingGroupId(null);
         } catch { toast.error("Failed to load plan data"); }
         finally { setLoading(false); }
-    }, [licenseId, balanceCif]);
+    }, [licenseId, balanceCif, queryClient]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -827,6 +836,7 @@ export default function PlanningEditor({
                 sg.id === gId ? { ...sg, splits: cloneSplits(g.splits) } : sg,
             ));
             setEditingGroupId(null);
+            markLicenceStale();
             await load();
             onSaved?.();
         } catch (err: unknown) {
@@ -835,7 +845,7 @@ export default function PlanningEditor({
         } finally {
             setSavingGroupId(null);
         }
-    }, [groups, licenseId, load, onSaved]);
+    }, [groups, licenseId, load, markLicenceStale, onSaved]);
 
     // ── Delete (per-row) ──────────────────────────────────────────────────────
 
@@ -854,6 +864,7 @@ export default function PlanningEditor({
             await Promise.all(savedSplitIds.map((id) => deleteItemPlan(id)));
             toast.success(`Plan deleted — ${g.description}`);
             if (editingGroupId === gId) setEditingGroupId(null);
+            markLicenceStale();
             await load();
             onSaved?.();
         } catch {
@@ -861,7 +872,7 @@ export default function PlanningEditor({
         } finally {
             setDeletingGroupId(null);
         }
-    }, [groups, editingGroupId, load, onSaved]);
+    }, [groups, editingGroupId, load, markLicenceStale, onSaved]);
 
     // ── Auto Plan ────────────────────────────────────────────────────────
 
@@ -875,6 +886,7 @@ export default function PlanningEditor({
             // The synchronous endpoint only resolves after the planner's
             // transaction commits. Refresh this licence's canonical planning
             // projection once, rather than polling a background status.
+            markLicenceStale();
             await load();
             onSaved?.();
             toast.success(result.message || "Auto Plan completed.");
@@ -883,7 +895,7 @@ export default function PlanningEditor({
         } finally {
             setIsPlanning(false);
         }
-    }, [licenseId, isPlanning, load, onSaved]);
+    }, [licenseId, isPlanning, load, markLicenceStale, onSaved]);
 
     // ── Derived totals ─────────────────────────────────────────────────────────
 

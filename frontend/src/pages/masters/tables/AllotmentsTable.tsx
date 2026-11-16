@@ -1,11 +1,8 @@
 import { Inbox } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import api from "../../../api/axios";
+import { buildAllotmentActions } from "@/features/allotment/allotmentCardActions";
+import { AllotmentRecordWorkspace } from "@/features/allotment/AllotmentRecordWorkspace";
 import EntityCard from "../../../components/primitives/EntityCard";
-import DetailTable from "../../../components/primitives/DetailTable";
-import { openPdfPreview } from "../../../utils/pdfPreview";
-import { saveFilterState } from "../../../utils/filterPersistence";
 import { openLicenseCopyPdf } from "../../../utils/licenseCopyPdf";
 import { formatTruthyIndianNumber, formatTruthyInr } from "../masterDisplayFormatters";
 
@@ -25,12 +22,14 @@ interface AllotmentsTableProps {
 
 /**
  * Allotments list rendering, extracted verbatim from MasterList as part of the
- * config-driven <EntityTable> decomposition. Behaviour unchanged.
+ * config-driven <EntityTable> decomposition. Card header unchanged; the
+ * expanded body is the DetailTabs record workspace (features/allotment).
  */
 export default function AllotmentsTable({
     loading, data, canWrite, entityName, filterParams, currentPage, pageSize,
     navigate, onDelete, expandedAllotments, toggleAllotment,
 }: AllotmentsTableProps) {
+    const actionCtx = { canWrite, entityName, filterParams, currentPage, pageSize, navigate, onDelete };
     return (
                         loading ? (
                             <div className="text-center py-5">
@@ -70,74 +69,14 @@ export default function AllotmentsTable({
                                                 { label: 'Allotted Items', value: item.allotted_items_count ?? 0 },
                                                 { label: 'Allocated Licenses', value: item.allocated_licenses_count ?? 0 },
                                             ]}
-                                            actions={[
-                                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/edit`); } },
-                                                canWrite && { icon: 'copy', title: 'Copy', tone: 'info',
-                                                    onClick: async () => {
-                                                        if (!window.confirm(`Create a copy of allotment ${item.invoice || 'this allotment'}?`)) return;
-                                                        try {
-                                                            const r = await api.post(`allotments/${item.id}/copy/`);
-                                                            toast.success('Allotment copied. Opening in edit mode...');
-                                                            saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                                            navigate(`/allotments/${r.data.id}/edit`);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to copy'); }
-                                                    } },
-                                                canWrite && { icon: 'box-arrow-in-down', title: 'Allocate', tone: 'success',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/allotments/${item.id}/allocate`); } },
-                                                { icon: 'file-pdf', title: 'Preview PDF', tone: 'warning',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            openPdfPreview(r.data, `${item.invoice_number || item.id}.pdf`);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to generate PDF'); }
-                                                    } },
-                                                { icon: 'download', title: 'Download',
-                                                    onClick: async () => {
-                                                        try {
-                                                            const r = await api.get(`allotment-actions/${item.id}/generate-pdf/`, { responseType: 'blob', headers: { Authorization: `Bearer ${localStorage.getItem('access')}` } });
-                                                            const url = window.URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
-                                                            const a = document.createElement('a');
-                                                            a.href = url;
-                                                            a.download = `Allotment-${item.invoice || item.id}.pdf`;
-                                                            document.body.appendChild(a); a.click(); a.remove();
-                                                            setTimeout(() => window.URL.revokeObjectURL(url), 10000);
-                                                        } catch (err) { toast.error(err.response?.data?.error || 'Failed to download PDF'); }
-                                                    } },
-                                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => onDelete(item) },
-                                            ].filter(Boolean)}
+                                            actions={buildAllotmentActions(item, actionCtx)}
                                             viewOpen={expandedAllotments.has(item.id)}
                                             onView={() => toggleAllotment(item.id)}
+                                            ariaExpanded={expandedAllotments.has(item.id)}
+                                            ariaControls={`allotment-detail-${item.id}`}
                                             detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
                                             detail={() => (
-                                                <DetailTable
-                                                    columns={[
-                                                        { key: 'license_number',     label: 'License',     bold: true, nowrap: true,
-                                                            render: (v, row) => v && row.license_id ? (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openLicenseCopyPdf(row.license_id, v)}
-                                                                    className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
-                                                                    title="Open License Copy PDF"
-                                                                    aria-label={`Open License Copy PDF for ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ) : (
-                                                                <span className="text-primary">{v || '—'}</span>
-                                                            ) },
-                                                        { key: 'serial_number',      label: 'Sl#',         align: 'right', nowrap: true },
-                                                        { key: 'product_description', label: 'Item',       muted: true },
-                                                        { key: 'qty',                 label: 'Qty',        align: 'right', nowrap: true,
-                                                            render: v => fmtQty(v) },
-                                                        { key: 'cif_fc',              label: 'CIF (FC)',   align: 'right', nowrap: true,
-                                                            render: v => formatTruthyIndianNumber(v, { maximumFractionDigits: 2 }) },
-                                                        { key: 'cif_inr',             label: 'CIF (INR)',  align: 'right', nowrap: true, bold: true,
-                                                            render: v => fmtInr(v) },
-                                                    ]}
-                                                    rows={detailRows}
-                                                    emptyMessage="No items have been allotted yet."
-                                                />
+                                                <AllotmentRecordWorkspace item={item} actions={buildAllotmentActions(item, actionCtx)} />
                                             )}
                                         >
                                             {(item.item_name || item.dfia_list) && (

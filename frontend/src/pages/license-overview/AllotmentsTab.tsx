@@ -15,11 +15,6 @@ interface AllotmentsTabProps {
 
 type SortKey = keyof LicenseOverviewAllotmentRow;
 
-// Cards when the count is small enough to browse visually, table otherwise —
-// same threshold convention as `pages/masters/tables/LedgerTab.tsx`'s
-// `AllotmentSection` (`CARD_THRESHOLD = 10`).
-const CARD_THRESHOLD = 10;
-
 async function copyToClipboard(text: string) {
     try {
         await navigator.clipboard.writeText(text);
@@ -31,10 +26,8 @@ async function copyToClipboard(text: string) {
 
 /**
  * Allotments tab — one row per allotment linked to this license, from
- * `GET /licenses/<id>/overview-allotments/`. Render pattern (cards for small
- * counts, dense table for large ones) copied from `LedgerTab.tsx`'s private
- * `AllotmentSection`, not imported from it (that component is specific to
- * the Master List's ledger tab and stays there unmodified).
+ * `GET /licenses/<id>/overview-allotments/`. Always renders a table
+ * (decision D3) regardless of row count.
  */
 export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProps) {
     const { data, isLoading, isError, error } = useLicenseOverviewAllotments(licenseId, isActive);
@@ -80,50 +73,8 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
 
     return (
         <div>
-            {rows.length <= CARD_THRESHOLD ? (
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {rows.map((a) => {
-                        const rate = a.quantity > 0 ? Number(a.cif_fc) / a.quantity : 0;
-                        return (
-                            <div key={a.allotment_number} className="group rounded-xl border border-border/60 bg-card p-3 transition-shadow hover:shadow-sm">
-                                <div className="mb-2 flex items-start justify-between gap-2">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="font-mono text-sm font-semibold text-foreground">{a.allotment_number}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => copyToClipboard(a.allotment_number)}
-                                            className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
-                                            title="Copy allotment number"
-                                        >
-                                            <ClipboardCopy className="size-3" />
-                                        </button>
-                                    </div>
-                                    <Badge variant={overviewAllotmentStatusVariant(a.status)}>{a.status}</Badge>
-                                </div>
-                                <div className="mb-1.5 truncate text-xs text-muted-foreground" title={a.customer ?? ""}>{a.customer ?? "—"}</div>
-                                <div className="mb-2 truncate text-xs text-muted-foreground/70" title={a.product ?? ""}>{a.product ?? "—"}</div>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground/70">{fmtDate(a.date)}</div>
-                                <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border/40 pt-2">
-                                    <div>
-                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Qty</div>
-                                        <div className="tabular-nums text-xs font-semibold text-foreground">{fmtNum(a.quantity)}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
-                                        <div className="tabular-nums text-xs font-semibold text-foreground">{rate > 0 ? fmtNum(rate) : "—"}</div>
-                                    </div>
-                                </div>
-                                <div className="mt-2 flex items-center justify-between rounded-lg bg-violet-50/60 px-2 py-1 dark:bg-violet-500/10">
-                                    <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</span>
-                                    <span className="tabular-nums text-xs font-bold text-violet-700 dark:text-violet-400">{fmtNum(a.cif_fc)}</span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
                 <div className="max-h-[calc(100vh-17rem)] overflow-auto rounded-lg border border-border/70 bg-card">
-                    <table className="w-full min-w-[800px] text-sm">
+                    <table className="w-full min-w-[900px] text-sm">
                         <thead className="sticky top-0 z-[1] bg-muted/95 text-xs uppercase tracking-wide text-muted-foreground backdrop-blur">
                             <tr>
                                 <SortableHeader label="Allotment Number" sortKey="allotment_number" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
@@ -133,12 +84,27 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                                 <SortableHeader label="Quantity" sortKey="quantity" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
                                 <SortableHeader label="CIF" sortKey="cif_fc" activeKey={sort.key} direction={sort.direction} onSort={handleSort} align="right" />
                                 <SortableHeader label="Status" sortKey="status" activeKey={sort.key} direction={sort.direction} onSort={handleSort} />
+                                <th scope="col" className="whitespace-nowrap px-3 py-2 text-right font-semibold">Rate</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((a) => (
-                            <tr key={a.allotment_number} className="border-t border-border/60 hover:bg-muted/30">
-                                    <td className="px-3 py-1.5 font-mono text-xs">{a.allotment_number}</td>
+                            {rows.map((a) => {
+                                const rate = a.quantity > 0 ? Number(a.cif_fc) / a.quantity : 0;
+                                return (
+                                <tr key={a.allotment_number} className="border-t border-border/60 hover:bg-muted/30">
+                                    <td className="px-3 py-1.5 font-mono text-xs"><span className="inline-flex items-center gap-1.5">
+                                            {a.allotment_number}
+                                            <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(a.allotment_number)}
+                                                className="cursor-pointer text-muted-foreground/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                                                title="Copy allotment number"
+                                                aria-label="Copy allotment number"
+                                            >
+                                                <ClipboardCopy className="size-3" />
+                                            </button>
+                                        </span>
+                                    </td>
                                     <td className="whitespace-nowrap px-3 py-1.5">{fmtDate(a.date)}</td>
                                     <td className="px-3 py-1.5">{a.customer ?? "—"}</td>
                                     <td className="px-3 py-1.5">{a.product ?? "—"}</td>
@@ -147,12 +113,13 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
                                     <td className="px-3 py-1.5">
                                         <Badge variant={overviewAllotmentStatusVariant(a.status)}>{a.status}</Badge>
                                     </td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{rate > 0 ? fmtNum(rate) : "—"}</td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
-            )}
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
                 <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-primary">

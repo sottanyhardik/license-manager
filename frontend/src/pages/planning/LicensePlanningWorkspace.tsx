@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Compo
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronRight, Eye, Loader2, MoreHorizontal, Pencil, Plus, Search, TestTube2, Zap, CheckCircle2, AlertTriangle, History, ClipboardList, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import api from "@/api/axios";
+import { fetchAllPages } from "@/hooks/fetchAllPages";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import { Button as UiButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -125,7 +125,7 @@ export default function LicensePlanningWorkspace() {
             host.scrollTop = top;
         }));
     };
-    useEffect(() => { setLoading(true); api.get("masters/sion-classes/", { params: { is_active: true, page_size: 500, ordering: "norm_class" } }).then(({ data }) => { const rows = data?.results ?? data ?? []; setSions(rows); const requested = params.get("sion"); if (requested) { const match = rows.find((row: any) => String(row.id) === requested || String(row.norm_class).toUpperCase() === requested.toUpperCase()); if (match) setSion(match.id); } }).catch(() => setError("Unable to load SION norms.")).finally(() => setLoading(false)); }, [params]);
+    useEffect(() => { setLoading(true); fetchAllPages<any>("masters/sion-classes/", { is_active: true, ordering: "norm_class" }).then((rows) => { setSions(rows); const requested = params.get("sion"); if (requested) { const match = rows.find((row: any) => String(row.id) === requested || String(row.norm_class).toUpperCase() === requested.toUpperCase()); if (match) setSion(match.id); } }).catch(() => setError("Unable to load SION norms.")).finally(() => setLoading(false)); }, [params]);
     useEffect(() => { if (!requestedLicenseNumber || !requestedSion) return; setLoading(true); previewScopedSionPlan(requestedLicenseNumber, requestedSion).then(setScopedPreview).catch((e) => setError(e?.response?.data?.error || "Unable to preview the exact licence/SION selection.")).finally(() => setLoading(false)); }, [requestedLicenseNumber, requestedSion]);
     useEffect(() => { if (!sion) { setRules([]); setDraft(null); setSelectedRuleId(null); setPreview(null); return; } setLoading(true); setError(""); setDraft(null); setPreview(null); fetchSionPlanningRules(sion).then((rows) => { const ordered = [...rows].sort((a, b) => a.priority - b.priority); setRules(ordered); setSelectedRuleId((current) => ordered.some((rule) => rule.id === current) ? current : ordered[0]?.id ?? null); }).catch(() => setError("Unable to load planning rules.")).finally(() => setLoading(false)); }, [sion]);
     const savedDraft = draft?.id ? rules.find((rule) => rule.id === draft.id) : null;

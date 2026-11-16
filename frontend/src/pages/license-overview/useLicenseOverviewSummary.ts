@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/api/axios";
+import { qk } from "@/lib/queryKeys";
 import type { LicenseOverviewSummary } from "./types";
 
 /**
@@ -9,12 +10,17 @@ import type { LicenseOverviewSummary } from "./types";
  * since each tab is fetched independently and lazily.
  */
 export const licenseOverviewKeys = {
-    summary: (licenseId: string | number) => ["license-overview-summary", String(licenseId)] as const,
-    boes: (licenseId: string | number) => ["license-overview-boes", String(licenseId)] as const,
-    allotments: (licenseId: string | number) => ["license-overview-allotments", String(licenseId)] as const,
-    items: (licenseId: string | number) => ["license-overview-items", String(licenseId)] as const,
-    invoiceLedger: (licenseId: string | number) => ["license-overview-invoice-ledger", String(licenseId)] as const,
-    planning: (licenseId: string | number) => ["license-overview-planning", String(licenseId)] as const,
+    summary: (licenseId: string | number) => qk.licenses.overview(String(licenseId), "summary"),
+    boes: (licenseId: string | number) => qk.licenses.overview(String(licenseId), "boes"),
+    allotments: (licenseId: string | number) => qk.licenses.overview(String(licenseId), "allotments"),
+    items: (licenseId: string | number) => qk.licenses.overview(String(licenseId), "items"),
+    invoiceLedger: (licenseId: string | number) => qk.licenses.overview(String(licenseId), "invoice-ledger"),
+    /**
+     * Was a dead key (never queried). Now the shared licence-detail key
+     * (`licenses/:id/`, the data PlanningEditor and the SION/documents readers
+     * use), so existing `planning` invalidations refetch real queries.
+     */
+    planning: (licenseId: string | number) => qk.licenses.detail(String(licenseId)),
 };
 
 /**

@@ -12,7 +12,7 @@
  * same small, rarely-changing list.
  */
 import { useEffect, useState } from "react";
-import api from "@/api/axios";
+import { fetchAllPages } from "./fetchAllPages";
 
 export type SelectOption = { value: string; label: string };
 
@@ -64,10 +64,9 @@ function useCachedOptions(cache: OptionsCache, fetcher: () => Promise<SelectOpti
 const purchaseStatusCache: OptionsCache = { promise: null, data: null };
 
 async function fetchPurchaseStatusOptions(): Promise<SelectOption[]> {
-    const response = await api.get("masters/purchase-statuses/", {
-        params: { is_active: true, ordering: "display_order,label", page_size: 200 },
+    const results = await fetchAllPages<{ code: string; label: string }>("masters/purchase-statuses/", {
+        is_active: true, ordering: "display_order,label",
     });
-    const results = response.data?.results ?? response.data ?? [];
     return results.map((row: { code: string; label: string }) => ({
         value: row.code,
         label: row.label,
@@ -87,12 +86,11 @@ export function usePurchaseStatusOptions() {
 const sionNormCache: OptionsCache = { promise: null, data: null };
 
 async function fetchSionNormOptions(): Promise<SelectOption[]> {
-    const response = await api.get("masters/sion-classes/", {
-        params: { is_active: true, ordering: "norm_class", page_size: 500 },
+    const results = await fetchAllPages<{ norm_class: string }>("masters/sion-classes/", {
+        is_active: true, ordering: "norm_class",
     });
-    const results = response.data?.results ?? response.data ?? [];
     return results
-        .map((row: { norm_class: string }) => ({ value: row.norm_class, label: row.norm_class }))
+        .map((row) => ({ value: row.norm_class, label: row.norm_class }))
         // Belt-and-suspenders: the SION norms master has no curated
         // display-order field, so alphabetical is the defined fallback
         // order regardless of what the backend returns.

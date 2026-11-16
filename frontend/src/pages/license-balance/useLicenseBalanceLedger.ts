@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/api/axios";
+import { qk } from "@/lib/queryKeys";
 import type { LicenseBalanceLedgerData } from "./types";
 
 /**
@@ -18,9 +19,7 @@ import type { LicenseBalanceLedgerData } from "./types";
  */
 export const licenseBalanceKeys = {
     ledger: (licenseId: string | number, showHidden?: boolean) =>
-        (showHidden
-            ? (["license-balance-ledger", String(licenseId), "show-hidden"] as const)
-            : (["license-balance-ledger", String(licenseId)] as const)),
+        qk.licenses.ledger(String(licenseId), showHidden),
 };
 
 /**

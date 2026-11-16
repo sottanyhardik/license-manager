@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import DataTable from "@/components/DataTable";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { useReconTabQuery } from "./useReconTabQuery";
+import ReconPagination from "./ReconPagination";
 import { fmtList, fmtNum, pick, pickId, type ReconRow } from "./reconciliationHelpers";
 
 interface ComparisonTabProps {
@@ -19,7 +20,7 @@ interface ComparisonTabProps {
 export default function ComparisonTab({ kind }: ComparisonTabProps) {
     const navigate = useNavigate();
     const tabKey = kind === "cif" ? "cif-comparison" : "qty-comparison";
-    const { data, isLoading, isError, error } = useReconTabQuery(tabKey, `reconciliation/${tabKey}/`);
+    const { data, isLoading, isError, error, pagination } = useReconTabQuery(tabKey, `reconciliation/${tabKey}/`);
 
     // Backend's `_linked_trade_comparison` returns generic `invoice_total`/
     // `boe_total` for both CIF and quantity (see
@@ -39,30 +40,33 @@ export default function ComparisonTab({ kind }: ComparisonTabProps) {
     }
 
     return (
-        <DataTable
-            data={data ?? []}
-            columns={columns}
-            loading={isLoading}
-            getRowStyle={(item: ReconRow) => {
-                const diff = Number(pick(item, "difference") ?? 0);
-                return !Number.isNaN(diff) && diff !== 0
-                    ? { backgroundColor: "var(--tb-warning-soft)", boxShadow: "inset 3px 0 0 var(--tb-warning)" }
-                    : undefined;
-            }}
-            customCellRender={{
-                invoice_number: (item: ReconRow) => String(pick(item, "invoice_number") ?? "—"),
-                boe_numbers: (item: ReconRow) => fmtList(pick(item, "boe_numbers", "linked_boe_numbers", "bill_of_entry_numbers")),
-                [`invoice_${kind}`]: (item: ReconRow) => fmtNum(pick(item, ...invoiceKeys)),
-                [`boe_${kind}`]: (item: ReconRow) => fmtNum(pick(item, ...boeKeys)),
-                difference: (item: ReconRow) => fmtNum(pick(item, "difference")),
-            }}
-            customActions={[
-                {
-                    icon: "Eye", label: "View Trade",
-                    showIf: (item: ReconRow) => pickId(item, "trade_id") !== null,
-                    onClick: (item: ReconRow) => navigate(`/trades/${pickId(item, "trade_id")}/edit`),
-                },
-            ]}
-        />
+        <>
+            <DataTable
+                data={data ?? []}
+                columns={columns}
+                loading={isLoading}
+                getRowStyle={(item: ReconRow) => {
+                    const diff = Number(pick(item, "difference") ?? 0);
+                    return !Number.isNaN(diff) && diff !== 0
+                        ? { backgroundColor: "var(--tb-warning-soft)", boxShadow: "inset 3px 0 0 var(--tb-warning)" }
+                        : undefined;
+                }}
+                customCellRender={{
+                    invoice_number: (item: ReconRow) => String(pick(item, "invoice_number") ?? "—"),
+                    boe_numbers: (item: ReconRow) => fmtList(pick(item, "boe_numbers", "linked_boe_numbers", "bill_of_entry_numbers")),
+                    [`invoice_${kind}`]: (item: ReconRow) => fmtNum(pick(item, ...invoiceKeys)),
+                    [`boe_${kind}`]: (item: ReconRow) => fmtNum(pick(item, ...boeKeys)),
+                    difference: (item: ReconRow) => fmtNum(pick(item, "difference")),
+                }}
+                customActions={[
+                    {
+                        icon: "Eye", label: "View Trade",
+                        showIf: (item: ReconRow) => pickId(item, "trade_id") !== null,
+                        onClick: (item: ReconRow) => navigate(`/trades/${pickId(item, "trade_id")}/edit`),
+                    },
+                ]}
+            />
+            <ReconPagination pagination={pagination} />
+        </>
     );
 }

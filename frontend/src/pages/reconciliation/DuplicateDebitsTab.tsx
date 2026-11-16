@@ -5,6 +5,7 @@ import api from "@/api/axios";
 import DataTable from "@/components/DataTable";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { useReconTabQuery } from "./useReconTabQuery";
+import ReconPagination from "./ReconPagination";
 import { fmtNum, pick, pickId, reconKeys, type ReconRow } from "./reconciliationHelpers";
 
 const COLUMNS = ["sr_number", "licence", "invoice_number", "bill_of_entry_number", "invoice_debit", "boe_debit", "difference"];
@@ -30,7 +31,7 @@ function isMismatched(row: ReconRow): boolean {
  */
 export default function DuplicateDebitsTab() {
     const queryClient = useQueryClient();
-    const { data, isLoading, isError, error } = useReconTabQuery("duplicate-debits", "reconciliation/duplicate-debits/");
+    const { data, isLoading, isError, error, pagination } = useReconTabQuery("duplicate-debits", "reconciliation/duplicate-debits/");
 
     const handleKeepInvoiceDebit = async (row: ReconRow) => {
         try {
@@ -51,38 +52,41 @@ export default function DuplicateDebitsTab() {
     }
 
     return (
-        <DataTable
-            data={data ?? []}
-            columns={COLUMNS}
-            loading={isLoading}
-            getRowStyle={(item: ReconRow) =>
-                isMismatched(item) ? { backgroundColor: "var(--tb-danger-soft)", boxShadow: "inset 3px 0 0 var(--tb-danger)" } : undefined
-            }
-            customCellRender={{
-                sr_number: (item: ReconRow) => String(pick(item, "sr_number_id", "sr_number") ?? "—"),
-                licence: (item: ReconRow) => String(pick(item, "licence_number", "license_number", "licence", "license") ?? "—"),
-                invoice_number: (item: ReconRow) => String(pick(item, "invoice_number") ?? "—"),
-                bill_of_entry_number: (item: ReconRow) => String(pick(item, "bill_of_entry_number") ?? "—"),
-                invoice_debit: (item: ReconRow) => fmtNum(pick(item, "invoice_debit")),
-                boe_debit: (item: ReconRow) => fmtNum(pick(item, "boe_debit")),
-                difference: (item: ReconRow) => fmtNum(pick(item, "difference")),
-            }}
-            customActions={[
-                {
-                    icon: "check2-circle", label: "Keep Invoice Debit",
-                    onClick: handleKeepInvoiceDebit,
-                },
-                {
-                    icon: "arrow-left-right", label: "Not yet available",
-                    className: DISABLED_ACTION_CLASS,
-                    onClick: () => {},
-                },
-                {
-                    icon: "arrow-repeat", label: "Not yet available",
-                    className: DISABLED_ACTION_CLASS,
-                    onClick: () => {},
-                },
-            ]}
-        />
+        <>
+            <DataTable
+                data={data ?? []}
+                columns={COLUMNS}
+                loading={isLoading}
+                getRowStyle={(item: ReconRow) =>
+                    isMismatched(item) ? { backgroundColor: "var(--tb-danger-soft)", boxShadow: "inset 3px 0 0 var(--tb-danger)" } : undefined
+                }
+                customCellRender={{
+                    sr_number: (item: ReconRow) => String(pick(item, "sr_number_id", "sr_number") ?? "—"),
+                    licence: (item: ReconRow) => String(pick(item, "licence_number", "license_number", "licence", "license") ?? "—"),
+                    invoice_number: (item: ReconRow) => String(pick(item, "invoice_number") ?? "—"),
+                    bill_of_entry_number: (item: ReconRow) => String(pick(item, "bill_of_entry_number") ?? "—"),
+                    invoice_debit: (item: ReconRow) => fmtNum(pick(item, "invoice_debit")),
+                    boe_debit: (item: ReconRow) => fmtNum(pick(item, "boe_debit")),
+                    difference: (item: ReconRow) => fmtNum(pick(item, "difference")),
+                }}
+                customActions={[
+                    {
+                        icon: "check2-circle", label: "Keep Invoice Debit",
+                        onClick: handleKeepInvoiceDebit,
+                    },
+                    {
+                        icon: "arrow-left-right", label: "Not yet available",
+                        className: DISABLED_ACTION_CLASS,
+                        onClick: () => {},
+                    },
+                    {
+                        icon: "arrow-repeat", label: "Not yet available",
+                        className: DISABLED_ACTION_CLASS,
+                        onClick: () => {},
+                    },
+                ]}
+            />
+            <ReconPagination pagination={pagination} />
+        </>
     );
 }

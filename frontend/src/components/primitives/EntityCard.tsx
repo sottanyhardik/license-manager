@@ -94,7 +94,7 @@ function HeaderChip({ icon, label, tone = "neutral", style }: { icon?: string; l
     );
 }
 
-function ActionButton({ icon, title, onClick, tone = "neutral", children, disabled }: { icon?: string; title?: string; onClick?: () => void; tone?: string; children?: React.ReactNode; disabled?: boolean }) {
+function ActionButton({ icon, title, onClick, tone = "neutral", children, disabled, ariaExpanded, ariaControls }: { icon?: string; title?: string; onClick?: () => void; tone?: string; children?: React.ReactNode; disabled?: boolean; ariaExpanded?: boolean; ariaControls?: string }) {
     const safe = ALLOWED_TONES.has(tone) ? tone : "neutral";
     const c = resolveTone(ACTION_TONE_MAP, safe);
     const hasLabel = !!children;
@@ -104,6 +104,8 @@ function ActionButton({ icon, title, onClick, tone = "neutral", children, disabl
             title={title}
             onClick={onClick}
             disabled={disabled}
+            aria-expanded={ariaExpanded}
+            aria-controls={ariaControls}
             className="entity-card-action-btn"
             style={{
                 display: "inline-flex",
@@ -152,6 +154,8 @@ export default function EntityCard({
     actions = [],
     onView,
     viewOpen,
+    ariaExpanded,
+    ariaControls,
     detail,
     detailLabel,
     defaultOpen = false,
@@ -167,6 +171,8 @@ export default function EntityCard({
     actions?: any[];
     onView?: () => void;
     viewOpen?: boolean;
+    ariaExpanded?: boolean;
+    ariaControls?: string;
     detail?: () => React.ReactNode;
     detailLabel?: string;
     defaultOpen?: boolean;
@@ -225,6 +231,8 @@ export default function EntityCard({
                             title={open ? "Hide details" : "View details"}
                             tone="primary"
                             onClick={toggle}
+                            ariaExpanded={ariaExpanded}
+                            ariaControls={ariaControls}
                         >
                             <span style={{ marginLeft: 2 }}>
                                 {open ? "Hide" : "View"}
@@ -236,7 +244,7 @@ export default function EntityCard({
             </div>
 
             {showViewBtn && open && (
-                <div className="entity-card-detail">
+                <div className="entity-card-detail" id={ariaControls}>
                     {detail()}
                 </div>
             )}

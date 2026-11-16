@@ -9,6 +9,7 @@ import { formatDate } from "@/utils/dateFormatter";
 import { getErrorMessage } from "@/utils/errorUtils";
 import LinkRecordModal from "./LinkRecordModal";
 import { useReconTabQuery } from "./useReconTabQuery";
+import ReconPagination from "./ReconPagination";
 import { fmtList, fmtNum, pick, pickId, reconKeys, type ReconRow } from "./reconciliationHelpers";
 
 const COLUMNS = ["bill_of_entry_number", "bill_of_entry_date", "cif_fc", "qty_kg", "licence"];
@@ -21,7 +22,7 @@ const COLUMNS = ["bill_of_entry_number", "bill_of_entry_date", "cif_fc", "qty_kg
 export default function MissingInvoiceTab() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
-    const { data, isLoading, isError, error } = useReconTabQuery("missing-invoice", "reconciliation/missing-invoice/");
+    const { data, isLoading, isError, error, pagination } = useReconTabQuery("missing-invoice", "reconciliation/missing-invoice/");
     const [linkTarget, setLinkTarget] = useState<ReconRow | null>(null);
 
     const invalidate = () => {
@@ -104,6 +105,7 @@ export default function MissingInvoiceTab() {
                 mode="invoice"
                 onConfirm={handleAttach}
             />
+            <ReconPagination pagination={pagination} />
         </>
     );
 }

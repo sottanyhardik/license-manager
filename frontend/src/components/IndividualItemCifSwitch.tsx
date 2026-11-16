@@ -6,7 +6,7 @@ import api from "@/api/axios";
 import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/pages/license-overview/licenseOverviewHelpers";
 import { licenseOverviewKeys } from "@/pages/license-overview/useLicenseOverviewSummary";
-import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
+import { invalidateLicence } from "@/lib/queryKeys";
 
 interface IndividualItemCifSwitchProps {
     licenseId: string | number;
@@ -27,10 +27,7 @@ export default function IndividualItemCifSwitch({ licenseId, override, canWrite,
 
     const invalidateConsumers = useCallback(() => {
         const id = String(licenseId);
-        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.summary(id) });
-        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.items(id) });
-        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.planning(id) });
-        void queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(id) });
+        void invalidateLicence(queryClient, id);
         void queryClient.invalidateQueries({ queryKey: ["license-allotment-candidates", id] });
         void queryClient.invalidateQueries({ queryKey: ["licenses"] });
     }, [licenseId, queryClient]);

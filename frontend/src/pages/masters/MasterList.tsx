@@ -13,11 +13,8 @@ import AccordionTable from "../../components/AccordionTable";
 import LicenseBalanceModal from "../../components/LicenseBalanceModal";
 import OwnershipDetailsModal from "../../components/OwnershipDetailsModal";
 import TransferLetterModal from "../../components/TransferLetterModal";
-import EntityCard from "../../components/primitives/EntityCard";
-import DetailTable from "../../components/primitives/DetailTable";
 import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../utils/filterPersistence";
 import {openPdfPreview} from "../../utils/pdfPreview";
-import {openLicenseCopyPdf} from "../../utils/licenseCopyPdf";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
@@ -25,13 +22,14 @@ import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
+import BoeCardList from "@/features/bill-of-entry/BoeCardList";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
+import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Layers, Loader2, MapPin, Network, Plus, RefreshCw, Target, Trash2, X } from "lucide-react";
 import { ROLES } from '../../routes/authorizationRoles';
 
 type TradeListItem = {
@@ -96,6 +94,22 @@ export function groupLinkedTrades(trades: TradeListItem[]): TradeGroup[] {
  * - Table with data
  * - Pagination
  */
+/** Read `page` and filter params from a URL query string (API-format keys). */
+function parseListUrl(search: string): { filters: Record<string, string>; page: number | null } {
+    const filters: Record<string, string> = {};
+    let page: number | null = null;
+    for (const [key, value] of new URLSearchParams(search).entries()) {
+        if (key === "page") {
+            const parsed = Number.parseInt(value, 10);
+            page = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+            continue;
+        }
+        if (key === "page_size") continue;
+        filters[key] = value;
+    }
+    return { filters, page };
+}
+
 export default function MasterList() {
     const {entity} = useParams();
     const location = useLocation();
@@ -129,11 +143,17 @@ export default function MasterList() {
     const [error, setError] = useState("");
 
     // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
+    // Seeded from the URL so the URL-sync effect (which runs in the same first
+    // commit as the init effect) sees the deep-linked page/filters instead of
+    // stale defaults and does not rewrite the URL back and forth.
+    const [currentPage, setCurrentPage] = useState(() => parseListUrl(location.search).page ?? 1);
     const [pageSize, setPageSize] = useState(25);
 
     // Filter state with default filters for allotments, bill-of-entries, and incentive-licenses
-    const [filterParams, setFilterParams] = useState(() => getDefaultFilters(entityName));
+    const [filterParams, setFilterParams] = useState<Record<string, string>>(() => {
+        const { filters } = parseListUrl(location.search);
+        return Object.keys(filters).length > 0 ? filters : getDefaultFilters(entityName);
+    });
     const backendDefaultsApplied = useRef(false);
     const qc = useQueryClient();
 
@@ -193,16 +213,6 @@ export default function MasterList() {
             const next = new Set(prev);
             if (next.has(pairKey)) next.delete(pairKey);
             else next.add(pairKey);
-            return next;
-        });
-    };
-
-    const [expandedBoeRows, setExpandedBoeRows] = useState(new Set());
-    const toggleBoeRow = (id) => {
-        setExpandedBoeRows(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
             return next;
         });
     };
@@ -827,33 +837,7 @@ export default function MasterList() {
         ? (entityDescriptions[entityName] || `Manage ${entityTitle?.toLowerCase()} records`)
         : "Manage records and operational data";
 
-    return (
-        <div className="min-h-screen bg-background">
-            {/* Unified PageHeader for all master entities */}
-            <PageHeader
-                pretitle={
-                    <>
-                        <a
-                            href="/"
-                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
-                            className="text-inherit no-underline hover:underline"
-                        >
-                            Home
-                        </a>
-                        <span className="mx-1.5 opacity-50">/</span>
-                        <span>{entityTitle}</span>
-                    </>
-                }
-                title={entityTitle}
-                description={
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                        <span className="font-medium text-foreground">{workspaceDescription}</span>
-                        <span aria-hidden="true" className="text-border">•</span>
-                        <span className="tabular-nums text-muted-foreground">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
-                        {isRefreshing && <span role="status" className="text-muted-foreground">Updating…</span>}
-                    </div>
-                }
-                actions={
+    const headerActions = (
                     <>
                         <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel" aria-label="Export to Excel">
                             <FileSpreadsheet className="size-3.5" aria-hidden="true" />
@@ -923,8 +907,36 @@ export default function MasterList() {
                             </Button>
                         )}
                     </>
+    );
+
+    return (
+        <div className="min-h-screen bg-background">
+            {/* Unified PageHeader for all master entities */}
+            {entityName !== 'licenses' && <PageHeader
+                pretitle={
+                    <>
+                        <a
+                            href="/"
+                            onClick={(e) => { e.preventDefault(); navigate('/'); }}
+                            className="text-inherit no-underline hover:underline"
+                        >
+                            Home
+                        </a>
+                        <span className="mx-1.5 opacity-50">/</span>
+                        <span>{entityTitle}</span>
+                    </>
                 }
-            />
+                title={entityTitle}
+                description={
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                        <span className="font-medium text-foreground">{workspaceDescription}</span>
+                        <span aria-hidden="true" className="text-border">•</span>
+                        <span className="tabular-nums text-muted-foreground">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
+                        {isRefreshing && <span role="status" className="text-muted-foreground">Updating…</span>}
+                    </div>
+                }
+                actions={headerActions}
+            />}
 
             {/* Error Display */}
             {error && (
@@ -946,6 +958,22 @@ export default function MasterList() {
                 defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
                 resetToDefaults={entityName === 'allotments'}
                 isUpdating={isRefreshing}
+                {...(entityName === 'licenses' ? {
+                    collapsible: true,
+                    layout: 'grid' as const,
+                    toolbarStart: (
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                            <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
+                                <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="text-inherit no-underline hover:underline">Home</a>
+                                <span className="mx-1.5 opacity-50">/</span>
+                                <span>{entityTitle}</span>
+                            </nav>
+                            <h1 className="text-lg font-semibold leading-tight tracking-tight text-foreground">{entityTitle}</h1>
+                            <span className="text-xs tabular-nums text-muted-foreground">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
+                        </div>
+                    ),
+                    toolbarEnd: headerActions,
+                } : {})}
             />
 
             {/* Active Filters Display */}
@@ -964,194 +992,29 @@ export default function MasterList() {
                     )}
                     {/* BOE Card Layout */}
                     {entityName === 'bill-of-entries' && (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading Bill of Entries...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="empty-state">
-                                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
-                                <div className="empty-title">No bill of entries found</div>
-                                <div className="empty-sub">Try adjusting filters or create a new BOE.</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => val ? `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—';
-                                    const fmtQty = (val) => val ? Number(val).toLocaleString('en-IN', { maximumFractionDigits: 3 }) : '—';
-                                    const detailRows = item.item_details || [];
-                                    const disputeRows = detailRows.filter(r => r.is_dispute);
-                                    const hasDispute = disputeRows.length > 0;
-                                    const invoiceChip = canEditInvoice
-                                        ? (editingInvoiceId === item.id
-                                            ? (
-                                                <span className="inline-flex items-center gap-1">
-                                                    <input
-                                                        autoFocus
-                                                        value={invoiceDraft}
-                                                        onChange={e => setInvoiceDraft(e.target.value)}
-                                                        onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
-                                                        placeholder="Invoice number"
-                                                        className="w-40 rounded-md border border-success px-2 py-0.5 text-[0.82rem] outline-none"
-                                                    />
-                                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} className="cursor-pointer rounded-md bg-success px-2 py-0.5 text-xs text-white disabled:opacity-50">
-                                                        {invoiceSaving ? '…' : 'Save'}
-                                                    </button>
-                                                    <button type="button" onClick={cancelInvoiceEdit} className="cursor-pointer rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">✕</button>
-                                                </span>
-                                            )
-                                            : (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => startInvoiceEdit(item)}
-                                                    title="Click to edit invoice number"
-                                                    className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-success bg-success/10 px-2 py-0.5 text-[0.82rem] font-medium text-success"
-                                                >
-                                                    {item.invoice_no
-                                                        ? (<><Receipt className="size-4" aria-hidden="true" /> {item.invoice_no}</>)
-                                                        : (<><PlusCircle className="size-4" aria-hidden="true" /> Add Invoice No</>)
-                                                    }
-                                                    <Pencil className="size-4" aria-hidden="true" />
-                                                </button>
-                                            ))
-                                        : null;
-
-                                    const boeTitleEl = item.bill_of_entry_number ? (
-                                        <Link
-                                            to={`/bill-of-entries/${item.id}/edit`}
-                                            onClick={() => {
-                                                saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
-                                            }}
-                                            className="font-mono text-[16px] font-bold tracking-tight text-inherit underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded"
-                                        >
-                                            {item.bill_of_entry_number}
-                                        </Link>
-                                    ) : '—';
-
-                                    return (
-                                        <EntityCard
-                                            key={item.id}
-                                            className={hasDispute ? 'is-dispute' : ''}
-                                            accent={hasDispute ? 'danger' : 'primary'}
-                                            title={boeTitleEl}
-                                            headerChips={[
-                                                item.bill_of_entry_date && { icon: 'calendar3', label: item.bill_of_entry_date },
-                                                item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
-                                                item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
-                                                hasDispute && {
-                                                    icon: 'exclamation-triangle-fill',
-                                                    label: `${disputeRows.length} Dispute${disputeRows.length > 1 ? 's' : ''}`,
-                                                    tone: 'danger',
-                                                },
-                                            ].filter(Boolean)}
-                                            statusBadges={[]}
-                                            summary={[
-                                                { label: 'CIF (INR)', value: fmtInr(item.total_inr) },
-                                                { label: 'CIF (FC)',  value: item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
-                                                { label: 'Qty (MT)',  value: fmtQty(item.total_quantity) },
-                                                { label: 'Unit Price', value: item.unit_price ? Number(item.unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
-                                            ]}
-                                            actions={[
-                                                hasDispute && {
-                                                    icon: 'check2-circle', title: 'Resolve Dispute', tone: 'danger',
-                                                    onClick: async () => {
-                                                        const confirmed = await confirmDangerousAction('Resolve Dispute', `Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`);
-                                                        if (!confirmed) return;
-                                                        try {
-                                                            const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
-                                                            toast.success(response.data.message || 'Dispute resolved');
-                                                            invalidateList();
-                                                        } catch (err) {
-                                                            toast.error(err.response?.data?.detail || err.response?.data?.message || 'Failed to resolve dispute');
-                                                        }
-                                                    }
-                                                },
-                                                { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
-                                                    onClick: () => { setTransferLetterType('boe'); setTransferLetterEntityId(item.id); setShowTransferLetterModal(true); } },
-                                                { icon: 'intersect', title: 'Merge BOE', tone: 'info',
-                                                    onClick: () => openMergeModal(item) },
-                                                (!item.product_name || item.product_name.trim() === '') && {
-                                                    icon: 'arrow-repeat', title: 'Update Product Name', tone: 'info',
-                                                    onClick: async () => {
-                                                        const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
-                                                        if (!confirmed) return;
-                                                        try {
-                                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
-                                                            toast.success(response.data.message || 'Product name updated');
-                                                            invalidateList();
-                                                        } catch (err) {
-                                                            toast.error(err.response?.data?.message || 'Failed to update product name');
-                                                        }
-                                                    }
-                                                },
-                                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
-                                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/bill-of-entries/${item.id}/edit`); } },
-                                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
-                                            ].filter(Boolean)}
-                                            viewOpen={expandedBoeRows.has(item.id)}
-                                            onView={() => toggleBoeRow(item.id)}
-                                            detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
-                                            detail={() => (
-                                                <DetailTable
-                                                    columns={[
-                                                        { key: 'is_dispute', label: '', nowrap: true, width: 28,
-                                                            render: (v, row) => row.is_dispute
-                                                                ? <span title="Not found in latest ledger upload — dispute" className="text-destructive text-sm"><TriangleAlert className="size-4" aria-hidden="true" /></span>
-                                                                : null },
-                                                        { key: 'license_number',   label: 'License',   bold: true, nowrap: true,
-                                                            render: (v, row) => v && row.license_id ? (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openLicenseCopyPdf(row.license_id, v)}
-                                                                    className={cn(row.is_dispute ? 'text-destructive' : 'text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer')}
-                                                                    title="Open License Copy PDF"
-                                                                    aria-label={`Open License Copy PDF for ${v}`}
-                                                                >
-                                                                    {v}
-                                                                </button>
-                                                            ) : (
-                                                                <span className={cn(row.is_dispute ? 'text-destructive' : 'text-primary')}>{v || '—'}</span>
-                                                            ) },
-                                                        { key: 'item_description', label: 'Item',      muted: true },
-                                                        { key: 'hs_code',          label: 'HS Code',   nowrap: true,
-                                                            render: v => v ? <code>{v}</code> : '—' },
-                                                        { key: 'qty',              label: 'Qty',       align: 'right', nowrap: true,
-                                                            render: v => fmtQty(v) },
-                                                        { key: 'cif_fc',           label: 'CIF (FC)',  align: 'right', nowrap: true,
-                                                            render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
-                                                        { key: 'cif_inr',          label: 'CIF (INR)', align: 'right', nowrap: true, bold: true,
-                                                            render: v => fmtInr(v) },
-                                                    ]}
-                                                    rows={detailRows}
-                                                    rowStyle={row => row.is_dispute ? { background: 'var(--tb-danger-soft)' } : undefined}
-                                                />
-                                            )}
-                                        >
-                                            <div className="flex flex-wrap items-start gap-6">
-                                                <div className="min-w-[200px] flex-1">
-                                                    <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Product</div>
-                                                    <div className="text-[14.5px] font-medium text-foreground">
-                                                        {item.product_name || <span className="italic text-muted-foreground">No product name</span>}
-                                                    </div>
-                                                </div>
-                                                {item.licenses && (
-                                                    <div className="min-w-[140px] flex-1">
-                                                        <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Licenses</div>
-                                                        <div className="text-[13.5px] font-medium text-primary">{item.licenses}</div>
-                                                    </div>
-                                                )}
-                                                {invoiceChip && (
-                                                    <div className="self-center">
-                                                        {invoiceChip}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </EntityCard>
-                                    );
-                                })}
-                            </div>
-                        )
+                        <BoeCardList
+                            loading={loading}
+                            data={data}
+                            canWrite={canWrite}
+                            canEditInvoice={canEditInvoice}
+                            entityName={entityName}
+                            filterParams={filterParams}
+                            currentPage={currentPage}
+                            pageSize={pageSize}
+                            navigate={navigate}
+                            onDelete={handleDelete}
+                            invalidateList={invalidateList}
+                            confirmDangerousAction={confirmDangerousAction}
+                            onTransferLetter={(id) => { setTransferLetterType('boe'); setTransferLetterEntityId(id); setShowTransferLetterModal(true); }}
+                            onMerge={openMergeModal}
+                            editingInvoiceId={editingInvoiceId}
+                            invoiceDraft={invoiceDraft}
+                            setInvoiceDraft={setInvoiceDraft}
+                            invoiceSaving={invoiceSaving}
+                            startInvoiceEdit={startInvoiceEdit}
+                            cancelInvoiceEdit={cancelInvoiceEdit}
+                            saveInvoiceEdit={saveInvoiceEdit}
+                        />
                     )}
 
                     {/* Allotments Card Layout */}

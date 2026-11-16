@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import api from "@/api/axios";
+import { useLicenseDetail } from "./useLicenseDetail";
 import { Badge } from "@/components/ui/badge";
 import { fmtNum } from "@/pages/license-balance/licenseBalanceHelpers";
 
@@ -19,7 +18,7 @@ function Card({ item }: { item: Item }) { const currentStatus = status(item); re
 
 /** One source-row-authoritative matrix. It never groups or recalculates item values. */
 export default function CustomsLedgerSection({ licenseId }: { licenseId: string | number }) {
-    const query = useQuery({ queryKey: ["license-balance-customs-ledger", String(licenseId)], queryFn: async () => (await api.get(`licenses/${licenseId}/`)).data as { import_license?: Item[] }, enabled: Boolean(licenseId) });
+    const query = useLicenseDetail(licenseId, (data) => data as { import_license?: Item[] });
     const items = useMemo(
         () => (query.data?.import_license ?? []).map((item) => ({
             ...item,

@@ -1,7 +1,6 @@
 import { useCallback, useContext, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText, Loader2, Target } from "lucide-react";
 
@@ -15,8 +14,9 @@ import { openPdfPreview } from "@/utils/pdfPreview";
 import { openAuthedFile, openDocument } from "@/utils/documentDownload";
 
 import { extractApiError } from "./licenseOverviewHelpers";
-import { licenseOverviewKeys, useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
-import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
+import { useLicenseDetail } from "./useLicenseDetail";
+import { invalidateLicence } from "@/lib/queryKeys";
+import { useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
 import OverviewTab from "./OverviewTab";
 import BoesTab from "./BoesTab";
 import AllotmentsTab from "./AllotmentsTab";
@@ -74,11 +74,7 @@ export default function LicenseOverviewPage() {
     const { data: summary } = useLicenseOverviewSummary(id, true);
     // There is no documents-only endpoint. Reuse the exact retrieve response
     // already consumed by the Balance item matrix under the same query key.
-    const detailsQuery = useQuery({
-        queryKey: ["license-balance-customs-ledger", String(id ?? "")],
-        queryFn: async () => (await api.get(`licenses/${id}/`)).data as { license_documents?: LicenseDocument[] },
-        enabled: Boolean(id),
-    });
+    const detailsQuery = useLicenseDetail(id, (data) => data as { license_documents?: LicenseDocument[] });
     const documents = detailsQuery.data?.license_documents ?? [];
     const licenceCopies = documents.filter((document) => document.type === "LICENSE COPY" && Boolean(document.file));
     const transferLetters = documents.filter((document) => document.type === "TRANSFER LETTER" && Boolean(document.file));
@@ -99,10 +95,7 @@ export default function LicenseOverviewPage() {
         if (!id) return;
         // The editor reloads its own persisted plan. Refresh every cached
         // overview projection that canonically incorporates those plans.
-        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.summary(id) });
-        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.items(id) });
-        void queryClient.invalidateQueries({ queryKey: licenseOverviewKeys.planning(id) });
-        void queryClient.invalidateQueries({ queryKey: licenseBalanceKeys.ledger(id) });
+        void invalidateLicence(queryClient, id);
     }, [id, queryClient]);
 
     const handleAutoPlan = useCallback(async () => {

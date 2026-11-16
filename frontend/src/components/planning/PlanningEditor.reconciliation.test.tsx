@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import PlanningEditor from "./PlanningEditor";
 import { autoPlanLicense, type AutoPlanResponse } from "../../api/planningRuleApi";
@@ -96,9 +97,12 @@ vi.mock("../../api/planningRuleApi", () => ({
     planLicense: vi.fn(),
 }));
 
+const renderEditor = (ui: React.ReactElement) =>
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
+
 describe("PlanningEditor reconciliation", () => {
     it("shows only approved percentage-split business fields", async () => {
-        render(<PlanningEditor licenseId={1} licenseNumber="LEVEL2" canWrite />);
+        renderEditor(<PlanningEditor licenseId={1} licenseNumber="LEVEL2" canWrite />);
 
         expect(await screen.findByText("PALM KERNEL OIL - E126")).toBeInTheDocument();
         expect(screen.getByText("OLIVE OIL - E126")).toBeInTheDocument();
@@ -142,7 +146,7 @@ describe("PlanningEditor reconciliation", () => {
             resolvePlan = resolve;
         }) as ReturnType<typeof autoPlanLicense>);
 
-        render(<PlanningEditor licenseId={430} licenseNumber="SYNC" canWrite />);
+        renderEditor(<PlanningEditor licenseId={430} licenseNumber="SYNC" canWrite />);
         const button = await screen.findByRole("button", { name: "Auto Plan" });
         fireEvent.click(button);
 
@@ -169,7 +173,7 @@ describe("PlanningEditor reconciliation", () => {
         vi.mocked(autoPlanLicense).mockRejectedValueOnce({
             response: { data: { detail: "Planning transaction failed" } },
         });
-        render(<PlanningEditor licenseId={431} licenseNumber="SYNC-ERROR" canWrite />);
+        renderEditor(<PlanningEditor licenseId={431} licenseNumber="SYNC-ERROR" canWrite />);
 
         const button = await screen.findByRole("button", { name: "Auto Plan" });
         fireEvent.click(button);

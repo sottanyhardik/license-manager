@@ -1,5 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import api from "@/api/axios";
+import { licenseDetailKey, useLicenseDetail } from "./useLicenseDetail";
 
 /**
  * A single `LicenseExportItemModel` row as returned by `GET licenses/{id}/`
@@ -17,7 +16,7 @@ export interface LicenseExportRow {
 }
 
 export const licenseSionNormKeys = {
-    detail: (licenseId: string | number) => ["license-sion-norm", String(licenseId)] as const,
+    detail: (licenseId: string | number) => licenseDetailKey(licenseId),
 };
 
 /**
@@ -38,14 +37,11 @@ export const licenseSionNormKeys = {
  * only fetched once the Overview tab is active.
  */
 export function useLicenseSionNorm(licenseId: string | number | undefined, isActive: boolean = true) {
-    const query = useQuery<LicenseExportRow[]>({
-        queryKey: licenseSionNormKeys.detail(licenseId ?? ""),
-        queryFn: async () => {
-            const { data } = await api.get(`licenses/${licenseId}/`);
-            return (data?.export_license ?? []) as LicenseExportRow[];
-        },
-        enabled: isActive && licenseId !== undefined && licenseId !== null && licenseId !== "",
-    });
+    const query = useLicenseDetail(
+        licenseId,
+        (data) => (data?.export_license ?? []) as LicenseExportRow[],
+        isActive,
+    );
 
     const exportRows = query.data ?? [];
     const primaryRow = exportRows[0] ?? null;

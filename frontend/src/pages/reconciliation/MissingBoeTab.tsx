@@ -9,6 +9,7 @@ import { formatDate } from "@/utils/dateFormatter";
 import { getErrorMessage } from "@/utils/errorUtils";
 import LinkRecordModal from "./LinkRecordModal";
 import { useReconTabQuery } from "./useReconTabQuery";
+import ReconPagination from "./ReconPagination";
 import { fmtNum, pick, pickId, reconKeys, type ReconRow } from "./reconciliationHelpers";
 
 const COLUMNS = ["invoice_number", "company", "invoice_date", "cif_fc", "qty_kg", "licence", "sr_number"];
@@ -21,7 +22,7 @@ const COLUMNS = ["invoice_number", "company", "invoice_date", "cif_fc", "qty_kg"
 export default function MissingBoeTab() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
-    const { data, isLoading, isError, error } = useReconTabQuery("missing-boe", "reconciliation/missing-boe/");
+    const { data, isLoading, isError, error, pagination } = useReconTabQuery("missing-boe", "reconciliation/missing-boe/");
     const [linkTarget, setLinkTarget] = useState<ReconRow | null>(null);
 
     const invalidate = () => {
@@ -106,6 +107,7 @@ export default function MissingBoeTab() {
                 mode="boe"
                 onConfirm={handleAttach}
             />
+            <ReconPagination pagination={pagination} />
         </>
     );
 }

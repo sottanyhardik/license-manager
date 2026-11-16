@@ -1098,7 +1098,7 @@ export default function MasterForm({
                                     type="button"
                                     variant="outline"
                                     size="lg"
-                                    onClick={() => navigate(`/licenses/${id}/balance`)}
+                                    onClick={() => navigate(`/licenses/${id}/overview`)}
                                     disabled={saving}
                                 >
                                     <BarChart3 className="size-4" aria-hidden="true" />

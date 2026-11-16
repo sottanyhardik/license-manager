@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/utils/dateFormatter";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { useReconTabQuery } from "./reconciliation/useReconTabQuery";
+import ReconPagination from "./reconciliation/ReconPagination";
 import {
     fmtList, fmtNum, pick, pickId, reconKeys, type ReconRow,
 } from "./reconciliation/reconciliationHelpers";
@@ -58,7 +59,7 @@ type IssueTabValue =
 
 function licenseHref(row: ReconRow, licenseNumber: string): string {
     const id = pickId(row, "license_id", "licence_id");
-    return id !== null ? `/licenses/${id}/balance` : `/licenses?search=${encodeURIComponent(licenseNumber)}`;
+    return id !== null ? `/licenses/${id}/overview` : `/licenses?search=${encodeURIComponent(licenseNumber)}`;
 }
 
 /** Renders one or more comma-joined license numbers as links, or "—" if none. */
@@ -99,20 +100,23 @@ function IssueTable({
     cellRender: Record<string, (item: ReconRow) => ReactNode>;
     rowStyle?: (item: ReconRow) => Record<string, string> | undefined;
 }) {
-    const { data, isLoading, isError, error } = useReconTabQuery(tabKey, endpoint);
+    const { data, isLoading, isError, error, pagination } = useReconTabQuery(tabKey, endpoint);
 
     if (isError) {
         return <p className="p-4 text-sm text-destructive">{getErrorMessage(error)}</p>;
     }
 
     return (
-        <DataTable
-            data={data ?? []}
-            columns={columns}
-            loading={isLoading}
-            customCellRender={cellRender}
-            getRowStyle={rowStyle}
-        />
+        <>
+            <DataTable
+                data={data ?? []}
+                columns={columns}
+                loading={isLoading}
+                customCellRender={cellRender}
+                getRowStyle={rowStyle}
+            />
+            <ReconPagination pagination={pagination} />
+        </>
     );
 }
 

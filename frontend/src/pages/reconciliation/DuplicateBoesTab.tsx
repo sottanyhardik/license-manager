@@ -5,6 +5,7 @@ import api from "@/api/axios";
 import DataTable from "@/components/DataTable";
 import { getErrorMessage } from "@/utils/errorUtils";
 import { useReconTabQuery } from "./useReconTabQuery";
+import ReconPagination from "./ReconPagination";
 import { pick, pickId, reconKeys, type ReconRow } from "./reconciliationHelpers";
 
 const COLUMNS = ["boe_number_a", "boe_number_b", "reason"];
@@ -31,7 +32,7 @@ interface DuplicateBoesTabProps {
  */
 export default function DuplicateBoesTab({ confirmDangerousAction }: DuplicateBoesTabProps) {
     const queryClient = useQueryClient();
-    const { data, isLoading, isError, error } = useReconTabQuery("duplicate-boes", "reconciliation/duplicate-boes/");
+    const { data, isLoading, isError, error, pagination } = useReconTabQuery("duplicate-boes", "reconciliation/duplicate-boes/");
 
     const handleMerge = async (row: ReconRow) => {
         const numberA = String(pick(row, "bill_of_entry_number_a", "boe_number_a") ?? "—");
@@ -60,18 +61,21 @@ export default function DuplicateBoesTab({ confirmDangerousAction }: DuplicateBo
     }
 
     return (
-        <DataTable
-            data={data ?? []}
-            columns={COLUMNS}
-            loading={isLoading}
-            customCellRender={{
-                boe_number_a: (item: ReconRow) => String(pick(item, "bill_of_entry_number_a", "boe_number_a") ?? "—"),
-                boe_number_b: (item: ReconRow) => String(pick(item, "bill_of_entry_number_b", "boe_number_b") ?? "—"),
-                reason: (item: ReconRow) => String(pick(item, "reason") ?? "—"),
-            }}
-            customActions={[
-                { icon: "intersect", label: "Merge", onClick: handleMerge },
-            ]}
-        />
+        <>
+            <DataTable
+                data={data ?? []}
+                columns={COLUMNS}
+                loading={isLoading}
+                customCellRender={{
+                    boe_number_a: (item: ReconRow) => String(pick(item, "bill_of_entry_number_a", "boe_number_a") ?? "—"),
+                    boe_number_b: (item: ReconRow) => String(pick(item, "bill_of_entry_number_b", "boe_number_b") ?? "—"),
+                    reason: (item: ReconRow) => String(pick(item, "reason") ?? "—"),
+                }}
+                customActions={[
+                    { icon: "intersect", label: "Merge", onClick: handleMerge },
+                ]}
+            />
+            <ReconPagination pagination={pagination} />
+        </>
     );
 }

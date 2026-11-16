@@ -16,12 +16,6 @@ interface BoesTabProps {
 
 type SortKey = keyof LicenseOverviewBoeRow;
 
-// Cards when the count is small enough to browse visually, dense table
-// otherwise — same threshold convention as `LedgerTab.tsx`'s `BoeSection`
-// (`CARD_THRESHOLD = 10`). Licenses can have 1000+ BOEs, so in practice this
-// tab almost always renders in table mode.
-const CARD_THRESHOLD = 10;
-
 async function copyToClipboard(text: string) {
     try {
         await navigator.clipboard.writeText(text);
@@ -42,9 +36,7 @@ function matchesSearch(row: LicenseOverviewBoeRow, term: string): boolean {
  * `GET /licenses/<id>/overview-boes/`. No "Duty Saved" column — no such
  * field exists anywhere in the schema.
  *
- * Render pattern (cards for small counts, dense table for large ones)
- * copied from `LedgerTab.tsx`'s private `BoeSection`, not imported from it.
- * No pagination/virtualization library is used, matching this codebase's
+ * Always renders a dense table (decision D3) regardless of row count. No pagination/virtualization library is used, matching this codebase's
  * existing convention everywhere else — payload is small JSON even at 1000
  * rows.
  */
@@ -119,42 +111,6 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                 <p className="py-10 text-center text-sm text-muted-foreground">No BOEs linked to this licence.</p>
             ) : rows.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">No BOEs match “{search}”.</p>
-            ) : allBoes.length <= CARD_THRESHOLD ? (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-                    {rows.map((b, idx) => (
-                        <div key={`${b.bill_of_entry_number}-${idx}`} className="group rounded-xl border border-border/60 bg-card p-3 transition-shadow hover:shadow-sm">
-                            <div className="mb-2 flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-sm font-semibold text-foreground">{b.bill_of_entry_number || "—"}</span>
-                                    {b.bill_of_entry_number && (
-                                        <button
-                                            type="button"
-                                            onClick={() => copyToClipboard(b.bill_of_entry_number!)}
-                                            className="text-muted-foreground/50 hover:text-muted-foreground cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
-                                            title="Copy BOE number"
-                                        >
-                                            <ClipboardCopy className="size-3" />
-                                        </button>
-                                    )}
-                                </div>
-                                <Badge variant={overviewBoeStatusVariant(b.status)}>{b.status}</Badge>
-                            </div>
-                            <div className="mb-1.5 truncate text-xs text-muted-foreground" title={b.supplier || ""}>{b.supplier || "—"}</div>
-                            <div className="mb-2 text-xs text-muted-foreground/70">
-                                {fmtDate(b.bill_of_entry_date)}
-                                {b.port ? ` · ${b.port}` : ""}
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-2 text-xs text-muted-foreground">
-                                <div>Invoice: {b.invoice_no || "—"}</div>
-                                <div>{fmtDate(b.invoice_date)}</div>
-                            </div>
-                            <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50/60 px-2 py-1 dark:bg-amber-500/10">
-                                <span className="text-[9.5px] font-semibold uppercase tracking-wider text-muted-foreground">CIF</span>
-                                <span className="tabular-nums text-xs font-bold text-amber-700 dark:text-amber-400">{fmtNum(b.cif_fc)}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
             ) : (
                 <div className="max-h-[calc(100vh-19rem)] overflow-auto rounded-lg border border-border/70 bg-card">
                     <table className="w-full min-w-[900px] text-sm">
@@ -173,7 +129,22 @@ export default function BoesTab({ licenseId, isActive }: BoesTabProps) {
                         <tbody>
                             {rows.map((b, idx) => (
                                 <tr key={`${b.bill_of_entry_number}-${idx}`} className="border-t border-border/60 hover:bg-muted/30">
-                                    <td className="px-3 py-1.5 font-mono text-xs">{b.bill_of_entry_number || "—"}</td>
+                                    <td className="px-3 py-1.5 font-mono text-xs">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            {b.bill_of_entry_number || "—"}
+                                            {b.bill_of_entry_number && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => copyToClipboard(b.bill_of_entry_number!)}
+                                                    className="cursor-pointer text-muted-foreground/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                                                    title="Copy BOE number"
+                                                    aria-label="Copy BOE number"
+                                                >
+                                                    <ClipboardCopy className="size-3" />
+                                                </button>
+                                            )}
+                                        </span>
+                                    </td>
                                     <td className="whitespace-nowrap px-3 py-1.5 text-xs">{fmtDate(b.bill_of_entry_date)}</td>
                                     <td className="px-3 py-1.5 text-xs">{b.port || "—"}</td>
                                     <td className="px-3 py-1.5 text-xs">{b.supplier || "—"}</td>

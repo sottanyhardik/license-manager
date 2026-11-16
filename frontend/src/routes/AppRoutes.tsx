@@ -70,7 +70,7 @@ const PDFViewer = lazy(() => import("../pages/PDFViewer"));
 function RedirectToLicenseOverview() {
     const { id } = useParams<{ id: string }>();
     const location = useLocation();
-    return <Navigate to={`/licenses/${id}/overview${location.search}`} replace />;
+    return <Navigate to={`/licenses/${id}/overview${location.search}${location.hash}`} replace />;
 }
 
 const REPORT_ROUTES: [string, ReactElement][] = [
@@ -284,6 +284,12 @@ export default function AppRoutes() {
                 <Route path="/licenses/:id/overview" element={
                     <ProtectedRoute requiredAnyRole={LICENSE_OVERVIEW_ROLES}>
                         <AdminLayout><LicenseOverviewPage /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                {/* Bare `/licenses/:id` -> workspace, same guard as /overview. Static `/licenses/create` outranks this dynamic segment; `/:id/edit` has more segments. */}
+                <Route path="/licenses/:id" element={
+                    <ProtectedRoute requiredAnyRole={LICENSE_OVERVIEW_ROLES}>
+                        <RedirectToLicenseOverview />
                     </ProtectedRoute>
                 } />
                 {/* Old bookmarks/links to the retired Balance Workspace redirect here. */}

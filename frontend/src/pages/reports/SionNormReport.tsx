@@ -151,7 +151,7 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
             <td>{index + 1}</td>
             <td>
                 {licenseId ? (
-                    <a href={`/licenses/${encodeURIComponent(String(licenseId))}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`/licenses/${encodeURIComponent(String(licenseId))}/overview`} target="_blank" rel="noopener noreferrer"
                        className="text-primary no-underline" style={{fontSize: '9px'}}>
                         {licenseNumber}
                     </a>

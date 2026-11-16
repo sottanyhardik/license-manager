@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Filter, Loader2, X } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import DateRangeFilter from "./DateRangeFilter";
 import { FilterField, FilterGrid, FilterPanel } from "./filters/FilterPanel";
+
+function FilterCol({ wide = false, grid = false, children }: { wide?: boolean; grid?: boolean; children: ReactNode }) {
+    return grid
+        ? <div className={`min-w-0 ${wide ? "md:col-span-2" : ""}`}>{children}</div>
+        : <FilterField wide={wide}>{children}</FilterField>;
+}
 
 /**
  * Advanced filter — supports icontains, date_range, range, exact, in, fk,
@@ -24,6 +30,10 @@ export default function AdvancedFilter({
     defaultFilters = {} as Record<string, any>,
     resetToDefaults = false,
     isUpdating = false,
+    collapsible = false,
+    layout = "default",
+    toolbarStart,
+    toolbarEnd,
 }: {
     filterConfig?: Record<string, any>;
     searchFields?: string[];
@@ -32,14 +42,28 @@ export default function AdvancedFilter({
     defaultFilters?: Record<string, any>;
     resetToDefaults?: boolean;
     isUpdating?: boolean;
+    /** Compact single-row toolbar (search + Filters toggle) with a collapsible field grid. */
+    collapsible?: boolean;
+    /** "grid": responsive 1/2/3/4-column field grid (used with `collapsible`). */
+    layout?: "default" | "grid";
+    /** Collapsible mode only: content rendered at the start / end of the toolbar row. */
+    toolbarStart?: ReactNode;
+    toolbarEnd?: ReactNode;
 }) {
+    const panelId = useId();
+    const [open, setOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
     const [filterValues, setFilterValues] = useState({ ...defaultFilters, ...initialFiltersWithoutSearch });
     const isInitialMount = useRef(true);
     const isAutoApplyInitialMount = useRef(true);
     const prevInitialFilters = useRef(initialFilters);
-    const skipNextAutoApply = useRef(false);
+    // Canonical key of the last filter state applied (emitted to the parent or
+    // received from it). Replaces a "skip next auto-apply" flag, which could be
+    // left armed and swallow a later text edit.
+    const appliedKey = useRef<string | null>(null);
+    const keyOf = (params: Record<string, any>) =>
+        JSON.stringify(Object.keys(params).sort().map((k) => [k, params[k]]));
 
     const toApiParams = useCallback((nextValues?: Record<string, any>, nextSearch?: string) => {
         const params: Record<string, any> = {};
@@ -54,6 +78,12 @@ export default function AdvancedFilter({
         });
         return params;
     }, [filterValues, searchTerm]);
+    // Latest-value refs so the prop-sync effect can read current state without
+    // re-running (and re-syncing) on every local edit.
+    const searchTermRef = useRef(searchTerm);
+    const toApiParamsRef = useRef(toApiParams);
+    searchTermRef.current = searchTerm;
+    toApiParamsRef.current = toApiParams;
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -63,17 +93,29 @@ export default function AdvancedFilter({
         }
         if (JSON.stringify(prevInitialFilters.current) !== JSON.stringify(initialFilters)) {
             prevInitialFilters.current = initialFilters;
-            skipNextAutoApply.current = true;
-            if (initialFilters.search !== undefined) setSearchTerm(initialFilters.search || "");
             const { search: _s, ...filtersWithoutSearch } = initialFilters;
-            setFilterValues(() => ({ ...defaultFilters, ...filtersWithoutSearch }));
+            const nextValues = { ...defaultFilters, ...filtersWithoutSearch };
+            const nextSearch = initialFilters.search !== undefined ? (initialFilters.search || "") : searchTermRef.current;
+            const key = keyOf(toApiParamsRef.current(nextValues, nextSearch));
+            // Echo of what this component just applied: local state is already
+            // right (and may hold a newer, still-debounced edit) - leave it.
+            if (key === appliedKey.current) return;
+            appliedKey.current = key;
+            if (initialFilters.search !== undefined) setSearchTerm(initialFilters.search || "");
+            setFilterValues(() => nextValues);
         }
     }, [initialFilters, defaultFilters]);
 
     useEffect(() => {
-        if (isAutoApplyInitialMount.current) { isAutoApplyInitialMount.current = false; return; }
-        if (skipNextAutoApply.current) { skipNextAutoApply.current = false; return; }
-        const timeoutId = setTimeout(() => onFilterChange(toApiParams()), 400);
+        if (isAutoApplyInitialMount.current) {
+            isAutoApplyInitialMount.current = false;
+            appliedKey.current = keyOf(toApiParams());
+            return;
+        }
+        const params = toApiParams();
+        const key = keyOf(params);
+        if (key === appliedKey.current) return;
+        const timeoutId = setTimeout(() => { appliedKey.current = key; onFilterChange(params); }, 400);
         return () => clearTimeout(timeoutId);
     }, [searchTerm, filterValues, onFilterChange, toApiParams]);
 
@@ -81,14 +123,16 @@ export default function AdvancedFilter({
         setFilterValues((prev) => {
             const next = { ...prev, [field]: value };
             if (immediate) {
-                skipNextAutoApply.current = true;
-                setTimeout(() => onFilterChange(toApiParams(next)), 0);
+                const params = toApiParams(next);
+                appliedKey.current = keyOf(params);
+                setTimeout(() => onFilterChange(params), 0);
             }
             return next;
         });
     };
 
     const handleResetFilters = () => {
+        appliedKey.current = null; // always emit a reset, even if already empty
         setSearchTerm("");
         setFilterValues(resetToDefaults ? defaultFilters : {});
     };
@@ -113,23 +157,21 @@ export default function AdvancedFilter({
         const filterType = config.type || "exact";
         const label = config.label || humanize(fieldName);
 
-        // Shared Tailwind col wrapper — replaces Bootstrap col-md-4 / col-md-6
-        const Col = ({ wide = false, children }) => <FilterField wide={wide}>{children}</FilterField>;
 
         switch (filterType) {
             case "icontains":
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <Input placeholder={`Search ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
-                    </Col>
+                    </FilterCol>
                 );
 
             case "date_range": {
                 const fromValue = filterValues[`${fieldName}_from`] || "";
                 const toValue = filterValues[`${fieldName}_to`] || "";
                 return (
-                    <Col key={fieldName} wide>
+                    <FilterCol grid={layout === "grid"} key={fieldName} wide>
                         <DateRangeFilter
                             label={`${label} Range`}
                             fromValue={fromValue}
@@ -137,7 +179,7 @@ export default function AdvancedFilter({
                             onFromChange={(v) => handleFilterChange(`${fieldName}_from`, v, true)}
                             onToChange={(v) => handleFilterChange(`${fieldName}_to`, v, true)}
                         />
-                    </Col>
+                    </FilterCol>
                 );
             }
 
@@ -145,7 +187,7 @@ export default function AdvancedFilter({
                 const minField = config.min_field || `${fieldName}_min`;
                 const maxField = config.max_field || `${fieldName}_max`;
                 return (
-                    <Col key={fieldName} wide>
+                    <FilterCol grid={layout === "grid"} key={fieldName} wide>
                         <Label className="mb-2">{label} Range</Label>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
@@ -157,7 +199,7 @@ export default function AdvancedFilter({
                                 <p className="mt-1 text-xs text-muted-foreground">Max</p>
                             </div>
                         </div>
-                    </Col>
+                    </FilterCol>
                 );
             }
 
@@ -166,17 +208,17 @@ export default function AdvancedFilter({
                     const opts = config.choices.map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
                     const selected = opts.find((o) => o.value === filterValues[fieldName]) || null;
                     return (
-                        <Col key={fieldName}>
+                        <FilterCol grid={layout === "grid"} key={fieldName}>
                             <Label className="mb-2">{label}</Label>
                             <Select options={opts} value={selected} onChange={(s) => handleFilterChange(fieldName, s ? s.value : "", true)} isClearable placeholder={`Select ${label.toLowerCase()}`} styles={{ control: rsControl }} classNamePrefix="react-select" />
-                        </Col>
+                        </FilterCol>
                     );
                 }
                 if (fieldName.startsWith("is_") || fieldName.startsWith("has_") || fieldName.includes("__is_") || fieldName.includes("__has_")) {
                     const cur = filterValues[fieldName];
                     const isAll = cur === "all" || (!cur && cur !== "True" && cur !== "False");
                     return (
-                        <Col key={fieldName}>
+                        <FilterCol grid={layout === "grid"} key={fieldName}>
                             <Label className="mb-2 block">{label}</Label>
                             <div className="flex gap-2">
                                 {[{ val: "all", lbl: "All", cls: "secondary" }, { val: "True", lbl: "Yes", cls: "success" }, { val: "False", lbl: "No", cls: "danger" }].map(({ val, lbl, cls }) => {
@@ -191,38 +233,38 @@ export default function AdvancedFilter({
                                     );
                                 })}
                             </div>
-                        </Col>
+                        </FilterCol>
                     );
                 }
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <Input placeholder={`Exact ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
-                    </Col>
+                    </FilterCol>
                 );
             }
 
             case "in":
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <Input placeholder="Comma-separated values" value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
                         <p className="mt-1 text-xs text-muted-foreground">Enter values separated by commas</p>
-                    </Col>
+                    </FilterCol>
                 );
 
             case "fk":
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Select ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
-                    </Col>
+                    </FilterCol>
                 );
 
             case "button_group": {
                 const bgChoices = (config.choices || []).map((c) => Array.isArray(c) ? { value: c[0], label: c[1] } : typeof c === "object" ? c : { value: c, label: c });
                 return (
-                    <Col key={fieldName} wide>
+                    <FilterCol grid={layout === "grid"} key={fieldName} wide>
                         <Label className="mb-2 block">{label}</Label>
                         <div className="flex flex-wrap gap-2">
                             {bgChoices.map((choice, idx) => {
@@ -235,7 +277,7 @@ export default function AdvancedFilter({
                                 );
                             })}
                         </div>
-                    </Col>
+                    </FilterCol>
                 );
             }
 
@@ -247,7 +289,7 @@ export default function AdvancedFilter({
                     selectedChoices = choiceOpts.filter((o) => vals.includes(o.value));
                 }
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <Select
                             options={choiceOpts}
@@ -258,29 +300,72 @@ export default function AdvancedFilter({
                             classNamePrefix="react-select"
                             styles={{ control: rsControl, valueContainer: (b) => ({ ...b, flexWrap: "wrap" }), multiValue: (b) => ({ ...b, maxWidth: "100%" }), multiValueLabel: (b) => ({ ...b, whiteSpace: "normal", wordBreak: "break-word" }), menu: (b) => ({ ...b, zIndex: 9999 }) }}
                         />
-                    </Col>
+                    </FilterCol>
                 );
             }
 
             case "exclude_fk":
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <DebouncedAsyncSelect endpoint={config.fk_endpoint || config.endpoint} labelField={config.label_field || "name"} value={filterValues[fieldName] || ""} onChange={(val) => handleFilterChange(fieldName, val)} placeholder={`Exclude ${label.toLowerCase()}`} isClearable isMulti debounceDelay={300} />
-                    </Col>
+                    </FilterCol>
                 );
 
             default:
                 return (
-                    <Col key={fieldName}>
+                    <FilterCol grid={layout === "grid"} key={fieldName}>
                         <Label className="mb-2">{label}</Label>
                         <Input placeholder={`Filter ${label.toLowerCase()}`} value={filterValues[fieldName] || ""} onChange={(e) => handleFilterChange(fieldName, e.target.value)} />
-                    </Col>
+                    </FilterCol>
                 );
         }
     };
 
-    if (Object.keys(filterConfig).length === 0 && searchFields.length === 0) return null;
+    if (Object.keys(filterConfig).length === 0 && searchFields.length === 0 && !collapsible) return null;
+
+    if (collapsible) {
+        const hasFilters = Object.keys(filterConfig).length > 0;
+        const fields = [...primaryEntries, ...secondaryEntries].map(([fieldName, config]) => renderFilterField(fieldName, config));
+        return (
+            <div className="mb-3 rounded-lg border border-border/70 bg-card shadow-sm">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+                    {toolbarStart && <div className="min-w-0 flex-1">{toolbarStart}</div>}
+                    {searchFields.length > 0 && (
+                        <div className="w-full sm:w-64 lg:w-72">
+                            <DebouncedSearchInput
+                                value={searchTerm}
+                                onChange={setSearchTerm}
+                                delay={400}
+                                placeholder={`Search by ${searchFields.join(", ")}`}
+                                className="!h-9"
+                            />
+                        </div>
+                    )}
+                    {hasFilters && (
+                        <Button type="button" variant="outline" size="sm" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}>
+                            <Filter className="size-3.5" aria-hidden="true" />
+                            Filters
+                            {activeEntries.length > 0 && <span className="rounded-full bg-primary/15 px-1.5 text-xs text-primary">{activeEntries.length}</span>}
+                            <ChevronDown className={`size-3.5 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+                        </Button>
+                    )}
+                    {isUpdating && <span role="status" className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin motion-reduce:animate-none" />Updating</span>}
+                    {toolbarEnd && <div className="flex flex-wrap items-center gap-2">{toolbarEnd}</div>}
+                </div>
+                {hasFilters && (
+                    <section id={panelId} aria-label="Filters" hidden={!open} className="border-t border-border/60 p-3">
+                        <div className={layout === "grid" ? "grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"}>{fields}</div>
+                        <div className="mt-3 flex justify-end">
+                            <Button type="button" variant="ghost" size="sm" onClick={handleResetFilters} disabled={activeEntries.length === 0 && !searchTerm}>
+                                <X className="size-3.5" aria-hidden="true" />Reset
+                            </Button>
+                        </div>
+                    </section>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="mb-4">

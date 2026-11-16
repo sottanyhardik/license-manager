@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { createSionPlanningRule, deleteSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, previewScopedSionPlan, type RuleAllocationStrategy, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule, type ScopedPlanPreview } from "@/services/api/planningRuleApi";
+import { createSionPlanningRule, deleteSionPlanningRule, fetchSionPlanningRules, planSavedSionRules, previewSavedSionRules, reorderSionPlanningRules, testSionPlanningRule, updateSionPlanningRule, previewScopedSionPlan, type RuleAllocationStrategy, type SionPlanningMode, type SionPlanningPreview, type SionPlanningPreviewLicense, type SionPlanningRule, type ScopedPlanPreview } from "@/api/planningRuleApi";
 import { SplitAllocationPreview } from "./SplitAllocationPreview";
 import { AllocationStrategyEditor } from "./AllocationStrategyEditor";
 import { validatePlanningRule, hasValidationErrors, type RuleFormErrors } from "./ruleFormValidation";

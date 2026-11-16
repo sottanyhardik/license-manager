@@ -3,7 +3,10 @@
  * Import from here everywhere roles are displayed.
  */
 
-export const ROLE_LABELS = {
+import type { CSSProperties } from 'react';
+import type { Role } from '@/routes/authorizationRoles';
+
+export const ROLE_LABELS: Record<Role, string> = {
     USER_MANAGER:               'User Manager',
     LICENSE_MANAGER:            'License Manager',
     LICENSE_VIEWER:             'License Viewer',
@@ -26,7 +29,7 @@ export const ROLE_LABELS = {
  * Manager roles = saturated colour. Viewer roles = muted/lighter variant.
  * Special roles = distinct accent.
  */
-export const ROLE_BADGE_COLOR = {
+export const ROLE_BADGE_COLOR: Partial<Record<Role, string>> = {
     USER_MANAGER:               'danger',     // admin — red, high attention
     LICENSE_MANAGER:            'primary',    // core business — indigo
     LICENSE_VIEWER:             'info',       // read-only — blue-teal
@@ -44,19 +47,21 @@ export const ROLE_BADGE_COLOR = {
 };
 
 /** Inline style overrides for colours not in Bootstrap's default palette. */
-export const ROLE_BADGE_STYLE = {
+export const ROLE_BADGE_STYLE: Partial<Record<Role, CSSProperties>> = {
     TL_GENERATE:    { background: '#ede9fe', color: '#6d28d9', border: '1px solid #c4b5fd' },
     LEDGER_MANAGER: { background: '#ccfbf1', color: '#0f766e', border: '1px solid #99f6e4' },
     ACCOUNT_ACCESS: { background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' },
 };
 
 /** Returns the label for a role code, falling back to the code itself. */
-export const getRoleLabel = (code) => ROLE_LABELS[code] ?? code;
+export const getRoleLabel = (code: string): string => ROLE_LABELS[code as Role] ?? code;
 
 /** Returns inline styles for a role badge (handles custom + Bootstrap variants). */
-export const getRoleBadgeProps = (code) => {
-    if (ROLE_BADGE_STYLE[code]) {
-        return { className: 'badge', style: ROLE_BADGE_STYLE[code] };
+export const getRoleBadgeProps = (code: string): { className: string; style?: CSSProperties } => {
+    const role = code as Role;
+    const style = ROLE_BADGE_STYLE[role];
+    if (style) {
+        return { className: 'badge', style };
     }
-    return { className: `badge bg-${ROLE_BADGE_COLOR[code] ?? 'secondary'}` };
+    return { className: `badge bg-${ROLE_BADGE_COLOR[role] ?? 'secondary'}` };
 };

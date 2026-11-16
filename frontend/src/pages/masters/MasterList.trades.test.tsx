@@ -30,7 +30,7 @@ vi.mock("../../api/axios", () => ({
   },
 }));
 
-vi.mock("../../services/api", () => ({
+vi.mock("../../api", () => ({
   boeApi: { fetchBOEList: vi.fn() },
 }));
 

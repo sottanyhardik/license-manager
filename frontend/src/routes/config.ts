@@ -1,4 +1,27 @@
-export const routes = [
+export interface RouteConfig {
+    path: string;
+    label: string;
+    component: string;
+    protected: boolean;
+    icon: string;
+    superuserOnly?: boolean;
+}
+
+export interface EntityRouteConfig {
+    path: string;
+    label: string;
+    entity: string;
+    icon: string;
+    deprecated?: boolean;
+}
+
+export interface ReportRouteConfig {
+    path: string;
+    label: string;
+    icon: string;
+}
+
+export const routes: RouteConfig[] = [
     {
         path: "/dashboard",
         label: "Dashboard",
@@ -59,7 +82,7 @@ export const routes = [
 ];
 
 // Master data entities configuration
-export const masterEntities = [
+export const masterEntities: EntityRouteConfig[] = [
     {
         path: "/masters/companies",
         label: "Companies",
@@ -105,12 +128,12 @@ export const masterEntities = [
     {
         path: "/masters/exchange-rates",
         label: "Exchange Rates",
-                entity: "exchange-rates",
+        entity: "exchange-rates",
         icon: "currency-exchange",
     },
 ];
 // Report entities configuration
-export const reportEntities = [
+export const reportEntities: ReportRouteConfig[] = [
     {
         path: "/license-ledger/download-requests",
         label: "License Downloads",

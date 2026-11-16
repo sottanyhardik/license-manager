@@ -4,12 +4,13 @@
  * Centralizes all API calls related to licenses.
  */
 
-import api from '../../api/axios';
+import api from './axios';
+import type {ApiId, ApiParams, ApiRecord} from '@/types/api/common';
 
 /**
  * Fetch license list with filters
  */
-export const fetchLicenseList = async (params = {}) => {
+export const fetchLicenseList = async <T = ApiRecord>(params: ApiParams = {}): Promise<T> => {
     const response = await api.get('licenses/', {params});
     return response.data;
 };
@@ -17,7 +18,7 @@ export const fetchLicenseList = async (params = {}) => {
 /**
  * Fetch single license details
  */
-export const fetchLicense = async (id) => {
+export const fetchLicense = async <T = ApiRecord>(id: ApiId): Promise<T> => {
     const response = await api.get(`licenses/${id}/`);
     return response.data;
 };
@@ -25,7 +26,7 @@ export const fetchLicense = async (id) => {
 /**
  * Create new license
  */
-export const createLicense = async (data) => {
+export const createLicense = async <T = ApiRecord>(data: ApiRecord): Promise<T> => {
     const response = await api.post('licenses/', data);
     return response.data;
 };
@@ -33,7 +34,7 @@ export const createLicense = async (data) => {
 /**
  * Update license
  */
-export const updateLicense = async (id, data) => {
+export const updateLicense = async <T = ApiRecord>(id: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.put(`licenses/${id}/`, data);
     return response.data;
 };
@@ -41,7 +42,7 @@ export const updateLicense = async (id, data) => {
 /**
  * Delete license
  */
-export const deleteLicense = async (id) => {
+export const deleteLicense = async <T = ApiRecord>(id: ApiId): Promise<T> => {
     const response = await api.delete(`licenses/${id}/`);
     return response.data;
 };
@@ -49,7 +50,7 @@ export const deleteLicense = async (id) => {
 /**
  * Fetch license import items
  */
-export const fetchLicenseImportItems = async (licenseId) => {
+export const fetchLicenseImportItems = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/import-items/`);
     return response.data;
 };
@@ -57,7 +58,7 @@ export const fetchLicenseImportItems = async (licenseId) => {
 /**
  * Fetch license export items
  */
-export const fetchLicenseExportItems = async (licenseId) => {
+export const fetchLicenseExportItems = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/export-items/`);
     return response.data;
 };
@@ -65,7 +66,7 @@ export const fetchLicenseExportItems = async (licenseId) => {
 /**
  * Fetch license balance summary
  */
-export const fetchLicenseBalance = async (licenseId) => {
+export const fetchLicenseBalance = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/balance/`);
     return response.data;
 };
@@ -73,7 +74,7 @@ export const fetchLicenseBalance = async (licenseId) => {
 /**
  * Export license ledger to PDF
  */
-export const exportLicenseLedgerPDF = async (licenseId) => {
+export const exportLicenseLedgerPDF = async (licenseId: ApiId): Promise<Blob> => {
     const response = await api.get(`licenses/${licenseId}/ledger-pdf/`, {
         responseType: 'blob'
     });
@@ -83,7 +84,7 @@ export const exportLicenseLedgerPDF = async (licenseId) => {
 /**
  * Export license item report
  */
-export const exportLicenseItemReport = async (licenseId, params = {}) => {
+export const exportLicenseItemReport = async (licenseId: ApiId, params: ApiParams = {}): Promise<Blob> => {
     const response = await api.get(`licenses/${licenseId}/item-report/`, {
         params,
         responseType: 'blob'
@@ -94,7 +95,7 @@ export const exportLicenseItemReport = async (licenseId, params = {}) => {
 /**
  * Fetch license documents
  */
-export const fetchLicenseDocuments = async (licenseId) => {
+export const fetchLicenseDocuments = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/documents/`);
     return response.data;
 };
@@ -102,7 +103,7 @@ export const fetchLicenseDocuments = async (licenseId) => {
 /**
  * Upload license document
  */
-export const uploadLicenseDocument = async (licenseId, formData) => {
+export const uploadLicenseDocument = async <T = ApiRecord>(licenseId: ApiId, formData: FormData): Promise<T> => {
     const response = await api.post(
         `/licenses/${licenseId}/documents/`,
         formData,
@@ -118,7 +119,7 @@ export const uploadLicenseDocument = async (licenseId, formData) => {
 /**
  * Fetch license transactions (BOE entries)
  */
-export const fetchLicenseTransactions = async (licenseId, params = {}) => {
+export const fetchLicenseTransactions = async <T = ApiRecord>(licenseId: ApiId, params: ApiParams = {}): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/transactions/`, {params});
     return response.data;
 };
@@ -126,7 +127,7 @@ export const fetchLicenseTransactions = async (licenseId, params = {}) => {
 /**
  * Fetch license allocations
  */
-export const fetchLicenseAllocations = async (licenseId, params = {}) => {
+export const fetchLicenseAllocations = async <T = ApiRecord>(licenseId: ApiId, params: ApiParams = {}): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/allocations/`, {params});
     return response.data;
 };
@@ -134,7 +135,7 @@ export const fetchLicenseAllocations = async (licenseId, params = {}) => {
 /**
  * Check license validity
  */
-export const checkLicenseValidity = async (licenseId) => {
+export const checkLicenseValidity = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.get(`licenses/${licenseId}/check-validity/`);
     return response.data;
 };
@@ -142,7 +143,7 @@ export const checkLicenseValidity = async (licenseId) => {
 /**
  * Update license flags (is_active, is_expired, etc.)
  */
-export const updateLicenseFlags = async (licenseId) => {
+export const updateLicenseFlags = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.post(`licenses/${licenseId}/update-flags/`);
     return response.data;
 };
@@ -150,7 +151,7 @@ export const updateLicenseFlags = async (licenseId) => {
 /**
  * Fetch license options/metadata
  */
-export const fetchLicenseOptions = async () => {
+export const fetchLicenseOptions = async <T = ApiRecord>(): Promise<T> => {
     const response = await api.options('/licenses/');
     return response.data;
 };
@@ -162,7 +163,7 @@ export const fetchLicenseOptions = async () => {
 /**
  * Fetch all plan lines for a license.
  */
-export const fetchItemPlans = async (licenseId) => {
+export const fetchItemPlans = async <T = ApiRecord>(licenseId: ApiId): Promise<T> => {
     const response = await api.get('license-item-plans/', {params: {license: licenseId}});
     return response.data;
 };
@@ -171,7 +172,7 @@ export const fetchItemPlans = async (licenseId) => {
  * Create/update many plan lines for a license in one call.
  * lines = [{import_item, planned_quantity, planned_cif_fc, planned_cif_inr?, note?}]
  */
-export const bulkUpsertItemPlans = async (licenseId, lines) => {
+export const bulkUpsertItemPlans = async <T = ApiRecord>(licenseId: ApiId, lines: ApiRecord[]): Promise<T> => {
     const response = await api.post('license-item-plans/bulk-upsert/', {
         license: licenseId,
         lines,
@@ -182,7 +183,7 @@ export const bulkUpsertItemPlans = async (licenseId, lines) => {
 /**
  * Create a single plan line.
  */
-export const createItemPlan = async (data) => {
+export const createItemPlan = async <T = ApiRecord>(data: ApiRecord): Promise<T> => {
     const response = await api.post('license-item-plans/', data);
     return response.data;
 };
@@ -190,7 +191,7 @@ export const createItemPlan = async (data) => {
 /**
  * Update a single plan line (used by the "modify plan" modal at allot time).
  */
-export const updateItemPlan = async (planId, data) => {
+export const updateItemPlan = async <T = ApiRecord>(planId: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.patch(`license-item-plans/${planId}/`, data);
     return response.data;
 };
@@ -198,7 +199,7 @@ export const updateItemPlan = async (planId, data) => {
 /**
  * Delete a single plan line.
  */
-export const deleteItemPlan = async (planId) => {
+export const deleteItemPlan = async <T = ApiRecord>(planId: ApiId): Promise<T> => {
     const response = await api.delete(`license-item-plans/${planId}/`);
     return response.data;
 };

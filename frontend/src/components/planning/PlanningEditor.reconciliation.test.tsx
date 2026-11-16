@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import PlanningEditor from "./PlanningEditor";
-import { autoPlanLicense, type AutoPlanResponse } from "../../services/api/planningRuleApi";
+import { autoPlanLicense, type AutoPlanResponse } from "../../api/planningRuleApi";
 
-vi.mock("../../services/api/licenseApi", () => ({
+vi.mock("../../api/licenseApi", () => ({
     fetchLicense: vi.fn().mockResolvedValue({
         balance_cif: "2772554.16",
         total_cif: "2772554.16",
@@ -91,7 +91,7 @@ vi.mock("../../services/api/licenseApi", () => ({
     deleteItemPlan: vi.fn(),
 }));
 
-vi.mock("../../services/api/planningRuleApi", () => ({
+vi.mock("../../api/planningRuleApi", () => ({
     autoPlanLicense: vi.fn(),
     planLicense: vi.fn(),
 }));

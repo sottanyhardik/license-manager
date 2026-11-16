@@ -24,7 +24,7 @@ import PlanningEditor from "@/components/planning/PlanningEditor";
 import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
 import ReplanStatus from "./ReplanStatus";
-import { autoPlanLicense } from "@/services/api/planningRuleApi";
+import { autoPlanLicense } from "@/api/planningRuleApi";
 
 type TabId = "overview" | "boes" | "allotments" | "planning" | "items" | "invoice-ledger";
 type LicenseDocument = { id: number; type: string; file: string };

@@ -4,7 +4,7 @@ import {AuthContext} from "../../context/AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../../api/axios";
-import {boeApi} from "../../services/api";
+import {boeApi} from "../../api";
 import AdvancedFilter from "../../components/AdvancedFilter";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import DataPagination from "../../components/DataPagination";
@@ -247,7 +247,7 @@ export default function MasterList() {
         setShowMergeModal(true);
         setMergeCandidatesLoading(true);
         try {
-            const resp = await boeApi.fetchBOEList({ search: item.bill_of_entry_number, is_invoice: 'all', page_size: 50 });
+            const resp = await boeApi.fetchBOEList<{ results?: Array<{ id: number; bill_of_entry_number: string }> }>({ search: item.bill_of_entry_number, is_invoice: 'all', page_size: 50 });
             const candidates = (resp.results || []).filter(b => b.id !== item.id && b.bill_of_entry_number === item.bill_of_entry_number);
             setMergeCandidates(candidates);
         } catch {
@@ -268,7 +268,7 @@ export default function MasterList() {
         if (!mergeBoeTarget || !mergeBoeSource) return;
         setMergeBoeLoading(true);
         try {
-            const resp = await boeApi.mergeBOE(mergeBoeTarget.id, mergeBoeSource.id);
+            const resp = await boeApi.mergeBOE<{ message?: string }>(mergeBoeTarget.id, mergeBoeSource.id);
             toast.success(resp.message || 'BOE merged successfully');
             closeMergeModal();
             invalidateList();

@@ -4,12 +4,20 @@
  * Centralizes all API calls related to allotments.
  */
 
-import api from '../../api/axios';
+import api from './axios';
+import type {ApiId, ApiParams, ApiRecord} from '@/types/api/common';
+
+/** Normalised notification-number option. */
+export interface NotificationOption {
+    value: string;
+    label: string;
+    display_name: string;
+}
 
 /**
  * Fetch allotment details
  */
-export const fetchAllotment = async (id) => {
+export const fetchAllotment = async <T = ApiRecord>(id: ApiId): Promise<T> => {
     const response = await api.get(`allotment-actions/${id}/available-licenses/`);
     return response.data;
 };
@@ -17,7 +25,7 @@ export const fetchAllotment = async (id) => {
 /**
  * Fetch available licenses for allocation
  */
-export const fetchAvailableLicenses = async (allotmentId, params = {}) => {
+export const fetchAvailableLicenses = async <T = ApiRecord>(allotmentId: ApiId, params: ApiParams = {}): Promise<T> => {
     const response = await api.get(`allotment-actions/${allotmentId}/available-licenses/`, {
         params
     });
@@ -27,7 +35,7 @@ export const fetchAvailableLicenses = async (allotmentId, params = {}) => {
 /**
  * Allocate a license item to an allotment
  */
-export const allocateItem = async (allotmentId, itemId, data) => {
+export const allocateItem = async <T = ApiRecord>(allotmentId: ApiId, itemId: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.post(
         `/allotment-actions/${allotmentId}/allocate-item/`,
         {
@@ -41,7 +49,7 @@ export const allocateItem = async (allotmentId, itemId, data) => {
 /**
  * Update an existing allocation
  */
-export const updateAllocation = async (allotmentId, allocationId, data) => {
+export const updateAllocation = async <T = ApiRecord>(allotmentId: ApiId, allocationId: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.patch(
         `/allotment-actions/${allotmentId}/update-allocation/${allocationId}/`,
         data
@@ -52,7 +60,7 @@ export const updateAllocation = async (allotmentId, allocationId, data) => {
 /**
  * Delete an allocation
  */
-export const deleteAllocation = async (allotmentId, allocationId) => {
+export const deleteAllocation = async <T = ApiRecord>(allotmentId: ApiId, allocationId: ApiId): Promise<T> => {
     const response = await api.delete(
         `/allotment-actions/${allotmentId}/delete-allocation/${allocationId}/`
     );
@@ -67,12 +75,12 @@ export const deleteAllocation = async (allotmentId, allocationId) => {
  * the values. Read them from the masters endpoint instead and normalize the
  * shape to {value, display_name, label} for legacy callers.
  */
-export const fetchNotificationOptions = async () => {
+export const fetchNotificationOptions = async (): Promise<NotificationOption[]> => {
     const response = await api.get('masters/notification-numbers/', {
         params: { page_size: 200, ordering: 'code' },
     });
     const results = response.data?.results ?? response.data ?? [];
-    return results.map(({ code, label }) => ({
+    return results.map(({ code, label }: { code: string; label?: string }) => ({
         value: code,
         label: label ? `${code} — ${label}` : code,
         display_name: label ? `${code} — ${label}` : code,
@@ -82,7 +90,7 @@ export const fetchNotificationOptions = async () => {
 /**
  * Export allotment to PDF
  */
-export const exportAllotmentPDF = async (allotmentId) => {
+export const exportAllotmentPDF = async (allotmentId: ApiId): Promise<Blob> => {
     const response = await api.get(`allotment-actions/${allotmentId}/export-pdf/`, {
         responseType: 'blob'
     });
@@ -92,7 +100,7 @@ export const exportAllotmentPDF = async (allotmentId) => {
 /**
  * Export allotment to Excel
  */
-export const exportAllotmentExcel = async (allotmentId) => {
+export const exportAllotmentExcel = async (allotmentId: ApiId): Promise<Blob> => {
     const response = await api.get(`allotment-actions/${allotmentId}/export-excel/`, {
         responseType: 'blob'
     });
@@ -102,7 +110,7 @@ export const exportAllotmentExcel = async (allotmentId) => {
 /**
  * Fetch allotment list with filters
  */
-export const fetchAllotmentList = async (params = {}) => {
+export const fetchAllotmentList = async <T = ApiRecord>(params: ApiParams = {}): Promise<T> => {
     const response = await api.get('allotments/', {params});
     return response.data;
 };
@@ -110,7 +118,7 @@ export const fetchAllotmentList = async (params = {}) => {
 /**
  * Create new allotment
  */
-export const createAllotment = async (data) => {
+export const createAllotment = async <T = ApiRecord>(data: ApiRecord): Promise<T> => {
     const response = await api.post('allotments/', data);
     return response.data;
 };
@@ -118,7 +126,7 @@ export const createAllotment = async (data) => {
 /**
  * Update allotment
  */
-export const updateAllotment = async (id, data) => {
+export const updateAllotment = async <T = ApiRecord>(id: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.patch(`allotments/${id}/`, data);
     return response.data;
 };
@@ -126,7 +134,7 @@ export const updateAllotment = async (id, data) => {
 /**
  * Delete allotment
  */
-export const deleteAllotment = async (id) => {
+export const deleteAllotment = async <T = ApiRecord>(id: ApiId): Promise<T> => {
     const response = await api.delete(`allotments/${id}/`);
     return response.data;
 };
@@ -134,7 +142,7 @@ export const deleteAllotment = async (id) => {
 /**
  * Convert allotment to Bill of Entry
  */
-export const convertToBOE = async (allotmentId, boeData) => {
+export const convertToBOE = async <T = ApiRecord>(allotmentId: ApiId, boeData: ApiRecord): Promise<T> => {
     const response = await api.post(
         `/allotment-actions/${allotmentId}/convert-to-boe/`,
         boeData

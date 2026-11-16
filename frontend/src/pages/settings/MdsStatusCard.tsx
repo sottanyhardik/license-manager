@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { fetchMdsStatus, type MdsStatus } from "../../services/api/mdsApi";
+import { fetchMdsStatus, type MdsStatus } from "../../api/mdsApi";
 
 /** A mirror is considered "stale" if it has never synced. */
 function isModelStale(lastSyncedAt: string | null): boolean {

@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { SplitAllocationPreview as SplitAllocationPreviewData } from "@/services/api/planningRuleApi";
+import type { SplitAllocationPreview as SplitAllocationPreviewData } from "@/api/planningRuleApi";
 
 export function SplitAllocationPreview({ allocation }: { allocation: SplitAllocationPreviewData }) {
     const successful = allocation.status === "ALLOCATED";

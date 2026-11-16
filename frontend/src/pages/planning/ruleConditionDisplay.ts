@@ -1,4 +1,4 @@
-import type { RuleCondition } from "@/services/api/planningRuleApi";
+import type { RuleCondition } from "@/api/planningRuleApi";
 
 const FIELD_LABELS: Record<string, string> = {
     HSN: "HSN",

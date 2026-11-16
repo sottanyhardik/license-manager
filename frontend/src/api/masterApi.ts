@@ -4,12 +4,13 @@
  * Centralizes all API calls related to master CRUD operations.
  */
 
-import api from '../../api/axios';
+import api from './axios';
+import type {ApiId, ApiParams, ApiRecord} from '@/types/api/common';
 
 /**
  * Fetch master list with pagination and filters
  */
-export const fetchMasterList = async (endpoint, params = {}) => {
+export const fetchMasterList = async <T = ApiRecord>(endpoint: string, params: ApiParams = {}): Promise<T> => {
     const response = await api.get(endpoint, {params});
     return response.data;
 };
@@ -17,7 +18,7 @@ export const fetchMasterList = async (endpoint, params = {}) => {
 /**
  * Fetch master metadata (field definitions, choices, etc.)
  */
-export const fetchMasterMetadata = async (endpoint) => {
+export const fetchMasterMetadata = async <T = ApiRecord>(endpoint: string): Promise<T> => {
     const response = await api.options(endpoint);
     return response.data;
 };
@@ -25,7 +26,7 @@ export const fetchMasterMetadata = async (endpoint) => {
 /**
  * Fetch single master record by ID
  */
-export const fetchMasterRecord = async (endpoint, id) => {
+export const fetchMasterRecord = async <T = ApiRecord>(endpoint: string, id: ApiId): Promise<T> => {
     const response = await api.get(`${endpoint}${id}/`);
     return response.data;
 };
@@ -33,7 +34,7 @@ export const fetchMasterRecord = async (endpoint, id) => {
 /**
  * Create new master record
  */
-export const createMasterRecord = async (endpoint, data) => {
+export const createMasterRecord = async <T = ApiRecord>(endpoint: string, data: ApiRecord): Promise<T> => {
     const response = await api.post(endpoint, data);
     return response.data;
 };
@@ -41,7 +42,7 @@ export const createMasterRecord = async (endpoint, data) => {
 /**
  * Update master record
  */
-export const updateMasterRecord = async (endpoint, id, data) => {
+export const updateMasterRecord = async <T = ApiRecord>(endpoint: string, id: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.put(`${endpoint}${id}/`, data);
     return response.data;
 };
@@ -49,7 +50,7 @@ export const updateMasterRecord = async (endpoint, id, data) => {
 /**
  * Partially update master record
  */
-export const patchMasterRecord = async (endpoint, id, data) => {
+export const patchMasterRecord = async <T = ApiRecord>(endpoint: string, id: ApiId, data: ApiRecord): Promise<T> => {
     const response = await api.patch(`${endpoint}${id}/`, data);
     return response.data;
 };
@@ -57,7 +58,7 @@ export const patchMasterRecord = async (endpoint, id, data) => {
 /**
  * Delete master record
  */
-export const deleteMasterRecord = async (endpoint, id) => {
+export const deleteMasterRecord = async <T = ApiRecord>(endpoint: string, id: ApiId): Promise<T> => {
     const response = await api.delete(`${endpoint}${id}/`);
     return response.data;
 };
@@ -65,7 +66,7 @@ export const deleteMasterRecord = async (endpoint, id) => {
 /**
  * Export master data to PDF
  */
-export const exportMasterPDF = async (endpoint, params = {}) => {
+export const exportMasterPDF = async (endpoint: string, params: ApiParams = {}): Promise<Blob> => {
     const response = await api.get(`${endpoint}export/pdf/`, {
         params,
         responseType: 'blob'
@@ -76,7 +77,7 @@ export const exportMasterPDF = async (endpoint, params = {}) => {
 /**
  * Export master data to Excel
  */
-export const exportMasterExcel = async (endpoint, params = {}) => {
+export const exportMasterExcel = async (endpoint: string, params: ApiParams = {}): Promise<Blob> => {
     const response = await api.get(`${endpoint}export/excel/`, {
         params,
         responseType: 'blob'
@@ -87,7 +88,7 @@ export const exportMasterExcel = async (endpoint, params = {}) => {
 /**
  * Bulk delete master records
  */
-export const bulkDeleteMasterRecords = async (endpoint, ids) => {
+export const bulkDeleteMasterRecords = async <T = ApiRecord>(endpoint: string, ids: ApiId[]): Promise<T> => {
     const response = await api.post(`${endpoint}bulk_delete/`, {ids});
     return response.data;
 };
@@ -95,7 +96,7 @@ export const bulkDeleteMasterRecords = async (endpoint, ids) => {
 /**
  * Fetch foreign key options for a field
  */
-export const fetchForeignKeyOptions = async (endpoint, search = '', params = {}) => {
+export const fetchForeignKeyOptions = async <T = ApiRecord>(endpoint: string, search = '', params: ApiParams = {}): Promise<T> => {
     const response = await api.get(endpoint, {
         params: {
             search,
@@ -108,7 +109,7 @@ export const fetchForeignKeyOptions = async (endpoint, search = '', params = {})
 /**
  * Download file attachment
  */
-export const downloadFileAttachment = async (url) => {
+export const downloadFileAttachment = async (url: string): Promise<Blob> => {
     const response = await api.get(url, {
         responseType: 'blob'
     });

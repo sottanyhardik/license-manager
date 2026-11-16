@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Trash2, X } from "luci
 
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import type { RuleCondition, RuleGroup } from "@/services/api/planningRuleApi";
+import type { RuleCondition, RuleGroup } from "@/api/planningRuleApi";
 import { conditionOperator, defaultOperatorForPlanningField, operatorsForPlanningField, PLANNING_MATCH_FIELDS, withConditionOperator } from "./ruleConditionDisplay";
 import { emptyRuleCondition } from "./expressionTreeUtils";
 

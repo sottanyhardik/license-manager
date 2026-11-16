@@ -1,4 +1,4 @@
-import type { RuleAllocationStrategy, SplitAllocationBucket } from "@/services/api/planningRuleApi";
+import type { RuleAllocationStrategy, SplitAllocationBucket } from "@/api/planningRuleApi";
 
 export type ResidualPolicy =
     | { policy: "LEAVE_UNPLANNED" }

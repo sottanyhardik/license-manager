@@ -54,7 +54,7 @@ import LedgerTab from "./LedgerTab";
 import PlanningEditor from "@/components/planning/PlanningEditor";
 import LicenseOverviewContent from "@/pages/license-overview/LicenseOverviewContent";
 import IndividualItemCifSwitch from "@/components/IndividualItemCifSwitch";
-import { autoPlanLicense } from "@/services/api/planningRuleApi";
+import { autoPlanLicense } from "@/api/planningRuleApi";
 import { licenseOverviewKeys } from "@/pages/license-overview/useLicenseOverviewSummary";
 import { licenseBalanceKeys } from "@/pages/license-balance/useLicenseBalanceLedger";
 

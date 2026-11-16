@@ -1,4 +1,4 @@
-import type { SionPlanningRule, RuleAllocationStrategy } from "@/services/api/planningRuleApi";
+import type { SionPlanningRule, RuleAllocationStrategy } from "@/api/planningRuleApi";
 
 export interface RuleFormErrors extends Record<string, any> {
     name?: string;

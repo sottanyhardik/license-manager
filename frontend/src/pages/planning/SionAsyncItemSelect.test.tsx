@@ -5,7 +5,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SionImportItemAsyncSelect } from "./SionAsyncItemSelect";
 
-vi.mock("@/services/api/planningRuleApi", () => ({
+vi.mock("@/api/planningRuleApi", () => ({
   searchSionImportItems: vi.fn().mockResolvedValue({
     items: [{ id: 41, name: "Sweet whey powder" }],
     nextPage: null,

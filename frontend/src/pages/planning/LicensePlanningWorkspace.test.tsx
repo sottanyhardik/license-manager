@@ -5,10 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LicensePlanningWorkspace from "./LicensePlanningWorkspace";
 import { planningPath } from "./planningPath";
-import * as rulesApi from "@/services/api/planningRuleApi";
+import * as rulesApi from "@/api/planningRuleApi";
 
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn().mockResolvedValue({ data: [{ id: 6, norm_class: "E1" }, { id: 7, norm_class: "E5" }] }) } }));
-vi.mock("@/services/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), searchSionImportItems: vi.fn(), fetchSionImportItem: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn(), previewScopedSionPlan: vi.fn(), saveScopedSionPlan: vi.fn() }));
+vi.mock("@/api/planningRuleApi", () => ({ fetchSionPlanningRules: vi.fn(), createSionPlanningRule: vi.fn(), updateSionPlanningRule: vi.fn(), searchSionImportItems: vi.fn(), fetchSionImportItem: vi.fn(), testSionPlanningRule: vi.fn(), previewSavedSionRules: vi.fn(), planSavedSionRules: vi.fn(), reorderSionPlanningRules: vi.fn(), previewScopedSionPlan: vi.fn(), saveScopedSionPlan: vi.fn() }));
 
 const rule = { id: 4, sion: 7, name: "Sugar rule", expression: { operator: "AND" as const, conditions: [{ field: "HSN" as const, comparator: "CONTAINS" as const, value: "1701" }] }, max_unit_price: "2.70", unit: "KG", priority: 10, is_active: true, strategy: "STANDARD" as const, import_item: 101, standard_item_name: "Sugar - E5", unit_value_rows: [], percentage_rows: [], version: 1 };
 const preview = { sion: "E5", mode: "NEW" as const, rules_processed: 1, summary: { licenses_matched: 1, licenses_new: 0, licenses_changed: 1, licenses_unchanged: 0, licenses_shortage: 0, rules_processed: 1 }, licenses: [{ license_id: 42, license_number: "LIC-42", sion: "E5", matched_item_count: 1, matched_rule_count: 1, matched_rule_priorities: [1], existing_plan_summary: "10 KG", proposed_plan_summary: "12 KG", existing_plan: {}, proposed_plan: {}, change_status: "CHANGE" as const, has_shortage: false, status: "FEASIBLE", items: [{ item_id: 1, rule_priority: 1, rule_name: "Sugar rule", item_name: "Sugar", hsn_code: "1701", unit: "KG", available_qty: "10.000", existing_planned_qty: "8.000", proposed_planned_qty: "10.000", max_unit_price: "2.70" }] }], conflicts: [] };

@@ -48,8 +48,8 @@ import {
     deleteItemPlan,
     fetchItemPlans,
     fetchLicense,
-} from "@/services/api/licenseApi";
-import { autoPlanLicense } from "@/services/api/planningRuleApi";
+} from "@/api/licenseApi";
+import { autoPlanLicense } from "@/api/planningRuleApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers
@@ -508,6 +508,30 @@ function InlineEditor({
 // PlanningEditor root
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Plan row shape returned by `license-item-plans/` (fields as consumed below). */
+type LoadedPlanRow = {
+                id: number; import_item: number; item_name?: number | null;
+                planning_item_name?: string | null; item_name_label?: string | null;
+                planned_quantity?: number | null; unit_price?: number | null;
+                planned_cif_fc?: number | null; note?: string | null;
+                modified_on?: string | null; modified_by_username?: string | null;
+                boe_used_quantity?: string; boe_used_cif?: string;
+                unlinked_allotment_quantity?: string; unlinked_allotment_cif?: string;
+                effective_used_quantity?: string; effective_used_cif?: string;
+                percentage_theoretical_quantity?: string; percentage_theoretical_cif?: string;
+                theoretical_quantity?: string; theoretical_cif?: string;
+                reconciled_planned_quantity?: string; reconciled_planned_cif?: string;
+                adjusted_planned_cif?: string; effective_unit_price?: string;
+                effective_planned_cif?: string; candidate_planned_cif?: string; cif_cap_adjustment?: string;
+                split_percentage?: string | null;
+                excess_other_item_qty?: string; excess_other_item_cif?: string;
+                remaining_entitlement_qty?: string; percentage_target_qty?: string;
+                remaining_quantity?: string; remaining_cif?: string;
+                excess_quantity?: string; excess_cif?: string;
+                reconciliation_status?: Split["reconciliation_status"];
+                needs_rebuild?: boolean;
+            };
+
 export default function PlanningEditor({
     licenseId, licenseNumber: _licenseNumber, balanceCif = 0, canWrite, onSaved,
 }: PlanningEditorProps) {
@@ -549,28 +573,7 @@ export default function PlanningEditor({
                 setOperational(numeric);
                 setLicenseTotalCif(numeric.license_total_cif || 0);
             }
-            const planList: {
-                id: number; import_item: number; item_name?: number | null;
-                planning_item_name?: string | null; item_name_label?: string | null;
-                planned_quantity?: number | null; unit_price?: number | null;
-                planned_cif_fc?: number | null; note?: string | null;
-                modified_on?: string | null; modified_by_username?: string | null;
-                boe_used_quantity?: string; boe_used_cif?: string;
-                unlinked_allotment_quantity?: string; unlinked_allotment_cif?: string;
-                effective_used_quantity?: string; effective_used_cif?: string;
-                percentage_theoretical_quantity?: string; percentage_theoretical_cif?: string;
-                theoretical_quantity?: string; theoretical_cif?: string;
-                reconciled_planned_quantity?: string; reconciled_planned_cif?: string;
-                adjusted_planned_cif?: string; effective_unit_price?: string;
-                effective_planned_cif?: string; candidate_planned_cif?: string; cif_cap_adjustment?: string;
-                split_percentage?: string | null;
-                excess_other_item_qty?: string; excess_other_item_cif?: string;
-                remaining_entitlement_qty?: string; percentage_target_qty?: string;
-                remaining_quantity?: string; remaining_cif?: string;
-                excess_quantity?: string; excess_cif?: string;
-                reconciliation_status?: Split["reconciliation_status"];
-                needs_rebuild?: boolean;
-            }[] = Array.isArray(rawPlans) ? rawPlans : (rawPlans as { results?: unknown[] })?.results ?? [];
+            const planList: LoadedPlanRow[] = (Array.isArray(rawPlans) ? rawPlans : (rawPlans as { results?: unknown[] })?.results ?? []) as LoadedPlanRow[];
 
             const splitsByItem: Record<number, Split[]> = {};
             planList.forEach((p) => {

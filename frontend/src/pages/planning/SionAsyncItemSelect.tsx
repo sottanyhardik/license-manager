@@ -5,7 +5,7 @@ import {
   fetchSionImportItem,
   searchSionImportItems,
   type ImportItemOption,
-} from "@/services/api/planningRuleApi";
+} from "@/api/planningRuleApi";
 
 type SelectOption = { value: number; label: string; item: ImportItemOption };
 

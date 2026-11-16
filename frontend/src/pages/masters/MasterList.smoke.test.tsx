@@ -37,7 +37,7 @@ vi.mock("../../api/axios", () => ({
 }));
 
 // Mock the dedicated API services (only boeApi is used, for bill-of-entries).
-vi.mock("../../services/api", () => ({
+vi.mock("../../api", () => ({
   boeApi: { fetchBOEList: vi.fn(() => Promise.resolve(META)) },
   masterApi: {},
   licenseApi: {},

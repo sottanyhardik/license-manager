@@ -11,7 +11,23 @@ import PasswordReset from "../pages/auth/PasswordReset";
 import Unauthorized from "../pages/errors/Unauthorized";
 import NotFound from "../pages/errors/NotFound";
 import Forbidden from "../pages/Forbidden";
-import { REPORT_ROLES } from "./authorizationRoles";
+import {
+    ROLES,
+    REPORT_ROLES,
+    ALLOTMENT_ROLES,
+    BOE_LIST_ROLES,
+    BOE_TRANSFER_LETTER_ROLES,
+    INCENTIVE_LICENSE_ROLES,
+    LEDGER_PACKAGE_READINESS_ROLES,
+    LEDGER_READ_ROLES,
+    LEDGER_UPLOAD_ROLES,
+    LICENSE_OVERVIEW_ROLES,
+    LICENSE_ROLES,
+    RECONCILIATION_ISSUES_ROLES,
+    RECONCILIATION_ROLES,
+    TRADE_ROLES,
+    USER_ADMIN_ROLES,
+} from "./authorizationRoles";
 
 const UserList = lazyLoadWithRetry(() => import("../pages/admin/UserList"));
 const UserForm = lazyLoadWithRetry(() => import("../pages/admin/UserForm"));
@@ -105,44 +121,44 @@ export default function AppRoutes() {
 
                 {/* License CRUD */}
                 <Route path="/licenses" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER"]}>
+                    <ProtectedRoute requiredAnyRole={LICENSE_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/licenses/create" element={
-                    <ProtectedRoute requiredRole="LICENSE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.LICENSE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/licenses/:id/edit" element={
-                    <ProtectedRoute requiredRole="LICENSE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.LICENSE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/planning" element={
-                    <ProtectedRoute requiredRole="LICENSE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.LICENSE_MANAGER}>
                         <AdminLayout><LicensePlanningWorkspace /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* Allotment CRUD */}
                 <Route path="/allotments" element={
-                    <ProtectedRoute requiredAnyRole={["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"]}>
+                    <ProtectedRoute requiredAnyRole={ALLOTMENT_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/allotments/create" element={
-                    <ProtectedRoute requiredRole="ALLOTMENT_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.ALLOTMENT_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/allotments/:id/edit" element={
-                    <ProtectedRoute requiredRole="ALLOTMENT_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.ALLOTMENT_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/allotments/:id/allocate" element={
-                    <ProtectedRoute requiredRole="ALLOTMENT_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.ALLOTMENT_MANAGER}>
                         <AdminLayout><AllotmentAction /></AdminLayout>
                     </ProtectedRoute>
                 } />
@@ -158,46 +174,46 @@ export default function AppRoutes() {
 
                 {/* Bill of Entry CRUD */}
                 <Route path="/bill-of-entries" element={
-                    <ProtectedRoute requiredAnyRole={["BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE", "ACCOUNT_ACCESS"]}>
+                    <ProtectedRoute requiredAnyRole={BOE_LIST_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/bill-of-entries/create" element={
-                    <ProtectedRoute requiredRole="BOE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.BOE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/bill-of-entries/:id/edit" element={
-                    <ProtectedRoute requiredRole="BOE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.BOE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/bill-of-entries/:id/generate-transfer-letter" element={
-                    <ProtectedRoute requiredAnyRole={["BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE"]}>
+                    <ProtectedRoute requiredAnyRole={BOE_TRANSFER_LETTER_ROLES}>
                         <AdminLayout><BOETransferLetter /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* Trade CRUD */}
                 <Route path="/trades" element={
-                    <ProtectedRoute requiredAnyRole={["TRADE_MANAGER", "TRADE_VIEWER"]}>
+                    <ProtectedRoute requiredAnyRole={TRADE_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/trades/create" element={
-                    <ProtectedRoute requiredRole="TRADE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.TRADE_MANAGER}>
                         <AdminLayout><TradeForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/trades/:id/edit" element={
-                    <ProtectedRoute requiredRole="TRADE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.TRADE_MANAGER}>
                         <AdminLayout><TradeForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* Reconciliation */}
                 <Route path="/reconciliation" element={
-                    <ProtectedRoute requiredAnyRole={["BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"]}>
+                    <ProtectedRoute requiredAnyRole={RECONCILIATION_ROLES}>
                         <AdminLayout><ReconciliationPanel /></AdminLayout>
                     </ProtectedRoute>
                 } />
@@ -205,68 +221,68 @@ export default function AppRoutes() {
                     /reconciliation above. Gated on ReconciliationPermission.read_roles
                     (backend/apps/accounts/permissions.py) since it only reads. */}
                 <Route path="/reconciliation-issues" element={
-                    <ProtectedRoute requiredAnyRole={["TRADE_MANAGER", "TRADE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "ACCOUNT_ACCESS", "TL_GENERATE"]}>
+                    <ProtectedRoute requiredAnyRole={RECONCILIATION_ISSUES_ROLES}>
                         <AdminLayout><ReconciliationIssues /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* Incentive License CRUD */}
                 <Route path="/incentive-licenses" element={
-                    <ProtectedRoute requiredAnyRole={["INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"]}>
+                    <ProtectedRoute requiredAnyRole={INCENTIVE_LICENSE_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/incentive-licenses/create" element={
-                    <ProtectedRoute requiredRole="INCENTIVE_LICENSE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.INCENTIVE_LICENSE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/incentive-licenses/:id/edit" element={
-                    <ProtectedRoute requiredRole="INCENTIVE_LICENSE_MANAGER">
+                    <ProtectedRoute requiredRole={ROLES.INCENTIVE_LICENSE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* Ledger */}
                 <Route path="/ledger-upload" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_UPLOAD_ROLES}>
                         <AdminLayout><LedgerUpload /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
                         <AdminLayout><LicenseLedger /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger/download-requests" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
                         <AdminLayout><LicenseDownloadRequests /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger/download-requests/:requestId" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
                         <AdminLayout><LicenseDownloadRequestDetail /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger/package-readiness/:jobId" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_PACKAGE_READINESS_ROLES}>
                         <AdminLayout><LicenseLedgerPackageReadiness /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger/:licenseId/:itemId" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
                         <AdminLayout><LicenseLedgerDetail /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/license-ledger/:licenseId" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
                         <AdminLayout><LicenseLedgerDetail /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* License Overview dashboard — replaces the old Balance Workspace */}
                 <Route path="/licenses/:id/overview" element={
-                    <ProtectedRoute requiredAnyRole={["LICENSE_MANAGER", "LICENSE_VIEWER", "BOE_MANAGER", "BOE_VIEWER", "TRADE_MANAGER", "TRADE_VIEWER"]}>
+                    <ProtectedRoute requiredAnyRole={LICENSE_OVERVIEW_ROLES}>
                         <AdminLayout><LicenseOverviewPage /></AdminLayout>
                     </ProtectedRoute>
                 } />
@@ -299,34 +315,34 @@ export default function AppRoutes() {
                     </ProtectedRoute>
                 } />
                 <Route path="/masters/:entity/create" element={
-                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/masters/:entity/:id/edit" element={
-                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
 
                 {/* Admin — Users */}
                 <Route path="/admin/users" element={
-                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
                         <AdminLayout><UserList /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/admin/users/create" element={
-                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
                         <AdminLayout><UserForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/admin/users/:id/edit" element={
-                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
                         <AdminLayout><UserForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/admin/activity-log" element={
-                    <ProtectedRoute requiredAnyRole={["USER_MANAGER"]}>
+                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
                         <AdminLayout><ActivityLog /></AdminLayout>
                     </ProtectedRoute>
                 } />

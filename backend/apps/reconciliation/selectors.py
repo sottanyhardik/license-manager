@@ -1,4 +1,4 @@
-# reconciliation/services/queries.py
+# reconciliation/selectors.py
 """
 Detection queries for the BOE / Invoice Reconciliation panel (Phase 1).
 

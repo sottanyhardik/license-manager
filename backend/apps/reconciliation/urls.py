@@ -2,7 +2,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ReconciliationViewSet
+from .api.views import ReconciliationViewSet
 
 app_name = "reconciliation"
 

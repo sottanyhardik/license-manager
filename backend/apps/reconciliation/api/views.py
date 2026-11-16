@@ -1,4 +1,4 @@
-# reconciliation/views.py
+# reconciliation/api/views.py
 """
 Read-only detection endpoints (one action per "tab") plus a small set of
 auditable write actions for the BOE / Invoice Reconciliation panel
@@ -29,8 +29,9 @@ from apps.license.models import LicenseImportItemsModel
 from apps.trade.models import LicenseTrade
 from apps.trade.services.trade_service import stamp_boe_invoice_from_trade
 
-from .models import ReconciliationLog, ReconciliationNote
-from .services import queries as reconciliation_queries
+from .. import selectors as reconciliation_queries
+from ..models import ReconciliationLog, ReconciliationNote
+from .serializers import _serialize_log
 
 
 class ReconciliationResultsPagination(PageNumberPagination):
@@ -42,23 +43,6 @@ class ReconciliationResultsPagination(PageNumberPagination):
 
 def _actor(request):
     return request.user if request.user and request.user.is_authenticated else None
-
-
-def _serialize_log(row: ReconciliationLog) -> dict:
-    return {
-        "id": row.id,
-        "action": row.action,
-        "trade_id": row.trade_id,
-        "invoice_number": row.trade.invoice_number if row.trade_id and row.trade else None,
-        "bill_of_entry_id": row.bill_of_entry_id,
-        "bill_of_entry_number": row.bill_of_entry.bill_of_entry_number if row.bill_of_entry_id and row.bill_of_entry else None,
-        "license_item_id": row.license_item_id,
-        "before": row.before,
-        "after": row.after,
-        "reason": row.reason,
-        "user": row.user.username if row.user_id and row.user else None,
-        "created_on": row.created_on,
-    }
 
 
 class ReconciliationViewSet(viewsets.ViewSet):

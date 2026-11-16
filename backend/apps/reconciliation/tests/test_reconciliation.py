@@ -30,7 +30,7 @@ from apps.reconciliation.models import (
     ReconciliationLog,
     ReconciliationNote,
 )
-from apps.reconciliation.services import queries as reconciliation_queries
+from apps.reconciliation import selectors as reconciliation_queries
 from apps.reconciliation.services.allocation_service import create_invoice_boe_allocation
 
 User = get_user_model()

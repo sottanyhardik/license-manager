@@ -117,3 +117,18 @@ tooling is approved, and every migration must re-run them before and after.
 - **The previous local dataset is preserved**, both in the verified dump `~/lm_backups/local_lmanagement_pre_modernization_20261116.dump` and in the clone DB `lmanagement_restore_verify_20261116`.
 - Sections 1–4 describe the **pre-incident** dataset. All balance findings (35 negative licences, 13 engine mismatches, 3 stale balances) refer to it, not to the current live DB.
 - Work paused pending owner confirmation of which dataset is authoritative.
+
+## 7. Stale LicenseBalance refresh — executed 2026-11-16 ~17:20 IST (owner-authorised)
+
+- Target: live `lmanagement` @ localhost:5432 (PG 18.7, oid 934718, not a replica). This is the 4th dataset of the day (synced 17:10 by `db-tools.sh`): 222 licences, 566 trades, 310,808 rows. Owner instruction: "use the current configured live database as the source of truth". It is a local development copy, not production.
+- Pre-write backup: `~/lm_backups/live4_lmanagement_pre_refresh_20261116.dump` (sha256 `b98d335d…dcee42`), restore-verified into `lmanagement_restore_verify_live4_20261116` with 0 mismatches. Before CSV: `balance_before_refresh_live4_20261116.csv`.
+- Method: the app's own `manage.py update_balance_cif` (financial engine, `save(update_fields=["balance_cif"])`). DB oid was re-checked immediately before the write.
+- Result:
+  - Stale rows: 71 → **0**.
+  - 72 rows changed. 62 now hold their true negative value; before this refresh they were floored at 0.
+  - Total stored balance went from 17,549,529.64 to 1,214,033.91. The drop comes from negatives no longer being hidden.
+- Integrity:
+  - Only `license_licensebalance` changed.
+  - Row counts are identical in all 119 tables.
+  - The LicenseBalance PK set is identical.
+- Rollback: restore the dump into a new DB, or reapply the values from the before CSV.

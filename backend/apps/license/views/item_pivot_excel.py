@@ -61,6 +61,7 @@ class ItemPivotExcelMixin:
                 fixed = ["SR NO", "DFIA NO", "EXPIRY DT", "EXPORTER", "TOTAL CIF", "DEBITED CIF", "ALLOTTED CIF", "PLANNED CIF", "BALANCE CIF"]
                 headerFill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
                 headerFont = Font(bold=True, size=11)
+                sheet = None  # stays None when no group matched the filters
                 for group_index, group in enumerate(report_data["groups"], 1):
                     notification_num = group['notification_number'] or 'Pivot'
                     safe_notification = notification_num[:24].replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace(':', '-').replace('[', '-').replace(']', '-')
@@ -182,7 +183,8 @@ class ItemPivotExcelMixin:
                     notification_rows = _item_summary_rows_from_matrix(group)
                     _write_item_summary_table(sheet, summaryStartRow, summaryTitle, notification_rows, _item_summary_subtotal(notification_rows), headerFont, headerFill)
 
-                _fit_sheet_columns(sheet)
+                if sheet is not None:
+                    _fit_sheet_columns(sheet)
 
                 # ``_Summary`` keeps this additive sheet distinct from the
                 # existing per-notification matrix sheets for consumers that

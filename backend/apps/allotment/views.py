@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from apps.accounts.permissions import AllotmentPermission
 from apps.allotment.models import AllotmentModel
 from apps.allotment.serializers import AllotmentSerializer
+from apps.allotment.services.audit_service import record_allotment_deleted
 from apps.allotment.views_export import add_grouped_export_action
 from apps.core.constants import ROW_TYPE_CHOICES
 from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
@@ -380,6 +381,7 @@ def destroy_allotment(self, request, pk=None):
         # Get object directly from model without filters
         with transaction.atomic():
             allotment = AllotmentModel.objects.get(pk=pk)
+            record_allotment_deleted(allotment, getattr(request, 'user', None))
             allotment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     except AllotmentModel.DoesNotExist:

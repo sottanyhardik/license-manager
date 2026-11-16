@@ -133,14 +133,26 @@ class MasterViewSet(viewsets.ModelViewSet):
             return False
         return mds_active_for(model)
 
+    @staticmethod
+    def _has_field(model, name) -> bool:
+        """True when ``model`` has a concrete ``name`` field (or model is unknown,
+        which keeps the historical always-inject behaviour)."""
+        if model is None:
+            return True
+        try:
+            model._meta.get_field(name)
+        except Exception:  # noqa: BLE001 - FieldDoesNotExist
+            return False
+        return True
+
     def perform_create(self, serializer):
         """Attach created_by when possible; route to MDS when the cutover is on."""
         user = getattr(self.request, "user", None)
+        model = self._serializer_model(serializer)
         extra = {}
-        if user and getattr(user, "is_authenticated", False):
+        if user and getattr(user, "is_authenticated", False) and self._has_field(model, "created_by"):
             extra["created_by"] = user
 
-        model = self._serializer_model(serializer)
         if self._mds_active(model):
             # MDS is the write authority: persist -> push to MDS -> reflect back
             # into the local mirror. A 503 (MDS down) rolls back the local write.
@@ -156,11 +168,11 @@ class MasterViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         """Attach modified_by when possible; route to MDS when the cutover is on."""
         user = getattr(self.request, "user", None)
+        model = self._serializer_model(serializer)
         extra = {}
-        if user and getattr(user, "is_authenticated", False):
+        if user and getattr(user, "is_authenticated", False) and self._has_field(model, "modified_by"):
             extra["modified_by"] = user
 
-        model = self._serializer_model(serializer)
         if self._mds_active(model):
             from apps.core.mds_write import save_through_mds
             save_through_mds(serializer, extra_save_kwargs=extra)

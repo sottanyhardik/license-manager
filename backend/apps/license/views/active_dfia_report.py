@@ -351,7 +351,7 @@ def add_active_dfia_report_action(viewset_class):
             }
 
             # Wastage CIF (10% of balance)
-            wastage_cif = float(live_balance) * 0.10
+            wastage_cif = float(max(live_balance, Decimal('0'))) * 0.10  # CAP clamp
             license_data['wastage_cif'] = wastage_cif
 
             # Add to grouped structure

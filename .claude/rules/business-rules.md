@@ -39,13 +39,15 @@ permissions unchanged · reconciliation workflows untouched unless the task is a
 Tests that pin this: `backend/apps/license/tests/test_balance_calculator.py`,
 `test_balance_ledger_views.py`, `test_balance_excel_export.py` — run them for any change here.
 
-## KNOWN OPEN DECISION — do not resolve unilaterally
+## DECIDED 2026-11-16 — negative balances are shown, with an over-use flag
 
-Both engines currently **floor the result at 0** (`return balance if balance >= DEC_0 else DEC_0`),
-which conflicts with "preserve negative balances / flag over-utilisation". The two engines
-also differ from the 5-line rule above (customs engine has no billed term). Until the
-product owner decides, agents must: not change the floor, not merge the engines, and
-report the discrepancy if their task touches it. Tracked in `.claude/memory/decisions.md`.
+Product owner decision: licence-level CIF balances (`calculate_balance*`, `calculate_customs_balance*`,
+`calculate_all_components`, `_calculate_financial_balance*`) return the **signed** value, never floored at 0.
+Responses carry an additive `is_over_utilised` flag. Callers that use the balance as a **cap** for new
+allotments/plans clamp locally to `max(balance, 0)`, so allocation and planning behaviour is unchanged.
+"Exhausted" checks are `<= 0`. Item-level availability floors (`ItemBalanceCalculator`) are unchanged.
+The two engines (customs vs financial) remain separate by design: the financial engine carries the billed
+term; do not merge them without an owner decision.
 
 ## Mandatory for any change in these paths
 

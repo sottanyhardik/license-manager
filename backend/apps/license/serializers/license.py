@@ -833,10 +833,9 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         get_serializer_context`) and passes it via `self.context
         ['live_balance_map']`; fall back to the stored column only if no
         batch map was supplied (e.g. this serializer used outside that
-        viewset's `list`/`retrieve` flow). Clamp negatives to zero so this
-        matches the live calculator's semantics exactly (it returns
-        max(balance, 0)); the stored column can hold a negative-zero that
-        would otherwise serialize as '-0.00'."""
+        viewset's `list`/`retrieve` flow). The value is SIGNED (negative =
+        over-utilised, see `is_over_utilised`); only a negative-zero is
+        normalised to '0.00' so it never serializes as '-0.00'."""
         from decimal import Decimal
         live_map = self.context.get('live_balance_map')
         if live_map is not None:
@@ -845,7 +844,7 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             bal = obj.balance_cif
         if bal is None:
             return bal
-        return bal if bal > 0 else Decimal('0.00')
+        return Decimal('0.00') if bal == 0 else bal
 
     def __init__(self, *args, **kwargs):
         """
@@ -943,9 +942,9 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         from decimal import Decimal
 
         def _clamp(value):
-            # The live calculator can yield a negative-zero that serializes
-            # as '-0.00' — clamp to a plain zero.
-            if value is not None and value <= 0:
+            # Signed balance is preserved (negative = over-utilised); only a
+            # negative-zero is normalised so it never serializes as '-0.00'.
+            if value is not None and value == 0:
                 return Decimal('0.00')
             return value
 
@@ -967,6 +966,13 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             rep['balance_cif'] = fresh
             if 'get_balance_cif' in rep:
                 rep['get_balance_cif'] = fresh
+
+        # Additive flag: licence-level balance_cif below zero.
+        try:
+            _bal = rep.get('balance_cif')
+            rep['is_over_utilised'] = bool(_bal is not None and Decimal(str(_bal)) < 0)
+        except Exception:
+            rep['is_over_utilised'] = False
 
         def walk(obj):
             if isinstance(obj, dict):

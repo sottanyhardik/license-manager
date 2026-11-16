@@ -1319,7 +1319,7 @@ class LicenseBalanceCalculator:
         `calculate_credit_for_licenses`, `calculate_boe_debit_total_for_licenses`,
         `calculate_allotment_for_licenses`.
 
-        Same formula/rounding/floor-at-0 as `calculate_balance` (see that
+        Same formula/rounding (signed, no floor) as `calculate_balance` (see that
         method's docstring): every id in `license_ids` gets an entry here —
         missing components simply contribute `DEC_0`, matching what a
         per-license `calculate_balance(license_obj)` call would have
@@ -1342,8 +1342,19 @@ class LicenseBalanceCalculator:
         for lid in ids:
             balance = credit.get(lid, DEC_0) - (boe_debit.get(lid, DEC_0) + allotment.get(lid, DEC_0))
             balance = quantize_2dp(balance)
-            result[lid] = balance if balance >= DEC_0 else DEC_0
+            result[lid] = balance
         return result
+
+    @staticmethod
+    def is_over_utilised(balance) -> bool:
+        """True when a licence-level CIF balance is negative (over-utilised)."""
+        return to_decimal(balance, DEC_0) < DEC_0
+
+    @staticmethod
+    def available_for_allocation(balance) -> Decimal:
+        """Clamp a signed licence balance to >= 0 for cap/availability/planning use."""
+        value = to_decimal(balance, DEC_0)
+        return value if value >= DEC_0 else DEC_0
 
     @classmethod
     def calculate_balance(cls, license_obj) -> Decimal:
@@ -1392,7 +1403,7 @@ class LicenseBalanceCalculator:
             license_obj: LicenseDetailsModel instance
 
         Returns:
-            Final balance as Decimal (minimum 0), quantized to 2 decimal places
+            Final balance as Decimal (signed; negative = over-utilised), quantized to 2 decimal places
         """
         credit = cls.calculate_credit(license_obj)
         boe_debit = cls.calculate_boe_debit_total(license_obj)
@@ -1400,7 +1411,7 @@ class LicenseBalanceCalculator:
 
         balance = credit - (boe_debit + allotment)
         balance = quantize_2dp(balance)
-        return balance if balance >= DEC_0 else DEC_0
+        return balance
 
     @classmethod
     def calculate_customs_balance(cls, license_obj) -> Decimal:
@@ -1419,7 +1430,7 @@ class LicenseBalanceCalculator:
             license_obj: LicenseDetailsModel instance
 
         Returns:
-            Customs Available Balance as Decimal (minimum 0), quantized to
+            Customs Available Balance as Decimal (signed; negative = over-utilised), quantized to
             2 decimal places.
         """
         credit = cls.calculate_credit(license_obj)
@@ -1428,7 +1439,7 @@ class LicenseBalanceCalculator:
 
         balance = credit - (boe_debit + allotment)
         balance = quantize_2dp(balance)
-        return balance if balance >= DEC_0 else DEC_0
+        return balance
 
     @classmethod
     def calculate_customs_balance_for_licenses(cls, license_ids) -> dict:
@@ -1451,7 +1462,7 @@ class LicenseBalanceCalculator:
                 boe_debit_map.get(lid, DEC_0) + hidden_map.get(lid, DEC_0) + allotment_map.get(lid, DEC_0)
             )
             balance = quantize_2dp(balance)
-            result[lid] = balance if balance >= DEC_0 else DEC_0
+            result[lid] = balance
         return result
 
     @classmethod
@@ -1479,7 +1490,7 @@ class LicenseBalanceCalculator:
             'credit': quantize_2dp(credit),
             'debit': quantize_2dp(debit),
             'allotment': quantize_2dp(allotment),
-            'balance': balance if balance >= DEC_0 else DEC_0,
+            'balance': balance,
         }
 
     @classmethod
@@ -1636,8 +1647,8 @@ class LicenseBalanceCalculator:
             license_obj: LicenseDetailsModel instance
 
         Returns:
-            Financial Available Balance as Decimal (minimum 0), quantized
-            to 2 decimal places — same floor-at-0/quantize convention as
+            Financial Available Balance as Decimal (signed; negative = over-utilised), quantized
+            to 2 decimal places — same signed/quantize convention as
             `calculate_balance`.
         """
         opening = cls.calculate_opening_balance(license_obj)
@@ -1648,7 +1659,7 @@ class LicenseBalanceCalculator:
 
         balance = opening + purchase_credit - sale_debit - boe_debit - allotment
         balance = quantize_2dp(balance)
-        return balance if balance >= DEC_0 else DEC_0
+        return balance
 
     @classmethod
     def calculate_financial_balance_for_licenses(cls, license_ids) -> dict:
@@ -1696,7 +1707,7 @@ class LicenseBalanceCalculator:
                 - allotment_map.get(lid, DEC_0)
             )
             balance = quantize_2dp(balance)
-            result[lid] = balance if balance >= DEC_0 else DEC_0
+            result[lid] = balance
         return result
 
 

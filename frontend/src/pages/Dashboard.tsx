@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import OverUtilisedBadge from "@/components/OverUtilisedBadge";
 import { cn } from "@/lib/utils";
 import { formatDashboardDate } from "@/utils/dashboardDate";
 
@@ -55,6 +56,7 @@ type ExpiringLicence = {
     license_number: string;
     license_expiry_date?: string | null;
     balance_cif?: string | number | null;
+    is_over_utilised?: boolean | null;
     days_to_expiry?: number | null;
 };
 type C969LinkReviewRow = {
@@ -663,8 +665,8 @@ export default function Dashboard() {
                                                     lic.license_expiry_date
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2.5 text-right text-xs tabular-nums text-slate-900 dark:text-slate-100">
-                                                {displayMoney(lic.balance_cif)}
+                                            <td className={cn("px-4 py-2.5 text-right text-xs tabular-nums", Number(lic.balance_cif) < 0 ? "text-destructive" : "text-slate-900 dark:text-slate-100")}>
+                                                {displayMoney(lic.balance_cif)}<OverUtilisedBadge balance={lic.balance_cif} isOverUtilised={lic.is_over_utilised} />
                                             </td>
                                             <td className="px-4 py-2.5 text-right text-xs tabular-nums text-slate-900 dark:text-slate-100">
                                                 {days <= 0

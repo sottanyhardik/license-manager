@@ -417,11 +417,13 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         ]
         from apps.license.services.planning_tolerances import effective_planning_balance_cif
         raw_planning_balance = Decimal(str(instance.get_balance_cif or 0))
-        effective_planning_balance = effective_planning_balance_cif(raw_planning_balance)
+        _planner_balance = max(raw_planning_balance, Decimal('0'))  # CAP clamp
+        effective_planning_balance = effective_planning_balance_cif(_planner_balance)
         data['planning_balance_cif'] = {
             'raw_balance_cif': str(raw_planning_balance),
             'effective_balance_cif': str(effective_planning_balance),
-            'balance_cif_ignored_by_tolerance': raw_planning_balance != effective_planning_balance,
+            'balance_cif_ignored_by_tolerance': _planner_balance != effective_planning_balance,
+            'is_over_utilised': raw_planning_balance < Decimal('0'),
         }
         # Canonical gross-entitlement reconciliation for every planning
         # consumer.  Never derive "available" by subtracting only plans: BOE

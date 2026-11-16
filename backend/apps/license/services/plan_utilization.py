@@ -183,7 +183,10 @@ def plan_utilization_rows(
             group["splits"].extend(member_plan.get("splits", []))
 
     license_balance_cif = _dec(getattr(license_obj, "get_balance_cif", DEC_0), DEC_0)
-    effective_license_balance_cif = effective_planning_balance_cif(license_balance_cif)
+    # CAP: planner capacity never goes below 0 (negative licence = exhausted);
+    # the raw signed value stays visible as `license_balance_cif`.
+    planner_license_balance_cif = max(license_balance_cif, DEC_0)
+    effective_license_balance_cif = effective_planning_balance_cif(planner_license_balance_cif)
     rows: List[Dict[str, Any]] = []
     for key in order:
         group = groups[key]
@@ -254,7 +257,7 @@ def plan_utilization_rows(
             canonical_status = STATUS_FEASIBLE
             feasible = True
 
-        planner_cif_exhausted = effective_license_balance_cif == DEC_0
+        planner_cif_exhausted = effective_license_balance_cif <= DEC_0
         planner_quantity_exhausted = effective_available == DEC_000
         if effective_license_balance_cif < DEC_0 or effective_available < DEC_000:
             operational_status = "MANUAL_PLANNING_REQUIRED"
@@ -284,7 +287,7 @@ def plan_utilization_rows(
             "license_balance_cif": license_balance_cif,
             "effective_license_balance_cif": effective_license_balance_cif,
             "balance_cif_ignored_by_tolerance": (
-                license_balance_cif != effective_license_balance_cif
+                planner_license_balance_cif != effective_license_balance_cif
             ),
             "planner_cif_exhausted": planner_cif_exhausted,
             "planner_quantity_exhausted": planner_quantity_exhausted,

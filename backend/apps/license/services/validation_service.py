@@ -154,9 +154,9 @@ class LicenseValidationService:
                     f"{available_balance}, Required: {required}"
                 )
             if available_balance is None:
-                available_balance = license_obj.get_balance_cif
+                available_balance = max(license_obj.get_balance_cif, DEC_0)  # CAP clamp
         else:
-            available_balance = license_obj.get_balance_cif
+            available_balance = max(license_obj.get_balance_cif, DEC_0)  # CAP clamp
 
         if available_balance < required:
             return False, f"Insufficient balance. Available: {available_balance}, Required: {required}"

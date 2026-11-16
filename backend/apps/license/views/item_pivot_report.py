@@ -1449,7 +1449,7 @@ class ItemPivotReportView(APIView):
 
         # Calculate unit price if we have RUTILE balance qty >= 10, otherwise set to 0
         if rutile_total_balance_qty >= 10:
-            rutile_unit_price = float(balance_cif / rutile_total_balance_qty)
+            rutile_unit_price = float(max(balance_cif, Decimal('0')) / rutile_total_balance_qty)  # CAP clamp
         elif rutile_total_balance_qty > 0:
             rutile_unit_price = 0.0
 

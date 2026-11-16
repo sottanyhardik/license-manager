@@ -550,7 +550,7 @@ class LicenseDetailsModel(AuditModel):
 
     @cached_property
     def cif_value_balance_glass(self):
-        available_value = self.get_balance_cif
+        available_value = max(self.get_balance_cif, DEC_0)  # CAP: clamp (negative balance => 0 availability)
         soda_ash_qty = _to_decimal(self.get_modifiers_namely.get("available_quantity_sum") or DEC_000, DEC_000)
         titanium_qty = _to_decimal(self.get_other_special_additives.get("available_quantity_sum") or DEC_000, DEC_000)
         borax_qty = _to_decimal(self.get_glass_formers.get("borax") or DEC_000, DEC_000)
@@ -644,7 +644,7 @@ class LicenseDetailsModel(AuditModel):
         """
         Allocation engine using Decimal arithmetic.
         """
-        available_value = self.get_balance_cif
+        available_value = max(self.get_balance_cif, DEC_0)  # CAP: clamp (negative balance => 0 availability)
         if available_value <= _to_decimal("100"):
             return {
                 "cif_juice": DEC_0,
@@ -786,7 +786,7 @@ class LicenseDetailsModel(AuditModel):
         Returns decimals in the dict values.
         NOTE: Removed @cached_property to ensure fresh calculation after updates.
         """
-        available_value = self.get_balance_cif
+        available_value = max(self.get_balance_cif, DEC_0)  # CAP: clamp (negative balance => 0 availability)
         # Use total export CIF as credit for restriction calculations
         credit = _to_decimal(self._calculate_license_credit() or DEC_0, DEC_0)
 
@@ -1083,7 +1083,7 @@ class LicenseImportItemsModel(models.Model):
 
         # Percentage condition — pool-based shared limit.
         if cond.endswith("%"):
-            license_balance = LicenseBalanceCalculator.calculate_financial_balance(self.license)
+            license_balance = max(LicenseBalanceCalculator.calculate_financial_balance(self.license), DEC_0)  # CAP clamp
             from apps.license.services.condition_pool import remaining_for_condition
             remaining = remaining_for_condition(self.license, cond)
             if remaining is None:
@@ -1096,7 +1096,7 @@ class LicenseImportItemsModel(models.Model):
         from apps.license.services.balance_calculator import ItemBalanceCalculator
         if ItemBalanceCalculator.has_item_attributed_cif(self):
             return ItemBalanceCalculator.calculate_item_attributed_balance(self)
-        return LicenseBalanceCalculator.calculate_financial_balance(self.license)
+        return max(LicenseBalanceCalculator.calculate_financial_balance(self.license), DEC_0)  # CAP clamp
 
     @cached_property
     def license_expiry(self) -> Optional[date]:

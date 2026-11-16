@@ -449,7 +449,7 @@ class TestLicenseBalanceCalculator:
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
         assert result == Decimal("500.00")  # 1000 - (300 + 200)
 
-    def test_balance_clamped_to_zero_when_debit_exceeds_credit(self):
+    def test_balance_is_signed_negative_when_debit_exceeds_credit(self):
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("100.00")),
@@ -457,7 +457,8 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
         ):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
-        assert result == DEC_0
+        assert result == Decimal("-400.00")  # signed (approved 2026-11-16: no floor at 0)
+        assert LicenseBalanceCalculator.is_over_utilised(result) is True
 
     def test_balance_exact_zero_when_credit_equals_debits(self):
         mock_license = Mock()
@@ -505,7 +506,7 @@ class TestLicenseBalanceCalculator:
         assert result["allotment"] == Decimal("200.00")
         assert result["balance"] == Decimal("500.00")
 
-    def test_all_components_balance_is_zero_when_negative(self):
+    def test_all_components_balance_is_signed_negative_when_over_utilised(self):
         mock_license = Mock()
         with (
             patch.object(LicenseBalanceCalculator, "calculate_credit", return_value=Decimal("100.00")),
@@ -513,7 +514,7 @@ class TestLicenseBalanceCalculator:
             patch.object(LicenseBalanceCalculator, "calculate_allotment", return_value=Decimal("200.00")),
         ):
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
-        assert result["balance"] == DEC_0
+        assert result["balance"] == Decimal("-400.00")
 
 
 # ===========================================================================

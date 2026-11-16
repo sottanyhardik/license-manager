@@ -67,7 +67,7 @@ class ScopedSionPlanningService:
         if not rules:
             raise ScopedPlanningError(f"SION {sion.norm_class} has no active planning rules.")
         import_items = list(licence.import_license.prefetch_related("items").order_by("serial_number", "pk"))
-        budget = _d(licence.get_balance_cif)
+        budget = max(_d(licence.get_balance_cif), Decimal("0"))  # CAP clamp
         opening_cif = budget
         lines: list[dict[str, Any]] = []
         unresolved: list[dict[str, Any]] = []

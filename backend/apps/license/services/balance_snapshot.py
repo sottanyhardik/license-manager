@@ -34,6 +34,7 @@ def _empty_snapshot() -> Dict[str, Any]:
     return for an id with nothing to report (see `plan_reporting.py`)."""
     return {
         "balance_cif": DEC_0,
+        "is_over_utilised": False,
         "total_licence_cif": DEC_0,
         "debited_cif": DEC_0,
         "outstanding_allotted_cif": DEC_0,
@@ -240,6 +241,8 @@ def get_snapshot_bulk(license_ids) -> Dict[int, Dict[str, Any]]:
             # `customs_balance` below, for the reconciliation-only
             # consumers that deliberately need the two to stay distinct.
             "balance_cif": financial_balance,
+            # Additive: signed balance below zero == over-utilised licence.
+            "is_over_utilised": financial_balance < DEC_0,
             "total_licence_cif": credit_map.get(lid, DEC_0),
             "debited_cif": debit_map.get(lid, DEC_0),
             "outstanding_allotted_cif": allotment_map.get(lid, DEC_0),

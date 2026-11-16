@@ -10,6 +10,7 @@ import ConditionBadge from './ConditionBadge';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil, Plus } from "lucide-react";
+import OverUtilisedBadge from "./OverUtilisedBadge";
 import { buildLicenseEndpoint, formatFiniteDecimal, normalizeItemOptions, normalizeLicenseBalanceData, normalizeUsageData } from "./licenseBalanceHelpers";
 
 const normalizeArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
@@ -509,6 +510,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                     </td>
                                                     <td className="p-3 text-sm border-b border-border/50">
                                                         {formatFiniteDecimal(licenseData.balance_cif)}
+<OverUtilisedBadge balance={licenseData.balance_cif} isOverUtilised={licenseData.is_over_utilised} />
                                                     </td>
                                                     <td className="p-3 text-sm border-b border-border/50">
                                                         {licenseData.get_norm_class || '-'}
@@ -617,6 +619,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                             </td>
                                                             <td className="p-3 border-b border-border/50">
                                                                 {formatFiniteDecimal(licenseData.balance_cif)}
+<OverUtilisedBadge balance={licenseData.balance_cif} isOverUtilised={licenseData.is_over_utilised} />
                                                             </td>
                                                         </tr>
                                                         {expandedItem?.id === item.id && usageData && (

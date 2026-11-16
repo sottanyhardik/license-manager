@@ -381,9 +381,12 @@ class SionPlanningExecutionService:
         if company_id is not None and any(row.exporter_id != int(company_id) for row in licenses):
             raise CompanyIsolationError("One or more selected licenses belong to another company.")
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        live_balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
-            [row.pk for row in licenses]
-        )
+        live_balances = {
+            lid: max(val, Decimal("0"))  # CAP clamp
+            for lid, val in LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+                [row.pk for row in licenses]
+            ).items()
+        }
         # The live financial balance is the absolute planning budget.  History
         # reconciliation provides a second safety cap, but must never replace
         # the currently available CIF: a zero live balance cannot generate a

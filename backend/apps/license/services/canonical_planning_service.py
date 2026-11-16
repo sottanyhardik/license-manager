@@ -306,7 +306,7 @@ class CanonicalPlanningService:
             CanonicalPlanningService._assert_item_names_exist(normalized)
 
             # LIVE balance (Module 1). Never the cached balance_cif column.
-            opening_balance = quantize_cif(license_obj.get_balance_cif or DEC_0)
+            opening_balance = quantize_cif(max(license_obj.get_balance_cif or DEC_0, DEC_0))  # CAP clamp
 
             if not force_replan and CanonicalPlanningService._is_already_planned(
                 license_obj, opening_balance,

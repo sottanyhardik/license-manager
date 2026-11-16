@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import OverUtilisedBadge from "@/components/OverUtilisedBadge";
 import { openPdfPreview } from "../../../utils/pdfPreview";
 import { openDocument, openAuthedFile } from "../../../utils/documentDownload";
 import { saveFilterState } from "../../../utils/filterPersistence";
@@ -72,6 +73,7 @@ interface LicenseListItem {
     exporter_iec: string | null;
     get_norm_class: string | null;
     get_balance_cif: string | number | null;
+    is_over_utilised?: boolean | null;
     individual_item_cif_override?: boolean | null;
     latest_transfer: string | null;
     purchase_status_label: string | null;
@@ -1197,7 +1199,7 @@ const LicenseRow = memo(function LicenseRow({
                         </span>
                         {!expanded && (
                             <span className="text-sm font-bold tabular-nums text-foreground">
-                                Balance CIF <span className="ml-1">${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                Balance CIF <span className={cn("ml-1", Number(item.get_balance_cif) < 0 && "text-destructive")}>${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><OverUtilisedBadge balance={item.get_balance_cif} isOverUtilised={item.is_over_utilised} />
                             </span>
                         )}
                         <ChevronDown
@@ -1224,8 +1226,9 @@ const LicenseRow = memo(function LicenseRow({
                             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 Balance CIF
                             </div>
-                            <div className="mt-0.5 text-[22px] font-bold tabular-nums leading-none text-foreground">
+                            <div className={cn("mt-0.5 text-[22px] font-bold tabular-nums leading-none text-foreground", Number(item.get_balance_cif) < 0 && "text-destructive")}>
                                 ${Number(item.get_balance_cif || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <OverUtilisedBadge balance={item.get_balance_cif} isOverUtilised={item.is_over_utilised} className="ml-2 text-xs align-middle" />
                             </div>
                             <IndividualItemCifSwitch
                                 licenseId={item.id}

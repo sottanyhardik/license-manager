@@ -179,11 +179,11 @@ class LicenseFilterSet(BaseFilterSet):
         return queryset
 
     def filter_has_balance(self, queryset, name, value):
-        """Filter licenses with balance > 0."""
+        """Filter licenses with balance > 0 (False: exhausted, balance <= 0 incl. over-utilised)."""
         if value:
             return queryset.filter(balance__balance_cif__gt=0)
         else:
-            return queryset.filter(balance__balance_cif=0)
+            return queryset.filter(balance__balance_cif__lte=0)
 
     def filter_purchase_status(self, queryset, name, value):
         """Filter by single or comma-separated purchase status IDs or codes."""

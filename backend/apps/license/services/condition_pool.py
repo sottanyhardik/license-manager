@@ -326,7 +326,10 @@ def available_value_bulk_map(items) -> dict[int, Decimal]:
     # Financial Ledger formula — must match `available_value_calculated`'s
     # own `get_balance_cif` exactly (see this function's docstring: "keep
     # in lock-step... never duplicate the branching logic elsewhere").
-    balance_map = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids) if license_ids else {}
+    balance_map = {
+        lid: max(val, DEC_0)  # CAP clamp
+        for lid, val in LicenseBalanceCalculator.calculate_financial_balance_for_licenses(license_ids).items()
+    } if license_ids else {}
     pools_map = compute_condition_pools_bulk(license_ids) if license_ids else {}
     attributed_map = ItemBalanceCalculator.calculate_item_attributed_balances_for_items(items)
 

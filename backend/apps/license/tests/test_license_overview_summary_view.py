@@ -73,8 +73,12 @@ class LicenseOverviewSummaryViewTests(LicenseBalanceLedgerFixtureMixin, TestCase
         self.assertEqual(set(summary.keys()), {
             "total_boes", "total_allotments", "total_planned_cif",
             "total_cif", "total_debited_cif", "total_allotted_cif",
-            "total_balance_cif",
+            "total_balance_cif", "is_over_utilised",
         })
+        # Fixture debits 400 against no credit: over-utilised, balance is
+        # signed (-400, previously floored to 0).
+        self.assertIs(summary["is_over_utilised"], True)
+        self.assertEqual(float(summary["total_balance_cif"]), -400.0)
         self.assertEqual(summary["total_boes"], 1)
         self.assertEqual(summary["total_allotments"], 0)
         self.assertEqual(summary["total_planned_cif"], 0.0)

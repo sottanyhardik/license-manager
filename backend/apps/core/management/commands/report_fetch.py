@@ -112,7 +112,9 @@ def fetch_debited(import_item):
 
 def fetch_data(list_exclude, biscuit_list, bisc, conc_list, steel_other, namkeen_other, found_other, not_found):
     for dfia in list_exclude:
-        if dfia.get_balance_cif >= 0:
+        # Balances are signed since 2026-11-16; clamp so over-utilised licences stay
+        # included exactly as before (they used to be floored to 0).
+        if max(dfia.get_balance_cif, 0) >= 0:
             try:
                 if dfia.get_norm_class == 'E5':
                     dict_data = {

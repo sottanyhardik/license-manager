@@ -15,3 +15,11 @@ const normalizeArray = (value: unknown): any[] => Array.isArray(value) ? value :
 export function normalizeItemOptions(data: any) { return normalizeArray(data?.results).filter((item) => item && item.id != null && item.name != null).map((item) => ({ value: item.id, label: String(item.name) })); }
 export function normalizeUsageData(data: any) { return { boes: normalizeArray(data?.boes), allotments: normalizeArray(data?.allotments) }; }
 export function normalizeLicenseBalanceData(data: any) { return !data || typeof data !== "object" ? null : { ...data, export_license: normalizeArray(data.export_license), import_license: normalizeArray(data.import_license) }; }
+
+/** Licence-level over-utilisation: prefer the backend flag, else derive from a negative balance. */
+export function isLicenceOverUtilised(balance: unknown, flag?: boolean | null): boolean {
+    if (typeof flag === "boolean") return flag;
+    if (balance === null || balance === undefined || balance === "") return false;
+    const n = Number(balance);
+    return Number.isFinite(n) && n < 0;
+}

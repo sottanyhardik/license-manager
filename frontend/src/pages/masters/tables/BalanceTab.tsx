@@ -30,6 +30,7 @@ import Select from "react-select";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import OverUtilisedBadge from "@/components/OverUtilisedBadge";
 import api from "../../../api/axios";
 import ConditionBadge from "../../../components/ConditionBadge";
 
@@ -88,6 +89,7 @@ interface LicenseDetail {
     exporter_name?: string;
     port_name?: string;
     balance_cif?: number | string;
+    is_over_utilised?: boolean | null;
     purchase_status_label?: string;
     latest_transfer?: string;
     condition_sheet?: string | null;
@@ -359,8 +361,8 @@ export default function BalanceTab({
                         <tbody>
                             <tr className="bg-muted/40">
                                 <td className="px-4 py-2.5 text-sm text-foreground border-b border-border/50">{detail.purchase_status_label || "—"}</td>
-                                <td className="px-4 py-2.5 text-sm font-bold tabular-nums text-primary border-b border-border/50">
-                                    {fmtDec(detail.balance_cif)}
+                                <td className={cn("px-4 py-2.5 text-sm font-bold tabular-nums border-b border-border/50", Number(detail.balance_cif) < 0 ? "text-destructive" : "text-primary")}>
+                                    {fmtDec(detail.balance_cif)}<OverUtilisedBadge balance={detail.balance_cif} isOverUtilised={detail.is_over_utilised} />
                                 </td>
                                 <td className="px-4 py-2.5 text-sm text-foreground border-b border-border/50">{detail.latest_transfer || "—"}</td>
                             </tr>
@@ -432,8 +434,8 @@ export default function BalanceTab({
                                         <td className="px-3 py-2.5 text-right tabular-nums text-sm">
                                             {fmtDec(ex.cif_fc ?? ex.fob_fc)}
                                         </td>
-                                        <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold text-primary">
-                                            {fmtDec(detail.balance_cif)}
+                                        <td className={cn("px-3 py-2.5 text-right tabular-nums text-sm font-semibold", Number(detail.balance_cif) < 0 ? "text-destructive" : "text-primary")}>
+                                            {fmtDec(detail.balance_cif)}<OverUtilisedBadge balance={detail.balance_cif} isOverUtilised={detail.is_over_utilised} />
                                         </td>
                                     </tr>
                                 ))}

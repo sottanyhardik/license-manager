@@ -84,3 +84,8 @@
   context, Stop verification reminder. `migrate` now prompts (DB target unverifiable without secrets);
   bypass mode disabled. Owner preference: fast path + short report (Status/Changes/Tests/Remaining) —
   CLAUDE.md §2a. Docs: `docs/development-environment/`.
+- 2026-11-16 — **RESOLVED: negative CIF balances.** Owner: show negatives + `is_over_utilised` flag; cap consumers
+  clamp to ≥0; exhausted = `<= 0`; item-level floors unchanged. Also: local `lmanagement` DB is now a remote sync
+  (222 licences, with trades) — owner-confirmed working DB; the old 2,185-licence dataset is preserved in
+  `~/lm_backups/local_lmanagement_pre_modernization_20261116.dump`. Backups live in `~/lm_backups/` (outside repo).
+  Old "13 engine mismatches" were an artefact of trade-less data (customs engine has no billed term by design).

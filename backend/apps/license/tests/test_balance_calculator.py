@@ -227,7 +227,7 @@ class TestLicenseBalanceCalculator(TestCase):
             assert result == Decimal('500.00')  # 1000 - (300 + 200)
 
     def test_calculate_balance_zero(self):
-        """Should return zero when balance would be negative"""
+        """Over-utilised licence returns the SIGNED (negative) balance, not a 0 floor"""
         # Setup mock
         mock_license = Mock()
 
@@ -239,7 +239,8 @@ class TestLicenseBalanceCalculator(TestCase):
             result = LicenseBalanceCalculator.calculate_balance(mock_license)
 
             # Assert
-            assert result == DEC_0  # Should not return negative
+            assert result == Decimal('-400.00')  # signed; over-utilised
+            assert LicenseBalanceCalculator.is_over_utilised(result) is True
 
     def test_calculate_balance_exact_zero(self):
         """Should handle exact zero balance"""
@@ -275,7 +276,7 @@ class TestLicenseBalanceCalculator(TestCase):
             assert result['balance'] == Decimal('500.00')
 
     def test_calculate_all_components_negative_balance(self):
-        """Should return zero balance in components when negative"""
+        """Should return the signed (negative) balance in components when over-utilised"""
         # Setup mock
         mock_license = Mock()
 
@@ -287,7 +288,7 @@ class TestLicenseBalanceCalculator(TestCase):
             result = LicenseBalanceCalculator.calculate_all_components(mock_license)
 
             # Assert
-            assert result['balance'] == DEC_0
+            assert result['balance'] == Decimal('-400.00')
 
 
 class TestItemBalanceCalculator(TestCase):

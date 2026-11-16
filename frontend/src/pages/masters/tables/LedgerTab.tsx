@@ -45,6 +45,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import OverUtilisedBadge from "@/components/OverUtilisedBadge";
 import ConditionBadge from "../../../components/ConditionBadge";
 import api from "../../../api/axios";
 
@@ -121,6 +122,7 @@ interface ListItem {
     id: number;
     license_number: string;
     get_balance_cif: number | string | null;
+    is_over_utilised?: boolean | null;
     ledger_date: string | null;
     [key: string]: unknown;
 }
@@ -184,9 +186,9 @@ const MARKING_OPTIONS = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SummaryMetric({
-    label, value, sub, variant = "default", size = "sm",
+    label, value, sub, variant = "default", size = "sm", trailing,
 }: {
-    label: string; value: string; sub?: string;
+    label: string; value: string; sub?: string; trailing?: import("react").ReactNode;
     variant?: "default" | "primary" | "success" | "danger" | "muted";
     size?: "sm" | "lg";
 }) {
@@ -194,7 +196,7 @@ function SummaryMetric({
     return (
         <div>
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-            <div className={cn("mt-0.5 tabular-nums font-bold", cls, size === "lg" ? "text-2xl" : "text-sm")}>{value}</div>
+            <div className={cn("mt-0.5 tabular-nums font-bold", cls, size === "lg" ? "text-2xl" : "text-sm")}>{value}{trailing}</div>
             {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
         </div>
     );
@@ -664,7 +666,8 @@ export default function LedgerTab({ item, detail, loading }: LedgerTabProps) {
                 </div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-6">
                     <SummaryMetric label="License Value" value={fmtUsd(licenseValue)} />
-                    <SummaryMetric label="Balance CIF" value={fmtUsd(displayBalance)} variant="primary"
+                    <SummaryMetric label="Balance CIF" value={fmtUsd(displayBalance)} variant={displayBalance < 0 ? "danger" : "primary"}
+                        trailing={<OverUtilisedBadge balance={displayBalance} isOverUtilised={commonBalance ? item.is_over_utilised : undefined} className="ml-2 align-middle" />}
                         sub={commonBalance ? "shared across items" : undefined} />
                     <SummaryMetric label="BOE Utilized" value={fmtUsd(totalDebited)} variant="danger" />
                     <SummaryMetric label="Allotted" value={fmtUsd(totalAllotted)} variant="muted" />

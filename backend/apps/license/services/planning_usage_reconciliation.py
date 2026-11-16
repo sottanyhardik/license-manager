@@ -371,7 +371,7 @@ def reconcile_license_plans(license_id: int) -> dict:
         for plan in operational_snapshot_rows
     }
     effective_balance_cif = apply_operational_cif_ceiling(
-        [(plan, by_plan_id[plan.id]) for plan in plans], license_obj.get_balance_cif,
+        [(plan, by_plan_id[plan.id]) for plan in plans], max(license_obj.get_balance_cif, Decimal("0")),  # CAP clamp
     )
     # Presentation and persistence share the same gross-CIF cap.  Apply a
     # plan-specific CIF adjustment to percentage children only; quantities and

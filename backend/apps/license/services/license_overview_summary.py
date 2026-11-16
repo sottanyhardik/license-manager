@@ -144,6 +144,7 @@ def get_overview_counts(license_obj) -> Dict[str, Any]:
             "total_debited_cif": components["debit"],
             "total_allotted_cif": components["allotment"],
             "total_balance_cif": components["balance"],
+            "is_over_utilised": components["balance"] < DEC_0,
         },
     }
 

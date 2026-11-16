@@ -125,7 +125,7 @@ def add_license_balance_ledger_actions(viewset_class):
             reason=request.data.get('reason', ''),
             user=request.user,
         )
-        return Response({'balance_cif': float(new_balance)})
+        return Response({'balance_cif': float(new_balance), 'is_over_utilised': new_balance < 0})
 
     @action(detail=True, methods=['post'], url_path='ignore-warning')
     def ignore_warning(self, request, pk=None):

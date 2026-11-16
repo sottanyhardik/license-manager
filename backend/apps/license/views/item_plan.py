@@ -90,7 +90,7 @@ def _validate_plan_line_cap(item, planned_quantity, planned_cif_fc, *, exclude_p
         t=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
     )["t"]
     new_license_cif = existing_license_cif + planned_cif_fc
-    balance_cif = Decimal(str(license_obj.get_balance_cif or 0))
+    balance_cif = max(Decimal(str(license_obj.get_balance_cif or 0)), DEC_0)  # CAP clamp
     if new_license_cif > balance_cif:
         raise ValidationError({
             "planned_cif_fc": (

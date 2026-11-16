@@ -662,7 +662,6 @@ class LicenseBalanceLedgerBuilder:
         # never folded into THIS mismatch check).
         engine_balance = LicenseBalanceCalculator.calculate_financial_balance(license_obj)
         computed_balance = quantize_2dp(running)
-        computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
 
         # Phase 4E-D: Use canonical final balance if provided (CanonicalLedgerService)
         if canonical_data is not None:
@@ -700,6 +699,7 @@ class LicenseBalanceLedgerBuilder:
             'total_purchase_credit': total_purchase_credit,
             'total_trade_debit': total_trade_debit,
             'computed_balance': computed_balance,
+            'is_over_utilised': computed_balance < DEC_0,
             'engine_balance': engine_balance,
             'difference': difference,
             'mismatched': mismatched,
@@ -950,7 +950,6 @@ class LicenseBalanceLedgerBuilder:
         # this ledger's own total always includes them.
         engine_balance = LicenseBalanceCalculator.calculate_customs_balance(license_obj)
         computed_balance = quantize_2dp(running)
-        computed_balance = computed_balance if computed_balance >= DEC_0 else DEC_0
 
         difference = abs(computed_balance - engine_balance)
         mismatched = difference > TOLERANCE
@@ -975,6 +974,7 @@ class LicenseBalanceLedgerBuilder:
             'remaining_after_boe': remaining_after_boe,
             'total_pending_allotment_cif': total_pending_allotment_cif,
             'computed_balance': computed_balance,
+            'is_over_utilised': computed_balance < DEC_0,
             'engine_balance': engine_balance,
             'difference': difference,
             'mismatched': mismatched,
@@ -1262,6 +1262,7 @@ class LicenseBalanceLedgerBuilder:
 
         return {
             'financial_ledger_balance': financial_balance,
+            'is_over_utilised': financial_balance < DEC_0,
             'customs_ledger_balance': customs_balance,
             'balance_engine': engine_balance,
             # Informational — never part of `difference`/`matched` above.

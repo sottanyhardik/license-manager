@@ -332,9 +332,12 @@ class SionRulePlanningService:
             for row in UnitPriceModel.objects.all().only("name", "unit_price")
         }
         from apps.license.services.balance_calculator import LicenseBalanceCalculator
-        balances = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
-            [license_obj.pk for license_obj in licenses],
-        )
+        balances = {
+            lid: max(val, Decimal("0"))  # CAP clamp
+            for lid, val in LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+                [license_obj.pk for license_obj in licenses],
+            ).items()
+        }
         results, conflicts = [], []
         for license_obj in licenses:
             license_balance = balances.get(license_obj.pk, Decimal("0"))

@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Type
 from datetime import datetime
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F
 from django.http import HttpResponse
 from rest_framework import viewsets, permissions, filters
@@ -148,8 +148,10 @@ class MasterViewSet(viewsets.ModelViewSet):
             save_through_mds(serializer, extra_save_kwargs=extra)
             return
 
-        # Local-only (default): unchanged behavior.
-        serializer.save(**extra)
+        # Local-only (default): atomic so multi-row serializer writes
+        # (e.g. BOE + RowDetails + Allotment.is_boe) commit or roll back together.
+        with transaction.atomic():
+            serializer.save(**extra)
 
     def perform_update(self, serializer):
         """Attach modified_by when possible; route to MDS when the cutover is on."""
@@ -164,7 +166,8 @@ class MasterViewSet(viewsets.ModelViewSet):
             save_through_mds(serializer, extra_save_kwargs=extra)
             return
 
-        serializer.save(**extra)
+        with transaction.atomic():
+            serializer.save(**extra)
 
     def perform_destroy(self, instance):
         """Delete locally by default; when the cutover is on, delete on MDS first
@@ -184,7 +187,8 @@ class MasterViewSet(viewsets.ModelViewSet):
         from rest_framework.exceptions import ValidationError
 
         try:
-            instance.delete()
+            with transaction.atomic():
+                instance.delete()
         except ProtectedError as exc:
             referencing = sorted({obj._meta.label for obj in exc.protected_objects})
             raise ValidationError(

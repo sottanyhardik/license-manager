@@ -1,4 +1,5 @@
 # allotment/views.py
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -377,8 +378,9 @@ def destroy_allotment(self, request, pk=None):
     """
     try:
         # Get object directly from model without filters
-        allotment = AllotmentModel.objects.get(pk=pk)
-        allotment.delete()
+        with transaction.atomic():
+            allotment = AllotmentModel.objects.get(pk=pk)
+            allotment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     except AllotmentModel.DoesNotExist:
         return Response(

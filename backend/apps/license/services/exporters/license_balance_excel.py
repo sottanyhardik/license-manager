@@ -161,7 +161,7 @@ def build_balance_excel_unused(license_obj):
             current_row += 1
 
             # Item data
-            item_names = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else '-'
+            item_names = ', '.join(_nm) if (_nm := [i.name for i in item.items.all()]) else '-'
             hs_code_display = str(item.hs_code.hs_code if item.hs_code else '-')
 
             item_values = [
@@ -772,6 +772,15 @@ def _write_timeline_sheet(wb, events):
     ws.column_dimensions['J'].width = 40
     ws.freeze_panes = 'A3'
 
+def _import_items_with_names(license_obj):
+    """Import items with ``items`` prefetched (one query for all names).
+
+    Keeps an existing prefetch (bulk export) untouched; otherwise adds one.
+    """
+    if 'import_license' in getattr(license_obj, '_prefetched_objects_cache', {}):
+        return license_obj.import_license.all()
+    return license_obj.import_license.prefetch_related('items')
+
 
 def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summary, reconciliation):
     """
@@ -833,8 +842,8 @@ def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summ
     summary_rows = []
     total_cif = 0.0
 
-    for item in license_obj.import_license.all():
-        item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+    for item in _import_items_with_names(license_obj):
+        item_name = ', '.join(_nm) if (_nm := [i.name for i in item.items.all()]) else (item.description or '-')
 
         _usage = get_item_usage(item)
         boes = _usage['boes']
@@ -1328,7 +1337,7 @@ def build_bulk_balance_excel(request):
         total_cif_inr = 0.0
 
         for item in license_obj.import_license.all():
-            item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+            item_name = ', '.join(_nm) if (_nm := [i.name for i in item.items.all()]) else (item.description or '-')
 
             # Previous-owner "hidden" BOEs (genuinely hidden per audit
             # trail) are excluded — this bulk export is a balance/
@@ -1432,7 +1441,7 @@ def build_bulk_balance_excel(request):
             _plan_map = {}
             _plan_source = ''
         for _item in license_obj.import_license.all():
-            _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+            _key = ', '.join(_nm) if (_nm := sorted([i.name for i in _item.items.all()])) else (_item.description or '-')
             _avail = float(_item.available_quantity or 0)
             _bal_agg[_key]['qty'] += _avail
             _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)

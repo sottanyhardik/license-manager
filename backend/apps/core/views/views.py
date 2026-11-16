@@ -1,4 +1,5 @@
 from django.db import models as dj_models
+from django.db.models import Prefetch
 from rest_framework import serializers
 
 from apps.accounts.permissions import CompanyPermission
@@ -473,6 +474,35 @@ ItemNameViewSet = MasterViewSet.create_viewset(
             "ordering": ["group__name", "name"]
         }
     ),
+)
+
+# Read-path N+1 fixes (query count independent of page size). The factory builds
+# ``queryset = model.objects.order_by("pk")``; swap in an equivalent queryset
+# that also prefetches what the serializers read per row.
+SionNormClassViewSet.queryset = (
+    SionNormClassModel.objects
+    .select_related("head_norm")
+    .prefetch_related(
+        "export_norm",
+        Prefetch("import_norm", queryset=SIONImportModel.objects.select_related("hsn_code")),
+        "notes",
+        "conditions",
+    )
+    .order_by("pk")
+)
+ItemNameViewSet.queryset = (
+    ItemNameModel.objects
+    .select_related("group", "sion_norm_class")
+    .prefetch_related(
+        "norms",
+        # DB-ordered (collation-identical) list for ``norm_details``.
+        Prefetch(
+            "norms",
+            queryset=SionNormClassModel.objects.order_by("norm_class"),
+            to_attr="_norms_by_class",
+        ),
+    )
+    .order_by("pk")
 )
 
 TransferLetterViewSet = MasterViewSet.create_viewset(

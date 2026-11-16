@@ -17,6 +17,15 @@ from apps.license.services.license_balance_ledger_builder import (
     split_invoice_numbers,
 )
 
+def _import_items_with_names(license_obj):
+    """Import items with ``items`` prefetched (one query for all names).
+
+    Keeps an existing prefetch (bulk export) untouched; otherwise adds one.
+    """
+    if 'import_license' in getattr(license_obj, '_prefetched_objects_cache', {}):
+        return license_obj.import_license.all()
+    return license_obj.import_license.prefetch_related('items')
+
 
 def _format_invoice_list(invoice_numbers):
     return ', '.join(invoice_numbers) if invoice_numbers else '-'
@@ -779,9 +788,9 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
         ]))
         elements.append(import_section_header)
 
-        for item in license_obj.import_license.all():
+        for item in _import_items_with_names(license_obj):
             # Main item data
-            item_names = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else '-'
+            item_names = ', '.join(_nm) if (_nm := [i.name for i in item.items.all()]) else '-'
 
             # Get HS code label
             hs_code_display = str(item.hs_code.hs_code if item.hs_code else '-')
@@ -1052,8 +1061,8 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
     _cond_pools = _ccp(license_obj)
 
     _bal_agg = defaultdict(lambda: {'qty': 0.0, 'total_qty': 0.0, 'sr_ids': [], 'description': '', 'hs_code': '', 'condition_type': '', 'qty_by_cond': {}})
-    for _item in license_obj.import_license.all():
-        _key = ', '.join(sorted([i.name for i in _item.items.all()])) if _item.items.exists() else (_item.description or '-')
+    for _item in _import_items_with_names(license_obj):
+        _key = ', '.join(_nm) if (_nm := sorted([i.name for i in _item.items.all()])) else (_item.description or '-')
         _avail = float(_item.available_quantity or 0)
         _bal_agg[_key]['qty'] += _avail
         _bal_agg[_key]['total_qty'] += float(_item.quantity or 0)
@@ -1069,7 +1078,7 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
         _bal_agg[_key]['qty_by_cond'][_ct] = _bal_agg[_key]['qty_by_cond'].get(_ct, 0.0) + _avail
 
     for item in license_obj.import_license.all():
-        item_name = ', '.join([i.name for i in item.items.all()]) if item.items.exists() else (item.description or '-')
+        item_name = ', '.join(_nm) if (_nm := [i.name for i in item.items.all()]) else (item.description or '-')
 
         _usage = get_item_usage(item)
         boes = _usage['boes']

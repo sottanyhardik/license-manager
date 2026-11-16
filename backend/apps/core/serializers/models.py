@@ -310,6 +310,9 @@ class ItemNameSerializer(AuditSerializerMixin):
         # payload.  Keep it human-readable so the table shows ``E1, E5``
         # rather than JSON objects/descriptions.  ``norms`` remains the
         # structured writable list of IDs for the API and editor.
+        prefetched = getattr(obj, "_norms_by_class", None)
+        if prefetched is not None:
+            return ", ".join(n.norm_class for n in prefetched)
         return ", ".join(obj.norms.order_by("norm_class").values_list("norm_class", flat=True))
 
 

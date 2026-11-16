@@ -249,6 +249,9 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
     def get_actual_license_balance_cif(self, obj):
         # Canonical financial balance after actual BOE/allotment utilization,
         # before future planning projections.
+        balance_map = self.context.get("license_balance_cif_map")
+        if balance_map is not None and obj.license_id in balance_map:
+            return f"{Decimal(balance_map[obj.license_id] or 0):.2f}"
         return f"{Decimal(obj.license.get_balance_cif or 0):.2f}"
 
     def _reconciliation(self, obj):
@@ -377,15 +380,23 @@ class LicenseItemPlanSerializer(serializers.ModelSerializer):
         # ``stable_key`` is not populated on older rules.  Filtering NULL
         # stable keys alone groups every unrelated active rule together and
         # makes every such plan permanently display "Needs Rebuild".
-        candidates = SionPlanningRule.objects.filter(is_active=True)
+        # Active rules are loaded once per serializer context (one query per
+        # request) and matched in Python with the same predicates.
+        active = self.context.get("active_planning_rules")
+        if active is None:
+            active = list(SionPlanningRule.objects.filter(is_active=True))
+            self.context["active_planning_rules"] = active
         if rule.stable_key:
-            candidates = candidates.filter(stable_key=rule.stable_key)
-        else:
-            candidates = candidates.filter(
-                sion_id=rule.sion_id, name=rule.name,
-                priority=rule.priority, strategy=rule.strategy,
+            return any(
+                r.pk != obj.planning_rule_id and r.stable_key == rule.stable_key
+                for r in active
             )
-        return candidates.exclude(pk=obj.planning_rule_id).exists()
+        return any(
+            r.pk != obj.planning_rule_id
+            and r.sion_id == rule.sion_id and r.name == rule.name
+            and r.priority == rule.priority and r.strategy == rule.strategy
+            for r in active
+        )
 
     class Meta:
         model = LicenseItemPlan

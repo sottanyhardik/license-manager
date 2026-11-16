@@ -104,7 +104,10 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
     """Manage a licence's per-item utilization plan."""
     queryset = (
         LicenseItemPlan.objects
-        .select_related("import_item", "import_item__license", "item_name", "license")
+        .select_related(
+            "import_item", "import_item__license", "item_name", "license",
+            "planning_rule", "modified_by",
+        )
         .order_by("pk")
     )
     serializer_class = LicenseItemPlanSerializer
@@ -121,6 +124,32 @@ class LicenseItemPlanViewSet(viewsets.ModelViewSet):
             is_deleted=False,
             is_cancelled=False,
         )
+
+    def list(self, request, *args, **kwargs):
+        """List with the per-licence financial balance batched for the page.
+
+        ``actual_license_balance_cif`` used to call ``license.get_balance_cif``
+        per row. ``calculate_financial_balance_for_licenses`` is that same
+        calculation's batch sibling (same components, same quantisation).
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        rows = page if page is not None else list(queryset)
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        license_ids = {
+            row.license_id or row.import_item.license_id for row in rows
+        }
+        context = self.get_serializer_context()
+        context["license_balance_cif_map"] = (
+            LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+                sorted(license_ids)
+            )
+        )
+        serializer = self.get_serializer(rows, many=True, context=context)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         """Direct plan line creation is disabled. Use /planning page instead."""

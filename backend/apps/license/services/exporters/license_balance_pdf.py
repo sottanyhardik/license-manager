@@ -94,6 +94,9 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
     ROW_KIND_COLORS = {
         'opening': COLOR_OPENING, 'boe': COLOR_BOE,
         'allotment': COLOR_ALLOT, 'trade_purchase': COLOR_TRADE_PURCHASE, 'trade': COLOR_TRADE,
+        # Emitted by build_financial_ledger for licences with hidden BOEs (b0336adc);
+        # was missing, so the PDF raised KeyError for every such licence.
+        'previous_owner_utilisation': COLOR_OPENING,
     }
     child_cell_style = ParagraphStyle('fl_child_cell', parent=cell_style, textColor=colors.HexColor('#555555'))
     child_cell_style_r = ParagraphStyle('fl_child_cell_r', parent=child_cell_style, alignment=TA_RIGHT)

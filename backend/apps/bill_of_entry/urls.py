@@ -1,8 +1,8 @@
 from django.urls import path, include
 from rest_framework import routers
 
-from apps.bill_of_entry.views.boe import BillOfEntryViewSet
-from apps.bill_of_entry.views.parse_pdf import BOEPdfParseView
+from apps.bill_of_entry.api.views import BillOfEntryViewSet
+from apps.bill_of_entry.api.views_parse_pdf import BOEPdfParseView
 
 app_name = "bill_of_entry"
 

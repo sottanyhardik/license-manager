@@ -28,7 +28,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER, RowDetails
-from apps.bill_of_entry.serializers import BillOfEntrySerializer
+from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
 from apps.bill_of_entry.services.boe_service import (
     hide_boe, hide_boes_bulk, restore_boe, restore_boes_bulk,
 )

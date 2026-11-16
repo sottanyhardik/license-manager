@@ -226,7 +226,7 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
     from django.db import transaction as db_transaction
     from django.db.models import Q
     from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
-    from apps.bill_of_entry.serializers import BillOfEntrySerializer
+    from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
 
     if not source_boe_id:
         raise ValueError("source_boe_id is required")

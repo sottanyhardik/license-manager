@@ -142,8 +142,9 @@ def _workbook_for_export():
 def _excel_categories_for_licence(workbook, number):
     """Return {hsn: {category}} for the licence's row in whichever sheet holds it.
 
-    The category sits in row 1 at the first column of its span; later columns of
-    the same span are blank, so the last non-empty header to the left applies.
+    Layout (07c5c856 added the notification title row): row 1 title, row 2 product
+    category at the first column of its span (later columns of the span are blank,
+    so the last non-empty header to the left applies), row 3 field sub-headers.
     """
     for sheet in workbook.worksheets:
         for row in sheet.iter_rows(min_row=3, max_col=2):
@@ -152,10 +153,10 @@ def _excel_categories_for_licence(workbook, number):
             categories = {}
             current = None
             for col in range(10, sheet.max_column + 1):
-                header = sheet.cell(1, col).value
+                header = sheet.cell(2, col).value
                 if header:
                     current = header
-                if sheet.cell(2, col).value == "HSN CODE":
+                if sheet.cell(3, col).value == "HSN CODE":
                     hsn = sheet.cell(row[0].row, col).value
                     if hsn not in (None, ""):
                         categories.setdefault(str(hsn), set()).add(current)
@@ -230,13 +231,14 @@ def test_rutile_cell_carries_balance_cif_over_balance_qty(pivot_client, a3627_li
 def test_excel_rutile_block_has_unit_price_after_balance_qty(a3627_licences):
     workbook = _workbook_for_export()
     for sheet in workbook.worksheets:
-        rutile_cols = [c for c in range(10, sheet.max_column + 1) if sheet.cell(1, c).value == "RUTILE"]
+        rutile_cols = [c for c in range(10, sheet.max_column + 1) if sheet.cell(2, c).value == "RUTILE"]
         if not rutile_cols:
             continue
         start = rutile_cols[0]
-        labels = [sheet.cell(2, c).value for c in range(start, start + 14)]
-        assert labels[9] == "BALANCE QTY"
-        assert labels[10] == "UNIT PRICE"
+        # Row 2 = category header, row 3 = field sub-headers. Hidden fields drop out of
+        # a block, so assert adjacency rather than fixed offsets.
+        labels = [sheet.cell(3, c).value for c in range(start, start + 14)]
+        assert labels.index("UNIT PRICE") == labels.index("BALANCE QTY") + 1
         break
     else:
         raise AssertionError("no RUTILE block in the workbook")

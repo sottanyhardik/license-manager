@@ -44,7 +44,8 @@ describe("SequentialPackageDownloadManager", () => {
             { id: 1, licence_number: "0311051359", status: "completed", completed_at: "2026-08-28T12:00:01Z", filename: "0311051359.pdf", download_url: "/api/first", size: pdf.size, sha256: digest },
         ];
         manager.enqueue(items);
-        await new Promise(resolve => setTimeout(resolve, 40));
+        // Poll rather than sleep a fixed 40ms: that raced and flaked on a loaded machine.
+        await vi.waitFor(() => expect(manager.snapshot().downloaded).toEqual(["1", "2"]), { timeout: 2000 });
 
         expect(maximum).toBe(1);
         expect(vi.mocked(api.get)).toHaveBeenCalledTimes(2);

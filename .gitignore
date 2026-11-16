@@ -104,3 +104,6 @@ backend/DFIA_COPY/
 .env.local
 .env.*.local
 /logs/
+
+# Ledger parser test fixtures (synthetic data) must be tracked despite *.csv above
+!backend/tests/fixtures/ledgers/*.csv

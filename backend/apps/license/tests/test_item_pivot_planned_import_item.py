@@ -41,16 +41,18 @@ class CanonicalPivotSourceTests(TestCase):
         planned = self._item(2, "11010090", "Batch B", "200")
         LicenseItemPlan.objects.create(license=self.license, import_item=planned, item_name=self.name, planned_quantity=Decimal("150"), planned_cif_fc=Decimal("750"))
         cell = self._cell()
-        assert cell["hsn_code"] == "11010090"
-        assert cell["description"] == "Batch B"
-        source = cell["source_items"]
-        assert len(source) == 1
-        assert source[0]["import_item_id"] == planned.id
-        assert source[0]["serial_number"] == 2
-        assert source[0]["hsn_code"] == "11010090"
-        assert source[0]["description"] == "Batch B"
-        assert Decimal(source[0]["quantity"]) == Decimal("200")
-        assert Decimal(source[0]["available_quantity"]) == Decimal("200")
+        # 0a155e89/ff021e74: unplanned rows of the same product category merge into the
+        # planned cell; HSN/description are de-duplicated and comma-joined.
+        assert cell["hsn_code"] == "11010000, 11010090"
+        assert cell["description"] == "Batch A, Batch B"
+        by_id = {source["import_item_id"]: source for source in cell["source_items"]}
+        assert len(by_id) == 2
+        source = by_id[planned.id]  # the planned row stays individually traceable
+        assert source["serial_number"] == 2
+        assert source["hsn_code"] == "11010090"
+        assert source["description"] == "Batch B"
+        assert Decimal(source["quantity"]) == Decimal("200")
+        assert Decimal(source["available_quantity"]) == Decimal("200")
 
     def test_same_source_split_lines_sum_plan_pair_once(self):
         item = self._item(1, "04021010", "Milk", "100")
@@ -68,7 +70,7 @@ class CanonicalPivotSourceTests(TestCase):
             LicenseItemPlan.objects.create(license=self.license, import_item=item, item_name=self.name, planned_quantity=item.quantity, planned_cif_fc=item.quantity)
         cell = self._cell()
         assert cell["hsn_code"] == "39021000"
-        assert cell["description"] == ""
+        assert cell["description"] == "PP A, PP B"  # ff021e74: joined, not blanked
         assert {source["import_item_id"] for source in cell["source_items"]} == {first.id, second.id}
         assert Decimal(cell["plan_qty"]) == Decimal("300")
 

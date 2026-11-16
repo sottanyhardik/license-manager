@@ -2,12 +2,17 @@
 from unittest.mock import patch
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.accounts.permissions import LicensePermission
 from apps.core.models import HSCodeModel, PortModel, NotificationNumber, SchemeCode
-from apps.license.tests.conftest import SAMPLE_PDF_DATA
 
 User = get_user_model()
+
+
+def _pdf():
+    # parse_dfia_pdf is mocked; the view only needs a real multipart file part.
+    return SimpleUploadedFile('licence.pdf', b'%PDF-1.4 fake', content_type='application/pdf')
 
 
 class ParsePdfHSCodeAutoCreateTestCase(TestCase):
@@ -18,6 +23,9 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         self.user = User.objects.create_user('testuser', 'test@test.com', 'password123')
         self.user.is_staff = True
         self.user.save()
+        # ParsePdfView requires LicensePermission write role (LICENSE_MANAGER).
+        group, _ = Group.objects.get_or_create(name='LICENSE_MANAGER')
+        self.user.groups.add(group)
 
         self.client = Client()
         self.client.login(username='testuser', password='password123')
@@ -59,8 +67,7 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         # Parse the PDF with auto-create enabled
         response = self.client.post(
             '/api/licenses/parse-pdf/',
-            {'file': b'fake pdf'},
-            content_type='multipart/form-data'
+            {'file': _pdf()}
         )
 
         assert response.status_code == 200
@@ -107,8 +114,7 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         # Parse the PDF
         response = self.client.post(
             '/api/licenses/parse-pdf/',
-            {'file': b'fake pdf'},
-            content_type='multipart/form-data'
+            {'file': _pdf()}
         )
 
         assert response.status_code == 200
@@ -150,8 +156,7 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         # Parse with create_hs_code=false
         response = self.client.post(
             '/api/licenses/parse-pdf/',
-            {'file': b'fake pdf', 'create_hs_code': 'false'},
-            content_type='multipart/form-data'
+            {'file': _pdf(), 'create_hs_code': 'false'}
         )
 
         assert response.status_code == 200
@@ -194,8 +199,7 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         # First parse - should create HS code
         response1 = self.client.post(
             '/api/licenses/parse-pdf/',
-            {'file': b'fake pdf'},
-            content_type='multipart/form-data'
+            {'file': _pdf()}
         )
         assert response1.json()['hs_codes_created'] == 1
         created_hs_id = response1.json()['items'][0]['matched_hs_code_id']
@@ -203,8 +207,7 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         # Second parse (duplicate) - should NOT create another
         response2 = self.client.post(
             '/api/licenses/parse-pdf/',
-            {'file': b'fake pdf'},
-            content_type='multipart/form-data'
+            {'file': _pdf()}
         )
         assert response2.json()['hs_codes_created'] == 0
         assert response2.json()['items'][0]['matched_hs_code_id'] == created_hs_id
@@ -237,8 +240,7 @@ class ParsePdfHSCodeAutoCreateTestCase(TestCase):
         # Parse the PDF
         response = self.client.post(
             '/api/licenses/parse-pdf/',
-            {'file': b'fake pdf'},
-            content_type='multipart/form-data'
+            {'file': _pdf()}
         )
 
         assert response.status_code == 200

@@ -48,7 +48,7 @@ This file is kept for reference only and all tests are disabled.
     by accidentally reading the wrong column.
 """
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import pytest

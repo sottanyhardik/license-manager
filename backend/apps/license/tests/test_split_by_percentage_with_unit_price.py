@@ -10,9 +10,8 @@ Covers:
 - Multi-license allocation
 - Configuration persistence
 """
-import pytest
 from decimal import Decimal
-from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner, PlanningRow
+from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner
 
 
 class TestPercentageAllocationBasics:

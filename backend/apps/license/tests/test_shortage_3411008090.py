@@ -19,7 +19,6 @@ This test verifies:
 4. Protected Nut Products reserve
 5. Shortage tracking and reporting
 """
-import pytest
 from decimal import Decimal
 from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner
 

@@ -14,7 +14,7 @@ from openpyxl import load_workbook
 
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseItemPlan
 from apps.license.tests.test_item_pivot_excel_export import (
-    _download_excel, pivot_license, pivot_masters, superuser_client,
+    _download_excel, pivot_license, pivot_masters, superuser_client,  # noqa: F401  side-effect: pytest fixtures imported from sibling test module
 )
 
 

@@ -11,7 +11,6 @@ this app's tests) and adds a small allotment-side mixin for
 the Phase 1 detection-query tests this app already has.
 """
 
-import uuid
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError

@@ -22,7 +22,6 @@ make_item/make_boe/make_debit_row/make_sale_trade/make_trade_line) and
 `apps.reconciliation.services.allocation_service.create_invoice_boe_allocation`
 -- never reimplemented.
 """
-import uuid
 from decimal import Decimal
 
 from django.test import TestCase

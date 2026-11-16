@@ -3,9 +3,7 @@ Integration tests for backend API endpoints.
 Tests the complete flow of requests through views, serializers, and models.
 """
 import pytest
-from decimal import Decimal
 from datetime import date, timedelta
-from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 from rest_framework import status

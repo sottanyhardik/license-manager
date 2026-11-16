@@ -11,13 +11,12 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 logger = logging.getLogger(__name__)
 
 from apps.accounts.permissions import LicenseBalanceLedgerPermission, LicensePermission, LicenseReadOnlyPermission
-from apps.core.constants import SCHEME_CODE_CHOICES, \
-    NOTIFICATION_NORM_CHOICES, UNIT_CHOICES, \
+from apps.core.constants import UNIT_CHOICES, \
     CURRENCY_CHOICES
 from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
 from apps.core.filtersets import LicenseFilterSet
 from apps.core.views.master_view import MasterViewSet
-from apps.license.models import LicenseDetailsModel, LicenseDocumentModel
+from apps.license.models import LicenseDetailsModel
 from apps.license.serializers import LicenseDetailsSerializer, LicenseExportItemSerializer, LicenseImportItemSerializer, \
     LicenseDocumentSerializer
 from apps.license.api.serializers.license import IndividualItemCifOverrideSerializer
@@ -1019,7 +1018,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         Merge all license documents (LICENSE COPY + TRANSFER LETTER) into one PDF.
         Converts images to PDF if needed.
         """
-        from django.http import FileResponse, HttpResponse
+        from django.http import HttpResponse
         import io
         import os
         import logging
@@ -1080,7 +1079,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
                         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
                         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
                         from reportlab.lib.pagesizes import A4
-                        from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+                        from reportlab.lib.enums import TA_LEFT
                         import tempfile
 
                         # Read DOCX content using storage API

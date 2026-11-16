@@ -25,7 +25,6 @@ Coverage map (from FREEZE_GATE_CHECKLIST):
 import pytest
 
 from apps.core.sync.service import apply_sync_event, apply_sync_batch, get_changes_since
-from apps.core.sync.registry import get_entry
 
 
 SERVERS = ("server-A", "server-B", "server-C")

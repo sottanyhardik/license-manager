@@ -31,7 +31,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import traceback
 from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
@@ -41,7 +40,6 @@ from apps.core.models import CompanyModel, HSCodeModel, PortModel
 from apps.license.models import (
     LicenseDetailsModel,
     LicenseDocumentModel,
-    LicenseExportItemModel,
     LicenseImportItemsModel,
 )
 from apps.license.parsers.dfia_pdf import parse_dfia_pdf

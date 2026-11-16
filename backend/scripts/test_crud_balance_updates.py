@@ -11,9 +11,9 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lmanagement.settings')
 django.setup()
 
 from decimal import Decimal
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
-from apps.allotment.models import AllotmentModel, AllotmentItems
+from apps.license.models import LicenseDetailsModel
+from apps.bill_of_entry.models import RowDetails
+from apps.allotment.models import AllotmentItems
 
 def test_crud_updates_all_items():
     print("=" * 80)

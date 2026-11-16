@@ -16,7 +16,6 @@ Design:
 - Works for standard and split allocations
 """
 from django.db import transaction
-from django.core.exceptions import ValidationError
 from apps.core.models import ItemNameModel
 from apps.license.models import SionPlanningRule
 

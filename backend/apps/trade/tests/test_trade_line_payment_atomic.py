@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from django.urls import reverse
 
-from apps.trade.models import LicenseTradeLine, LicenseTradePayment
+from apps.trade.models import LicenseTradePayment
 from apps.trade.views import TradeLineViewSet, TradePaymentViewSet
 
 

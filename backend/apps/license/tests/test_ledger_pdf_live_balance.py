@@ -6,15 +6,11 @@ balance()` live, matching every other module. This replaces the legacy
 `build_dfia_ledger_detail` function (removed in Phase 4E-F).
 """
 from decimal import Decimal
-from unittest.mock import patch
 
 from django.test import TestCase
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
-from rest_framework.test import APIClient
 
-from apps.license.models.core import LicenseBalance
-from apps.license.services.balance_calculator import LicenseBalanceCalculator
 from apps.license.tests.test_balance_ledger_views import LicenseBalanceLedgerFixtureMixin
 
 
@@ -199,7 +195,6 @@ class CanonicalLedgerPdfSemanticParityTests(LicenseBalanceLedgerFixtureMixin, Te
         from apps.license.services.canonical_ledger_service import CanonicalLedgerService
         from apps.license.models import LicenseExportItemModel, LicenseImportItemsModel
         from apps.trade.models import LicenseTrade
-        from datetime import date
 
         company = self.make_company()
         license_obj = self.make_license(company)

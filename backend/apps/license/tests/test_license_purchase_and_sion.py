@@ -29,13 +29,9 @@ GOLDEN TEST CASE: License 0311055282
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from io import BytesIO
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.models import CompanyModel, PortModel, SionNormClassModel, HeadSIONNormsModel, ItemNameModel
 from apps.license.models import (

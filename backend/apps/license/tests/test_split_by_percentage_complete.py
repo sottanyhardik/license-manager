@@ -15,7 +15,6 @@ Verifies:
 - Protected Nut Products CIF reserve
 - No shortage tracking/warnings
 """
-import pytest
 from decimal import Decimal
 from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner
 

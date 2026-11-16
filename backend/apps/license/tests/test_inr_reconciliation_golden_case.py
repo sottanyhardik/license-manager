@@ -18,7 +18,6 @@ import pytest
 from decimal import Decimal
 from datetime import date
 
-from django.test import TestCase
 from django.contrib.auth import get_user_model
 
 # Models

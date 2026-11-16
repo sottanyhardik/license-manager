@@ -12,7 +12,7 @@ from apps.core.models import (
 )
 from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel,
-    LicenseItemPlan, SionPlanningRule, SionPlanningUnitValueRow, SionPlanningPercentageRow,
+    LicenseItemPlan, SionPlanningRule, SionPlanningPercentageRow,
 )
 from apps.license.serializers.incentive import SionPlanningRuleSerializer
 

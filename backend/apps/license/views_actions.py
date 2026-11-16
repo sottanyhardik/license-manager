@@ -1,6 +1,5 @@
 # license/views_actions.py
 import logging
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import action
@@ -462,7 +461,6 @@ class LicenseActionViewSet(ViewSet):
             DGFT_PROXY,
             get_dgft_ownership_credentials,
         )
-        from django.conf import settings
 
         # Validate DGFT credentials are configured
         app_id, session_id, csrf_token, aws_alb = get_dgft_ownership_credentials()
@@ -489,7 +487,6 @@ class LicenseActionViewSet(ViewSet):
                 license_obj, max_retries=2, proxy=DGFT_PROXY, default_iec=default_iec,
             )
         except Exception as e:
-            import traceback
             logger.exception("Unexpected error in fetch_and_update_ownership")
             return Response(
                 {

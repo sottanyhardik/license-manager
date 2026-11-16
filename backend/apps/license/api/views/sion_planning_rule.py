@@ -14,7 +14,7 @@ from apps.core.models import ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseReplanRequest, SionInputAliasConfig, SionPlanningAction, SionPlanningProfile, SionPlanningRule
 from apps.license.serializers import SionPlanningRuleSerializer
 from apps.license.api.serializers.incentive import (
-    BulkLicensePlanningSerializer, LicenseIdOnlySerializer,
+    LicenseIdOnlySerializer,
 )
 from apps.license.services.canonical_planning_service import (
     CompanyIsolationError, PlanningError,

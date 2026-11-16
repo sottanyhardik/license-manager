@@ -15,8 +15,6 @@ Tests cover:
 import pytest
 from decimal import Decimal
 
-from django.contrib.auth.models import User
-from django.test import TestCase
 
 from apps.accounts.models import User as CustomUser
 from apps.allotment.models import AllotmentModel, AllotmentItems
@@ -27,8 +25,7 @@ from apps.license.models import (
     LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan,
 )
 from apps.license.services.license_plan_presentation import (
-    LicensePlanPresentationService, PlanRow, PlanLinePresentation,
-    LicensePlanPresentation,
+    LicensePlanPresentationService,
 )
 
 

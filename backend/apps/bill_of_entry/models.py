@@ -6,7 +6,6 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, DivisionByZero
 
 logger = logging.getLogger(__name__)
 
-from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Sum, DecimalField, Value

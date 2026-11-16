@@ -10,10 +10,9 @@ import pytest
 from decimal import Decimal
 
 from apps.core.models import (
-    HSCodeModel, ItemNameModel, SionNormClassModel, HeadSIONNormsModel
+    ItemNameModel, SionNormClassModel, HeadSIONNormsModel
 )
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, SionPlanningRule
-from apps.license.services.sion_rule_engine import SionRulePriorityService
+from apps.license.models import SionPlanningRule
 
 
 @pytest.fixture

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from io import BytesIO
 
 from django.apps import apps
 from django.core.files.base import ContentFile

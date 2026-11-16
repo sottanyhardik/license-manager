@@ -117,7 +117,6 @@ class LicenseLedgerViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['post'], url_path=r'download-requests/(?P<request_id>[^/.]+)/retry')
     def download_request_retry(self, request, request_id=None):
-        from apps.license.models import LicenseLedgerPackageItem
         from apps.license.services.ledger_package_recovery import licence_readiness
         job=self._owned_download_request(request, request_id)
         # A retry never bypasses missing evidence. It only requeues blockers

@@ -5,7 +5,6 @@ Generates transfer letters from DOCX templates and converts to PDF
 import os
 import shutil
 import subprocess
-import tempfile
 import time
 import uuid
 import logging

@@ -41,15 +41,10 @@ This test suite is parametrized to support:
 import uuid
 from datetime import date
 from decimal import Decimal
-from io import BytesIO
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.core.constants import DEBIT, CREDIT
 from apps.core.models import CompanyModel, PortModel
 from apps.license.models import (
     LicenseDetailsModel,

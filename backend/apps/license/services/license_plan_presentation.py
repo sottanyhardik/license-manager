@@ -49,13 +49,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from django.db.models import Prefetch, Sum, Value, DecimalField, Q
-from django.db.models.functions import Coalesce
 
 from apps.core.constants import DEC_0, DEC_000
 from apps.core.utils.decimal_utils import to_decimal
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseItemPlan
-from apps.license.services.plan_grouping import plan_group_key, group_ids_of
+from apps.license.services.plan_grouping import plan_group_key
 from apps.allotment.models import AllotmentItems
 
 logger = logging.getLogger(__name__)

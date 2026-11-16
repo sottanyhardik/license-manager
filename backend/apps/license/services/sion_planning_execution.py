@@ -400,10 +400,6 @@ class SionPlanningExecutionService:
     ):
         """Build a priority-waterfall strategy plan from saved configuration."""
         from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
-        from apps.license.services.canonical_planning_service import (
-            SplitPercentIncompleteError,
-            SplitPercentQuantityMismatchError,
-        )
 
         strategy_rules = validate_declarative_rules(strategy_rules)
         import_items = list(
@@ -1233,7 +1229,6 @@ class SionPlanningExecutionService:
         from apps.license.services.database_driven_sion_planner import (
             DatabaseDrivenPlanResult, PlanningRow, InvalidPlannerConfiguration
         )
-        from apps.license.models import SionPlanningRule
 
         # Get the configuration (rules)
         configuration = cls.resolve_configuration(sion)

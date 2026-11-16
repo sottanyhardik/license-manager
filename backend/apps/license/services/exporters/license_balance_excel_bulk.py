@@ -13,7 +13,6 @@ def build_bulk_balance_excel(request):
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from io import BytesIO
-    from decimal import Decimal as _Dec
     from collections import defaultdict
     from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
     from apps.allotment.models import AllotmentItems

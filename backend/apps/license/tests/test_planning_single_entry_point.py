@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.models import CompanyModel, HeadSIONNormsModel, SionNormClassModel
-from apps.license.models import LicenseItemPlan, SionPlanningRule, LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.models import LicenseItemPlan, LicenseDetailsModel, LicenseImportItemsModel
 
 User = get_user_model()
 

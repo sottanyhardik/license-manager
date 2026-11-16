@@ -8,10 +8,9 @@ from decimal import Decimal
 
 from apps.core.models import SionNormClassModel, ItemNameModel, HeadSIONNormsModel
 from apps.license.models import (
-    LicenseDetailsModel, SionPlanningRule, SionInputAliasConfig,
+    SionPlanningRule, SionInputAliasConfig,
 )
 from apps.license.services.sion_rule_resolver import SionRuleResolver
-from apps.core.constants import DEC_0
 
 
 @pytest.fixture

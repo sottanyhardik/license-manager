@@ -33,7 +33,6 @@ from apps.core.models import (
     SionNormClassModel,
     HeadSIONNormsModel,
 )
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 
 
 class CanonicalLedgerServiceTestBase(TestCase):

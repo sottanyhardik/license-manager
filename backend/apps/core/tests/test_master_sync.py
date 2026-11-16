@@ -15,18 +15,15 @@ Covers:
 - Batch ordering
 """
 import uuid
-from datetime import date
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 
 import pytest
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from apps.core.sync.registry import (
     get_entry, get_all_entries, get_model_labels, get_media_entries,
-    MASTER_SYNC_REGISTRY, MasterSyncEntry,
+    MASTER_SYNC_REGISTRY,
 )
-from apps.core.sync.mixins import deterministic_uid, MasterSyncMixin, media_sha256
+from apps.core.sync.mixins import deterministic_uid, media_sha256
 
 
 # ── Registry tests ──────────────────────────────────────────────────────
@@ -441,7 +438,6 @@ class TestDeltaPull:
         assert len(port_events) >= 1
 
     def test_get_changes_since_with_timestamp(self):
-        from apps.core.models import MasterChange
         from django.utils import timezone
         from datetime import timedelta
 

@@ -6,47 +6,47 @@ documents, incentive, ledger_jobs).  Every name that used to be importable from
 """
 from __future__ import annotations
 
-import uuid
-from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, Any, Optional
+import uuid  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from datetime import date  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from decimal import Decimal, ROUND_HALF_UP  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from typing import Dict, Any, Optional  # noqa: F401  re-export: facade module, names consumed via apps.license.models
 
-from django.conf import settings
-from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
-from django.core.exceptions import ValidationError
-from django.db import models, transaction
-from django.db.models import Count, Sum, DecimalField, Value, Q
-from django.db.models.functions import Coalesce
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.urls import reverse
-from django.utils import timezone
-from django.utils.functional import cached_property
+from django.conf import settings  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.core.exceptions import ValidationError  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.db import models, transaction  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.db.models import Count, Sum, DecimalField, Value, Q  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.db.models.functions import Coalesce  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.db.models.signals import post_save  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.dispatch import receiver  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.urls import reverse  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.utils import timezone  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from django.utils.functional import cached_property  # noqa: F401  re-export: facade module, names consumed via apps.license.models
 
-from apps.allotment.models import AllotmentItems
-from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
+from apps.allotment.models import AllotmentItems  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden  # noqa: F401  re-export: facade module, names consumed via apps.license.models
 # Removed: from bill_of_entry.tasks import update_balance_values_task
 # Now using direct synchronous balance updates for better performance
 from apps.core.constants import (
-    DEC_0,
-    DEC_000,
-    UNIT_CHOICES,
-    CURRENCY_CHOICES,
-    SCHEME_CODE_CHOICES,
-    NOTIFICATION_NORM_CHOICES,
-    GE,
-    KG,
-    USD,
-    ARO,
-    DEBIT,
+    DEC_0,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    DEC_000,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    UNIT_CHOICES,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    CURRENCY_CHOICES,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    SCHEME_CODE_CHOICES,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    NOTIFICATION_NORM_CHOICES,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    GE,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    KG,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    USD,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    ARO,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+    DEBIT,  # noqa: F401  re-export: facade module, names consumed via apps.license.models
 )
 # Local imports — keep lightweight at module import time
-from apps.core.models import AuditModel, InvoiceEntity, ItemNameModel
-from apps.core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept for compatibility
+from apps.core.models import AuditModel, InvoiceEntity, ItemNameModel  # noqa: F401  re-export: facade module, names consumed via apps.license.models
+from apps.core.models import PurchaseStatus, SchemeCode, NotificationNumber  # kept for compatibility  # noqa: F401  re-export: facade module, names consumed via apps.license.models
 # -----------------------------
 # Import centralized utilities
 # -----------------------------
-from apps.core.utils.decimal_utils import to_decimal as _to_decimal, round_decimal_down as round_down
+from apps.core.utils.decimal_utils import to_decimal as _to_decimal, round_decimal_down as round_down  # noqa: F401  re-export: facade module, names consumed via apps.license.models
 
 _D = Decimal  # shorthand
 

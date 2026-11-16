@@ -14,7 +14,7 @@ def null_all_export_items():
 
 
 def delete_all_items():
-    from django.db import models, connection
+    from django.db import connection
     from apps.core.models import ItemNameModel
     ItemNameModel.objects.all().delete()
     from apps.core.models import ItemHeadModel

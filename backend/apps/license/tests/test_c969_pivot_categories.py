@@ -10,7 +10,6 @@ import pytest
 from apps.core.models import HeadSIONNormsModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 from apps.license.services.c969_product_classifier import (
-    C969_CATEGORY_ORDER,
     C969_CLASSIFIER_ORDER,
     C969_GENERIC_CATEGORIES,
     NO_DESCRIPTION,

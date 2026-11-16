@@ -8,14 +8,13 @@ Shows per-license available_qty, planned_qty, remaining for each item.
 """
 
 from django.core.management.base import BaseCommand
-from django.db.models import Q, Sum, Prefetch
+from django.db.models import Prefetch
 from decimal import Decimal
 from datetime import timedelta
 from datetime import date
 
 from apps.license.models import LicenseDetailsModel, LicenseItemPlan, LicenseImportItemsModel
-from apps.core.models import ItemNameModel
-from apps.core.constants import GE, MI, CO, DEC_0, DEC_000
+from apps.core.constants import GE, MI, CO
 
 
 class Command(BaseCommand):

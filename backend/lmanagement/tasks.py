@@ -5,7 +5,6 @@ from celery import shared_task
 from django.db.models import Q
 
 from apps.bill_of_entry.scripts.boe import request_bill_of_entry, be_details
-from apps.core.models import PortModel
 from backend.scripts.dgft_shipping_bill import get_shipping_dgft_cookies, get_dgft_shipping_details
 from .celery import app
 

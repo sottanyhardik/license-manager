@@ -243,7 +243,6 @@ class ItemPivotRowMixin:
         # If a license has no persisted plan: show 0 / not planned.
         # This separates read paths (reports) from write paths (planning).
         from apps.license.models import LicenseItemPlan
-        from decimal import Decimal as _Decimal
 
         # `item_plan_data[item_name]` → {'planned_cif': float, 'unit_price': float, 'planned_import_items': [...]}
         item_plan_data: Dict[str, Dict[str, float]] = {}

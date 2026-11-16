@@ -5,12 +5,10 @@ Tests E126/E132 percentage cap calculations and SPLIT_BY_PERCENTAGE strategy.
 import pytest
 from decimal import Decimal
 
-from apps.core.models import SionNormClassModel, ItemNameModel, HeadSIONNormsModel
+from apps.core.models import SionNormClassModel, HeadSIONNormsModel
 from apps.license.models import (
-    LicenseDetailsModel, LicenseExportItemModel, SionPlanningRule, LicenseItemPlan,
+    LicenseDetailsModel, LicenseExportItemModel,
 )
-from apps.allotment.models import AllotmentModel, AllotmentItems
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.license.services.sion_product_classifier import (
     SionProductClassifier, CanonicalInput,
 )

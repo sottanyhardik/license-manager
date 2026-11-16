@@ -11,9 +11,6 @@ from decimal import Decimal
 import openpyxl
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.core.constants import GE
 from apps.core.models import CompanyModel, HeadSIONNormsModel, HSCodeModel, PurchaseStatus, SionNormClassModel

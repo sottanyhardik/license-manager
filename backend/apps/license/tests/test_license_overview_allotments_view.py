@@ -6,7 +6,6 @@ View-level tests for `GET .../overview-allotments/`
 Proves the endpoint is O(1) queries regardless of allotment count by
 asserting the SAME query count at 10 and 50 allotments.
 """
-import uuid
 from decimal import Decimal
 
 from django.test import TestCase

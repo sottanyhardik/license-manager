@@ -11,10 +11,8 @@ Returns breakdown: BOE qty/CIF, Allotment qty/CIF, relevant totals.
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, Any
 
-from django.db.models import Q, Sum, DecimalField
-from django.db.models.functions import Coalesce
 
-from apps.core.constants import DEC_0, DEC_000, DEBIT, CREDIT
+from apps.core.constants import DEC_0, DEC_000, DEBIT
 from apps.core.utils.decimal_utils import to_decimal
 from apps.bill_of_entry.models import RowDetails
 from apps.allotment.models import AllotmentItems

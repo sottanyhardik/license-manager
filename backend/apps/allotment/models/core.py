@@ -10,7 +10,6 @@ from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from django.urls import reverse
 from django.utils.functional import cached_property
 
 from apps.core.constants import (

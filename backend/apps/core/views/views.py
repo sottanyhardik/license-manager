@@ -1,6 +1,5 @@
 from django.db import models as dj_models
 from django.db.models import Prefetch
-from rest_framework import serializers
 
 from apps.accounts.permissions import CompanyPermission
 

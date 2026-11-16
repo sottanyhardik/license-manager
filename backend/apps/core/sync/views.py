@@ -26,7 +26,7 @@ from .models import (
     SyncConflictLog, SyncPeer, SyncCursor, MediaSyncTask, SyncEvent,
     SyncPeerDelivery,
 )
-from .registry import get_entry, get_all_entries, get_model_labels
+from .registry import get_entry, get_model_labels
 from .service import (
     apply_sync_batch,
     get_changes_since,
@@ -40,7 +40,6 @@ from .mixins import SERVER_ID
 from .serializers import (
     SyncPushSerializer,
     SyncBatchResultSerializer,
-    SyncPullRequestSerializer,
     DeleteCheckSerializer,
     DeleteCheckResultSerializer,
     SyncStatusSerializer,

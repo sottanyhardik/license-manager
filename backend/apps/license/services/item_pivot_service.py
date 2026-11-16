@@ -192,7 +192,7 @@ class ItemPivotService:
 
         # Load active SION planning rules so we can look up cif_restriction_percentage
         # per item.  We'll build a map: {sion_norm: {item_name_id: restriction_pct}}.
-        from apps.license.models import SionPlanningRule, SionPlanningUnitValueRow, SionPlanningPercentageRow
+        from apps.license.models import SionPlanningRule
         active_rules = list(
             SionPlanningRule.objects.filter(is_active=True)
             .select_related("sion")

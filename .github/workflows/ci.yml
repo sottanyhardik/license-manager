@@ -110,6 +110,9 @@ jobs:
       - name: Undefined-name lint (flake8 F821/F822/F823, backend/.flake8)
         run: flake8 .
 
+      - name: Unused-import lint (ruff F401, backend/ruff.toml)
+        run: ruff check .
+
       - name: App-level tests (all apps/**/tests)
         run: pytest apps --import-mode=importlib -p no:cacheprovider
 

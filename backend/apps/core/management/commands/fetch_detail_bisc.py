@@ -1,8 +1,6 @@
-from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Q
+from django.core.management.base import BaseCommand
 
 
-from apps.license.models import LicenseDetailsModel
 
 
 class Command(BaseCommand):

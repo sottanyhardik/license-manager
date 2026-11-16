@@ -5,7 +5,6 @@ import csv
 from io import StringIO
 
 from django.db import transaction
-from django.utils import timezone
 
 from apps.trade.models import LicenseTrade, LicenseTradeLine, SaleClassificationDecision
 

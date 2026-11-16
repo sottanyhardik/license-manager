@@ -50,6 +50,8 @@ gate_backend() {
   run "backend: migrations check" backend "$PY" manage.py makemigrations --check --dry-run
   run "backend: pytest tests/"    backend "$PY" -m pytest tests/ -p no:cacheprovider
   run "backend: flake8 (undefined names)" backend "$PY" -m flake8 .
+  if "$PY" -m ruff --version >/dev/null 2>&1; then RUFF=("$PY" -m ruff); elif command -v ruff >/dev/null 2>&1; then RUFF=(ruff); else RUFF=(); fi
+  if [ ${#RUFF[@]} -gt 0 ]; then run "backend: ruff (unused imports F401)" backend "${RUFF[@]}" check .; else skip "backend: ruff" "ruff not installed (pip install -r backend/requirements-test.txt)"; fi
   run "backend: app-level tests"  backend "$PY" -m pytest apps --import-mode=importlib -p no:cacheprovider
 }
 gate_mds() { # MDS has its own venv (separate CI job); restore PY for later gates.

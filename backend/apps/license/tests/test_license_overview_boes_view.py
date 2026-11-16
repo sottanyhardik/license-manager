@@ -8,7 +8,7 @@ the SAME query count at 10 and 50 BOEs (licenses can have 1000+ BOEs in
 production).
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 
 from django.test import TestCase

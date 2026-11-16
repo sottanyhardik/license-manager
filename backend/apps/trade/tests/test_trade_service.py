@@ -282,7 +282,6 @@ class LinkTradesTests(TestCase):
         )
 
     def test_link_two_trades(self):
-        from apps.trade.models import LicenseTrade
         t1 = self._make_trade("INV-001")
         t2 = self._make_trade("INV-002")
 
@@ -293,7 +292,6 @@ class LinkTradesTests(TestCase):
         self.assertEqual(t2.linked_trade_id, t1.pk)
 
     def test_unlink_trades(self):
-        from apps.trade.models import LicenseTrade
         t1 = self._make_trade("INV-003")
         t2 = self._make_trade("INV-004")
 
@@ -320,7 +318,6 @@ class LinkTradesTests(TestCase):
 
     def test_relinking_clears_old_partner(self):
         """If t1 was already linked to t2, linking t1 to t3 should clear t2's back-link."""
-        from apps.trade.models import LicenseTrade
         t1 = self._make_trade("INV-007")
         t2 = self._make_trade("INV-008")
         t3 = self._make_trade("INV-009")

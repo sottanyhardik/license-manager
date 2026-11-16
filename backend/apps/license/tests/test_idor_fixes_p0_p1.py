@@ -19,8 +19,6 @@ contract replaced their competing ledger calculations.  Their authorization
 requirements are asserted below against the supported collection/summary
 routes instead of preserving dead routes just for a test.
 """
-import pytest
-from django.test import TestCase
 from django.contrib.auth.models import Group
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
@@ -29,8 +27,8 @@ from decimal import Decimal
 
 from apps.accounts.models import User
 from apps.core.models import CompanyModel, PortModel
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, IncentiveLicense
-from apps.trade.models import LicenseTrade, LicenseTradeLine, IncentiveTradeLine
+from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.trade.models import LicenseTrade, LicenseTradeLine
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 
 

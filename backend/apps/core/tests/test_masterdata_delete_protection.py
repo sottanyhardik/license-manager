@@ -15,7 +15,6 @@ and that deleting a referenced row leaves unrelated licenses/ports/companies
 completely untouched.
 """
 from datetime import date
-from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model

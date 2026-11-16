@@ -11,13 +11,13 @@ name is re-exported here so existing imports / patches keep working.
 
 import hashlib
 import logging
-from collections import defaultdict
-from decimal import Decimal
-from typing import Dict, List, Any
+from collections import defaultdict  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
+from decimal import Decimal  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
+from typing import Dict, List, Any  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
 
-from django.db.models import Prefetch
+from django.db.models import Prefetch  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
 from django.core.cache import cache
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from apps.accounts.permissions import ReportPermission
@@ -25,16 +25,16 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.constants import DEC_0, DEC_000, GE, MI, CO
-from apps.core.models import ItemNameModel
+from apps.core.constants import DEC_0, DEC_000, GE, MI, CO  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
+from apps.core.models import ItemNameModel  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
 from apps.license.models import (
-    LicenseDetailsModel, LicenseImportItemsModel,
-    LicenseExportItemModel, LicenseTransferModel,
+    LicenseDetailsModel, LicenseImportItemsModel,  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
+    LicenseExportItemModel, LicenseTransferModel,  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
 )
 from apps.license.services.a3627_classifier import registry_version
 from apps.license.services.plan_grouping import (
-    merge_planned_import_items as _merge_planned_import_items,
-    merge_items_for_classification as _merge_items_for_classification,
+    merge_planned_import_items as _merge_planned_import_items,  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
+    merge_items_for_classification as _merge_items_for_classification,  # noqa: F401  re-export: facade module, names consumed via old view-module path/patches
 )
 from apps.license.api.views.item_report import _ExcelPassthroughRenderer
 from apps.license.api.views.item_pivot_helpers import (  # noqa: F401  (re-exports)

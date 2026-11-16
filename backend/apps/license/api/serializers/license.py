@@ -1,10 +1,10 @@
 # license/serializers.py
 from datetime import date, datetime, time
-from typing import Any, Dict, Iterable
+from typing import Any, Dict
 
 from rest_framework import serializers
 
-from apps.core.models import ItemNameModel, ProductDescriptionModel, SchemeCode, NotificationNumber
+from apps.core.models import ItemNameModel, SchemeCode, NotificationNumber
 from apps.core.serializers import HSCodeSerializer, SionNormClassNestedSerializer
 from apps.core.serializers.fields import IndianDateField
 from apps.license.api.serializers._license_write import LicenseWriteMixin  # write-path mixin
@@ -15,11 +15,6 @@ from apps.license.models import (
     LicenseDocumentModel,
     LicenseTransferModel,
     LicensePurchase,
-    IncentiveLicense,
-    LicenseBalance,
-    LicenseFlags,
-    LicenseNotes,
-    LicenseOwnership,
     LicenseItemPlan,
 )
 
@@ -672,7 +667,6 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         """
         Object-level validation with specific error messages.
         """
-        from django.core.exceptions import ValidationError as DjangoValidationError
         from rest_framework.exceptions import ValidationError
         import re
 

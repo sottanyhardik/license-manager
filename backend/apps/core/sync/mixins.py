@@ -22,7 +22,6 @@ from contextvars import ContextVar
 
 from django.conf import settings
 from django.db import models
-from django.utils import timezone
 
 
 def deterministic_uid(model_label: str, *key_parts: str) -> uuid.UUID:

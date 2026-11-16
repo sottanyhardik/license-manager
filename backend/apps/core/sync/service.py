@@ -16,7 +16,6 @@ All operations are idempotent: replaying the same event produces no change.
 from __future__ import annotations
 
 import logging
-import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
@@ -24,7 +23,6 @@ from typing import Any
 
 from django.apps import apps
 from django.db import models, transaction
-from django.db.models import ProtectedError
 from django.utils import timezone
 
 from apps.core.models import MasterChange

@@ -5,12 +5,12 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest import TestCase
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import Mock, patch
 
 from django.test import TestCase as DjangoTestCase
 
 from apps.core.constants import DEC_0, DEBIT
-from apps.core.models import CompanyModel, PortModel
+from apps.core.models import CompanyModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.bill_of_entry.models import BillOfEntryModel, OTH_INVOICE_MARKER, RowDetails
 from apps.trade.models import LicenseTrade, LicenseTradeLine

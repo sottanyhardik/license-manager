@@ -34,18 +34,16 @@ Golden Dataset Reference:
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
-from unittest.mock import Mock, patch, MagicMock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase as DjangoTestCase
 
-from rest_framework.test import APIClient
 
 from apps.core.constants import DEC_0
 from apps.core.models import CompanyModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
-from apps.trade.models import LicenseTrade, LicenseTradeLine
+from apps.bill_of_entry.models import BillOfEntryModel
+from apps.trade.models import LicenseTrade
 
 User = get_user_model()
 

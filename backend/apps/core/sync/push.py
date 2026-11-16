@@ -17,14 +17,10 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from django.conf import settings
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .models import SyncPeer, SyncCursor, SyncEvent, SyncPeerDelivery
-from .registry import get_entry
-from .service import get_changes_since, _serialize_instance, _get_model
-from .media import get_media_info
 from .mixins import SERVER_ID
 from .credentials import token_for_peer
 

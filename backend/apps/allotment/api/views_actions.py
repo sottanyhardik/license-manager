@@ -1,20 +1,11 @@
 # allotment/views_actions.py
 import logging
-from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
-from io import BytesIO
+from decimal import Decimal, InvalidOperation, ROUND_UP
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Q, Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response

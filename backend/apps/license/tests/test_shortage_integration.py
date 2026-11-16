@@ -3,7 +3,6 @@ Integration tests for shortage handling in complete Planning flow.
 
 Verifies end-to-end: configuration → allocation → shortage tracking → response.
 """
-import pytest
 from decimal import Decimal
 from apps.license.services.database_driven_sion_planner import DatabaseDrivenSionPlanner
 

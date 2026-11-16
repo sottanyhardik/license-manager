@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from django.db.models import DecimalField, Sum, Value
+from django.db.models import DecimalField, Sum
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.constants import DEC_0, DEC_000

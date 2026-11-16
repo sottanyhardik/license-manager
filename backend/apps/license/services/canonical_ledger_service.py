@@ -41,8 +41,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, List, Any
 from datetime import date as date_type
 
-from django.db.models import Q, Sum, Value, DecimalField, Prefetch
-from django.db.models.functions import Coalesce
+from django.db.models import Sum, Prefetch
 
 from apps.license.domain.transaction_semantics import (
     LEDGER_COLUMN_CREDIT,

@@ -314,7 +314,7 @@ dispatch_pending_license_replans = recover_pending_replan_requests
 @shared_task(name="license.enqueue_license_ledger_package", queue=QUEUE, acks_late=True, reject_on_worker_lost=True)
 def enqueue_license_ledger_package_job(job_pk: int, item_ids: list[int] | None = None) -> dict:
     """Fan out serialisable per-licence tasks after the job transaction commits."""
-    from apps.license.models import LicenseLedgerPackageItem, LicenseLedgerPackageJob
+    from apps.license.models import LicenseLedgerPackageItem
     query = LicenseLedgerPackageItem.objects.filter(job_id=job_pk, status=LicenseLedgerPackageItem.STATUS_QUEUED)
     if item_ids is not None:
         query = query.filter(pk__in=list(dict.fromkeys(int(value) for value in item_ids)))

@@ -3,7 +3,6 @@ Data migration script to create norm-specific item names
 Run this script to create new ItemNameModel entries for norm-specific items
 """
 
-from django.core.management import setup_environ
 import sys
 import os
 

@@ -11,7 +11,6 @@ All financial calculations are performed by CanonicalLedgerService; this module
 just presents the results to the client.
 """
 
-from decimal import Decimal
 from rest_framework import serializers
 
 

@@ -16,7 +16,6 @@ from decimal import Decimal
 from django.urls import reverse
 from rest_framework import status
 
-from apps.license.models import LicenseDetailsModel, IncentiveLicense
 from apps.license.services.canonical_ledger_service import CanonicalLedgerService
 
 

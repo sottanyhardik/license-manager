@@ -22,7 +22,7 @@ from apps.core.utils.decimal_utils import to_decimal
 # Module-level imports so tests can patch via
 # patch("apps.license.services.balance_calculator.LicenseExportItemModel") etc.
 from apps.license.models import LicenseExportItemModel
-from apps.bill_of_entry.models import RowDetails, OTH_INVOICE_MARKER, annotate_and_exclude_hidden
+from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
 from apps.allotment.models import AllotmentItems
 
 DECIMAL_CENT = Decimal("0.01")

@@ -55,8 +55,6 @@ def _build_financial_ledger_elements(license_obj, alloc_map):
 
     from apps.license.services.license_balance_ledger_builder import (
         LicenseBalanceLedgerBuilder, boe_external_invoice_map,
-        split_invoice_numbers, item_display_name,
-        boe_invoice_allocation_map, boe_row_invoice_numbers,
     )
 
     styles = getSampleStyleSheet()
@@ -614,9 +612,8 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.lib.enums import TA_CENTER
     import io
-    from datetime import date
     from apps.license.services.item_usage import get_item_usage
 
 
@@ -1054,8 +1051,6 @@ def build_balance_pdf_response(license_obj, request, show_hidden=False):
     # Pre-aggregate by item name across all sr numbers.
     from collections import defaultdict
     from decimal import Decimal as _Dec
-    from django.db.models import Sum as _Sum, DecimalField as _DF, Value as _Val
-    from django.db.models.functions import Coalesce as _Coalesce
 
     # New restriction model: condition_type on LicenseImportItemsModel is
     # the source of truth. %-conditions share a pool from compute_condition_pools();

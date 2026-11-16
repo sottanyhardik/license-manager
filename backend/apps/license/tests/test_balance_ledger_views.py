@@ -29,7 +29,7 @@ from apps.license.services.license_balance_ledger_builder import (
     LicenseBalanceLedgerBuilder,
     build_invoice_allocation_groups,
 )
-from apps.reconciliation.models import BOEAllotmentAllocation, ReconciliationLog
+from apps.reconciliation.models import ReconciliationLog
 from apps.reconciliation.services.allocation_service import (
     create_boe_allotment_allocation,
     create_invoice_boe_allocation,

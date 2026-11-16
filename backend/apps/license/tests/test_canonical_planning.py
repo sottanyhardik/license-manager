@@ -41,7 +41,6 @@ from apps.license.models import (
 from apps.license.services.canonical_planning_service import (
     CanonicalPlanningService,
     CompanyIsolationError,
-    InsufficientQuantityError,
     InvalidPlanInputError,
     LicenseMismatchError,
     LicenseNotFoundError,

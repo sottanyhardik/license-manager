@@ -11,9 +11,9 @@ Works generically for any SION norm and any number of inputs.
 from decimal import Decimal
 from typing import Dict, Optional
 
-from apps.core.models import SionNormClassModel, ItemNameModel
+from apps.core.models import SionNormClassModel
 from apps.license.models import (
-    LicenseDetailsModel, LicenseExportItemModel, SionPlanningRule, LicenseItemPlan
+    LicenseDetailsModel, LicenseExportItemModel, LicenseItemPlan
 )
 from apps.allotment.models import AllotmentItems
 from apps.bill_of_entry.models import RowDetails

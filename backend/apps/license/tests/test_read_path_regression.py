@@ -7,9 +7,8 @@ without invoking the planning engine, even when rules/profiles exist.
 This ensures that planning operations do not have side effects on read paths,
 and that all data consistency is maintained through persisted plans only.
 """
-from decimal import Decimal
 from django.test import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class ReadPathRegressionTest(TestCase):

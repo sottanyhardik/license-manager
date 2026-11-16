@@ -13,7 +13,6 @@ from shutil import make_archive
 from django.conf import settings
 from django.db.models import prefetch_related_objects
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
 

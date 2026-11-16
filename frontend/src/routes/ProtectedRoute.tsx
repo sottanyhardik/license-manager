@@ -1,11 +1,12 @@
 import React, {useContext} from "react";
 import {Navigate, useLocation} from "react-router-dom";
 import {AuthContext} from "../context/AuthContext";
+import type {Role} from "./authorizationRoles";
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
-    requiredRole?: string;
-    requiredAnyRole?: string[];
+    requiredRole?: Role;
+    requiredAnyRole?: readonly Role[];
     requireSuperuser?: boolean;
 }
 

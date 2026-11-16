@@ -17,6 +17,7 @@ import { masterEntities, reportEntities } from "../routes/config";
 import { REPORT_ROLES } from "../routes/authorizationRoles";
 import { Search } from "lucide-react";
 import Icon from "@/components/Icon";
+import { ALLOTMENT_ROLES, BOE_LIST_ROLES, LEDGER_READ_ROLES, LICENSE_ROLES, ROLES, TRADE_ROLES } from "../routes/authorizationRoles";
 
 // ── Command registry ──────────────────────────────────────────────────────────
 
@@ -31,14 +32,14 @@ interface CommandDef {
 
 const BASE_COMMANDS: CommandDef[] = [
     { id: "dashboard",      label: "Dashboard",          icon: "speedometer2",          path: "/dashboard",              group: "Navigation" },
-    { id: "licenses",       label: "Licenses",           icon: "file-earmark-text",     path: "/licenses",               group: "Navigation", roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"] },
-    { id: "allotments",     label: "Allotments",         icon: "box-seam",              path: "/allotments",             group: "Navigation", roles: ["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"] },
-    { id: "boe",            label: "Bill of Entries",    icon: "receipt",               path: "/bill-of-entries",        group: "Navigation", roles: ["BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE", "ACCOUNT_ACCESS"] },
-    { id: "trades",         label: "Trade In & Out",     icon: "arrow-left-right",      path: "/trades",                 group: "Navigation", roles: ["TRADE_MANAGER", "TRADE_VIEWER"] },
-    { id: "ledger",         label: "License Ledger",     icon: "journal-text",          path: "/license-ledger",         group: "Navigation", roles: ["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"] },
-    { id: "new-boe",        label: "New Bill of Entry",  icon: "plus-circle",           path: "/bill-of-entries/create", group: "Quick Create", roles: ["BOE_MANAGER"] },
-    { id: "new-allotment",  label: "New Allotment",      icon: "plus-circle",           path: "/allotments/create",      group: "Quick Create", roles: ["ALLOTMENT_MANAGER"] },
-    { id: "new-license",    label: "New License",        icon: "plus-circle",           path: "/licenses/create",        group: "Quick Create", roles: ["LICENSE_MANAGER"] },
+    { id: "licenses",       label: "Licenses",           icon: "file-earmark-text",     path: "/licenses",               group: "Navigation", roles: LICENSE_ROLES },
+    { id: "allotments",     label: "Allotments",         icon: "box-seam",              path: "/allotments",             group: "Navigation", roles: ALLOTMENT_ROLES },
+    { id: "boe",            label: "Bill of Entries",    icon: "receipt",               path: "/bill-of-entries",        group: "Navigation", roles: BOE_LIST_ROLES },
+    { id: "trades",         label: "Trade In & Out",     icon: "arrow-left-right",      path: "/trades",                 group: "Navigation", roles: TRADE_ROLES },
+    { id: "ledger",         label: "License Ledger",     icon: "journal-text",          path: "/license-ledger",         group: "Navigation", roles: LEDGER_READ_ROLES },
+    { id: "new-boe",        label: "New Bill of Entry",  icon: "plus-circle",           path: "/bill-of-entries/create", group: "Quick Create", roles: [ROLES.BOE_MANAGER] },
+    { id: "new-allotment",  label: "New Allotment",      icon: "plus-circle",           path: "/allotments/create",      group: "Quick Create", roles: [ROLES.ALLOTMENT_MANAGER] },
+    { id: "new-license",    label: "New License",        icon: "plus-circle",           path: "/licenses/create",        group: "Quick Create", roles: [ROLES.LICENSE_MANAGER] },
     { id: "profile",        label: "Profile",            icon: "person",                path: "/profile",                group: "Account" },
 ];
 

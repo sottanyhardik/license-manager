@@ -25,7 +25,7 @@ export interface AuthContextValue {
     updateUser: (user: AuthUser) => void;
     logout: (reason?: string) => Promise<void>;
     hasRole: (roleCode: string) => boolean;
-    hasAnyRole: (roleCodes: string[]) => boolean;
+    hasAnyRole: (roleCodes: readonly string[]) => boolean;
     isSuperAdmin: () => boolean;
     canManageUsers: () => boolean;
 }

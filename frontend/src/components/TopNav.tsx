@@ -3,7 +3,10 @@ import { Link, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { reportEntities, masterEntities } from "../routes/config";
-import { REPORT_ROLES } from "../routes/authorizationRoles";
+import {
+    ALLOTMENT_ROLES, BOE_LIST_ROLES, INCENTIVE_LICENSE_ROLES, LEDGER_READ_ROLES, LEDGER_UPLOAD_ROLES,
+    LICENSE_ROLES, RECONCILIATION_ROLES, REPORT_ROLES, ROLES, TRADE_ROLES, USER_ADMIN_ROLES,
+} from "../routes/authorizationRoles";
 import { ChevronDown, Gauge, Menu, Search, ShieldCheck, X } from "lucide-react";
 import Icon from "@/components/Icon";
 
@@ -17,21 +20,21 @@ const NAV_GROUPS = [
         label: "Licenses",
         icon: "file-earmark-text",
         items: [
-            { path: "/licenses",           label: "Licenses",           icon: "file-earmark-text", roles: ["LICENSE_MANAGER", "LICENSE_VIEWER"] },
-            { path: "/planning",           label: "Auto Plan",          icon: "diagram-3",          roles: ["LICENSE_MANAGER"] },
-            { path: "/incentive-licenses", label: "Incentive Licenses", icon: "award",              roles: ["INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER"] },
-            { path: "/license-ledger",     label: "License Ledger",     icon: "journal-text",       roles: ["LICENSE_MANAGER", "TRADE_MANAGER", "TRADE_VIEWER", "LEDGER_MANAGER"] },
-            { path: "/ledger-upload",      label: "Ledger Upload",      icon: "cloud-upload",       roles: ["LICENSE_MANAGER", "LEDGER_MANAGER"] },
+            { path: "/licenses",           label: "Licenses",           icon: "file-earmark-text", roles: LICENSE_ROLES },
+            { path: "/planning",           label: "Auto Plan",          icon: "diagram-3",          roles: [ROLES.LICENSE_MANAGER] },
+            { path: "/incentive-licenses", label: "Incentive Licenses", icon: "award",              roles: INCENTIVE_LICENSE_ROLES },
+            { path: "/license-ledger",     label: "License Ledger",     icon: "journal-text",       roles: LEDGER_READ_ROLES },
+            { path: "/ledger-upload",      label: "Ledger Upload",      icon: "cloud-upload",       roles: LEDGER_UPLOAD_ROLES },
         ],
     },
     {
         label: "Operations",
         icon: "arrow-left-right",
         items: [
-            { path: "/allotments",      label: "Allotments",     icon: "box-seam",         roles: ["ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER"] },
-            { path: "/bill-of-entries", label: "Bill of Entry",  icon: "receipt",          roles: ["BOE_MANAGER", "BOE_VIEWER", "TL_GENERATE", "ACCOUNT_ACCESS"] },
-            { path: "/trades",          label: "Trade In & Out", icon: "arrow-left-right", roles: ["TRADE_MANAGER", "TRADE_VIEWER"] },
-            { path: "/reconciliation",  label: "Reconciliation", icon: "check2-square",    roles: ["BOE_MANAGER", "TRADE_MANAGER", "ACCOUNT_ACCESS"] },
+            { path: "/allotments",      label: "Allotments",     icon: "box-seam",         roles: ALLOTMENT_ROLES },
+            { path: "/bill-of-entries", label: "Bill of Entry",  icon: "receipt",          roles: BOE_LIST_ROLES },
+            { path: "/trades",          label: "Trade In & Out", icon: "arrow-left-right", roles: TRADE_ROLES },
+            { path: "/reconciliation",  label: "Reconciliation", icon: "check2-square",    roles: RECONCILIATION_ROLES },
         ],
     },
 ];
@@ -297,7 +300,7 @@ export default function TopNav() {
                                 </li>,
                                 <li key="div1" role="separator" className="tb-nav-menu-divider" />,
                                 <MenuItem key="profile" to="/profile" icon="person" label="Profile" active={isPathActive("/profile")} />,
-                                ((isSuperAdmin && isSuperAdmin()) || (hasAnyRole && hasAnyRole(["USER_MANAGER"])))
+                                ((isSuperAdmin && isSuperAdmin()) || (hasAnyRole && hasAnyRole(USER_ADMIN_ROLES)))
                                     ? <MenuItem key="activity" to="/admin/activity-log" icon="journal-text" label="Activity Log" active={isPathActive("/admin/activity-log")} />
                                     : null,
                                 (isSuperAdmin && isSuperAdmin())

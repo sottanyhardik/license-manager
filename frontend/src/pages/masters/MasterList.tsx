@@ -32,6 +32,7 @@ import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Inbox, Layers, Loader2, MapPin, Network, Pencil, Plus, PlusCircle, Receipt, RefreshCw, Target, Trash2, TriangleAlert, X } from "lucide-react";
+import { ROLES } from '../../routes/authorizationRoles';
 
 type TradeListItem = {
     id: number;
@@ -111,20 +112,20 @@ export default function MasterList() {
     // Role-based write access per entity
     const {hasAnyRole, isSuperAdmin, hasRole} = useContext(AuthContext);
     const ENTITY_WRITE_ROLES = {
-        'licenses':           ['LICENSE_MANAGER'],
-        'allotments':         ['ALLOTMENT_MANAGER'],
-        'bill-of-entries':    ['BOE_MANAGER'],
-        'trades':             ['TRADE_MANAGER'],
-        'incentive-licenses': ['INCENTIVE_LICENSE_MANAGER'],
+        'licenses':           [ROLES.LICENSE_MANAGER],
+        'allotments':         [ROLES.ALLOTMENT_MANAGER],
+        'bill-of-entries':    [ROLES.BOE_MANAGER],
+        'trades':             [ROLES.TRADE_MANAGER],
+        'incentive-licenses': [ROLES.INCENTIVE_LICENSE_MANAGER],
     };
     // For known business entities: check the mapped write roles.
     // Master data is maintained by superusers and trusted user administrators.
     const canWrite = entityName in ENTITY_WRITE_ROLES
         ? hasAnyRole(ENTITY_WRITE_ROLES[entityName])
-        : isSuperAdmin() || hasRole('USER_MANAGER');
+        : isSuperAdmin() || hasRole(ROLES.USER_MANAGER);
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
-    const canEditInvoice = canWrite || hasRole('ACCOUNT_ACCESS');
+    const canEditInvoice = canWrite || hasRole(ROLES.ACCOUNT_ACCESS);
     const [error, setError] = useState("");
 
     // Pagination state

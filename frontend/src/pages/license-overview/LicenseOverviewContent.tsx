@@ -6,6 +6,7 @@ import PlanningEditor from "@/components/planning/PlanningEditor";
 import OverviewTab from "./OverviewTab";
 import ItemsTab from "./ItemsTab";
 import { useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
+import { ROLES } from "../../routes/authorizationRoles";
 
 export type LicenseOverviewContentTab = "overview" | "items" | "planning";
 
@@ -15,7 +16,7 @@ export default function LicenseOverviewContent({ licenseId, activeTab, mode }: {
     const summary = useLicenseOverviewSummary(licenseId, activeTab === "overview" || activeTab === "planning");
 
     if (activeTab === "planning") {
-        return <PlanningEditor licenseId={licenseId} licenseNumber={summary.data?.license_number || ""} balanceCif={summary.data?.balance_cif ? Number(summary.data.balance_cif) : 0} canWrite={hasRole("LICENSE_MANAGER")} />;
+        return <PlanningEditor licenseId={licenseId} licenseNumber={summary.data?.license_number || ""} balanceCif={summary.data?.balance_cif ? Number(summary.data.balance_cif) : 0} canWrite={hasRole(ROLES.LICENSE_MANAGER)} />;
     }
 
     if (activeTab === "items") {

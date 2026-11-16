@@ -1,6 +1,7 @@
 import React, {createContext, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import api, { AUTH_SESSION_EVENT_KEY, clearStoredAuth, publishAuthEvent, refreshAccessToken } from "../api/axios";
 import type { AuthContextValue, AuthUser, LoginResponse } from "../types";
+import { ROLES } from '../routes/authorizationRoles';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext<AuthContextValue>({
@@ -241,14 +242,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return Array.isArray(user?.roles) && user.roles.includes(roleCode);
     }, [user]);
 
-    const hasAnyRole = useCallback((roleCodes: string[]) => {
+    const hasAnyRole = useCallback((roleCodes: readonly string[]) => {
         if (user?.is_superuser) return true;
         if (!Array.isArray(user?.roles)) return false;
         return roleCodes.some(r => user.roles.includes(r));
     }, [user]);
 
     const canManageUsers = useCallback(
-        () => isSuperAdmin() || hasRole('USER_MANAGER'),
+        () => isSuperAdmin() || hasRole(ROLES.USER_MANAGER),
         [isSuperAdmin, hasRole],
     );
 

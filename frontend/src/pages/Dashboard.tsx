@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import OverUtilisedBadge from "@/components/OverUtilisedBadge";
 import { cn } from "@/lib/utils";
 import { formatDashboardDate } from "@/utils/dashboardDate";
+import { ALLOTMENT_ROLES, LICENSE_ROLES, ROLES, TRADE_ROLES } from "../routes/authorizationRoles";
 
 type LicenceStats = {
     total: number;
@@ -183,32 +184,16 @@ export default function Dashboard() {
     // Permission checks
     const canSeeAllotments =
         isSuperAdmin() ||
-        hasAnyRole([
-            "ALLOTMENT_MANAGER",
-            "ALLOTMENT_VIEWER",
-            "REPORT_VIEWER",
-        ]);
+        hasAnyRole([...ALLOTMENT_ROLES, ROLES.REPORT_VIEWER]);
     const canSeeBOE =
         isSuperAdmin() ||
-        hasAnyRole([
-            "BOE_MANAGER",
-            "BOE_VIEWER",
-            "ACCOUNT_ACCESS",
-            "TL_GENERATE",
-            "REPORT_VIEWER",
-        ]);
+        hasAnyRole([ROLES.BOE_MANAGER, ROLES.BOE_VIEWER, ROLES.ACCOUNT_ACCESS, ROLES.TL_GENERATE, ROLES.REPORT_VIEWER]);
     const canSeeLicenses =
         isSuperAdmin() ||
-        hasAnyRole([
-            "LICENSE_MANAGER",
-            "LICENSE_VIEWER",
-            "TRADE_MANAGER",
-            "TRADE_VIEWER",
-            "REPORT_VIEWER",
-        ]);
+        hasAnyRole([...LICENSE_ROLES, ...TRADE_ROLES, ROLES.REPORT_VIEWER]);
     const canCreateAllotments =
-        isSuperAdmin() || hasAnyRole(["ALLOTMENT_MANAGER"]);
-    const canCreateBOE = isSuperAdmin() || hasAnyRole(["BOE_MANAGER"]);
+        isSuperAdmin() || hasAnyRole([ROLES.ALLOTMENT_MANAGER]);
+    const canCreateBOE = isSuperAdmin() || hasAnyRole([ROLES.BOE_MANAGER]);
 
     // State
     const [loading, setLoading] = useState(true);

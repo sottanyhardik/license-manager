@@ -20,6 +20,7 @@ import FinancialLedgerTable from "./FinancialLedgerTable";
 import FinancialSummarySection from "./FinancialSummarySection";
 import FinalReconciliationSection from "./FinalReconciliationSection";
 import NoTradeActivityBanner from "./NoTradeActivityBanner";
+import { ROLES } from "../../routes/authorizationRoles";
 
 interface OverviewTabProps {
     licenseId: string | number | undefined;
@@ -48,12 +49,12 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
     const summaryQuery = useLicenseOverviewSummary(licenseId, isActive);
     const ledgerQuery = useLicenseBalanceLedger(isActive ? licenseId : undefined, showHiddenBoe);
 
-    const canRecalculate = hasRole("LICENSE_MANAGER");
+    const canRecalculate = hasRole(ROLES.LICENSE_MANAGER);
     // Purchase Status is a plain `LicenseDetailsModel` field (like any other
     // license field), so it's editable by the same role that can edit the
     // license itself, via the existing generic `PATCH licenses/{id}/`
     // endpoint — no new write endpoint needed.
-    const canEditPurchaseStatus = hasRole("LICENSE_MANAGER");
+    const canEditPurchaseStatus = hasRole(ROLES.LICENSE_MANAGER);
 
     const handlePurchaseStatusChange = async (value: unknown) => {
         if (!licenseId) return;
@@ -137,7 +138,7 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                     </div>
 
                     <div className="mt-3">
-                        <LicenseMetricsGrid summary={summary.summary} licenseId={licenseId ?? ""} override={summary.individual_item_cif_override} canWrite={hasRole("LICENSE_MANAGER")} />
+                        <LicenseMetricsGrid summary={summary.summary} licenseId={licenseId ?? ""} override={summary.individual_item_cif_override} canWrite={hasRole(ROLES.LICENSE_MANAGER)} />
                     </div>
                 </>
             )}

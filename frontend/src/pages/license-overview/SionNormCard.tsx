@@ -11,6 +11,7 @@ import { extractApiError } from "./licenseOverviewHelpers";
 import { licenseOverviewKeys } from "./useLicenseOverviewSummary";
 import { licenseSionNormKeys, useLicenseSionNorm } from "./useLicenseSionNorm";
 import InlineNormEditor from "./InlineNormEditor";
+import { ROLES } from "../../routes/authorizationRoles";
 
 interface SionNormCardProps {
     licenseId: string | number | undefined;
@@ -39,7 +40,7 @@ export default function SionNormCard({ licenseId, isActive }: SionNormCardProps)
     // Gate on role AND on there being an export row to attach a norm to —
     // creating one is out of scope, so with zero rows the edit affordance
     // must not appear at all.
-    const canEdit = hasRole("LICENSE_MANAGER") && !!primaryRow;
+    const canEdit = hasRole(ROLES.LICENSE_MANAGER) && !!primaryRow;
 
     const handleEditStart = () => {
         setSelectedId(currentNorm?.id ?? null);

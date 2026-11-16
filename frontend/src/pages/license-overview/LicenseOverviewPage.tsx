@@ -25,6 +25,7 @@ import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
 import ReplanStatus from "./ReplanStatus";
 import { autoPlanLicense } from "@/api/planningRuleApi";
+import { ROLES } from "../../routes/authorizationRoles";
 
 type TabId = "overview" | "boes" | "allotments" | "planning" | "items" | "invoice-ledger";
 type LicenseDocument = { id: number; type: string; file: string };
@@ -170,7 +171,7 @@ export default function LicenseOverviewPage() {
                 description={summary?.importer ?? undefined}
                 actions={
                     <>
-                        <PermissionGate role="LICENSE_MANAGER" anyRole={undefined}>
+                        <PermissionGate role={ROLES.LICENSE_MANAGER} anyRole={undefined}>
                             <Button size="sm" onClick={() => void handleAutoPlan()} disabled={isAutoPlanning}>
                                 {isAutoPlanning ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />}
                                 {isAutoPlanning ? "Planning…" : "Auto Plan"}
@@ -227,7 +228,7 @@ export default function LicenseOverviewPage() {
                             licenseId={id}
                             licenseNumber={summary?.license_number || ""}
                             balanceCif={summary?.balance_cif ? parseFloat(String(summary.balance_cif)) : 0}
-                            canWrite={hasRole("LICENSE_MANAGER")}
+                            canWrite={hasRole(ROLES.LICENSE_MANAGER)}
                             onSaved={refreshPlanningDependents}
                         />
                     )}

@@ -1,0 +1,274 @@
+# license/views/item_plan.py
+"""
+Read-only CRUD + bulk-upsert for per-import-item utilization plans (LicenseItemPlan).
+
+All plan line writes must be routed through the /planning page workflow.
+
+Endpoints (mounted under /api/):
+    GET    /api/license-item-plans/?license=<id>        list plan lines (read-only)
+    POST   /api/license-item-plans/                     DISABLED - use /planning page
+    PATCH  /api/license-item-plans/<id>/                DISABLED - use /planning page
+    DELETE /api/license-item-plans/<id>/                remove one line (delete split children)
+    POST   /api/license-item-plans/bulk-upsert/         create/update many lines (planning panel)
+    GET    /api/license-item-plans/planning-norms/     list norms for selected licenses (read-only)
+"""
+from decimal import Decimal
+
+from django.db import transaction
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
+
+from apps.accounts.permissions import LicensePermission
+from apps.license.models import (
+    LicenseDetailsModel,
+    LicenseImportItemsModel,
+    LicenseItemPlan,
+)
+from apps.license.serializers import LicenseItemPlanSerializer
+
+
+def _validate_plan_line_cap(item, planned_quantity, planned_cif_fc, *, exclude_plan_id=None):
+    """
+    Enforce the same capacity / CIF-pool caps `bulk_upsert` enforces (see its
+    docstring) for a SINGLE plan line created/edited via the plain CRUD
+    endpoints — the only write path that previously had no cross-line
+    validation at all (capacity + CIF pool are cross-line checks; see
+    `LicenseItemPlanSerializer`'s docstring).
+
+    Locks the licence and the item's plan-group rows for the duration of the
+    check (must be called inside `transaction.atomic()`) so two concurrent
+    requests against the same licence can't each read a stale total and
+    collectively overcommit it — mirrors `allocate_items`'s
+    `select_for_update` pattern in `apps/allotment/views_actions.py`.
+
+    `exclude_plan_id` excludes the row being edited from the "already
+    planned" sums so an update compares the NEW value against every OTHER
+    line for the group/licence, never the old value plus the new one.
+    """
+    from django.db.models import DecimalField, Sum, Value
+    from django.db.models.functions import Coalesce
+    from rest_framework.exceptions import ValidationError
+
+    from apps.core.constants import DEC_0, DEC_000
+    from apps.license.services.plan_enforcement import live_allotted_qty_for
+    from apps.license.services.plan_grouping import group_ids_of
+
+    planned_quantity = Decimal(str(planned_quantity or 0))
+    planned_cif_fc = Decimal(str(planned_cif_fc or 0))
+
+    license_obj = LicenseDetailsModel.objects.select_for_update().get(pk=item.license_id)
+
+    gids = group_ids_of(item)
+    group_items = LicenseImportItemsModel.objects.select_for_update().filter(id__in=gids)
+    avail_sum = sum(
+        (Decimal(str(it.available_quantity or 0)) for it in group_items), Decimal("0"),
+    )
+    capacity = live_allotted_qty_for(gids) + avail_sum
+
+    group_plans = LicenseItemPlan.objects.filter(import_item_id__in=gids)
+    if exclude_plan_id is not None:
+        group_plans = group_plans.exclude(pk=exclude_plan_id)
+    existing_group_qty = group_plans.aggregate(
+        t=Coalesce(Sum("planned_quantity"), Value(DEC_000), output_field=DecimalField()),
+    )["t"]
+    new_group_qty = existing_group_qty + planned_quantity
+    if new_group_qty > capacity:
+        raise ValidationError({
+            "planned_quantity": (
+                f"Planned quantity {new_group_qty} exceeds available capacity "
+                f"{capacity} for this item group (Quantity Exceeded)."
+            ),
+        })
+
+    license_plans = LicenseItemPlan.objects.filter(license_id=license_obj.pk)
+    if exclude_plan_id is not None:
+        license_plans = license_plans.exclude(pk=exclude_plan_id)
+    existing_license_cif = license_plans.aggregate(
+        t=Coalesce(Sum("planned_cif_fc"), Value(DEC_0), output_field=DecimalField()),
+    )["t"]
+    new_license_cif = existing_license_cif + planned_cif_fc
+    balance_cif = max(Decimal(str(license_obj.get_balance_cif or 0)), DEC_0)  # CAP clamp
+    if new_license_cif > balance_cif:
+        raise ValidationError({
+            "planned_cif_fc": (
+                f"Planned CIF total {new_license_cif:.2f} exceeds licence balance "
+                f"{balance_cif:.2f} (Value Exceeded)."
+            ),
+        })
+
+
+class LicenseItemPlanViewSet(viewsets.ModelViewSet):
+    """Manage a licence's per-item utilization plan."""
+    queryset = (
+        LicenseItemPlan.objects
+        .select_related(
+            "import_item", "import_item__license", "item_name", "license",
+            "planning_rule", "modified_by",
+        )
+        .order_by("pk")
+    )
+    serializer_class = LicenseItemPlanSerializer
+    permission_classes = [LicensePermission]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["license", "import_item"]
+
+    def _authorized_licenses(self):
+        return LicenseDetailsModel.objects.all()
+
+    def get_queryset(self):
+        return super().get_queryset().filter(
+            is_active=True,
+            is_deleted=False,
+            is_cancelled=False,
+        )
+
+    def list(self, request, *args, **kwargs):
+        """List with the per-licence financial balance batched for the page.
+
+        ``actual_license_balance_cif`` used to call ``license.get_balance_cif``
+        per row. ``calculate_financial_balance_for_licenses`` is that same
+        calculation's batch sibling (same components, same quantisation).
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        rows = page if page is not None else list(queryset)
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        license_ids = {
+            row.license_id or row.import_item.license_id for row in rows
+        }
+        context = self.get_serializer_context()
+        context["license_balance_cif_map"] = (
+            LicenseBalanceCalculator.calculate_financial_balance_for_licenses(
+                sorted(license_ids)
+            )
+        )
+        serializer = self.get_serializer(rows, many=True, context=context)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        """Direct plan line creation is disabled. Use /planning page instead."""
+        raise PermissionDenied(
+            "Plan lines can only be created through the /planning page using "
+            "bulk-upsert or via SionRulePlanningService. Direct POST is not allowed."
+        )
+
+    def update(self, request, *args, **kwargs):
+        """Direct plan line updates are disabled. Use /planning page instead."""
+        raise PermissionDenied(
+            "Plan lines can only be updated through the /planning page using "
+            "bulk-upsert or via SionRulePlanningService. Direct PATCH is not allowed."
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        """Remove an unused line or supersede one with immutable debit links.
+
+        ``AllotmentItems.plan_line`` is a ledger identity.  Deleting a used
+        split asks Django to set the FK to NULL, which can collide with another
+        split of the same item/allotment under the legacy NULL uniqueness rule.
+        A superseded row is no longer returned or allocatable, while its audit
+        relation remains intact.
+        """
+        instance = self.get_object()
+        from apps.allotment.models import AllotmentItems
+
+        if AllotmentItems.objects.filter(plan_line=instance).exists():
+            from apps.license.services.plan_lifecycle import PlanLifecycleService
+
+            PlanLifecycleService.transition(instance, "supersede")
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=["post"], url_path="bulk-upsert")
+    def bulk_upsert(self, request):
+        """Replace one license's manual plan through the canonical writer."""
+        from apps.license.services.canonical_planning_service import (
+            CanonicalPlanningService,
+            PlanningError,
+        )
+
+        license_id = request.data.get("license")
+        lines = request.data.get("lines", [])
+        if not license_id:
+            return Response({"error": "license is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(lines, list):
+            return Response({"error": "lines must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+
+        items_input = [{
+            "import_item_id": line.get("import_item"),
+            "item_name_id": line.get("item_name"),
+            "requested_quantity": line.get("planned_quantity", 0) or 0,
+            "unit_price": line.get("unit_price", 0) or 0,
+            "note": line.get("note", ""),
+        } for line in lines]
+        try:
+            result = CanonicalPlanningService.build_canonical_plan(
+                license_id=license_id,
+                items=items_input,
+                force_replan=True,
+                company_id=None,
+            )
+        except PlanningError as exc:
+            error = exc.as_dict()
+            if error["code"] == "LICENSE_NOT_FOUND":
+                http_status = status.HTTP_404_NOT_FOUND
+            elif error["code"] in ("COMPANY_MISMATCH", "LICENSE_MISMATCH"):
+                http_status = status.HTTP_403_FORBIDDEN
+            else:
+                http_status = status.HTTP_400_BAD_REQUEST
+            return Response(error, status=http_status)
+
+        response_lines = [{
+            "import_item": row["import_item_id"],
+            "item_name": row.get("item_name_id"),
+            "planned_quantity": row["allocated_quantity"],
+            "unit_price": row["unit_price"],
+            "planned_cif_fc": row["planned_cif_fc"],
+            "requested_planned_qty": row.get("requested_planned_qty", row["requested_quantity"]),
+            "effective_planned_qty": row.get("effective_planned_qty", row["allocated_quantity"]),
+            "capped_qty": row.get("capped_qty", 0),
+            "was_quantity_capped": row.get("was_quantity_capped", False),
+            "balance_qty": row.get("balance_qty", 0),
+            "note": row.get("note", ""),
+        } for row in result["allocated_items"] if row.get("allocated_quantity", 0) > 0]
+        return Response(
+            {"saved": len(response_lines), "lines": response_lines},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["get"], url_path="planning-norms")
+    def planning_norms(self, request):
+        """Canonical selected-SION rows and totals; no client aggregation."""
+        from apps.license.services.canonical_planning_service import (
+            CompanyIsolationError,
+            PlanningError,
+            CanonicalPlanningService,
+        )
+
+        raw_ids = request.query_params.getlist("license_ids")
+        if len(raw_ids) == 1:
+            raw_ids = [part.strip() for part in raw_ids[0].split(",") if part.strip()]
+        try:
+            common = dict(
+                company_id=None,
+                hsn=request.query_params.get("hsn", ""),
+                product=request.query_params.get("product", ""),
+                logic=request.query_params.get("logic", "AND"),
+            )
+            sion_id = request.query_params.get("sion_id")
+            result = (
+                CanonicalPlanningService.planning_sion_snapshot(sion_id, raw_ids, **common)
+                if sion_id not in (None, "")
+                else CanonicalPlanningService.applicable_planning_sions(raw_ids, **common)
+            )
+        except CompanyIsolationError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_403_FORBIDDEN)
+        except PlanningError as exc:
+            return Response(exc.as_dict(), status=status.HTTP_400_BAD_REQUEST)
+        return Response(result, status=status.HTTP_200_OK)

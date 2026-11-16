@@ -1,6 +1,7 @@
 """License serializers package (split from the former ~1.6k-LOC serializers.py;
 behaviour unchanged, all names still importable from apps.license.serializers).
 """
+from . import _license_write  # noqa: F401  (package attribute kept from pre-api/ layout)
 from .license import (
     SafeDateTimeField,
     LicenseExportItemSerializer,

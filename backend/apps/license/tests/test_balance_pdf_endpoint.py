@@ -67,7 +67,7 @@ class BalancePdfEndpointTests(LicenseBalanceLedgerFixtureMixin, TestCase):
     def test_generation_error_is_logged_and_safely_returned(self, generate_pdf):
         generate_pdf.side_effect = RuntimeError("renderer details must not reach clients")
 
-        with self.assertLogs("apps.license.views.license", level="ERROR") as logs:
+        with self.assertLogs("apps.license.api.views.license", level="ERROR") as logs:
             response = self.client.get(f"/api/licenses/{self.license.id}/balance-pdf/")
 
         self.assertEqual(response.status_code, 500)

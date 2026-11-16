@@ -3,26 +3,26 @@ from rest_framework import routers
 
 app_name = "license"
 
-from apps.license.views import LicenseDetailsViewSet
-from apps.license.views.expiring_licenses_report import ExpiringLicensesViewSet, ExpiringLicensesReportView
-from apps.license.views.active_licenses_report import ActiveLicensesViewSet, ActiveLicensesReportView
-from apps.license.views.item_pivot_report import ItemPivotViewSet, ItemPivotReportView
-from apps.license.views.item_report import ItemReportViewSet, ItemReportView
-from apps.license.views.planned_report import PlannedReportViewSet, PlannedReportView
-from apps.license.views.license_purchase_profit_report import LicensePurchaseProfitReportView
-from apps.license.views.inventory_balance_report import InventoryBalanceReportView
-from apps.license.views.inventory_balance_viewset import InventoryBalanceViewSet
-from apps.license.views.license_items import LicenseItemViewSet
-from apps.license.views.item_plan import LicenseItemPlanViewSet
-from apps.license.views.sion_planning_rule import SionPlanningRuleViewSet
-from apps.license.views.dashboard import DashboardDataView
-from apps.license.views.ledger_upload import LedgerUploadView, LedgerTaskStatusView
-from apps.license.views.ledger import LicenseLedgerViewSet
-from apps.license.views.parse_pdf import LicensePdfParseView
+from apps.license.api.views.license import LicenseDetailsViewSet
+from apps.license.api.views.expiring_licenses_report import ExpiringLicensesViewSet, ExpiringLicensesReportView
+from apps.license.api.views.active_licenses_report import ActiveLicensesViewSet, ActiveLicensesReportView
+from apps.license.api.views.item_pivot_report import ItemPivotViewSet, ItemPivotReportView
+from apps.license.api.views.item_report import ItemReportViewSet, ItemReportView
+from apps.license.api.views.planned_report import PlannedReportViewSet, PlannedReportView
+from apps.license.api.views.license_purchase_profit_report import LicensePurchaseProfitReportView
+from apps.license.api.views.inventory_balance_report import InventoryBalanceReportView
+from apps.license.api.views.inventory_balance_viewset import InventoryBalanceViewSet
+from apps.license.api.views.license_items import LicenseItemViewSet
+from apps.license.api.views.item_plan import LicenseItemPlanViewSet
+from apps.license.api.views.sion_planning_rule import SionPlanningRuleViewSet
+from apps.license.api.views.dashboard import DashboardDataView
+from apps.license.api.views.ledger_upload import LedgerUploadView, LedgerTaskStatusView
+from apps.license.api.views.ledger import LicenseLedgerViewSet
+from apps.license.api.views.parse_pdf import LicensePdfParseView
 from apps.license.views_actions import LicenseActionViewSet
 from apps.license.views_incentive import IncentiveLicenseViewSet
-from apps.license.views.replan_status import LicenseReplanStatusView
-from apps.license.views.import_item_suggestion import ImportItemSuggestionView
+from apps.license.api.views.replan_status import LicenseReplanStatusView
+from apps.license.api.views.import_item_suggestion import ImportItemSuggestionView
 
 router = routers.DefaultRouter()
 router.register(r"licenses", LicenseDetailsViewSet, basename="licenses")

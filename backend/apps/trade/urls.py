@@ -2,8 +2,8 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import LicenseTradeViewSet, TradeLineViewSet, TradePaymentViewSet
-from .views_invoice_documents import InvoiceDocumentView
+from .api.views import LicenseTradeViewSet, TradeLineViewSet, TradePaymentViewSet
+from .api.views_invoice_documents import InvoiceDocumentView
 
 app_name = "trade"
 

@@ -20,7 +20,7 @@ Local auth works without a password (trust), so pg tools need no secret.
 
 1. Resolve the target through Django settings (never `cat .env`) and assert `HOST in {localhost, 127.0.0.1, ::1}`.
 2. Query `select current_database(), inet_server_addr(), pg_is_in_recovery()` and record the output.
-3. Make sure a verified dump less than 24h old exists (`docs/operations/BACKUP_AND_RECOVERY.md`).
+3. Make sure a verified dump less than 24h old exists (`docs/modernization/BACKUP_AND_RECOVERY.md`).
 4. Rehearse on the restore clone first.
 5. Read-only inspection runs inside `BEGIN READ ONLY` / `SET TRANSACTION READ ONLY`. All discovery queries in this phase did.
 

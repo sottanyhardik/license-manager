@@ -7,14 +7,14 @@ Date 2026-11-16 · branch `feature/v5` · No application code, migration, or bus
 
 | Doc | Content | Author |
 |---|---|---|
-| `docs/architecture/PROJECT_ARCHITECTURE.md` | Architecture diagram, backend apps, app dependency map + cycles, API, Celery, infra, repo hygiene | discovery agent (backend) |
-| `docs/architecture/FRONTEND_STRUCTURE.md` | src tree, routes, API layer, duplicates, target feature structure + migration path | discovery agent (frontend) |
-| `docs/architecture/DATABASE_ARCHITECTURE.md` | Per-model schema, constraints, precision, findings | discovery agent (DB, static) |
-| `docs/architecture/DATABASE_ER_DIAGRAM.md` | Mermaid ER: overview + 7 domain clusters | discovery agent (DB) |
-| `docs/migrations/MIGRATION_REGISTER.md` | Per-app migration history, data migrations, reversibility | discovery agent (DB) |
-| `docs/migrations/DATA_INTEGRITY_REPORT.md` | **Live** baseline: row counts, constraints, balance reconciliation | orchestrator (live DB, read-only) |
-| `docs/security/DATABASE_SAFETY.md` | Env identification, guardrails, legacy tables | orchestrator |
-| `docs/operations/BACKUP_AND_RECOVERY.md` | Verified backup + restore/rollback procedure | orchestrator |
+| `docs/modernization/PROJECT_ARCHITECTURE.md` | Architecture diagram, backend apps, app dependency map + cycles, API, Celery, infra, repo hygiene | discovery agent (backend) |
+| `docs/modernization/FRONTEND_STRUCTURE.md` | src tree, routes, API layer, duplicates, target feature structure + migration path | discovery agent (frontend) |
+| `docs/modernization/DATABASE_ARCHITECTURE.md` | Per-model schema, constraints, precision, findings | discovery agent (DB, static) |
+| `docs/modernization/DATABASE_ER_DIAGRAM.md` | Mermaid ER: overview + 7 domain clusters | discovery agent (DB) |
+| `docs/modernization/MIGRATION_REGISTER.md` | Per-app migration history, data migrations, reversibility | discovery agent (DB) |
+| `docs/modernization/DATA_INTEGRITY_REPORT.md` | **Live** baseline: row counts, constraints, balance reconciliation | orchestrator (live DB, read-only) |
+| `docs/modernization/DATABASE_SAFETY.md` | Env identification, guardrails, legacy tables | orchestrator |
+| `docs/modernization/BACKUP_AND_RECOVERY.md` | Verified backup + restore/rollback procedure | orchestrator |
 
 Static docs were written by agents from code. Live-DB facts were verified by the orchestrator. Where they differ, the live facts win.
 

@@ -13,7 +13,7 @@ production procedure at the end is a proposal and has not been run.
 | SHA-256 | `0902d8517a7ffbf010f2e08685c394e31f00f07d537444188be19cce38399bec` (stored in `.dump.sha256`) |
 | Schema-only | `~/lm_backups/local_lmanagement_schema_20261116.sql` (431,825 bytes) |
 | Balance baseline | `~/lm_backups/balance_baseline_20261116.csv`: per-licence output of every `LicenseBalanceCalculator` term (2,185 licences) |
-| Git | `~/lm_backups/` is gitignored (`.gitignore:52`). **Never commit dumps.** |
+| Location | `~/lm_backups/`, outside the repo (moved 2026-11-16). The repo `backups/` is gitignored (`.gitignore:52`) but `db-tools.sh` still writes there. **Never commit dumps.** |
 
 ### Verification performed (a successful `pg_dump` was not treated as proof)
 
@@ -31,7 +31,7 @@ rehearsal (Phase 6). Drop it only with explicit approval.
 
 ### Pre-existing files (not created by this work)
 
-`~/lm_backups/remote_db_backup_20261115_*.sql`: four plain-SQL dumps, two pairs of identical size
+`~/lm_backups/remote_db_backup_20261115_*.sql`: pg_dump custom-format files (despite `.sql`), written by `scripts/database/db-tools.sh`; two pairs of identical size
 (6.6 MB and 14.0 MB). Their origin is "remote". They have **not** been opened or verified, and they may
 contain production data. The owner should confirm their provenance and retention.
 

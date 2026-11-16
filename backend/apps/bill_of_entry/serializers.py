@@ -206,7 +206,36 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_on', 'modified_on', 'created_by', 'modified_by']
 
+    @staticmethod
+    def _seed_totals_from_prefetch(instance):
+        """List view: derive the per-BOE totals from the prefetched rows.
+
+        `get_total_inr/fc/quantity` are cached_properties that each run a
+        SUM() query over the BOE's rows (3 queries per BOE).  Decimal columns
+        sum exactly, so summing the already-loaded rows (same default-manager
+        row set, NULLs ignored like SQL SUM, same quantize) is identical.
+        """
+        from apps.bill_of_entry.models import DEC_0, DEC_000
+
+        rows = list(instance.item_details.all())
+
+        def _total(attr, default):
+            vals = [getattr(r, attr) for r in rows if getattr(r, attr) is not None]
+            total = sum(vals, Decimal(0)) if vals else default
+            return total.quantize(default)
+
+        instance.__dict__.setdefault('get_total_inr', _total('cif_inr', DEC_0))
+        instance.__dict__.setdefault('get_total_fc', _total('cif_fc', DEC_0))
+        instance.__dict__.setdefault('get_total_quantity', _total('qty', DEC_000))
+
     def to_representation(self, instance):
+        request = self.context.get('request')
+        view = getattr(request, 'parser_context', {}).get('view') if request is not None else None
+        if (
+            getattr(view, 'action', None) == 'list'
+            and 'item_details' in getattr(instance, '_prefetched_objects_cache', {})
+        ):
+            self._seed_totals_from_prefetch(instance)
         data = super().to_representation(instance)
         # Auto-calculate exchange_rate from row totals when stored value is 0 or null
         exc = data.get('exchange_rate')

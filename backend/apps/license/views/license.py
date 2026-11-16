@@ -608,12 +608,14 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         qs = qs.select_related(
             'exporter', 'port', 'purchase_status',
             'balance', 'flags', 'ownership', 'ownership__current_owner', 'notes',
+            # Serialized as slug codes (scheme_code/notification_number) on every row.
+            'scheme_code', 'notification_number',
         )
 
         # Flag licenses that have a manual utilization plan (drives list colour) and
         # which document types they carry — annotated so the list serializer doesn't
         # fire an .exists() query per row (was 2 extra queries/row for has_tl/has_copy).
-        from django.db.models import Exists, OuterRef
+        from django.db.models import Exists, OuterRef, Subquery
         from apps.license.models import LicenseItemPlan, LicenseDocumentModel
         qs = qs.annotate(
             _has_manual_plan=Exists(LicenseItemPlan.objects.filter(license=OuterRef('pk'))),
@@ -644,6 +646,27 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             # read the prefetch cache (zero per-row queries) instead of calling
             # .exists() + .all()[:1] which fired 2 queries per row.
             qs = qs.prefetch_related('license_documents')
+            if self.action == 'list':
+                # Per-row reads in the list serializer: `get_norm_class`
+                # (export lines + norm class) and `latest_transfer`
+                # (transfers, newest first, resolved in Python).
+                from django.db.models import Prefetch
+                from apps.license.models.core import LicenseTransferModel, LicenseReplanRequest
+                qs = qs.prefetch_related(
+                    Prefetch(
+                        'transfers',
+                        queryset=LicenseTransferModel.objects.select_related('from_company', 'to_company'),
+                    ),
+                    'export_license__norm_class',
+                )
+                # Newest replan request status (same ordering as
+                # `get_planning_state`), read without a per-row query.
+                qs = qs.annotate(
+                    _latest_replan_status=Subquery(
+                        LicenseReplanRequest.objects.filter(license=OuterRef('pk'))
+                        .order_by('-requested_at', '-pk').values('status')[:1]
+                    )
+                )
 
         return qs
 

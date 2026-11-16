@@ -154,7 +154,18 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
             return queryset
 
         # Light prefetch for list view only
-        queryset = queryset.prefetch_related('item_details', 'allotment')
+        # The serializer reads each row's sr_number -> license (+purchase_status,
+        # hs_code) and each allotment's company; prefetch them so those reads
+        # are constant per page rather than per row.
+        queryset = queryset.prefetch_related(
+            'item_details',
+            'item_details__sr_number',
+            'item_details__sr_number__hs_code',
+            'item_details__sr_number__license',
+            'item_details__sr_number__license__purchase_status',
+            'allotment',
+            'allotment__company',
+        )
 
         # Handle available_for_trade filtering
         if self.request.query_params.get('available_for_trade') == 'true':

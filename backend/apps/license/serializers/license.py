@@ -911,6 +911,24 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             from apps.license.services.condition_pool import available_value_bulk_map
             self.context['available_value_map'] = available_value_bulk_map(instance.import_license.all())
 
+        if is_list_view and 'latest_transfer' not in instance.__dict__ \
+                and 'transfers' in getattr(instance, '_prefetched_objects_cache', {}):
+            # `latest_transfer` is a cached_property whose query ignores the
+            # prefetch cache (exists() + first() per row). Seed it from the
+            # prefetched rows with identical semantics: ORDER BY transfer_date
+            # DESC (NULLs first in Postgres), id DESC; else the same fallbacks.
+            _transfers = sorted(
+                instance.transfers.all(),
+                key=lambda t: (t.transfer_date is None, t.transfer_date or date.min, t.id),
+                reverse=True,
+            )
+            if _transfers:
+                instance.__dict__['latest_transfer'] = _transfers[0]
+            elif instance.current_owner:
+                instance.__dict__['latest_transfer'] = f"Current Owner is {instance.current_owner.name}"
+            else:
+                instance.__dict__['latest_transfer'] = "Data Not Found"
+
         rep = super().to_representation(instance)
 
         if is_list_view:
@@ -1001,12 +1019,17 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
         """
         if obj.planning_source_revision == obj.planning_applied_revision:
             return "CURRENT"
-        request = obj.replan_requests.order_by("-requested_at", "-pk").first()
-        if request is None:
+        if hasattr(obj, "_latest_replan_status"):
+            # List view: annotated with the newest request's status.
+            status = obj._latest_replan_status
+        else:
+            request = obj.replan_requests.order_by("-requested_at", "-pk").first()
+            status = request.status if request is not None else None
+        if status is None:
             return "REPLAN_PENDING"
-        if request.status == "running":
+        if status == "running":
             return "REPLAN_RUNNING"
-        if request.status in {"pending", "queued", "retry_pending"}:
+        if status in {"pending", "queued", "retry_pending"}:
             return "REPLAN_PENDING"
         return "REPLAN_FAILED"
 

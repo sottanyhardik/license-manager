@@ -72,3 +72,18 @@ The target domain list in the brief (companies, customers, imports, exports, acc
 
 Records preserved ✅ (nothing written) · Backup restoration verified ✅ (local) · Migration state consistent ✅ ·
 FK integrity ✅ · Balances reconcile ❌ (findings 1–3, pre-existing) · Tests/typecheck/build: NOT RUN (no code changed).
+
+---
+
+## 7. Implementation status (2026-11-16, end of session)
+
+Batches, commits and blockers: [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md).
+Commits on `feature/v5`: 85370c94, 93f1cecf, 5e8bdba9, 40198342, 4f6ef131, e22f1ad5, ca9dad8b, 81163117, 0a55d205. Not pushed.
+
+**Final gates on the committed tree:** backend check ✅ · migrations check ✅ · `tests/` ✅ · app-level **2720 passed, 0 failed** · frontend lint ✅ (0 errors) · typecheck ✅ · unit tests ✅ (549) · build ✅.
+
+**Data:** no live business record was written by this work, and no migration was applied to any DB. Every local dataset seen has a verified dump and restore clone in `~/lm_backups/`.
+
+**Acceptance criteria:**
+- Met: records preserved, PKs preserved, FKs valid, migrations consistent in code, API changes additive, tests pass, build passes, backup restore verified.
+- Open: the stale `LicenseBalance` refresh is not run (blocked), so balances do not fully reconcile yet. Migration 0057 is unapplied locally.

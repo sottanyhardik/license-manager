@@ -237,4 +237,41 @@ describe("LicenseLedger fresh filters", () => {
         fireEvent.click(screen.getAllByRole("button", { name: /^Ledger$/i })[0]);
         expect(navigate).toHaveBeenCalledWith("/license-ledger/1/766");
     });
+    describe("per-licence detail enrichment", () => {
+        const licences = (withTransactions: boolean) => Array.from({ length: 250 }, (_, n) => ({
+            license_id: n + 1, license_number: `LIC-${n + 1}`, license_date: "2026-04-01", license_type: "DFIA",
+            companies: [{ company_id: 766, company_name: "LABDHI", purchases: [], sales: [], purchase_total: 0, sale_total: 0, profit_loss: 0 }],
+            ...(withTransactions ? { transactions: [], summary: {} } : {}),
+        }));
+
+        it("caps legacy-payload detail GETs at 4 concurrent and still renders every licence", async () => {
+            let inFlight = 0;
+            let maxInFlight = 0;
+            let detailCalls = 0;
+            mockedApiGet.mockImplementation((url: string) => {
+                if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: { licenses: licences(false) } });
+                if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
+                const id = Number(/license-ledger\/(\d+)\//.exec(url)?.[1]);
+                detailCalls += 1; inFlight += 1; maxInFlight = Math.max(maxInFlight, inFlight);
+                return new Promise(resolve => setTimeout(() => { inFlight -= 1; resolve({ data: { license_id: id, transactions: [], summary: {} } }); }, 0));
+            });
+            render(<LicenseLedger />);
+            expect(await screen.findByText("LIC-250", {}, { timeout: 5000 })).toBeInTheDocument();
+            expect(screen.getByText("LIC-1")).toBeInTheDocument();
+            expect(detailCalls).toBe(250);
+            expect(maxInFlight).toBeGreaterThan(0);
+            expect(maxInFlight).toBeLessThanOrEqual(4);
+        });
+
+        it("skips detail GETs when the payload already carries transactions", async () => {
+            mockedApiGet.mockImplementation((url: string) => {
+                if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: { licenses: licences(true) } });
+                if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
+                return Promise.reject(new Error(`Unexpected URL: ${url}`));
+            });
+            render(<LicenseLedger />);
+            expect(await screen.findByText("LIC-250", {}, { timeout: 5000 })).toBeInTheDocument();
+            expect(mockedApiGet.mock.calls.filter(([url]) => !String(url).includes("license-wise") && !String(url).includes("summary"))).toHaveLength(0);
+        });
+    });
 });

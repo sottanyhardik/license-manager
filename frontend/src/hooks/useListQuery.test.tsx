@@ -26,6 +26,19 @@ const useIt = () => ({
 });
 
 describe("useListQuery", () => {
+    it("multiKeys round-trip array filters through the URL; other keys are not comma-split", async () => {
+        const useMulti = () => ({
+            q: useListQuery<{ id: number }>({ key: qk.licenses.list, endpoint: "licenses/", filterKeys: ["status", "name"], multiKeys: ["status"] }),
+            loc: useLocation(),
+        });
+        const { result } = renderHook(useMulti, { wrapper: wrapper("/l?status=1,2&name=ACME,%20Ltd") });
+        await waitFor(() => expect(result.current.q.status).toBe("success"));
+        expect(result.current.q.params.filters).toEqual({ status: ["1", "2"], name: "ACME, Ltd" });
+        act(() => result.current.q.setFilters({ status: ["3", "4"] }));
+        expect(new URLSearchParams(result.current.loc.search).get("status")).toBe("3,4");
+        await waitFor(() => expect(result.current.q.params.filters.status).toEqual(["3", "4"]));
+    });
+
     beforeEach(() => { get.mockReset(); get.mockResolvedValue({ data: envelope }); });
 
     it("reads params from URL, forwards AbortSignal and query string to axios", async () => {

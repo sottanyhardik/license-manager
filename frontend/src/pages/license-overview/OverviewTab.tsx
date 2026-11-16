@@ -13,6 +13,7 @@ import { useLicenseOverviewSummary, licenseOverviewKeys } from "./useLicenseOver
 import { extractApiError, fmtNum } from "./licenseOverviewHelpers";
 import LicenseDetailsHeader from "./LicenseDetailsHeader";
 import SionNormCard from "./SionNormCard";
+import LicenceModalSections from "./LicenceModalSections";
 import LicenseMetricsGrid from "./LicenseMetricsGrid";
 import CustomsLedgerSection from "./CustomsLedgerSection";
 import CustomsLedgerTable from "./CustomsLedgerTable";
@@ -136,6 +137,12 @@ export default function OverviewTab({ licenseId, isActive, showHiddenBoe, onShow
                     <div className="mt-3">
                         <SionNormCard licenseId={licenseId} isActive={isActive} />
                     </div>
+
+                    {licenseId && (
+                        <div className="mt-3">
+                            <LicenceModalSections licenseId={licenseId} />
+                        </div>
+                    )}
 
                     <div className="mt-3">
                         <LicenseMetricsGrid summary={summary.summary} licenseId={licenseId ?? ""} override={summary.individual_item_cif_override} canWrite={hasRole(ROLES.LICENSE_MANAGER)} />

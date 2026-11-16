@@ -151,6 +151,33 @@ export const refreshAccessToken = () => {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── 429 throttling ──────────────────────────────────────────────────────────
+// Honour Retry-After (delta-seconds or HTTP-date) and show at most ONE toast per
+// throttle window, however many concurrent requests are rejected. Never replays.
+const DEFAULT_THROTTLE_WAIT_S = 30;
+const MAX_THROTTLE_WAIT_S = 3600;
+let throttleToastUntil = 0;
+
+export const parseRetryAfterSeconds = (value, now = Date.now()) => {
+    if (value === undefined || value === null || String(value).trim() === "") return null;
+    const text = String(value).trim();
+    if (/^\d+$/.test(text)) return Math.min(Number(text), MAX_THROTTLE_WAIT_S);
+    const at = Date.parse(text);
+    if (Number.isNaN(at)) return null;
+    return Math.min(Math.max(Math.ceil((at - now) / 1000), 0), MAX_THROTTLE_WAIT_S);
+};
+
+export const notifyThrottled = (headers) => {
+    const now = Date.now();
+    if (now < throttleToastUntil) return;
+    const raw = headers?.["retry-after"] ?? headers?.get?.("retry-after");
+    const wait = Math.max(parseRetryAfterSeconds(raw, now) ?? DEFAULT_THROTTLE_WAIT_S, 1);
+    throttleToastUntil = now + wait * 1000;
+    toast.error(`Too many requests \u2014 please wait ${wait}s and try again.`, { id: "http-429", duration: wait * 1000 });
+};
+
+export const _resetThrottleToastForTests = () => { throttleToastUntil = 0; };
+
 api.interceptors.response.use(
     (res) => res,
     async (error) => {
@@ -185,6 +212,12 @@ api.interceptors.response.use(
             } catch (refreshError) {
                 return Promise.reject(refreshError);
             }
+        }
+
+        // 429 - Throttled: single toast per window, no automatic replay.
+        if (status === 429) {
+            notifyThrottled(error.response.headers);
+            return Promise.reject(error);
         }
 
         // 403 - Forbidden

@@ -5,7 +5,7 @@ import { useTheme } from "../context/ThemeContext";
 import { reportEntities, masterEntities } from "../routes/config";
 import {
     ALLOTMENT_ROLES, BOE_LIST_ROLES, INCENTIVE_LICENSE_ROLES, LEDGER_READ_ROLES, LEDGER_UPLOAD_ROLES,
-    LICENSE_ROLES, RECONCILIATION_ROLES, REPORT_ROLES, ROLES, TRADE_ROLES, USER_ADMIN_ROLES,
+    LICENSE_ROLES, RECONCILIATION_ISSUES_ROLES, RECONCILIATION_ROLES, REPORT_ROLES, ROLES, TRADE_ROLES, USER_ADMIN_ROLES,
 } from "../routes/authorizationRoles";
 import { ChevronDown, Gauge, Menu, Search, ShieldCheck, X } from "lucide-react";
 import Icon from "@/components/Icon";
@@ -35,9 +35,24 @@ const NAV_GROUPS = [
             { path: "/bill-of-entries", label: "Bill of Entry",  icon: "receipt",          roles: BOE_LIST_ROLES },
             { path: "/trades",          label: "Trade In & Out", icon: "arrow-left-right", roles: TRADE_ROLES },
             { path: "/reconciliation",  label: "Reconciliation", icon: "check2-square",    roles: RECONCILIATION_ROLES },
+            { path: "/reconciliation-issues", label: "Reconciliation Issues", icon: "exclamation-triangle", roles: RECONCILIATION_ISSUES_ROLES },
         ],
     },
 ];
+
+// Report routes that exist in AppRoutes (all guarded by REPORT_ROLES, the same
+// gate as the whole Reports menu) but had no in-app link. Kept here rather than
+// in routes/config.ts so the command palette / legacy sidebar are unaffected.
+const EXTRA_REPORTS = [
+    { path: "/reports/expiring-licenses", label: "Expiring Licenses",  icon: "exclamation-triangle" },
+    { path: "/reports/active-licenses",   label: "Active Licenses",    icon: "check-circle" },
+    { path: "/reports/download-license",  label: "Download License",   icon: "download" },
+    { path: "/reports/parle/sion-e1",     label: "SION E1 Report",     icon: "file-earmark-text" },
+    { path: "/reports/parle/sion-e5",     label: "SION E5 Report",     icon: "file-earmark-text" },
+    { path: "/reports/parle/sion-e126",   label: "SION E126 Report",   icon: "file-earmark-text" },
+    { path: "/reports/parle/sion-e132",   label: "SION E132 Report",   icon: "file-earmark-text" },
+];
+const REPORT_LINKS = [...reportEntities, ...EXTRA_REPORTS];
 
 
 function NavMenu({ icon, label, items, isActive, end = false }) {
@@ -227,8 +242,8 @@ export default function TopNav() {
                         <NavMenu
                             icon="bar-chart-line"
                             label="Reports"
-                            isActive={isGroupActive(reportEntities)}
-                            items={reportEntities.map(r => (
+                            isActive={isGroupActive(REPORT_LINKS)}
+                            items={REPORT_LINKS.map(r => (
                                 <MenuItem
                                     key={r.path}
                                     to={r.path}
@@ -356,7 +371,7 @@ export default function TopNav() {
                             {hasAnyRole(REPORT_ROLES) && (
                                 <section className="tb-mobile-nav-group" aria-label="Reports">
                                     <div className="tb-mobile-nav-group-label"><Icon name="bar-chart-line" className="size-3.5" aria-hidden="true" />Reports</div>
-                                    {reportEntities.map(report => <Link key={report.path} to={report.path} className={`tb-mobile-nav-link${isPathActive(report.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={report.icon} className="size-4" aria-hidden="true" />{report.label}</Link>)}
+                                    {REPORT_LINKS.map(report => <Link key={report.path} to={report.path} className={`tb-mobile-nav-link${isPathActive(report.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={report.icon} className="size-4" aria-hidden="true" />{report.label}</Link>)}
                                 </section>
                             )}
                             <section className="tb-mobile-nav-group" aria-label="Masters">

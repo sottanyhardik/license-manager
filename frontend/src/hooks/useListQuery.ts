@@ -33,6 +33,8 @@ export interface UseListQueryOptions<T> {
     defaults?: Partial<Omit<ListParams, "page">>;
     /** Allow-list of URL params owned by this list. */
     filterKeys: string[];
+    /** Subset of filterKeys holding arrays; comma-split on parse so they round-trip via the URL. */
+    multiKeys?: string[];
     urlPrefix?: string;
     /** Default and hard cap: 200. */
     maxPageSize?: number;
@@ -56,19 +58,20 @@ export interface UseListQueryResult<T> {
 }
 
 export function useListQuery<T>(opts: UseListQueryOptions<T>): UseListQueryResult<T> {
-    const { key, fetcher, endpoint, defaults, filterKeys, urlPrefix, maxPageSize, enabled = true } = opts;
+    const { key, fetcher, endpoint, defaults, filterKeys, multiKeys, urlPrefix, maxPageSize, enabled = true } = opts;
     const [sp, setSp] = useSearchParams();
 
     // Options are read through a ref so callers can pass inline literals.
-    const optsRef = useRef({ defaults, filterKeys, urlPrefix, maxPageSize });
-    optsRef.current = { defaults, filterKeys, urlPrefix, maxPageSize };
+    const optsRef = useRef({ defaults, filterKeys, multiKeys, urlPrefix, maxPageSize });
+    optsRef.current = { defaults, filterKeys, multiKeys, urlPrefix, maxPageSize };
     const spKey = sp.toString();
     const filterKeysId = filterKeys.join("|");
+    const multiKeysId = (multiKeys ?? []).join("|");
     const defaultsId = JSON.stringify(defaults ?? {});
     const params = useMemo(
         () => parseListParams(new URLSearchParams(spKey), optsRef.current),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [spKey, filterKeysId, urlPrefix, maxPageSize, defaultsId],
+        [spKey, filterKeysId, multiKeysId, urlPrefix, maxPageSize, defaultsId],
     );
     const paramsRef = useRef(params);
     paramsRef.current = params;

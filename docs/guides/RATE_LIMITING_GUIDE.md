@@ -40,7 +40,7 @@ Rate limiting (throttling) controls the number of requests a user can make to th
 ### 1. AnonRateThrottle
 
 **Purpose**: Throttle anonymous (unauthenticated) users
-**Rate**: 100 requests per hour
+**Rate**: 300 requests per hour
 **Scope**: `anon`
 
 ```python
@@ -60,7 +60,7 @@ class MyView(APIView):
 ### 2. UserRateThrottle
 
 **Purpose**: General throttle for authenticated users
-**Rate**: 1000 requests per hour
+**Rate**: 3000 requests per hour
 **Scope**: `user`
 
 ```python
@@ -80,7 +80,7 @@ class MyViewSet(viewsets.ModelViewSet):
 ### 3. StaffRateThrottle
 
 **Purpose**: Higher limits for staff/admin users
-**Rate**: 5000 requests per hour
+**Rate**: 10,000 requests per hour
 **Scope**: `staff`
 
 ```python
@@ -100,7 +100,7 @@ class AdminViewSet(viewsets.ModelViewSet):
 ### 4. BurstRateThrottle
 
 **Purpose**: Short-term burst protection
-**Rate**: 60 requests per minute
+**Rate**: 180 requests per minute
 **Scope**: `burst`
 
 ```python
@@ -122,7 +122,7 @@ class MyView(APIView):
 ### 5. SustainedRateThrottle
 
 **Purpose**: Long-term sustained usage limits
-**Rate**: 10,000 requests per day
+**Rate**: 20,000 requests per day
 **Scope**: `sustained`
 
 ```python
@@ -142,7 +142,7 @@ class MyViewSet(viewsets.ModelViewSet):
 ### 6. UploadRateThrottle
 
 **Purpose**: Throttle file upload endpoints
-**Rate**: 20 requests per hour
+**Rate**: 2000 requests per hour
 **Scope**: `upload`
 
 ```python
@@ -165,7 +165,7 @@ class LedgerUploadView(APIView):
 ### 7. ExportRateThrottle
 
 **Purpose**: Throttle report export endpoints
-**Rate**: 30 requests per hour
+**Rate**: 100 requests per hour
 **Scope**: `export`
 
 ```python
@@ -188,7 +188,7 @@ class ItemReportView(View):
 ### 8. LoginRateThrottle
 
 **Purpose**: Protect authentication endpoints
-**Rate**: 5 requests per minute
+**Rate**: 10 requests per minute
 **Scope**: `login`
 
 ```python
@@ -214,7 +214,7 @@ class LoginView(APIView):
 ### 9. StrictRateThrottle
 
 **Purpose**: Very strict limits for sensitive operations
-**Rate**: 10 requests per hour
+**Rate**: 30 requests per hour
 **Scope**: `strict`
 
 ```python
@@ -270,21 +270,22 @@ All throttle rates are configured in `backend/lmanagement/settings.py`:
 REST_FRAMEWORK = {
     # Default throttle classes applied to all views
     "DEFAULT_THROTTLE_CLASSES": [
-        "core.throttling.BurstRateThrottle",
-        "core.throttling.UserRateThrottle",
+        "apps.core.throttling.BurstRateThrottle",
+        "apps.core.throttling.UserRateThrottle",
     ],
 
     # Rate limits for each scope
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
-        "staff": "5000/hour",
-        "burst": "60/minute",
-        "sustained": "10000/day",
-        "upload": "20/hour",
-        "export": "30/hour",
-        "login": "5/minute",
-        "strict": "10/hour",
+        "anon": "300/hour",
+        "user": "3000/hour",
+        "staff": "10000/hour",
+        "burst": "180/minute",
+        "sustained": "20000/day",
+        "upload": "2000/hour",
+        "export": "100/hour",
+        "login": "10/minute",
+        "strict": "30/hour",
+        "password_reset": "5/hour",
     },
 }
 ```
@@ -332,13 +333,13 @@ Applied automatically to all views:
 # settings.py
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": [
-        "core.throttling.BurstRateThrottle",
-        "core.throttling.UserRateThrottle",
+        "apps.core.throttling.BurstRateThrottle",
+        "apps.core.throttling.UserRateThrottle",
     ],
 }
 ```
 
-**Result**: All authenticated endpoints have burst protection (60/min) and user limits (1000/hour).
+**Result**: All authenticated endpoints have burst protection (180/min) and user limits (3000/hour).
 
 ---
 
@@ -406,8 +407,8 @@ from core.throttling import (
 
 class MyViewSet(viewsets.ModelViewSet):
     throttle_classes = [
-        BurstRateThrottle,      # 60/minute
-        UserRateThrottle,        # 1000/hour
+        BurstRateThrottle,      # 180/minute
+        UserRateThrottle,        # 3000/hour
         SustainedRateThrottle,   # 10000/day
     ]
 ```
@@ -566,8 +567,8 @@ GET /api/masters/throttle-health/
         "login", "strict"
     ],
     "rates": {
-        "anon": "100/hour",
-        "user": "1000/hour",
+        "anon": "300/hour",
+        "user": "3000/hour",
         ...
     },
     "default_throttle_classes": [
@@ -658,11 +659,11 @@ When a request is throttled (429 Too Many Requests):
 
 ### 1. Choose Appropriate Throttles
 
-- **Read-heavy endpoints**: `UserRateThrottle` (1000/hour)
-- **Write operations**: `StrictRateThrottle` (10/hour)
-- **File uploads**: `UploadRateThrottle` (20/hour)
-- **Exports**: `ExportRateThrottle` (30/hour)
-- **Authentication**: `LoginRateThrottle` (5/minute)
+- **Read-heavy endpoints**: `UserRateThrottle` (3000/hour)
+- **Write operations**: `StrictRateThrottle` (30/hour)
+- **File uploads**: `UploadRateThrottle` (2000/hour)
+- **Exports**: `ExportRateThrottle` (100/hour)
+- **Authentication**: `LoginRateThrottle` (10/minute)
 
 ### 2. Layer Multiple Throttles
 
@@ -670,15 +671,17 @@ Combine short-term and long-term throttles:
 
 ```python
 throttle_classes = [
-    BurstRateThrottle,       # 60/minute (prevents rapid-fire)
-    UserRateThrottle,        # 1000/hour (hourly limit)
+    BurstRateThrottle,       # 180/minute (prevents rapid-fire)
+    UserRateThrottle,        # 3000/hour (hourly limit)
     SustainedRateThrottle,   # 10000/day (daily quota)
 ]
 ```
 
 ### 3. Handle Throttle Errors Gracefully
 
-Frontend should handle 429 responses:
+The SPA (`frontend/src/api/axios.js`, `queryClient.ts`) already does this: a 429 is never retried or replayed, `Retry-After` (seconds or HTTP date) is honoured, and at most one "Too many requests" toast is shown per throttle window.
+
+Other frontend code should handle 429 responses:
 
 ```javascript
 async function fetchData() {
@@ -863,7 +866,7 @@ if DEBUG:
     REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['user'] = '10000/hour'
 ```
 
-2. **For Staff Users**: Use StaffRateThrottle (5000/hour)
+2. **For Staff Users**: Use StaffRateThrottle (10000/hour)
 
 3. **For Production**: Request rate limit increase from admin
 
@@ -978,7 +981,7 @@ Throttling helps but isn't complete DDoS protection. Also use:
 
 ### 2. Brute Force Prevention
 
-`LoginRateThrottle` (5/minute) protects against brute force, but also:
+`LoginRateThrottle` (10/minute) protects against brute force, but also:
 - Implement CAPTCHA after failed attempts
 - Account lockout after N failures
 - IP blacklisting for repeated violations

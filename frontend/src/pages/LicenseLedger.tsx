@@ -387,6 +387,23 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+const LEDGER_DETAIL_CONCURRENCY = 4;
+
+/** Runs the task factories with at most `limit` in flight; results keep input order (allSettled shape). */
+async function settleWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<PromiseSettledResult<T>[]> {
+    const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+    let next = 0;
+    const worker = async () => {
+        while (next < tasks.length) {
+            const index = next++;
+            try { results[index] = { status: 'fulfilled', value: await tasks[index]() }; }
+            catch (reason) { results[index] = { status: 'rejected', reason }; }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+    return results;
+}
+
 export default function LicenseLedger() {
     const navigate = useNavigate();
     const [summary, setSummary] = useState<Record<string, Record<string, number>> | null>(null);
@@ -443,13 +460,16 @@ export default function LicenseLedger() {
             const rawLedger = ledgerResponse.data;
             const rawLicenses = isRecord(rawLedger) && Array.isArray(rawLedger.licenses) ? rawLedger.licenses : [];
             // A server that has not yet reloaded may still return the legacy
-            // company-only collection payload. Its detail endpoint contains
-            // the full canonical rows, so enrich only those affected licenses.
-            const details = await Promise.allSettled(rawLicenses.flatMap((license) => {
-                if (!isRecord(license) || license.license_id == null || (Array.isArray(license.transactions) && license.transactions.length > 0)) return [];
+            // company-only collection payload (no `transactions` key at all).
+            // Its detail endpoint contains the full canonical rows, so enrich
+            // only those licenses. The current endpoint always sends
+            // `transactions` + `summary` (an empty list is a real empty ledger),
+            // so it needs no per-licence follow-up. Detail GETs are capped.
+            const details = await settleWithConcurrency(rawLicenses.flatMap((license) => {
+                if (!isRecord(license) || license.license_id == null || Array.isArray(license.transactions)) return [];
                 const licenseType = encodeURIComponent(normalizeText(license.license_type, 'AUTO'));
-                return [api.get(`license-ledger/${encodeURIComponent(String(license.license_id))}/?license_type=${licenseType}`)];
-            }));
+                return [() => api.get(`license-ledger/${encodeURIComponent(String(license.license_id))}/?license_type=${licenseType}`)];
+            }), LEDGER_DETAIL_CONCURRENCY);
             if (version !== requestVersion.current) return;
             const detailByLicense = new Map(details.flatMap((result) => {
                 if (result.status !== 'fulfilled' || !isRecord(result.value.data) || result.value.data.license_id == null) return [];

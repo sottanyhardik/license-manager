@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { DetailTabs, type DetailTab } from "@/components/workspace";
+import { invalidateLicence } from "@/lib/queryKeys";
 import LicenseOverviewContent from "@/pages/license-overview/LicenseOverviewContent";
 
 import OverviewTab from "./tabs/OverviewTab";
@@ -26,6 +28,39 @@ export interface LicenseRecordWorkspaceProps {
     activeTab: LicenseRecordTabId;
     onTabChange: (tab: LicenseRecordTabId) => void;
     renderHistory: () => ReactNode;
+}
+
+/** Trailing debounce so a burst of per-row plan saves triggers one refetch, not one each. */
+const PLAN_SAVED_DEBOUNCE_MS = 300;
+
+/**
+ * Card Planning tab. Mirrors LicenseOverviewPage: after a plan save the licence
+ * detail prefix is invalidated so overview, items and ledger refresh (D5).
+ * The editor fires `onSaved` per row; `invalidateQueries` cancels and restarts
+ * an in-flight refetch, so saves are coalesced here. A pending invalidation is
+ * flushed on unmount (tab switch) so a save is never left stale.
+ */
+function PlanningTab({ licenseId }: { licenseId: number }) {
+    const queryClient = useQueryClient();
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const onSaved = useMemo(() => () => {
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+            timer.current = null;
+            void invalidateLicence(queryClient, licenseId);
+        }, PLAN_SAVED_DEBOUNCE_MS);
+    }, [queryClient, licenseId]);
+
+    useEffect(() => () => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = null;
+            void invalidateLicence(queryClient, licenseId);
+        }
+    }, [queryClient, licenseId]);
+
+    return <LicenseOverviewContent licenseId={licenseId} activeTab="planning" mode="embedded" onSaved={onSaved} />;
 }
 
 /**
@@ -55,7 +90,7 @@ export default function LicenseRecordWorkspace({
         { id: "import-item", label: "Import Items", render: () => <ImportItemTab licenseId={licenseId} /> },
         { id: "boe-allotment", label: "BOE & Allotment", render: () => <BoeAllotmentTab licenseId={licenseId} /> },
         { id: "invoices", label: "Invoices", render: () => <InvoicesTab licenseId={licenseId} /> },
-        { id: "plan", label: "Planning", visible: canWrite, render: () => <LicenseOverviewContent licenseId={licenseId} activeTab="planning" mode="embedded" /> },
+        { id: "plan", label: "Planning", visible: canWrite, render: () => <PlanningTab licenseId={licenseId} /> },
         { id: "reconciliation", label: "Reconciliation", visible: hasTradingActivity, render: () => <ReconciliationTab licenseId={licenseId} /> },
         { id: "history", label: "History", render: renderHistory },
     ];

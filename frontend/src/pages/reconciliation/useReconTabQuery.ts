@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 import api from "@/api/axios";
+import { useListQuery, type ListFetcher } from "@/hooks/useListQuery";
+import type { ListResult } from "@/lib/listContract";
 import { reconKeys, unwrapList, type ReconRow } from "./reconciliationHelpers";
 
 export const RECON_DEFAULT_PAGE_SIZE = 50;
 
-type ReconPage = { rows: ReconRow[]; count: number };
+const DEFAULTS = { pageSize: RECON_DEFAULT_PAGE_SIZE };
+const NO_FILTERS: string[] = [];
 
 /**
  * Shared data-fetching hook for every reconciliation tab. Each `TabsContent`
@@ -13,34 +15,45 @@ type ReconPage = { rows: ReconRow[]; count: number };
  * unmounts inactive panels by default), so calling this hook inside a tab
  * component gives "lazy-fetch on first activation" for free.
  *
- * The backend paginates every detection endpoint (`page` / `page_size`,
- * `ReconciliationResultsPagination`), so the hook fetches one server page at
- * a time and exposes `pagination` for `ReconPagination`. A bare-array
+ * Built on `useListQuery`: page / page_size live in the URL under a per-tab
+ * prefix (`<tabKey>_page`, `<tabKey>_page_size`), so tabs keep their own page,
+ * and a deep link restores it. The backend paginates every detection endpoint
+ * (`page` / `page_size`, `ReconciliationResultsPagination`); a bare-array
  * response (unpaginated) is treated as a single page.
  */
 export function useReconTabQuery(tabKey: string, endpoint: string) {
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSizeState] = useState(RECON_DEFAULT_PAGE_SIZE);
-
-    const query = useQuery<ReconPage>({
-        queryKey: [...reconKeys.tab(tabKey), page, pageSize],
-        queryFn: async () => {
-            const { data } = await api.get(endpoint, { params: { page, page_size: pageSize } });
+    const fetcher = useCallback<ListFetcher<ReconRow>>(
+        async (p, signal): Promise<ListResult<ReconRow>> => {
+            const { data } = await api.get(endpoint, { params: { page: p.page, page_size: p.pageSize }, signal });
             const rows = unwrapList(data);
             const count = typeof data?.count === "number" ? data.count : rows.length;
-            return { rows, count };
+            const totalPages = Math.max(1, Math.ceil(count / p.pageSize));
+            return {
+                rows, count, page: p.page, pageSize: p.pageSize, totalPages,
+                hasNext: p.page < totalPages, hasPrevious: p.page > 1,
+            };
         },
-        placeholderData: keepPreviousData,
+        [endpoint],
+    );
+
+    const list = useListQuery<ReconRow>({
+        key: (p) => [...reconKeys.tab(tabKey), p.page, p.pageSize],
+        fetcher,
+        filterKeys: NO_FILTERS,
+        defaults: DEFAULTS,
+        urlPrefix: `${tabKey}_`,
+        maxPageSize: 200,
     });
 
-    const count = query.data?.count ?? 0;
+    const { page, pageSize } = list.params;
+    const count = list.result?.count ?? 0;
     const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
     return {
-        data: query.data?.rows,
-        isLoading: query.isLoading,
-        isError: query.isError,
-        error: query.error,
+        data: list.result?.rows,
+        isLoading: list.status === "loading",
+        isError: list.status === "error",
+        error: list.error,
         pagination: {
             currentPage: page,
             totalPages,
@@ -48,11 +61,8 @@ export function useReconTabQuery(tabKey: string, endpoint: string) {
             totalItems: count,
             hasNext: page < totalPages,
             hasPrevious: page > 1,
-            onPageChange: setPage,
-            onPageSizeChange: (size: number) => {
-                setPageSizeState(size);
-                setPage(1);
-            },
+            onPageChange: list.setPage,
+            onPageSizeChange: list.setPageSize,
         },
     };
 }

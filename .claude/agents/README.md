@@ -1,10 +1,20 @@
 # Agent roster — License Manager engineering org
 
-40 agents: 16 original project agents (kept as they were, except that `code-reviewer` and
+42 agents: 16 original project agents (kept as they were, except that `code-reviewer` and
 `security-auditor` are now limited to read-only tools), 12 vendored ECC agents (each with a
-project-context section appended), and 12 new ones. Original README backed up at
+project-context section appended), 12 added 2026-11-15, and 2 added 2026-11-16
+(`database-architect` [opus, RO+docs], `debugging-specialist` [sonnet, RW]). Original README backed up at
 `.claude/backups/2026-11-15-pre-ecc/agents/README.md`. Orchestration:
 `docs/claude/ORCHESTRATION.md`.
+
+**12 core roles (2026-11-16)** — each carries an `## Engagement contract` section (responsibility,
+scope guard, protected areas, safety, review, short output) and an explicit `tools:` list:
+Principal Architect `solutions-architect` · Engineering Orchestrator `engineering-manager` ·
+Senior Backend `backend-engineer` · Senior Frontend `frontend-engineer` · Database Architect
+`database-architect` (+ `data-engineer` implements, `database-reviewer` reviews) · Code Reviewer
+`code-reviewer` · QA `qa-test-engineer` · Security `security-auditor` · Performance
+`performance-engineer` · Documentation `technical-writer` · Debugging `debugging-specialist` ·
+Test Automation `test-automation-engineer`. Full catalog: `docs/development-environment/AGENT-CATALOG.md`.
 
 Legend: **RO** = read-only tools (Read/Grep/Glob/Bash) · **RW** = full tools · model in brackets.
 Origin: P = project original, E = vendored ECC (MIT), N = new 2026-11-15.

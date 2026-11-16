@@ -31,7 +31,31 @@ change touching them → `cif-balance-auditor` review + tests, and an explicit
 "BUSINESS-RULE CHANGE" note in the final report. Unresolved conflicts between the
 stated rule and the code are escalated to the human, never "fixed" unilaterally.
 
-## 3. Orchestration protocol (substantial tasks)
+## 2a. Operating mode — scope, speed, reporting (permanent)
+
+**Scope:** change application code only when the user explicitly requests that change.
+Never invent requirements, choose new ERP features, refactor unrelated code, add
+dependencies (reuse existing ones), or overwrite user changes. Preserve architecture,
+API contracts and historical data unless explicitly authorised. No destructive DB
+operations without authorisation. Significant architectural decisions → `docs/decisions/`.
+
+**Fast path (default):** SHORT PROMPT → UNDERSTAND (index + only relevant files) →
+IMPLEMENT the minimum change → TEST (targeted first, then the area gate) → fix introduced
+failures → REPORT. Infer routine details from the repo; don't ask about things this file or
+`.claude/memory/` already answer; don't ask before routine reversible actions. Ask only when an
+ambiguity materially affects architecture, data safety or behaviour. No long plans for clear,
+small tasks; no agents for trivial tasks; parallel agents only for independent work.
+Don't re-run passing checks unless code changed. Load only relevant skills.
+
+**Never traded for speed:** necessary tests, security, existing behaviour, safe DB changes,
+honest failure reporting (skills `regression-testing`, `migration-safety`).
+
+**Report format (every task):** `Status: Completed/Blocked` · `Changes:` files + one line each ·
+`Tests: Pass/Fail` (NOT RUN + reason if a gate couldn't run) · `Remaining:` genuine items only.
+Add `BUSINESS-RULE / API CONTRACT / SCHEMA CHANGE` flags when applicable. No long prose.
+Workflow detail + agent/skill catalogs: `docs/development-environment/`.
+
+## 3. Orchestration protocol (substantial / multi-area tasks only)
 
 Full detail: `docs/claude/ORCHESTRATION.md`. Short form:
 
@@ -60,8 +84,10 @@ output — if a gate could not run (missing toolchain/DB), say so explicitly.
 ## 5. Autonomy and safety boundaries
 
 Allowed without asking: read/edit app code, write tests, run dev/test/lint/build
-commands, local migrations against the **local dev/test DB only**, plans, reviews,
-temporary worktrees, local commits on a feature branch when the user asked for the work.
+commands, `makemigrations` (file generation), plans, reviews, temporary worktrees,
+local commits on a feature branch when the user asked for the work.
+`migrate` prompts each time (settings `ask`): Claude cannot verify the DB target without
+reading secrets — approve only for the local dev/test DB.
 
 Always ask first: `git push`, merges into `develop`/`master`, rebases/resets/force
 operations, deleting branches, anything under `backend/deploy`/`scripts/deploy*`

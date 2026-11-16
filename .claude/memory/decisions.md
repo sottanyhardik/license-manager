@@ -76,3 +76,11 @@
   `_calculate_financial_balance()` both floor at 0. Also, the stated 5-term rule (BOE + ALLOTMENT +
   BILLED-WITHOUT-BOE) maps onto the financial engine, not the customs engine. Agents must not change
   either until decided. See `.claude/rules/business-rules.md`.
+- 2026-11-16 — **Environment reconfirmed + tightened.** ECC vendored copy verified = upstream latest
+  (v2.2.3, `d2ef268`); no reinstall. Added agents `database-architect`, `debugging-specialist`; 12 core
+  roles got an "Engagement contract" + explicit tools (specialists can't spawn agents). 14 project skills
+  added (thin, delegate to ECC); `code-review`/`security-review` left to built-ins (name collision).
+  New hooks: pre-commit secret/syntax check, post-edit syntax validation (no auto-format), session-start
+  context, Stop verification reminder. `migrate` now prompts (DB target unverifiable without secrets);
+  bypass mode disabled. Owner preference: fast path + short report (Status/Changes/Tests/Remaining) —
+  CLAUDE.md §2a. Docs: `docs/development-environment/`.

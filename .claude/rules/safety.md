@@ -1,11 +1,16 @@
 # Safety & autonomy boundaries (always applies)
 
-Enforced by `.claude/settings.json` permissions + `.claude/hooks/guard-bash.sh`; this file is the policy.
+Enforced by `.claude/settings.json` permissions + `.claude/hooks/guard_bash.py` and
+`.claude/hooks/pre_commit_check.py`; this file is the policy (details: `docs/development-environment/HOOKS-AND-PERMISSIONS.md`).
 
-**Autonomous (no approval needed):** read/edit application code, tests, docs, config under `.claude/`;
-run tests/linters/typecheck/builds/dev servers; local migrations against the local dev/test DB
-(`DB_HOST` = localhost/127.0.0.1 only); create plans and reviews; create/remove temporary git worktrees;
-`git status/diff/log/branch/add/commit/stash/worktree` on a feature branch.
+**Autonomous (no approval needed):** read/edit application code (only for explicitly requested changes),
+tests, docs, config under `.claude/`; run tests/linters/typecheck/builds/dev servers; `makemigrations`;
+create plans and reviews; create/remove temporary clean git worktrees;
+`git status/diff/log/branch/add/commit/worktree`, `git stash list/show` on a feature branch.
+
+**Prompts every time (settings `ask`):** `manage.py migrate` (local dev/test DB only — `DB_HOST` =
+localhost/127.0.0.1; Claude cannot verify the target without reading secrets), `rm`, `git restore`/`checkout --`,
+`git stash` push/pop/drop, `psql`/`redis-cli`/`docker`, `gh api`/PR/issue creation.
 
 **Requires explicit human approval in the current conversation:** `git push`, merge/rebase into
 `develop`/`master`, `git reset --hard`, `git clean -f`, force-anything, branch deletion; any deploy

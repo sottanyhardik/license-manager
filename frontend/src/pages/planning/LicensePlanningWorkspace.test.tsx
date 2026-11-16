@@ -74,4 +74,16 @@ describe("SION planning workspace", () => {
   it("protects unsaved edits while switching norms", async () => {
     vi.mocked(rulesApi.fetchSionPlanningRules).mockImplementation(async id => id === 7 ? [rule] : []); renderWorkspace(); await openEdit(); fireEvent.change(screen.getByLabelText("Rule name"), { target: { value: "Unsaved E5 edit" } }); await userEvent.click(screen.getByRole("tab", { name: /E1/ })); const dialog = await screen.findByRole("alertdialog", { name: "Unsaved changes" }); expect(within(dialog).getByText(/Save or discard/)).toBeInTheDocument(); await userEvent.click(within(dialog).getByRole("button", { name: "Discard and switch" })); expect(await screen.findByText("No rules match this search.")).toBeInTheDocument(); expect(screen.queryByDisplayValue("Unsaved E5 edit")).not.toBeInTheDocument();
   });
+  it("fetches SION classes once across tab, rule and SION changes", async () => {
+    const api = (await import("@/api/axios")).default;
+    vi.mocked(api.get).mockClear();
+    renderWorkspace("/planning?sion=E5");
+    await ready();
+    await userEvent.click(screen.getByRole("button", { name: "Select rule Sugar rule" }));
+    await userEvent.click(screen.getByRole("tab", { name: /E1/ }));
+    await userEvent.click(screen.getByRole("tab", { name: /E5/ }));
+    await ready();
+    const sionCalls = vi.mocked(api.get).mock.calls.filter(([u]) => String(u).includes("sion-classes"));
+    expect(sionCalls).toHaveLength(1);
+  });
 });

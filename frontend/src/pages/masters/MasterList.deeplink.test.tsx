@@ -84,14 +84,14 @@ describe("MasterList deep links and auto-apply", () => {
   const settleQuiet = () => new Promise((r) => setTimeout(r, 700));
 
   for (const page of [2, 3]) {
-    it(`deep link ?page=${page} stays on page ${page} with bounded fetches`, async () => {
+    it(`deep link ?page=${page} stays on page ${page} with exactly one fetch`, async () => {
       renderAt(`/licenses?is_expired=False&scheme_code=26&page=${page}`);
       await waitFor(() => expect(lastParams("licenses/")?.page).toBe(page));
       await settleQuiet();
       expect(lastParams("licenses/")?.page).toBe(page);
       expect(lastParams("licenses/")?.scheme_code).toBe("26");
       expect(new URLSearchParams(lastSearch).get("page")).toBe(String(page));
-      expect(listCalls("licenses/").length).toBeLessThanOrEqual(3);
+      expect(listCalls("licenses/").length).toBe(1);
     });
   }
 
@@ -101,7 +101,7 @@ describe("MasterList deep links and auto-apply", () => {
     await settleQuiet();
     expect(lastParams("licenses/")?.page).toBe(1);
     expect(new URLSearchParams(lastSearch).get("page")).toBe("1");
-    expect(listCalls("licenses/").length).toBeLessThanOrEqual(2);
+    expect(listCalls("licenses/").length).toBe(1);
   });
 
   it("a text edit after an immediate-apply filter is not swallowed", async () => {

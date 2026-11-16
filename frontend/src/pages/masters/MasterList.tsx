@@ -110,6 +110,28 @@ function parseListUrl(search: string): { filters: Record<string, string>; page: 
     return { filters, page };
 }
 
+/** Canonical (sorted) query encoding, used to recognise our own URL writes. */
+function canonicalSearch(search: string): string {
+    const params = new URLSearchParams(search);
+    params.sort();
+    return params.toString();
+}
+
+/**
+ * Filter values travel as strings: arrays (multi-select FKs, list defaults)
+ * become comma lists and booleans/numbers `String()`.  This is the form the URL
+ * round-trip produced anyway, so normalising at the boundary keeps the React
+ * Query key stable instead of refetching after the URL write.
+ */
+function normalizeFilterValues(filters: Record<string, unknown>): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(filters)) {
+        if (Array.isArray(value)) out[key] = value.join(",");
+        else if (value !== null && value !== undefined) out[key] = String(value);
+    }
+    return out;
+}
+
 export default function MasterList() {
     const {entity} = useParams();
     const location = useLocation();
@@ -155,6 +177,10 @@ export default function MasterList() {
         return Object.keys(filters).length > 0 ? filters : getDefaultFilters(entityName);
     });
     const backendDefaultsApplied = useRef(false);
+    // Canonical search string of the last URL write made by the sync effect.
+    // The init effect skips that echo so it never re-seeds state (page size,
+    // filters) from our own navigation; cleared on any external navigation.
+    const ownSearchWrite = useRef<string | null>(null);
     const qc = useQueryClient();
 
     // License Balance Modal state
@@ -326,6 +352,14 @@ export default function MasterList() {
     useEffect(() => {
         if (!entityName) return;
 
+        // Echo of our own URL write: state is already the source of truth.
+        // Single use and keyed on entity+search, so a later navigation that
+        // happens to land on the same string (or another entity) re-initialises.
+        const echoKey = `${entityName}|${canonicalSearch(location.search)}`;
+        const isOwnEcho = ownSearchWrite.current === echoKey;
+        ownSearchWrite.current = null;
+        if (isOwnEcho) return;
+
         // Reset flags when entity changes
         backendDefaultsApplied.current = false;
 
@@ -385,7 +419,7 @@ export default function MasterList() {
                 backendDefaultsApplied.current = true;
             } else {
                 setFilterParams(defaultFilters);
-                setCurrentPage(1);
+                setCurrentPage(urlPage ?? 1);
                 setPageSize(25);
                 backendDefaultsApplied.current = true;
             }
@@ -504,7 +538,7 @@ export default function MasterList() {
         const backendDefaults = metadata.default_filters || {};
         const hardcodedDefaults = getDefaultFilters(entityName);
         if (Object.keys(backendDefaults).length > 0 && Object.keys(hardcodedDefaults).length === 0) {
-            setFilterParams(backendDefaults);
+            setFilterParams(normalizeFilterValues(backendDefaults));
             setCurrentPage(1);
             backendDefaultsApplied.current = true;
         }
@@ -558,7 +592,7 @@ export default function MasterList() {
         // filters arrives in API format (license_date__gte etc.) from AdvancedFilter.
         // Keep in API format — queryParams spreads filterParams directly into the API call.
         // uiFilterParams (derived via useMemo) converts back to UI format for display.
-        setFilterParams(filters as Record<string, string>);
+        setFilterParams(normalizeFilterValues(filters));
         setCurrentPage(1);
     }, []);
 
@@ -581,7 +615,10 @@ export default function MasterList() {
         const nextSearch = params.toString();
         const current = new URLSearchParams(location.search);
         current.sort();
-        if (nextSearch !== current.toString()) navigate({ search: nextSearch }, { replace: true });
+        if (nextSearch !== current.toString()) {
+            ownSearchWrite.current = `${entityName}|${nextSearch}`;
+            navigate({ search: nextSearch }, { replace: true });
+        }
     }, [entityName, filterParams, currentPage, location.search, navigate]);
 
     const handlePageChange = (page) => {

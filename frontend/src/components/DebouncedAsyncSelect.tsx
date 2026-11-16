@@ -2,6 +2,7 @@ import {useState, useEffect, useCallback, useMemo} from "react";
 import AsyncSelect from "react-select/async";
 import api from "../api/axios";
 import { useDebouncedCallback } from "../hooks/useDebounce";
+import { _fkDetailCache, _fkInFlight } from "./fkDetailCache";
 
 /**
  * Debounced AsyncSelectField Component
@@ -75,8 +76,27 @@ export default function DebouncedAsyncSelect({
     const fetchOptionById = async (id) => {
         try {
             const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-            const {data} = await api.get(`${baseEndpoint}${numId}/`);
-            return formatOption(data);
+            // Same URL key as AsyncSelectField so the shared cache is reused.
+            const url = `${baseEndpoint}${encodeURIComponent(String(numId))}/`;
+            if (_fkDetailCache.has(url)) {
+                return formatOption(_fkDetailCache.get(url));
+            }
+            let pending = _fkInFlight.get(url);
+            if (!pending) {
+                pending = api.get(url).then(
+                    ({data}) => {
+                        _fkDetailCache.set(url, data);
+                        _fkInFlight.delete(url);
+                        return data;
+                    },
+                    (err) => {
+                        _fkInFlight.delete(url);
+                        throw err;
+                    },
+                );
+                _fkInFlight.set(url, pending);
+            }
+            return formatOption(await pending);
         } catch (err) {
             return null;
         }
@@ -163,6 +183,13 @@ export default function DebouncedAsyncSelect({
 
     const handleChange = (selected) => {
         setSelectedOption(selected);
+        // Prime the shared cache so the value-change lookup needs no GET.
+        const picked = selected ? (Array.isArray(selected) ? selected : [selected]) : [];
+        for (const opt of picked) {
+            if (opt?.data?.id != null) {
+                _fkDetailCache.set(`${baseEndpoint}${encodeURIComponent(String(opt.data.id))}/`, opt.data);
+            }
+        }
 
         if (isMulti) {
             const values = selected ? selected.map(opt => opt.value) : [];

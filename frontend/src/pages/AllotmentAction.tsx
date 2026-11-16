@@ -15,6 +15,7 @@ import AllotmentFilters from "./AllotmentFilters";
 import LicensePlanningPanel from "../components/planning/LicensePlanningPanel";
 import { ArrowLeft, Building2, Calendar, CheckCircle2, CheckSquare, ChevronDown, Clipboard, CloudDownload, FileText, Files, Filter, Inbox, Info, ListChecks, Network, PenSquare, RefreshCw, StickyNote, Trash2, TriangleAlert, Unlock, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { qk } from "@/lib/queryKeys";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import DataPagination from "@/components/DataPagination";
@@ -183,6 +184,8 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
 
     // Use prop ID if provided (for modal), otherwise use URL param (for page)
     const id = propId || paramId;
+    // Shared with the allotment workspace tabs (numeric id), so opening allocate reuses the cache.
+    const allotmentKey = useMemo(() => qk.allotments.detail(Number(id)), [id]);
 
     const [allocationData, setAllocationData] = useState({});
     const [transferLetterOpen, setTransferLetterOpen] = useState(false);
@@ -307,7 +310,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
         data: allotment,
         isError: allotmentFailed,
     } = useQuery({
-        queryKey: ['allotments', id, 'info'],
+        queryKey: allotmentKey,
         queryFn: () => api.get(`allotments/${id}/`).then(r => r.data),
         enabled: Boolean(id),
         // Allocation edits explicitly invalidate this key.  Avoid refetching
@@ -514,7 +517,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
     // ---------------------------------------------------------------------------
 
     const invalidateAllotment = () => {
-        qc.invalidateQueries({ queryKey: ['allotments', id] });
+        qc.invalidateQueries({ queryKey: allotmentKey });
     };
 
     const handleFetchOwnership = useCallback(async () => {
@@ -539,13 +542,13 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
                 ? `Updated ${successCount}/${licenseIds.length} license transfers`
                 : `Updated ${successCount} license transfers`;
             toast.success(msg);
-            qc.invalidateQueries({ queryKey: ['allotments', id, 'info'] });
+            qc.invalidateQueries({ queryKey: allotmentKey });
         } catch (err: any) {
             toast.error('Failed to fetch ownership');
         } finally {
             setFetchingOwnershipIds(new Set());
         }
-    }, [allottedDetailGroups, id, qc]);
+    }, [allottedDetailGroups, id, qc, allotmentKey]);
 
     // Refresh the exact currently visible query after a mutation.  Broad cache
     // invalidation alone can leave a cancelled request stale until another
@@ -612,7 +615,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             // allocation stays because the backend continues to return it
             // with its recalculated balances.
             await Promise.all([
-                qc.invalidateQueries({ queryKey: ['allotments', id] }),
+                qc.invalidateQueries({ queryKey: allotmentKey }),
                 refreshAvailableLicenses(),
             ]);
 
@@ -639,7 +642,7 @@ export default function AllotmentAction({ allotmentId: propId, isModal = false, 
             // an enabled Confirm button that can only fail again.
             if (responseErrors.some(({ code }) => code === "NO_PLANNED_BALANCE" || code === "NO_PLANNED_QTY_BALANCE" || code === "NO_PLANNED_CIF_BALANCE")) {
                 void Promise.all([
-                    qc.invalidateQueries({ queryKey: ['allotments', id] }),
+                    qc.invalidateQueries({ queryKey: allotmentKey }),
                     refreshAvailableLicenses(),
                 ]);
             }

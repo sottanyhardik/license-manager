@@ -1,3 +1,4 @@
+import {useDebouncedValue} from "../../hooks/useDebouncedValue";
 import React, {useEffect, useState, useCallback, useRef, useLayoutEffect, useMemo} from "react";
 import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import ConditionBadge from "../../components/ConditionBadge";
@@ -340,6 +341,8 @@ export default function ItemPivotReport() {
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);
     const [minBalance, setMinBalance] = useState(200);
+    // Debounced so rapid changes issue a single report request.
+    const debouncedMinBalance = useDebouncedValue(minBalance, 400);
     const [licenseStatus, setLicenseStatus] = useState('active');
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
@@ -446,14 +449,6 @@ export default function ItemPivotReport() {
         loadAvailableNorms();
     }, []);
 
-    // Reload available norms when filters change (but not on initial mount)
-    useEffect(() => {
-        // Skip first render (already loaded above)
-        if (minBalance !== 200 || licenseStatus !== 'active') {
-            loadAvailableNorms();
-        }
-    }, [minBalance, licenseStatus]);
-
     const loadAvailableNorms = async () => {
         try {
             // Fetch only the list of norm classes (lightweight endpoint)
@@ -489,7 +484,7 @@ export default function ItemPivotReport() {
                 normClass,
                 selectedCompanies,
                 excludeCompanies,
-                minBalance,
+                minBalance: debouncedMinBalance,
                 licenseStatus,
                 expiryDateFrom,
                 expiryDateTo,
@@ -517,7 +512,7 @@ export default function ItemPivotReport() {
                 setLoading(false);
             }
         }
-    }, [selectedCompanies, excludeCompanies, minBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus]);
+    }, [selectedCompanies, excludeCompanies, debouncedMinBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus]);
 
     // Load report when active norm tab changes or filters change
     useEffect(() => {
@@ -590,7 +585,7 @@ export default function ItemPivotReport() {
                 normClass: activeNormTab,
                 selectedCompanies,
                 excludeCompanies,
-                minBalance,
+                minBalance: debouncedMinBalance,
                 licenseStatus,
                 expiryDateFrom,
                 expiryDateTo,
@@ -762,7 +757,7 @@ export default function ItemPivotReport() {
                 filters={{
                     selectedCompanies,
                     excludeCompanies,
-                    minBalance,
+                    minBalance: debouncedMinBalance,
                     licenseStatus,
                     expiryDateFrom,
                     expiryDateTo,

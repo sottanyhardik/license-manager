@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { qk } from "@/lib/queryKeys";
 import api from "../api/axios";
 import AllotmentAction, { aggregateAllottedDetails } from "./AllotmentAction";
 
@@ -280,6 +281,24 @@ describe("AllotmentAction canonical paired Max", () => {
         });
         const submittedPayload = mockedPost.mock.calls[0][1] as { allocations: Record<string, unknown>[] };
         expect(submittedPayload.allocations[0]).not.toHaveProperty("plan_line_id");
+    });
+
+    it("reuses the shared qk.allotments.detail cache entry instead of refetching the header", async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+        client.setQueryData(qk.allotments.detail(9722), allotment);
+        render(<QueryClientProvider client={client}><AllotmentAction allotmentId={9722} onClose={vi.fn()} /></QueryClientProvider>);
+        await screen.findByPlaceholderText("Qty");
+        expect(mockedGet.mock.calls.filter(([url]) => url === "allotments/9722/")).toHaveLength(0);
+    });
+
+    it("invalidates qk.allotments.detail after a successful allocation", async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+        const spy = vi.spyOn(client, "invalidateQueries");
+        render(<QueryClientProvider client={client}><AllotmentAction allotmentId={9722} onClose={vi.fn()} /></QueryClientProvider>);
+        await screen.findByPlaceholderText("Qty");
+        fireEvent.click(screen.getAllByRole("button", { name: "Max" })[0]);
+        fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+        await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: qk.allotments.detail(9722) }));
     });
 });
 

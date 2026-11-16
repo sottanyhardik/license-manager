@@ -1,6 +1,8 @@
 /**
  * Frontend list contract over DRF `page` / `page_size` (04 §3).
  * Pure helpers: no React, no network.
+ * Array filters are sent comma-joined (`status=1,2`): MasterViewSet reads one value per key
+ * and splits on commas (`master_view.py`, `fk` / `in` filters), as AdvancedFilter does.
  */
 
 export type FilterValue = string | number | boolean | readonly string[] | null | undefined;
@@ -53,7 +55,7 @@ export function toQuery(p: ListParams, maxPageSize: number = PAGE_SIZE_MAX): URL
     if (p.ordering) q.set("ordering", p.ordering);
     for (const [k, v] of Object.entries(p.filters)) {
         if (isEmpty(v)) continue;
-        if (Array.isArray(v)) v.forEach((item) => q.append(wireKey(k), String(item)));
+        if (Array.isArray(v)) q.set(wireKey(k), v.join(","));
         else q.set(wireKey(k), String(v));
     }
     return q;
@@ -84,6 +86,8 @@ export function normalizeList<T>(raw: unknown, sent: ListParams): ListResult<T> 
 export interface UrlOptions {
     /** Allow-list of filter param names owned by this list. */
     filterKeys: readonly string[];
+    /** Subset of filterKeys holding arrays; these travel comma-joined and are split on parse. */
+    multiKeys?: readonly string[];
     /** Prefix isolating two lists on one page, e.g. "avail_". */
     urlPrefix?: string;
     defaults?: Partial<Omit<ListParams, "page">>;
@@ -101,7 +105,13 @@ export function parseListParams(sp: URLSearchParams, opts: UrlOptions): ListPara
     const filters: Record<string, FilterValue> = { ...(d.filters ?? {}) };
     for (const key of opts.filterKeys) {
         const all = sp.getAll(`${pre}${key}`);
-        if (all.length === 1) filters[key] = all[0];
+        // Only declared multi-value keys are comma-split; everything else stays a raw string
+        // (free text such as "ACME, Ltd" must survive). Repeated keys are still read as arrays.
+        if (opts.multiKeys?.includes(key)) {
+            const values = all.flatMap((v) => v.split(",")).filter((v) => v !== "");
+            if (all.length === 1 && values.length <= 1) filters[key] = all[0];
+            else if (values.length > 0) filters[key] = values;
+        } else if (all.length === 1) filters[key] = all[0];
         else if (all.length > 1) filters[key] = all;
     }
     return {
@@ -135,7 +145,7 @@ export function writeListParams(base: URLSearchParams, p: ListParams, opts: UrlO
     for (const key of opts.filterKeys) {
         const v = p.filters[key];
         if (isEmpty(v) || sameValue(v, d.filters?.[key])) continue;
-        if (Array.isArray(v)) v.forEach((item) => next.append(`${pre}${key}`, String(item)));
+        if (Array.isArray(v)) next.set(`${pre}${key}`, v.join(","));
         else next.set(`${pre}${key}`, String(v));
     }
     return next;

@@ -12,11 +12,27 @@ describe("listContract", () => {
         expect(toQuery({ ...p, pageSize: 500 }).get("page_size")).toBe("200");
     });
 
-    it("toQuery maps _from to __gte, repeats arrays, drops empties", () => {
+    it("toQuery maps _from to __gte, comma-joins arrays (backend contract), drops empties", () => {
         const q = toQuery(p);
-        expect(q.getAll("status")).toEqual(["a", "b"]);
+        expect(q.getAll("status")).toEqual(["a,b"]);
         expect(q.get("date__gte")).toBe("2024-01-01");
         expect(q.has("empty")).toBe(false);
+    });
+
+    it("array filters round-trip through the URL as a single comma-joined key", () => {
+        const opts = { filterKeys: ["status"], multiKeys: ["status"] };
+        const written = writeListParams(new URLSearchParams(), { ...p, filters: { status: ["1", "2"] } }, opts);
+        expect(written.getAll("status")).toEqual(["1,2"]);
+        expect(parseListParams(written, opts).filters.status).toEqual(["1", "2"]);
+        // legacy repeated-key URLs still parse
+        expect(parseListParams(new URLSearchParams("status=1&status=2"), opts).filters.status).toEqual(["1", "2"]);
+    });
+
+    it("keeps comma text in non-multi keys raw", () => {
+        const opts = { filterKeys: ["company", "status"], multiKeys: ["status"] };
+        const sp = new URLSearchParams({ company: "ACME, Ltd", status: "a,,b" });
+        expect(parseListParams(sp, opts).filters).toEqual({ company: "ACME, Ltd", status: ["a", "b"] });
+        expect(parseListParams(new URLSearchParams({ search: "ACME, Ltd" }), opts).search).toBe("ACME, Ltd");
     });
 
     it("normalizes the envelope variants identically", () => {

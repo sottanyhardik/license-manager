@@ -125,7 +125,10 @@ export default function LicensePlanningWorkspace() {
             host.scrollTop = top;
         }));
     };
-    useEffect(() => { setLoading(true); fetchAllPages<any>("masters/sion-classes/", { is_active: true, ordering: "norm_class" }).then((rows) => { setSions(rows); const requested = params.get("sion"); if (requested) { const match = rows.find((row: any) => String(row.id) === requested || String(row.norm_class).toUpperCase() === requested.toUpperCase()); if (match) setSion(match.id); } }).catch(() => setError("Unable to load SION norms.")).finally(() => setLoading(false)); }, [params]);
+    // Fetch the SION list once; the request has no dependency on the URL.
+    useEffect(() => { setLoading(true); fetchAllPages<any>("masters/sion-classes/", { is_active: true, ordering: "norm_class" }).then(setSions).catch(() => setError("Unable to load SION norms.")).finally(() => setLoading(false)); }, []);
+    // Preselect the ?sion= deep link (id or norm class) once the list is loaded or the param changes.
+    useEffect(() => { if (!requestedSion) return; const match = sions.find((row: any) => String(row.id) === requestedSion || String(row.norm_class).toUpperCase() === requestedSion.toUpperCase()); if (match) setSion(match.id); }, [sions, requestedSion]);
     useEffect(() => { if (!requestedLicenseNumber || !requestedSion) return; setLoading(true); previewScopedSionPlan(requestedLicenseNumber, requestedSion).then(setScopedPreview).catch((e) => setError(e?.response?.data?.error || "Unable to preview the exact licence/SION selection.")).finally(() => setLoading(false)); }, [requestedLicenseNumber, requestedSion]);
     useEffect(() => { if (!sion) { setRules([]); setDraft(null); setSelectedRuleId(null); setPreview(null); return; } setLoading(true); setError(""); setDraft(null); setPreview(null); fetchSionPlanningRules(sion).then((rows) => { const ordered = [...rows].sort((a, b) => a.priority - b.priority); setRules(ordered); setSelectedRuleId((current) => ordered.some((rule) => rule.id === current) ? current : ordered[0]?.id ?? null); }).catch(() => setError("Unable to load planning rules.")).finally(() => setLoading(false)); }, [sion]);
     const savedDraft = draft?.id ? rules.find((rule) => rule.id === draft.id) : null;

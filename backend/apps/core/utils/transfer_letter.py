@@ -18,7 +18,6 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from apps.core.models import TransferLetterModel
-from apps.allotment.scripts.aro import convert_docx_to_pdf
 
 
 def merge_license_documents(licenses, output_path):
@@ -32,6 +31,8 @@ def merge_license_documents(licenses, output_path):
     Returns:
         True if successful, False otherwise
     """
+    from apps.allotment.scripts.aro import convert_docx_to_pdf
+
     try:
         from pypdf import PdfWriter, PdfReader
         from PIL import Image

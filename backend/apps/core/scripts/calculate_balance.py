@@ -1,3 +1,4 @@
+from django.apps import apps
 from django.db.models import Sum, Q
 
 from apps.core.constants import DEBIT
@@ -143,7 +144,7 @@ def calculate_available_value(instance):
     are unchanged; only the source of "full balance" is now guaranteed
     live instead of potentially stale.
     """
-    from apps.license.models import LicenseImportItemsModel
+    LicenseImportItemsModel = apps.get_model("license", "LicenseImportItemsModel")
     from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
     if instance.license:
@@ -203,7 +204,7 @@ def update_balance_values(item):
 
     # Check and update license is_null if balance_cif < 100
     if item.license:
-        from apps.license.models import LicenseFlags
+        LicenseFlags = apps.get_model("license", "LicenseFlags")
 
         license = item.license
         balance_cif = license.get_balance_cif

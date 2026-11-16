@@ -9,6 +9,7 @@ generation only.
 """
 from __future__ import annotations
 
+from django.apps import apps
 from drf_spectacular.extensions import (
     OpenApiAuthenticationExtension,
     OpenApiSerializerFieldExtension,
@@ -82,7 +83,7 @@ class RuntimeAPIViewSchema(OpenApiViewExtension):
             # The collection/detail handlers are bespoke and do not call a
             # queryset.  A harmless empty queryset gives schema generation a
             # concrete integer lookup model without altering request handling.
-            from apps.license.models import LicenseDetailsModel
+            LicenseDetailsModel = apps.get_model("license", "LicenseDetailsModel")
             attrs["queryset"] = LicenseDetailsModel.objects.none()
         # Schema generation instantiates this replacement only.  Runtime URL
         # callbacks still point at the original view class.

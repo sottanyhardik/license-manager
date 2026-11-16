@@ -22,6 +22,7 @@ the activation runbook in ``docs/08-security.md``.
 """
 import os
 
+from django.apps import apps
 from django.conf import settings
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
@@ -60,28 +61,28 @@ def _required_read_roles(rel_path):
     and therefore the correct role, can't be established.
     """
     if rel_path.startswith("licenses/"):
-        from apps.license.models import LicenseDocumentModel
+        LicenseDocumentModel = apps.get_model("license", "LicenseDocumentModel")
 
         if not LicenseDocumentModel.objects.filter(file=rel_path).exists():
             return []
         return LicensePermission.required_roles_for_read
 
     if rel_path.startswith("boe_copies/"):
-        from apps.bill_of_entry.models import BillOfEntryModel
+        BillOfEntryModel = apps.get_model("bill_of_entry", "BillOfEntryModel")
 
         if not BillOfEntryModel.objects.filter(boe_pdf_copy=rel_path).exists():
             return []
         return BillOfEntryPermission.required_roles_for_read
 
     if rel_path.startswith("trade/"):
-        from apps.trade.models import LicenseTrade
+        LicenseTrade = apps.get_model("trade", "LicenseTrade")
 
         if not LicenseTrade.objects.filter(purchase_invoice_copy=rel_path).exists():
             return []
         return TradePermission.required_roles_for_read
 
     if rel_path.startswith("license_purchases/"):
-        from apps.license.models import LicensePurchase
+        LicensePurchase = apps.get_model("license", "LicensePurchase")
 
         if not LicensePurchase.objects.filter(invoice_copy=rel_path).exists():
             return []

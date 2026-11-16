@@ -1,4 +1,5 @@
 """Read-only preflight for safe ItemNameModel identity consolidation."""
+from django.apps import apps
 from collections import defaultdict
 
 from django.core.management.base import BaseCommand
@@ -24,7 +25,8 @@ class Command(BaseCommand):
             references.append((relation.related_model, field.name, field.remote_field.on_delete.__name__))
         # ``related_name='+'`` intentionally suppresses Django reverse
         # metadata for strategy-child FKs, so include them explicitly.
-        from apps.license.models import SionPlanningPercentageRow, SionPlanningUnitValueRow
+        SionPlanningPercentageRow = apps.get_model("license", "SionPlanningPercentageRow")
+        SionPlanningUnitValueRow = apps.get_model("license", "SionPlanningUnitValueRow")
         references.extend([
             (SionPlanningPercentageRow, "import_item", "PROTECT"),
             (SionPlanningUnitValueRow, "import_item", "PROTECT"),

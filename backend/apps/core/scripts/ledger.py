@@ -1,15 +1,14 @@
 import datetime
 import logging
 
+from django.apps import apps
 from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
-from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.core.constants import DEBIT
 from apps.core.models import CompanyModel, PortModel
 from apps.core.scripts.calculate_balance import update_balance_values
-from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel, LicenseExportItemModel
 
 
 def extract_value_from_splits(split_values):
@@ -123,6 +122,7 @@ from django.db import transaction
 
 
 def bulk_get_or_create_license_items(type_credit_list, license):
+    LicenseImportItemsModel = apps.get_model("license", "LicenseImportItemsModel")
     license_import_list = [LicenseImportItemsModel(
         license=license,
         serial_number=item['sr_no'],
@@ -161,6 +161,7 @@ def bulk_get_or_create_license_items(type_credit_list, license):
 
 
 def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
+    BillOfEntryModel = apps.get_model("bill_of_entry", "BillOfEntryModel")
     unique_bill_entries = {}
 
     # Normalize date format and deduplicate by (be_number, be_date)
@@ -218,6 +219,8 @@ def bulk_get_or_create_boe_details(type_debit_list, existing_ports):
 
 
 def create_object(data_dict):
+    LicenseDetailsModel = apps.get_model("license", "LicenseDetailsModel")
+    LicenseExportItemModel = apps.get_model("license", "LicenseExportItemModel")
     # Try to retrieve existing objects before creating new ones
     company, _ = CompanyModel.objects.get_or_create(iec=data_dict['iec'])
     license, _ = LicenseDetailsModel.objects.update_or_create(
@@ -289,6 +292,7 @@ def fetch_page_data(data):
 
 
 def bulk_get_or_create_boe(boe_row):
+    RowDetails = apps.get_model("bill_of_entry", "RowDetails")
     row_details_list = [
         RowDetails(
             bill_of_entry=item['boe'],

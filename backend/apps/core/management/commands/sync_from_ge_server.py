@@ -151,7 +151,7 @@ class Command(BaseCommand):
 
     def _sync_all_data(self, dry_run: bool = False, force: bool = False):
         """Recalculate all locally stored GE-status license data."""
-        from apps.license.models import LicenseDetailsModel
+        LicenseDetailsModel = apps.get_model("license", "LicenseDetailsModel")
 
         self.stdout.write("Fetching licenses to sync...")
 
@@ -198,7 +198,7 @@ class Command(BaseCommand):
 
     def _sync_specific_license(self, license_number: str, dry_run: bool = False, force: bool = False):
         """Recalculate a specific license from local database state."""
-        from apps.license.models import LicenseDetailsModel
+        LicenseDetailsModel = apps.get_model("license", "LicenseDetailsModel")
 
         try:
             license = LicenseDetailsModel.objects.get(license_number=license_number)
@@ -232,7 +232,7 @@ class Command(BaseCommand):
                     f"{license.balance_cif} → {calculated_balance}"
                 )
                 # balance_cif lives on LicenseBalance sub-table after the split.
-                from apps.license.models import LicenseBalance
+                LicenseBalance = apps.get_model("license", "LicenseBalance")
                 LicenseBalance.objects.filter(license_id=license.pk).update(
                     balance_cif=calculated_balance
                 )

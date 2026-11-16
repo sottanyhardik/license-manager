@@ -14,6 +14,7 @@ Usage:
             from apps.core import cache_signals  # noqa
 """
 
+from django.apps import apps
 import logging
 
 from django.db.models.signals import m2m_changed, post_delete, post_save
@@ -420,7 +421,7 @@ def connect_m2m_signals():
     Call this from apps.py ready() after models are loaded.
     """
     try:
-        from apps.license.models import LicenseImportItemsModel
+        LicenseImportItemsModel = apps.get_model("license", "LicenseImportItemsModel")
 
         # Connect the M2M signal for import items <-> item names
         m2m_changed.connect(

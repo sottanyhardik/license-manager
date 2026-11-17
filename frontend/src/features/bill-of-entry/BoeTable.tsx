@@ -8,6 +8,7 @@ import { ActionMenu, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { boeInvoiceBadge } from "./invoiceStatus";
 import { saveFilterState } from "@/utils/filterPersistence";
 
 import BoeRecordWorkspace from "./BoeRecordWorkspace";
@@ -190,9 +191,9 @@ function InvoiceCell({ item }: { item: BoeListItem }) {
 }
 
 function InvoiceStatusCell({ item }: { item: BoeListItem }) {
-    return item.invoice_no
-        ? <StatusBadge tone="success" label="Invoiced" />
-        : <StatusBadge tone="neutral" label="Pending" />;
+    const badge = boeInvoiceBadge(item);
+    if (!badge) return <>—</>;
+    return <StatusBadge tone={badge.tone} label={badge.label} className={badge.muted ? "opacity-60" : undefined} />;
 }
 
 function QtyCell({ item }: { item: BoeListItem }) {

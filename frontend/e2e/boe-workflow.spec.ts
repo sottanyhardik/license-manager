@@ -17,7 +17,7 @@ const userFor = (roles: string[]) => ({
 const BOES = [
   {
     id: 201, bill_of_entry_number: "7012345", bill_of_entry_date: "05-01-2025", port_name: "INNSA1", company_name: "Alpha Imports",
-    product_name: "Crude Palm Oil", invoice_no: "INV-201", invoice_date: "06-01-2025", licenses: "0310123456",
+    invoice_status: "invoiced", invoice_status_label: "Invoiced", product_name: "Crude Palm Oil", invoice_no: "INV-201", invoice_date: "06-01-2025", licenses: "0310123456",
     total_inr: "1234567.89", total_fc: "15000.5", total_quantity: "12.3456", unit_price: "1215.03",
     exchange_rate: "82.30", appraisement: "Yes", ooc_date: "07-01-2025", cha: "Beta CHA", comments: null,
     allotment: [301], boe_pdf_copy: null,
@@ -27,7 +27,7 @@ const BOES = [
   },
   {
     id: 202, bill_of_entry_number: "7012346", bill_of_entry_date: "15-08-2025", port_name: "INMAA1", company_name: null,
-    product_name: "", invoice_no: "", licenses: "0310654321",
+    invoice_status: "not_invoiced", invoice_status_label: "Not invoiced", product_name: "", invoice_no: "", licenses: "0310654321",
     total_inr: "8200", total_fc: "100", total_quantity: "2", unit_price: null, allotment: [], boe_pdf_copy: null,
     item_details: [
       { id: 2, license_id: 12, license_number: "0310654321", item_description: "Cashew", hs_code: "08013100", qty: "2", cif_fc: "100", cif_inr: "8200", is_dispute: true },

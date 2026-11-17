@@ -47,6 +47,8 @@ BOE_RESPONSE_KEYS = {
     "cha", "comments", "planning_target_item", "planning_target_item_name",
     "item_details", "total_inr", "total_fc", "total_quantity", "licenses",
     "unit_price", "created_on", "modified_on", "created_by", "modified_by",
+    # Additive, read-only (BOE invoice status, 2026-11-17).
+    "invoice_status", "invoice_status_label",
 }
 BOE_RESPONSE_KEYS_NO_PORT_NO_PLAN = BOE_RESPONSE_KEYS - NULL_FK_OMITTED_KEYS
 BOE_RESPONSE_KEYS_NO_PLAN = BOE_RESPONSE_KEYS - {"planning_target_item_name"}

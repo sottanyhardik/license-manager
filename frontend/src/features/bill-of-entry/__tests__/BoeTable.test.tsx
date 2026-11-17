@@ -38,8 +38,19 @@ describe("BOE register table", () => {
         expect(within(row).getByText("₹12,34,568")).toBeInTheDocument();
         expect(within(row).getByText("15,000.5")).toBeInTheDocument();
         expect(within(boeCards()[1]).getByText("1 Dispute")).toBeInTheDocument();
-        expect(within(boeCards()[1]).getByText("Pending")).toBeInTheDocument();
+        expect(within(boeCards()[1]).getByText("Not invoiced")).toBeInTheDocument();
         expect(within(boeCards()[0]).queryByText(/Dispute/)).toBeNull();
+    });
+
+    it("renders the status badge from invoice_status, not from invoice_no", async () => {
+        renderBoeList("BOE_MANAGER");
+        await ready();
+        // 204 has an invoice_no but is only "Invoice no. recorded"; never "Invoiced".
+        const rec = within(boeCards()[3]);
+        expect(rec.getByText("Invoice no. recorded")).toBeInTheDocument();
+        expect(rec.queryByText("Invoiced")).toBeNull();
+        expect(rec.getByText("Invoice no. recorded").closest("[data-tone]")).toHaveAttribute("data-tone", "info");
+        expect(within(boeCards()[0]).getByText("Invoiced").closest("[data-tone]")).toHaveAttribute("data-tone", "success");
     });
 
     const invoiceGate: Array<[Role, boolean, boolean]> = [

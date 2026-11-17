@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.bill_of_entry.services import boe_service
+from apps.bill_of_entry.services.boe_invoice_status import INVOICE_STATUS_LABELS, invoice_status_for_boes
 # Re-exported: the write-path guards moved to the service layer (ADR-003);
 # existing imports of these names from this module keep working.
 from apps.bill_of_entry.services.boe_service import (  # noqa: F401
@@ -189,6 +190,8 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
         read_only=True
     )
     planning_target_item_name = serializers.CharField(source="planning_target_item.name", read_only=True)
+    invoice_status = serializers.SerializerMethodField()
+    invoice_status_label = serializers.SerializerMethodField()
 
     # Display fields for foreign keys
     port_name = serializers.CharField(source='port.name', read_only=True)
@@ -224,12 +227,28 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
             'total_quantity',
             'licenses',
             'unit_price',
+            'invoice_status',
+            'invoice_status_label',
             'created_on',
             'modified_on',
             'created_by',
             'modified_by',
         ]
         read_only_fields = ['created_on', 'modified_on', 'created_by', 'modified_by']
+
+    def _invoice_status(self, obj):
+        status_map = self.context.get('invoice_status_map')
+        if status_map is not None and obj.pk in status_map:
+            return status_map[obj.pk]
+        if obj.pk is None:
+            return None
+        return invoice_status_for_boes([obj]).get(obj.pk)
+
+    def get_invoice_status(self, obj):
+        return self._invoice_status(obj)
+
+    def get_invoice_status_label(self, obj):
+        return INVOICE_STATUS_LABELS.get(self._invoice_status(obj))
 
     HIDDEN_INVOICE_NO_MESSAGE = boe_service.HIDDEN_INVOICE_NO_MESSAGE
 

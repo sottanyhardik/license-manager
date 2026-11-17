@@ -9,7 +9,7 @@ import MasterList from "@/pages/masters/MasterList";
 /** List-level fields as returned by `bill-of-entries/` (BillOfEntrySerializer). */
 export const BOE_FIXTURE = [
     {
-        id: 201, bill_of_entry_number: "7012345", bill_of_entry_date: "05-01-2025", port_name: "INNSA1", company_name: "Alpha Imports",
+        id: 201, invoice_status: "invoiced", invoice_status_label: "Invoiced", bill_of_entry_number: "7012345", bill_of_entry_date: "05-01-2025", port_name: "INNSA1", company_name: "Alpha Imports",
         product_name: "Crude Palm Oil", invoice_no: "INV-201", invoice_date: "06-01-2025", licenses: "0310123456",
         total_inr: "1234567.89", total_fc: "15000.5", total_quantity: "12.3456", unit_price: "1215.03",
         exchange_rate: "82.30", appraisement: "Yes", ooc_date: "07-01-2025", cha: "Beta CHA", comments: null,
@@ -19,7 +19,7 @@ export const BOE_FIXTURE = [
         ],
     },
     {
-        id: 202, bill_of_entry_number: "7012346", bill_of_entry_date: "15-08-2025", port_name: "INMAA1", company_name: null,
+        id: 202, invoice_status: "not_invoiced", invoice_status_label: "Not invoiced", bill_of_entry_number: "7012346", bill_of_entry_date: "15-08-2025", port_name: "INMAA1", company_name: null,
         product_name: "", invoice_no: "", licenses: "0310654321, 0310777777",
         total_inr: "0", total_fc: null, total_quantity: "5", unit_price: null,
         allotment: [], boe_pdf_copy: null,
@@ -29,13 +29,13 @@ export const BOE_FIXTURE = [
         ],
     },
     {
-        id: 203, bill_of_entry_number: "", bill_of_entry_date: null, port_name: null, company_name: "Gamma",
+        id: 203, invoice_status: "not_invoiced", invoice_status_label: "Not invoiced", bill_of_entry_number: "", bill_of_entry_date: null, port_name: null, company_name: "Gamma",
         product_name: "Almonds", invoice_no: null, licenses: null,
         total_inr: null, total_fc: "0.333", total_quantity: null, unit_price: "77",
         allotment: [302, 303], item_details: [],
     },
     {
-        id: 204, bill_of_entry_number: "7012348", bill_of_entry_date: "29-02-2024", port_name: "INBOM4", company_name: "Delta",
+        id: 204, invoice_status: "invoice_no_recorded", invoice_status_label: "Invoice no. recorded", bill_of_entry_number: "7012348", bill_of_entry_date: "29-02-2024", port_name: "INBOM4", company_name: "Delta",
         product_name: null, invoice_no: "INV-204", licenses: "0310000004",
         total_inr: "98765", total_fc: "1200", total_quantity: "1.5", unit_price: "800",
         allotment: [304],

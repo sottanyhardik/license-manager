@@ -13,6 +13,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { buildBoeRecordTabs } from "@/features/bill-of-entry/boeRecordTabs";
 import { useBoeRowActions, type BoeRowActionContext } from "@/features/bill-of-entry/useBoeRowActions";
 import { fmtFc2, fmtInrExact, fmtQty } from "@/features/bill-of-entry/format";
+import { boeInvoiceBadge } from "@/features/bill-of-entry/invoiceStatus";
 import type { BoeDetailRow, BoeListItem } from "@/features/bill-of-entry/types";
 import { qk } from "@/lib/queryKeys";
 import { shouldRetryQuery } from "@/api/queryClient";
@@ -195,6 +196,7 @@ function BoeDetailView({ item, onBack }: { item: BoeListItem; onBack: () => void
     };
     const { actions } = useBoeRowActions(item, ctx);
 
+    const invoiceBadge = boeInvoiceBadge(item);
     const number = item.bill_of_entry_number || String(item.id);
     const disputes = ((item.item_details || []) as BoeDetailRow[]).filter((r) => r.is_dispute).length;
     // The page header (number, date, port, company) and the figure tiles already show
@@ -215,9 +217,9 @@ function BoeDetailView({ item, onBack }: { item: BoeListItem; onBack: () => void
                             {[item.bill_of_entry_date, item.port_name].filter(Boolean).join(" · ")}
                         </span>
                         {item.company_name && <span className="text-sm font-medium text-foreground">{item.company_name}</span>}
-                        {item.invoice_no
-                            ? <StatusBadge tone="success" label={`Invoiced · ${item.invoice_no}`} />
-                            : <StatusBadge tone="neutral" label="Invoice pending" />}
+                        {invoiceBadge && (
+                            <StatusBadge tone={invoiceBadge.tone} label={invoiceBadge.label} className={invoiceBadge.muted ? "opacity-60" : undefined} />
+                        )}
                         {disputes > 0 && (
                             <StatusBadge tone="danger" icon={TriangleAlert} label={`${disputes} Dispute${disputes > 1 ? "s" : ""}`} />
                         )}

@@ -3,12 +3,18 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.accounts.permissions import BillOfEntryPermission, TransferLetterPermission, AccountAccessPermission
 from apps.bill_of_entry.models import BillOfEntryModel, annotate_and_exclude_hidden
 from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
 from apps.bill_of_entry.services import boe_service
+from apps.bill_of_entry.services.boe_invoice_status import (
+    INVOICE_STATUS_CHOICES,
+    boe_ids_for_statuses,
+    invoice_status_for_boes,
+)
 from apps.bill_of_entry.api.views_export import add_grouped_export_action
 from apps.core.constants import TYPE_CHOICES, ROW_TYPE_CHOICES
 from apps.core.filters import CombinedFilterBackend, EnhancedSearchFilter, AdvancedOrderingFilter
@@ -172,12 +178,48 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         )
 
         # Handle available_for_trade filtering
+        statuses = self._requested_invoice_statuses()
         if self.request.query_params.get('available_for_trade') == 'true':
             queryset = annotate_and_exclude_hidden(queryset)
+            if statuses:
+                queryset = queryset.filter(pk__in=boe_ids_for_statuses(statuses, queryset))
             return queryset
+
+        # invoice_status (additive): when given, it replaces the legacy
+        # is_invoice default so e.g. invoiced/hidden BOEs are reachable.
+        if statuses:
+            if self.request.query_params.get('is_invoice') is not None:
+                queryset = self._apply_invoice_filter(queryset)
+            return queryset.filter(pk__in=boe_ids_for_statuses(statuses, queryset))
 
         # Apply is_invoice filter with defaults
         return self._apply_invoice_filter(queryset)
+
+    def _requested_invoice_statuses(self):
+        raw = self.request.query_params.get('invoice_status') or ''
+        valid = {value for value, _label in INVOICE_STATUS_CHOICES}
+        requested = [p.strip().lower() for p in raw.split(',') if p.strip()]
+        unknown = sorted(set(requested) - valid)
+        if unknown:
+            # Reject instead of silently falling back to the legacy default.
+            raise ValidationError({
+                'invoice_status': f"Unknown value(s): {', '.join(unknown)}. Allowed: {', '.join(sorted(valid))}."
+            })
+        return requested
+
+    def paginate_queryset(self, queryset):
+        page = super().paginate_queryset(queryset)
+        if page is not None:
+            # One bulk resolution per page keeps the list query count constant.
+            self._invoice_status_map = invoice_status_for_boes(page)
+        return page
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        status_map = getattr(self, '_invoice_status_map', None)
+        if status_map is not None:
+            context['invoice_status_map'] = status_map
+        return context
 
     def _apply_invoice_filter(self, queryset):
         """Apply is_invoice filter logic."""
@@ -194,6 +236,7 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         """Exclude is_invoice from advanced filter processing (handled in get_queryset)."""
         params_copy = params.copy() if hasattr(params, 'copy') else dict(params)
         params_copy.pop('is_invoice', None)
+        params_copy.pop('invoice_status', None)
         return super().apply_advanced_filters(qs, params_copy, filter_config)
 
     def retrieve(self, request, *args, **kwargs):
@@ -217,7 +260,12 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         if isinstance(response.data, dict) and 'filter_config' in response.data:
             response.data['filter_config']['is_invoice'] = {
                 'type': 'exact',
-                'label': 'Has Invoice'
+                'label': 'Has Invoice No.'
+            }
+            response.data['filter_config']['invoice_status'] = {
+                'type': 'exact',
+                'label': 'Invoice Status',
+                'choices': [list(c) for c in INVOICE_STATUS_CHOICES],
             }
         return response
 

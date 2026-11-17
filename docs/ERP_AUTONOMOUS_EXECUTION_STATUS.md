@@ -102,13 +102,14 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 <!-- CHECKPOINT:boe:BEGIN -->
 **BOE — last verified checkpoint (2026-11-17)**
 - Branch `feature/v5` (local; push needs owner approval). Verified: `3ece31f0` (iteration 1), `f202cedb` (Phase A, D1–D15),
-  `d47041f5` (autonomous workflow), `9f012089` (Phase B), `48e7207b` (Licence + BOE UI modernization, shell cleanup).
+  `d47041f5` (autonomous workflow), `9f012089` (Phase B), `48e7207b` (Licence + BOE UI modernization, shell cleanup), BOE invoice status (authoritative `invoice_status`, see api-contract-standards.md).
 - Evidence: Phase B integrated tree BE gate exit 0 (3395 passed / 1 pre-existing xfail); UI commit FE gate PASS
   833/833 + typecheck + lint + build; Playwright 38/38 mocked, serial (check port 41731 is free first — another
   session's dev server on that port makes Playwright test the wrong tree).
 - Open (low): Licence `$-250.75` sign format (pinned owner decision); Tasks FAB near Dashboard "View all" at 768px;
-  BOE invoice status derived from invoice_no (no is_invoice in list payload); live-backend Playwright not run
+  live-backend Playwright not run
   (needs credentials); licence detail page (`pages/license-overview/**`) not modernized — has uncommitted user edits.
+- Perf follow-up (protected balance code): BOE list ~8 queries/row from per-row authoritative_available_cif (local: 818 queries / 3.3 s per 100 rows).
 - Owner items: nginx `nosniff` reload by ops (not deployed); `git push`.
 <!-- CHECKPOINT:boe:END -->
 

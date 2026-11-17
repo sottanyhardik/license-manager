@@ -40,3 +40,14 @@ No custom `EXCEPTION_HANDLER` is configured (`lmanagement/settings.py` REST_FRAM
 3. Put permission logic in `accounts/permissions.py`, not views.
 4. Business logic in `boe_service`; view = parse, call, respond (rule 1).
 5. Add a contract test pinning status codes and keys.
+
+## BOE `invoice_status` (additive, 2026-11-17)
+
+| Field / param | Contract |
+|---|---|
+| `invoice_status` (read-only, list + detail) | `hidden` \| `invoiced` \| `invoice_no_recorded` \| `not_invoiced`, in that precedence. `hidden` = `genuinely_hidden_boe_ids` (audit history, not the `OTH` text); `invoiced` = BOE represented by a Sale invoice per the canonical `LicenseBalanceCalculator.resolve_boes_represented_by_invoice_for_licenses` (active + current `InvoiceBOEAllocation`, or legacy sale `trade.boes`; reversed/non-current allocations do not count); `invoice_no_recorded` = invoice number entered but no linked Sale invoice; `not_invoiced` otherwise. Service: `apps/bill_of_entry/services/boe_invoice_status.py`. |
+| `invoice_status_label` (read-only) | Human label for the status. |
+| `?invoice_status=a,b` (list + export) | Filters by the same service. Unknown values → 400 `{"invoice_status": ...}`. When given without `is_invoice`, the legacy invoice-number default is not applied (otherwise hidden/invoiced BOEs would be unreachable). |
+| `?is_invoice=` (legacy) | Unchanged semantics (invoice number present/absent) and default (`false`); UI label now "Has Invoice No.". |
+
+Known limitation: the status filter resolves over all candidate BOEs of the already-filtered queryset (fixed query count, cost grows with data size). The BOE list's pre-existing per-row `authoritative_available_cif` cost (~8 queries/row on local data) is unchanged and remains a performance follow-up in protected balance code.

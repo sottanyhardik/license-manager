@@ -20,6 +20,7 @@ import { useLicenseOverviewSummary } from "./useLicenseOverviewSummary";
 import OverviewTab from "./OverviewTab";
 import BoesTab from "./BoesTab";
 import AllotmentsTab from "./AllotmentsTab";
+import TransactionsTab from "./TransactionsTab";
 import PlanningEditor from "@/components/planning/PlanningEditor";
 import ItemsTab from "./ItemsTab";
 import InvoiceLedgerTab from "./InvoiceLedgerTab";
@@ -27,13 +28,14 @@ import ReplanStatus from "./ReplanStatus";
 import { autoPlanLicense } from "@/api/planningRuleApi";
 import { ROLES } from "../../routes/authorizationRoles";
 
-type TabId = "overview" | "boes" | "allotments" | "planning" | "items" | "invoice-ledger";
+type TabId = "overview" | "boes" | "allotments" | "transactions" | "planning" | "items" | "invoice-ledger";
 type LicenseDocument = { id: number; type: string; file: string };
 
 const TABS: { id: TabId; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "boes", label: "BOEs" },
     { id: "allotments", label: "Allotments" },
+    { id: "transactions", label: "Transactions" },
     { id: "planning", label: "Planning" },
     { id: "items", label: "Items" },
     { id: "invoice-ledger", label: "Invoice Ledger" },
@@ -214,6 +216,9 @@ export default function LicenseOverviewPage() {
                 </TabsContent>
                 <TabsContent value="allotments" className="mt-4">
                     <AllotmentsTab licenseId={id} isActive={activeTab === "allotments"} />
+                </TabsContent>
+                <TabsContent value="transactions" className="mt-4">
+                    <TransactionsTab licenseId={id} isActive={activeTab === "transactions"} />
                 </TabsContent>
                 <TabsContent value="planning" className="mt-4">
                     {id && (

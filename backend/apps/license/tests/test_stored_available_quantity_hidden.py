@@ -1,7 +1,7 @@
 """A-2 option (i): the stored quantity writer is hidden-BOE aware.
 
-BUSINESS-RULE CHANGE, A-2 option (i): PENDING OWNER RECONCILIATION — not approved; do not commit
-(doc 11 §9 A-2), QUANTITY ONLY:
+BUSINESS-RULE CHANGE, A-2 option (i): APPROVED by the owner 2026-11-17 (landed in 9a4dcf94;
+doc 11 §9 A-2), QUANTITY ONLY:
 ``apps.core.scripts.calculate_balance`` now excludes genuinely hidden BOE debit
 rows from the stored ``debited_quantity`` / ``available_quantity`` exactly as
 ``ItemBalanceCalculator`` does.  Unchanged by design: the integer floor of the
@@ -14,7 +14,6 @@ Before this change (pinned in doc 11 §6 L8) the L8 shape stored
 import uuid
 from decimal import Decimal
 
-import pytest
 
 
 from django.contrib.auth import get_user_model
@@ -28,7 +27,6 @@ from apps.license.models import LicenseImportItemsModel
 from apps.license.tests.test_quantity_parity import QuantityFixtureMixin
 
 D = Decimal
-A2_NOT_APPROVED = pytest.mark.skip(reason="A-2 not approved; pending owner reconciliation")
 
 
 def floor0(value):
@@ -41,7 +39,6 @@ class StoredAvailableQuantityHiddenBoeTests(QuantityFixtureMixin, TestCase):
         self.company = self.make_company()
         self.lic = self.make_license(self.company)
 
-    @A2_NOT_APPROVED
     def test_hidden_boe_excluded_from_stored_quantity_cif_unchanged(self):
         item = self.make_item(self.lic, "12335.890")
         self.debit(self.make_boe(self.company, hidden=True), item, "12335.000", cif="500.00")
@@ -71,7 +68,6 @@ class StoredAvailableQuantityHiddenBoeTests(QuantityFixtureMixin, TestCase):
         self.assertEqual(stored.available_quantity, D("60"))
         self.assertEqual(stored.debited_quantity, D("40.00"))
 
-    @A2_NOT_APPROVED
     def test_mixed_visible_hidden_and_direct_sale_l7(self):
         item = self.make_item(self.lic, "58965.610")
         self.debit(self.make_boe(self.company), item, "19233.000", cif="100.00")
@@ -83,7 +79,6 @@ class StoredAvailableQuantityHiddenBoeTests(QuantityFixtureMixin, TestCase):
         self.assertEqual(stored.debited_quantity, D("40547.00"))  # visible D + direct sale; was 78314
         self.assertEqual(stored.debited_value, D("300.00"))  # CIF unchanged
 
-    @A2_NOT_APPROVED
     def test_prefetch_path_equals_sql_path(self):
         item = self.make_item(self.lic, "1000.000")
         self.debit(self.make_boe(self.company), item, "100.000", cif="10.00")
@@ -108,7 +103,6 @@ class StoredAvailableQuantityHiddenBoeTests(QuantityFixtureMixin, TestCase):
         self.assertEqual(writer.calculate_available_quantity(sql_item, sql), D("852"))
         self.assertEqual(writer.calculate_available_quantity(sql_item, sql), floor0(self.engine(item)))
 
-    @A2_NOT_APPROVED
     def test_api_db_consistency_with_and_without_hidden(self):
         plain = self.make_item(self.lic, "1253.620", serial=1)
         self.debit(self.make_boe(self.company), plain, "1014.000")
@@ -134,7 +128,6 @@ class AllotmentGatingAfterHiddenBoeTests(QuantityFixtureMixin, TestCase):
     def candidates(self):
         return set(LicenseImportItemsModel.objects.filter(available_quantity__gt=0).values_list("id", flat=True))
 
-    @A2_NOT_APPROVED
     def test_hidden_only_debit_item_becomes_candidate_after_recompute(self):
         from apps.bill_of_entry.services.boe_service import hide_boe
 

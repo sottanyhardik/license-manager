@@ -15,7 +15,7 @@ def _get_aggregated_values(instance):
       `debited_qty` (quantity) excludes GENUINELY hidden BOEs exactly as the
       Balance Engine does (`ItemBalanceCalculator.calculate_available_
       quantity[_for_items]` via `exclude_hidden`).  BUSINESS-RULE CHANGE,
-      A-2 option (i): PENDING OWNER RECONCILIATION — not approved; do not commit (doc 11 §9): before this, the stored
+      A-2 option (i): APPROVED by the owner 2026-11-17 (doc 11 §9): before this, the stored
       quantity still subtracted hidden-BOE debits the engine ignores (Q-1).
       When the caller has prefetched 'item_details' the sums come from the
       cache, and the hidden set from `genuinely_hidden_boe_ids` (the

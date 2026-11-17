@@ -1102,8 +1102,8 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     background: var(--tb-card-bg);
     border-bottom: 1px solid var(--tb-border);
     box-shadow: none;
-    height: 56px;
-    padding: 0 clamp(14px, 2vw, 28px);
+    height: 48px;
+    padding: 0 clamp(12px, 1.6vw, 24px);
     display: flex;
     align-items: center;
     position: sticky;
@@ -1116,7 +1116,7 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     display: inline-flex;
     align-items: center;
     gap: 9px;
-    margin-right: 24px;
+    margin-right: 16px;
     text-decoration: none;
     color: var(--tb-text);
     flex-shrink: 0;
@@ -1155,8 +1155,8 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 36px;
-    padding: 0 12px;
+    height: 32px;
+    padding: 0 10px;
     border-radius: var(--tb-r-sm);
     font-size: 13px;
     font-weight: var(--tb-fw-medium);
@@ -1185,13 +1185,34 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     /* Subtle bottom indicator line */
     box-shadow: inset 0 -2px 0 0 var(--tb-brand);
 }
-.tb-nav-trigger > i { font-size: 14px; }
-.tb-nav-trigger > .bi-chevron-down { font-size: 9px; opacity: 0.5; }
+.tb-nav-trigger-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.tb-nav-chevron { opacity: 0.6; transition: transform var(--tb-tx-fast); }
+.tb-nav-trigger.is-open .tb-nav-chevron { transform: rotate(180deg); }
+
+/* One root per dropdown; the ::after bridge spans the trigger→menu gap so the
+   pointer never "leaves" while travelling into the open menu. */
+.tb-nav-menu-root { position: relative; display: flex; align-items: center; }
+.tb-nav-menu-root.is-open::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 8px;
+}
+.tb-nav-account { display: flex; align-items: center; }
 
 .tb-nav-menu {
     position: absolute;
     top: calc(100% + 6px);
-    min-width: 216px;
+    left: 0;
+    width: max-content;
+    min-width: 200px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    translate: var(--tb-nav-menu-shift, 0px) 0;
     background: var(--tb-card-bg);
     border: 1px solid var(--tb-border);
     border-radius: var(--tb-r-md);
@@ -1210,12 +1231,45 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 .tb-nav-menu.is-end { right: 0; left: auto; }
+/* Multi-column dropdowns: sections (or items, for single-section menus) flow
+   column by column so long menus stay short instead of growing downwards. */
+.tb-nav-menu.is-multi {
+    display: grid;
+    grid-template-columns: repeat(var(--tb-nav-menu-cols, 2), minmax(176px, max-content));
+    grid-template-rows: repeat(var(--tb-nav-menu-rows, 1), auto);
+    grid-auto-flow: column;
+    column-gap: 4px;
+    row-gap: 1px;
+}
+.tb-nav-menu-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+.tb-nav-menu.is-multi .tb-nav-menu-section + .tb-nav-menu-section {
+    border-left: 1px solid var(--tb-border-soft);
+    padding-left: 4px;
+}
+.tb-nav-menu-heading {
+    padding: 6px 10px 4px;
+    font-size: 10.5px;
+    font-weight: var(--tb-fw-semibold);
+    color: var(--tb-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+    .tb-nav-menu { animation: none; }
+    .tb-nav-chevron { transition: none; }
+}
 
 .tb-nav-menu-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 11px;
+    gap: 9px;
+    padding: 6px 10px;
     border-radius: var(--tb-r-sm);
     font-size: 13px;
     color: var(--tb-text);
@@ -1229,6 +1283,11 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     font-weight: var(--tb-fw-normal);
     letter-spacing: -0.01em;
 }
+.tb-nav-menu-item-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-nav-menu-item > svg { flex-shrink: 0; color: var(--tb-text-tertiary); }
+.tb-nav-menu-item.is-active > svg { color: var(--tb-brand); }
+.tb-nav-menu-item.is-danger > svg { color: var(--tb-danger); }
+.tb-nav-menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--tb-brand); }
 .tb-nav-menu-item:hover,
 .tb-nav-menu-item:focus {
     background: var(--tb-sunken);
@@ -2314,7 +2373,9 @@ label, .form-label { color: var(--tb-text-secondary); font-weight: var(--tb-fw-s
 .top-nav--premium .tb-nav-trigger:hover,
 .top-nav--premium .tb-nav-theme-toggle:hover { color: #fff; }
 .top-nav--premium .tb-nav-trigger:hover,
+.top-nav--premium .tb-nav-trigger.is-open,
 .top-nav--premium .tb-nav-theme-toggle:hover { background: rgba(255,255,255,.09); }
+.top-nav--premium .tb-nav-trigger.is-open { color: #fff; }
 .top-nav--premium .tb-nav-trigger.is-active {
     color: #fff;
     background: color-mix(in srgb, var(--tb-brand) 62%, transparent);
@@ -2361,14 +2422,23 @@ label, .form-label { color: var(--tb-text-secondary); font-weight: var(--tb-fw-s
 .tb-nav-mobile-toggle,
 .tb-mobile-nav-layer { display: none; }
 
+@media (max-width: 1199px) {
+    .tb-nav-brand { margin-right: 10px; }
+    .tb-nav-brand-text { display: none; }
+}
+@media (max-width: 1080px) {
+    .tb-nav-trigger { padding: 0 8px; }
+    .tb-nav-account .tb-nav-trigger-label { display: none; }
+}
+
 @media (max-width: 900px) {
-    .tb-nav { height: 56px; padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); }
+    .tb-nav { height: 52px; padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); }
     .tb-nav-brand { margin-right: 8px; }
     .tb-nav-brand-text { font-size: 13px; }
     .tb-nav-scroller { display: none; }
     .tb-nav__utilities { margin-left: auto; }
     .tb-nav__utilities > .tb-nav-sep,
-    .tb-nav__utilities > div[style*="position"] { display: none; }
+    .tb-nav__utilities > .tb-nav-account { display: none; }
     .tb-nav__utilities .tb-nav-theme-toggle:first-child { min-width: 44px; padding-inline: 10px; }
     .tb-nav-mobile-toggle {
         width: 44px;

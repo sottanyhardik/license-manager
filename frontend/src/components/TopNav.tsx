@@ -1,143 +1,18 @@
-import React, { lazy, Suspense, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { reportEntities, masterEntities } from "../routes/config";
-import {
-    ALLOTMENT_ROLES, BOE_LIST_ROLES, INCENTIVE_LICENSE_ROLES, LEDGER_READ_ROLES, LEDGER_UPLOAD_ROLES,
-    LICENSE_ROLES, RECONCILIATION_ISSUES_ROLES, RECONCILIATION_ROLES, REPORT_ROLES, ROLES, TRADE_ROLES, USER_ADMIN_ROLES,
-} from "../routes/authorizationRoles";
-import { ChevronDown, Gauge, Menu, Search, ShieldCheck, X } from "lucide-react";
+import { USER_ADMIN_ROLES } from "../routes/authorizationRoles";
+import { Gauge, Menu, Search, ShieldCheck, X } from "lucide-react";
 import Icon from "@/components/Icon";
+import { NavMenu, NavMenuHeader, NavMenuItem, NavMenuSection, NavMenuSeparator } from "./navigation/NavMenu";
+import { DASHBOARD_PATH, groupItems, resolveActiveNavPath, visibleNavGroups } from "./navigation/navConfig";
+import { siblingTrigger, useNavMenus } from "./navigation/useNavMenus";
 
 // cmdk and its dialog primitives are only useful after the user opens global
 // search.  Keeping them out of the navigation chunk materially reduces the
 // authenticated first-paint payload without changing the command workflow.
 const CommandPalette = lazy(() => import("./CommandPalette"));
-
-const NAV_GROUPS = [
-    {
-        label: "Licenses",
-        icon: "file-earmark-text",
-        items: [
-            { path: "/licenses",           label: "Licenses",           icon: "file-earmark-text", roles: LICENSE_ROLES },
-            { path: "/planning",           label: "Auto Plan",          icon: "diagram-3",          roles: [ROLES.LICENSE_MANAGER] },
-            { path: "/incentive-licenses", label: "Incentive Licenses", icon: "award",              roles: INCENTIVE_LICENSE_ROLES },
-            { path: "/license-ledger",     label: "License Ledger",     icon: "journal-text",       roles: LEDGER_READ_ROLES },
-            { path: "/ledger-upload",      label: "Ledger Upload",      icon: "cloud-upload",       roles: LEDGER_UPLOAD_ROLES },
-        ],
-    },
-    {
-        label: "Operations",
-        icon: "arrow-left-right",
-        items: [
-            { path: "/allotments",      label: "Allotments",     icon: "box-seam",         roles: ALLOTMENT_ROLES },
-            { path: "/bill-of-entries", label: "Bill of Entry",  icon: "receipt",          roles: BOE_LIST_ROLES },
-            { path: "/trades",          label: "Trade In & Out", icon: "arrow-left-right", roles: TRADE_ROLES },
-            { path: "/reconciliation",  label: "Reconciliation", icon: "check2-square",    roles: RECONCILIATION_ROLES },
-            { path: "/reconciliation-issues", label: "Reconciliation Issues", icon: "exclamation-triangle", roles: RECONCILIATION_ISSUES_ROLES },
-        ],
-    },
-];
-
-// Report routes that exist in AppRoutes (all guarded by REPORT_ROLES, the same
-// gate as the whole Reports menu) but had no in-app link. Kept here rather than
-// in routes/config.ts so the command palette / legacy sidebar are unaffected.
-const EXTRA_REPORTS = [
-    { path: "/reports/expiring-licenses", label: "Expiring Licenses",  icon: "exclamation-triangle" },
-    { path: "/reports/active-licenses",   label: "Active Licenses",    icon: "check-circle" },
-    { path: "/reports/download-license",  label: "Download License",   icon: "download" },
-    { path: "/reports/parle/sion-e1",     label: "SION E1 Report",     icon: "file-earmark-text" },
-    { path: "/reports/parle/sion-e5",     label: "SION E5 Report",     icon: "file-earmark-text" },
-    { path: "/reports/parle/sion-e126",   label: "SION E126 Report",   icon: "file-earmark-text" },
-    { path: "/reports/parle/sion-e132",   label: "SION E132 Report",   icon: "file-earmark-text" },
-];
-const REPORT_LINKS = [...reportEntities, ...EXTRA_REPORTS];
-
-
-function NavMenu({ icon, label, items, isActive, end = false }) {
-    const [open, setOpen] = useState(false);
-    const wrapperRef = useRef(null);
-    const closeTimerRef = useRef(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const onDown = (e) => { if (!wrapperRef.current?.contains(e.target)) setOpen(false); };
-        const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-        document.addEventListener("mousedown", onDown);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("mousedown", onDown);
-            document.removeEventListener("keydown", onKey);
-        };
-    }, [open]);
-
-    const scheduleClose = () => {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = setTimeout(() => setOpen(false), 150);
-    };
-    const cancelClose = () => clearTimeout(closeTimerRef.current);
-
-    return (
-        <div
-            ref={wrapperRef}
-            style={{ position: "relative" }}
-            onMouseEnter={() => { cancelClose(); setOpen(true); }}
-            onMouseLeave={scheduleClose}
-        >
-            <button
-                type="button"
-                className={`tb-nav-trigger${isActive ? " is-active" : ""}`}
-                onClick={() => setOpen(v => !v)}
-                aria-expanded={open}
-                aria-haspopup="menu"
-            >
-                <Icon name={icon} className="size-4" />
-                {label}
-                <ChevronDown
-                    className="size-3.5 transition-transform duration-200"
-                    style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", opacity: 0.6 }}
-                    aria-hidden="true"
-                />
-            </button>
-
-            {open && (
-                <ul role="menu" className={`tb-nav-menu${end ? " is-end" : ""}`}>
-                    {/* Invisible bridge prevents gap between trigger and menu closing on mouse movement */}
-                    <li aria-hidden="true" style={{ position: "absolute", top: -8, left: 0, right: 0, height: 8 }} />
-                    {items}
-                </ul>
-            )}
-        </div>
-    );
-}
-
-
-function MenuItem({ to, icon, label, active, onClick, danger = false }: { to?: string; icon?: string; label?: React.ReactNode; active?: boolean; onClick?: ((...args: unknown[]) => unknown); danger?: boolean }) {
-    const classes = [
-        "tb-nav-menu-item",
-        active ? "is-active" : "",
-        danger ? "is-danger" : "",
-    ].filter(Boolean).join(" ");
-    const inner = (
-        <>
-            {icon && <Icon name={icon} className="size-4" />}
-            <span style={{ flex: 1 }}>{label}</span>
-        </>
-    );
-    if (onClick) {
-        return (
-            <li role="none">
-                <button type="button" role="menuitem" className={classes} onClick={onClick}>{inner}</button>
-            </li>
-        );
-    }
-    return (
-        <li role="none">
-            <Link role="menuitem" to={to} className={classes}>{inner}</Link>
-        </li>
-    );
-}
 
 
 export default function TopNav() {
@@ -149,10 +24,12 @@ export default function TopNav() {
     const mobileDrawerRef = useRef<HTMLDivElement | null>(null);
     const mobileTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-    const isPathActive = (path) =>
+    const menus = useNavMenus();
+    const { close: closeMenus } = menus;
+
+    // Account-menu destinations are not in the primary config; plain prefix match.
+    const isPathActive = (path: string) =>
         location.pathname === path || location.pathname.startsWith(path + "/");
-    const isGroupActive = (items) => items.some(i => isPathActive(i.path));
-    const isDashActive = isPathActive("/dashboard");
 
     const openCmd = useCallback(() => setCmdOpen(true), []);
     const closeCmd = useCallback(() => setCmdOpen(false), []);
@@ -160,10 +37,13 @@ export default function TopNav() {
         setMobileOpen(false);
         window.requestAnimationFrame(() => mobileTriggerRef.current?.focus());
     }, []);
-    const visibleGroups = NAV_GROUPS.map(group => ({
-        ...group,
-        items: group.items.filter(item => !item.roles || hasAnyRole(item.roles)),
-    })).filter(group => group.items.length > 0);
+    const visibleGroups = useMemo(() => visibleNavGroups(hasAnyRole), [hasAnyRole]);
+    const activePath = resolveActiveNavPath(location.pathname, visibleGroups);
+    const isDashActive = activePath === DASHBOARD_PATH;
+    const isGroupActive = (group: (typeof visibleGroups)[number]) =>
+        groupItems(group).some(item => item.path === activePath);
+    const canSeeActivityLog = Boolean((isSuperAdmin && isSuperAdmin()) || (hasAnyRole && hasAnyRole(USER_ADMIN_ROLES)));
+    const canManageRoles = Boolean(isSuperAdmin && isSuperAdmin());
 
     useEffect(() => {
         const handler = (e) => {
@@ -198,7 +78,10 @@ export default function TopNav() {
         };
     }, [closeMobileNav, mobileOpen]);
 
-    useEffect(() => setMobileOpen(false), [location.pathname]);
+    useEffect(() => {
+        setMobileOpen(false);
+        closeMenus();
+    }, [location.pathname, closeMenus]);
 
     return (
         <>
@@ -211,64 +94,55 @@ export default function TopNav() {
                     <span className="tb-nav-brand-text">License Manager</span>
                 </Link>
 
-                {/* Nav items */}
-                <div className="tb-nav-scroller nav-items-scroller" aria-label="Primary sections">
-                    <Link to="/dashboard" className={`tb-nav-trigger${isDashActive ? " is-active" : ""}`}>
+                {/* Primary sections — one shared open-state, so menus never overlap */}
+                <div className="tb-nav-scroller nav-items-scroller" data-nav-bar="">
+                    <Link
+                        to={DASHBOARD_PATH}
+                        className={`tb-nav-trigger${isDashActive ? " is-active" : ""}`}
+                        aria-current={isDashActive ? "page" : undefined}
+                        data-nav-trigger=""
+                        onPointerEnter={(event) => { if (event.pointerType === "mouse") closeMenus(); }}
+                        onKeyDown={(event) => {
+                            if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                            event.preventDefault();
+                            siblingTrigger(event.currentTarget, event.key === "ArrowRight" ? 1 : -1)?.focus();
+                        }}
+                    >
                         <Gauge className="size-4" aria-hidden="true" />
-                        Dashboard
+                        <span className="tb-nav-trigger-label">Dashboard</span>
                     </Link>
 
                     {visibleGroups.map(group => {
+                        const items = groupItems(group);
+                        const columns = group.columns ?? 1;
+                        const rows = group.sections.length > 1 ? 1 : Math.ceil(items.length / columns);
                         return (
                             <NavMenu
-                                key={group.label}
+                                key={group.id}
+                                id={group.id}
                                 icon={group.icon}
                                 label={group.label}
-                                isActive={isGroupActive(group.items)}
-                                items={group.items.map(item => (
-                                    <MenuItem
-                                        key={item.path}
-                                        to={item.path}
-                                        icon={item.icon}
-                                        label={item.label}
-                                        active={isPathActive(item.path)}
-                                    />
+                                controller={menus}
+                                isActive={isGroupActive(group)}
+                                columns={Math.min(columns, group.sections.length > 1 ? group.sections.length : items.length)}
+                                rows={rows}
+                            >
+                                {group.sections.map((section, index) => (
+                                    <NavMenuSection key={section.label ?? index} label={group.sections.length > 1 ? section.label : undefined}>
+                                        {section.items.map(item => (
+                                            <NavMenuItem
+                                                key={item.path}
+                                                to={item.path}
+                                                icon={item.icon}
+                                                label={item.label}
+                                                active={item.path === activePath}
+                                            />
+                                        ))}
+                                    </NavMenuSection>
                                 ))}
-                            />
+                            </NavMenu>
                         );
                     })}
-
-                    {hasAnyRole(REPORT_ROLES) && (
-                        <NavMenu
-                            icon="bar-chart-line"
-                            label="Reports"
-                            isActive={isGroupActive(REPORT_LINKS)}
-                            items={REPORT_LINKS.map(r => (
-                                <MenuItem
-                                    key={r.path}
-                                    to={r.path}
-                                    icon={r.icon}
-                                    label={r.label}
-                                    active={isPathActive(r.path)}
-                                />
-                            ))}
-                        />
-                    )}
-
-                    <NavMenu
-                        icon="database"
-                        label="Masters"
-                        isActive={isGroupActive(masterEntities)}
-                        items={masterEntities.filter(m => !m.deprecated).map(m => (
-                            <MenuItem
-                                key={m.path}
-                                to={m.path}
-                                icon={m.icon}
-                                label={m.label}
-                                active={isPathActive(m.path)}
-                            />
-                        ))}
-                    />
                 </div>
 
                 {/* Right-side controls */}
@@ -282,8 +156,8 @@ export default function TopNav() {
                         title="Search ⌘K"
                     >
                         <Search className="size-4" aria-hidden="true" />
-                        <span className="hidden sm:inline text-xs">Search</span>
-                        <kbd className="hidden rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] tracking-normal border border-border lg:inline-block">
+                        <span className="hidden xl:inline text-xs">Search</span>
+                        <kbd className="hidden rounded bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] tracking-normal border border-border xl:inline-block">
                             ⌘K
                         </kbd>
                     </button>
@@ -303,28 +177,31 @@ export default function TopNav() {
 
                     {/* User menu */}
                     {user && (
-                        <NavMenu
-                            icon="person-circle"
-                            label={<span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{user.username}</span>}
-                            isActive={false}
-                            end
-                            items={[
-                                <li key="header" role="none" className="tb-nav-menu-header">
+                        <div className="tb-nav-account" data-nav-bar="">
+                            <NavMenu
+                                id="account"
+                                icon="person-circle"
+                                label={user.username}
+                                ariaLabel={`Account menu for ${user.username}`}
+                                controller={menus}
+                                align="end"
+                            >
+                                <NavMenuHeader>
                                     <div className="pretitle">Signed in as</div>
                                     <div className="username">{user.username}</div>
-                                </li>,
-                                <li key="div1" role="separator" className="tb-nav-menu-divider" />,
-                                <MenuItem key="profile" to="/profile" icon="person" label="Profile" active={isPathActive("/profile")} />,
-                                ((isSuperAdmin && isSuperAdmin()) || (hasAnyRole && hasAnyRole(USER_ADMIN_ROLES)))
-                                    ? <MenuItem key="activity" to="/admin/activity-log" icon="journal-text" label="Activity Log" active={isPathActive("/admin/activity-log")} />
-                                    : null,
-                                (isSuperAdmin && isSuperAdmin())
-                                    ? <MenuItem key="settings" to="/settings" icon="shield-lock" label="Users & Roles" active={isPathActive("/settings")} />
-                                    : null,
-                                <li key="div2" role="separator" className="tb-nav-menu-divider" />,
-                                <MenuItem key="logout" icon="box-arrow-right" label="Sign out" danger onClick={logout} />,
-                            ].filter(Boolean)}
-                        />
+                                </NavMenuHeader>
+                                <NavMenuSeparator />
+                                <NavMenuItem to="/profile" icon="person" label="Profile" active={isPathActive("/profile")} />
+                                {canSeeActivityLog && (
+                                    <NavMenuItem to="/admin/activity-log" icon="journal-text" label="Activity Log" active={isPathActive("/admin/activity-log")} />
+                                )}
+                                {canManageRoles && (
+                                    <NavMenuItem to="/settings" icon="shield-lock" label="Users & Roles" active={isPathActive("/settings")} />
+                                )}
+                                <NavMenuSeparator />
+                                <NavMenuItem icon="box-arrow-right" label="Sign out" danger onSelect={logout} />
+                            </NavMenu>
+                        </div>
                     )}
                     <button
                         ref={mobileTriggerRef}
@@ -359,25 +236,23 @@ export default function TopNav() {
                             <button type="button" className="tb-mobile-nav-close" onClick={closeMobileNav} aria-label="Close navigation menu"><X className="size-5" aria-hidden="true" /></button>
                         </div>
                         <div className="tb-mobile-nav-body">
-                            <Link to="/dashboard" className={`tb-mobile-nav-link${isDashActive ? " is-active" : ""}`} onClick={closeMobileNav}><Gauge className="size-4" aria-hidden="true" /> Dashboard</Link>
+                            <Link to={DASHBOARD_PATH} className={`tb-mobile-nav-link${isDashActive ? " is-active" : ""}`} aria-current={isDashActive ? "page" : undefined} onClick={closeMobileNav}><Gauge className="size-4" aria-hidden="true" /> Dashboard</Link>
                             {visibleGroups.map(group => (
-                                <section className="tb-mobile-nav-group" key={group.label} aria-label={group.label}>
+                                <section className="tb-mobile-nav-group" key={group.id} aria-label={group.label}>
                                     <div className="tb-mobile-nav-group-label"><Icon name={group.icon} className="size-3.5" aria-hidden="true" />{group.label}</div>
-                                    {group.items.map(item => (
-                                        <Link key={item.path} to={item.path} className={`tb-mobile-nav-link${isPathActive(item.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={item.icon} className="size-4" aria-hidden="true" />{item.label}</Link>
+                                    {groupItems(group).map(item => (
+                                        <Link
+                                            key={item.path}
+                                            to={item.path}
+                                            className={`tb-mobile-nav-link${item.path === activePath ? " is-active" : ""}`}
+                                            aria-current={item.path === activePath ? "page" : undefined}
+                                            onClick={closeMobileNav}
+                                        >
+                                            <Icon name={item.icon} className="size-4" aria-hidden="true" />{item.label}
+                                        </Link>
                                     ))}
                                 </section>
                             ))}
-                            {hasAnyRole(REPORT_ROLES) && (
-                                <section className="tb-mobile-nav-group" aria-label="Reports">
-                                    <div className="tb-mobile-nav-group-label"><Icon name="bar-chart-line" className="size-3.5" aria-hidden="true" />Reports</div>
-                                    {REPORT_LINKS.map(report => <Link key={report.path} to={report.path} className={`tb-mobile-nav-link${isPathActive(report.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={report.icon} className="size-4" aria-hidden="true" />{report.label}</Link>)}
-                                </section>
-                            )}
-                            <section className="tb-mobile-nav-group" aria-label="Masters">
-                                <div className="tb-mobile-nav-group-label"><Icon name="database" className="size-3.5" aria-hidden="true" />Masters</div>
-                                {masterEntities.filter(master => !master.deprecated).map(master => <Link key={master.path} to={master.path} className={`tb-mobile-nav-link${isPathActive(master.path) ? " is-active" : ""}`} onClick={closeMobileNav}><Icon name={master.icon} className="size-4" aria-hidden="true" />{master.label}</Link>)}
-                            </section>
                         </div>
                         <div className="tb-mobile-nav-footer">
                             <button type="button" className="tb-mobile-nav-utility" onClick={() => { closeMobileNav(); openCmd(); }}><Search className="size-4" aria-hidden="true" /> Search</button>

@@ -240,6 +240,9 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   transaction + audit, MDS-outage stop; UI select page/rows → activate/deactivate/delete with per-record results.
   Off for domain viewsets and CIF/planning masters (B9). **API CONTRACT (additive).** Tests: backend 60 + architecture 39;
   backend app-level 3572 passed, 1 xfailed (exit 0); tests/ 246 passed after the services move; frontend gate exit 0 (903/903); real-backend masters 5/5.
+- Master rows rebuilt on the licence register anatomy (2026-11-18): `masterColumns.ts` per master, one header row
+  (select-all + labels), expandable rows, IEC-led Companies. Frontend gate exit 0 (910/910); real-backend masters 5/5;
+  licence regression 6/6. The user's dev server (main checkout) still runs `b099789c`: land with ff-merge to see it.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

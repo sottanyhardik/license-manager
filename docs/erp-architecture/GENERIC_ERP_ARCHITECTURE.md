@@ -59,3 +59,14 @@ Live licence UI reference (measured 2026-11-18 on `localhost:5173/licenses`, rea
 slate-300 border, ~5 px gap, Inter 13.5 px; identifier 13.5/600 monospace `rgb(0,102,204)`; soft status badges; 26/600
 h1 and 36 px inline search in one toolbar; no overflow at 390 px. `masters-workspace.real` asserts master rows match the
 licence register's radius, border colour and font (height within 6 px).
+
+## 6. Master rows = licence register rows (2026-11-18)
+
+Per-master column configuration: `frontend/src/pages/masters/masterColumns.ts` (`MASTER_COLUMNS`, one entry per
+registered master; fields verified against real API rows). First column = identifier (monospace link to the record,
+like the licence number); then the master's columns on one CSS grid; `details` appear only when the row expands
+(non-empty values only, plus audit timestamps). One header row carries select-all and the column labels (bulk actions
+replace the labels while rows are selected), so labels are not repeated per row on desktop. Rows: expand chevron,
+click-anywhere-to-expand (controls excluded), status badge + ActionMenu in a fixed trailing slot — the `LicenceCard`
+anatomy. Toolbar and filters are the licence `COMPACT_REGISTER` toolbar (filters closed until opened; no Filters control
+on masters without filters). Masters without an entry use `defaultMasterColumns` (skips ids, MDS sync, audit, status).

@@ -57,3 +57,13 @@ config and new tests; affected core suites ran), full Playwright default suite (
 | Frontend gate | lint PASS (0 errors, 20 warnings unchanged) · typecheck PASS · **vitest 903/903** · build PASS → exit 0 |
 | Real-backend Playwright `masters-workspace.real` | **5/5**: incl. bulk deactivate (persisted + in record history), bulk delete (licence-referenced port refused by name, unused one deleted), master vs licence row style parity |
 | Independent review (Sonnet) | approve-with-nits; fixed: audit row before MDS write, stop batch on MDS outage, bulk off for CIF/planning masters |
+
+## 2026-11-18 — Master rows rebuilt on the licence register anatomy
+
+| Check | Result |
+|---|---|
+| Column config vs real API rows (local DB, read-only) | every configured field present for all 13 masters (Groups: no local rows) |
+| Frontend gate | lint PASS (0 errors, 20 warnings unchanged) · typecheck PASS · **vitest 910/910** · build PASS → exit 0 |
+| Real-backend Playwright `masters-workspace.real` | **5/5**; companies / ports / item-names: one toolbar row at the licence toolbar position (±4 px), filters closed by default and open on click, Filters only where configured, Companies identifier = IEC, in-place expand; master rows match licence rows (radius, border, font; height ±6 px) |
+| Licence regression, real backend (`data-bearing.real` + `item-pivot.sticky`) | **6 passed**, exit 0 |
+| Screenshots | licence list, companies, ports, item names, companies with filters open + expanded row, record page (390 / 1440 px) |

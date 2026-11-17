@@ -4,6 +4,7 @@ Masters hub: `/masters` (`pages/masters/MastersHub.tsx`) lists every `masterEnti
 the Masters menu and command palette read the same registry. Adding a simple master = backend `create_viewset(config)` +
 one `masterEntities` line. Every registered master gets the licence register toolbar, licence-style rows and the
 generic record page `/masters/:entity/:id` (fields, audit timestamps, real change history).
+Row layout per master: `pages/masters/masterColumns.ts` (identifier + columns + expandable details).
 Bulk actions (select page / rows → activate, deactivate, delete with per-record results) on every core master except
 head norms, SION classes, SION export/import and exchange rates (CIF/planning inputs; owner decision B9).
 

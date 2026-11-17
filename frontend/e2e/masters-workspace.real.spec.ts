@@ -174,6 +174,43 @@ test.describe("Masters workspace on the real backend", () => {
         const licenceRow = await rowStyle('ul[aria-label="Licenses"] > li > article');
         expect({ radius: masterRow.radius, border: masterRow.border, font: masterRow.font }).toEqual({ radius: licenceRow.radius, border: licenceRow.border, font: licenceRow.font });
         expect(Math.abs(masterRow.h - licenceRow.h)).toBeLessThanOrEqual(6);
+
+        // One toolbar row like the licence register: breadcrumb, h1, count, search, Filters, Excel, PDF, Add New.
+        const toolbarRow = async () => page.evaluate(() => {
+            const mid = (el: Element | null) => (el ? Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2) : null);
+            const q = (sel: string) => document.querySelector(sel);
+            return {
+                h1: mid(q("h1")),
+                search: mid(q("input[placeholder^='Search']")),
+                filters: mid(Array.from(document.querySelectorAll("button")).find(b => b.textContent?.trim().startsWith("Filters")) ?? null),
+                excel: mid(q("[aria-label='Export to Excel']")),
+                addNew: mid(q("[aria-label='Add New']")),
+                filterPanelHidden: (q("section[aria-label='Filters']") as HTMLElement | null)?.hidden ?? true,
+            };
+        });
+        const licenceToolbar = await toolbarRow();
+        // Filters appear exactly where the master has filters configured (Ports has none, so no empty control).
+        for (const [entity, hasFilters] of [["companies", true], ["ports", false], ["item-names", true]] as const) {
+            await page.goto(`/masters/${entity}`, { waitUntil: "networkidle" });
+            await expect(page.getByRole("list").first()).toBeVisible();
+            const t = await toolbarRow();
+            expect(t.filters !== null, `${entity}: Filters control only when the master has filters`).toBe(hasFilters);
+            const ys = [t.h1, t.search, t.filters, t.excel, t.addNew].filter((y): y is number => y !== null);
+            expect(ys.length, `${entity}: toolbar controls present`).toBe(hasFilters ? 5 : 4);
+            expect(Math.max(...ys) - Math.min(...ys), `${entity}: one toolbar row`).toBeLessThanOrEqual(8);
+            expect(Math.abs(t.h1! - licenceToolbar.h1!), `${entity}: toolbar at the licence position`).toBeLessThanOrEqual(4);
+            expect(t.filterPanelHidden, `${entity}: filters closed by default`).toBe(true);
+            await page.screenshot({ path: testInfo.outputPath(`compare-${entity}-1440.png`) });
+        }
+        // Companies: identifier is the IEC (not a timestamp); a row expands to its address in place.
+        await page.goto("/masters/companies", { waitUntil: "networkidle" });
+        const companyRows = page.getByRole("list", { name: "Companies" }).getByRole("listitem");
+        await expect(companyRows.first().getByRole("link").first()).toHaveText(/^\d{10}$/);
+        await companyRows.first().getByRole("button", { name: /^Expand / }).click();
+        await expect(companyRows.first().getByRole("region")).toBeVisible();
+        await page.getByRole("button", { name: /^Filters/ }).click();
+        await expect(page.locator("section[aria-label='Filters']")).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath("compare-companies-filters-open-1440.png") });
     });
 
     test("bulk deactivate and bulk delete report every record and keep referenced data", async ({ page }) => {

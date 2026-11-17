@@ -1,9 +1,11 @@
 /**
  * GenericMasterCards: the list for every simple master (`/masters/:entity`).
  * Same row anatomy as the licence register (`features/licenses/LicenceCard`):
- * bordered compact rows, a primary identifier that opens the record, muted
- * meta fields, a status badge and one shared ActionMenu. Columns come from the
- * backend `list_display` metadata, so a new master needs no UI code.
+ * one compact bordered row per record — expand chevron, a monospace identifier
+ * that opens the record, the master's own columns, a status badge and one
+ * shared ActionMenu — expanding in place to secondary details. Columns come
+ * from `masterColumns.ts` (one config per master), so a new master needs
+ * configuration, not UI code.
  *
  * Bulk actions: offered when the backend lists them in `metadata.bulk_actions`
  * and the user can write. Selection is per page (like DataTable) and clears
@@ -11,15 +13,17 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleCheck, CircleOff, Eye, Pencil, Trash2, X } from "lucide-react";
+import { ChevronRight, CircleCheck, CircleOff, Eye, Pencil, Trash2, X } from "lucide-react";
 import { ActionMenu, BulkSelectionSummary, EmptyState, LoadingState, StatusBadge, TONE_MAP, type ActionMenuItem } from "@/components/shared";
+import { FieldGrid, type FieldSpec } from "@/components/shared/FieldGrid";
 import { cn } from "@/lib/utils";
 import { useOptionalConfirm, type ConfirmOptions } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import { getMasterRecordKey, getMasterRecordLookup } from "../masterListConfig";
-import { formatMasterLabel, formatMasterValue, readMasterField } from "../masterDetailFields";
+import { formatMasterLabel, formatMasterRecord, formatMasterValue, MASTER_AUDIT_FIELDS, readMasterField } from "../masterDetailFields";
+import { masterColumnLabel, resolveMasterColumns } from "../masterColumns";
 
 export type MasterBulkAction = "activate" | "deactivate" | "delete";
 
@@ -48,8 +52,10 @@ interface GenericMasterCardsProps {
     onBulk?: (action: MasterBulkAction, keys: string[]) => Promise<MasterBulkResult>;
 }
 
-/** `is_active` is shown as a status badge, not as a meta field. */
+/** `is_active` is shown as a status badge, not as a column. */
 const STATUS_FIELD = "is_active";
+/** Controls inside a row that keep their own click behaviour (row click toggles otherwise). */
+const ROW_CONTROLS = "a,button,input,[role=checkbox],[role=menu],[role=menuitem]";
 
 const BULK_LABEL: Record<MasterBulkAction, { label: string; icon: typeof Trash2; done: string }> = {
     activate: { label: "Activate", icon: CircleCheck, done: "activated" },
@@ -75,14 +81,15 @@ export default function GenericMasterCards({
     const sharedConfirm = useOptionalConfirm();
     const confirm = (opts: ConfirmOptions) => sharedConfirm ? sharedConfirm(opts) : Promise.resolve(window.confirm(opts.title));
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
+    const [expandedKey, setExpandedKey] = useState<string | null>(null);
     const [pending, setPending] = useState<MasterBulkAction | null>(null);
     // Titles are captured when the request is made: deleted rows leave the refreshed list.
     const [outcome, setOutcome] = useState<{ result: MasterBulkResult; titles: Record<string, string> } | null>(null);
 
     const bulkActions: MasterBulkAction[] = canWrite && onBulk ? (metadata.bulk_actions || []) : [];
     const pageKeys = useMemo(() => data.map(item => getMasterRecordLookup(entityName, item)), [data, entityName]);
-    // A new page, filter or refetch replaces the rows: never act on rows the user can no longer see.
-    useEffect(() => { setSelected(new Set()); }, [pageKeys]);
+    // A new page, filter or refetch replaces the rows: never act on (or keep open) rows the user can no longer see.
+    useEffect(() => { setSelected(new Set()); setExpandedKey(null); }, [pageKeys]);
 
     if (loading) return <LoadingState variant="skeleton-rows" rows={6} label={`Loading ${entityTitle ?? "records"}`} />;
 
@@ -101,18 +108,27 @@ export default function GenericMasterCards({
         );
     }
 
-    const columns: string[] = metadata.list_display || [];
-    const [primary, ...meta] = columns;
+    const { columns, details = [] } = resolveMasterColumns(entityName, metadata);
+    const [primary, ...cells] = columns;
     const fieldMeta: Record<string, { label?: string }> = metadata.field_meta || {};
+    const template = columns.map(c => c.width ?? "minmax(8rem,1fr)").join(" ");
+    const hasStatus = data.some(item => STATUS_FIELD in item);
+    const showSelect = bulkActions.length > 0;
     const titleOf = (item: Record<string, unknown>) =>
-        formatMasterValue(primary ? readMasterField(item, primary) : undefined) ?? `#${item.id}`;
+        formatMasterValue(primary ? readMasterField(item, primary.field) : undefined) ?? `#${item.id}`;
+    const detailFieldsOf = (item: Record<string, unknown>): FieldSpec[] => [
+        // Only fields with a value, like the licence workspace (no columns of em dashes).
+        ...details.filter(field => formatMasterValue(readMasterField(item, field)) !== null).map(field => ({ key: field, label: formatMasterLabel(field, fieldMeta) })),
+        // Audit timestamps when the master has them; "by" columns only when the API sends a name, not a raw id.
+        ...MASTER_AUDIT_FIELDS.filter(f => f.key in item && !details.includes(f.key) && (!f.key.endsWith("_by") || typeof item[f.key] === "string")),
+    ];
     const rememberList = () => saveFilterState(entityName, {
         filters: filterParams,
         pagination: { currentPage, pageSize },
         search: "",
     });
     const allSelected = selected.size > 0 && selected.size === pageKeys.length;
-    const toggle = (key: string, on: boolean) => setSelected(prev => {
+    const toggleSelected = (key: string, on: boolean) => setSelected(prev => {
         const next = new Set(prev);
         if (on) next.add(key); else next.delete(key);
         return next;
@@ -141,45 +157,80 @@ export default function GenericMasterCards({
         }
     };
 
+    // The column header and every row use the same slots, so the grid columns line up.
+    const trailClass = cn("flex shrink-0 items-center justify-end gap-2", hasStatus ? "w-[7.5rem]" : "w-8");
+
     return (
         <div className="flex min-w-0 flex-col gap-1.5">
             {resultsPanel}
-            {bulkActions.length > 0 && (
-                <div className="flex min-h-9 flex-wrap items-center gap-2 px-1" data-slot="bulk-actions">
+            {/* One header row: select-all + column labels (desktop) aligned with the row grid; while rows are
+                selected the bulk actions take the labels' place (no extra toolbar row). Rows carry sr-only labels. */}
+            <div
+                data-testid="master-column-header"
+                data-slot={showSelect ? "bulk-actions" : undefined}
+                className={cn(
+                    "min-h-8 items-center gap-x-4 px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:px-4",
+                    showSelect ? "flex" : "hidden lg:flex",
+                )}
+            >
+                {showSelect && (
                     <Checkbox
                         aria-label="Select all on page"
                         checked={allSelected ? true : selected.size > 0 ? "indeterminate" : false}
                         onCheckedChange={(v) => setSelected(v ? new Set(pageKeys) : new Set())}
                     />
-                    <BulkSelectionSummary count={selected.size}>
-                        {bulkActions.map(action => {
-                            const { label, icon: Icon } = BULK_LABEL[action];
-                            return (
-                                <Button
-                                    key={action}
-                                    type="button"
-                                    size="sm"
-                                    variant={action === "delete" ? "destructive" : "outline"}
-                                    disabled={pending !== null}
-                                    onClick={() => { void runBulk(action); }}
-                                >
-                                    <Icon className="size-3.5" aria-hidden="true" />
-                                    {pending === action ? `${label}…` : label}
-                                </Button>
-                            );
-                        })}
-                        <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={pending !== null}>
-                            Clear
-                        </Button>
-                    </BulkSelectionSummary>
-                </div>
-            )}
+                )}
+                <span className="size-7 shrink-0" aria-hidden="true" />
+                {selected.size > 0 ? (
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 normal-case tracking-normal">
+                        <BulkSelectionSummary count={selected.size}>
+                            {bulkActions.map(action => {
+                                const { label, icon: Icon } = BULK_LABEL[action];
+                                return (
+                                    <Button
+                                        key={action}
+                                        type="button"
+                                        size="sm"
+                                        variant={action === "delete" ? "destructive" : "outline"}
+                                        disabled={pending !== null}
+                                        onClick={() => { void runBulk(action); }}
+                                    >
+                                        <Icon className="size-3.5" aria-hidden="true" />
+                                        {pending === action ? `${label}…` : label}
+                                    </Button>
+                                );
+                            })}
+                            <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={pending !== null}>
+                                Clear
+                            </Button>
+                        </BulkSelectionSummary>
+                    </div>
+                ) : (
+                    <>
+                        <div aria-hidden="true" className="hidden min-w-0 flex-1 gap-x-4 lg:grid" style={{ gridTemplateColumns: template }}>
+                            {columns.map(column => (
+                                <span key={column.field} className={cn("truncate", column.align === "end" && "text-right")}>
+                                    {masterColumnLabel(column, fieldMeta)}
+                                </span>
+                            ))}
+                        </div>
+                        <span aria-hidden="true" className={cn(trailClass, "hidden lg:flex")}>{hasStatus ? "Status" : ""}</span>
+                    </>
+                )}
+            </div>
+
             <ul className="flex min-w-0 flex-col gap-1.5" aria-label={entityTitle ?? entityName}>
                 {data.map((item, index) => {
                     const lookup = pageKeys[index];
                     const key = getMasterRecordKey(entityName, item);
                     const detailPath = `/masters/${entityName}/${key}`;
                     const title = titleOf(item);
+                    const extra = detailFieldsOf(item);
+                    const canExpand = extra.length > 0;
+                    const expanded = canExpand && expandedKey === lookup;
+                    const isSelected = selected.has(lookup);
+                    const regionId = `master-row-${entityName}-${lookup.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+                    const toggleExpanded = () => setExpandedKey(prev => (prev === lookup ? null : lookup));
                     const actions: ActionMenuItem[] = [
                         { id: "open", label: "Open", icon: Eye, onSelect: () => { rememberList(); navigate(detailPath); } },
                         ...(canWrite ? [
@@ -191,39 +242,91 @@ export default function GenericMasterCards({
                         <li key={item.id ?? key} className="min-w-0">
                             <article
                                 aria-label={`${entityTitle ?? "Record"} ${title}`}
-                                data-state={selected.has(lookup) ? "selected" : undefined}
-                                className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:border-foreground/20 data-[state=selected]:border-ring/40 data-[state=selected]:bg-muted/40 md:px-4"
-                            >
-                                {bulkActions.length > 0 && (
-                                    <Checkbox
-                                        aria-label={`Select ${title}`}
-                                        checked={selected.has(lookup)}
-                                        onCheckedChange={(v) => toggle(lookup, !!v)}
-                                    />
+                                data-state={isSelected ? "selected" : undefined}
+                                className={cn(
+                                    "min-w-0 overflow-hidden rounded-lg border bg-card transition-colors",
+                                    expanded || isSelected ? "border-ring/40" : "border-border hover:border-foreground/20",
                                 )}
-                                <Link
-                                    to={detailPath}
-                                    onClick={rememberList}
-                                    className="min-w-0 truncate rounded-sm font-mono text-base font-semibold tracking-tight text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                {/* Header row. Mouse: anywhere toggles (licence register); keyboard: the chevron (aria-expanded). */}
+                                <div
+                                    onClick={(event) => {
+                                        if (!canExpand || (event.target as HTMLElement).closest(ROW_CONTROLS)) return;
+                                        toggleExpanded();
+                                    }}
+                                    className={cn(
+                                        "flex min-w-0 items-center gap-x-4 px-3 py-2 md:px-4",
+                                        canExpand && "cursor-pointer",
+                                        (expanded || isSelected) && "bg-muted/40",
+                                    )}
                                 >
-                                    {title}
-                                </Link>
-                                <dl className="order-3 flex min-w-0 basis-full flex-wrap items-baseline gap-x-4 gap-y-0.5 text-xs text-muted-foreground lg:order-none lg:basis-auto lg:flex-1">
-                                    {meta.filter(column => column !== STATUS_FIELD).map(column => (
-                                        <div key={column} className="flex min-w-0 items-baseline gap-1">
-                                            <dt className="shrink-0 text-muted-foreground/70">{formatMasterLabel(column, fieldMeta)}</dt>
-                                            <dd className="min-w-0 truncate text-foreground/80" title={formatMasterValue(readMasterField(item, column)) ?? undefined}>
-                                                {formatMasterValue(readMasterField(item, column)) ?? "—"}
+                                    {showSelect && (
+                                        <Checkbox aria-label={`Select ${title}`} checked={isSelected} onCheckedChange={(v) => toggleSelected(lookup, !!v)} />
+                                    )}
+                                    {canExpand ? (
+                                        <button
+                                            type="button"
+                                            onClick={toggleExpanded}
+                                            aria-expanded={expanded}
+                                            aria-controls={regionId}
+                                            aria-label={`${expanded ? "Collapse" : "Expand"} ${title}`}
+                                            className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <ChevronRight
+                                                className={cn("size-4 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-90")}
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    ) : <span className="size-7 shrink-0" aria-hidden="true" />}
+
+                                    <dl className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-0.5 lg:grid" style={{ gridTemplateColumns: template }}>
+                                        <div className="min-w-0 basis-full lg:basis-auto">
+                                            <dt className="sr-only">{primary ? masterColumnLabel(primary, fieldMeta) : "Record"}</dt>
+                                            <dd className="min-w-0 truncate">
+                                                <Link
+                                                    to={detailPath}
+                                                    onClick={rememberList}
+                                                    className={cn(
+                                                        "rounded-sm text-base font-semibold tracking-tight text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                                                        primary?.mono && "font-mono",
+                                                    )}
+                                                >
+                                                    {title}
+                                                </Link>
                                             </dd>
                                         </div>
-                                    ))}
-                                </dl>
-                                <div className="ml-auto flex shrink-0 items-center gap-2">
-                                    {STATUS_FIELD in item && (
-                                        <StatusBadge tone={item[STATUS_FIELD] ? "success" : "neutral"} label={item[STATUS_FIELD] ? "Active" : "Inactive"} />
-                                    )}
-                                    <ActionMenu items={actions} label={`Actions for ${title}`} />
+                                        {cells.map(column => {
+                                            const value = formatMasterValue(readMasterField(item, column.field));
+                                            return (
+                                                <div key={column.field} className={cn("flex min-w-0 items-baseline gap-1 text-xs lg:block", column.align === "end" && "lg:text-right")}>
+                                                    <dt className="shrink-0 text-muted-foreground/70 lg:sr-only">{masterColumnLabel(column, fieldMeta)}</dt>
+                                                    <dd
+                                                        className={cn("min-w-0 truncate text-foreground/80", column.mono && "font-mono", column.align === "end" && "tabular-nums")}
+                                                        title={value ?? undefined}
+                                                    >
+                                                        {value ?? "—"}
+                                                    </dd>
+                                                </div>
+                                            );
+                                        })}
+                                    </dl>
+
+                                    <div className={trailClass}>
+                                        {STATUS_FIELD in item && (
+                                            <StatusBadge tone={item[STATUS_FIELD] ? "success" : "neutral"} label={item[STATUS_FIELD] ? "Active" : "Inactive"} />
+                                        )}
+                                        <ActionMenu items={actions} label={`Actions for ${title}`} />
+                                    </div>
                                 </div>
+
+                                {expanded && (
+                                    <div id={regionId} role="region" aria-label={`${title} details`} className="border-t border-border px-3 py-2.5 md:px-4">
+                                        <FieldGrid record={formatMasterRecord(item, extra)} fields={extra} />
+                                        <Link to={detailPath} onClick={rememberList} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
+                                            Open record
+                                        </Link>
+                                    </div>
+                                )}
                             </article>
                         </li>
                     );
@@ -237,7 +340,11 @@ export default function GenericMasterCards({
 function BulkResults({ outcome, titles, onDismiss }: { outcome: MasterBulkResult; titles: Record<string, string>; onDismiss: () => void }) {
     const failures = outcome.results.filter(r => !r.ok);
     return (
-        <div role="status" className={cn("flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm", TONE_MAP[failures.length === 0 ? "success" : "warning"].outline)} data-testid="bulk-results">
+        <div
+            role="status"
+            className={cn("flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm", TONE_MAP[failures.length === 0 ? "success" : "warning"].outline)}
+            data-testid="bulk-results"
+        >
             <div className="min-w-0">
                 <p className="font-medium text-foreground">
                     {outcome.succeeded} of {outcome.requested} {BULK_LABEL[outcome.action].done}

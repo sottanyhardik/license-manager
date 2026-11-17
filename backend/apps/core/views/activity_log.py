@@ -42,6 +42,20 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         if module:
             qs = qs.filter(module__icontains=module)
 
+        # Record history (additive): successful writes only, then one exact path —
+        # e.g. endpoint=/api/masters/ports/5/ (decoded, as the middleware stores it).
+        # `action` is indexed, so the change filter narrows before the path match.
+        if params.get('changes_only', '').strip().lower() in ('1', 'true', 'yes'):
+            qs = qs.filter(
+                action__in=(ActivityLog.ACTION_CREATE, ActivityLog.ACTION_UPDATE, ActivityLog.ACTION_DELETE),
+                status_code__gte=200,
+                status_code__lt=300,
+            )
+
+        endpoint = params.get('endpoint', '').strip()
+        if endpoint:
+            qs = qs.filter(endpoint=endpoint if endpoint.endswith('/') else f'{endpoint}/')
+
         date_from = params.get('date_from', '').strip()
         if date_from:
             qs = qs.filter(timestamp__date__gte=date_from)

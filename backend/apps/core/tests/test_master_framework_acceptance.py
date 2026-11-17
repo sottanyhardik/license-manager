@@ -163,3 +163,43 @@ class TestMasterPermissions:
 
     def test_anonymous_is_refused(self, db):
         assert _client().get(f"{BASE}/ports/").status_code == 401
+
+
+@pytest.mark.django_db
+class TestRecordHistory:
+    """`/api/masters/activity-logs/?endpoint=…&changes_only=1` — a record's successful writes only."""
+
+    URL = f"{BASE}/activity-logs/"
+
+    def _log(self, action, endpoint, status=200):
+        from apps.core.models import ActivityLog
+
+        return ActivityLog.objects.create(
+            username="someone", action=action, module="masters", endpoint=endpoint, method="PATCH", status_code=status,
+        )
+
+    def test_changes_for_one_record(self, manager):
+        self._log("UPDATE", "/api/masters/ports/5/")
+        self._log("DELETE", "/api/masters/ports/5/", status=204)
+        self._log("VIEW", "/api/masters/ports/5/")
+        self._log("UPDATE", "/api/masters/ports/5/", status=400)
+        self._log("UPDATE", "/api/masters/ports/50/")
+        self._log("UPDATE", "/api/masters/notification-numbers/025/2023/")
+
+        rows = manager.get(self.URL, {"endpoint": "/api/masters/ports/5/", "changes_only": "1"}).json()
+        assert sorted(r["action"] for r in rows) == ["DELETE", "UPDATE"]
+        assert all(r["endpoint"] == "/api/masters/ports/5/" for r in rows)
+
+        no_slash = manager.get(self.URL, {"endpoint": "/api/masters/ports/5", "changes_only": "true"}).json()
+        assert len(no_slash) == 2
+
+        coded = manager.get(self.URL, {"endpoint": "/api/masters/notification-numbers/025/2023/", "changes_only": "1"}).json()
+        assert [r["endpoint"] for r in coded] == ["/api/masters/notification-numbers/025/2023/"]
+
+    def test_without_new_params_behaviour_is_unchanged(self, manager):
+        self._log("VIEW", "/api/masters/ports/5/")
+        self._log("UPDATE", "/api/masters/ports/5/")
+        assert len(manager.get(self.URL).json()) == 2
+
+    def test_history_stays_user_manager_only(self, reader):
+        assert reader.get(self.URL, {"endpoint": "/api/masters/ports/5/", "changes_only": "1"}).status_code == 403

@@ -120,19 +120,46 @@ describe("GenericMasterCards", () => {
         currentPage: 1,
         pageSize: 25,
     };
-
-    it("edits code-keyed masters by their encoded code", async () => {
-        const user = userEvent.setup();
+    const renderCards = (extra: Record<string, unknown> = {}) => {
         const navigate = vi.fn();
-        render(<GenericMasterCards {...props} navigate={navigate} onDelete={vi.fn()} />);
-        await user.click(screen.getByRole("button", { name: /Edit/ }));
-        expect(navigate).toHaveBeenCalledWith("/masters/notification-numbers/025%2F2023/edit");
+        const onDelete = vi.fn();
+        render(<MemoryRouter><GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} /></MemoryRouter>);
+        return { navigate, onDelete };
+    };
+
+    it("links the identifier to the record page by its encoded code", () => {
+        renderCards();
+        expect(screen.getByRole("link", { name: "025/2023" })).toHaveAttribute("href", "/masters/notification-numbers/025%2F2023");
+        expect(screen.getByText("Advance authorisation")).toBeInTheDocument();
     });
 
-    it("hides edit and delete when the user cannot write", () => {
-        render(<GenericMasterCards {...props} navigate={vi.fn()} onDelete={vi.fn()} canWrite={false} />);
-        expect(screen.getByText("025/2023")).toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: /Edit/ })).not.toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    it("edits and deletes through the shared action menu", async () => {
+        const user = userEvent.setup();
+        const { navigate, onDelete } = renderCards();
+        await user.click(screen.getByRole("button", { name: "Actions for 025/2023" }));
+        await user.click(screen.getByRole("menuitem", { name: /Edit/ }));
+        expect(navigate).toHaveBeenCalledWith("/masters/notification-numbers/025%2F2023/edit");
+        await user.click(screen.getByRole("button", { name: "Actions for 025/2023" }));
+        await user.click(screen.getByRole("menuitem", { name: /Delete/ }));
+        expect(onDelete).toHaveBeenCalledWith(props.data[0]);
+    });
+
+    it("offers only Open when the user cannot write", async () => {
+        const user = userEvent.setup();
+        renderCards({ canWrite: false });
+        await user.click(screen.getByRole("button", { name: "Actions for 025/2023" }));
+        expect(screen.getByRole("menuitem", { name: /Open/ })).toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /Edit/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole("menuitem", { name: /Delete/ })).not.toBeInTheDocument();
+    });
+
+    it("shows is_active as a status badge", () => {
+        renderCards({ data: [{ id: 2, code: "Q1", label: "Off", is_active: false }], metadata: { list_display: ["code", "label", "is_active"] }, entityName: "purchase-statuses" });
+        expect(screen.getByText("Inactive")).toBeInTheDocument();
+    });
+
+    it("shows the shared empty state", () => {
+        renderCards({ data: [] });
+        expect(screen.getByText("No notification numbers found")).toBeInTheDocument();
     });
 });

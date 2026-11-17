@@ -22,8 +22,13 @@ async function signIn(page: Page) {
 /** Search the list and wait until the debounced request has narrowed it to CODE only. */
 async function searchUntilOnly(page: Page, term: string) {
     await page.getByPlaceholder(/Search by/).first().fill(term);
-    await expect(page.getByText(CODE, { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Edit/ })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: CODE, exact: true })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Notification Numbers" }).getByRole("listitem")).toHaveCount(1);
+}
+
+async function rowAction(page: Page, action: "Open" | "Edit" | "Delete") {
+    await page.getByRole("button", { name: `Actions for ${CODE}` }).click();
+    await page.getByRole("menuitem", { name: action }).click();
 }
 
 async function authGet<T>(page: Page, path: string): Promise<{ status: number; body: T | null }> {
@@ -72,7 +77,7 @@ test.describe("Masters workspace on the real backend", () => {
 
         await searchUntilOnly(page, "E2E/99");
 
-        await page.getByRole("button", { name: /Edit/ }).first().click();
+        await rowAction(page, "Edit");
         await page.waitForURL(`**/masters/notification-numbers/${encodeURIComponent(CODE)}/edit`);
         await expect(page.locator("#field-label")).toHaveValue("E2E notification");
         await page.locator("#field-label").fill("E2E notification renamed");
@@ -83,8 +88,26 @@ test.describe("Masters workspace on the real backend", () => {
         // The list we return to must show the saved value, not a cached page.
         await expect(page.getByText("E2E notification renamed", { exact: true })).toBeVisible();
 
+        // Record page: real fields + the real audit entry the server logged for the PATCH.
         await searchUntilOnly(page, "E2E/99");
-        await page.getByRole("button", { name: "Delete" }).first().click();
+        await page.getByRole("link", { name: CODE, exact: true }).click();
+        await page.waitForURL(`**/masters/notification-numbers/${encodeURIComponent(CODE)}`);
+        await expect(page.getByRole("heading", { name: CODE, level: 1 })).toBeVisible();
+        await expect(page.getByText("E2E notification renamed", { exact: true })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Notification Numbers" })).toHaveAttribute("href", "/masters/notification-numbers");
+        await page.getByRole("tab", { name: "History" }).click();
+        // The middleware writes the log on a background thread: poll, then expect exactly the one edit.
+        await expect.poll(async () => (await authGet<unknown[]>(page,
+            `masters/activity-logs/?changes_only=1&endpoint=${encodeURIComponent(`/api/masters/notification-numbers/${CODE}/`)}`)).body?.length ?? 0,
+        ).toBe(1);
+        await page.reload({ waitUntil: "networkidle" });
+        await page.getByRole("tab", { name: "History" }).click();
+        // One timeline entry: the real UPDATE, by the signed-in user (tone is announced as sr-only text).
+        await expect(page.getByRole("listitem").filter({ hasText: /^Updated/ }).filter({ hasText: "hardik" })).toHaveCount(1);
+
+        await page.goto("/masters/notification-numbers", { waitUntil: "networkidle" });
+        await searchUntilOnly(page, "E2E/99");
+        await rowAction(page, "Delete");
         await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
         await expect(page.getByText(CODE, { exact: true })).toHaveCount(0);
         expect((await authGet(page, `masters/notification-numbers/${encodeURIComponent(CODE)}/`)).status).toBe(404);
@@ -101,5 +124,31 @@ test.describe("Masters workspace on the real backend", () => {
         await expect(page.getByText(PORT_CODE, { exact: true })).toBeVisible();
         const listed = await authGet<{ count: number }>(page, `masters/ports/?search=${PORT_CODE}`);
         expect(listed.body?.count).toBe(1);
+    });
+
+    test("hub, list and record page fit a phone viewport; desktop comparison screenshots", async ({ page }, testInfo) => {
+        await signIn(page);
+        await page.setViewportSize({ width: 390, height: 844 });
+        const noOverflow = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+        for (const path of ["/masters", "/masters/ports"]) {
+            await page.goto(path, { waitUntil: "networkidle" });
+            await expect.poll(noOverflow).toBeTruthy();
+        }
+        await page.screenshot({ path: testInfo.outputPath("masters-ports-list-390.png"), fullPage: true });
+        await page.getByRole("link", { name: PORT_CODE, exact: true }).click();
+        await expect(page.getByRole("heading", { name: PORT_CODE, level: 1 })).toBeVisible();
+        await expect.poll(noOverflow).toBeTruthy();
+        await page.screenshot({ path: testInfo.outputPath("masters-port-detail-390.png"), fullPage: true });
+
+        // Same session (the login endpoint is rate limited): desktop screenshots for a side-by-side with the licence register.
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto("/licenses", { waitUntil: "networkidle" });
+        await page.screenshot({ path: testInfo.outputPath("licences-1440.png") });
+        await page.goto("/masters/ports", { waitUntil: "networkidle" });
+        await expect(page.getByRole("list", { name: "Ports" })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath("masters-ports-1440.png") });
+        await page.getByRole("link", { name: PORT_CODE, exact: true }).click();
+        await expect(page.getByRole("heading", { name: PORT_CODE, level: 1 })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath("masters-port-detail-1440.png") });
     });
 });

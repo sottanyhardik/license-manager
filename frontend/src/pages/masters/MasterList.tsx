@@ -27,6 +27,7 @@ import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
 import BoeTable from "@/features/bill-of-entry/BoeTable";
 import {getDefaultFilters, getMasterRecordKey} from "./masterListConfig";
+import { masterEntities } from "../../routes/config";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import PageHeader from "@/components/PageHeader";
@@ -876,11 +877,14 @@ export default function MasterList() {
     };
 
     // Entities rendered with the compact register toolbar (breadcrumb + h1 + actions inside the filter bar).
-    const isCompactRegister = !!entityName && COMPACT_REGISTER.has(entityName);
+    // Registered generic masters use the licence register toolbar too, under a "Masters" breadcrumb.
+    const registeredMaster = masterEntities.find(m => m.entity === entityName);
+    const isCompactRegister = !!entityName && (COMPACT_REGISTER.has(entityName) || !!registeredMaster);
+    const breadcrumbParent = registeredMaster ? { label: "Masters", to: "/masters" } : { label: "Home", to: "/" };
     const entityTitles: Record<string, string> = {
         "bill-of-entries": "Bills of Entry",
     };
-    const entityTitle = (entityName && entityTitles[entityName]) || entityName
+    const entityTitle = (entityName && entityTitles[entityName]) || registeredMaster?.label || entityName
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
@@ -1033,7 +1037,7 @@ export default function MasterList() {
                     toolbarStart: (
                         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
                             <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
-                                <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="text-inherit no-underline hover:underline">Home</a>
+                                <a href={breadcrumbParent.to} onClick={(e) => { e.preventDefault(); navigate(breadcrumbParent.to); }} className="text-inherit no-underline hover:underline">{breadcrumbParent.label}</a>
                                 <span className="mx-1.5 opacity-50">/</span>
                                 <span>{entityTitle}</span>
                             </nav>

@@ -50,7 +50,7 @@ export default function MastersHub() {
         .filter(group => group.items.length > 0);
 
     return (
-        <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+        <div className="w-full">
             <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h1 className="text-xl font-semibold tracking-tight text-foreground">Masters</h1>

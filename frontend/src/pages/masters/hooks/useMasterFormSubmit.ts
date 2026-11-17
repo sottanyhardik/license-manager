@@ -454,6 +454,8 @@ export function useMasterFormSubmit({
             // The list caches pages for 30 s (global staleTime); without this the
             // list we redirect to shows the record as it was before the save.
             queryClient.invalidateQueries({ queryKey: ['entity-list', entityName] });
+            queryClient.invalidateQueries({ queryKey: ['master-record', entityName] });
+            queryClient.invalidateQueries({ queryKey: ['master-count', entityName] });
 
             // If modal mode, call onSuccess and onClose
             if (isModal && onSuccess) {

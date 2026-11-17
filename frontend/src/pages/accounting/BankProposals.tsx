@@ -9,7 +9,7 @@ import { useAccounting } from "./AccountingContext";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { useAccountingAccess } from "./useAccountingAccess";
 import { useGuardedAction } from "./useGuardedAction";
-import { formatMoney, sumMoney } from "./money";
+import { formatMoney } from "./money";
 import { Amount, DataGrid, inputCls, notifyError, Panel, QueryState, ReadOnlyNote } from "./ui";
 
 type Confidence = "high" | "medium" | "low" | "none";
@@ -58,7 +58,6 @@ const SOURCE_LABEL: Record<string, string> = { alias: "learned", name: "name mat
 export const UNDO_SECONDS = 10;
 interface Recent { proposal: Proposal; payment_id: number; voucher: string; until: number }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function AliasesPanel({ entityId }: { entityId: number | null }) {
     const { canApprove } = useAccountingAccess();
@@ -93,8 +92,10 @@ function AliasesPanel({ entityId }: { entityId: number | null }) {
     );
 }
 
-function PartyCell({ p, canWrite, onPick, onReset, overridden, busy }: {
-    p: Proposal; canWrite: boolean; onPick: (partyId: number) => void; onReset: () => void; overridden: boolean; busy: boolean;
+type PickedParty = { id: number; name: string; gstin: string | null };
+
+function PartyCell({ p, canSave, onSave, busy }: {
+    p: Proposal; canSave: boolean; onSave: (party: PickedParty) => void; busy: boolean;
 }) {
     return (
         <div className="min-w-56 space-y-1">
@@ -106,18 +107,20 @@ function PartyCell({ p, canWrite, onPick, onReset, overridden, busy }: {
             ) : <span className="text-xs text-slate-500">No party proposed</span>}
             {p.party?.gstin && <div className="text-xs text-slate-500">{p.party.gstin}</div>}
             {p.blocked && <div className="text-xs text-red-700" role="note">{p.blocked}</div>}
-            {canWrite && (
+            {canSave && (
                 <div className="space-y-1">
-                    {p.options.length > 0 && (
+                    {p.options.filter((o) => o.id !== p.party?.id).length > 0 && (
                         <select className={`${inputCls} w-full`} aria-label={`Suggested parties for line ${p.line.id}`} disabled={busy}
-                                value="" onChange={(e) => { if (e.target.value) onPick(Number(e.target.value)); }}>
+                                value="" onChange={(e) => {
+                                    const o = p.options.find((x) => x.id === Number(e.target.value));
+                                    if (o) onSave({ id: o.id, name: o.name, gstin: o.gstin });
+                                }}>
                             <option value="">{p.party ? "Other suggestions…" : "Pick a suggestion…"}</option>
                             {p.options.filter((o) => o.id !== p.party?.id).map((o) => <option key={o.id} value={o.id}>{o.name}{o.gstin ? ` · ${o.gstin}` : ""}</option>)}
                         </select>
                     )}
                     <PartyPicker key={`${p.line.id}-${p.party?.id ?? 0}`} value={null} label={`Party for line ${p.line.id}`}
-                                 onChange={(party: Party | null) => { if (party) onPick(party.id); }} />
-                    {overridden && <button type="button" className="text-xs text-blue-700 hover:underline" onClick={onReset}>Reset to suggestion</button>}
+                                 onChange={(party: Party | null) => { if (party) onSave({ id: party.id, name: party.name, gstin: party.gstin ?? null }); }} />
                 </div>
             )}
         </div>
@@ -125,15 +128,13 @@ function PartyCell({ p, canWrite, onPick, onReset, overridden, busy }: {
 }
 
 export default function BankProposals({ bank }: { bank: BankAccount }) {
-    const { canApprove, canWrite } = useAccountingAccess();
+    const { canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
-    const { guard, dialog } = useGuardedAction();
     const [conf, setConf] = useState<Confidence[]>(["high", "medium"]);
     const [direction, setDirection] = useState<"" | Direction>("");
-    const [overrides, setOverrides] = useState<Record<number, Proposal>>({});
-    const [selected, setSelected] = useState<number[]>([]);
-    const [result, setResult] = useState<ConfirmResponse | null>(null);
+    const [errors, setErrors] = useState<Record<number, string>>({});
+    const [saving, setSaving] = useState<number[]>([]);
     const [showAliases, setShowAliases] = useState(false);
     const [recent, setRecent] = useState<Record<number, Recent>>({});
     const [now, setNow] = useState(() => Date.now());
@@ -157,31 +158,30 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
         queryFn: () => acctGet<ProposalsResponse>(`bank-accounts/${bank.id}/proposals/`, { confidence: confParam, direction }),
     });
 
-    const preview = useMutation({
-        mutationFn: ({ lineId, partyId }: { lineId: number; partyId: number }) =>
-            acctGet<Proposal>(`statement-lines/${lineId}/proposal/`, { party_id: partyId }),
-        onSuccess: (p) => setOverrides((o) => ({ ...o, [p.line.id]: p })),
-        onError: notifyError,
-    });
-    const confirm = useMutation({
-        mutationFn: (items: { line_id: number; party_id: number }[]) =>
-            acctPost<ConfirmResponse>(`bank-accounts/${bank.id}/proposals/confirm/`, { items }),
-        onSuccess: (r) => {
-            setResult(r);
-            const done = new Set(r.confirmed.map((c) => c.line_id));
-            const byLine = new Map(effective.map((p) => [p.line.id, p]));
-            const until = Date.now() + UNDO_SECONDS * 1000;
-            setNow(Date.now());
-            setRecent((cur) => ({ ...cur, ...Object.fromEntries(r.confirmed.flatMap((c) => {
-                const proposal = byLine.get(c.line_id);
-                return proposal ? [[c.line_id, { proposal, payment_id: c.payment_id, voucher: c.voucher, until }]] : [];
-            })) }));
-            setSelected((s) => s.filter((id) => !done.has(id)));
-            setOverrides((o) => Object.fromEntries(Object.entries(o).filter(([id]) => !done.has(Number(id)))));
-            if (r.confirmed.length) toast.success(`${plural(r.confirmed.length, "line")} posted`);
-            void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
+    /** Saving = booking: one line, posted and matched at once; Undo is the safety net for 10 s. */
+    const save = useMutation({
+        mutationFn: ({ p, party }: { p: Proposal; party: PickedParty }) =>
+            acctPost<ConfirmResponse>(`bank-accounts/${bank.id}/proposals/confirm/`, { items: [{ line_id: p.line.id, party_id: party.id }] }),
+        onMutate: ({ p }) => {
+            setSaving((s) => [...s, p.line.id]);
+            setErrors((e) => Object.fromEntries(Object.entries(e).filter(([id]) => Number(id) !== p.line.id)));
+        },
+        onSuccess: (r, { p, party }) => {
+            const done = r.confirmed.find((c) => c.line_id === p.line.id);
+            if (done) {
+                const samePerson = p.party?.id === party.id;
+                const snapshot: Proposal = samePerson ? p : { ...p, party, source: "", allocations: [], advance: "0.00" };
+                setNow(Date.now());
+                setRecent((cur) => ({ ...cur, [p.line.id]: { proposal: snapshot, payment_id: done.payment_id, voucher: done.voucher,
+                    until: Date.now() + UNDO_SECONDS * 1000 } }));
+                toast.success(`${done.voucher} posted for ${party.name}`);
+                void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
+            }
+            const failed = r.errors.find((e) => e.line_id === p.line.id);
+            if (failed) setErrors((e) => ({ ...e, [p.line.id]: failed.detail }));
         },
         onError: notifyError,
+        onSettled: (_r, _e, { p }) => setSaving((s) => s.filter((id) => id !== p.line.id)),
     });
     const undo = useMutation({
         mutationFn: (r: Recent) => acctPost<{ line_id: number; status: string }>(`bank-proposals/${r.payment_id}/undo/`, {}),
@@ -193,26 +193,9 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
         onError: notifyError,
     });
 
-    const effective = (q.data?.proposals ?? []).map((p) => overrides[p.line.id] ?? p);
-    const recentRows = Object.values(recent).map((r) => r.proposal);
-    const rows = [...recentRows, ...effective.filter((p) => !recent[p.line.id])];
-    const eligible = (p: Proposal) => !!p.party && !p.blocked && !recent[p.line.id];
-    const chosen = effective.filter((p) => selected.includes(p.line.id) && eligible(p));
-    const receipts = chosen.filter((p) => p.direction === "RECEIPT");
-    const payments = chosen.filter((p) => p.direction === "PAYMENT");
-    const eligibleIds = effective.filter(eligible).map((p) => p.line.id);
-    const allSelected = eligibleIds.length > 0 && eligibleIds.every((id) => selected.includes(id));
-
+    const proposals = q.data?.proposals ?? [];
+    const rows = [...Object.values(recent).map((r) => r.proposal), ...proposals.filter((p) => !recent[p.line.id])];
     const toggleConf = (c: Confidence) => setConf((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]));
-    const toggleRow = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-
-    const onConfirm = () => void guard({
-        title: "Confirm proposed payments", confirmText: "Post",
-        message: `This will post ${plural(receipts.length, "receipt")} (₹ ${formatMoney(sumMoney(receipts.map((p) => p.line.amount)))}) and `
-            + `${plural(payments.length, "payment")} (₹ ${formatMoney(sumMoney(payments.map((p) => p.line.amount)))}), `
-            + `total ₹ ${formatMoney(sumMoney(chosen.map((p) => p.line.amount)))}. Bills are settled oldest first and any remainder is booked as an advance.`,
-    }, () => confirm.mutate(chosen.map((p) => ({ line_id: p.line.id, party_id: (p.party as { id: number }).id }))));
-
     const summary = q.data?.summary;
     return (
         <div className="space-y-4">
@@ -223,7 +206,6 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                 <Button size="sm" variant="outline" aria-expanded={showAliases} onClick={() => setShowAliases((v) => !v)}>
                     {showAliases ? "Hide learned aliases" : "Learned aliases"}
                 </Button>
-                {canApprove && <Button size="sm" disabled={chosen.length === 0 || confirm.isPending} onClick={onConfirm}>Confirm selected ({chosen.length})</Button>}
             </>}>
                 <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filter by confidence">
                     {CONFIDENCES.map((c) => (
@@ -233,55 +215,53 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                         </button>
                     ))}
                 </div>
-                {!canApprove && <div className="mb-3"><ReadOnlyNote need="the Accounts Approver role to confirm proposals" /></div>}
-                {result && (
-                    <div className="mb-3 rounded-md bg-slate-50 p-3 text-sm" role="status">
-                        <b>{plural(result.confirmed.length, "line")} confirmed</b>
-                        {result.errors.length > 0 && <>, {plural(result.errors.length, "line")} failed:
-                            <ul className="mt-1 list-disc pl-5 text-red-700">{result.errors.map((e) => <li key={e.line_id}>Line {e.line_id}: {e.detail} ({e.code})</li>)}</ul></>}
-                    </div>
-                )}
+                {canApprove
+                    ? <p className="mb-3 text-xs text-slate-600">Picking a company or pressing Confirm books the line at once (bills oldest first, any remainder as advance) and marks it matched. Undo is available for {UNDO_SECONDS} seconds.</p>
+                    : <div className="mb-3"><ReadOnlyNote need="the Accounts Approver role to confirm proposals" /></div>}
                 <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                     <DataGrid rows={rows} rowKey={(p) => p.line.id} caption="Invoice proposals"
                         empty="No unmatched lines need a party — try Auto-match on Bank Transactions." columns={[
-                        ...(canApprove ? [{ key: "sel", header: (
-                            <input type="checkbox" aria-label="Select all proposals" checked={allSelected}
-                                   onChange={() => setSelected(allSelected ? [] : eligibleIds)} />),
-                            cell: (p: Proposal) => (
-                                <input type="checkbox" aria-label={`Select line ${p.line.id}`} checked={selected.includes(p.line.id)}
-                                       disabled={!eligible(p)} onChange={() => toggleRow(p.line.id)} />) }] : []),
                         { key: "d", header: "Date", cell: (p) => p.line.txn_date },
                         { key: "n", header: "Narration", cell: (p) => (
                             <div className="max-w-xs"><span className="line-clamp-2">{p.line.narration}</span>
                                 {p.counterparty && <span className="text-xs text-slate-500">{p.counterparty}</span>}</div>) },
                         { key: "a", header: "Amount", numeric: true, cell: (p) => (
                             <span><Amount value={p.line.amount} /> <span className="text-xs text-slate-500">{p.direction === "RECEIPT" ? "Cr" : "Dr"}</span></span>) },
-                        { key: "p", header: "Proposed party", cell: (p) => (
-                            <PartyCell p={p} canWrite={canWrite && !recent[p.line.id]} overridden={!!overrides[p.line.id]} busy={preview.isPending}
-                                       onPick={(partyId) => preview.mutate({ lineId: p.line.id, partyId })}
-                                       onReset={() => setOverrides((o) => Object.fromEntries(Object.entries(o).filter(([id]) => Number(id) !== p.line.id)))} />) },
-                        { key: "b", header: "Bills to settle", cell: (p) => (
+                        { key: "p", header: "Party", cell: (p) => (
+                            <PartyCell p={p} canSave={canApprove && !recent[p.line.id] && !p.blocked} busy={saving.includes(p.line.id)}
+                                       onSave={(party) => save.mutate({ p, party })} />) },
+                        { key: "b", header: "Bills to settle", cell: (p) => recent[p.line.id] && !p.allocations.length ? (
+                            <span className="text-xs text-slate-500">Settled oldest first</span>) : (
                             <div className="space-y-0.5 text-xs">
                                 {p.allocations.map((a) => <div key={a.invoice_id}>{a.number} · <Amount value={a.amount} /></div>)}
                                 {formatMoney(p.advance, { blankZero: true }) && <div className="text-amber-700">Advance <Amount value={p.advance} /></div>}
                                 {p.allocations.length === 0 && !p.party && <span className="text-slate-400">—</span>}
                             </div>) },
-                        { key: "c", header: "Confidence", cell: (p) => {
+                        { key: "c", header: "Status", cell: (p) => {
                             const r = recent[p.line.id];
-                            if (!r) return <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset ${CONF_TONE[p.confidence]}`}>{p.confidence}</span>;
-                            const left = Math.max(0, Math.ceil((r.until - now) / 1000));
+                            if (r) {
+                                const left = Math.max(0, Math.ceil((r.until - now) / 1000));
+                                return (
+                                    <div className="flex flex-col items-start gap-1" role="status" aria-live="polite">
+                                        <span className="inline-flex rounded-md bg-emerald-600 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-white">Matched · {r.voucher}</span>
+                                        {canApprove && <Button size="sm" variant="outline" disabled={undo.isPending} aria-label={`Undo line ${p.line.id}`}
+                                                               onClick={() => undo.mutate(r)}>Undo ({left}s)</Button>}
+                                    </div>);
+                            }
                             return (
-                                <div className="flex flex-col items-start gap-1" role="status" aria-live="polite">
-                                    <span className="inline-flex rounded-md bg-emerald-600 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-white">Matched · {r.voucher}</span>
-                                    {canApprove && <Button size="sm" variant="outline" disabled={undo.isPending} aria-label={`Undo line ${p.line.id}`}
-                                                           onClick={() => undo.mutate(r)}>Undo ({left}s)</Button>}
+                                <div className="flex flex-col items-start gap-1">
+                                    <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset ${CONF_TONE[p.confidence]}`}>{p.confidence}</span>
+                                    {canApprove && p.party && !p.blocked && (
+                                        <Button size="sm" disabled={saving.includes(p.line.id)} aria-label={`Confirm line ${p.line.id}`}
+                                                onClick={() => save.mutate({ p, party: p.party as PickedParty })}>
+                                            {saving.includes(p.line.id) ? "Saving…" : "Confirm"}</Button>)}
+                                    {errors[p.line.id] && <span className="max-w-48 text-xs text-red-700" role="alert">{errors[p.line.id]}</span>}
                                 </div>);
                         } },
                     ]} />
                 </QueryState>
             </Panel>
             {showAliases && <AliasesPanel entityId={entityId} />}
-            {dialog}
         </div>
     );
 }

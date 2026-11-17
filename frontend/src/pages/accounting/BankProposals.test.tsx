@@ -88,21 +88,29 @@ describe("BankProposals", () => {
             expect.objectContaining({ params: expect.objectContaining({ confidence: "high,medium,low" }) }));
     });
 
-    it("previews a party override and confirms the selected {line_id, party_id}", async () => {
+    it("picking another company saves that line at once (no select / confirm step)", async () => {
         post.mockResolvedValue({ data: { confirmed: [{ line_id: 1, payment_id: 5, voucher: "RV-1" }], errors: [] } });
+        const user = userEvent.setup();
         renderAt();
         const row = (await screen.findByText("NEFT ACME 1")).closest("tr")!;
-        await userEvent.selectOptions(within(row).getByRole("combobox", { name: "Suggested parties for line 1" }), "555");
-        await waitFor(() => expect(get).toHaveBeenCalledWith("accounting/statement-lines/1/proposal/", expect.objectContaining({ params: { party_id: 555 } })));
-        expect(await within(row).findByText("Other Co", { selector: "span, div, p, b, strong" })).toBeInTheDocument();
-        expect(within(row).queryByText(/^chosen$/i)).not.toBeInTheDocument();
-        await userEvent.click(screen.getByRole("checkbox", { name: "Select line 1" }));
-        await userEvent.click(screen.getByRole("button", { name: "Confirm selected (1)" }));
-        const dialog = await screen.findByRole("alertdialog");
-        expect(dialog).toHaveTextContent(/1 receipt .*0 payments.*1,180\.50/);
-        await userEvent.click(within(dialog).getByRole("button", { name: "Post" }));
+        expect(screen.queryByRole("button", { name: /Confirm selected/ })).toBeNull();
+        expect(screen.queryByRole("checkbox")).toBeNull();
+        await user.selectOptions(within(row).getByRole("combobox", { name: "Suggested parties for line 1" }), "555");
         await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/bank-accounts/3/proposals/confirm/", { items: [{ line_id: 1, party_id: 555 }] }));
-        expect(await screen.findByText("1 line confirmed")).toBeInTheDocument();
+        expect(screen.queryByRole("alertdialog")).toBeNull();
+        const matched = (await screen.findByText("Matched · RV-1")).closest("tr")!;
+        expect(within(matched).getByText("Other Co")).toBeInTheDocument();
+        expect(within(matched).queryByRole("combobox", { name: "Suggested parties for line 1" })).toBeNull();
+    });
+
+    it("shows the server's reason inline when a save is refused", async () => {
+        post.mockResolvedValue({ data: { confirmed: [], errors: [{ line_id: 1, code: "existing_book_entry", detail: "A book entry with this UTR already exists." }] } });
+        const user = userEvent.setup();
+        renderAt();
+        await screen.findByText("NEFT ACME 1");
+        await user.click(screen.getByRole("button", { name: "Confirm line 1" }));
+        expect(await screen.findByRole("alert")).toHaveTextContent("A book entry with this UTR already exists.");
+        expect(screen.queryByText(/Matched ·/)).toBeNull();
     });
 
     async function confirmLine1(user: ReturnType<typeof userEvent.setup>) {
@@ -113,16 +121,14 @@ describe("BankProposals", () => {
         });
         renderAt();
         await screen.findByText("NEFT ACME 1");
-        await user.click(screen.getByRole("checkbox", { name: "Select line 1" }));
-        await user.click(screen.getByRole("button", { name: "Confirm selected (1)" }));
-        await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Post" }));
+        await user.click(screen.getByRole("button", { name: "Confirm line 1" }));
         return (await screen.findByText("Matched · RV-1")).closest("tr")!;
     }
 
     it("shows a confirmed line as matched with Undo, and Undo reverses it", async () => {
         const user = userEvent.setup();
         const row = await confirmLine1(user);
-        expect(within(row).getByRole("checkbox", { name: "Select line 1" })).toBeDisabled();
+        expect(within(row).queryByRole("button", { name: "Confirm line 1" })).toBeNull();
         await user.click(within(row).getByRole("button", { name: "Undo line 1" }));
         await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/bank-proposals/5/undo/", {}));
         await waitFor(() => expect(screen.queryByText("Matched · RV-1")).not.toBeInTheDocument());
@@ -142,8 +148,8 @@ describe("BankProposals", () => {
     it("hides confirm and selection for a viewer", async () => {
         renderAt(["ACCOUNTS_VIEWER"]);
         await screen.findByText("NEFT ACME 1");
-        expect(screen.queryByRole("button", { name: /Confirm selected/ })).toBeNull();
-        expect(screen.queryByRole("checkbox")).toBeNull();
+        expect(screen.queryByRole("button", { name: /Confirm line/ })).toBeNull();
+        expect(screen.queryByRole("combobox", { name: /Suggested parties/ })).toBeNull();
         expect(screen.getByRole("note")).toHaveTextContent("Read-only");
     });
 });

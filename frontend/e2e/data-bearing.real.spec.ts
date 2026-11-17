@@ -67,7 +67,7 @@ test.describe("isolated data-bearing operational workflows", () => {
     expect(errors).toEqual([]);
   });
 
-  test("real PLAN queue refills from 1–10 to 2–11 and persists the debit", async ({ page }, testInfo) => {
+  test("real PLAN queue refills from 1–25 to 2–26 and persists the debit", async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     const failures: string[] = [];
     page.on("console", message => {
@@ -79,8 +79,8 @@ test.describe("isolated data-bearing operational workflows", () => {
     await page.goto("/allotments/2/allocate", { waitUntil: "networkidle" });
     await expect(page.getByText(`Invoice #${queueInvoice}`, { exact: false })).toBeVisible();
     await expect(page.getByText("3411009001", { exact: true })).toBeVisible();
-    await expect(page.getByText("3411009010", { exact: true })).toBeVisible();
-    await expect(page.getByText("3411009011", { exact: true })).toBeHidden();
+    await expect(page.getByText("3411009025", { exact: true })).toBeVisible();
+    await expect(page.getByText("3411009026", { exact: true })).toBeHidden();
 
     const confirms = page.getByRole("button", { name: "Confirm" });
     const maxButtons = page.getByRole("button", { name: "Max" });
@@ -92,7 +92,7 @@ test.describe("isolated data-bearing operational workflows", () => {
     // The number remains once in the authoritative allotted-history table,
     // but is no longer one of the ten actionable queue cards.  The 11th
     // eligible licence is promoted without reloading the document.
-    await expect(page.getByText("3411009011", { exact: true })).toBeVisible();
+    await expect(page.getByText("3411009026", { exact: true })).toBeVisible();
     await expect(page.getByText("Allotted Items")).toBeVisible();
     await expectNoDocumentOverflow(page);
 

@@ -402,6 +402,9 @@ CACHES = {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        # Optional namespace so an isolated backend (e.g. the browser e2e harness on its own test_* DB) never
+        # reads cache entries written by another backend sharing this Redis. Empty by default = keys unchanged.
+        "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", ""),
     }
 }
 

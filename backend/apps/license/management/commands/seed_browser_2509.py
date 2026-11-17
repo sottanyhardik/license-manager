@@ -51,7 +51,7 @@ MAX_CIF = Decimal("2064.12")
 QUEUE_ITEM_NAME = "E2E QUEUE MATERIAL 2509"
 QUEUE_INVOICE = "E2E-QUEUE-2509"
 QUEUE_LICENSE_START = 2510
-QUEUE_LICENSE_COUNT = 12
+QUEUE_LICENSE_COUNT = 27  # one 25-item allocate page (AllotmentAction pageSize) + the refill + a spare
 QUEUE_POSITION_QUANTITY = Decimal("100.000")
 QUEUE_POSITION_CIF = Decimal("1000.00")
 BOE_NUMBER = "E2E-BOE-2509"
@@ -166,7 +166,7 @@ class Command(BaseCommand):
         port = _get_or_report_conflict(
             PortModel, {"code": "E2E"}, {"name": "E2E Browser Port"}, "port",
         )
-        _get_or_report_conflict(
+        purchase_status = _get_or_report_conflict(
             PurchaseStatus,
             {"code": "E2"},
             {"label": "E2E Browser Purchase Status", "is_active": True, "display_order": 1},
@@ -183,6 +183,7 @@ class Command(BaseCommand):
                 "scheme_code": scheme,
                 "notification_number": notification,
                 "port": port,
+                "purchase_status": purchase_status,
             },
         )
         if not created:
@@ -192,9 +193,10 @@ class Command(BaseCommand):
             license_obj.scheme_code = scheme
             license_obj.notification_number = notification
             license_obj.port = port
+            license_obj.purchase_status = purchase_status
             license_obj.save(update_fields=[
                 "license_date", "license_expiry_date", "exporter", "scheme_code",
-                "notification_number", "port",
+                "notification_number", "port", "purchase_status",
             ])
 
         profile, _ = SionPlanningProfile.objects.get_or_create(
@@ -387,11 +389,14 @@ class Command(BaseCommand):
                 "qty_kg": Decimal("1.0000"),
                 "rate_inr_per_kg": Decimal("89283.10"),
                 "cif_inr": Decimal("89283.10"),
+                # The financial balance credits purchases by cif_fc; without it the licence nets to 0.00.
+                "cif_fc": AVAILABLE_CIF,
             },
         )
-        if not created and purchase_line.amount_inr == 0:
-            purchase_line.amount_inr = Decimal("89283.10")
-            purchase_line.save(update_fields=["amount_inr"])
+        if not created and (purchase_line.amount_inr == 0 or purchase_line.cif_fc != AVAILABLE_CIF):
+            purchase_line.amount_inr = purchase_line.amount_inr or Decimal("89283.10")
+            purchase_line.cif_fc = AVAILABLE_CIF
+            purchase_line.save(update_fields=["amount_inr", "cif_fc"])
         self.stdout.write(f"  → Purchase trade {purchase_trade.id} (type={purchase_trade.license_type}) with line {purchase_line.id}, amount={purchase_line.amount_inr}")
 
         # Verify trade was created correctly
@@ -426,8 +431,8 @@ class Command(BaseCommand):
             sale_line.save(update_fields=["amount_inr"])
         self.stdout.write(f"  → Sale trade {sale_trade.id} with line {sale_line.id}, amount={sale_line.amount_inr}")
 
-        # Twelve independently eligible positions make the browser test prove
-        # the real server-backed 10-item queue and its 11th-item refill.
+        # Twenty-seven independently eligible positions make the browser test prove
+        # the real server-backed 25-item queue and its 26th-item refill.
         for offset in range(QUEUE_LICENSE_COUNT):
             queue_license_id = QUEUE_LICENSE_START + offset
             queue_license_number = f"3411009{offset + 1:03d}"
@@ -441,6 +446,7 @@ class Command(BaseCommand):
                     "scheme_code": scheme,
                     "notification_number": notification,
                     "port": port,
+                    "purchase_status": purchase_status,
                 },
             )
             if queue_license.license_number != queue_license_number:
@@ -451,9 +457,10 @@ class Command(BaseCommand):
             queue_license.scheme_code = scheme
             queue_license.notification_number = notification
             queue_license.port = port
+            queue_license.purchase_status = purchase_status
             queue_license.save(update_fields=[
                 "license_date", "license_expiry_date", "exporter", "scheme_code",
-                "notification_number", "port",
+                "notification_number", "port", "purchase_status",
             ])
             LicenseExportItemModel.objects.update_or_create(
                 license=queue_license,

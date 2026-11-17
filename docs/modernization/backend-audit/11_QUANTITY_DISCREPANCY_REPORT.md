@@ -365,3 +365,27 @@ Gates to run with any change: `license/tests/test_balance_*`, `test_sale_trade_q
   re-executed.
 - The physical meaning of the D-9 lines and the `mts` SRs.
 - No test or gate was run in this session (measurement only; no code changed).
+
+## 9. Owner decisions recorded (2026-11-17)
+
+- **A-1 APPROVED, as "engine as-is".** The canonical item Available Quantity is exactly
+  `ItemBalanceCalculator.calculate_available_quantity_for_items`: S7 direct-sale netting, floored at 0,
+  Decimal at 3dp. It is exposed additively as server fields (`available_quantity_canonical`,
+  `over_utilised_quantity`, `is_quantity_over_utilised`). Client formulas C1 (CustomsLedgerSection) and
+  C2 (LicenseBalanceModal) read those fields instead of computing. A-3 and A-4 alternatives are NOT adopted;
+  they remain open only if the owner wants to deviate from the engine.
+- **A-2: NOT APPROVED (owner, 2026-11-17; supersedes every earlier note here).** Option (i), the hidden-aware
+  stored writer, is paused. Its uncommitted hunk in `calculate_balance.py:50-70` and the 5 tests in
+  `test_stored_available_quantity_hidden.py` are preserved for review, not committed, and skipped. Reconsideration
+  requires a cif-balance-auditor review (done: ESCALATE-TO-OWNER; 253 items / 94 licences would change on recompute and
+  enter allotment candidate lists), documented before/after evidence, reconciliation of the conflicting rules, and a
+  separate explicit owner approval. History: chosen, then paused, then reaffirmed in this thread, then superseded.
+  Option (i), a BUSINESS-RULE CHANGE: The stored
+  `debited_quantity` / `available_quantity` writer (`core/scripts/calculate_balance.py`) excludes hidden BOEs
+  exactly as the engine does, using Decimal arithmetic. Allotment gating (`views_actions.py:315,644`,
+  `filter_service.py:30`) then uses the corrected value.
+  Scope limits:
+  - **quantity only**; the CIF fields `debited_value` / `available_value` are unchanged (CIF needs separate approval);
+  - **no bulk refresh**: stored rows update only through their existing recompute signals (A-10 not approved);
+  - **no data correction**, and no change to rounding or the integer floor (Q-10) or the column scale (A-7).
+- Still unapproved: A-3 … A-11 (except as implied by A-1 above).

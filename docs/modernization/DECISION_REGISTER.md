@@ -17,7 +17,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
     `CustomsLedgerSection.tsx:10` `actualAvailableQuantity` still exists and waits for the Reconciliation Engineer).
 - **Earlier:** CIF `$` en-US format on the licence workspace; card status from `deriveStatus`; D1(a) `/overview` stays.
 
-## Proposed (all: status PROPOSED, awaiting owner)
+## Owner-reviewed proposals (D5–D9, OD-BA-a/b/c APPROVED 2026-11-17 as recommended)
 
 ### D5. Card Planning refresh
 - **Decision:** the card's Planning tab passes `onSaved` that calls `invalidateLicence(queryClient, id)`, as the overview page does.
@@ -27,7 +27,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** extra refetches after each row save (the editor saves per row; `onSaved` fires each time). Debounce or invalidate once per batch if noisy. `LicenseRecordWorkspace.tsx` is owned by a debugging agent; coordinate.
 - **Options:** (a) add invalidation **[RECOMMENDED]**; (b) leave.
 - **Blocks grouped BOE/Allotment endpoint:** no.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### D6. Dead and orphan code
 - **Decision:** delete `BalanceTab.tsx` and `LedgerTab.tsx` now; defer the balance-modal wiring removal to the D3-modal decision; do not add a Documents tab.
@@ -41,7 +41,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** hidden importers (dynamic import, tests). Mitigate with `tsc` + full vitest + index rebuild. Do not delete the modal (still reachable from MasterForm).
 - **Options:** (a) delete BalanceTab/LedgerTab, MasterList wiring later **[RECOMMENDED]**; (b) keep; (c) also build a Documents tab (a new visible tab = presentation change, needs its own approval).
 - **Blocks grouped BOE/Allotment endpoint:** no.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### D7. Import Items column-group header misalignment
 - **Decision:** set the Quantity and CIF (FC) group headers to `colSpan={7}` so they cover their 7 columns each.
@@ -51,7 +51,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** `Identity` colSpan 4 over sticky columns is unaffected. Snapshot/aria tests may assert the old spans.
 - **Options:** (a) fix to 7 **[RECOMMENDED]**; (b) keep.
 - **Blocks grouped BOE/Allotment endpoint:** no.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### D8. Per-surface formatting (CIF, dates, toasts)
 - **Decision:** keep formats per surface; the licence workspace stays `$` en-US (already approved); do not unify other surfaces now.
@@ -60,7 +60,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** inconsistency stays visible across surfaces (card/page vs modal vs report). A later unification should go through one `licenceFormat.ts`-style helper (exists at `features/licenses/licenceFormat.ts`) with a per-surface migration.
 - **Options:** (a) keep per surface **[RECOMMENDED]**; (b) unify to one format (owner must name it).
 - **Blocks grouped BOE/Allotment endpoint:** no. The unified list should simply reuse the licence-workspace format.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### D9. Action-menu label for the overview link
 - **Decision:** keep the label "Recalculate / hide-restore BOE (License Overview)".
@@ -69,7 +69,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** duplicate destination may confuse; revisit only if user feedback says so.
 - **Options:** (a) keep **[RECOMMENDED]**; (b) merge into "License Overview" (removes a writer-only hint, changes the test).
 - **Blocks grouped BOE/Allotment endpoint:** no.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### OD-BA-a. Supplier source
 - **Decision:** L1 "Supplier" = the transaction's `company_id` for both BOEs and allotments (BOE `company`, allotment `company`); `related_company` is not used for grouping.
@@ -79,7 +79,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** mixing BOE suppliers and allotment customers under one L1 may group unrelated parties together if a company is both. Keep record-type visible on every row. Null-supplier BOEs must show an explicit group. See 07 for measured coverage.
 - **Options:** (a) `company` for both **[RECOMMENDED]**; (b) `related_company` for allotments when set, else `company` (inconsistent across records); (c) separate L1 per record type (Suppliers for BOE, Customers for allotments).
 - **Blocks grouped BOE/Allotment endpoint:** **yes**.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### OD-BA-b. "Safe normalisation" of supplier identity
 - **Decision:** group strictly by `company_id`; no name-based merging in the endpoint; list same-normalised-name different-`company_id` pairs in a master-data cleanup report instead.
@@ -88,7 +88,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** one real supplier with two company records appears twice (visible, not wrong). Rewiring FKs to merge them is a data operation needing owner approval. Whitespace-only differences in the displayed name do not affect grouping.
 - **Options:** (a) `company_id` only + cleanup list **[RECOMMENDED]**; (b) merge identical normalised names (casefold, whitespace, punctuation strip) at group time (cheap but can hide distinct IECs, requires owner rule); (c) fuzzy match (rejected, unsafe).
 - **Blocks grouped BOE/Allotment endpoint:** **yes** (defines the L1 key). Recommended option (a) is the simplest contract.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ### OD-BA-c. Product key (L2)
 - **Decision:** L2 = the licence import item (SR number, `serial_number`) the record line is drawn against, displayed as canonical product name(s) via `items_detail`; allotment free-text `item_name` is shown only as a secondary label.
@@ -98,7 +98,7 @@ principal-architect role from current code (feature/v5 working tree). Sources: `
 - **Risks:** SR with several canonical names (display only, group key stays SR); SR missing product mapping; mixed units within a group; allotments spanning several SRs get several lines (not double counted if each line carries only its own qty/CIF); linked allotments already netted against BOEs must stay excluded from totals (OD-BA-e). Quantity semantics remain unapproved: the endpoint can return the raw line qty and unit and leave derived "available" qty out. Allocation audit `05` D5/D6 shows BOE-linked allotment items are counted differently by R1/R3/R5, so any totals must state which rule they use. See 07 for measured mapping coverage.
 - **Options:** (a) licence import item (SR) **[RECOMMENDED]**; (b) canonical `ItemNameModel` (breaks on many-to-many, double counts); (c) allotment `item_name` (BOE has none).
 - **Blocks grouped BOE/Allotment endpoint:** **yes**.
-- **Status:** PROPOSED (awaiting owner).
+- **Status:** APPROVED 2026-11-17 (owner), recommended option.
 
 ## Dependencies and notes
 
@@ -147,3 +147,15 @@ All PROPOSED / awaiting owner. Full definitions live in the cited docs; they are
 ### From backend-audit/09 (licence workspace performance)
 - Ranked fixes 1–6 are proposals. #1 (documents-only endpoint) is an **API CONTRACT** addition. #2, #4, #5, #6 touch CIF
   computation paths and need cif-balance-auditor review before implementation.
+
+## Owner decisions 2026-11-17
+
+- **APPROVED as recommended:** D5, D6 (incl. `ServerError.tsx`), D7, D8, D9, OD-BA-a, OD-BA-b, OD-BA-c.
+- **Packages:** `@tanstack/react-table` 8.21.3 APPROVED. `react-hook-form`, `zod`, `@hookform/resolvers` NOT approved (removed).
+- **Doc-07 follow-ups APPROVED:** B8 (429 handling), B9b (first `useListQuery` consumer, list page in URL), B13 (nav links), B14 (ledger fan-out).
+- **Balance modal ("complete"):** implemented as doc 06 D3 option (c): unique modal features ported into the workspace, modal and its
+  MasterForm entry kept unchanged. The modal's client-side usage "Balance" line was not ported (quantity semantics still open).
+  If the owner intended (b) (retire the modal entry point), that is a follow-up step (B6).
+- **Still open:** OD-BA-d (columns/labels), e (linked allotments display), f (default expansion), g (page tabs) — these gate the
+  grouped list's UI placement only; the backend endpoint and client are implemented. Quantity semantics (OD-QTY, OD-MAP),
+  measurements M1–M14, and the escalated rule/code conflicts above.

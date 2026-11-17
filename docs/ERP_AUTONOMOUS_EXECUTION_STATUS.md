@@ -174,6 +174,10 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 - Local data (dev DB only): LABDHI bank `BANK 400000070225` (id 2) created; `2025.xlsx` imported (318 lines, reconciles
   to closing ₹10,73,152.07). A second import `2026.xlsx` (341 lines) was added to the same account by someone else.
   Read-only proposal run on 659 lines: high 232 · medium 30 · low 13 · none 384; 11 queries. **Nothing confirmed.**
+- `98b74efc` + `47866635` Record payment / receipt: tick invoices (settle in full), **Against invoices / On account** toggle,
+  **Pick bank transaction** (party-ranked unmatched lines; `POST payments/` + optional `statement_line_id` posts and
+  matches once, partial allowed). Tests: backend 120 passed; vitest 863 + Payments 4; typecheck/lint/build pass; real
+  accounting e2e 10/10, 0 HTTP 500s.
 - Open: bank name/IFSC for account id 2 (owner); no e2e that confirms a proposal on seeded data yet.
 - Next: owner reviews proposals in the UI and confirms; add an e2e confirm flow to `seed_accounting_e2e`.
 <!-- CHECKPOINT:accounting-banking-proposals:END -->

@@ -102,18 +102,20 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 <!-- CHECKPOINT:boe:BEGIN -->
 **BOE — last verified checkpoint (2026-11-17)**
 - Branch `feature/v5` (local; push needs owner approval). Verified: `3ece31f0` (iteration 1), `f202cedb` (Phase A, D1–D15),
-  `d47041f5` (autonomous workflow), `9f012089` (Phase B: detail route, sticky form + unsaved guard, `save_boe_with_rows`,
-  exporter service + golden tests).
-- Phase B integrated-tree evidence: BE gate exit 0 (3395 passed / 1 pre-existing xfail); FE gate PASS 836/836 + typecheck
-  + lint + build; Playwright 21/21 mocked (BOE 11, Licence/nav 10; run serially — parallel runs under BE-gate load time out).
-- In progress: Licence + BOE UI/UX modernization (worktree `.claude/worktrees/boe-erp`, uncommitted).
-- Next: verify UI agents' screenshots → consolidated FE checks once → commit → land → update this block.
+  `d47041f5` (autonomous workflow), `9f012089` (Phase B), `48e7207b` (Licence + BOE UI modernization, shell cleanup).
+- Evidence: Phase B integrated tree BE gate exit 0 (3395 passed / 1 pre-existing xfail); UI commit FE gate PASS
+  833/833 + typecheck + lint + build; Playwright 38/38 mocked, serial (check port 41731 is free first — another
+  session's dev server on that port makes Playwright test the wrong tree).
+- Open (low): Licence `$-250.75` sign format (pinned owner decision); Tasks FAB near Dashboard "View all" at 768px;
+  BOE invoice status derived from invoice_no (no is_invoice in list payload); live-backend Playwright not run
+  (needs credentials); licence detail page (`pages/license-overview/**`) not modernized — has uncommitted user edits.
 - Owner items: nginx `nosniff` reload by ops (not deployed); `git push`.
 <!-- CHECKPOINT:boe:END -->
 
 | Date | BOE milestone | Commit | Evidence |
 |---|---|---|---|
 | 2026-11-17 | Iteration 1 | `3ece31f0` | BE 3152 passed/1 pre-existing xfail; FE 807/807; Playwright 29/29 mocked |
+| 2026-11-17 | Licence + BOE UI modernization | `48e7207b` | FE 833/833 + typecheck + lint + build; Playwright 38/38 mocked |
 | 2026-11-17 | Phase B | `9f012089` | BE gate exit 0, 3395 passed/1 pre-existing xfail; FE 836/836; Playwright 21/21 mocked |
 | 2026-11-17 | Iteration 2 Phase A (D1–D15) | `f202cedb` | BE gate exit 0, 3339 passed/1 pre-existing xfail; FE 814/814; Playwright 29/29 mocked; 1044 local BOEs echo-validated, 0 false 400s |
 

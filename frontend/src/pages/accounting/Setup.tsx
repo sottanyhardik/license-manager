@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { acctGet, acctKeys, acctPatch, acctPost, type Account, type EntityBooks } from "@/api/accountingApi";
+import { Link } from "react-router-dom";
+import { acctGet, acctKeys, acctPatch, acctPost, type EntityBooks } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
 import { useAccountingAccess } from "./useAccountingAccess";
@@ -97,39 +98,12 @@ function EntitySettings() {
     );
 }
 
-function Chart() {
-    const { canApprove } = useAccountingAccess();
-    const { entityId } = useAccounting();
-    const qc = useQueryClient();
-    const q = useQuery({ queryKey: acctKeys.of(entityId, "accounts"), enabled: !!entityId,
-        queryFn: () => acctGet<{ accounts: Account[]; groups: { id: number; code: string; name: string; nature: string }[] }>("accounts/", { entity: entityId }) });
-    const [f, setF] = useState({ group_id: "", code: "", name: "" });
-    const add = useMutation({
-        mutationFn: () => acctPost("accounts/", { entity: entityId, ...f }),
-        onSuccess: () => { toast.success("Ledger added"); setF({ group_id: "", code: "", name: "" }); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); },
-        onError: notifyError,
-    });
-    if (!entityId) return null;
+/** The chart itself is managed under Masters → Chart of Accounts (one screen, no duplicate editor). */
+function ChartLink() {
     return (
         <Panel title="Chart of accounts">
-            {canApprove && <form className="mb-3 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
-                <Field label="Group"><select className={inputCls} required value={f.group_id} onChange={(e) => setF({ ...f, group_id: e.target.value })}>
-                    <option value="">Select…</option>{(q.data?.groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.name} ({g.nature})</option>)}</select></Field>
-                <Field label="Code"><input className={`${inputCls} w-24`} required value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></Field>
-                <Field label="Name"><input className={`${inputCls} w-64`} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-                <Button type="submit" disabled={add.isPending}>Add ledger</Button>
-            </form>}
-            <QueryState isLoading={q.isLoading} error={q.error}>
-                <DataGrid rows={q.data?.accounts ?? []} rowKey={(a) => a.id} caption="Accounts" columns={[
-                    { key: "c", header: "Code", cell: (a) => a.code },
-                    { key: "n", header: "Name", cell: (a) => a.name },
-                    { key: "g", header: "Group", cell: (a) => a.group },
-                    { key: "na", header: "Nature", cell: (a) => a.nature },
-                    { key: "k", header: "Kind", cell: (a) => a.kind },
-                    { key: "r", header: "Posting role", cell: (a) => <code className="text-xs">{a.system_role ?? ""}</code> },
-                    { key: "ic", header: "Intercompany", cell: (a) => (a.intercompany_entity_id ? "Yes" : "") },
-                ]} />
-            </QueryState>
+            <p className="text-sm text-slate-600">Ledgers, groups and opening balances are managed under{" "}
+                <Link className="font-medium text-blue-700 hover:underline" to="/accounting/masters/accounts">Masters → Chart of Accounts</Link>.</p>
         </Panel>
     );
 }
@@ -179,7 +153,7 @@ export default function Setup() {
             {!canApprove && <ReadOnlyNote need="the accounts approver role to change books, periods, chart or TDS" />}
             <ActivateBooks />
             <EntitySettings />
-            <Chart />
+            <ChartLink />
             <TdsSections />
         </div>
     );

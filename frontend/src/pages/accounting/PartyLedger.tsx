@@ -38,37 +38,44 @@ interface PartyLedgerData extends Ledger {
         outstanding: Money; status: string; trade_id: number | null }[];
 }
 
-export default function PartyLedger() {
+/** Ledger + bill-wise outstanding for one party in the selected entity and window (reports/party-ledger/). */
+export function PartyLedgerView({ partyId, partyName }: { partyId: number; partyName: string }) {
     const { entityId, scope } = useAccounting();
-    const [party, setParty] = useState<Party | null>(null);
     const q = useQuery({
-        queryKey: acctKeys.of(entityId, "party-ledger", party?.id, scope.fy),
-        queryFn: () => acctGet<PartyLedgerData>("reports/party-ledger/", { ...scope, party: party?.id }),
-        enabled: !!party,
+        queryKey: acctKeys.of(entityId, "party-ledger", partyId, scope.start, scope.end),
+        queryFn: () => acctGet<PartyLedgerData>("reports/party-ledger/", { ...scope, party: partyId }),
     });
+    return (
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+            {q.data && (q.data.account_id === null
+                ? <Panel title={`Ledger — ${partyName}`}><p className="text-sm text-slate-500">This party has no ledger in these books yet (no posted document).</p></Panel>
+                : (<>
+                    <Panel title={`Ledger — ${partyName}`}><LedgerTable ledger={q.data} /></Panel>
+                    <Panel title="Outstanding bills (bill-wise)">
+                        <DataGrid rows={q.data.open_bills} rowKey={(b) => b.invoice_id} empty="Nothing outstanding." caption="Open bills" columns={[
+                            { key: "no", header: "Bill", cell: (b) => <Link className="text-blue-700 hover:underline" to={`/accounting/invoices/${b.invoice_id}`}>{b.number}</Link> },
+                            { key: "k", header: "Kind", cell: (b) => b.kind.replace(/_/g, " ") },
+                            { key: "d", header: "Date", cell: (b) => b.date },
+                            { key: "due", header: "Due", cell: (b) => b.due_date ?? "—" },
+                            { key: "a", header: "Amount", numeric: true, cell: (b) => <Amount value={b.amount} /> },
+                            { key: "o", header: "Outstanding", numeric: true, cell: (b) => <Amount value={b.outstanding} /> },
+                            { key: "s", header: "Status", cell: (b) => <StatusBadge status={b.status} /> },
+                        ]} />
+                    </Panel>
+                </>))}
+        </QueryState>
+    );
+}
+
+export default function PartyLedger() {
+    const [party, setParty] = useState<Party | null>(null);
     return (
         <div className="space-y-4">
             <Panel title="Party ledger (customer / supplier / agent — one ledger per party)">
                 <div className="max-w-xl"><Field label="Party"><PartyPicker value={party} onChange={setParty} /></Field></div>
+                <p className="mt-2 text-xs text-slate-500">Or browse every party with a balance under <Link className="text-blue-700 hover:underline" to="/accounting/masters/parties">Masters → Parties</Link>.</p>
             </Panel>
-            {party && (
-                <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-                    {q.data && (<>
-                        <Panel title={`Ledger — ${party.name}`}><LedgerTable ledger={q.data} /></Panel>
-                        <Panel title="Outstanding bills (bill-wise)">
-                            <DataGrid rows={q.data.open_bills} rowKey={(b) => b.invoice_id} empty="Nothing outstanding." caption="Open bills" columns={[
-                                { key: "no", header: "Bill", cell: (b) => <Link className="text-blue-700 hover:underline" to={`/accounting/invoices/${b.invoice_id}`}>{b.number}</Link> },
-                                { key: "k", header: "Kind", cell: (b) => b.kind.replace(/_/g, " ") },
-                                { key: "d", header: "Date", cell: (b) => b.date },
-                                { key: "due", header: "Due", cell: (b) => b.due_date ?? "—" },
-                                { key: "a", header: "Amount", numeric: true, cell: (b) => <Amount value={b.amount} /> },
-                                { key: "o", header: "Outstanding", numeric: true, cell: (b) => <Amount value={b.outstanding} /> },
-                                { key: "s", header: "Status", cell: (b) => <StatusBadge status={b.status} /> },
-                            ]} />
-                        </Panel>
-                    </>)}
-                </QueryState>
-            )}
+            {party && <PartyLedgerView key={party.id} partyId={party.id} partyName={party.name} />}
         </div>
     );
 }

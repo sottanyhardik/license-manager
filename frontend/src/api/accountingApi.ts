@@ -266,3 +266,50 @@ export const acctKeys = {
     entity: (entityId: number | null) => ["accounting", entityId] as const,
     of: (entityId: number | null, ...rest: unknown[]) => ["accounting", entityId, ...rest] as const,
 };
+
+/* ---- Frontend round 2026-11-17: shapes of reports/dashboard/, parties/summary/, audit/ ---- */
+
+/** GET reports/dashboard/ (selectors/reports.py dashboard()). */
+export interface AccountingDashboardData {
+    entity_id: number; start: string; end: string;
+    sales: Money; purchases: Money; gross_profit: Money; net_profit: Money; bank_balance: Money; cash_balance: Money;
+    receivables: Money; payables: Money; overdue_receivables: Money; overdue_payables: Money; draft_vouchers: number;
+    unposted_invoices: number; unmatched_bank_lines: number; open_suspense: number; gst_net_payable: Money;
+    tds_payable: Money; loan_outstanding: Money;
+    /** Additive: posted payments / receipts not yet allocated to bills. Absent on older servers. */
+    advances_paid?: Money; advances_received?: Money;
+}
+
+/** One row of GET parties/summary/ (selectors/reports.py party_summary()). Balance is debit-positive. */
+export interface PartySummaryRow {
+    party_id: number; party: string; gstin: string | null; account_id: number; account_code: string;
+    balance: Money; receivable: Money; payable: Money; open_bills: number; open_payable_bills: number;
+    is_customer: boolean; is_supplier: boolean; is_active: boolean;
+}
+
+export interface PartySummary {
+    as_of: string;
+    parties: PartySummaryRow[];
+    totals: { debit_balance: Money; credit_balance: Money; receivable: Money; payable: Money };
+}
+
+/** One row of GET audit/ (paged). */
+export interface AuditEvent {
+    id: number; action: string; object_type: string; object_id: number | null; at: string;
+    detail: Record<string, unknown>; actor: string | null;
+}
+
+export interface AccountGroup { id: number; code: string; name: string; nature: string; report_head: string }
+
+/** GET accounts/ */
+export interface ChartData {
+    accounts: Account[];
+    groups: AccountGroup[];
+    cost_centres: { id: number; code: string; name: string }[];
+}
+
+/** One row of GET reports/trial-balance/ (used for per-ledger balances on master screens). */
+export interface TrialBalanceRow {
+    account_id: number | null; code: string; name: string; group: string; nature: string; kind: string;
+    opening_debit: Money; opening_credit: Money; debit: Money; credit: Money; closing_debit: Money; closing_credit: Money;
+}

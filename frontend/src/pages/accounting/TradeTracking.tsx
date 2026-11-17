@@ -25,7 +25,7 @@ export default function TradeTracking() {
     const [bankId, setBankId] = useState<string>("");
 
     const q = useQuery({
-        queryKey: acctKeys.of(entityId, "trades", status, pageNo, fyRange.start),
+        queryKey: acctKeys.of(entityId, "trades", status, pageNo, fyRange.start, fyRange.end),
         queryFn: () => acctGet<Paged<TradeRow> & { summary: Record<string, number> }>("trades/",
             { entity: entityId, status, page: pageNo, page_size: 50, ...fyRange }),
     });

@@ -16,6 +16,11 @@ const ROUTES = [
     "reports/balance-sheet", "reports/cash-flow", "reports/general-ledger", "reports/receivables-ageing",
     "reports/payables-ageing", "reports/register", "reports/gst", "reports/tds", "reports/trade-profitability",
     "reports/bank-book", "reports/cash-book", "reports/consolidated", "loans", "migration", "setup",
+    // frontend round 2026-11-17
+    "masters/accounts", "masters/groups", "masters/parties", "ledgers/customers", "ledgers/suppliers", "entities",
+    "vouchers/journal", "vouchers/payment", "vouchers/receipt", "vouchers/contra", "vouchers/sales", "vouchers/purchase",
+    "banking/transactions", "banking/unmatched", "banking/reconciliation", "reports/party-outstanding",
+    "reports/voucher-register", "reports/register/expense", "reports/register/sales",
 ];
 
 async function signIn(page: Page, username: string) {

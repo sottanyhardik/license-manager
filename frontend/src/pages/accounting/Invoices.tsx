@@ -29,7 +29,7 @@ function InvoiceList() {
     const f = { kind: params.get("kind") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
         page: Math.max(1, Number(params.get("page")) || 1) };
     const set = (p: Record<string, string>) => setParams({ ...Object.fromEntries(params), page: "1", ...p });
-    const q = useQuery({ queryKey: acctKeys.of(entityId, "invoices", f, fyRange.start),
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "invoices", f, fyRange.start, fyRange.end),
         queryFn: () => acctGet<Paged<Invoice>>("invoices/", { entity: entityId, ...f, ...fyRange, page_size: 50 }) });
     return (
         <Panel title="Bills, invoices, expenses and notes" actions={<>

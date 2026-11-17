@@ -1,26 +1,19 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { Link, NavLink, Route, Routes, useSearchParams } from "react-router-dom";
+import { Link, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { acctGet, acctKeys, type Account, type Money } from "@/api/accountingApi";
+import { acctGet, acctKeys, type Account, type Money, type PartySummary } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
 import { drCr, formatMoney, isMoneyInput } from "./money";
 import { LedgerTable, type Ledger } from "./PartyLedger";
+import { VoucherList } from "./Vouchers";
 import { Amount, DataGrid, Field, inputCls, Panel, QueryState, StatusBadge } from "./ui";
-
-const REPORTS = [
-    ["trial-balance", "Trial Balance"], ["profit-loss", "Profit & Loss"], ["balance-sheet", "Balance Sheet"],
-    ["cash-flow", "Cash Flow"], ["general-ledger", "General Ledger"], ["receivables-ageing", "Receivables Ageing"],
-    ["payables-ageing", "Payables Ageing"], ["register", "Registers"], ["gst", "GST"], ["tds", "TDS"],
-    ["trade-profitability", "Trade Profitability"], ["bank-book", "Bank Book"], ["cash-book", "Cash Book"],
-    ["consolidated", "Consolidated"],
-] as const;
 
 function useReport<T>(name: string, extra: Record<string, string | number | undefined> = {}, enabled = true) {
     const { entityId, scope } = useAccounting();
     return useQuery({
-        queryKey: acctKeys.of(entityId, "report", name, scope.fy, extra),
+        queryKey: acctKeys.of(entityId, "report", name, scope.start, scope.end, extra),
         queryFn: () => acctGet<T>(`reports/${name}/`, { ...scope, ...extra }),
         enabled,
     });
@@ -219,15 +212,18 @@ function RegisterTable({ rows, totals }: { rows: RegRow[]; totals?: Record<strin
     );
 }
 
+const REGISTER_KINDS = [["sales", "Sales"], ["purchase", "Purchase"], ["expense", "Expense"], ["commission", "Commission"],
+    ["notes", "Debit/Credit notes"], ["receivables", "Receivable documents"], ["payables", "Payable documents"]] as const;
+
 function Registers() {
     const [params, setParams] = useSearchParams();
-    const kind = params.get("kind") ?? "sales";
+    const routeKind = useParams().kind;
+    const kind = routeKind ?? params.get("kind") ?? "sales";
     const q = useReport<{ rows: RegRow[]; totals: Record<string, Money> }>("register", { kind });
     return (
-        <Panel title="Registers" actions={
+        <Panel title={`${REGISTER_KINDS.find(([v]) => v === kind)?.[1] ?? "Document"} register`} actions={routeKind ? undefined :
             <select className={inputCls} aria-label="Register" value={kind} onChange={(e) => setParams({ kind: e.target.value })}>
-                {[["sales", "Sales"], ["purchase", "Purchase"], ["expense", "Expense"], ["commission", "Commission"], ["notes", "Debit/Credit notes"]]
-                    .map(([v, l]) => <option key={v} value={v}>{l} register</option>)}</select>}>
+                {REGISTER_KINDS.map(([v, l]) => <option key={v} value={v}>{l} register</option>)}</select>}>
             <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>{q.data && <RegisterTable rows={q.data.rows} totals={q.data.totals} />}</QueryState>
         </Panel>
     );
@@ -304,14 +300,13 @@ function Books({ cash }: { cash: boolean }) {
 }
 
 function Consolidated() {
-    const { entities, fy } = useAccounting();
+    const { entities, fyRange } = useAccounting();
     const [ids, setIds] = useState<number[]>(entities.map((e) => e.id));
     const [reserve, setReserve] = useState("");
     const sortedIds = [...ids].sort((a, b) => a - b);
-    const start = fy ? `${fy.slice(0, 4)}-04-01` : undefined;
-    const end = fy ? `${Number(fy.slice(0, 4)) + 1}-03-31` : undefined;
+    const { start, end } = fyRange;
     const q = useQuery({
-        queryKey: [...acctKeys.all, "consolidated", sortedIds, fy, reserve],
+        queryKey: [...acctKeys.all, "consolidated", sortedIds, start, end, reserve],
         queryFn: () => acctGet<{ entities: { entity_id: number; name: string; net_sales: Money; gross_profit: Money; net_profit: Money }[];
             eliminations: { intercompany_sales: Money; intercompany_purchases: Money; eliminated: Money; unmatched_difference: Money; intercompany_balance_difference: Money };
             profit_and_loss: { net_sales: Money; gross_profit: Money; net_profit: Money }; warnings: string[];
@@ -355,16 +350,43 @@ function Consolidated() {
     );
 }
 
+/** Party-wise open bills and ledger balance (GET parties/summary/), with drill-down to the party. */
+function PartyOutstanding() {
+    const { entityId, scope } = useAccounting();
+    const q = useQuery({
+        queryKey: acctKeys.of(entityId, "party-summary", scope.start, scope.end, ""),
+        queryFn: () => acctGet<PartySummary>("parties/summary/", { ...scope, search: "" }),
+    });
+    const rows = (q.data?.parties ?? []).filter((p) => p.receivable !== "0.00" || p.payable !== "0.00");
+    return (
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+            {q.data && (
+                <Panel title={`Party outstanding as of ${q.data.as_of}`} actions={<>
+                    <Link className="text-xs text-blue-700 hover:underline" to="/accounting/reports/receivables-ageing">Receivables ageing →</Link>
+                    <Link className="text-xs text-blue-700 hover:underline" to="/accounting/reports/payables-ageing">Payables ageing →</Link></>}>
+                    <DataGrid rows={rows} rowKey={(r) => r.party_id} caption="Party outstanding" empty="No open bills." columns={[
+                        { key: "p", header: "Party", cell: (r) => <Link className="text-blue-700 hover:underline" to={`/accounting/masters/parties/${r.party_id}`}>{r.party}</Link> },
+                        { key: "r", header: "Receivable", numeric: true, cell: (r) => <Amount value={r.receivable} blankZero /> },
+                        { key: "py", header: "Payable", numeric: true, cell: (r) => <Amount value={r.payable} blankZero /> },
+                        { key: "o", header: "Open bills", numeric: true, cell: (r) => r.open_bills + r.open_payable_bills },
+                        { key: "b", header: "Ledger balance", numeric: true, cell: (r) => drCr(r.balance) },
+                    ]} footer={<tr><td className="px-3 py-1.5">Total</td>
+                        <td className="px-3 py-1.5 text-right"><Amount value={q.data.totals.receivable} /></td>
+                        <td className="px-3 py-1.5 text-right"><Amount value={q.data.totals.payable} /></td><td /><td /></tr>} />
+                    <p className="mt-2 text-xs text-slate-500">Outstanding = posted bills less bill-wise settlements. A ledger balance that differs from the open bills means unallocated advances or on-account amounts.</p>
+                </Panel>)}
+        </QueryState>
+    );
+}
+
 function Stat({ label, value, warn }: { label: string; value: Money; warn?: boolean }): ReactNode {
     return <div><dt className="text-xs text-slate-500">{label}</dt><dd className={warn && value !== "0.00" ? "font-semibold text-red-700" : ""}><Amount value={value} /></dd></div>;
 }
 
 export default function Reports() {
-    const tab = ({ isActive }: { isActive: boolean }) =>
-        `whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`;
+    // Report navigation lives in the workspace header (sections.ts: Reports, Ledgers, Expenses & Income).
     return (
         <div className="space-y-4">
-            <nav aria-label="Reports" className="flex flex-wrap gap-1">{REPORTS.map(([to, label]) => <NavLink key={to} to={`/accounting/reports/${to}`} className={tab}>{label}</NavLink>)}</nav>
             <Routes>
                 <Route index element={<TrialBalance />} />
                 <Route path="trial-balance" element={<TrialBalance />} />
@@ -375,6 +397,9 @@ export default function Reports() {
                 <Route path="receivables-ageing" element={<Ageing receivable />} />
                 <Route path="payables-ageing" element={<Ageing receivable={false} />} />
                 <Route path="register" element={<Registers />} />
+                <Route path="register/:kind" element={<Registers />} />
+                <Route path="party-outstanding" element={<PartyOutstanding />} />
+                <Route path="voucher-register" element={<VoucherList title="Voucher register" />} />
                 <Route path="gst" element={<Gst />} />
                 <Route path="tds" element={<Tds />} />
                 <Route path="trade-profitability" element={<TradeProfitability />} />

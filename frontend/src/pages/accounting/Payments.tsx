@@ -114,7 +114,7 @@ export default function Payments() {
     const [params, setParams] = useSearchParams();
     const pageNo = Math.max(1, Number(params.get("page")) || 1);
     const direction = params.get("direction") ?? "";
-    const q = useQuery({ queryKey: acctKeys.of(entityId, "payments", direction, pageNo, fyRange.start),
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "payments", direction, pageNo, fyRange.start, fyRange.end),
         queryFn: () => acctGet<Paged<Payment>>("payments/", { entity: entityId, direction, page: pageNo, page_size: 50, ...fyRange }) });
     const refresh = () => qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
     return (

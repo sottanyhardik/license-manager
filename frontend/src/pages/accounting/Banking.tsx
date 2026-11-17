@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink, Route, Routes, useParams } from "react-router-dom";
+import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -160,22 +160,28 @@ function minMoney(a: Money, b: Money): Money {
     return sumMoney([a, `-${b}`]).startsWith("-") ? a : b;
 }
 
-function Workbench({ bank }: { bank: BankAccount }) {
+function Workbench({ bank, initialStatus = "UNMATCHED,PARTIAL", title = "Statement lines", dated = false }: {
+    bank: BankAccount; initialStatus?: string; title?: string; /** Limit to the selected FY / date range (history view only; queues show every open line). */ dated?: boolean;
+}) {
     const { canWrite } = useAccountingAccess();
-    const { entityId } = useAccounting();
+    const { entityId, fyRange } = useAccounting();
     const refresh = useRefresh();
-    const [status, setStatus] = useState("UNMATCHED,PARTIAL");
+    const [status, setStatus] = useState(initialStatus);
+    const [search, setSearch] = useState("");
     const [pageNo, setPageNo] = useState(1);
     const [open, setOpen] = useState<number | null>(null);
-    const lines = useQuery({ queryKey: acctKeys.of(entityId, "lines", bank.id, status, pageNo),
-        queryFn: () => acctGet<Paged<StatementLine>>(`bank-accounts/${bank.id}/lines/`, { status, page: pageNo, page_size: 100 }) });
+    const lines = useQuery({ queryKey: acctKeys.of(entityId, "lines", bank.id, status, search, pageNo, fyRange.start, fyRange.end),
+        queryFn: () => acctGet<Paged<StatementLine>>(`bank-accounts/${bank.id}/lines/`,
+            { status, search, page: pageNo, page_size: 100, ...(dated ? fyRange : {}) }) });
     const auto = useMutation({
         mutationFn: () => acctPost<Record<string, number>>(`bank-accounts/${bank.id}/auto-match/`),
         onSuccess: (r) => { toast.success(`Auto-matched: ${r.utr ?? 0} by UTR, ${r.amount ?? 0} by amount; ${(r.ambiguous ?? 0) + (r.unmatched ?? 0)} left for review`); void refresh(); },
         onError: notifyError,
     });
     return (
-        <Panel title={`Statement lines — ${bank.bank_name} ${bank.account_number}`} actions={<>
+        <Panel title={`${title} — ${bank.bank_name} ${bank.account_number}`} actions={<>
+            <input className={inputCls} placeholder="UTR / reference / narration" aria-label="Search statement lines" defaultValue={search}
+                   onKeyDown={(e) => { if (e.key === "Enter") { setSearch((e.target as HTMLInputElement).value.trim()); setPageNo(1); } }} />
             <select className={inputCls} value={status} aria-label="Line status" onChange={(e) => { setStatus(e.target.value); setPageNo(1); }}>
                 <option value="UNMATCHED,PARTIAL">Needs attention</option><option value="">All lines</option>
                 {["UNMATCHED", "PARTIAL", "MATCHED", "SUSPENSE", "RESOLVED"].map((s) => <option key={s} value={s}>{s}</option>)}
@@ -257,6 +263,25 @@ function Reconciliation({ bank }: { bank: BankAccount }) {
     );
 }
 
+/** Renders `children(bank)` for the bank in the URL tail (`.../<bankId>`), defaulting to the first. */
+function WithBank({ base, children }: { base: string; children: (bank: BankAccount) => React.ReactNode }) {
+    const banks = useBanks();
+    const navigate = useNavigate();
+    const fromUrl = Number(useParams()["*"]) || null;
+    const bank = (banks.data ?? []).find((b) => b.id === fromUrl) ?? banks.data?.[0];
+    if (banks.isLoading) return null;
+    if (banks.error) return <QueryState isLoading={false} error={banks.error} onRetry={() => void banks.refetch()}>{null}</QueryState>;
+    if (!bank) return <p className="text-sm text-slate-600">Add a bank account under <Link className="text-blue-700 hover:underline" to="/accounting/banking">Bank Accounts</Link> first.</p>;
+    return (
+        <div className="space-y-4">
+            <select className={inputCls} aria-label="Bank account" value={bank.id} onChange={(e) => navigate(`/accounting/banking/${base}/${e.target.value}`)}>
+                {(banks.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.bank_name} {b.account_number}</option>)}
+            </select>
+            <div key={bank.id} className="space-y-4">{children(bank)}</div>
+        </div>
+    );
+}
+
 function BankWorkbenchPage() {
     const banks = useBanks();
     const fromUrl = Number(useParams()["*"]) || null;
@@ -329,16 +354,18 @@ function Suspense() {
 }
 
 export default function Banking() {
-    const tab = ({ isActive }: { isActive: boolean }) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`;
+    // Section navigation lives in the workspace header (sections.ts); these are the banking pages.
     return (
         <div className="space-y-4">
-            <nav aria-label="Banking" className="flex gap-1">
-                <NavLink end to="/accounting/banking" className={tab}>Accounts</NavLink>
-                <NavLink to="/accounting/banking/workbench" className={tab}>Statements &amp; reconciliation</NavLink>
-                <NavLink to="/accounting/banking/suspense" className={tab}>Suspense</NavLink>
-            </nav>
             <Routes>
                 <Route index element={<BankAccounts />} />
+                <Route path="transactions/*" element={<WithBank base="transactions">{(bank) => (<>
+                    <Upload bank={bank} />
+                    <Workbench bank={bank} initialStatus="" title="Bank transactions" dated />
+                </>)}</WithBank>} />
+                <Route path="unmatched/*" element={<WithBank base="unmatched">{(bank) => (
+                    <Workbench bank={bank} initialStatus="UNMATCHED,PARTIAL" title="Unmatched transactions" />)}</WithBank>} />
+                <Route path="reconciliation/*" element={<WithBank base="reconciliation">{(bank) => <Reconciliation bank={bank} />}</WithBank>} />
                 <Route path="workbench/*" element={<BankWorkbenchPage />} />
                 <Route path="suspense" element={<Suspense />} />
             </Routes>

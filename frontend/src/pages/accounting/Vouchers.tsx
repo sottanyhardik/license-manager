@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { acctDelete, acctGet, acctKeys, acctPost, type Account, type Paged, type Voucher } from "@/api/accountingApi";
+import { acctDelete, acctGet, acctKeys, acctPatch, acctPost, type Account, type Paged, type Voucher } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
 import { useAccountingAccess } from "./useAccountingAccess";
@@ -16,29 +16,44 @@ import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, Read
 const TYPES = ["", "PURCHASE", "SALES", "PAYMENT", "RECEIPT", "CONTRA", "JOURNAL", "DEBIT_NOTE", "CREDIT_NOTE", "EXPENSE",
     "COMMISSION", "LOAN_DISBURSEMENT", "LOAN_REPAYMENT", "INTEREST_ACCRUAL", "OPENING", "ADJUSTMENT", "REVERSAL"];
 
-function VoucherList() {
+/** Route slug -> voucher type for the typed voucher books (Transactions menu). */
+export const TYPED_BOOKS: Record<string, { type: string; title: string; create: { to: string; label: string; manual?: boolean } }> = {
+    journal: { type: "JOURNAL", title: "Journal vouchers", create: { to: "/accounting/vouchers/new?type=JOURNAL", label: "New journal", manual: true } },
+    contra: { type: "CONTRA", title: "Contra vouchers", create: { to: "/accounting/vouchers/new?type=CONTRA", label: "New contra", manual: true } },
+    payment: { type: "PAYMENT", title: "Payment vouchers", create: { to: "/accounting/payments", label: "Record a payment" } },
+    receipt: { type: "RECEIPT", title: "Receipt vouchers", create: { to: "/accounting/payments", label: "Record a receipt" } },
+    sales: { type: "SALES", title: "Sales vouchers", create: { to: "/accounting/trades", label: "Post from Trade" } },
+    purchase: { type: "PURCHASE", title: "Purchase vouchers", create: { to: "/accounting/invoices/new", label: "New bill" } },
+};
+
+const MANUAL_TYPES = ["JOURNAL", "CONTRA", "OPENING", "ADJUSTMENT"];
+
+export function VoucherList({ book, title = "Vouchers" }: { book?: string; title?: string }) {
     const { entityId, fyRange } = useAccounting();
     const { canWrite } = useAccountingAccess();
     const [params, setParams] = useSearchParams();
-    const filters = { type: params.get("type") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
+    const typed = book ? TYPED_BOOKS[book] : undefined;
+    const filters = { type: typed?.type ?? params.get("type") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
         page: Math.max(1, Number(params.get("page")) || 1) };
+    // Payment/receipt/sales/purchase vouchers are only ever created by their documents; the button opens that screen.
+    const create = typed?.create ?? { to: "/accounting/vouchers/new", label: "New journal", manual: true };
     const set = (patch: Record<string, string>) => setParams({ ...Object.fromEntries(params), page: "1", ...patch });
     const q = useQuery({
-        queryKey: acctKeys.of(entityId, "vouchers", filters, fyRange.start),
+        queryKey: acctKeys.of(entityId, "vouchers", filters, fyRange.start, fyRange.end),
         queryFn: () => acctGet<Paged<Voucher>>("vouchers/", { entity: entityId, ...filters, ...fyRange, page_size: 50 }),
     });
     return (
         <div className="space-y-4">
-            <Panel title="Vouchers" actions={<>
+            <Panel title={typed?.title ?? title} actions={<>
                 <input className={inputCls} placeholder="Number / narration" defaultValue={filters.search} aria-label="Search vouchers"
                        onKeyDown={(e) => { if (e.key === "Enter") set({ search: (e.target as HTMLInputElement).value }); }} />
-                <select className={inputCls} value={filters.type} aria-label="Voucher type" onChange={(e) => set({ type: e.target.value })}>
+                {!typed && <select className={inputCls} value={filters.type} aria-label="Voucher type" onChange={(e) => set({ type: e.target.value })}>
                     {TYPES.map((t) => <option key={t} value={t}>{t ? t.replace(/_/g, " ") : "All types"}</option>)}
-                </select>
+                </select>}
                 <select className={inputCls} value={filters.status} aria-label="Status" onChange={(e) => set({ status: e.target.value })}>
                     {["", "DRAFT", "POSTED", "REVERSED"].map((s) => <option key={s} value={s}>{s || "All statuses"}</option>)}
                 </select>
-                {canWrite && <Link to="/accounting/vouchers/new"><Button size="sm">New journal</Button></Link>}
+                {canWrite && <Link to={create.to}><Button size="sm">{create.label}</Button></Link>}
             </>}>
                 <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                     <DataGrid rows={q.data?.results ?? []} rowKey={(v) => v.id} caption="Vouchers" columns={[
@@ -87,6 +102,8 @@ function VoucherDetail() {
                            {canApprove && v.status === "DRAFT" && <Button size="sm" disabled={post.isPending} onClick={() => void guard({
                                title: "Post voucher", confirmText: "Post", message: `Post this ${v.voucher_type.toLowerCase()} voucher for ₹ ${v.total}? It becomes immutable.`,
                            }, () => post.mutate())}>Post</Button>}
+                           {canWrite && v.status === "DRAFT" && v.source_type === "MANUAL" && MANUAL_TYPES.includes(v.voucher_type) &&
+                               <Link to={`/accounting/vouchers/${v.id}/edit`}><Button size="sm" variant="outline">Edit draft</Button></Link>}
                            {canWrite && v.status === "DRAFT" && <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => void guard({
                                title: "Delete draft", severity: "danger", confirmText: "Delete", message: "Delete this draft voucher? Drafts have no ledger effect.",
                            }, () => remove.mutate())}>Delete draft</Button>}
@@ -141,65 +158,109 @@ function VoucherDetail() {
 
 interface DraftLine { account_id: string; debit: string; credit: string; narration: string }
 
-function NewJournal() {
+const blankLine = (): DraftLine => ({ account_id: "", debit: "", credit: "", narration: "" });
+
+/** Manual voucher draft: create (POST vouchers/) or edit an existing draft (PATCH vouchers/<id>/).
+ * Balancing is shown live for guidance; the server re-validates and only the posting engine posts. */
+function VoucherForm({ initial }: { initial?: Voucher }) {
     const { canWrite } = useAccountingAccess();
-    const { entityId } = useAccounting();
+    const { entityId, fyBounds } = useAccounting();
     const qc = useQueryClient();
     const navigate = useNavigate();
-    const [form, setForm] = useState({ voucher_type: "JOURNAL", date: new Date().toISOString().slice(0, 10), narration: "" });
-    const [lines, setLines] = useState<DraftLine[]>([
-        { account_id: "", debit: "", credit: "", narration: "" }, { account_id: "", debit: "", credit: "", narration: "" }]);
+    const [params] = useSearchParams();
+    const presetType = params.get("type");
+    const [form, setForm] = useState({
+        voucher_type: initial?.voucher_type ?? (presetType && MANUAL_TYPES.includes(presetType) ? presetType : "JOURNAL"),
+        date: initial?.date ?? new Date().toISOString().slice(0, 10), narration: initial?.narration ?? "" });
+    const [lines, setLines] = useState<DraftLine[]>(() => initial?.lines?.length
+        ? initial.lines.map((l) => ({ account_id: String(l.account_id), debit: l.debit === "0.00" ? "" : l.debit,
+            credit: l.credit === "0.00" ? "" : l.credit, narration: l.narration }))
+        : [blankLine(), blankLine()]);
     const accounts = useQuery({
         queryKey: acctKeys.of(entityId, "accounts"),
         queryFn: () => acctGet<{ accounts: Account[] }>("accounts/", { entity: entityId }),
     });
-    const dr = sumMoney(lines.map((l) => l.debit || "0"));
-    const cr = sumMoney(lines.map((l) => l.credit || "0"));
-    const valid = dr === cr && dr !== "0.00" && lines.every((l) => l.account_id && (isMoneyInput(l.debit || "0") && isMoneyInput(l.credit || "0")));
+    const used = lines.filter((l) => l.account_id || l.debit || l.credit);
+    const dr = sumMoney(used.map((l) => l.debit || "0"));
+    const cr = sumMoney(used.map((l) => l.credit || "0"));
+    const amountsOk = used.every((l) => isMoneyInput(l.debit || "0") && isMoneyInput(l.credit || "0"));
+    const accountsOk = used.every((l) => !!l.account_id);
+    const valid = used.length >= 2 && dr === cr && dr !== "0.00" && amountsOk && accountsOk;
+    const problem = used.length < 2 ? "At least two lines are needed."
+        : !accountsOk ? "Every line with an amount needs an account."
+            : !amountsOk ? "Amounts must be numbers with at most 2 decimals."
+                : dr !== cr ? `Debit and credit differ by ${sumMoney([dr, `-${cr}`])}.` : dr === "0.00" ? "Enter the amounts." : "";
+    const body = () => ({ ...form, lines: used.map((l) => ({ account_id: Number(l.account_id), debit: l.debit || "0",
+        credit: l.credit || "0", narration: l.narration })) });
     const save = useMutation({
-        mutationFn: () => acctPost<Voucher>("vouchers/", { entity: entityId, ...form,
-            lines: lines.filter((l) => l.account_id).map((l) => ({ account_id: Number(l.account_id), debit: l.debit || "0",
-                credit: l.credit || "0", narration: l.narration })) }),
-        onSuccess: (v) => { toast.success("Draft saved — an approver can now post it"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); navigate(`/accounting/vouchers/${v.id}`); },
+        mutationFn: () => (initial
+            ? acctPatch<Voucher>(`vouchers/${initial.id}/`, body())
+            : acctPost<Voucher>("vouchers/", { entity: entityId, ...body() })),
+        onSuccess: (v) => {
+            toast.success(initial ? "Draft updated" : "Draft saved — an approver can now post it");
+            void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
+            navigate(`/accounting/vouchers/${v.id}`);
+        },
         onError: notifyError,
     });
     const setLine = (i: number, patch: Partial<DraftLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
     if (!canWrite) return <ReadOnlyNote need="an accounts manager or approver role" />;
+    const outsideFy = form.date < fyBounds.start || form.date > fyBounds.end;
     return (
-        <Panel title="New manual voucher (draft)">
+        <Panel title={initial ? `Edit draft voucher #${initial.id}` : "New manual voucher (draft)"}>
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
                 <Field label="Type"><select className={inputCls} value={form.voucher_type} onChange={(e) => setForm({ ...form, voucher_type: e.target.value })}>
-                    {["JOURNAL", "CONTRA", "OPENING", "ADJUSTMENT"].map((t) => <option key={t}>{t}</option>)}</select></Field>
-                <Field label="Date"><input type="date" className={inputCls} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+                    {MANUAL_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
+                <Field label="Date" hint={outsideFy ? "Outside the selected financial year" : undefined}>
+                    <input type="date" className={inputCls} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
                 <div className="sm:col-span-2"><Field label="Narration"><input className={inputCls} value={form.narration} onChange={(e) => setForm({ ...form, narration: e.target.value })} /></Field></div>
             </div>
-            <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
                 <caption className="sr-only">Voucher lines</caption>
-                <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Account</th><th>Narration</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead>
+                <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Account</th><th>Narration</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th><span className="sr-only">Remove</span></th></tr></thead>
                 <tbody>
                     {lines.map((l, i) => (
                         <tr key={i}>
                             <td className="py-1 pr-2"><select className={`${inputCls} w-full`} value={l.account_id} aria-label={`Account line ${i + 1}`} onChange={(e) => setLine(i, { account_id: e.target.value })}>
                                 <option value="">Select account…</option>
-                                {(accounts.data?.accounts ?? []).filter((a) => a.is_active).map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+                                {(accounts.data?.accounts ?? []).filter((a) => a.is_active || String(a.id) === l.account_id).map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
                             </select></td>
                             <td className="pr-2"><input className={`${inputCls} w-full`} value={l.narration} aria-label={`Narration line ${i + 1}`} onChange={(e) => setLine(i, { narration: e.target.value })} /></td>
                             <td className="pr-2"><input inputMode="decimal" className={`${inputCls} w-32 text-right`} value={l.debit} aria-label={`Debit line ${i + 1}`} onChange={(e) => setLine(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} /></td>
-                            <td><input inputMode="decimal" className={`${inputCls} w-32 text-right`} value={l.credit} aria-label={`Credit line ${i + 1}`} onChange={(e) => setLine(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} /></td>
+                            <td className="pr-2"><input inputMode="decimal" className={`${inputCls} w-32 text-right`} value={l.credit} aria-label={`Credit line ${i + 1}`} onChange={(e) => setLine(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} /></td>
+                            <td>{lines.length > 2 && <Button size="sm" variant="ghost" aria-label={`Remove line ${i + 1}`} onClick={() => setLines(lines.filter((_, j) => j !== i))}>×</Button>}</td>
                         </tr>
                     ))}
                 </tbody>
                 <tfoot><tr className="font-semibold"><td colSpan={2} className="py-2">
-                    <Button size="sm" variant="ghost" onClick={() => setLines([...lines, { account_id: "", debit: "", credit: "", narration: "" }])}>+ Line</Button></td>
-                    <td className="text-right"><Amount value={dr} /></td><td className="text-right"><Amount value={cr} /></td></tr></tfoot>
+                    <Button size="sm" variant="ghost" onClick={() => setLines([...lines, blankLine()])}>+ Line</Button></td>
+                    <td className="text-right"><Amount value={dr} /></td><td className="text-right"><Amount value={cr} /></td><td /></tr></tfoot>
             </table></div>
-            <div className="mt-3 flex items-center justify-between">
-                <p className={`text-sm ${dr === cr ? "text-emerald-700" : "text-red-700"}`} role="status">
-                    {dr === cr ? "Balanced" : `Difference ${sumMoney([dr, `-${cr}`])}`}
-                </p>
-                <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>Save draft</Button>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className={`text-sm ${valid ? "text-emerald-700" : "text-red-700"}`} role="status">{valid ? "Balanced" : problem}</p>
+                <div className="flex gap-2">
+                    {initial && <Link to={`/accounting/vouchers/${initial.id}`}><Button variant="outline">Cancel</Button></Link>}
+                    <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>{initial ? "Save changes" : "Save draft"}</Button>
+                </div>
             </div>
         </Panel>
+    );
+}
+
+function EditVoucher() {
+    const { id } = useParams();
+    const { entityId } = useAccounting();
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "voucher", id), queryFn: () => acctGet<Voucher>(`vouchers/${id}/`) });
+    const v = q.data;
+    return (
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
+            {v && (v.status === "DRAFT" && v.source_type === "MANUAL" && MANUAL_TYPES.includes(v.voucher_type)
+                ? <VoucherForm key={v.id} initial={v} />
+                : <Panel title={v.number ?? `Voucher #${v.id}`}>
+                    <p className="text-sm text-slate-600">Only manual drafts can be edited. A posted voucher is corrected by reversal; a document voucher is changed from its bill or payment.</p>
+                    <Link className="mt-2 inline-block text-sm text-blue-700 hover:underline" to={`/accounting/vouchers/${v.id}`}>← Back to the voucher</Link>
+                </Panel>)}
+        </QueryState>
     );
 }
 
@@ -207,7 +268,9 @@ export default function Vouchers() {
     return (
         <Routes>
             <Route index element={<VoucherList />} />
-            <Route path="new" element={<NewJournal />} />
+            <Route path="new" element={<VoucherForm />} />
+            {Object.keys(TYPED_BOOKS).map((book) => <Route key={book} path={book} element={<VoucherList key={book} book={book} />} />)}
+            <Route path=":id/edit" element={<EditVoucher />} />
             <Route path=":id" element={<VoucherDetail />} />
         </Routes>
     );

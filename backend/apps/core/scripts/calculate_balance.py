@@ -1,8 +1,8 @@
 from django.apps import apps
 from django.db.models import Sum, Q
 
-from apps.core.constants import DEBIT
-from apps.core.utils.decimal_utils import round_decimal_down as round_down, to_float
+from apps.core.constants import DEBIT, DEC_0
+from apps.core.utils.decimal_utils import round_decimal_down as round_down, to_decimal, to_float
 
 
 def _get_aggregated_values(instance):
@@ -10,10 +10,21 @@ def _get_aggregated_values(instance):
     Compute item-level debit/allotment aggregations.
 
     item_details (RowDetails):
-      When the caller has prefetched 'item_details' the debited sums are computed
-      in Python from the cache — zero extra queries. Filter is purely on
-      transaction_type, a direct column with no FK traversal, so the Python
-      result is bit-for-bit identical to the SQL SUM(... WHERE transaction_type='D').
+      `debited_value` (CIF) sums EVERY DEBIT row, hidden BOEs included —
+      unchanged (CIF is outside the proposed A-2 scope).
+      `debited_qty` (quantity) excludes GENUINELY hidden BOEs exactly as the
+      Balance Engine does (`ItemBalanceCalculator.calculate_available_
+      quantity[_for_items]` via `exclude_hidden`).  BUSINESS-RULE CHANGE,
+      A-2 option (i): PENDING OWNER RECONCILIATION — not approved; do not commit (doc 11 §9): before this, the stored
+      quantity still subtracted hidden-BOE debits the engine ignores (Q-1).
+      When the caller has prefetched 'item_details' the sums come from the
+      cache, and the hidden set from `genuinely_hidden_boe_ids` (the
+      documented Python-side sibling of `annotate_and_exclude_hidden`, one
+      or two queries, zero when no row has a BOE); otherwise both are SQL
+      aggregates.  The two paths give identical results.
+
+    Quantity terms are Decimal (no float); CIF terms keep their existing
+    float arithmetic unchanged.
 
     allotment_details (AllotmentItems):
       `allotted_qty`/`allotted_value` (AT-type, outstanding-only) are computed
@@ -26,25 +37,38 @@ def _get_aggregated_values(instance):
       unchanged business rule) stay a plain local aggregate; ARO allotments
       aren't subject to BOE-linking exclusion.
     """
-    from apps.license.services.balance_calculator import ItemBalanceCalculator, LicenseBalanceCalculator
+    from apps.bill_of_entry.models import genuinely_hidden_boe_ids
+    from apps.license.services.balance_calculator import (
+        ItemBalanceCalculator,
+        LicenseBalanceCalculator,
+        exclude_hidden,
+    )
 
     prefetch_cache = getattr(instance, '_prefetched_objects_cache', {})
 
     # ------------------------------------------------------------------ #
     # item_details (RowDetails): debited rows only                        #
-    # Prefetch-cache path: zero extra queries, exact same result as SQL.  #
     # ------------------------------------------------------------------ #
     if 'item_details' in prefetch_cache:
-        rows = prefetch_cache['item_details']
-        debited_qty = sum(float(r.qty or 0) for r in rows if r.transaction_type == DEBIT)
-        debited_value = sum(float(r.cif_fc or 0) for r in rows if r.transaction_type == DEBIT)
+        debit_rows = [r for r in prefetch_cache['item_details'] if r.transaction_type == DEBIT]
+        debited_value = sum(float(r.cif_fc or 0) for r in debit_rows)
+        boe_ids = {r.bill_of_entry_id for r in debit_rows if r.bill_of_entry_id}
+        hidden_ids = genuinely_hidden_boe_ids(boe_ids) if boe_ids else set()
+        debited_qty = sum(
+            (to_decimal(r.qty, DEC_0) for r in debit_rows if r.bill_of_entry_id not in hidden_ids),
+            DEC_0,
+        )
     else:
         item_agg = instance.item_details.aggregate(
-            debited_qty=Sum('qty', filter=Q(transaction_type=DEBIT)),
             debited_value=Sum('cif_fc', filter=Q(transaction_type=DEBIT))
         )
-        debited_qty = to_float(item_agg['debited_qty'])
         debited_value = to_float(item_agg['debited_value'])
+        debited_qty = to_decimal(
+            exclude_hidden(instance.item_details.filter(transaction_type=DEBIT)).aggregate(
+                total=Sum('qty')
+            )['total'],
+            DEC_0,
+        )
 
     # ------------------------------------------------------------------ #
     # allotment_details (AllotmentItems): ARO stays a plain local aggregate;
@@ -62,20 +86,22 @@ def _get_aggregated_values(instance):
     return {
         'debited_qty': debited_qty,
         'debited_value': debited_value,
-        'aro_qty': to_float(aro_agg['aro_qty']),
+        'aro_qty': to_decimal(aro_agg['aro_qty'], DEC_0),
         'aro_value': to_float(aro_agg['aro_value']),
-        'allotted_qty': to_float(allotted_qty),
+        'allotted_qty': to_decimal(allotted_qty, DEC_0),
         'allotted_value': to_float(allotted_value),
-        'direct_sale_qty': to_float(direct_sale_qty),
+        'direct_sale_qty': to_decimal(direct_sale_qty, DEC_0),
     }
 
 
 def calculate_available_quantity(instance, agg_values=None):
     """
-    Available Quantity = current stored licence item quantity − Debited −
-    Outstanding (unlinked) Allotted, and direct SALE quantity (a SALE with
-    no BOE), floored at 0. A BOE-linked sale is excluded because its BOE is
-    already the physical debit.
+    Available Quantity = current stored licence item quantity − Debited
+    (hidden BOEs excluded, as the Balance Engine) − Outstanding (unlinked)
+    Allotted, and direct SALE quantity (a SALE with no BOE), floored to a
+    whole number and at 0 (existing stored-field rounding, unchanged). A
+    BOE-linked sale is excluded because its BOE is already the physical
+    debit. Decimal arithmetic throughout.
 
     Always uses `instance.quantity` (the current, possibly-amended licence
     item quantity) — NEVER `instance.old_quantity`. A prior restricted-item/
@@ -91,7 +117,7 @@ def calculate_available_quantity(instance, agg_values=None):
     if agg_values is None:
         agg_values = _get_aggregated_values(instance)
 
-    credit = to_float(instance.quantity)
+    credit = to_decimal(instance.quantity, DEC_0)
     debited = agg_values['debited_qty'] + agg_values['aro_qty']
     allotted = agg_values['allotted_qty']
     direct_sale_qty = agg_values['direct_sale_qty']
@@ -108,7 +134,8 @@ def calculate_debited_quantity(instance, agg_values=None):
 def calculate_allotted_quantity(instance, agg_values=None):
     if agg_values is None:
         agg_values = _get_aggregated_values(instance)
-    return round(agg_values['allotted_qty'], 2)
+    # Not part of the A-2 change: keep the historical float rounding exactly.
+    return round(to_float(agg_values['allotted_qty']), 2)
 
 
 def calculate_debited_value(instance, agg_values=None):

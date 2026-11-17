@@ -23,6 +23,7 @@ from apps.license.views_actions import LicenseActionViewSet
 from apps.license.views_incentive import IncentiveLicenseViewSet
 from apps.license.api.views.replan_status import LicenseReplanStatusView
 from apps.license.api.views.import_item_suggestion import ImportItemSuggestionView
+from apps.license.api.views.license_overview_transactions import LicenseOverviewTransactionsView
 
 router = routers.DefaultRouter()
 router.register(r"licenses", LicenseDetailsViewSet, basename="licenses")
@@ -47,6 +48,11 @@ urlpatterns = [
     # License PDF parse (DFIA licence copy → prefill License form)
     path("licenses/parse-pdf/", LicensePdfParseView.as_view(), name="licenses-parse-pdf"),
     path("licenses/<str:license_id>/replan-status/", LicenseReplanStatusView.as_view(), name="license-replan-status"),
+    path(
+        "licenses/<str:license_id>/overview-transactions/",
+        LicenseOverviewTransactionsView.as_view(),
+        name="license-overview-transactions",
+    ),
     # Ledger Upload endpoint
     path("upload-ledger/", LedgerUploadView.as_view(), name="upload-ledger"),
     # Ledger Task Status endpoint

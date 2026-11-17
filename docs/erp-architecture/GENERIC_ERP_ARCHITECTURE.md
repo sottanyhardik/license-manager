@@ -29,3 +29,18 @@ remain in their services (`.claude/rules/business-rules.md`, ADR-004). Generic C
 [AGENT_TASK_OWNERSHIP](AGENT_TASK_OWNERSHIP.md) · [API_CONTRACTS](API_CONTRACTS.md) ·
 [ARCHITECTURE_DECISIONS](ARCHITECTURE_DECISIONS.md) · [TEST_AND_QA_REPORT](TEST_AND_QA_REPORT.md) ·
 [CURRENT_BLOCKERS](CURRENT_BLOCKERS.md). Workstream checkpoints: `docs/ERP_AUTONOMOUS_EXECUTION_STATUS.md`.
+
+## 4. Licence UI as the standard — mapping to generic Masters (2026-11-17)
+
+Masters reuse the licence/BOE presentation; no new components or CSS were introduced.
+
+| Licence pattern (reference) | Shared piece | Masters usage |
+|---|---|---|
+| Register toolbar: inline breadcrumb + h1 + count + search + Filters popover + Excel/PDF + Add New | `MasterList` `COMPACT_REGISTER` branch → `AdvancedFilter` `toolbarStart/End` | Every `masterEntities` entry opts in; breadcrumb parent "Masters" (`/masters`) |
+| Register rows (`features/licenses/LicenceCard`): bordered compact row, mono identifier, muted meta, status badge, one action menu | `ActionMenu`, `StatusBadge`, `LoadingState`, `EmptyState` | `tables/GenericMasterCards` (columns from `list_display`; `is_active` → badge) |
+| Record workspace (`BoeDetailPage`, licence overview): breadcrumbs, meta badges, primary + secondary actions, tabs | `ModuleWorkspace`, `WorkspaceSection`, `FieldGrid`, `ActivityTimeline` | `pages/masters/MasterDetail` (`/masters/:entity/:id`): Details (fields + audit timestamps), History (real `ActivityLog`, USER_MANAGER) |
+| Confirmed destructive actions | `ActionMenu` `confirm` → `ConfirmProvider` | Delete on the row menu (existing `confirmDelete`) and on the record page |
+| Forms | `MasterForm` (labels, required marks, inline validation, sticky bars where enabled) | unchanged |
+
+History = the audit log of successful writes to the record's own URL. Creation is a POST to the list URL, so it cannot be
+attributed to a record and is not shown. "Created by"/"Updated by" appear only when the API sends a name, not a raw id.

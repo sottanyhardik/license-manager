@@ -13,3 +13,7 @@ Latest addition: grouped licence overview transactions endpoint (`9a4dcf94`,
 **API CONTRACT CHANGE (additive, 2026-11-17, `331b9520`):** `GET/PATCH/DELETE /api/masters/notification-numbers/<code>/`
 now resolves codes containing `/` (e.g. `025/2023`); previously 404. Response shapes unchanged. Generic metadata for
 `unit-prices` now lists `unit_price` in `form_fields`.
+
+**API CONTRACT CHANGE (additive, 2026-11-17):** `GET /api/masters/activity-logs/` accepts `changes_only=1` (successful
+CREATE/UPDATE/DELETE only) and `endpoint=<path>` (exact request path, trailing slash optional). Without them the response is
+unchanged. Permission unchanged (`UserManagementPermission`).

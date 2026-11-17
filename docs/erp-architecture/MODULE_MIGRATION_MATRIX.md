@@ -2,7 +2,8 @@
 
 Masters hub: `/masters` (`pages/masters/MastersHub.tsx`) lists every `masterEntities` entry by category with live counts;
 the Masters menu and command palette read the same registry. Adding a simple master = backend `create_viewset(config)` +
-one `masterEntities` line.
+one `masterEntities` line. Every registered master gets the licence register toolbar, licence-style rows and the
+generic record page `/masters/:entity/:id` (fields, audit timestamps, real change history).
 
 Facts from code @ `b099789c`. "Generic BE" = built by `MasterViewSet.create_viewset`. "Generic FE" = rendered by
 `pages/masters/MasterList`/`MasterForm`. Extends (does not replace) `docs/MODULE_EXECUTION_MATRIX.md`.

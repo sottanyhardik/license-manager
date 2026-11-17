@@ -229,5 +229,12 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   frontend gate lint/typecheck/build PASS; real-backend Playwright 4/4. Independent review: approve-with-nits, nits fixed.
 - No business-rule change (no CIF/balance/BOE/accounting code touched). Not pushed.
 - Blocked on owner (B1): Customer/Supplier/Country/Currency/Category/UoM/Bank masters have no models — not invented.
-- Next: master detail view + per-record audit timeline from `ActivityLog`; bulk actions on generic masters.
+- Masters on the licence UI standard (2026-11-17, later): registered masters use the licence register toolbar
+  (`COMPACT_REGISTER`), licence-style rows (`GenericMasterCards` → `ActionMenu`/`StatusBadge`), and a generic record page
+  `/masters/:entity/:id` (`ModuleWorkspace`; Details + audit timestamps; History = real `ActivityLog` writes, USER_MANAGER).
+  **API CONTRACT (additive):** `activity-logs/?changes_only=1&endpoint=…`. Tests: backend 21 passed; frontend gate exit 0
+  (vitest 895/895 → 99/99 masters after review fixes); real-backend masters 4/4; licence data-bearing 6/6 (+1 live-only skip).
+  Review (Sonnet): approve-with-nits; fixed 404 flash after delete + DRF error messages. Endpoint index deferred (B8, 31 ms).
+- No business-rule change. Not pushed. `feature/v5` still at `b099789c` — land with `git merge --ff-only` (owner).
+- Next: bulk actions on generic masters; owner decisions B1 (missing master models), B8 (optional index).
 <!-- CHECKPOINT:generic-erp:END -->

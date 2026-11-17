@@ -34,3 +34,14 @@ UI create → search → edit (encoded URL) → list refresh → delete with con
 
 Not run for this milestone: the full backend app-level suite after `331b9520` (changes are confined to `core/views/views.py`
 config and new tests; affected core suites ran), full Playwright default suite (legacy `responsive.spec.ts` known env failures).
+
+## 2026-11-17 — Masters on the licence UI standard + generic record page
+
+| Check | Result |
+|---|---|
+| Backend `test_master_framework_acceptance.py` (+3 record-history tests) + `test_activity_log_connections.py` | **21 passed**; flake8 0; ruff all checks passed |
+| Frontend gate (`quality-gate.sh frontend`) | lint PASS (0 errors, 20 warnings, count unchanged) · typecheck PASS · **vitest 895/895** · build PASS → exit 0 |
+| Snapshot update (`MasterList.licenses.filters`) | 2 updated: `companies` = intended move to the register toolbar; `bill-of-entries` = React `useId` values only (word diff checked) |
+| Real-backend Playwright `masters-workspace.real` | **4/4**: hub; create → search → edit (encoded URL) → record page → History shows the real UPDATE → delete; port create/search; 390 px no horizontal overflow (hub, list, record) + desktop comparison screenshots |
+| Licence regression, real backend (`data-bearing.real` + `item-pivot.sticky`) | **6 passed**, 1 skipped (`licence-workspace.live`, live-server config only), exit 0 |
+| Note | All real specs in one harness run trip the login rate limit (`Request was throttled`) — a security control, left as is; suites run in separate harness runs |

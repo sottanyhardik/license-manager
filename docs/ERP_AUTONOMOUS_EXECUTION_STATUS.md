@@ -118,7 +118,7 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 <!-- CHECKPOINT:accounting:END -->
 
 <!-- CHECKPOINT:accounting-frontend:BEGIN -->
-**Accounting frontend round — COMPLETED, not tested (2026-11-17)** · details `docs/erp-accounting/09-accounting-frontend-implementation.md`
+**Accounting frontend round — TESTED (2026-11-17; licence e2e FAILED, pre-existing)** · details `docs/erp-accounting/09-accounting-frontend-implementation.md`
 - Workspace IA (`pages/accounting/sections.ts`): Dashboard · Masters · Transactions · Ledgers · Banking · Expenses &
   Income · Reports · Entity-wise · Setup; sidebar mirrors it (`navConfig.ts` + test). Date range inside the FY.
 - New screens: Chart of Accounts, Account Groups, Parties (+detail), Customer/Supplier ledgers, typed voucher books,
@@ -134,6 +134,23 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   `ROLE_CODES`; Accounting entries added to the Ctrl-K palette. Tests: `apps/accounts/tests` 21 passed (exit 0,
   `TEST_DB_NAME=test_lmanagement_acctnav`); vitest CommandPalette + navConfig 20/20 (exit 0); `tsc` exit 0; ESLint
   exit 0. Owner action: assign an `ACCOUNTS_*` role to each accounting user (Users & Roles). Full gates not run.
+- **Testing phase (2026-11-17, evening) — accounting TESTED.** Fix `3e7cfed5`: `parties/summary/` 500 (`period_from`
+  not imported) + BOE list query-budget repin (cb2abf5c adds a flat +3; caps 20/50 → 23/53).
+  - Frontend gate (lint, typecheck, vitest **853/853**, build): exit 0.
+  - Backend gate (on 7b106d8f, `TEST_DB_NAME=test_lmanagement_b5gate`): check, migrations check, `tests/`, ruff PASS;
+    app-level 3500 passed / 3 failed, flake8 1 F821 → all 3 caused by the two issues fixed in `3e7cfed5`. After the fix:
+    flake8 exit 0; `apps/accounting` + query-budget file 107 passed; c914288b (peer) tests 3 + CommandPalette 5 passed.
+    Full app-level suite not re-run (only those files changed).
+  - Real-backend accounting e2e (`seed_accounting_e2e`, isolated DB, backend :8011): **10/10 passed**, 0 HTTP 500s
+    (47 routes, trade→books→receipt→statement→reconciliation, reports drill-down, viewer/non-accounting permissions,
+    breadcrumbs, desktop/tablet/mobile overflow). Before the fix: 1 failed (4× 500 on parties/summary).
+  - Default Playwright suite: 103 passed / 52 failed / 19 skipped. 51 = legacy `responsive.spec.ts` (hardcodes
+    `localhost:5175`, unchanged since 2026-09-25; not in CI) — env, not a regression. 1 = item-pivot (needs harness).
+  - **FAILED (P1, pre-existing, Licence):** under the harness (`seed_browser_2509`) `data-bearing.real` (allocate page:
+    no available licence items) and `item-pivot.sticky` ("0 Licenses") fail at HEAD **and at c33f6a1a** → not caused by
+    the accounting work. Root cause under read-only investigation (licence availability = business-rule code; no fix
+    without diagnosis + cif-balance-auditor). 4 later data-bearing tests did not run (serial).
+- Next: fix/decide the licence-availability e2e failure; re-run data-bearing harness; then deferred items.
 <!-- CHECKPOINT:accounting-frontend:END -->
 
 

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
-import { BookCheck, Calendar, CalendarX, ChevronRight, MapPin } from "lucide-react";
+import { BookCheck, Building2, Calendar, CalendarX, ChevronRight, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 import api from "@/api/axios";
@@ -27,16 +27,14 @@ export interface LicenceCardProps extends LicenceRowActionContext {
     onDGFTComplete?: (licenseId: number) => void;
 }
 
-/** Header detail field (expanded only). Missing values keep the existing "—". */
+/** Header detail field (expanded only). Empty values are omitted, never shown as placeholders. */
 function HeaderField({ label, value, mono = false }: { label: string; value?: string | null; mono?: boolean }) {
+    if (!value) return null;
     return (
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-baseline gap-1.5">
             <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd
-                className={cn("truncate text-sm font-medium text-foreground", mono && "font-mono", !value && "text-muted-foreground")}
-                title={value || ""}
-            >
-                {value || "—"}
+            <dd className={cn("truncate text-sm font-medium text-foreground", mono && "font-mono")} title={value}>
+                {value}
             </dd>
         </div>
     );
@@ -44,7 +42,7 @@ function HeaderField({ label, value, mono = false }: { label: string; value?: st
 
 function MetaItem({ icon: Icon, label, children, className }: { icon: typeof Calendar; label: string; children: React.ReactNode; className?: string }) {
     return (
-        <span className={cn("inline-flex items-center gap-1 whitespace-nowrap", className)}>
+        <span className={cn("inline-flex min-w-0 items-center gap-1 whitespace-nowrap", className)}>
             <Icon className="size-3.5" aria-hidden="true" />
             <span className="sr-only">{label} </span>
             {children}
@@ -176,6 +174,11 @@ export const LicenceCard = memo(function LicenceCard({
                     )}
                     {item.ledger_date && <MetaItem icon={BookCheck} label="Ledger date" className="text-success">Ledger: {item.ledger_date}</MetaItem>}
                     {item.port_name && <MetaItem icon={MapPin} label="Port">{item.port_name}</MetaItem>}
+                    {item.exporter_name && (
+                        <MetaItem icon={Building2} label="Company" className="max-w-[16rem] text-foreground/80">
+                            <span className="truncate" title={item.exporter_name}>{item.exporter_name}</span>
+                        </MetaItem>
+                    )}
                     {item.purchase_status_label && (
                         <span className="rounded-sm border border-border px-1.5 py-px text-xs text-foreground/80">
                             <span className="sr-only">Licence type </span>{item.purchase_status_label}
@@ -185,22 +188,21 @@ export const LicenceCard = memo(function LicenceCard({
 
                 <div className="ml-auto flex shrink-0 items-center gap-3">
                     <StatusBadge tone={status.tone} label={status.label} />
-                    <div className="flex items-baseline gap-1.5 text-sm tabular-nums">
-                        <span className="text-xs text-muted-foreground">Balance CIF</span>
-                        <span className={cn("min-w-[6.5rem] text-right font-semibold text-foreground", isNegativeValue(item.get_balance_cif) && "text-destructive")}>
+                    <OverUtilisedBadge balance={item.get_balance_cif} isOverUtilised={item.is_over_utilised} className="ml-0" />
+                    <div className="flex min-w-[7.5rem] flex-col items-end leading-tight tabular-nums">
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Available CIF</span>
+                        <span className={cn("text-base font-semibold text-foreground", isNegativeValue(item.get_balance_cif) && "text-destructive")}>
                             {formatCifUsd(item.get_balance_cif)}
                         </span>
                     </div>
-                    <OverUtilisedBadge balance={item.get_balance_cif} isOverUtilised={item.is_over_utilised} className="ml-0" />
                 </div>
             </div>
 
             {expanded && (
                 <div id={regionId} role="region" aria-label={`License ${displayNumber} details`} className="border-t border-border">
-                    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-border/60 px-3 py-2 md:px-4">
-                        <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-1.5 md:grid-cols-4">
+                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 border-b border-border/60 px-3 py-1.5 md:px-4">
+                        <dl className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-5 gap-y-1">
                             <HeaderField label="Norm Class" value={item.get_norm_class} mono />
-                            <HeaderField label="Exporter" value={item.exporter_name} />
                             <HeaderField label="IEC" value={item.exporter_iec} mono />
                             <HeaderField label="Transfer Status" value={item.latest_transfer} />
                         </dl>
@@ -209,7 +211,7 @@ export const LicenceCard = memo(function LicenceCard({
                             <ActionMenu items={actionItems} label={`Actions for license ${displayNumber}`} trigger="button" />
                         </div>
                     </div>
-                    <div className="min-w-0 px-3 pb-3 pt-2 md:px-4">
+                    <div className="min-w-0 px-3 pb-2 pt-1.5 md:px-4">
                         <LicenseRecordWorkspace
                             licenseId={item.id}
                             licenseNumber={item.license_number}

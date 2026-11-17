@@ -41,6 +41,6 @@ export function deriveStatus(item: LicenseListItem): { label: LicenceStatusLabel
     const balance = Number(item.get_balance_cif ?? 0);
     if (isLicenceExpired(item)) return { label: "Expired", tone: "danger" };
     if (balance <= 0) return { label: "Exhausted", tone: "neutral" };
-    if (item.is_manually_planned) return { label: "Planned", tone: "success" };
+    if (item.is_manually_planned) return { label: "Planned", tone: "info" };
     return { label: "Active", tone: "success" };
 }

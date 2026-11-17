@@ -81,19 +81,19 @@ const requested = () => get.mock.calls.map((c) => c[0] as string);
 
 /** Collapsed header values rendered BEFORE (old snapshot), in their exact format. */
 const BEFORE_HEADER: Record<number, string[]> = {
-    101: ["0310123456", "05-01-2020", "Exp: 04-01-2021", "Ledger: 10-02-2020", "INNSA1", "DFIA", "Expired", "Balance CIF", "$1,234.50"],
-    102: ["0310654321", "15-08-2024", "Exp: 14-08-2099", "INMAA1", "Advance", "Exhausted", "Balance CIF", "$-250.75", "Over-utilised"],
-    103: ["0310777777", "01-12-2025", "Exp: 30-11-2099", "Ledger: 02-12-2025", "Planned", "Balance CIF", "$987,654.32"],
-    104: ["0310000004", "INBOM4", "DFIA", "Exhausted", "Balance CIF", "$0.00"],
-    105: ["—", "29-02-2024", "Exp: 28-02-2099", "Ledger: 01-03-2024", "INNSA1", "DFIA", "Exhausted", "Balance CIF", "$0.00"],
+    101: ["0310123456", "05-01-2020", "Exp: 04-01-2021", "Ledger: 10-02-2020", "INNSA1", "Alpha Exports", "DFIA", "Expired", "Available CIF", "$1,234.50"],
+    102: ["0310654321", "15-08-2024", "Exp: 14-08-2099", "INMAA1", "Beta Foods", "Advance", "Exhausted", "Available CIF", "$-250.75", "Over-utilised"],
+    103: ["0310777777", "01-12-2025", "Exp: 30-11-2099", "Ledger: 02-12-2025", "Planned", "Available CIF", "$987,654.32"],
+    104: ["0310000004", "INBOM4", "Gamma", "DFIA", "Exhausted", "Available CIF", "$0.00"],
+    105: ["—", "29-02-2024", "Exp: 28-02-2099", "Ledger: 01-03-2024", "INNSA1", "Delta", "DFIA", "Exhausted", "Available CIF", "$0.00"],
 };
 /** Old expanded info strip: label → value ("—" when missing). */
 const BEFORE_STRIP: Record<number, [string, string][]> = {
-    101: [["Norm Class", "E1"], ["Exporter", "Alpha Exports"], ["IEC", "0301000001"], ["Transfer Status", "Transferred to Beta"]],
-    102: [["Norm Class", "E5"], ["Exporter", "Beta Foods"], ["IEC", "0301000002"], ["Transfer Status", "—"]],
-    103: [["Norm Class", "—"], ["Exporter", "—"], ["IEC", "—"], ["Transfer Status", "Pending"]],
-    104: [["Norm Class", "A3"], ["Exporter", "Gamma"], ["IEC", "0301000004"], ["Transfer Status", "—"]],
-    105: [["Norm Class", "E1"], ["Exporter", "Delta"], ["IEC", "0301000005"], ["Transfer Status", "—"]],
+    101: [["Norm Class", "E1"], ["IEC", "0301000001"], ["Transfer Status", "Transferred to Beta"]],
+    102: [["Norm Class", "E5"], ["IEC", "0301000002"]],
+    103: [["Transfer Status", "Pending"]],
+    104: [["Norm Class", "A3"], ["IEC", "0301000004"]],
+    105: [["Norm Class", "E1"], ["IEC", "0301000005"]],
 };
 /** Old unique actions per role (ActionPanel + Edit Options; "Edit licence" was the same handler as "Edit"). */
 const BEFORE_ACTIONS: Record<Role, string[]> = {
@@ -179,11 +179,11 @@ describe("Licence register card — value equivalence", () => {
         let region = await expand(user, 101);
         const summary = await within(region).findByRole("region", { name: "Financial summary" });
         const s = within(summary);
-        expect(fieldValue(summary, "Original Licence CIF")).toBe(CHANGED_STRINGS.summaryCifFormat.rendered);
-        expect(fieldValue(summary, "Total BOE CIF")).toBe("$3,000.00");
+        expect(fieldValue(summary, "Original CIF")).toBe(CHANGED_STRINGS.summaryCifFormat.rendered);
+        expect(fieldValue(summary, "BOE CIF")).toBe("$3,000.00");
         expect(fieldValue(summary, "Remaining After BOE")).toBe("$2,000.00");
-        expect(fieldValue(summary, "Pending / Unlinked Allotted CIF")).toBe("$765.50");
-        expect(fieldValue(summary, "Available Balance")).toBe("$1,234.50");
+        expect(fieldValue(summary, "Outstanding Allotment CIF")).toBe("$765.50");
+        expect(fieldValue(summary, "Available CIF (customs)")).toBe("$1,234.50");
         expect(fieldValue(summary, "Difference")).toBe("$0.00");
         expect(s.getByText("Reconciled")).toBeInTheDocument();
 
@@ -196,8 +196,8 @@ describe("Licence register card — value equivalence", () => {
         region = await expand(user, 103);
         const missing = await within(region).findByRole("region", { name: "Financial summary" });
         expect(within(missing).queryByText("Remaining After BOE")).toBeNull();
-        expect(within(missing).queryByText("Pending / Unlinked Allotted CIF")).toBeNull();
-        expect(fieldValue(missing, "Available Balance")).toBe("$987,654.32");
+        expect(within(missing).queryByText("Outstanding Allotment CIF")).toBeNull();
+        expect(fieldValue(missing, "Available CIF (customs)")).toBe("$987,654.32");
     });
 
     it("(1) every old tab body still shows its values; changed strings are the listed ones only", async () => {

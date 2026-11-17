@@ -16,15 +16,16 @@ function hasValue(v: unknown): boolean {
 
 function FinancialSummaryList({ summary }: { summary: CustomsLedgerSummary }) {
     return (
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 md:grid-cols-4 xl:grid-cols-7">
+        <dl className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-card p-1 sm:grid-cols-3 xl:grid-cols-6">
             {FINANCIAL_SUMMARY_FIELDS.filter((f) => hasValue(summary[f.key])).map((f) => {
                 const value = summary[f.key];
                 return (
-                    <div key={f.key} className="min-w-0">
+                    <div key={f.key} className={cn("min-w-0 rounded-md px-2.5 py-1.5", f.emphasis && "bg-muted")}>
                         <dt className="truncate text-xs text-muted-foreground" title={f.label}>{f.label}</dt>
                         <dd
                             className={cn(
-                                "mt-0.5 text-right text-sm font-semibold tabular-nums text-foreground",
+                                "mt-0.5 text-right text-sm font-medium tabular-nums text-foreground",
+                                f.emphasis && "text-base font-semibold",
                                 f.signed && isNegativeValue(value) && "text-destructive",
                             )}
                         >
@@ -34,9 +35,9 @@ function FinancialSummaryList({ summary }: { summary: CustomsLedgerSummary }) {
                 );
             })}
             {typeof summary.mismatched === "boolean" && (
-                <div className="min-w-0">
+                <div className="min-w-0 rounded-md px-2.5 py-1.5">
                     <dt className="truncate text-xs text-muted-foreground">Reconciliation</dt>
-                    <dd className="mt-1 flex justify-end">
+                    <dd className="mt-0.5 flex justify-end">
                         <StatusBadge
                             tone={summary.mismatched ? "danger" : "success"}
                             label={summary.mismatched ? "Reconciliation Failed" : "Reconciled"}

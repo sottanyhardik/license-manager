@@ -16,8 +16,8 @@ export type BoeRecordTabId =
 
 export interface BoeRecordWorkspaceProps {
     item: BoeListItem;
-    /** Consolidated Edit / Transfer Letter / Merge / ... actions (shared ActionMenu). */
-    actionItems: ActionMenuItem[];
+    /** Optional consolidated actions (shared ActionMenu); the register table keeps them in its row menu instead. */
+    actionItems?: ActionMenuItem[];
     onTransferLetter?: () => void;
 }
 
@@ -38,9 +38,11 @@ export default function BoeRecordWorkspace({ item, actionItems, onTransferLetter
 
     return (
         <div role="region" id={`boe-content-${item.id}`} aria-label={`BOE ${label} details`}>
-            <div className="mb-2 flex justify-end">
-                <ActionMenu items={actionItems} label={`Actions for BOE ${label}`} trigger="button" />
-            </div>
+            {actionItems && (
+                <div className="mb-2 flex justify-end">
+                    <ActionMenu items={actionItems} label={`Actions for BOE ${label}`} trigger="button" />
+                </div>
+            )}
             <DetailTabs
                 recordKey={recordKey}
                 tabs={tabs}

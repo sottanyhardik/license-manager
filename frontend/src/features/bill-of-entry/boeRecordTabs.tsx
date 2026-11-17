@@ -15,11 +15,11 @@ import type { BoeDetailRow, BoeListItem } from "./types";
  */
 export function buildBoeRecordTabs(
     item: BoeListItem,
-    { onTransferLetter }: { onTransferLetter?: () => void } = {},
+    { onTransferLetter, overviewOmit }: { onTransferLetter?: () => void; overviewOmit?: readonly string[] } = {},
 ): DetailTab[] {
     const rows: BoeDetailRow[] = item.item_details || [];
     return [
-        { id: "overview", label: "Overview", render: () => <OverviewTab item={item} /> },
+        { id: "overview", label: "Overview", render: () => <OverviewTab item={item} omit={overviewOmit} /> },
         { id: "boe-details", label: "BOE Details", render: () => <BoeDetailsTab boeId={item.id} /> },
         { id: "import-items", label: "Import Items", render: () => <BoeItemsTable rows={rows} /> },
         { id: "licence-mapping", label: "Licence Mapping", render: () => <LicenceMappingTab rows={rows} /> },

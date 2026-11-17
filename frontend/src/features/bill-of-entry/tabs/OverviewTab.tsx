@@ -18,7 +18,13 @@ const OVERVIEW_FIELDS: FieldSpec[] = [
     { key: "unit_price", label: "Unit Price" },
 ];
 
-export function OverviewTab({ item }: { item: BoeListItem }) {
+export interface OverviewTabProps {
+    item: BoeListItem;
+    /** Field keys already shown elsewhere on the page (e.g. detail header + figure tiles). */
+    omit?: readonly string[];
+}
+
+export function OverviewTab({ item, omit = [] }: OverviewTabProps) {
     // Display-only formatting of backend values; nothing is recomputed. The record
     // view keeps the backend's full scale: INR to paise (DEC_0 = 0.00) and unit
     // price to 0.001 (get_unit_price), unlike the compact card.
@@ -29,5 +35,6 @@ export function OverviewTab({ item }: { item: BoeListItem }) {
         total_quantity: fmtQty(item.total_quantity),
         unit_price: fmtQty(item.unit_price),
     };
-    return <FieldGrid record={record} fields={OVERVIEW_FIELDS} />;
+    const fields = omit.length ? OVERVIEW_FIELDS.filter((f) => !omit.includes(f.key)) : OVERVIEW_FIELDS;
+    return <FieldGrid record={record} fields={fields} />;
 }

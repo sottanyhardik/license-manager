@@ -5,9 +5,9 @@ import { CheckSquare } from "lucide-react";
 
 /**
  * Floating action button that opens the global task drawer.
- * Positioned bottom-right, above the AdminLayout footer.
+ * Compact bottom-right button; AdminLayout reserves bottom padding for it and hides it on form routes.
  */
-export default function TaskFAB({ bottomOffset = 110 }) {
+export default function TaskFAB({ bottomOffset = 16 }) {
     const [show, setShow] = useState(false);
     const [hovered, setHovered] = useState(false);
 
@@ -23,19 +23,19 @@ export default function TaskFAB({ bottomOffset = 110 }) {
                 title="Tasks"
                 style={{
                     position: "fixed",
-                    right: 24,
+                    right: 64,
                     bottom: bottomOffset,
-                    height: 48,
+                    height: 40,
                     paddingInline: hovered ? 18 : 0,
-                    minWidth: 48,
+                    minWidth: 40,
                     borderRadius: 999,
-                    border: "1px solid rgba(15,23,42,0.06)",
+                    border: "1px solid var(--border)",
                     background: "var(--surface-raised)",
                     color: "var(--text-primary)",
                     boxShadow: hovered
                         ? "var(--elevation-3)"
                         : "var(--elevation-2)",
-                    zIndex: 1040,
+                    zIndex: 30,
                     fontSize: "0.9rem",
                     fontWeight: 500,
                     cursor: "pointer",
@@ -53,13 +53,13 @@ export default function TaskFAB({ bottomOffset = 110 }) {
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        width: 28,
-                        height: 28,
+                        width: 24,
+                        height: 24,
                         borderRadius: 999,
                         background: "var(--indigo-50)",
                         color: "var(--primary-color)",
-                        marginLeft: hovered ? 0 : 10,
-                        marginRight: hovered ? 0 : 10,
+                        marginLeft: hovered ? 0 : 7,
+                        marginRight: hovered ? 0 : 7,
                         transition: "margin 180ms cubic-bezier(0.16,1,0.3,1)",
                     }}
                 >

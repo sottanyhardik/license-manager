@@ -67,7 +67,7 @@ export function authFor(role: Role) {
     };
 }
 
-/** Renders the real MasterList at /bill-of-entries (the BOE card register). */
+/** Renders the real MasterList at /bill-of-entries (the BOE table register). */
 export function renderBoeList(role: Role) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
@@ -87,6 +87,7 @@ export function renderBoeList(role: Role) {
 /** useId output is position-derived and not part of the presentation contract. */
 export const normaliseIds = (html: string) => html.replace(/«[^»]*»|:r[0-9a-z]+:|_r_[0-9a-z]+_/g, "«id»");
 
+/** Register data rows (the ones carrying the expand toggle), in render order. */
 export function boeCards(): HTMLElement[] {
-    return Array.from(document.querySelectorAll<HTMLElement>("article.entity-card"));
+    return Array.from(document.querySelectorAll<HTMLElement>("tbody tr")).filter((tr) => tr.querySelector("button[aria-expanded]"));
 }

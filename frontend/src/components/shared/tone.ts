@@ -19,15 +19,15 @@ export const TONE_MAP: Record<Tone, ToneClasses> = {
         dot: "bg-primary",
     },
     success: {
-        soft: "border-transparent bg-success/10 text-success",
+        soft: "border-transparent bg-success/10 text-[var(--tb-success-text)]",
         solid: "border-transparent bg-success text-white",
-        outline: "border-success/40 bg-transparent text-success",
+        outline: "border-success/40 bg-transparent text-[var(--tb-success-text)]",
         dot: "bg-success",
     },
     warning: {
-        soft: "border-transparent bg-warning/10 text-warning",
-        solid: "border-transparent bg-warning text-white",
-        outline: "border-warning/40 bg-transparent text-warning",
+        soft: "border-transparent bg-warning/10 text-[var(--tb-warning-text)]",
+        solid: "border-transparent bg-warning text-black",
+        outline: "border-warning/40 bg-transparent text-[var(--tb-warning-text)]",
         dot: "bg-warning",
     },
     danger: {
@@ -37,9 +37,9 @@ export const TONE_MAP: Record<Tone, ToneClasses> = {
         dot: "bg-destructive",
     },
     info: {
-        soft: "border-transparent bg-info/10 text-info",
+        soft: "border-transparent bg-info/10 text-[var(--tb-info-text)]",
         solid: "border-transparent bg-info text-white",
-        outline: "border-info/40 bg-transparent text-info",
+        outline: "border-info/40 bg-transparent text-[var(--tb-info-text)]",
         dot: "bg-info",
     },
     neutral: {
@@ -49,3 +49,22 @@ export const TONE_MAP: Record<Tone, ToneClasses> = {
         dot: "bg-muted-foreground",
     },
 };
+
+/**
+ * Domain status -> tone (AA-checked: soft tones use the `--tb-*-text` tokens).
+ * Licence: Active / Expired / Planned / Exhausted. BOE: Invoiced / Pending / Dispute.
+ */
+export const STATUS_TONE: Record<string, Tone> = {
+    active: "success",
+    expired: "danger",
+    planned: "info",
+    exhausted: "neutral",
+    invoiced: "success",
+    pending: "warning",
+    dispute: "danger",
+};
+
+/** Case-insensitive lookup; unknown statuses fall back to neutral. */
+export function statusTone(status: string | null | undefined): Tone {
+    return STATUS_TONE[String(status ?? "").trim().toLowerCase()] ?? "neutral";
+}

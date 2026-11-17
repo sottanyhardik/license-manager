@@ -25,7 +25,7 @@ import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
-import BoeCardList from "@/features/bill-of-entry/BoeCardList";
+import BoeTable from "@/features/bill-of-entry/BoeTable";
 import {getDefaultFilters} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
@@ -1057,9 +1057,9 @@ export default function MasterList() {
                     {isRefreshing && !loading && (
                         <div role="status" className="mb-2 text-xs text-muted-foreground">Updating results…</div>
                     )}
-                    {/* BOE Card Layout */}
+                    {/* BOE compact data table */}
                     {entityName === 'bill-of-entries' && (
-                        <BoeCardList
+                        <BoeTable
                             loading={loading}
                             data={data}
                             canWrite={canWrite}

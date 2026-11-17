@@ -29,12 +29,13 @@ function LIST() {
 const get = api.get as unknown as ReturnType<typeof vi.fn>;
 const tabRequests = () => get.mock.calls.map((c) => c[0] as string).filter((u) => u !== "bill-of-entries/");
 const cardFor = (id: number) => boeCards()[BOE_FIXTURE.findIndex((b) => b.id === id)];
+const toggleOf = (id: number) => within(cardFor(id)).getByRole("button", { name: /^(Expand|Collapse) BOE/ });
 
 async function ready() {
     await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
 }
 
-describe("BOE record workspace (expanded card)", () => {
+describe("BOE record workspace (expanded register row)", () => {
     beforeEach(() => vi.clearAllMocks());
     afterEach(() => cleanup());
 
@@ -43,12 +44,12 @@ describe("BOE record workspace (expanded card)", () => {
         renderBoeList("BOE_MANAGER");
         await ready();
 
-        await user.click(within(cardFor(201)).getByTitle("View details"));
+        await user.click(toggleOf(201));
         const regionA = screen.getByRole("region", { name: "BOE 7012345 details" });
         await user.click(within(regionA).getByRole("tab", { name: "BOE Details" }));
         expect(await screen.findByText("CHA of 201")).toBeInTheDocument();
 
-        await user.click(within(cardFor(202)).getByTitle("View details"));
+        await user.click(toggleOf(202));
         expect(screen.getAllByRole("region", { name: /^BOE .* details$/ })).toHaveLength(2);
         const regionB = screen.getByRole("region", { name: "BOE 7012346 details" });
         // B opens on its own default tab, not A's last tab; A keeps its state.
@@ -61,10 +62,10 @@ describe("BOE record workspace (expanded card)", () => {
         expect(within(regionB).queryByText("CHA of 201")).toBeNull();
 
         // Toggle semantics: clicking an open card closes only that card.
-        await user.click(within(cardFor(201)).getByTitle("Hide details"));
-        expect(cardFor(201).querySelector(".entity-card-detail")).toBeNull();
+        await user.click(toggleOf(201));
+        expect(screen.queryByRole("region", { name: "BOE 7012345 details" })).toBeNull();
         expect(screen.getAllByRole("region", { name: /^BOE .* details$/ })).toHaveLength(1);
-        expect(within(cardFor(201)).getByTitle("View details")).toHaveAttribute("aria-expanded", "false");
+        expect(toggleOf(201)).toHaveAttribute("aria-expanded", "false");
     });
 
     it("each tab requests only its own endpoint, and only when opened", async () => {
@@ -73,7 +74,7 @@ describe("BOE record workspace (expanded card)", () => {
         await ready();
         get.mockClear();
 
-        await user.click(within(cardFor(203)).getByTitle("View details"));
+        await user.click(toggleOf(203));
         expect(tabRequests()).toEqual([]);
 
         const step = async (tab: string, expected: string[]) => {
@@ -95,7 +96,7 @@ describe("BOE record workspace (expanded card)", () => {
         const user = userEvent.setup();
         renderBoeList("BOE_VIEWER");
         await ready();
-        await user.click(within(cardFor(201)).getByTitle("View details"));
+        await user.click(toggleOf(201));
         expect(screen.getByRole("tablist", { name: "BOE 7012345 sections" })).toBeInTheDocument();
         expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
             "Overview", "BOE Details", "Import Items", "Licence Mapping", "Allotment Mapping", "Documents",
@@ -116,7 +117,7 @@ describe("BOE record workspace (expanded card)", () => {
         const user = userEvent.setup();
         renderBoeList("BOE_MANAGER");
         await ready();
-        await user.click(within(cardFor(201)).getByTitle("View details"));
+        await user.click(toggleOf(201));
         const tabsRoot = screen.getByRole("tablist", { name: "BOE 7012345 sections" }).parentElement;
         expect(tabsRoot).toHaveClass("min-w-0", "[&_[role=tablist]]:flex-nowrap", "[&_[role=tablist]]:overflow-x-auto", "[&_[role=tab]]:shrink-0");
         expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
@@ -126,7 +127,7 @@ describe("BOE record workspace (expanded card)", () => {
         const user = userEvent.setup();
         renderBoeList("BOE_VIEWER");
         await ready();
-        await user.click(within(cardFor(201)).getByTitle("View details"));
+        await user.click(toggleOf(201));
         expect(screen.queryByRole("tab", { name: "Edit Options" })).toBeNull();
         // Viewer: no write actions and no Transfer Letter, so no menu at all.
         expect(screen.queryByRole("button", { name: "Actions for BOE 7012345" })).toBeNull();
@@ -136,7 +137,7 @@ describe("BOE record workspace (expanded card)", () => {
 
         renderBoeList("BOE_MANAGER");
         await ready();
-        await user.click(within(cardFor(201)).getByTitle("View details"));
+        await user.click(toggleOf(201));
         await user.click(screen.getByRole("button", { name: "Actions for BOE 7012345" }));
         await user.click(screen.getByRole("menuitem", { name: "Edit" }));
         expect(await screen.findByTestId("edit-page")).toHaveTextContent("edit 201");
@@ -146,7 +147,7 @@ describe("BOE record workspace (expanded card)", () => {
         const user = userEvent.setup();
         renderBoeList("BOE_MANAGER");
         await ready();
-        await user.click(within(cardFor(201)).getByTitle("View details"));
+        await user.click(toggleOf(201));
         const items = screen.getByRole("tab", { name: "Overview" });
         act(() => items.focus());
         await user.keyboard("{ArrowRight}");

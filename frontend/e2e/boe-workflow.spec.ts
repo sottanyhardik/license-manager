@@ -76,7 +76,10 @@ async function expectNoDocumentOverflow(page: Page) {
 }
 
 const card = (page: Page, number: string) =>
-  page.locator("article, [data-entity-card], .entity-card, div").filter({ has: page.getByRole("link", { name: number, exact: true }) }).last();
+  page.getByRole("row").filter({ has: page.getByRole("link", { name: number, exact: true }) });
+
+const expandRow = (page: Page, number: string) =>
+  card(page, number).getByRole("button", { name: `Expand BOE ${number}` }).click();
 
 test.describe("BOE register (compact ERP register, Licence parity)", () => {
   test("manager sees the compact toolbar, Add New target and secondary actions menu", async ({ page }) => {
@@ -127,7 +130,7 @@ test.describe("BOE register (compact ERP register, Licence parity)", () => {
     expect(Math.abs(boe.left - licence.left)).toBeLessThanOrEqual(4);
   });
 
-  test("viewer gets read-only register and cards", async ({ page }) => {
+  test("viewer gets read-only register and rows", async ({ page }) => {
     await mockApi(page, ["BOE_VIEWER"] satisfies Role[]);
     await page.goto("/bill-of-entries", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { level: 1, name: "Bills of Entry" })).toBeVisible();
@@ -135,7 +138,7 @@ test.describe("BOE register (compact ERP register, Licence parity)", () => {
     // D2: viewers may edit the invoice number inline; they get no menu actions
     // (no Transfer Letter - owner decision - and no write actions).
     await expect(card(page, "7012345").locator('button[title="Click to edit invoice number"]')).toBeVisible();
-    await card(page, "7012345").locator('button[title="View details"]').first().click();
+    await expandRow(page, "7012345");
     await expect(page.getByRole("button", { name: "Actions for BOE 7012345" })).toHaveCount(0);
     await expect(page.getByRole("menuitem", { name: "Transfer Letter" })).toHaveCount(0);
   });
@@ -147,7 +150,10 @@ test.describe("BOE detail route", () => {
     await page.goto("/bill-of-entries/201", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "BOE 7012345" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("tabpanel")).toContainText("₹12,34,567.89");
+    // Figures live in the page tiles; Overview keeps only fields not already shown above it.
+    await expect(page.getByText("₹12,34,567.89").first()).toBeVisible();
+    await expect(page.getByRole("tabpanel")).toContainText("Crude Palm Oil");
+    await expect(page.getByRole("tabpanel")).not.toContainText("₹12,34,567.89");
 
     await page.getByRole("tab", { name: "Import Items" }).click();
     await expect(page).toHaveURL(/\/bill-of-entries\/201\?tab=import-items$/);
@@ -190,12 +196,12 @@ test.describe("BOE detail route", () => {
 });
 
 test.describe("BOE record workspace", () => {
-  test("card expands into the shared workspace; each tab calls only its own endpoint", async ({ page }) => {
+  test("row expands into the shared workspace; each tab calls only its own endpoint", async ({ page }) => {
     const requests = await mockApi(page, ["BOE_MANAGER"]);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/bill-of-entries", { waitUntil: "networkidle" });
 
-    await card(page, "7012345").locator('button[title="View details"]').first().click();
+    await expandRow(page, "7012345");
     const tabs = page.getByRole("tablist", { name: "BOE 7012345 sections" });
     await expect(tabs).toBeVisible();
     await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
@@ -238,6 +244,39 @@ test.describe("BOE record workspace", () => {
   });
 });
 
+test.describe("BOE register table visual loop", () => {
+  const shots = [
+    { name: "1440", width: 1440, height: 900 },
+    { name: "1366", width: 1366, height: 768 },
+    { name: "768", width: 768, height: 1024 },
+    { name: "390", width: 390, height: 844 },
+    { name: "1440-dark", width: 1440, height: 900, dark: true },
+  ];
+  for (const vp of shots) {
+    test(`register + detail screenshots ${vp.name}`, async ({ page }) => {
+      const errors: string[] = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+      await mockApi(page, ["BOE_MANAGER"]);
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      if (vp.dark) await page.emulateMedia({ colorScheme: "dark" });
+      await page.goto("/bill-of-entries", { waitUntil: "networkidle" });
+      await expect(card(page, "7012345")).toBeVisible();
+      await expectNoDocumentOverflow(page);
+      await page.screenshot({ path: `test-results/boe-register-${vp.name}.png`, fullPage: true });
+      await expandRow(page, "7012345");
+      await expect(page.getByRole("tablist", { name: "BOE 7012345 sections" })).toBeVisible();
+      await expectNoDocumentOverflow(page);
+      await page.screenshot({ path: `test-results/boe-register-expanded-${vp.name}.png`, fullPage: true });
+      await page.goto("/bill-of-entries/201", { waitUntil: "networkidle" });
+      await expect(page.getByRole("heading", { name: "BOE 7012345" })).toBeVisible();
+      await expectNoDocumentOverflow(page);
+      await page.screenshot({ path: `test-results/boe-detail-${vp.name}.png`, fullPage: true });
+      expect(errors.filter((e) => !/Failed to load resource/.test(e))).toEqual([]);
+    });
+  }
+});
+
 test.describe("BOE responsive containment", () => {
   for (const vp of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
     test(`register and workspace fit ${vp.width}px`, async ({ page }, testInfo) => {
@@ -248,7 +287,7 @@ test.describe("BOE responsive containment", () => {
       await expectNoDocumentOverflow(page);
       // Icon-only toolbar actions below `sm` must keep accessible names.
       await expectNoSeriousOrCriticalAxeViolations(page, "main");
-      await card(page, "7012345").locator('button[title="View details"]').first().click();
+      await expandRow(page, "7012345");
       await expect(page.getByRole("tablist", { name: "BOE 7012345 sections" })).toBeVisible();
       await expectNoDocumentOverflow(page);
       await page.screenshot({ path: testInfo.outputPath(`boe-${vp.width}.png`), fullPage: true });

@@ -2,17 +2,18 @@ import { useCallback, useContext, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, FileQuestion } from "lucide-react";
+import { ArrowLeft, FileQuestion, TriangleAlert } from "lucide-react";
 
 import { boeApi } from "@/api";
-import { EmptyState, QueryBoundary } from "@/components/shared";
+import { EmptyState, QueryBoundary, StatusBadge } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { ModuleWorkspace } from "@/components/workspace";
 import { AuthContext } from "@/context/AuthContext";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { buildBoeRecordTabs } from "@/features/bill-of-entry/boeRecordTabs";
 import { useBoeRowActions, type BoeRowActionContext } from "@/features/bill-of-entry/useBoeRowActions";
-import type { BoeListItem } from "@/features/bill-of-entry/types";
+import { fmtFc2, fmtInrExact, fmtQty } from "@/features/bill-of-entry/format";
+import type { BoeDetailRow, BoeListItem } from "@/features/bill-of-entry/types";
 import { qk } from "@/lib/queryKeys";
 import { shouldRetryQuery } from "@/api/queryClient";
 import { restoreFilterState } from "@/utils/filterPersistence";
@@ -21,6 +22,11 @@ import BoeMergeModal from "@/pages/masters/BoeMergeModal";
 
 const ENTITY = "bill-of-entries";
 const LIST_PATH = "/bill-of-entries";
+/** Shown by the page header and BoeFigures tiles; omitted from the Overview tab. */
+const DETAIL_HEADER_FIELDS = [
+    "bill_of_entry_number", "bill_of_entry_date", "port_name", "company_name",
+    "total_inr", "total_fc", "total_quantity", "unit_price",
+] as const;
 
 type MergeSource = { id: number; bill_of_entry_number: string };
 
@@ -37,6 +43,26 @@ function useBackToRegister() {
     }, [navigate]);
 }
 
+/** Headline figures (backend values, display-formatting only): right-aligned, tabular numerals. */
+function BoeFigures({ item }: { item: BoeListItem }) {
+    const figures = [
+        { label: "CIF (INR)", value: fmtInrExact(item.total_inr) },
+        { label: "CIF (FC)", value: fmtFc2(item.total_fc) },
+        { label: "Qty (MT)", value: fmtQty(item.total_quantity) },
+        { label: "Unit Price", value: fmtQty(item.unit_price) },
+    ];
+    return (
+        <>
+            {figures.map((f) => (
+                <div key={f.label} className="flex items-baseline justify-between gap-2 rounded-lg border border-border bg-card px-3 py-1.5 sm:block sm:py-2">
+                    <div className="text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{f.label}</div>
+                    <div className="text-right text-base sm:mt-0.5 sm:text-lg font-semibold tabular-nums text-foreground">{f.value}</div>
+                </div>
+            ))}
+        </>
+    );
+}
+
 function NotFound({ onBack }: { onBack: () => void }) {
     return (
         <EmptyState
@@ -44,7 +70,7 @@ function NotFound({ onBack }: { onBack: () => void }) {
             icon={FileQuestion}
             title="Bill of entry not found"
             description="It may have been deleted or merged into another bill of entry."
-            action={<Button variant="outline" size="sm" onClick={onBack}><ArrowLeft className="size-4" aria-hidden="true" /> Back to Bill of Entries</Button>}
+            action={<Button variant="outline" size="sm" onClick={onBack}><ArrowLeft className="size-4" aria-hidden="true" /> Back to Bills of Entry</Button>}
         />
     );
 }
@@ -170,18 +196,34 @@ function BoeDetailView({ item, onBack }: { item: BoeListItem; onBack: () => void
     const { actions } = useBoeRowActions(item, ctx);
 
     const number = item.bill_of_entry_number || String(item.id);
-    const tabs = buildBoeRecordTabs(item, { onTransferLetter: canTransferLetter ? () => goTransferLetter(item.id) : undefined });
+    const disputes = ((item.item_details || []) as BoeDetailRow[]).filter((r) => r.is_dispute).length;
+    // The page header (number, date, port, company) and the figure tiles already show
+    // these fields, so the Overview tab does not repeat them.
+    const tabs = buildBoeRecordTabs(item, {
+        onTransferLetter: canTransferLetter ? () => goTransferLetter(item.id) : undefined,
+        overviewOmit: DETAIL_HEADER_FIELDS,
+    });
 
     return (
         <>
             <ModuleWorkspace
                 title={`BOE ${number}`}
-                breadcrumbs={[{ label: "Bill of Entries", to: LIST_PATH }, { label: number }]}
+                breadcrumbs={[{ label: "Bills of Entry", to: LIST_PATH }, { label: number }]}
                 meta={
-                    <span className="text-sm text-muted-foreground">
-                        {[item.bill_of_entry_date, item.port_name].filter(Boolean).join(" · ")}
-                    </span>
+                    <>
+                        <span className="text-sm text-muted-foreground">
+                            {[item.bill_of_entry_date, item.port_name].filter(Boolean).join(" · ")}
+                        </span>
+                        {item.company_name && <span className="text-sm font-medium text-foreground">{item.company_name}</span>}
+                        {item.invoice_no
+                            ? <StatusBadge tone="success" label={`Invoiced · ${item.invoice_no}`} />
+                            : <StatusBadge tone="neutral" label="Invoice pending" />}
+                        {disputes > 0 && (
+                            <StatusBadge tone="danger" icon={TriangleAlert} label={`${disputes} Dispute${disputes > 1 ? "s" : ""}`} />
+                        )}
+                    </>
                 }
+                kpis={<BoeFigures item={item} />}
                 secondaryActions={actions}
                 primaryAction={
                     <Button variant="outline" size="sm" onClick={onBack}>

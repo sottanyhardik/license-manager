@@ -27,6 +27,10 @@ const mk = (id: number, over: Record<string, unknown> = {}) => ({
 });
 const HIGH = mk(1);
 const LOW = mk(2, { confidence: "low", party: null, source: "", allocations: [], advance: "0.00" });
+const BULK = mk(3, { line: { id: 3, txn_date: "2026-11-26", narration: "BU : 2056141 Transfer 26.11.2026", reference: "", debit: "169347.00",
+    credit: "0.00", amount: "169347.00", status: "UNMATCHED" }, direction: "PAYMENT", confidence: "bulk", party: null, source: "",
+    options: [], allocations: [], advance: "0.00", is_bulk: true });
+const PARTIES = [{ id: 71, name: "Alpha Exim", gstin: null, pan: null }, { id: 72, name: "Beta Traders", gstin: null, pan: null }];
 
 let booked = new Set<number>();  // lines the "server" has matched (they leave the proposals list)
 
@@ -34,12 +38,17 @@ function respond(url: string, config?: { params?: Record<string, unknown> }) {
     if (url === "accounting/entities/") return { data: { books: [BOOKS], discovered: [] } };
     if (url === "accounting/bank-accounts/") return { data: [BANK] };
     if (url === "accounting/bank-accounts/3/proposals/") {
-        const wantsLow = String(config?.params?.confidence ?? "").includes("low");
-        return { data: { bank_account_id: 3, summary: { high: 1, medium: 0, low: 1, none: 0, total: 2 },
-            proposals: (wantsLow ? [HIGH, LOW] : [HIGH]).filter((p) => !booked.has(p.line.id)) } };
+        const wanted = String(config?.params?.confidence ?? "");
+        const list = [HIGH, ...(wanted.includes("bulk") ? [BULK] : []), ...(wanted.includes("low") ? [LOW] : [])];
+        return { data: { bank_account_id: 3, summary: { high: 1, medium: 0, low: 1, none: 0, bulk: 1, total: 3 },
+            proposals: list.filter((p) => !booked.has(p.line.id)) } };
     }
     if (url === "accounting/statement-lines/1/proposal/") return { data: mk(1, { party: { id: 555, name: "Other Co", gstin: null }, source: "chosen" }) };
     if (url === "accounting/narration-aliases/") return { data: { aliases: [] } };
+    if (url === "accounting/parties/") {
+        const term = String(config?.params?.search ?? "").toLowerCase();
+        return { data: PARTIES.filter((p) => p.name.toLowerCase().includes(term)) };
+    }
     return { data: {} };
 }
 
@@ -85,7 +94,7 @@ describe("BankProposals", () => {
         await userEvent.click(screen.getByRole("button", { name: /^Low/ }));
         expect(await screen.findByText("NEFT ACME 2")).toBeInTheDocument();
         expect(get).toHaveBeenCalledWith("accounting/bank-accounts/3/proposals/",
-            expect.objectContaining({ params: expect.objectContaining({ confidence: "high,medium,low" }) }));
+            expect.objectContaining({ params: expect.objectContaining({ confidence: "high,medium,bulk,low" }) }));
     });
 
     it("picking another company saves that line at once (no select / confirm step)", async () => {
@@ -143,6 +152,50 @@ describe("BankProposals", () => {
         await act(async () => { vi.advanceTimersByTime(10_500); });
         await waitFor(() => expect(screen.queryByText("NEFT ACME 1")).not.toBeInTheDocument());
         expect(post).not.toHaveBeenCalledWith(expect.stringContaining("/undo/"), expect.anything());
+    });
+
+    it("splits a bulk (BU) line into one payment per supplier and can undo the split", async () => {
+        post.mockImplementation((url: string, body: { rows: { party_id: number; amount: string }[]; dry_run?: boolean }) => {
+            if (url === "accounting/statement-lines/3/split/" && body.dry_run) {
+                return Promise.resolve({ data: { rows: body.rows.map((r) => ({ ...r, party: "x", advance: "0.00",
+                    allocations: [{ invoice_id: r.party_id * 10, number: `PB-${r.party_id}`, date: "2026-11-01", outstanding: r.amount, amount: r.amount }] })) } });
+            }
+            if (url === "accounting/statement-lines/3/split/") {
+                booked.add(3);
+                return Promise.resolve({ data: { line_id: 3, payments: [
+                    { id: 61, voucher: "PV-61", party_id: 71, party: "Alpha Exim", amount: "100000.00" },
+                    { id: 62, voucher: "PV-62", party_id: 72, party: "Beta Traders", amount: "69347.00" }] } });
+            }
+            return Promise.resolve({ data: {} });
+        });
+        del.mockImplementation(() => { booked.delete(3); return Promise.resolve({ data: { line_id: 3, status: "UNMATCHED" } }); });
+        const user = userEvent.setup();
+        renderAt();
+        expect(await screen.findByRole("button", { name: /^Bulk \(BU\)/ })).toHaveAttribute("aria-pressed", "true");
+        await screen.findByText("BU : 2056141 Transfer 26.11.2026");
+        await user.click(screen.getByRole("button", { name: "Split line 3" }));
+        const pick = async (row: number, term: string, name: string) => {
+            await user.type(screen.getByRole("combobox", { name: `Paid to (row ${row})` }), term);
+            await user.click(await screen.findByRole("option", { name: new RegExp(name) }));
+        };
+        await pick(1, "Alp", "Alpha Exim");
+        await user.type(screen.getByRole("textbox", { name: "Amount row 1" }), "100000.00");
+        await pick(2, "Bet", "Beta Traders");
+        await user.type(screen.getByRole("textbox", { name: "Amount row 2" }), "60000.00");
+        const save = screen.getByRole("button", { name: /Save split/ });
+        expect(save).toBeDisabled();
+        expect(screen.getByText(/left ₹ 9,347\.00/)).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /Put remaining/ }));
+        expect(screen.getByText("balanced")).toBeInTheDocument();
+        expect(await screen.findByText(/PB-72/)).toBeInTheDocument();  // oldest-first bills preview per row
+        await user.click(save);
+        await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/statement-lines/3/split/", {
+            rows: [{ party_id: 71, amount: "100000.00" }, { party_id: 72, amount: "69347.00" }] }));
+        const row = (await screen.findByText("Matched · 2 payments")).closest("tr")!;
+        expect(within(row).getByText("Alpha Exim, Beta Traders")).toBeInTheDocument();
+        await user.click(within(row).getByRole("button", { name: "Undo line 3" }));
+        await waitFor(() => expect(del).toHaveBeenCalledWith("accounting/statement-lines/3/split/"));
+        expect(await screen.findByRole("button", { name: "Split line 3" })).toBeInTheDocument();
     });
 
     it("hides confirm and selection for a viewer", async () => {

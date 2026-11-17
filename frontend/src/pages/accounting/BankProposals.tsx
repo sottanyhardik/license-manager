@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { acctDelete, acctGet, acctKeys, acctPost, type BankAccount, type Money } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import BankLineSplit, { type SplitResult } from "./BankLineSplit";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { useAccountingAccess } from "./useAccountingAccess";
 import { useGuardedAction } from "./useGuardedAction";
 import { formatMoney } from "./money";
 import { Amount, DataGrid, inputCls, notifyError, Panel, QueryState, ReadOnlyNote } from "./ui";
 
-type Confidence = "high" | "medium" | "low" | "none";
+type Confidence = "high" | "medium" | "low" | "none" | "bulk";
 type Direction = "RECEIPT" | "PAYMENT";
 
 interface ProposalOption { id: number; name: string; gstin: string | null; score: number }
@@ -31,6 +32,7 @@ export interface Proposal {
     advance: Money;
     exact_bill: boolean;
     existing_candidates: number;
+    is_bulk: boolean;
 }
 interface ProposalsResponse {
     bank_account_id: number;
@@ -44,19 +46,20 @@ interface ConfirmResponse {
 interface Alias { id: number; key: string; direction: Direction; party_id: number; party: string; hits: number; modified_on: string }
 
 const CONFIDENCES: { id: Confidence; label: string }[] = [
-    { id: "high", label: "High" }, { id: "medium", label: "Medium" }, { id: "low", label: "Low" }, { id: "none", label: "None" },
+    { id: "high", label: "High" }, { id: "medium", label: "Medium" }, { id: "bulk", label: "Bulk (BU)" }, { id: "low", label: "Low" }, { id: "none", label: "None" },
 ];
 const CONF_TONE: Record<Confidence, string> = {
     high: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
     medium: "bg-sky-50 text-sky-700 ring-sky-600/20",
     low: "bg-amber-50 text-amber-800 ring-amber-600/20",
     none: "bg-slate-100 text-slate-700 ring-slate-500/20",
+    bulk: "bg-violet-50 text-violet-700 ring-violet-600/20",
 };
 const SOURCE_LABEL: Record<string, string> = { alias: "learned", name: "name match" };
 
 /** Confirmed lines stay on screen as "Matched" this long, with Undo; then they leave the list. */
 export const UNDO_SECONDS = 10;
-interface Recent { proposal: Proposal; payment_id: number; voucher: string; until: number }
+interface Recent { kind: "proposal" | "split"; proposal: Proposal; payment_id: number; voucher: string; until: number }
 
 
 function AliasesPanel({ entityId }: { entityId: number | null }) {
@@ -131,7 +134,8 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
     const { canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
-    const [conf, setConf] = useState<Confidence[]>(["high", "medium"]);
+    const [conf, setConf] = useState<Confidence[]>(["high", "medium", "bulk"]);
+    const [splitting, setSplitting] = useState<Proposal | null>(null);
     const [direction, setDirection] = useState<"" | Direction>("");
     const [errors, setErrors] = useState<Record<number, string>>({});
     const [saving, setSaving] = useState<number[]>([]);
@@ -172,7 +176,7 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                 const samePerson = p.party?.id === party.id;
                 const snapshot: Proposal = samePerson ? p : { ...p, party, source: "", allocations: [], advance: "0.00" };
                 setNow(Date.now());
-                setRecent((cur) => ({ ...cur, [p.line.id]: { proposal: snapshot, payment_id: done.payment_id, voucher: done.voucher,
+                setRecent((cur) => ({ ...cur, [p.line.id]: { kind: "proposal", proposal: snapshot, payment_id: done.payment_id, voucher: done.voucher,
                     until: Date.now() + UNDO_SECONDS * 1000 } }));
                 toast.success(`${done.voucher} posted for ${party.name}`);
                 void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
@@ -184,7 +188,9 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
         onSettled: (_r, _e, { p }) => setSaving((s) => s.filter((id) => id !== p.line.id)),
     });
     const undo = useMutation({
-        mutationFn: (r: Recent) => acctPost<{ line_id: number; status: string }>(`bank-proposals/${r.payment_id}/undo/`, {}),
+        mutationFn: (r: Recent) => (r.kind === "split"
+            ? acctDelete<{ line_id: number; status: string }>(`statement-lines/${r.proposal.line.id}/split/`)
+            : acctPost<{ line_id: number; status: string }>(`bank-proposals/${r.payment_id}/undo/`, {})),
         onSuccess: (res, r) => {
             setRecent((cur) => Object.fromEntries(Object.entries(cur).filter(([id]) => Number(id) !== res.line_id)));
             toast.success(`${r.voucher} reversed — the bank line is unmatched again`);
@@ -192,6 +198,17 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
         },
         onError: notifyError,
     });
+
+    const onSplit = (p: Proposal, r: SplitResult) => {
+        const names = r.payments.map((x) => x.party).join(", ");
+        const snapshot: Proposal = { ...p, party: { id: -1, name: names, gstin: null }, source: "", allocations: [], advance: "0.00" };
+        setNow(Date.now());
+        setRecent((cur) => ({ ...cur, [p.line.id]: { kind: "split", proposal: snapshot, payment_id: r.payments[0]?.id ?? 0,
+            voucher: `${r.payments.length} ${p.direction === "PAYMENT" ? "payments" : "receipts"}`, until: Date.now() + UNDO_SECONDS * 1000 } }));
+        setSplitting(null);
+        toast.success(`Split into ${r.payments.length} entries: ${r.payments.map((x) => x.voucher).join(", ")}`);
+        void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
+    };
 
     const proposals = q.data?.proposals ?? [];
     const rows = [...Object.values(recent).map((r) => r.proposal), ...proposals.filter((p) => !recent[p.line.id])];
@@ -218,6 +235,13 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                 {canApprove
                     ? <p className="mb-3 text-xs text-slate-600">Picking a company or pressing Confirm books the line at once (bills oldest first, any remainder as advance) and marks it matched. Undo is available for {UNDO_SECONDS} seconds.</p>
                     : <div className="mb-3"><ReadOnlyNote need="the Accounts Approver role to confirm proposals" /></div>}
+                {splitting && (
+                    <div className="mb-4">
+                        <BankLineSplit key={splitting.line.id} onCancel={() => setSplitting(null)} onDone={(r) => onSplit(splitting, r)}
+                                       line={{ id: splitting.line.id, txn_date: splitting.line.txn_date, narration: splitting.line.narration,
+                                               amount: splitting.line.amount, direction: splitting.direction }} />
+                    </div>
+                )}
                 <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                     <DataGrid rows={rows} rowKey={(p) => p.line.id} caption="Invoice proposals"
                         empty="No unmatched lines need a party — try Auto-match on Bank Transactions." columns={[
@@ -255,6 +279,9 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                                         <Button size="sm" disabled={saving.includes(p.line.id)} aria-label={`Confirm line ${p.line.id}`}
                                                 onClick={() => save.mutate({ p, party: p.party as PickedParty })}>
                                             {saving.includes(p.line.id) ? "Saving…" : "Confirm"}</Button>)}
+                                    {canApprove && !p.blocked && (
+                                        <Button size="sm" variant={p.is_bulk ? "default" : "outline"} aria-label={`Split line ${p.line.id}`}
+                                                onClick={() => setSplitting(p)}>Split</Button>)}
                                     {errors[p.line.id] && <span className="max-w-48 text-xs text-red-700" role="alert">{errors[p.line.id]}</span>}
                                 </div>);
                         } },

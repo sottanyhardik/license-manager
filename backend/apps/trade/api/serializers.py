@@ -8,6 +8,11 @@ from rest_framework import serializers
 from ..models import (
     LicenseTrade, LicenseTradeLine, IncentiveTradeLine, LicenseTradePayment, q2
 )
+from apps.trade.services.line_pricing import (
+    apply_server_pricing,
+    cif_inr_warnings,
+    pricing_snapshot,
+)
 from apps.license.services.effective_cif_mode import (
     INDIVIDUAL_ITEM,
     effective_source_row_cif_available,
@@ -55,6 +60,16 @@ class LicenseTradePaymentSerializer(serializers.ModelSerializer):
         fields = ('id', 'date', 'amount', 'note')
 
 
+def validate_amount_override(attrs, instance=None):
+    """T1: a manual amount must be explicit and carry a reason."""
+    override = attrs.get('amount_override', getattr(instance, 'amount_override', False))
+    reason = attrs.get('amount_override_reason', getattr(instance, 'amount_override_reason', '')) or ''
+    if override and not reason.strip():
+        raise serializers.ValidationError({
+            'amount_override_reason': 'A reason is required when amount_override is true.',
+        })
+
+
 class LicenseTradeLineSerializer(serializers.ModelSerializer):
     """Serializer for trade line items"""
     id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -63,6 +78,8 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     computed_amount = serializers.SerializerMethodField()
     source_row_id = serializers.IntegerField(source='sr_number_id', read_only=True)
     authoritative_available_cif = serializers.SerializerMethodField()
+    # T4 (owner-approved): additive, non-blocking CIF INR consistency warnings.
+    warnings = serializers.SerializerMethodField()
 
     def to_internal_value(self, data):
         """Remove empty string fields and coerce numeric fields for DecimalField compatibility"""
@@ -95,8 +112,8 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'sr_number', 'sr_number_label', 'condition_type', 'description', 'hsn_code', 'mode',
             'qty_kg', 'rate_inr_per_kg', 'cif_fc', 'exc_rate', 'cif_inr',
-            'fob_inr', 'pct', 'amount_inr', 'computed_amount',
-            'source_row_id', 'authoritative_available_cif',
+            'fob_inr', 'pct', 'amount_inr', 'amount_override', 'amount_override_reason', 'computed_amount',
+            'source_row_id', 'authoritative_available_cif', 'warnings',
         )
 
     def get_authoritative_available_cif(self, obj):
@@ -123,6 +140,7 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
         ))
 
     def validate(self, attrs):
+        validate_amount_override(attrs, self.instance)
         # Check for force-save mode - skip CIF validation when enabled
         # Force-save assumes data is correct (e.g., PURCHASE/SALE values mirror each other)
         # Auto-enable force-save for paired trades (PURCHASE↔SALE) to skip CIF validation
@@ -176,6 +194,9 @@ class LicenseTradeLineSerializer(serializers.ModelSerializer):
     def get_computed_amount(self, obj):
         """Return computed amount based on mode"""
         return float(obj.compute_amount())
+
+    def get_warnings(self, obj):
+        return cif_inr_warnings(obj)
 
 
 class IncentiveTradeLineSerializer(serializers.ModelSerializer):
@@ -456,7 +477,9 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
         # Create lines (DFIA)
         for line_data in lines_data:
             line_data.pop('id', None)  # Remove temp ID
-            LicenseTradeLine.objects.create(trade=trade, **line_data)
+            line = LicenseTradeLine(trade=trade, **line_data)
+            apply_server_pricing(line, previous=None)  # T1: new line
+            line.save()
 
         # Create incentive lines (RODTEP/ROSTL/MEIS)
         for line_data in incentive_lines_data:
@@ -544,6 +567,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             force_save = True
 
         if lines_data is not None:
+            # Fresh queries: the viewset may have prefetched `lines`, which would
+            # return stale pre-sync objects.
+            pricing_before = {
+                line.pk: pricing_snapshot(line) for line in LicenseTradeLine.objects.filter(trade=instance)
+            }
             try:
                 _sync_nested(
                     instance,
@@ -555,6 +583,11 @@ class LicenseTradeSerializer(serializers.ModelSerializer):
             except Exception as e:
                 if not force_save:
                     raise
+            # T1: price new lines and lines whose pricing inputs changed;
+            # untouched (historical) lines keep their stored amount.
+            for line in LicenseTradeLine.objects.filter(trade=instance):
+                if apply_server_pricing(line, pricing_before.get(line.pk)):
+                    line.save(update_fields=['amount_inr', 'modified_on'])
 
         # Sync nested incentive lines if provided (RODTEP/ROSTL/MEIS)
         if incentive_lines_data is not None:
@@ -625,10 +658,32 @@ class TradeLineSimpleSerializer(serializers.ModelSerializer):
     """Simple serializer for trade lines without nested data"""
     sr_number_label = serializers.CharField(source='sr_number.__str__', read_only=True)
     mode_label = serializers.CharField(source='get_mode_display', read_only=True)
+    warnings = serializers.SerializerMethodField()
 
     class Meta:
         model = LicenseTradeLine
         fields = '__all__'
+
+    def get_warnings(self, obj):
+        return cif_inr_warnings(obj)
+
+    def validate(self, attrs):
+        validate_amount_override(attrs, self.instance)
+        return attrs
+
+    def create(self, validated_data):
+        line = LicenseTradeLine(**validated_data)
+        apply_server_pricing(line, previous=None)  # T1: new line
+        line.save()
+        return line
+
+    def update(self, instance, validated_data):
+        before = pricing_snapshot(instance)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        apply_server_pricing(instance, before)  # T1: changed line only
+        instance.save()
+        return instance
 
 
 # =============================================================================

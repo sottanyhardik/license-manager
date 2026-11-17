@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Sum, Q, F
 from django.core.exceptions import ValidationError
-from django.db.models.signals import pre_delete, post_save
+from django.db.models.signals import post_delete, pre_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -545,6 +545,10 @@ class LicenseTradeLine(models.Model):
 
     # Result
     amount_inr = models.DecimalField(max_digits=20, decimal_places=2, default=Decimal("0"))
+    # T1 (owner-approved 2026-11-17): the server computes `amount_inr` on API writes
+    # unless the line is an explicit manual amount (see services/line_pricing.py).
+    amount_override = models.BooleanField(default=False)
+    amount_override_reason = models.CharField(max_length=255, blank=True, default="")
 
     created_on = models.DateTimeField(auto_now_add=True, db_index=True)
     modified_on = models.DateTimeField(auto_now=True)
@@ -557,7 +561,9 @@ class LicenseTradeLine(models.Model):
 
     def compute_amount(self) -> Decimal:
         if self.mode == self.MODE_QTY:
-            return q2(q4(self.qty_kg) * q2(self.rate_inr_per_kg))
+            # T2: use the stored 3-dp rate as-is (was truncated to 2 dp via q2).
+            rate = self.rate_inr_per_kg if self.rate_inr_per_kg is not None else Decimal("0")
+            return q2(q4(self.qty_kg) * Decimal(str(rate)))
         if self.mode == self.MODE_CIF_INR:
             return q2(q2(self.cif_inr) * (Decimal(str(self.pct if self.pct is not None else 0)) / Decimal("100")))
         if self.mode == self.MODE_FOB_INR:
@@ -565,9 +571,10 @@ class LicenseTradeLine(models.Model):
         return Decimal("0.00")
 
     def save(self, *args, **kwargs) -> None:
-        # Don't auto-calculate amount_inr - allow manual entry from frontend
-        # If amount_inr is not set (0 or None), calculate it
-        if not self.amount_inr or self.amount_inr == 0:
+        # Legacy fallback for non-API writers: fill a missing amount from the
+        # formula. API writes are priced by `services.line_pricing` (T1). An
+        # explicit manual amount (`amount_override`) is never replaced here.
+        if not self.amount_override and (not self.amount_inr or self.amount_inr == 0):
             self.amount_inr = self.compute_amount()
         super().save(*args, **kwargs)
         if self.trade_id:
@@ -815,3 +822,25 @@ def update_incentive_license_on_trade_line_delete(sender, instance, **kwargs):
     """
     if instance.incentive_license and instance.trade.direction == 'SALE':
         instance.incentive_license.update_sold_status()
+
+
+@receiver(post_delete, sender=LicenseTradeLine)
+@receiver(post_delete, sender=IncentiveTradeLine)
+def recompute_trade_totals_on_line_delete(sender, instance, **kwargs):
+    """
+    Keep the header invariant `subtotal_amount == Σ line amount_inr` when a
+    line is deleted outside the trade serializer's update path (e.g. the
+    generic `lines/` endpoint DELETE or a queryset delete), which otherwise
+    left the stored header totals stale. Saving a line already recomputes
+    (see `LicenseTradeLine.save`). No-op when the parent trade is gone.
+    Never rewrites historical rows by itself — only reacts to new deletes.
+    Skipped when the delete cascades from the trade itself (header is going too).
+    """
+    origin = kwargs.get("origin")
+    origin_model = getattr(origin, "model", None) or type(origin)
+    if origin is not None and issubclass(origin_model, LicenseTrade):
+        return
+    trade = LicenseTrade.objects.filter(pk=instance.trade_id).first()
+    if trade is not None:
+        trade.recompute_totals()
+

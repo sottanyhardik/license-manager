@@ -272,6 +272,7 @@ def _copy_to_counterpart(source_id: int, *, source_direction: str, user=None):
                 rate_inr_per_kg=line.rate_inr_per_kg, cif_fc=line.cif_fc,
                 exc_rate=line.exc_rate, cif_inr=line.cif_inr, fob_inr=line.fob_inr,
                 pct=line.pct, amount_inr=line.amount_inr, transaction_pair_uuid=pair_uuid,
+                amount_override=line.amount_override, amount_override_reason=line.amount_override_reason,
             )
             line.counterpart_line = clone
             line.transaction_pair_uuid = pair_uuid
@@ -428,6 +429,7 @@ def sync_to_counterpart(trade_id: int, user=None):
                 exc_rate=line.exc_rate, cif_inr=line.cif_inr, fob_inr=line.fob_inr,
                 pct=line.pct, amount_inr=line.amount_inr,
                 transaction_pair_uuid=source.transaction_pair_uuid,
+                amount_override=line.amount_override, amount_override_reason=line.amount_override_reason,
             )
             line.counterpart_line = clone
             line.save(update_fields=['counterpart_line'])

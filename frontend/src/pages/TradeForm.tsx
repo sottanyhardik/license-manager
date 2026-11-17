@@ -15,7 +15,8 @@ import {navigateToList} from "../utils/navigationUtils";
 import { openDocument } from "../utils/documentDownload";
 import {useBackButton} from "../hooks/useBackButton";
 import TradeConfigCard from "./TradeConfigCard";
-import { buildTradeJsonPayload, cleanIncentiveLine, cleanTradeLine, cleanTradePayment, formatTradeDateForApi, getEntityId } from "./tradeFormHelpers";
+import { buildTradeJsonPayload, cleanIncentiveLine, cleanTradeLine, cleanTradePayment, formatTradeDateForApi, getEntityId, roundPaise } from "./tradeFormHelpers";
+import TradeLineAmountOverride from "./TradeLineAmountOverride";
 import { AlertCircle, ArrowLeft, ArrowLeftRight, Award, Building2, Calculator, CheckCircle, FileText, IndianRupee, Link, List, Package, Percent, Plus, ShoppingCart, SlidersHorizontal, Store, Trash2, TrendingUp, Wand2, Weight, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -366,7 +367,9 @@ export default function TradeForm() {
                 cif_inr: 0,
                 fob_inr: 0,
                 pct: billingMode === "CIF_INR" ? 7.9 : billingMode === "FOB_INR" ? 7.9 : 0,
-                amount_inr: 0
+                amount_inr: 0,
+                amount_override: false,
+                amount_override_reason: ""
             }]
         }));
     };
@@ -477,7 +480,10 @@ export default function TradeForm() {
         // If amount_inr is being changed, calculate rate (reverse calculation)
         // Otherwise, calculate amount from rate
 
-        if (field === 'amount_inr') {
+        if (line.amount_override) {
+            // T1: an explicit manual amount stands as entered; the server keeps it
+            // and no rate/pct is derived from it.
+        } else if (field === 'amount_inr') {
             // Reverse calculation: calculate rate from amount (round to 3 decimals)
             const amount = parseFloat(line.amount_inr) || 0;
 
@@ -498,13 +504,14 @@ export default function TradeForm() {
                 }
             }
         } else {
-            // Forward calculation: calculate amount from rate (round to whole number)
+            // Forward calculation: preview of the server amount (T3: paise, 2dp).
+            // The server recomputes authoritatively on save (T1).
             if (line.mode === "QTY") {
-                line.amount_inr = Math.round((parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0));
+                line.amount_inr = roundPaise((parseFloat(line.qty_kg) || 0) * (parseFloat(line.rate_inr_per_kg) || 0));
             } else if (line.mode === "CIF_INR") {
-                line.amount_inr = Math.round((parseFloat(line.cif_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
+                line.amount_inr = roundPaise((parseFloat(line.cif_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
             } else if (line.mode === "FOB_INR") {
-                line.amount_inr = Math.round((parseFloat(line.fob_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
+                line.amount_inr = roundPaise((parseFloat(line.fob_inr) || 0) * ((parseFloat(line.pct) || 0) / 100));
             }
         }
 
@@ -1429,6 +1436,15 @@ export default function TradeForm() {
                                             value={line.amount_inr || ""}
                                             onChange={(e) => handleLineChange(index, 'amount_inr', e.target.value)}
                                             placeholder="0.00"
+                                            aria-label={`Amount (INR), line ${index + 1}`}
+                                        />
+                                        <TradeLineAmountOverride
+                                            index={index}
+                                            override={!!line.amount_override}
+                                            reason={line.amount_override_reason || ""}
+                                            warnings={line.warnings}
+                                            onOverrideChange={(checked) => handleLineChange(index, 'amount_override', checked)}
+                                            onReasonChange={(text) => handleLineChange(index, 'amount_override_reason', text)}
                                         />
                                     </td>
                                     <td className="text-center px-2">

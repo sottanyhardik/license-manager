@@ -23,6 +23,7 @@ export function cleanTradeLine(line: Record<string, any>) {
         cleanedLine.sr_number = cleanedLine.sr_number.id;
     }
     cleanedLine.hsn_code = "49070000";
+    delete cleanedLine.warnings; // read-only server output (T4), never sent back
     return cleanedLine;
 }
 
@@ -67,4 +68,17 @@ export function buildTradeJsonPayload(formData: Record<string, any>, autoCreateP
         payments: (formData.payments || []).map(cleanTradePayment),
         auto_create_paired: autoCreatePaired,
     };
+}
+
+/**
+ * T3 (owner-approved 2026-11-17): trade line amounts are paise (2 dp), half-up.
+ * Display preview only — the server recomputes `amount_inr` with Decimal (T1).
+ */
+export function roundPaise(value: number): number {
+    if (!Number.isFinite(value)) return 0;
+    const sign = value < 0 ? -1 : 1;
+    // Decimal-string exponent shift avoids binary-float error at any magnitude
+    // (1.005 → 1.01, 1234567.005 → 1234567.01): half-up, away from zero.
+    const shifted = Math.round(Number(`${Math.abs(value)}e2`));
+    return sign * Number(`${shifted}e-2`);
 }

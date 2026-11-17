@@ -7,6 +7,7 @@ import {
     cleanTradePayment,
     formatTradeDateForApi,
     getEntityId,
+    roundPaise,
 } from "./tradeFormHelpers";
 
 describe("tradeFormHelpers", () => {
@@ -100,5 +101,17 @@ describe("tradeFormHelpers", () => {
             lines: [],
             incentive_lines: [{ incentive_license: 8, license_value: 909129 }],
         }));
+    });
+});
+
+describe("roundPaise (T3: paise, half-up)", () => {
+    it("rounds to 2 dp half-up, including binary-float halves", () => {
+        expect(roundPaise(7900.079)).toBe(7900.08);
+        expect(roundPaise(1.005)).toBe(1.01);
+        expect(roundPaise(218072.91175)).toBe(218072.91);
+        expect(roundPaise(1234567.005)).toBe(1234567.01);
+        expect(roundPaise(100000.125)).toBe(100000.13);
+        expect(roundPaise(-1.005)).toBe(-1.01);
+        expect(roundPaise(Number.NaN)).toBe(0);
     });
 });

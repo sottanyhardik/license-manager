@@ -86,3 +86,7 @@ Status legend: **Implemented** (code), **Tested** (automated tests green), **Dry
 Owner: confirm the policy items above, then approve (a) cherry-picking this branch into `feature/v5` and (b) a migration dry run
 on the sanitised snapshot. Engineering next: Playwright e2e for the purchase → bank reconciliation flow against a dev server;
 resolve the open low-severity items.
+
+## Integration into feature/v5 (2026-11-17)
+
+Done. All five commits plus the follow-ups are on `feature/v5`. Report, tests and remaining decisions: `docs/erp-accounting/07-integration-report.md`.

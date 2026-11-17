@@ -1,6 +1,6 @@
 # ADR-004 — Central double-entry accounting engine fed by the Trade module
 
-- **Status:** Proposed (2026-11-17). Not accepted. No code exists.
+- **Status:** Implemented and integrated into `feature/v5` (2026-11-17, owner-approved integration). Production posting awaits CA decisions; see `docs/erp-accounting/07-integration-report.md`.
 - **Context:** `docs/erp-accounting/00–05`. The repo has no accounting. The owner wants the existing Trade module to be
   the single source of purchase and sales transactions, feeding one general ledger for two (or more) legal entities.
 

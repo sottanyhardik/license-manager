@@ -146,3 +146,17 @@ Other rules:
 - `tests/architecture` — 9 tests. Accounting is a governed app.
 - Frontend: `money.test.ts` and `AccountingWorkspace.test.tsx`, plus the existing suites. `tsc` and `vite build`
   pass.
+
+## 9. Second review round (2026-11-17)
+
+Rule changes made by the second review round (details: `07-integration-report.md`):
+- Trade payment linking refuses `possible_duplicate` and offers to link an existing payment.
+- TDS FULL mode catches up the FY aggregate once, the first time the threshold is crossed. Lower-deduction certificate limits are honoured.
+- A payment reversal keeps its bank match: the reversal voucher matches the bank return line, and a voucher+reversal pair that never reached the bank nets off.
+- Notes show their unapplied credit and are capped at the bill amount. Suspense on account can be allocated later.
+- Cash flow treats opening balances as opening cash. An overdraft is a liability.
+- An unregistered recipient is intra-state for GST.
+- A backdated loan repayment trues up accrued interest.
+- Consolidation eliminates only flows within the selected group, includes intercompany commission, and takes a stock reserve with a warning.
+- Maker-checker also applies to posting bills and to reversals.
+- Migration 0004 freezes the narration and posting audit columns of posted vouchers.

@@ -257,10 +257,12 @@ def party_name(voucher: Voucher) -> str:
     return payment.party.name if payment else ""
 
 
-def candidates_for(line: StatementLine, pool: list[tuple[Voucher, Decimal]] | None = None) -> list[Candidate]:
-    """Ranked book entries for a statement line. Scores are signals for humans, not auto-posting."""
+def candidates_for(line: StatementLine, pool: list[tuple[Voucher, Decimal]] | None = None,
+                   remaining: Decimal | None = None) -> list[Candidate]:
+    """Ranked book entries for a statement line. Scores are signals for humans, not auto-posting.
+    ``remaining`` lets batch callers that already know it (an unmatched line: its amount) skip a query."""
     bank, deposit = line.bank_account, line.credit > 0
-    remaining = line_remaining(line)
+    remaining = line_remaining(line) if remaining is None else remaining
     narration = f"{line.narration} {line.reference}".upper()
     out = []
     for voucher, unmatched in (pool if pool is not None else book_pool(bank, deposit=deposit)):

@@ -176,7 +176,8 @@ def _build(line: StatementLine, ctx: _Context, party: CompanyModel | None = None
     direction = _direction(line)
     key = counterparty_key(line.narration)
     proposal = Proposal(line=line, direction=direction, counterparty=key)
-    candidates = candidates_for(line, ctx.pools[line.credit > 0])
+    pool = ctx.pools[line.credit > 0]
+    candidates = candidates_for(line, pool, remaining=line.amount - line.matched_amount) if pool else []  # no book entries on this side: nothing to compare
     proposal.existing_candidates = sum(1 for c in candidates if {"utr", "exact_amount"} & set(c.signals))
     reference = line.reference or extract_utr(line.narration)
     if line.status != LineStatus.UNMATCHED or line.matched_amount:
@@ -208,8 +209,12 @@ def _build(line: StatementLine, ctx: _Context, party: CompanyModel | None = None
 def proposals_for(bank: BankAccount, *, include_blocked: bool = False) -> list[Proposal]:
     """Read-only proposals for every unmatched line of one bank account (oldest first)."""
     ctx = _Context(bank)
-    lines = StatementLine.objects.filter(bank_account=bank, status=LineStatus.UNMATCHED, matched_amount=0)
-    out = [_build(line, ctx) for line in lines.order_by("txn_date", "id")]
+    lines = (StatementLine.objects.filter(bank_account=bank, status=LineStatus.UNMATCHED, matched_amount=0)
+             .order_by("txn_date", "id"))
+    out = []
+    for line in lines:
+        line.bank_account = bank  # same object for every line: no per-line lookup
+        out.append(_build(line, ctx))
     return out if include_blocked else [p for p in out if not p.blocked]
 
 

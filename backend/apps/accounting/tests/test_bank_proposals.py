@@ -125,6 +125,19 @@ class BankProposalTests(TestCase):
             confirm_proposal(line, party=self.lm)
         self.assertEqual(err.exception.code, "own_account")
 
+    def test_proposals_query_count_is_flat(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        record_payment(entity=self.entity, direction="RECEIPT", party=self.customer, bank_account=self.bank,
+                       payment_date=date(2026, 5, 2), amount=D("10.00"))  # book pool is non-empty
+        self._import("15/05/2026,NEFT JASH MERCANTILE,,,500.00,\n")
+        with CaptureQueriesContext(connection) as one:
+            proposals_for(self.bank)
+        self._import("".join(f"1{d}/05/2026,NEFT JASH MERCANTILE {d},,,{d}00.00,\n" for d in range(6, 10)))
+        with CaptureQueriesContext(connection) as five:
+            self.assertEqual(len(proposals_for(self.bank)), 5)
+        self.assertEqual(len(five), len(one))
+
     def test_confirm_many_reports_failures_without_rolling_back_others(self):
         good, bad = self._import("15/05/2026,NEFT JASH MERCANTILE,,,500.00,\n16/05/2026,TRF SELF,,,600.00,\n")
         result = confirm_many(self.bank, [(good.pk, self.customer.pk), (bad.pk, self.lm.pk), (999999, self.customer.pk)])

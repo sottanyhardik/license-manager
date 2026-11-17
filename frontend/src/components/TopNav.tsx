@@ -78,10 +78,11 @@ export default function TopNav() {
         };
     }, [closeMobileNav, mobileOpen]);
 
-    useEffect(() => {
-        setMobileOpen(false);
-        closeMenus();
-    }, [location.pathname, closeMenus]);
+    // Only the mobile drawer closes on route change.  Desktop menus close on
+    // item select / outside press / Escape instead: lazy routes commit inside a
+    // transition, so a pathname effect fires late and would shut a menu the
+    // user hovered open while the next page was still loading.
+    useEffect(() => setMobileOpen(false), [location.pathname]);
 
     return (
         <>

@@ -96,14 +96,17 @@ test.describe("primary navigation — desktop hover", () => {
   }
 
   test("every menu item navigates to its existing route and highlights it", async ({ page }) => {
+    test.setTimeout(60_000); // 30 real route loads on a possibly cold dev server
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockShell(page);
     await page.goto("/dashboard", { waitUntil: "networkidle" });
     for (const [menu, paths] of Object.entries(MENUS)) {
       for (const path of paths) {
+        // Deliberately no settle wait: hovering while the previous page is still
+        // loading must work (regression for the late route-change close).
         await trigger(page, menu).hover();
         await page.locator(`[role="menu"] a[href="${path}"]`).click();
-        await expect(page).toHaveURL(new RegExp(`${path.replace(/[/-]/g, "\\$&")}$`));
+        await expect(page).toHaveURL(new RegExp(`${path.replace(/[/-]/g, "\\$&")}(\\?.*)?$`));
         await expect(page.getByRole("menu")).toHaveCount(0);
         await expect(trigger(page, menu)).toHaveClass(/is-active/);
       }

@@ -49,26 +49,32 @@ export function useWorkspaceTab(tabs: WorkspaceTab[], defaultId?: string): [stri
 
 type HeaderProps = Pick<ModuleWorkspaceProps, "title" | "breadcrumbs" | "meta" | "primaryAction" | "secondaryActions">;
 
+/** Shared breadcrumb trail (also used by the accounting workspace header). */
+export function Breadcrumbs({ items }: { items: { label: string; to?: string }[] }) {
+    if (items.length === 0) return null;
+    return (
+        <nav aria-label="Breadcrumb">
+            <ol className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                {items.map((b, i) => {
+                    const last = i === items.length - 1;
+                    return (
+                        <li key={`${b.label}-${i}`} className="flex items-center gap-1">
+                            {b.to && !last
+                                ? <Link to={b.to} className="hover:text-foreground hover:underline">{b.label}</Link>
+                                : <span aria-current={last ? "page" : undefined}>{b.label}</span>}
+                            {!last && <span aria-hidden="true">/</span>}
+                        </li>
+                    );
+                })}
+            </ol>
+        </nav>
+    );
+}
+
 function Header({ title, breadcrumbs, meta, primaryAction, secondaryActions }: HeaderProps) {
     return (
         <header className="space-y-2">
-            {breadcrumbs && breadcrumbs.length > 0 && (
-                <nav aria-label="Breadcrumb">
-                    <ol className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                        {breadcrumbs.map((b, i) => {
-                            const last = i === breadcrumbs.length - 1;
-                            return (
-                                <li key={`${b.label}-${i}`} className="flex items-center gap-1">
-                                    {b.to && !last
-                                        ? <Link to={b.to} className="hover:text-foreground hover:underline">{b.label}</Link>
-                                        : <span aria-current={last ? "page" : undefined}>{b.label}</span>}
-                                    {!last && <span aria-hidden="true">/</span>}
-                                </li>
-                            );
-                        })}
-                    </ol>
-                </nav>
-            )}
+            {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <h1 className="text-xl font-semibold text-foreground">{title}</h1>

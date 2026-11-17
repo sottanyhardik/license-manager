@@ -29,7 +29,7 @@ export default function AccountingDashboard() {
     const d = q.data;
     const money = (v: Money | undefined) => `₹ ${formatMoney(v)}`;
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {d && (
                 <div className="space-y-6">
                     <section aria-label="Performance" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

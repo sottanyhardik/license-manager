@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type BankAccount, type Money } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { useGuardedAction } from "./useGuardedAction";
 import { isMoneyInput } from "./money";
 import PartyPicker, { type Party } from "./PartyPicker";
-import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, ReadOnlyNote, StatusBadge } from "./ui";
 
 interface Loan {
     id: number; party: string; direction: "GIVEN" | "TAKEN"; loan_type: string; principal: Money; interest_rate: Money; compound: boolean;
@@ -24,11 +25,13 @@ const today = () => new Date().toISOString().slice(0, 10);
 function LoanActions({ loan, onDone }: { loan: Loan; onDone: () => void }) {
     const [f, setF] = useState({ date: today(), principal: "", interest: "", tds: "" });
     const { guard, dialog } = useGuardedAction();
+    const { canApprove } = useAccountingAccess();
     const act = useMutation({
         mutationFn: (action: string) => acctPost(`loans/${loan.id}/${action}/`, { ...f, principal: f.principal || "0", interest: f.interest || "0", tds: f.tds || "0" }),
         onSuccess: (_d, a) => { toast.success(`${a} posted`); onDone(); }, onError: notifyError,
     });
     if (loan.status === "CLOSED") return <span className="text-xs text-slate-500">Closed</span>;
+    if (!canApprove) return <span className="text-xs text-slate-500">Approver only</span>;
     return (
         <div className="flex flex-wrap items-end gap-1">
             <input type="date" className={`${inputCls} w-36`} aria-label="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
@@ -52,6 +55,7 @@ function LoanActions({ loan, onDone }: { loan: Loan; onDone: () => void }) {
 
 export default function Loans() {
     const { entityId } = useAccounting();
+    const { canApprove } = useAccountingAccess();
     const qc = useQueryClient();
     const refresh = () => qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
     const loans = useQuery({ queryKey: acctKeys.of(entityId, "loans"), queryFn: () => acctGet<Loan[]>("loans/", { entity: entityId }) });
@@ -64,7 +68,7 @@ export default function Loans() {
     });
     return (
         <div className="space-y-4">
-            <Panel title="New loan">
+            {canApprove ? <Panel title="New loan">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
                     <Field label="Direction"><select className={inputCls} value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}>
                         <option value="TAKEN">Loan taken (borrowing)</option><option value="GIVEN">Loan given</option></select></Field>
@@ -81,7 +85,7 @@ export default function Loans() {
                 </div>
                 <p className="mt-2 text-xs text-slate-500">Interest is actual/365 on each day's closing balance, posted monthly. Principal never goes to P&amp;L.</p>
                 <div className="mt-3 text-right"><Button disabled={!party || !f.bank_account_id || !isMoneyInput(f.principal) || !f.interest_rate || create.isPending} onClick={() => create.mutate()}>Create &amp; disburse</Button></div>
-            </Panel>
+            </Panel> : <ReadOnlyNote need="the accounts approver role to create loans" />}
             <Panel title="Loan register">
                 <QueryState isLoading={loans.isLoading} error={loans.error}>
                     <DataGrid rows={loans.data ?? []} rowKey={(l) => l.id} empty="No loans." caption="Loans" columns={[

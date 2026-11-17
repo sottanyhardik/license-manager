@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPatch, acctPost, type Account, type EntityBooks } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { useGuardedAction } from "./useGuardedAction";
-import { DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+import { DataGrid, Field, inputCls, notifyError, Panel, QueryState, ReadOnlyNote, StatusBadge } from "./ui";
 
 function ActivateBooks() {
+    const { canApprove } = useAccountingAccess();
     const { discovered, refetchEntities } = useAccounting();
     const qc = useQueryClient();
     const [dates, setDates] = useState<Record<number, string>>({});
@@ -29,7 +31,7 @@ function ActivateBooks() {
                 { key: "g", header: "GSTIN", cell: (d) => d.gstin ?? "—" },
                 { key: "c", header: "Own-side documents", numeric: true, cell: (d) => d.own_side_documents },
                 { key: "b", header: "Books", cell: (d) => d.has_books ? <StatusBadge status="POSTED" /> : <StatusBadge status="NOT_ACCOUNTED" /> },
-                { key: "a", header: "Start books", cell: (d) => d.has_books ? `since ${d.books_start_date}` : (
+                { key: "a", header: "Start books", cell: (d) => d.has_books ? `since ${d.books_start_date}` : !canApprove ? "—" : (
                     <div className="flex items-center gap-1">
                         <input type="date" className={`${inputCls} w-40`} aria-label={`Books start date for ${d.name}`} value={dates[d.company_id] ?? ""}
                                onChange={(e) => setDates({ ...dates, [d.company_id]: e.target.value })} />
@@ -41,6 +43,7 @@ function ActivateBooks() {
 }
 
 function EntitySettings() {
+    const { canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const { guard, dialog } = useGuardedAction();
     const qc = useQueryClient();
@@ -64,11 +67,11 @@ function EntitySettings() {
                 <Panel title={`Books settings — ${e.name}`}>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                         <Field label="Books start date"><span className="h-9 py-2 text-sm">{e.books_start_date}</span></Field>
-                        <Field label="Default credit days"><input key={`cd-${e.id}`} inputMode="numeric" className={inputCls} defaultValue={e.default_credit_days}
+                        <Field label="Default credit days"><input key={`cd-${e.id}`} inputMode="numeric" className={inputCls} disabled={!canApprove} defaultValue={e.default_credit_days}
                             onBlur={(ev) => saveIfChanged("default_credit_days", ev.target.value)} /></Field>
-                        <Field label="GST state code" hint="From GSTIN; drives CGST+SGST vs IGST"><input key={`sc-${e.id}`} className={inputCls} defaultValue={e.state_code}
+                        <Field label="GST state code" hint="From GSTIN; drives CGST+SGST vs IGST"><input key={`sc-${e.id}`} className={inputCls} disabled={!canApprove} defaultValue={e.state_code}
                             onBlur={(ev) => saveIfChanged("state_code", ev.target.value)} /></Field>
-                        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={e.require_maker_checker} disabled={save.isPending}
+                        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={e.require_maker_checker} disabled={!canApprove || save.isPending}
                             onChange={(ev) => save.mutate({ require_maker_checker: ev.target.checked })} /> Maker-checker (bills, manual vouchers, reversals)</label>
                     </div>
                     {dialog}
@@ -76,7 +79,7 @@ function EntitySettings() {
                         <div key={fy.id} className="mt-4">
                             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">FY {fy.label} periods</h3>
                             <div className="flex flex-wrap gap-1">{fy.periods.map((p) => (
-                                <button key={p.id} type="button" aria-pressed={p.status === "LOCKED"} disabled={lock.isPending}
+                                <button key={p.id} type="button" aria-pressed={p.status === "LOCKED"} disabled={!canApprove || lock.isPending}
                                         aria-label={`${p.start_date.slice(0, 7)} ${p.status === "LOCKED" ? "locked" : "open"}`}
                                         onClick={() => p.status === "LOCKED"
                                             ? void guard({ title: "Unlock period", severity: "danger", confirmText: "Unlock",
@@ -95,6 +98,7 @@ function EntitySettings() {
 }
 
 function Chart() {
+    const { canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
     const q = useQuery({ queryKey: acctKeys.of(entityId, "accounts"), enabled: !!entityId,
@@ -108,13 +112,13 @@ function Chart() {
     if (!entityId) return null;
     return (
         <Panel title="Chart of accounts">
-            <form className="mb-3 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+            {canApprove && <form className="mb-3 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
                 <Field label="Group"><select className={inputCls} required value={f.group_id} onChange={(e) => setF({ ...f, group_id: e.target.value })}>
                     <option value="">Select…</option>{(q.data?.groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.name} ({g.nature})</option>)}</select></Field>
                 <Field label="Code"><input className={`${inputCls} w-24`} required value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></Field>
                 <Field label="Name"><input className={`${inputCls} w-64`} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
                 <Button type="submit" disabled={add.isPending}>Add ledger</Button>
-            </form>
+            </form>}
             <QueryState isLoading={q.isLoading} error={q.error}>
                 <DataGrid rows={q.data?.accounts ?? []} rowKey={(a) => a.id} caption="Accounts" columns={[
                     { key: "c", header: "Code", cell: (a) => a.code },
@@ -134,6 +138,7 @@ interface TdsSection { id: number; code: string; description: string; rate_indiv
     threshold_single: string; threshold_aggregate: string; threshold_mode: string; effective_from: string; effective_to: string | null }
 
 function TdsSections() {
+    const { canApprove } = useAccountingAccess();
     const qc = useQueryClient();
     const q = useQuery({ queryKey: [...acctKeys.all, "tds"], queryFn: () => acctGet<TdsSection[]>("tds-sections/") });
     const blank = { code: "", description: "", rate_individual: "", rate_other: "", rate_no_pan: "", threshold_single: "0", threshold_aggregate: "0", threshold_mode: "FULL", effective_from: "" };
@@ -155,21 +160,23 @@ function TdsSections() {
                 { key: "t", header: "Threshold (FY)", numeric: true, cell: (s) => `${s.threshold_aggregate} (${s.threshold_mode})` },
                 { key: "e", header: "Effective", cell: (s) => `${s.effective_from} → ${s.effective_to ?? "open"}` },
             ]} />
-            <form className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-9" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+            {canApprove && <form className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-9" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
                 {(["code", "description", "rate_individual", "rate_other", "rate_no_pan", "threshold_single", "threshold_aggregate"] as const).map((k) => (
                     <Field key={k} label={k.replace(/_/g, " ")}><input className={inputCls} required={k !== "threshold_single"} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></Field>))}
                 <Field label="mode"><select className={inputCls} value={f.threshold_mode} onChange={(e) => setF({ ...f, threshold_mode: e.target.value })}>
                     <option value="FULL">Whole amount</option><option value="EXCESS">Only above threshold</option></select></Field>
                 <Field label="effective from"><input type="date" className={inputCls} required value={f.effective_from} onChange={(e) => setF({ ...f, effective_from: e.target.value })} /></Field>
                 <Button className="self-end" type="submit" disabled={add.isPending}>Save</Button>
-            </form>
+            </form>}
         </Panel>
     );
 }
 
 export default function Setup() {
+    const { canApprove } = useAccountingAccess();
     return (
         <div className="space-y-4">
+            {!canApprove && <ReadOnlyNote need="the accounts approver role to change books, periods, chart or TDS" />}
             <ActivateBooks />
             <EntitySettings />
             <Chart />

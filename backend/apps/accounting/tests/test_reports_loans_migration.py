@@ -67,6 +67,9 @@ class FullChainTests(TestCase):
         self.assertTrue(pl["agrees_with_ledger"])
         self.assertEqual(pl["net_sales"], D("360000.00"))
         self.assertEqual(pl["gross_profit"], D("50000.00"))  # 360k - 300k purchase - 10k freight
+        # account rows under a cost line carry the line's sign (shown as a positive cost)
+        self.assertEqual([a["amount"] for a in pl["lines"]["purchases"]["accounts"]], [D("300000.00")])
+        self.assertEqual(pl["lines"]["gross_sales"]["accounts"][0]["amount"], D("360000.00"))
         self.assertEqual(pl["net_profit"], D("50000.00"))
         bs = balance_sheet(self.entity, FY[1])
         self.assertTrue(bs["balanced"])

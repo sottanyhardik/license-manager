@@ -34,7 +34,7 @@ interface TbRow { account_id: number | null; code: string; name: string; group: 
 function TrialBalance() {
     const q = useReport<{ rows: TbRow[]; totals: Record<string, Money>; balanced: boolean }>("trial-balance");
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (
                 <Panel title={<span>Trial Balance <StatusBadge status={q.data.balanced ? "MATCHED" : "EXCEPTION"} /></span>}>
                     <DataGrid rows={q.data.rows} rowKey={(r) => `${r.account_id}-${r.code}`} caption="Trial balance" columns={[
@@ -81,7 +81,7 @@ function ProfitLoss() {
     const total = (label: string, v: Money) => (
         <tr className="border-t-2 border-slate-300 font-semibold"><td className="px-3 py-1.5">{label}</td><td className="px-3 py-1.5 text-right"><Amount value={v} /></td></tr>);
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (
                 <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
                     <Panel title={<span>Profit &amp; Loss <StatusBadge status={q.data.agrees_with_ledger ? "MATCHED" : "EXCEPTION"} /></span>}>
@@ -121,7 +121,7 @@ function BalanceSheet() {
             ]} footer={<tr><td className="px-3 py-1.5">Total</td><td className="px-3 py-1.5 text-right"><Amount value={total} /></td></tr>} />
         </Panel>);
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (<>
                 <p className="mb-2"><StatusBadge status={q.data.balanced ? "MATCHED" : "EXCEPTION"} /> <span className="text-sm text-slate-600">Assets = Liabilities + Capital + Profit &amp; Loss</span></p>
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -136,7 +136,7 @@ function BalanceSheet() {
 function CashFlow() {
     const q = useReport<{ opening_cash: Money; closing_cash: Money; sections: Record<string, Money>; detail: Record<string, Record<string, Money>>; net_change: Money; agrees_with_ledger: boolean }>("cash-flow");
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (
                 <Panel title={<span>Cash flow (direct method) <StatusBadge status={q.data.agrees_with_ledger ? "MATCHED" : "EXCEPTION"} /></span>}>
                     <table className="w-full max-w-2xl text-sm"><tbody>
@@ -167,7 +167,7 @@ function GeneralLedger() {
                 <option value="">Choose an account…</option>
                 {(accounts.data?.accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
             </select>}>
-            {account ? <QueryState isLoading={q.isLoading} error={q.error}>{q.data && <LedgerTable ledger={q.data} voucherBase="/accounting/vouchers" />}</QueryState>
+            {account ? <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>{q.data && <LedgerTable ledger={q.data} voucherBase="/accounting/vouchers" />}</QueryState>
                 : <p className="text-sm text-slate-500">Select an account, or click any figure in another report.</p>}
         </Panel>
     );
@@ -180,7 +180,7 @@ function Ageing({ receivable }: { receivable: boolean }) {
     const q = useReport<{ parties: AgeRow[]; totals: Record<string, Money> }>(receivable ? "receivables-ageing" : "payables-ageing");
     const buckets = ["not_due", "0-30", "31-60", "61-90", "91-180", "181-+"];
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (
                 <Panel title={receivable ? "Receivables ageing (by due date)" : "Payables ageing (by due date)"}>
                     <DataGrid rows={q.data.parties} rowKey={(r) => r.party_id} empty="Nothing outstanding." caption="Ageing" columns={[
@@ -228,7 +228,7 @@ function Registers() {
             <select className={inputCls} aria-label="Register" value={kind} onChange={(e) => setParams({ kind: e.target.value })}>
                 {[["sales", "Sales"], ["purchase", "Purchase"], ["expense", "Expense"], ["commission", "Commission"], ["notes", "Debit/Credit notes"]]
                     .map(([v, l]) => <option key={v} value={v}>{l} register</option>)}</select>}>
-            <QueryState isLoading={q.isLoading} error={q.error}>{q.data && <RegisterTable rows={q.data.rows} totals={q.data.totals} />}</QueryState>
+            <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>{q.data && <RegisterTable rows={q.data.rows} totals={q.data.totals} />}</QueryState>
         </Panel>
     );
 }
@@ -237,7 +237,7 @@ function Gst() {
     const q = useReport<{ outward: { rows: RegRow[]; totals: Record<string, Money> }; inward: { rows: RegRow[]; totals: Record<string, Money> };
         output_tax: Money; input_tax: Money; net_payable: Money }>("gst");
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (<div className="space-y-4">
                 <Panel title="GST summary (from the tax ledgers)">
                     <dl className="grid grid-cols-3 gap-4 text-sm">
@@ -257,7 +257,7 @@ function Gst() {
 function Tds() {
     const q = useReport<{ rows: RegRow[]; by_section: Record<string, Money>; tds_payable: Money; tds_receivable: Money }>("tds");
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (<Panel title="TDS register">
                 <dl className="mb-3 flex flex-wrap gap-6 text-sm">
                     <div><dt className="text-xs text-slate-500">TDS payable (ledger)</dt><dd><Amount value={q.data.tds_payable} /></dd></div>
@@ -275,7 +275,7 @@ interface ProfitRow { trade_id: number; invoice_number: string; direction: strin
 function TradeProfitability() {
     const q = useReport<{ rows: ProfitRow[]; totals: Record<string, Money> }>("trade-profitability");
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {q.data && (<Panel title="Trade-wise profitability (posted ledger lines tagged to each trade, incl. allocated expenses)">
                 <DataGrid rows={q.data.rows} rowKey={(r) => r.trade_id} caption="Trade profitability" columns={[
                     { key: "t", header: "Trade", cell: (r) => <Link className="text-blue-700 hover:underline" to={`/trades/${r.trade_id}/edit`}>{r.invoice_number || `#${r.trade_id}`}</Link> },
@@ -295,7 +295,7 @@ function TradeProfitability() {
 function Books({ cash }: { cash: boolean }) {
     const q = useReport<Ledger[]>(cash ? "cash-book" : "bank-book");
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             <div className="space-y-4">{(q.data ?? []).map((l) => (
                 <Panel key={l.account_id} title={`${l.code} ${l.name} — closing ${drCr(l.closing)}`}><LedgerTable ledger={l} voucherBase="/accounting/vouchers" /></Panel>))}
                 {q.data?.length === 0 && <p className="text-sm text-slate-500">No {cash ? "cash" : "bank"} accounts.</p>}</div>
@@ -364,7 +364,7 @@ export default function Reports() {
         `whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`;
     return (
         <div className="space-y-4">
-            <nav aria-label="Reports" className="flex flex-wrap gap-1">{REPORTS.map(([to, label]) => <NavLink key={to} to={to} className={tab}>{label}</NavLink>)}</nav>
+            <nav aria-label="Reports" className="flex flex-wrap gap-1">{REPORTS.map(([to, label]) => <NavLink key={to} to={`/accounting/reports/${to}`} className={tab}>{label}</NavLink>)}</nav>
             <Routes>
                 <Route index element={<TrialBalance />} />
                 <Route path="trial-balance" element={<TrialBalance />} />

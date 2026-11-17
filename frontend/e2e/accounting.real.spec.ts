@@ -142,16 +142,19 @@ test.describe("accounting on a real isolated backend", () => {
         await expect(page.getByText("ALREADY ACCOUNTED").first()).toBeVisible();
     });
 
-    test("viewer can read but not post; non-accounting user is kept out", async ({ page }) => {
+    test("viewer sees no write actions; non-accounting user is kept out", async ({ page }) => {
         await signIn(page, "e2e_viewer");
         await page.goto("/accounting/trades", { waitUntil: "networkidle" });
         await chooseEntity(page, "E2E Mercantile LLP");
         const row = page.getByRole("row").filter({ hasText: "E2E/COM/0001" });
-        await row.getByRole("button", { name: "Post to books" }).click();
-        const denied = page.waitForResponse((r) => r.url().includes("/api/accounting/invoices/from-trade/") && r.status() === 403);
-        await confirm(page, "Post");
-        await denied;
         await expect(row.getByText("NOT ACCOUNTED")).toBeVisible();
+        await expect(row.getByRole("button", { name: "Post to books" })).toHaveCount(0);
+        await page.goto("/accounting/payments", { waitUntil: "networkidle" });
+        await expect(page.getByRole("note")).toContainText("approver");
+        await page.goto("/accounting/vouchers", { waitUntil: "networkidle" });
+        await expect(page.getByRole("link", { name: "New journal" })).toHaveCount(0);
+        await page.goto("/accounting/reports/trial-balance", { waitUntil: "networkidle" });
+        await expect(page.getByText("MATCHED").first()).toBeVisible();  // reading still works
 
         await signIn(page, "e2e_trade_only");
         const nav = page.getByRole("navigation", { name: "Main navigation" });
@@ -159,4 +162,46 @@ test.describe("accounting on a real isolated backend", () => {
         await page.goto("/accounting/dashboard", { waitUntil: "networkidle" });
         await expect(page).not.toHaveURL(/\/accounting\/dashboard/);
     });
+
+    test("breadcrumbs, active menu highlighting and in-workspace navigation", async ({ page }) => {
+        await signIn(page, "e2e_approver");
+        await page.goto("/accounting/reports/cash-flow", { waitUntil: "networkidle" });
+        const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+        await expect(crumbs.getByRole("link", { name: "Accounting" })).toBeVisible();
+        await expect(crumbs.getByRole("link", { name: "Reports" })).toBeVisible();
+        await expect(crumbs.getByText("Cash Flow")).toHaveAttribute("aria-current", "page");
+        const nav = page.getByRole("navigation", { name: "Main navigation" });
+        await expect(nav.getByRole("button", { name: "Accounting", exact: true })).toHaveClass(/is-active/);
+        await expect(page.getByRole("navigation", { name: "Accounting sections" }).getByRole("link", { name: "Reports" }))
+            .toHaveAttribute("aria-current", "page");
+        await crumbs.getByRole("link", { name: "Accounting" }).click();
+        await expect(page).toHaveURL(/\/accounting\/dashboard$/);
+        // Existing Trade and Licence navigation is untouched.
+        await nav.getByRole("button", { name: "Operations", exact: true }).hover();
+        await expect(page.getByRole("menuitem", { name: "Trade In & Out" })).toBeVisible();
+    });
+
+    for (const vp of [{ name: "desktop", width: 1440, height: 900 }, { name: "tablet", width: 768, height: 1024 },
+        { name: "mobile", width: 390, height: 844 }]) {
+        test(`major screens fit the ${vp.name} viewport without horizontal overflow`, async ({ page }) => {
+            await page.setViewportSize({ width: vp.width, height: vp.height });
+            await signIn(page, "e2e_approver");
+            await page.goto("/accounting/dashboard", { waitUntil: "networkidle" });
+            await chooseEntity(page, "E2E Mercantile LLP");  // the entity with posted data (choice persists)
+            for (const route of ["dashboard", "trades", "payments", "banking/workbench", "reports/trial-balance",
+                "reports/profit-loss", "reports/balance-sheet", "vouchers"]) {
+                await page.goto(`/accounting/${route}`, { waitUntil: "networkidle" });
+                await expect(page.getByRole("combobox", { name: "Entity" })).toBeVisible();
+                await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+                    { message: `${route} overflows at ${vp.width}px` }).toBeTruthy();
+                if (process.env.LM_E2E_SCREENSHOTS) {
+                    await page.screenshot({ path: `${process.env.LM_E2E_SCREENSHOTS}/${vp.name}-${route.replace(/\//g, "-")}.png` });
+                }
+            }
+            if (vp.name === "mobile") {
+                await page.getByRole("button", { name: "Open navigation menu" }).click();
+                await expect(page.getByRole("region", { name: "Accounting" }).or(page.locator('section[aria-label="Accounting"]'))).toBeVisible();
+            }
+        });
+    }
 });

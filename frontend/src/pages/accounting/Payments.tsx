@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type BankAccount, type Invoice, type Paged, type Payment } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { useGuardedAction } from "./useGuardedAction";
 import { formatMoney, isMoneyInput, isZero, sumMoney } from "./money";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { Pager } from "./TradeTracking";
-import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, ReadOnlyNote, StatusBadge } from "./ui";
 
 const PAYABLE = "PURCHASE,EXPENSE,COMMISSION_PAYABLE";
 const RECEIVABLE = "SALES,COMMISSION_RECEIVABLE";
@@ -108,6 +109,7 @@ function RecordPayment({ onDone }: { onDone: () => void }) {
 
 export default function Payments() {
     const { entityId, fyRange } = useAccounting();
+    const { canApprove } = useAccountingAccess();
     const qc = useQueryClient();
     const [params, setParams] = useSearchParams();
     const pageNo = Math.max(1, Number(params.get("page")) || 1);
@@ -117,11 +119,12 @@ export default function Payments() {
     const refresh = () => qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
     return (
         <div className="space-y-4">
-            <RecordPayment onDone={() => void refresh()} />
+            {canApprove ? <RecordPayment onDone={() => void refresh()} />
+                : <ReadOnlyNote need="the accounts approver role (recording a payment posts it)" />}
             <Panel title="Payments and receipts" actions={
                 <select className={inputCls} value={direction} aria-label="Direction filter" onChange={(e) => setParams(e.target.value ? { direction: e.target.value } : {})}>
                     <option value="">All</option><option value="PAYMENT">Payments</option><option value="RECEIPT">Receipts</option></select>}>
-                <QueryState isLoading={q.isLoading} error={q.error}>
+                <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                     <DataGrid rows={q.data?.results ?? []} rowKey={(p) => p.id} caption="Payments" columns={[
                         { key: "date", header: "Date", cell: (p) => p.date },
                         { key: "v", header: "Voucher", cell: (p) => p.voucher_id ? <Link className="text-blue-700 hover:underline" to={`/accounting/vouchers/${p.voucher_id}`}>{p.voucher_number}</Link> : "—" },

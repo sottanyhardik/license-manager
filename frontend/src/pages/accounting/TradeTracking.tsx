@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type BankAccount, type Paged, type TradeRow } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { formatMoney } from "./money";
 import { useGuardedAction } from "./useGuardedAction";
 import { Amount, DataGrid, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
@@ -16,6 +17,7 @@ const STATUSES = ["", "NOT_ACCOUNTED", "PENDING", "ACCOUNTED", "PARTIALLY_ACCOUN
 export default function TradeTracking() {
     const { entityId, entity, fyRange } = useAccounting();
     const { guard, dialog } = useGuardedAction();
+    const { canApprove } = useAccountingAccess();
     const qc = useQueryClient();
     const [params, setParams] = useSearchParams();
     const status = params.get("status") ?? "";
@@ -60,6 +62,7 @@ export default function TradeTracking() {
     });
 
     const actions = (row: TradeRow) => {
+        if (!canApprove) return null;
         if (row.accounting_status === "NOT_ACCOUNTED" || row.accounting_status === "PENDING") {
             return <Button size="sm" disabled={post.isPending} onClick={() => void guard({
                 title: "Post trade to books", confirmText: "Post",
@@ -90,12 +93,12 @@ export default function TradeTracking() {
                     onChange={(e) => setParams(e.target.value ? { status: e.target.value } : {})}>
                 {STATUSES.map((s) => <option key={s} value={s}>{s ? s.replace(/_/g, " ") : "All statuses"}</option>)}
             </select>
-            <select className={inputCls} value={bankId} aria-label="Bank for trade payments" onChange={(e) => setBankId(e.target.value)}>
+            {canApprove && <select className={inputCls} value={bankId} aria-label="Bank for trade payments" onChange={(e) => setBankId(e.target.value)}>
                 <option value="">Bank for trade payments…</option>
                 {(banks.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.bank_name} {b.account_number}</option>)}
-            </select>
+            </select>}
         </>}>
-            <QueryState isLoading={q.isLoading} error={q.error}>
+            <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                 <div className="mb-3 flex flex-wrap gap-2 text-xs">
                     {Object.entries(q.data?.summary ?? {}).map(([k, v]) => (
                         <button key={k} type="button" aria-pressed={status === k} onClick={() => setParams({ status: k })}

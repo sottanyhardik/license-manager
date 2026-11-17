@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type BankAccount, type Money } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
-import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+import { useAccountingAccess } from "./useAccountingAccess";
+import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, ReadOnlyNote, StatusBadge } from "./ui";
 
 interface Item { source_type: string; source_id: number; classification: string; outcome: string; reasons: string[]; amount: Money; financial_year: string }
 interface Run { id: number; mode: string; created_on: string; created_by: string | null; summary: Record<string, unknown>; items?: Item[] }
 
 export default function MigrationCenter() {
     const { entityId, entity } = useAccounting();
+    const { canApprove } = useAccountingAccess();
     const qc = useQueryClient();
     const [run, setRun] = useState<Run | null>(null);
     const [bankId, setBankId] = useState("");
@@ -36,14 +38,15 @@ export default function MigrationCenter() {
                     <li><b>Execute</b> posts Ready records through the same posting engine as live entries, and each record at most once. Payments need a mapped bank account.</li>
                     <li>The reconciliation below compares source trade totals with accounted totals by financial year. Differences stay visible.</li>
                 </ol>
-                <div className="flex flex-wrap items-end gap-3">
+                {!canApprove && <ReadOnlyNote need="the accounts approver role to run or execute migrations" />}
+                {canApprove && <div className="flex flex-wrap items-end gap-3">
                     <Button onClick={() => go.mutate("DRY_RUN")} disabled={go.isPending}>Run dry run</Button>
                     <Field label="Bank for historical payments"><select className={inputCls} value={bankId} onChange={(e) => setBankId(e.target.value)}>
                         <option value="">None (payments skipped)</option>{(banks.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.bank_name} {b.account_number}</option>)}</select></Field>
                     <Field label={`Type the entity name to confirm posting into ${entity?.name ?? ""}'s books`}>
                         <input className={`${inputCls} w-72`} value={confirmText} onChange={(e) => setConfirmText(e.target.value)} /></Field>
                     <Button variant="destructive" disabled={confirmText.trim() !== entity?.name || go.isPending} onClick={() => go.mutate("EXECUTE")}>Execute migration</Button>
-                </div>
+                </div>}
             </Panel>
             <Panel title="Source vs accounted, by financial year">
                 <QueryState isLoading={data.isLoading} error={data.error}>

@@ -26,7 +26,7 @@ const EXPECTED = {
         ["Loans & Interest", "/accounting/loans"],
         ["Bank Accounts", "/accounting/banking"], ["Statements & Reconciliation", "/accounting/banking/workbench"],
         ["Suspense", "/accounting/banking/suspense"],
-        ["Trial Balance", "/accounting/reports/trial-balance"], ["Profit & Loss", "/accounting/reports/profit-loss"],
+        ["All Reports", "/accounting/reports"], ["Trial Balance", "/accounting/reports/trial-balance"], ["Profit & Loss", "/accounting/reports/profit-loss"],
         ["Balance Sheet", "/accounting/reports/balance-sheet"], ["GST & TDS", "/accounting/reports/gst"],
         ["Consolidated", "/accounting/reports/consolidated"], ["Migration Center", "/accounting/migration"],
         ["Books Setup", "/accounting/setup"],

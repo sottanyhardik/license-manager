@@ -1,8 +1,9 @@
 import { lazy, Suspense } from "react";
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { BookOpenCheck } from "lucide-react";
 
 import { PageLoader } from "@/components/LoadingFallback";
+import { Breadcrumbs } from "@/components/workspace/ModuleWorkspace";
 
 import { AccountingProvider, currentFyLabel, useAccounting } from "./AccountingContext";
 import { inputCls, NoEntity } from "./ui";
@@ -33,6 +34,30 @@ const SECTIONS = [
     { to: "setup", label: "Setup" },
 ];
 
+const SUBPAGE_LABEL: Record<string, string> = {
+    new: "New", workbench: "Statements & reconciliation", suspense: "Suspense",
+    "trial-balance": "Trial Balance", "profit-loss": "Profit & Loss", "balance-sheet": "Balance Sheet",
+    "cash-flow": "Cash Flow", "general-ledger": "General Ledger", "receivables-ageing": "Receivables Ageing",
+    "payables-ageing": "Payables Ageing", register: "Registers", gst: "GST", tds: "TDS",
+    "trade-profitability": "Trade Profitability", "bank-book": "Bank Book", "cash-book": "Cash Book",
+    consolidated: "Consolidated",
+};
+
+/** Accounting / Section / Sub-page (route-derived, so every screen has a way back). */
+function useAccountingCrumbs(): { label: string; to?: string }[] {
+    const { pathname } = useLocation();
+    const [, , section, sub, detail] = pathname.split("/");
+    const sec = SECTIONS.find((s) => s.to === section);
+    const crumbs: { label: string; to?: string }[] = [{ label: "Accounting", to: "/accounting/dashboard" }];
+    if (sec) crumbs.push({ label: sec.label, to: `/accounting/${sec.to}` });
+    if (sub) {
+        const label = SUBPAGE_LABEL[sub] ?? (/^\d+$/.test(sub) ? `#${sub}` : sub.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()));
+        crumbs.push({ label, to: `/accounting/${section}/${sub}` });
+    }
+    if (detail && /^\d+$/.test(detail)) crumbs.push({ label: `#${detail}` });
+    return crumbs;
+}
+
 function fyOptions(): string[] {
     const current = Number(currentFyLabel().slice(0, 4));
     return Array.from({ length: 6 }, (_, i) => current + 1 - i).map((y) => `${y}-${String(y + 1).slice(-2)}`);
@@ -40,6 +65,7 @@ function fyOptions(): string[] {
 
 function WorkspaceHeader() {
     const { entities, entityId, setEntityId, fy, setFy, entity } = useAccounting();
+    const crumbs = useAccountingCrumbs();
     return (
         <div className="-mx-4 mb-4 border-b border-slate-200 bg-white/90 px-4 pt-3 backdrop-blur sm:sticky sm:top-0 sm:z-20">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -48,7 +74,7 @@ function WorkspaceHeader() {
                         <BookOpenCheck className="size-5" aria-hidden />
                     </span>
                     <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Accounting</p>
+                        <Breadcrumbs items={crumbs} />
                         <h1 className="text-lg font-semibold leading-tight text-slate-900">{entity?.name ?? "Books"}</h1>
                     </div>
                 </div>
@@ -72,7 +98,7 @@ function WorkspaceHeader() {
             </div>
             <nav aria-label="Accounting sections" className="mt-3 flex gap-1 overflow-x-auto pb-px">
                 {SECTIONS.map((s) => (
-                    <NavLink key={s.to} to={s.to}
+                    <NavLink key={s.to} to={`/accounting/${s.to}`}
                              className={({ isActive }) =>
                                  `whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${isActive
                                      ? "border-blue-600 text-blue-700" : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"}`}>

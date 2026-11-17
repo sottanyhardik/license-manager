@@ -52,7 +52,7 @@ export default function PartyLedger() {
                 <div className="max-w-xl"><Field label="Party"><PartyPicker value={party} onChange={setParty} /></Field></div>
             </Panel>
             {party && (
-                <QueryState isLoading={q.isLoading} error={q.error}>
+                <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                     {q.data && (<>
                         <Panel title={`Ledger — ${party.name}`}><LedgerTable ledger={q.data} /></Panel>
                         <Panel title="Outstanding bills (bill-wise)">

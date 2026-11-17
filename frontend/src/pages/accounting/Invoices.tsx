@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type Account, type Invoice, type Paged } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { formatMoney } from "./money";
 import { useGuardedAction } from "./useGuardedAction";
 import { isMoneyInput, sumMoney } from "./money";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { Pager } from "./TradeTracking";
-import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, ReadOnlyNote, StatusBadge } from "./ui";
 
 const KINDS = [
     { value: "EXPENSE", label: "Expense bill" }, { value: "PURCHASE", label: "Purchase invoice (non-trade)" },
@@ -23,6 +24,7 @@ const KINDS = [
 
 function InvoiceList() {
     const { entityId, fyRange } = useAccounting();
+    const { canWrite } = useAccountingAccess();
     const [params, setParams] = useSearchParams();
     const f = { kind: params.get("kind") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
         page: Math.max(1, Number(params.get("page")) || 1) };
@@ -39,12 +41,12 @@ function InvoiceList() {
             <select className={inputCls} value={f.status} aria-label="Status" onChange={(e) => set({ status: e.target.value })}>
                 {["", "DRAFT", "CONFIRMED", "POSTED", "CANCELLED", "REVERSED"].map((s) => <option key={s} value={s}>{s || "All statuses"}</option>)}
             </select>
-            <Link to="new"><Button size="sm">New bill / expense</Button></Link>
+            {canWrite && <Link to="/accounting/invoices/new"><Button size="sm">New bill / expense</Button></Link>}
         </>}>
-            <QueryState isLoading={q.isLoading} error={q.error}>
+            <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                 <DataGrid rows={q.data?.results ?? []} rowKey={(i) => i.id} caption="Bills" columns={[
                     { key: "date", header: "Date", cell: (i) => i.date },
-                    { key: "no", header: "Number", cell: (i) => <Link className="font-medium text-blue-700 hover:underline" to={String(i.id)}>{i.number}</Link> },
+                    { key: "no", header: "Number", cell: (i) => <Link className="font-medium text-blue-700 hover:underline" to={`/accounting/invoices/${i.id}`}>{i.number}</Link> },
                     { key: "kind", header: "Kind", cell: (i) => i.kind.replace(/_/g, " ") },
                     { key: "party", header: "Party", cell: (i) => i.party },
                     { key: "gross", header: "Gross", numeric: true, cell: (i) => <Amount value={i.gross_amount} /> },
@@ -61,6 +63,7 @@ function InvoiceList() {
 }
 
 function InvoiceDetail() {
+    const { canWrite, canApprove } = useAccountingAccess();
     const { id } = useParams();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
@@ -74,19 +77,19 @@ function InvoiceDetail() {
     });
     const i = q.data;
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {i && (
                 <Panel title={<span>{i.kind.replace(/_/g, " ")} {i.number} <StatusBadge status={i.status} /> <StatusBadge status={i.payment_status} /></span>}
                        actions={<>
-                           {i.status === "DRAFT" && <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => act.mutate("confirm")}>Confirm</Button>}
-                           {(i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" disabled={act.isPending} onClick={() => void guard({
+                           {canWrite && i.status === "DRAFT" && <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => act.mutate("confirm")}>Confirm</Button>}
+                           {canApprove && (i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" disabled={act.isPending} onClick={() => void guard({
                                title: "Post bill", confirmText: "Post",
                                message: `Post ${i.number} for ${i.party}: net ₹ ${formatMoney(i.net_amount)} (TDS ₹ ${formatMoney(i.tds_amount)})? Posted bills can only be reversed.`,
                            }, () => act.mutate("post"))}>Post</Button>}
-                           {(i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => void guard({
+                           {canWrite && (i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => void guard({
                                title: "Cancel bill", severity: "danger", confirmText: "Cancel bill", message: `Cancel the unposted bill ${i.number}?`,
                            }, () => act.mutate("cancel"))}>Cancel</Button>}
-                           {i.status === "POSTED" && (<>
+                           {canApprove && i.status === "POSTED" && (<>
                                <input className={inputCls} placeholder="Reversal reason" value={reason} aria-label="Reversal reason" onChange={(e) => setReason(e.target.value)} />
                                <Button size="sm" variant="destructive" disabled={!reason.trim() || act.isPending} onClick={() => void guard({
                                    title: "Reverse bill", severity: "danger", confirmText: "Reverse",
@@ -129,6 +132,7 @@ function InvoiceDetail() {
 interface Line { account_id: string; description: string; amount: string; gst_rate: string; trade_ids: string; method: string }
 
 function NewInvoice() {
+    const { canWrite } = useAccountingAccess();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
     const navigate = useNavigate();
@@ -151,6 +155,7 @@ function NewInvoice() {
         onSuccess: (inv) => { toast.success("Draft saved"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); navigate(`/accounting/invoices/${inv.id}`); },
         onError: notifyError,
     });
+    if (!canWrite) return <ReadOnlyNote need="an accounts manager or approver role" />;
     return (
         <Panel title="New bill / expense / note (draft)">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">

@@ -130,12 +130,24 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 export const inputCls =
     "h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30";
 
-export function QueryState({ isLoading, error, children }: { isLoading: boolean; error: unknown; children: ReactNode }) {
+export function QueryState({ isLoading, error, children, onRetry }: {
+    isLoading: boolean; error: unknown; children: ReactNode; onRetry?: () => void;
+}) {
     if (isLoading) return <div className="py-8 text-center text-sm text-slate-500" role="status">Loading…</div>;
     if (error) {
-        return <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">{getErrorMessage(error)}</div>;
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+                <span>{getErrorMessage(error)}</span>
+                {onRetry && <button type="button" className="rounded border border-red-300 bg-white px-2 py-0.5 text-xs font-medium hover:bg-red-100" onClick={onRetry}>Retry</button>}
+            </div>
+        );
     }
     return <>{children}</>;
+}
+
+/** Shown instead of an action the user's role cannot perform (the API would refuse it). */
+export function ReadOnlyNote({ need }: { need: string }) {
+    return <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="note">Read-only: this needs {need}.</p>;
 }
 
 export function notifyError(error: unknown): void {

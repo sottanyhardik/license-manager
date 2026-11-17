@@ -8,6 +8,9 @@ const post = vi.fn();
 vi.mock("@/api/axios", () => ({ default: { get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a) } }));
 vi.mock("./axios", () => ({ default: { get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a) } }));
 
+import { AuthContext } from "@/context/AuthContext";
+import type { AuthContextValue } from "@/types";
+
 import AccountingWorkspace from "./AccountingWorkspace";
 
 const BOOKS = { id: 7, company_id: 7, name: "Labdhi Mercantile LLP", gstin: "27AAAFL0000A1Z5", pan: null, state_code: "27",
@@ -32,14 +35,21 @@ function respond(url: string) {
     return { data: {} };
 }
 
-function renderAt(path: string) {
+function authAs(roles: string[]): AuthContextValue {
+    const has = (codes: readonly string[]) => codes.some((r) => roles.includes(r));
+    return { user: null, hasRole: (r: string) => roles.includes(r), hasAnyRole: has, isSuperAdmin: () => false } as unknown as AuthContextValue;
+}
+
+function renderAt(path: string, roles: string[] = ["ACCOUNTS_APPROVER"]) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
-        <QueryClientProvider client={qc}>
-            <MemoryRouter initialEntries={[path]}>
-                <Routes><Route path="/accounting/*" element={<AccountingWorkspace />} /></Routes>
-            </MemoryRouter>
-        </QueryClientProvider>,
+        <AuthContext.Provider value={authAs(roles)}>
+            <QueryClientProvider client={qc}>
+                <MemoryRouter initialEntries={[path]}>
+                    <Routes><Route path="/accounting/*" element={<AccountingWorkspace />} /></Routes>
+                </MemoryRouter>
+            </QueryClientProvider>
+        </AuthContext.Provider>,
     );
 }
 
@@ -77,5 +87,22 @@ describe("AccountingWorkspace", () => {
         within(dialog).getByRole("button", { name: "Post" }).click();
         await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/invoices/99/post/", {}));
         expect(post).toHaveBeenCalledWith("accounting/invoices/from-trade/", { trade_id: 11 });
+    });
+
+    it("hides approver-only actions from a viewer and shows breadcrumbs", async () => {
+        renderAt("/accounting/trades", ["ACCOUNTS_VIEWER"]);
+        const row = (await screen.findByText("LML/2026-27/0001")).closest("tr")!;
+        expect(within(row).queryByRole("button", { name: "Post to books" })).toBeNull();
+        const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+        expect(within(crumbs).getByRole("link", { name: "Accounting" })).toHaveAttribute("href", "/accounting/dashboard");
+        expect(within(crumbs).getByText("Trade → Invoice")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("shows a read-only note instead of the payment form for a manager", async () => {
+        get.mockImplementation((url: string) => Promise.resolve(url === "accounting/payments/"
+            ? { data: { count: 0, page: 1, page_size: 50, next: null, previous: null, results: [] } } : respond(url)));
+        renderAt("/accounting/payments", ["ACCOUNTS_MANAGER"]);
+        expect(await screen.findByRole("note")).toHaveTextContent("approver");
+        expect(screen.queryByRole("button", { name: /Post (payment|receipt)/ })).toBeNull();
     });
 });

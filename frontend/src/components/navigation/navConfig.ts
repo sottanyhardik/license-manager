@@ -114,6 +114,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
             {
                 label: "Reports & setup",
                 items: [
+                    { path: "/accounting/reports",               label: "All Reports",      icon: "file-earmark-text" },
                     { path: "/accounting/reports/trial-balance", label: "Trial Balance",    icon: "list-ul" },
                     { path: "/accounting/reports/profit-loss",   label: "Profit & Loss",    icon: "graph-up-arrow" },
                     { path: "/accounting/reports/balance-sheet", label: "Balance Sheet",    icon: "table" },

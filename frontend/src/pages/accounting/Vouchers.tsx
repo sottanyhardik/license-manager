@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { acctDelete, acctGet, acctKeys, acctPost, type Account, type Paged, type Voucher } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { useGuardedAction } from "./useGuardedAction";
 import { isMoneyInput, sumMoney } from "./money";
 import { Pager } from "./TradeTracking";
-import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, ReadOnlyNote, StatusBadge } from "./ui";
 
 const TYPES = ["", "PURCHASE", "SALES", "PAYMENT", "RECEIPT", "CONTRA", "JOURNAL", "DEBIT_NOTE", "CREDIT_NOTE", "EXPENSE",
     "COMMISSION", "LOAN_DISBURSEMENT", "LOAN_REPAYMENT", "INTEREST_ACCRUAL", "OPENING", "ADJUSTMENT", "REVERSAL"];
 
 function VoucherList() {
     const { entityId, fyRange } = useAccounting();
+    const { canWrite } = useAccountingAccess();
     const [params, setParams] = useSearchParams();
     const filters = { type: params.get("type") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
         page: Math.max(1, Number(params.get("page")) || 1) };
@@ -36,12 +38,12 @@ function VoucherList() {
                 <select className={inputCls} value={filters.status} aria-label="Status" onChange={(e) => set({ status: e.target.value })}>
                     {["", "DRAFT", "POSTED", "REVERSED"].map((s) => <option key={s} value={s}>{s || "All statuses"}</option>)}
                 </select>
-                <Link to="new"><Button size="sm">New journal</Button></Link>
+                {canWrite && <Link to="/accounting/vouchers/new"><Button size="sm">New journal</Button></Link>}
             </>}>
-                <QueryState isLoading={q.isLoading} error={q.error}>
+                <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
                     <DataGrid rows={q.data?.results ?? []} rowKey={(v) => v.id} caption="Vouchers" columns={[
                         { key: "date", header: "Date", cell: (v) => v.date },
-                        { key: "no", header: "Number", cell: (v) => <Link className="font-medium text-blue-700 hover:underline" to={String(v.id)}>{v.number ?? "Draft"}</Link> },
+                        { key: "no", header: "Number", cell: (v) => <Link className="font-medium text-blue-700 hover:underline" to={`/accounting/vouchers/${v.id}`}>{v.number ?? "Draft"}</Link> },
                         { key: "type", header: "Type", cell: (v) => v.voucher_type.replace(/_/g, " ") },
                         { key: "narr", header: "Narration", cell: (v) => <span className="line-clamp-1">{v.narration}</span> },
                         { key: "src", header: "Source", cell: (v) => v.source_type ? `${v.source_type} #${v.source_id ?? ""}` : "—" },
@@ -56,6 +58,7 @@ function VoucherList() {
 }
 
 function VoucherDetail() {
+    const { canWrite, canApprove } = useAccountingAccess();
     const { id } = useParams();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
@@ -77,17 +80,17 @@ function VoucherDetail() {
     const remove = useMutation({ mutationFn: () => acctDelete(`vouchers/${id}/`), onSuccess: () => { done("Draft deleted"); navigate("/accounting/vouchers"); }, onError: notifyError });
     const v = q.data;
     return (
-        <QueryState isLoading={q.isLoading} error={q.error}>
+        <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
             {v && (
                 <Panel title={<span>{v.number ?? "Draft voucher"} <span className="ml-2"><StatusBadge status={v.status} /></span></span>}
                        actions={<>
-                           {v.status === "DRAFT" && <Button size="sm" disabled={post.isPending} onClick={() => void guard({
+                           {canApprove && v.status === "DRAFT" && <Button size="sm" disabled={post.isPending} onClick={() => void guard({
                                title: "Post voucher", confirmText: "Post", message: `Post this ${v.voucher_type.toLowerCase()} voucher for ₹ ${v.total}? It becomes immutable.`,
                            }, () => post.mutate())}>Post</Button>}
-                           {v.status === "DRAFT" && <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => void guard({
+                           {canWrite && v.status === "DRAFT" && <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => void guard({
                                title: "Delete draft", severity: "danger", confirmText: "Delete", message: "Delete this draft voucher? Drafts have no ledger effect.",
                            }, () => remove.mutate())}>Delete draft</Button>}
-                           {v.status === "POSTED" && v.voucher_type !== "REVERSAL" && (
+                           {canApprove && v.status === "POSTED" && v.voucher_type !== "REVERSAL" && (
                                <>
                                    <input className={inputCls} placeholder="Reason for reversal" value={reason}
                                           onChange={(e) => setReason(e.target.value)} aria-label="Reversal reason" />
@@ -117,7 +120,7 @@ function VoucherDetail() {
                     ]} footer={<tr><td className="px-3 py-1.5" colSpan={3}>Total</td>
                         <td className="px-3 py-1.5 text-right"><Amount value={sumMoney((v.lines ?? []).map((l) => l.debit))} /></td>
                         <td className="px-3 py-1.5 text-right"><Amount value={sumMoney((v.lines ?? []).map((l) => l.credit))} /></td></tr>} />
-                    {v.status === "POSTED" && v.voucher_type === "JOURNAL" && (
+                    {canApprove && v.status === "POSTED" && v.voucher_type === "JOURNAL" && (
                         <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); allocate.mutate(); }}>
                             <Field label="Allocate on-account amount to bill id"><input inputMode="numeric" className={`${inputCls} w-28`} value={alloc.invoice_id} onChange={(e) => setAlloc({ ...alloc, invoice_id: e.target.value.replace(/\D/g, "") })} /></Field>
                             <Field label="Amount"><input inputMode="decimal" className={`${inputCls} w-32`} value={alloc.amount} onChange={(e) => setAlloc({ ...alloc, amount: e.target.value })} /></Field>
@@ -139,6 +142,7 @@ function VoucherDetail() {
 interface DraftLine { account_id: string; debit: string; credit: string; narration: string }
 
 function NewJournal() {
+    const { canWrite } = useAccountingAccess();
     const { entityId } = useAccounting();
     const qc = useQueryClient();
     const navigate = useNavigate();
@@ -160,6 +164,7 @@ function NewJournal() {
         onError: notifyError,
     });
     const setLine = (i: number, patch: Partial<DraftLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+    if (!canWrite) return <ReadOnlyNote need="an accounts manager or approver role" />;
     return (
         <Panel title="New manual voucher (draft)">
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4">

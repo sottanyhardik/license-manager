@@ -59,7 +59,8 @@ def profit_and_loss(entity: EntityBooks, start: date, end: date) -> dict:
     for key, label, heads, sign in PL_LAYOUT:
         amount = sum((by_head[hd] for hd in heads), ZERO)
         lines[key] = {"label": label, "amount": amount if sign > 0 else -amount,
-                      "accounts": [a for hd in heads for a in detail[hd]]}
+                      # account rows carry the same sign as their line (costs shown positive under a cost line)
+                      "accounts": [{**a, "amount": a["amount"] if sign > 0 else -a["amount"]} for hd in heads for a in detail[hd]]}
     net_sales = lines["gross_sales"]["amount"] + lines["sales_returns"]["amount"]
     cogs = sum((lines[k]["amount"] for k in DIRECT_COSTS), ZERO)
     gross_profit = net_sales - cogs

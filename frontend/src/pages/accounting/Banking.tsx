@@ -10,6 +10,7 @@ import {
 } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useAccountingAccess } from "./useAccountingAccess";
 import { Pager } from "./TradeTracking";
 import { useGuardedAction } from "./useGuardedAction";
 import { formatMoney, isMoneyInput, sumMoney } from "./money";
@@ -27,6 +28,7 @@ function useRefresh() {
 }
 
 function BankAccounts() {
+    const { canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const banks = useBanks();
     const refresh = useRefresh();
@@ -43,21 +45,22 @@ function BankAccounts() {
                 { key: "a", header: "Account no.", cell: (b) => b.account_number },
                 { key: "i", header: "IFSC", cell: (b) => b.ifsc || "—" },
                 { key: "bal", header: "Book balance", numeric: true, cell: (b) => <Amount value={b.book_balance} to={`/accounting/reports/general-ledger?account=${b.account_id}`} /> },
-                { key: "go", header: <span className="sr-only">Open</span>, cell: (b) => <Link className="text-sm text-blue-700 hover:underline" to={`workbench/${b.id}`}>Reconcile →</Link> },
+                { key: "go", header: <span className="sr-only">Open</span>, cell: (b) => <Link className="text-sm text-blue-700 hover:underline" to={`/accounting/banking/workbench/${b.id}`}>Reconcile →</Link> },
             ]} />
-            <form className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+            {canApprove && <form className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
                 <Field label="Bank name"><input className={inputCls} required value={f.bank_name} onChange={(e) => setF({ ...f, bank_name: e.target.value })} /></Field>
                 <Field label="Account number"><input className={inputCls} required value={f.account_number} onChange={(e) => setF({ ...f, account_number: e.target.value })} /></Field>
                 <Field label="IFSC"><input className={inputCls} value={f.ifsc} onChange={(e) => setF({ ...f, ifsc: e.target.value })} /></Field>
                 <Field label="Opening balance" hint="At books start date"><input inputMode="decimal" className={inputCls} value={f.opening_balance} onChange={(e) => setF({ ...f, opening_balance: e.target.value })} /></Field>
                 <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={f.is_cash} onChange={(e) => setF({ ...f, is_cash: e.target.checked })} /> Cash account</label>
                 <Button className="self-end" type="submit" disabled={add.isPending || (!!f.opening_balance && !isMoneyInput(f.opening_balance.replace("-", "")))}>Add account</Button>
-            </form>
+            </form>}
         </Panel>
     );
 }
 
 function Upload({ bank }: { bank: BankAccount }) {
+    const { canWrite } = useAccountingAccess();
     const refresh = useRefresh();
     const [file, setFile] = useState<File | null>(null);
     const [mapping, setMapping] = useState("");
@@ -71,6 +74,7 @@ function Upload({ bank }: { bank: BankAccount }) {
         onSuccess: (r) => { setResult(r); toast.success(`${r.rows_new} new line(s); ${r.rows_duplicate} duplicate(s) skipped`); void refresh(); },
         onError: notifyError,
     });
+    if (!canWrite) return null;
     return (
         <Panel title="Upload statement (CSV or Excel)">
             <div className="flex flex-wrap items-end gap-3">
@@ -90,6 +94,7 @@ function Upload({ bank }: { bank: BankAccount }) {
 }
 
 function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void }) {
+    const { canWrite, canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const cands = useQuery({ queryKey: acctKeys.of(entityId, "candidates", line.id, line.matched_amount),
         queryFn: () => acctGet<{ candidates: Candidate[] }>(`statement-lines/${line.id}/candidates/`) });
@@ -117,7 +122,7 @@ function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void
                 <ul className="mb-2 space-y-1 text-xs">{line.matches.map((m) => (
                     <li key={m.id} className={m.is_active ? "" : "text-slate-400 line-through"}>
                         {m.method} → <Link className="text-blue-700" to={`/accounting/vouchers/${m.voucher_id}`}>{m.voucher_number}</Link> {formatMoney(m.amount)}
-                        {m.is_active && m.method !== "SUSPENSE" && <button type="button" className="ml-2 text-red-700 hover:underline disabled:opacity-50" disabled={!reason.trim() || unmatch.isPending}
+                        {canWrite && m.is_active && m.method !== "SUSPENSE" && <button type="button" className="ml-2 text-red-700 hover:underline disabled:opacity-50" disabled={!reason.trim() || unmatch.isPending}
                             title={reason.trim() ? "" : "Enter a reason first"} aria-label={`Unmatch ${m.voucher_number}`}
                             onClick={() => void guard({ title: "Remove match", severity: "danger", confirmText: "Unmatch",
                                 message: `Remove the match to ${m.voucher_number} (₹ ${formatMoney(m.amount)})? The history is kept.` }, () => unmatch.mutate(m.id))}>unmatch</button>}
@@ -139,12 +144,12 @@ function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                     <input className={inputCls} placeholder="Reason (suspense / unmatch)" value={reason} aria-label="Reason for suspense or unmatch" onChange={(e) => setReason(e.target.value)} />
-                    <Button size="sm" variant="outline" disabled={!reason.trim() || suspense.isPending} onClick={() => void guard({
+                    {canApprove && <Button size="sm" variant="outline" disabled={!reason.trim() || suspense.isPending} onClick={() => void guard({
                         title: "Move to suspense", confirmText: "Post to suspense",
                         message: `Post ₹ ${formatMoney(line.unmatched)} of this bank line to Bank Suspense (not to income or expense) until it is identified?`,
-                    }, () => suspense.mutate())}>Move to suspense</Button>
+                    }, () => suspense.mutate())}>Move to suspense</Button>}
                 </div>
-                <Button size="sm" disabled={total === "0.00" || match.isPending} onClick={() => match.mutate()}>Match {formatMoney(total)}{Object.keys(split).length > 1 ? " (split)" : ""}</Button>
+                {canWrite && <Button size="sm" disabled={total === "0.00" || match.isPending} onClick={() => match.mutate()}>Match {formatMoney(total)}{Object.keys(split).length > 1 ? " (split)" : ""}</Button>}
             </div>
             {dialog}
         </div>
@@ -156,6 +161,7 @@ function minMoney(a: Money, b: Money): Money {
 }
 
 function Workbench({ bank }: { bank: BankAccount }) {
+    const { canWrite } = useAccountingAccess();
     const { entityId } = useAccounting();
     const refresh = useRefresh();
     const [status, setStatus] = useState("UNMATCHED,PARTIAL");
@@ -174,7 +180,7 @@ function Workbench({ bank }: { bank: BankAccount }) {
                 <option value="UNMATCHED,PARTIAL">Needs attention</option><option value="">All lines</option>
                 {["UNMATCHED", "PARTIAL", "MATCHED", "SUSPENSE", "RESOLVED"].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <Button size="sm" onClick={() => auto.mutate()} disabled={auto.isPending}>Auto-match (UTR → amount)</Button>
+            {canWrite && <Button size="sm" onClick={() => auto.mutate()} disabled={auto.isPending}>Auto-match (UTR → amount)</Button>}
         </>}>
             <QueryState isLoading={lines.isLoading} error={lines.error}>
                 <div className="space-y-2">
@@ -188,7 +194,7 @@ function Workbench({ bank }: { bank: BankAccount }) {
                         { key: "s", header: "Status", cell: (l) => <StatusBadge status={l.status} /> },
                         { key: "a", header: <span className="sr-only">Match</span>, cell: (l) => (
                             <Button size="sm" variant="ghost" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)}>
-                                {open === l.id ? "Close" : "Match…"}</Button>) },
+                                {open === l.id ? "Close" : (canWrite ? "Match…" : "Details")}</Button>) },
                     ]} />
                     {open !== null && lines.data?.results.find((l) => l.id === open) && (
                         <LineMatcher key={open} line={lines.data.results.find((l) => l.id === open)!} onDone={() => void refresh()} />
@@ -271,6 +277,7 @@ function BankWorkbenchPage() {
 }
 
 function Suspense() {
+    const { canApprove } = useAccountingAccess();
     const { entityId } = useAccounting();
     const refresh = useRefresh();
     const q = useQuery({ queryKey: acctKeys.of(entityId, "suspense"), queryFn: () => acctGet<SuspenseRow[]>("suspense/", { entity: entityId }) });
@@ -300,7 +307,7 @@ function Suspense() {
                     { key: "r", header: "Reason", cell: (s) => s.reason },
                     { key: "o", header: "Owner", cell: (s) => s.owner ?? "—" },
                     { key: "s", header: "Status", cell: (s) => <StatusBadge status={s.status} /> },
-                    { key: "x", header: "Resolve", cell: (s) => s.status === "RESOLVED" ? <span className="text-xs text-slate-500">{s.resolution_note}</span> : (
+                    { key: "x", header: "Resolve", cell: (s) => s.status === "RESOLVED" ? <span className="text-xs text-slate-500">{s.resolution_note}</span> : !canApprove ? <span className="text-xs text-slate-500">Approver resolves</span> : (
                         <div className="flex flex-wrap items-center gap-1">
                             <select className={`${inputCls} w-48`} aria-label="Reclassify to" value={target[s.id]?.account_id ?? ""} onChange={(e) => set(s.id, { account_id: e.target.value })}>
                                 <option value="">Reclassify to…</option>{choices.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</select>
@@ -326,9 +333,9 @@ export default function Banking() {
     return (
         <div className="space-y-4">
             <nav aria-label="Banking" className="flex gap-1">
-                <NavLink end to="." className={tab}>Accounts</NavLink>
-                <NavLink to="workbench" className={tab}>Statements &amp; reconciliation</NavLink>
-                <NavLink to="suspense" className={tab}>Suspense</NavLink>
+                <NavLink end to="/accounting/banking" className={tab}>Accounts</NavLink>
+                <NavLink to="/accounting/banking/workbench" className={tab}>Statements &amp; reconciliation</NavLink>
+                <NavLink to="/accounting/banking/suspense" className={tab}>Suspense</NavLink>
             </nav>
             <Routes>
                 <Route index element={<BankAccounts />} />

@@ -113,3 +113,25 @@ dev DB itself was only read.
 The work is locally integrated, tested and committed on `feature/v5`. It is **not release-ready for production
 posting** until the CA decisions above are taken and a production-snapshot rehearsal is approved. The code is ready
 for review and push approval.
+
+## 8. UI/navigation readiness round and consolidation (2026-11-17, later)
+
+**UI round** (`b5f0d3f8` on `feature/v5`):
+- Actions are gated by role, mirroring `AccountingPermission`, so viewers and managers never see a button the API
+  refuses.
+- Breadcrumbs reuse the shared `ModuleWorkspace` `Breadcrumbs`. An "All Reports" menu item makes every report page
+  highlight in the menu.
+- **Bug fixed:** the workspace section, report and banking tabs used relative links that resolved under the splat
+  route (for example `/accounting/reports/cash-flow/reports`). All workspace links are now absolute.
+- Errors offer a Retry button. P&L detail rows now carry their line's sign.
+
+Checks run **before** the owner's "no testing for now" instruction [V]:
+- vitest 817 passed; tsc, eslint (0 errors) and build clean;
+- real-backend Playwright 10/10, which includes desktop 1440, tablet 768 and mobile 390 layouts with no horizontal
+  overflow on 8 major screens, viewer and trade-only access, breadcrumbs and active menu;
+- existing navigation and shell specs 10/10.
+
+Screenshots: `docs/erp-accounting/screenshots/` (24 files: desktop/tablet/mobile × dashboard, trades, payments,
+banking workbench, trial balance, P&L, balance sheet, vouchers).
+
+**Consolidation:** see `08-completion-inventory.md`. **No tests were run for the consolidation step itself.**

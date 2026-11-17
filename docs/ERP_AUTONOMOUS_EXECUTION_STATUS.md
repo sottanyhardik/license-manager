@@ -99,6 +99,19 @@ Rules for every workstream in this file: `.claude/rules/autonomous-execution.md`
 `CHECKPOINT:<name>` block below; `.claude/hooks/session_start.sh` prints every such block at session start.
 The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept for history.
 
+<!-- CHECKPOINT:accounting:BEGIN -->
+**Accounting — last verified checkpoint (2026-11-17, consolidation)**
+- On `feature/v5`: engine, API, workspace and review fixes (`706af329` … `43131b80`). This consolidation adds the UI/navigation
+  round `b5f0d3f8`, the trades-ordering fix `1efb04bf`, the trade-to-finance audit doc `18f62820`, and the ERP-program docs.
+- Inventory (completed / deferred / blocked): `docs/erp-accounting/08-completion-inventory.md`. Report: `07-integration-report.md`.
+- **No tests were run for the consolidation step.** The last verified run is the UI round: vitest 817, Playwright 10/10.
+- Next: run backend + frontend gates once on `feature/v5`. Then take the deferred items in order: report exports,
+  opening-balance import, accrual beat job, DataTable/sort, trade-screen accounting badge.
+- Blocked on CA: GST on licence trades, TDS sections/rates, inventory costing. Production historical posting needs approval.
+- Left alone: ERP OD-program code (`feature/erp-implementation`, needs a reviewed port), `feature/v5-throttle-retry`
+  (competes with the current 429 policy), other sessions' uncommitted WIP. Local DB `test_lm_upgrade_9b79` is kept (owner).
+<!-- CHECKPOINT:accounting:END -->
+
 <!-- CHECKPOINT:boe:BEGIN -->
 **BOE — last verified checkpoint (2026-11-17, integration sweep)**
 - Branch `feature/v5` (local only; 17 commits ahead of origin, 0 behind; push needs owner approval).

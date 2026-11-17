@@ -1,8 +1,9 @@
 # accounts/views/user_management.py
 from django.contrib.auth import get_user_model
 from django.db.models import Q
-from rest_framework import serializers, viewsets, status
+from rest_framework import permissions, serializers, viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from ..permissions import UserManagementPermission
@@ -61,6 +62,21 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_active=False)
 
         return qs.distinct()
+
+    def get_object(self):
+        """Only a superuser may change a superuser account.
+
+        Without this a USER_MANAGER could reset a superuser's password (or change
+        their email) and take the account over. Reads are unchanged.
+        """
+        user = super().get_object()
+        if (
+            self.request.method not in permissions.SAFE_METHODS
+            and user.is_superuser
+            and not self.request.user.is_superuser
+        ):
+            raise PermissionDenied("Only a superuser can modify a superuser account.")
+        return user
 
     @action(detail=True, methods=['post'], url_path='reset-password')
     def reset_password(self, request, pk=None):

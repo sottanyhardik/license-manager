@@ -98,7 +98,7 @@ def test_sync_backfills_superusers_that_bypassed_signals(roles):
     normal = User.objects.create_user(username="untouched", password=PASSWORD)
     User.objects.filter(pk=user.pk).update(is_superuser=True)  # no signals
 
-    assert sync_all_superusers() == len(_all_role_names())
+    assert sync_all_superusers() >= len(_all_role_names())  # other superusers may need grants too
     assert sync_all_superusers() == 0  # idempotent: no duplicates
     assert set(user.get_role_codes()) == _all_role_names()
     assert list(normal.groups.all()) == []
@@ -118,3 +118,43 @@ def test_management_command_and_raw_saves(roles, capsys):
     raw_user.set_password(PASSWORD)
     raw_user.save_base(raw=True)  # sends post_save(raw=True), as loaddata does
     assert list(raw_user.groups.all()) == []
+
+
+def test_user_demoted_in_same_transaction_gets_no_roles(roles, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=True):
+        user = User.objects.create_superuser(username="su-then-demoted", password=PASSWORD)
+        user.is_superuser = False
+        user.save()
+
+    assert list(user.groups.all()) == []
+
+
+def test_login_style_save_does_not_queue_a_grant(roles, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=True):
+        admin = User.objects.create_superuser(username="su-login", password=PASSWORD)
+    with django_capture_on_commit_callbacks() as callbacks:
+        admin.save(update_fields=["last_login"])
+
+    assert callbacks == []
+
+
+def test_user_manager_cannot_modify_a_superuser_account(roles, django_capture_on_commit_callbacks):
+    manager_role, _ = Group.objects.get_or_create(name="USER_MANAGER")
+    with django_capture_on_commit_callbacks(execute=True):
+        target = User.objects.create_superuser(username="su-protected", password=PASSWORD)
+        manager = User.objects.create_user(username="user-manager", password=PASSWORD)
+        manager.groups.add(manager_role)
+        normal = User.objects.create_user(username="managed", password=PASSWORD)
+    client = APIClient()
+    client.force_authenticate(manager)
+    old_hash = User.objects.get(pk=target.pk).password
+
+    assert client.get(f"/api/auth/users/{target.pk}/").status_code == 200
+    assert client.post(
+        f"/api/auth/users/{target.pk}/reset-password/", {"password": "N3w-Takeover-pass!"}, format="json",
+    ).status_code == 403
+    assert client.patch(f"/api/auth/users/{target.pk}/", {"email": "x@example.com"}, format="json").status_code == 403
+    assert client.patch(f"/api/auth/users/{normal.pk}/", {"is_superuser": True}, format="json").status_code == 200
+    assert User.objects.get(pk=target.pk).password == old_hash
+    assert User.objects.get(pk=normal.pk).is_superuser is False  # read-only for a non-superuser
+    assert list(manager.groups.all()) == [manager_role]

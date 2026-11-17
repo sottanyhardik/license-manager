@@ -3,7 +3,7 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_save
 from django.dispatch import receiver
 
@@ -47,9 +47,13 @@ def delete_old_avatar_on_change(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=User)
-def grant_roles_to_new_or_promoted_superuser(sender, instance, raw=False, using="default", **kwargs):
+def grant_roles_to_new_or_promoted_superuser(
+    sender, instance, raw=False, using="default", update_fields=None, **kwargs,
+):
     if raw or not instance.is_superuser:
         return
+    if update_fields is not None and "is_superuser" not in update_fields:
+        return  # e.g. last_login on every login: cannot be a promotion
     user_id = instance.pk
     transaction.on_commit(lambda: superuser_roles.grant_all_roles_to_user(user_id, using), using=using)
 
@@ -76,4 +80,7 @@ def keep_superuser_roles_after_removal(sender, instance, action, reverse, using=
 
 def sync_superuser_roles_after_migrate(sender, using="default", **kwargs):
     """Existing superusers + roles created by data migrations (no model signals there)."""
-    superuser_roles.sync_all_superusers(using)
+    try:
+        superuser_roles.sync_all_superusers(using)
+    except DatabaseError:  # e.g. migrating backwards to a schema without these tables
+        logger.warning("Superuser role sync skipped after migrate (db=%s)", using, exc_info=True)

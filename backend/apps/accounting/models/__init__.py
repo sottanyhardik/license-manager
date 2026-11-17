@@ -1,4 +1,6 @@
-from .banking import BankAccount, BankMatch, LineStatus, StatementImport, StatementLine, SuspenseItem
+from .banking import (
+    BankAccount, BankMatch, LineStatus, NarrationAlias, StatementImport, StatementLine, SuspenseItem,
+)
 from .books import AccountingPeriod, CostCentre, EntityBooks, FinancialYear
 from .coa import PL_NATURES, Account, AccountGroup, AccountKind, Nature, ReportHead
 from .documents import (
@@ -16,7 +18,7 @@ from .vouchers import (
 __all__ = [
     "Account", "AccountGroup", "AccountKind", "AccountingAuditEvent", "AccountingPeriod", "BankAccount", "BankMatch",
     "CostCentre", "DocStatus", "EntityBooks", "FinancialYear", "Invoice", "InvoiceKind", "InvoiceLine",
-    "LEDGER_STATUSES", "LineStatus", "Loan", "LoanAccrual", "LowerDeductionCertificate", "MigrationItem",
+    "LEDGER_STATUSES", "LineStatus", "Loan", "NarrationAlias", "LoanAccrual", "LowerDeductionCertificate", "MigrationItem",
     "MigrationRun", "NOTE_KINDS", "Nature", "PAYABLE_KINDS", "PL_NATURES", "Payment", "PaymentDirection",
     "RECEIVABLE_KINDS", "ReportHead", "Settlement", "StatementImport", "StatementLine", "SuspenseItem", "TdsSection",
     "VOUCHER_PREFIX", "Voucher", "VoucherLine", "VoucherSequence", "VoucherStatus", "VoucherType",

@@ -41,6 +41,12 @@ urlpatterns = [
     path("accounting/statement-lines/<int:line_id>/candidates/", b.LineCandidatesView.as_view(), name="candidates"),
     path("accounting/statement-lines/<int:line_id>/match/", b.ManualMatchView.as_view(), name="manual-match"),
     path("accounting/bank-matches/<int:match_id>/unmatch/", b.UnmatchView.as_view(), name="unmatch"),
+    path("accounting/bank-accounts/<int:bank_id>/proposals/", b.BankProposalListView.as_view(), name="bank-proposals"),
+    path("accounting/bank-accounts/<int:bank_id>/proposals/confirm/", b.BankProposalConfirmView.as_view(),
+         name="bank-proposals-confirm"),
+    path("accounting/statement-lines/<int:line_id>/proposal/", b.LineProposalView.as_view(), name="line-proposal"),
+    path("accounting/narration-aliases/", b.NarrationAliasView.as_view(), name="narration-aliases"),
+    path("accounting/narration-aliases/<int:alias_id>/", b.NarrationAliasView.as_view(), name="narration-alias"),
     path("accounting/suspense/", b.SuspenseView.as_view(), name="suspense"),
     path("accounting/suspense/<int:item_id>/resolve/", b.SuspenseResolveView.as_view(), name="suspense-resolve"),
     # reports, loans, migration

@@ -6,8 +6,12 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 
-from apps.accounting.models import Account, BankAccount, BankMatch, Invoice, StatementImport, StatementLine, SuspenseItem, Voucher
+from apps.accounting.models import (
+    Account, BankAccount, BankMatch, Invoice, NarrationAlias, StatementImport, StatementLine, SuspenseItem, Voucher,
+)
+from apps.core.models import CompanyModel
 from apps.accounting.selectors.reports import suspense_register
+from apps.accounting.services import bank_proposals as proposals_svc
 from apps.accounting.services import banking
 from apps.accounting.services import payments as pay_svc
 from apps.accounts.models import User
@@ -155,3 +159,76 @@ class ReconciliationView(AccountingView):
         from django.utils import timezone
         bank = BankAccount.objects.select_related("account", "entity").get(pk=bank_id)
         return ok(banking.bank_reconciliation(bank, as_date(param(request, "as_of"), "as_of", timezone.localdate())))
+
+
+# --- invoice proposals (propose -> approver confirms; see services/bank_proposals.py) ------------------
+
+def _party(p) -> dict | None:
+    return {"id": p.pk, "name": p.name, "gstin": p.gst_number} if p is not None else None
+
+
+def proposal_dict(p) -> dict:
+    ln = p.line
+    return {
+        "line": {"id": ln.pk, "txn_date": ln.txn_date, "narration": ln.narration, "reference": ln.reference,
+                 "debit": ln.debit, "credit": ln.credit, "amount": ln.amount, "status": ln.status},
+        "direction": p.direction, "counterparty": p.counterparty, "party": _party(p.party), "source": p.source,
+        "score": round(p.score, 2), "confidence": p.confidence, "blocked": p.blocked or None,
+        "options": [{**_party(o), "score": round(sc, 2)} for o, sc in p.options],
+        "allocations": [{"invoice_id": a.invoice.pk, "number": a.invoice.number, "date": a.invoice.date,
+                         "due_date": a.invoice.due_date, "outstanding": a.outstanding, "amount": a.amount}
+                        for a in p.allocations],
+        "advance": p.advance, "exact_bill": p.exact_bill, "existing_candidates": p.existing_candidates,
+    }
+
+
+class BankProposalListView(ApproverView):
+    """GET bank-accounts/<id>/proposals/?confidence=&direction=  Read-only proposals for unmatched lines."""
+
+    def get(self, request, bank_id: int):
+        bank = BankAccount.objects.select_related("entity").get(pk=bank_id)
+        rows = proposals_svc.proposals_for(bank)
+        summary = {level: sum(1 for p in rows if p.confidence == level) for level in ("high", "medium", "low", "none")}
+        if param(request, "confidence"):
+            wanted = set(str(param(request, "confidence")).split(","))
+            rows = [p for p in rows if p.confidence in wanted]
+        if param(request, "direction"):
+            rows = [p for p in rows if p.direction == param(request, "direction")]
+        return ok({"bank_account_id": bank.pk, "summary": {**summary, "total": sum(summary.values())},
+                   "proposals": [proposal_dict(p) for p in rows]})
+
+
+class BankProposalConfirmView(ApproverView):
+    """POST {items: [{line_id, party_id}]}  Books each line (receipt/payment, oldest bills first, excess advance)."""
+
+    def post(self, request, bank_id: int):
+        bank = BankAccount.objects.select_related("entity").get(pk=bank_id)
+        raw = request.data.get("items") or []
+        if not isinstance(raw, list) or not raw:
+            raise ValidationError({"items": "Give at least one {line_id, party_id}."})
+        items = [(as_int(r.get("line_id"), "line_id"), as_int(r.get("party_id"), "party_id")) for r in raw]
+        return ok(proposals_svc.confirm_many(bank, items, user=request.user))
+
+
+class LineProposalView(ApproverView):
+    """GET statement-lines/<id>/proposal/?party_id=  Preview the allocation for a chosen party (read-only)."""
+
+    def get(self, request, line_id: int):
+        line = StatementLine.objects.select_related("bank_account__entity").get(pk=line_id)
+        party = CompanyModel.objects.get(pk=as_int(param(request, "party_id"), "party_id")) \
+            if param(request, "party_id") else None
+        return ok(proposal_dict(proposals_svc.proposal_for(line, party)))
+
+
+class NarrationAliasView(ApproverView):
+    """GET narration-aliases/?entity=  learned narration -> party mappings; DELETE narration-aliases/<id>/."""
+
+    def get(self, request):
+        e = entity_from(request)
+        qs = NarrationAlias.objects.filter(entity=e).select_related("party").order_by("key", "direction")
+        return ok({"aliases": [{"id": a.pk, "key": a.key, "direction": a.direction, "party_id": a.party_id,
+                                "party": a.party.name, "hits": a.hits, "modified_on": a.modified_on} for a in qs]})
+
+    def delete(self, request, alias_id: int):
+        proposals_svc.forget_alias(NarrationAlias.objects.select_related("entity").get(pk=alias_id), user=request.user)
+        return ok({"deleted": alias_id})

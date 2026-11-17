@@ -1,7 +1,7 @@
 """Own bank accounts, imported statements, matches and suspense."""
 from django.db import models
 
-from apps.core.models import AuditModel
+from apps.core.models import AuditModel, CompanyModel
 
 from .books import EntityBooks
 from .coa import Account
@@ -84,6 +84,7 @@ class StatementLine(models.Model):
 
 class BankMatch(AuditModel):
     AUTO_REFERENCE, AUTO_AMOUNT, MANUAL, SUSPENSE = "AUTO_REFERENCE", "AUTO_AMOUNT", "MANUAL", "SUSPENSE"
+    PROPOSAL = "PROPOSAL"  # a confirmed invoice proposal: the receipt/payment was booked from this bank line
     statement_line = models.ForeignKey(StatementLine, on_delete=models.PROTECT, related_name="matches")
     voucher = models.ForeignKey(Voucher, on_delete=models.PROTECT, related_name="bank_matches")
     amount = models.DecimalField(max_digits=20, decimal_places=2)
@@ -118,3 +119,19 @@ class SuspenseItem(AuditModel):
 
     class Meta:
         ordering = ["status", "-id"]
+
+
+class NarrationAlias(AuditModel):
+    """Learned 'bank narration counterparty text -> party' for one entity's books (from confirmed proposals).
+
+    ``key`` is the normalised counterparty text of a narration (see services.bank_proposals.counterparty_key).
+    ``direction`` is RECEIPT (money in) or PAYMENT (money out): the same text can name a customer and a supplier.
+    """
+    entity = models.ForeignKey(EntityBooks, on_delete=models.PROTECT, related_name="narration_aliases")
+    key = models.CharField(max_length=200)
+    direction = models.CharField(max_length=8)
+    party = models.ForeignKey(CompanyModel, on_delete=models.PROTECT, related_name="+")
+    hits = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["entity", "key", "direction"], name="acct_alias_unique_key")]

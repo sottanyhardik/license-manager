@@ -90,3 +90,28 @@ resolve the open low-severity items.
 ## Integration into feature/v5 (2026-11-17)
 
 Done. All five commits plus the follow-ups are on `feature/v5`. Report, tests and remaining decisions: `docs/erp-accounting/07-integration-report.md`.
+
+---
+
+# Workstream: BOE ERP modernization
+
+Rules for every workstream in this file: `.claude/rules/autonomous-execution.md`. Each workstream keeps one
+`CHECKPOINT:<name>` block below; `.claude/hooks/session_start.sh` prints every such block at session start.
+The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept for history.
+
+<!-- CHECKPOINT:boe:BEGIN -->
+**BOE — last verified checkpoint (2026-11-17)**
+- Branch `feature/v5` (local; push needs owner approval). Verified: `3ece31f0` (iteration 1), `f202cedb` (Phase A, D1–D15).
+- In progress: Phase B in worktree `.claude/worktrees/boe-erp` (detail route, sticky form + unsaved guard,
+  `save_boe_with_rows`, exporter service + golden tests). FE gate PASS 835/835; Playwright 26/26 mocked; BE gate running.
+- Next: BE gate exit code → fix affected tests only → commit Phase B → land on feature/v5 → update this block.
+- Owner items: nginx `nosniff` reload by ops (not deployed); `git push`.
+<!-- CHECKPOINT:boe:END -->
+
+| Date | BOE milestone | Commit | Evidence |
+|---|---|---|---|
+| 2026-11-17 | Iteration 1 | `3ece31f0` | BE 3152 passed/1 pre-existing xfail; FE 807/807; Playwright 29/29 mocked |
+| 2026-11-17 | Iteration 2 Phase A (D1–D15) | `f202cedb` | BE gate exit 0, 3339 passed/1 pre-existing xfail; FE 814/814; Playwright 29/29 mocked; 1044 local BOEs echo-validated, 0 false 400s |
+
+Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-modernization/owner-decisions.md`,
+`docs/erp-architecture/claude-usage-log.md`.

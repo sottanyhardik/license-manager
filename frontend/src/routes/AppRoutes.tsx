@@ -6,6 +6,7 @@ import AdminLayout from "../layout/AdminLayout";
 import { PageLoader } from "../components/LoadingFallback";
 import { lazyLoadWithRetry } from "../utils/lazyLoad";
 
+
 import Login from "../pages/Login";
 import PasswordReset from "../pages/auth/PasswordReset";
 import Unauthorized from "../pages/errors/Unauthorized";
@@ -13,6 +14,7 @@ import NotFound from "../pages/errors/NotFound";
 import Forbidden from "../pages/Forbidden";
 import {
     ROLES,
+    ACCOUNTING_ROLES,
     REPORT_ROLES,
     ALLOTMENT_ROLES,
     BOE_LIST_ROLES,
@@ -28,6 +30,8 @@ import {
     TRADE_ROLES,
     USER_ADMIN_ROLES,
 } from "./authorizationRoles";
+
+const AccountingWorkspace = lazy(() => import("../pages/accounting/AccountingWorkspace"));
 
 const UserList = lazyLoadWithRetry(() => import("../pages/admin/UserList"));
 const UserForm = lazyLoadWithRetry(() => import("../pages/admin/UserForm"));
@@ -195,6 +199,11 @@ export default function AppRoutes() {
                 } />
 
                 {/* Trade CRUD */}
+                <Route path="/accounting/*" element={
+                    <ProtectedRoute requiredAnyRole={ACCOUNTING_ROLES}>
+                        <AdminLayout><AccountingWorkspace /></AdminLayout>
+                    </ProtectedRoute>
+                } />
                 <Route path="/trades" element={
                     <ProtectedRoute requiredAnyRole={TRADE_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>

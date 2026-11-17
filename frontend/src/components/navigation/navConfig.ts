@@ -7,7 +7,7 @@
  */
 import { masterEntities, reportEntities } from "../../routes/config";
 import {
-    ALLOTMENT_ROLES, BOE_LIST_ROLES, INCENTIVE_LICENSE_ROLES, LEDGER_READ_ROLES, LEDGER_UPLOAD_ROLES,
+    ACCOUNTING_ROLES, ALLOTMENT_ROLES, BOE_LIST_ROLES, INCENTIVE_LICENSE_ROLES, LEDGER_READ_ROLES, LEDGER_UPLOAD_ROLES,
     LICENSE_ROLES, RECONCILIATION_ISSUES_ROLES, RECONCILIATION_ROLES, REPORT_ROLES, ROLES, TRADE_ROLES,
 } from "../../routes/authorizationRoles";
 import type { Role } from "../../routes/authorizationRoles";
@@ -83,6 +83,47 @@ export const NAV_GROUPS: readonly NavGroup[] = [
                 { path: "/reconciliation-issues", label: "Reconciliation Issues", icon: "exclamation-triangle", roles: RECONCILIATION_ISSUES_ROLES },
             ],
         }],
+    },
+    {
+        id: "accounting",
+        label: "Accounting",
+        icon: "journal-text",
+        roles: ACCOUNTING_ROLES,
+        columns: 3,
+        sections: [
+            {
+                label: "Books",
+                items: [
+                    { path: "/accounting/dashboard",    label: "Accounting Overview", icon: "speedometer2" },
+                    { path: "/accounting/trades",       label: "Trade → Invoice",     icon: "arrow-left-right" },
+                    { path: "/accounting/invoices",     label: "Bills & Expenses",    icon: "receipt" },
+                    { path: "/accounting/payments",     label: "Payments & Receipts", icon: "receipt-cutoff" },
+                    { path: "/accounting/vouchers",     label: "Vouchers",            icon: "journal-text" },
+                    { path: "/accounting/party-ledger", label: "Party Ledger",        icon: "people" },
+                    { path: "/accounting/loans",        label: "Loans & Interest",    icon: "table" },
+                ],
+            },
+            {
+                label: "Banking",
+                items: [
+                    { path: "/accounting/banking",           label: "Bank Accounts",          icon: "database" },
+                    { path: "/accounting/banking/workbench", label: "Statements & Reconciliation", icon: "check2-square" },
+                    { path: "/accounting/banking/suspense",  label: "Suspense",               icon: "exclamation-triangle" },
+                ],
+            },
+            {
+                label: "Reports & setup",
+                items: [
+                    { path: "/accounting/reports/trial-balance", label: "Trial Balance",    icon: "list-ul" },
+                    { path: "/accounting/reports/profit-loss",   label: "Profit & Loss",    icon: "graph-up-arrow" },
+                    { path: "/accounting/reports/balance-sheet", label: "Balance Sheet",    icon: "table" },
+                    { path: "/accounting/reports/gst",           label: "GST & TDS",        icon: "receipt" },
+                    { path: "/accounting/reports/consolidated",  label: "Consolidated",     icon: "intersect" },
+                    { path: "/accounting/migration",             label: "Migration Center", icon: "file-earmark-arrow-up" },
+                    { path: "/accounting/setup",                 label: "Books Setup",      icon: "shield-lock" },
+                ],
+            },
+        ],
     },
     {
         id: "reports",

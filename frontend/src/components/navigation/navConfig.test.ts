@@ -19,6 +19,18 @@ const EXPECTED = {
         ["Allotments", "/allotments"], ["Bill of Entry", "/bill-of-entries"], ["Trade In & Out", "/trades"],
         ["Reconciliation", "/reconciliation"], ["Reconciliation Issues", "/reconciliation-issues"],
     ],
+    Accounting: [
+        ["Accounting Overview", "/accounting/dashboard"], ["Trade → Invoice", "/accounting/trades"],
+        ["Bills & Expenses", "/accounting/invoices"], ["Payments & Receipts", "/accounting/payments"],
+        ["Vouchers", "/accounting/vouchers"], ["Party Ledger", "/accounting/party-ledger"],
+        ["Loans & Interest", "/accounting/loans"],
+        ["Bank Accounts", "/accounting/banking"], ["Statements & Reconciliation", "/accounting/banking/workbench"],
+        ["Suspense", "/accounting/banking/suspense"],
+        ["Trial Balance", "/accounting/reports/trial-balance"], ["Profit & Loss", "/accounting/reports/profit-loss"],
+        ["Balance Sheet", "/accounting/reports/balance-sheet"], ["GST & TDS", "/accounting/reports/gst"],
+        ["Consolidated", "/accounting/reports/consolidated"], ["Migration Center", "/accounting/migration"],
+        ["Books Setup", "/accounting/setup"],
+    ],
     Reports: [
         ["License Downloads", "/license-ledger/download-requests"], ["Item Pivot Report", "/reports/item-pivot"],
         ["Item Report", "/reports/item-report"], ["Planned Report", "/reports/planned-report"],
@@ -52,7 +64,7 @@ describe("navConfig hierarchy", () => {
 describe("visibleNavGroups (role-based visibility)", () => {
     it("shows everything to a user with every role", () => {
         expect(labelsByGroup(visibleNavGroups(withRoles(allRoles)))).toEqual(labelsByGroup());
-        expect(visibleNavGroups(everyone)).toHaveLength(4);
+        expect(visibleNavGroups(everyone)).toHaveLength(5); // + Accounting
     });
 
     it("gates Reports on REPORT_ROLES and keeps Masters ungated (unchanged behaviour)", () => {

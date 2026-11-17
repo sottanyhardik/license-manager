@@ -1,0 +1,167 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { acctGet, acctKeys, acctPatch, acctPost, type Account, type EntityBooks } from "@/api/accountingApi";
+
+import { useAccounting } from "./AccountingContext";
+import { DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
+
+function ActivateBooks() {
+    const { discovered, refetchEntities } = useAccounting();
+    const qc = useQueryClient();
+    const [dates, setDates] = useState<Record<number, string>>({});
+    const activate = useMutation({
+        mutationFn: (companyId: number) => acctPost<EntityBooks>("entities/", { company_id: companyId, books_start_date: dates[companyId] }),
+        onSuccess: (b) => { toast.success(`Books started for ${b.name}`); refetchEntities(); void qc.invalidateQueries({ queryKey: acctKeys.all }); },
+        onError: notifyError,
+    });
+    return (
+        <Panel title="Entities discovered from Trade">
+            <p className="mb-3 text-sm text-slate-600">
+                These companies are the own side of trade documents (buyer on purchases, seller on sales). Start books only for the
+                group's own legal entities. Counterparties appear here only through copied paired legs. Entity ids are the existing company ids.
+            </p>
+            <DataGrid rows={discovered} rowKey={(d) => d.company_id} empty="No trades yet." caption="Discovered entities" columns={[
+                { key: "n", header: "Company", cell: (d) => d.name },
+                { key: "g", header: "GSTIN", cell: (d) => d.gstin ?? "—" },
+                { key: "c", header: "Own-side documents", numeric: true, cell: (d) => d.own_side_documents },
+                { key: "b", header: "Books", cell: (d) => d.has_books ? <StatusBadge status="POSTED" /> : <StatusBadge status="NOT_ACCOUNTED" /> },
+                { key: "a", header: "Start books", cell: (d) => d.has_books ? `since ${d.books_start_date}` : (
+                    <div className="flex items-center gap-1">
+                        <input type="date" className={`${inputCls} w-40`} aria-label={`Books start date for ${d.name}`} value={dates[d.company_id] ?? ""}
+                               onChange={(e) => setDates({ ...dates, [d.company_id]: e.target.value })} />
+                        <Button size="sm" disabled={!dates[d.company_id] || activate.isPending} onClick={() => activate.mutate(d.company_id)}>Start books</Button>
+                    </div>) },
+            ]} />
+        </Panel>
+    );
+}
+
+function EntitySettings() {
+    const { entityId } = useAccounting();
+    const qc = useQueryClient();
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "entity"), queryFn: () => acctGet<EntityBooks>(`entities/${entityId}/`), enabled: !!entityId });
+    const save = useMutation({
+        mutationFn: (body: Record<string, unknown>) => acctPatch(`entities/${entityId}/`, body),
+        onSuccess: () => { toast.success("Saved"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); }, onError: notifyError,
+    });
+    const lock = useMutation({
+        mutationFn: ({ id, locked }: { id: number; locked: boolean }) => acctPost(`periods/${id}/lock/`, { locked }),
+        onSuccess: () => { void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); }, onError: notifyError,
+    });
+    if (!entityId) return null;
+    const e = q.data;
+    return (
+        <QueryState isLoading={q.isLoading} error={q.error}>
+            {e && (
+                <Panel title={`Books settings — ${e.name}`}>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                        <Field label="Books start date"><span className="h-9 py-2 text-sm">{e.books_start_date}</span></Field>
+                        <Field label="Default credit days"><input inputMode="numeric" className={inputCls} defaultValue={e.default_credit_days}
+                            onBlur={(ev) => save.mutate({ default_credit_days: ev.target.value })} /></Field>
+                        <Field label="GST state code" hint="From GSTIN; drives CGST+SGST vs IGST"><input className={inputCls} defaultValue={e.state_code}
+                            onBlur={(ev) => save.mutate({ state_code: ev.target.value })} /></Field>
+                        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" defaultChecked={e.require_maker_checker}
+                            onChange={(ev) => save.mutate({ require_maker_checker: ev.target.checked })} /> Maker-checker for manual vouchers</label>
+                    </div>
+                    {(e.financial_years ?? []).map((fy) => (
+                        <div key={fy.id} className="mt-4">
+                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">FY {fy.label} periods</h3>
+                            <div className="flex flex-wrap gap-1">{fy.periods.map((p) => (
+                                <button key={p.id} type="button" aria-pressed={p.status === "LOCKED"} onClick={() => lock.mutate({ id: p.id, locked: p.status !== "LOCKED" })}
+                                        className={`rounded-md border px-2 py-1 text-xs ${p.status === "LOCKED" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"}`}
+                                        title={p.status === "LOCKED" ? "Locked — click to unlock" : "Open — click to lock"}>
+                                    {p.start_date.slice(0, 7)} {p.status === "LOCKED" ? "🔒" : ""}</button>))}</div>
+                        </div>
+                    ))}
+                </Panel>
+            )}
+        </QueryState>
+    );
+}
+
+function Chart() {
+    const { entityId } = useAccounting();
+    const qc = useQueryClient();
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "accounts"), enabled: !!entityId,
+        queryFn: () => acctGet<{ accounts: Account[]; groups: { id: number; code: string; name: string; nature: string }[] }>("accounts/", { entity: entityId }) });
+    const [f, setF] = useState({ group_id: "", code: "", name: "" });
+    const add = useMutation({
+        mutationFn: () => acctPost("accounts/", { entity: entityId, ...f }),
+        onSuccess: () => { toast.success("Ledger added"); setF({ group_id: "", code: "", name: "" }); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); },
+        onError: notifyError,
+    });
+    if (!entityId) return null;
+    return (
+        <Panel title="Chart of accounts">
+            <form className="mb-3 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+                <Field label="Group"><select className={inputCls} required value={f.group_id} onChange={(e) => setF({ ...f, group_id: e.target.value })}>
+                    <option value="">Select…</option>{(q.data?.groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.name} ({g.nature})</option>)}</select></Field>
+                <Field label="Code"><input className={`${inputCls} w-24`} required value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></Field>
+                <Field label="Name"><input className={`${inputCls} w-64`} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+                <Button type="submit" disabled={add.isPending}>Add ledger</Button>
+            </form>
+            <QueryState isLoading={q.isLoading} error={q.error}>
+                <DataGrid rows={q.data?.accounts ?? []} rowKey={(a) => a.id} caption="Accounts" columns={[
+                    { key: "c", header: "Code", cell: (a) => a.code },
+                    { key: "n", header: "Name", cell: (a) => a.name },
+                    { key: "g", header: "Group", cell: (a) => a.group },
+                    { key: "na", header: "Nature", cell: (a) => a.nature },
+                    { key: "k", header: "Kind", cell: (a) => a.kind },
+                    { key: "r", header: "Posting role", cell: (a) => <code className="text-xs">{a.system_role ?? ""}</code> },
+                    { key: "ic", header: "Intercompany", cell: (a) => (a.intercompany_entity_id ? "Yes" : "") },
+                ]} />
+            </QueryState>
+        </Panel>
+    );
+}
+
+interface TdsSection { id: number; code: string; description: string; rate_individual: string; rate_other: string; rate_no_pan: string;
+    threshold_single: string; threshold_aggregate: string; threshold_mode: string; effective_from: string; effective_to: string | null }
+
+function TdsSections() {
+    const qc = useQueryClient();
+    const q = useQuery({ queryKey: [...acctKeys.all, "tds"], queryFn: () => acctGet<TdsSection[]>("tds-sections/") });
+    const blank = { code: "", description: "", rate_individual: "", rate_other: "", rate_no_pan: "", threshold_single: "0", threshold_aggregate: "0", threshold_mode: "FULL", effective_from: "" };
+    const [f, setF] = useState(blank);
+    const add = useMutation({
+        mutationFn: () => acctPost("tds-sections/", f),
+        onSuccess: () => { toast.success("TDS section version saved"); setF(blank); void qc.invalidateQueries({ queryKey: [...acctKeys.all, "tds"] }); },
+        onError: notifyError,
+    });
+    return (
+        <Panel title="TDS sections (dated configuration — nothing is pre-filled)">
+            <p className="mb-3 text-xs text-slate-500">Enter each section with the rates and thresholds your CA has confirmed. A new effective date creates a new version, and old invoices keep the rate that applied on their date.</p>
+            <DataGrid rows={q.data ?? []} rowKey={(s) => s.id} empty="No TDS sections configured — invoices carry no TDS until one is added." caption="TDS sections" columns={[
+                { key: "c", header: "Section", cell: (s) => s.code },
+                { key: "d", header: "Description", cell: (s) => s.description },
+                { key: "ri", header: "Indiv./HUF %", numeric: true, cell: (s) => s.rate_individual },
+                { key: "ro", header: "Others %", numeric: true, cell: (s) => s.rate_other },
+                { key: "rn", header: "No PAN %", numeric: true, cell: (s) => s.rate_no_pan },
+                { key: "t", header: "Threshold (FY)", numeric: true, cell: (s) => `${s.threshold_aggregate} (${s.threshold_mode})` },
+                { key: "e", header: "Effective", cell: (s) => `${s.effective_from} → ${s.effective_to ?? "open"}` },
+            ]} />
+            <form className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-9" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+                {(["code", "description", "rate_individual", "rate_other", "rate_no_pan", "threshold_single", "threshold_aggregate"] as const).map((k) => (
+                    <Field key={k} label={k.replace(/_/g, " ")}><input className={inputCls} required={k !== "threshold_single"} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></Field>))}
+                <Field label="mode"><select className={inputCls} value={f.threshold_mode} onChange={(e) => setF({ ...f, threshold_mode: e.target.value })}>
+                    <option value="FULL">Whole amount</option><option value="EXCESS">Only above threshold</option></select></Field>
+                <Field label="effective from"><input type="date" className={inputCls} required value={f.effective_from} onChange={(e) => setF({ ...f, effective_from: e.target.value })} /></Field>
+                <Button className="self-end" type="submit" disabled={add.isPending}>Save</Button>
+            </form>
+        </Panel>
+    );
+}
+
+export default function Setup() {
+    return (
+        <div className="space-y-4">
+            <ActivateBooks />
+            <EntitySettings />
+            <Chart />
+            <TdsSections />
+        </div>
+    );
+}

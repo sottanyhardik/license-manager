@@ -6,7 +6,7 @@ import { REPORT_ROLES, ROLES } from "./authorizationRoles";
 describe("ROLES", () => {
     it("has the expected role codes (key === value)", () => {
         expect(Object.values(ROLES).sort()).toEqual([
-            "ACCOUNT_ACCESS", "ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER", "BOE_MANAGER", "BOE_VIEWER",
+            "ACCOUNTS_APPROVER", "ACCOUNTS_MANAGER", "ACCOUNTS_VIEWER", "ACCOUNT_ACCESS", "ALLOTMENT_MANAGER", "ALLOTMENT_VIEWER", "BOE_MANAGER", "BOE_VIEWER",
             "INCENTIVE_LICENSE_MANAGER", "INCENTIVE_LICENSE_VIEWER", "LEDGER_MANAGER", "LICENSE_MANAGER",
             "LICENSE_VIEWER", "REPORT_VIEWER", "TL_GENERATE", "TRADE_MANAGER", "TRADE_VIEWER", "USER_MANAGER",
         ]);
@@ -28,6 +28,11 @@ describe("named role sets", () => {
         const { ROLES: _r, ...sets } = R;
         expect(sets).toMatchInlineSnapshot(`
           {
+            "ACCOUNTING_ROLES": [
+              "ACCOUNTS_VIEWER",
+              "ACCOUNTS_MANAGER",
+              "ACCOUNTS_APPROVER",
+            ],
             "ALLOTMENT_ROLES": [
               "ALLOTMENT_MANAGER",
               "ALLOTMENT_VIEWER",

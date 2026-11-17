@@ -22,6 +22,9 @@ export const ROLE_LABELS: Record<Role, string> = {
     TL_GENERATE:                'Transfer Letter',
     LEDGER_MANAGER:             'Ledger Manager',
     ACCOUNT_ACCESS:             'Account Access',
+    ACCOUNTS_VIEWER:            'Accounts Viewer',
+    ACCOUNTS_MANAGER:           'Accounts Manager',
+    ACCOUNTS_APPROVER:          'Accounts Approver',
 };
 
 /**

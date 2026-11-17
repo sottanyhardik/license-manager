@@ -159,6 +159,25 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 <!-- CHECKPOINT:accounting-frontend:END -->
 
 
+<!-- CHECKPOINT:accounting-banking-proposals:BEGIN -->
+**Accounting banking — statement import + invoice proposals — TESTED (2026-11-17)** (session license-manager-b5)
+- Owner decisions (2026-11-17, this session): proposals are **propose → approver confirms** (nothing auto-posts);
+  allocation **oldest bills first**, excess = on-account advance; **learn narration → party aliases**.
+- `05c62ad2` importer: header scan 25→60 rows, `Withdrawl Amt` alias, one-sided debit/credit mapping rejected.
+- `d4320df6` + `5ba25fff` backend: `services/bank_proposals.py` (confirm → `payments.record_payment` + BankMatch
+  `PROPOSAL`); guards: UTR book candidate, used UTR, unaccounted Trade payment, own account. API: `bank-accounts/<id>/
+  proposals/` (+`confirm/`, approver), `statement-lines/<id>/proposal/?party_id=`, `narration-aliases/` (delete approver,
+  audited). **SCHEMA (additive):** `accounting/0005_narration_alias` — applied to local `lmanagement` only.
+- `3d96d090` UI: `/accounting/banking/proposals` (Invoice Proposals) + nav; read-only for viewers.
+- Tests: backend `apps/accounting` + architecture **116 passed**; flake8 0; makemigrations --check clean; frontend gate
+  exit 0 (**vitest 859/859**, lint, typecheck, build); real accounting e2e **10/10**, 0 HTTP 500s.
+- Local data (dev DB only): LABDHI bank `BANK 400000070225` (id 2) created; `2025.xlsx` imported (318 lines, reconciles
+  to closing ₹10,73,152.07). A second import `2026.xlsx` (341 lines) was added to the same account by someone else.
+  Read-only proposal run on 659 lines: high 232 · medium 30 · low 13 · none 384; 11 queries. **Nothing confirmed.**
+- Open: bank name/IFSC for account id 2 (owner); no e2e that confirms a proposal on seeded data yet.
+- Next: owner reviews proposals in the UI and confirms; add an e2e confirm flow to `seed_accounting_e2e`.
+<!-- CHECKPOINT:accounting-banking-proposals:END -->
+
 <!-- CHECKPOINT:boe:BEGIN -->
 **BOE — last verified checkpoint (2026-11-17, integration sweep)**
 - Branch `feature/v5` (local only; 17 commits ahead of origin, 0 behind; push needs owner approval).

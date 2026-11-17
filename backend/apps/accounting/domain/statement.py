@@ -13,7 +13,8 @@ FIELD_ALIASES = {
     "narration": ("narration", "description", "particulars", "remarks", "transaction details", "details"),
     "reference": ("utr", "utr no", "reference", "ref no", "ref no./cheque no.", "chq/ref no", "cheque no",
                   "chq no", "chq./ref.no.", "reference no", "ref"),
-    "debit": ("debit", "withdrawal", "withdrawals", "withdrawal amt", "withdrawal amount", "dr", "debit amount"),
+    "debit": ("debit", "withdrawal", "withdrawals", "withdrawal amt", "withdrawal amount", "dr", "debit amount",
+              "withdrawl amt", "withdrawl amount", "withdrawl"),  # bank exports misspell "withdrawal"
     "credit": ("credit", "deposit", "deposits", "deposit amt", "deposit amount", "cr", "credit amount"),
     "amount": ("amount", "transaction amount", "txn amount"),
     "dr_cr": ("dr/cr", "cr/dr", "type", "debit/credit", "transaction type"),
@@ -54,10 +55,15 @@ def detect_mapping(headers: list[object], override: dict[str, str] | None = None
         raise StatementFormatError(f"Missing required column(s): {', '.join(missing)}.")
     if not ({"debit", "credit"} & mapping.keys() or "amount" in mapping):
         raise StatementFormatError("Need debit/credit columns or an amount column.")
+    one_sided = {"debit", "credit"} - mapping.keys()
+    if len(one_sided) == 1 and "amount" not in mapping:
+        # A file with deposits but no recognised withdrawal column (or vice versa) would silently drop one side.
+        raise StatementFormatError(f"Found a {'credit' if 'debit' in one_sided else 'debit'} column but no "
+                                   f"{one_sided.pop()} column; map it explicitly.")
     return mapping
 
 
-def find_header_row(rows: list[list[object]], scan: int = 25) -> int:
+def find_header_row(rows: list[list[object]], scan: int = 60) -> int:
     """Banks put preamble lines above the table; the header is the first row that maps."""
     for i, row in enumerate(rows[:scan]):
         try:

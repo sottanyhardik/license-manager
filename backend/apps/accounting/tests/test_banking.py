@@ -7,7 +7,7 @@ from decimal import Decimal
 from django.test import SimpleTestCase, TestCase
 
 from apps.accounting.domain.statement import (
-    StatementFormatError, detect_mapping, extract_utr, normalise_row, parse_amount, parse_date,
+    StatementFormatError, detect_mapping, extract_utr, find_header_row, normalise_row, parse_amount, parse_date,
 )
 from apps.accounting.models import BankMatch, LineStatus, StatementLine, SuspenseItem, Voucher
 from apps.accounting.selectors.ledger import account_balance
@@ -53,6 +53,25 @@ class StatementParsingTests(SimpleTestCase):
     def test_missing_columns_rejected(self):
         with self.assertRaises(StatementFormatError):
             detect_mapping(["Narration", "Balance"])
+
+    def test_misspelt_withdrawal_header_and_deep_preamble(self):
+        # Synthetic copy of a real bank export layout: ~28 preamble rows, "Withdrawl Amt" (sic), newest first.
+        header = ["Transaction Date", "Transaction Details", "Cheque ID", "Value Date", "Withdrawl Amt", "Deposit Amt",
+                  "Balance (₹)", None]
+        rows = [["ACCOUNT DETAILS"]] + [[f"preamble {i}", None] for i in range(27)] + [header]
+        self.assertEqual(find_header_row(rows), 28)
+        mapping = detect_mapping(header)
+        self.assertEqual(header[mapping["debit"]], "Withdrawl Amt")
+        line = normalise_row(["11/03/2025", "NEFT DR-SUPPLIER", None, "11/03/2025", 2500, None, 97500.0, None],
+                             mapping, 30)
+        self.assertEqual((line.debit, line.credit, line.balance), (D("2500.00"), D("0.00"), D("97500.00")))
+        with self.assertRaises(StatementFormatError):  # footer rows are rejected, not imported
+            normalise_row(["Opening Balance:", "₹ 0.00", "Count Of Debit:", "1"], mapping, 40)
+
+    def test_one_sided_debit_credit_mapping_rejected(self):
+        # An unrecognised withdrawal column must not silently drop every debit.
+        with self.assertRaises(StatementFormatError):
+            detect_mapping(["Date", "Narration", "Paid Out", "Deposit Amt", "Balance"])
 
     def test_utr_extraction(self):
         self.assertEqual(extract_utr("NEFT CR-HDFCN52026050212-IMPORTER"), "HDFCN52026050212")

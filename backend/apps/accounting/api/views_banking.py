@@ -179,6 +179,7 @@ def proposal_dict(p) -> dict:
                          "due_date": a.invoice.due_date, "outstanding": a.outstanding, "amount": a.amount}
                         for a in p.allocations],
         "advance": p.advance, "exact_bill": p.exact_bill, "existing_candidates": p.existing_candidates,
+        "is_bulk": p.is_bulk,
     }
 
 
@@ -188,7 +189,7 @@ class BankProposalListView(ApproverView):
     def get(self, request, bank_id: int):
         bank = BankAccount.objects.select_related("entity").get(pk=bank_id)
         rows = proposals_svc.proposals_for(bank)
-        summary = {level: sum(1 for p in rows if p.confidence == level) for level in ("high", "medium", "low", "none")}
+        summary = {level: sum(1 for p in rows if p.confidence == level) for level in ("high", "medium", "low", "none", "bulk")}
         if param(request, "confidence"):
             wanted = set(str(param(request, "confidence")).split(","))
             rows = [p for p in rows if p.confidence in wanted]
@@ -260,4 +261,39 @@ class UndoProposalView(ApproverView):
     def post(self, request, payment_id: int):
         from apps.accounting.models import Payment
         line = proposals_svc.undo_confirmation(Payment.objects.get(pk=payment_id), user=request.user)
+        return ok({"line_id": line.pk, "status": line.status})
+
+
+def _split_rows(raw) -> list:
+    if not isinstance(raw, list) or not raw:
+        raise ValidationError({"rows": "Give at least one {party_id, amount}."})
+    parties = CompanyModel.objects.in_bulk({as_int(r.get("party_id"), "party_id") for r in raw})
+    rows = []
+    for r in raw:
+        party = parties.get(as_int(r.get("party_id"), "party_id"))
+        if party is None:
+            raise ValidationError({"rows": f"Unknown party {r.get('party_id')}."})
+        rows.append((party, as_money(r.get("amount"))))
+    return rows
+
+
+class LineSplitView(ApproverView):
+    """POST statement-lines/<id>/split/ {rows:[{party_id, amount}], dry_run?}
+    dry_run: the oldest-first bills per row (read-only). Otherwise books one payment/receipt per row and
+    matches them all to the line; rows must add up to the line's unmatched amount."""
+
+    def post(self, request, line_id: int):
+        line = StatementLine.objects.select_related("bank_account__entity").get(pk=line_id)
+        rows = _split_rows(request.data.get("rows"))
+        if request.data.get("dry_run"):
+            return ok({"rows": [{"party_id": r.party.pk, "party": r.party.name, "amount": r.amount, "advance": r.advance,
+                                 "allocations": [{"invoice_id": a.invoice.pk, "number": a.invoice.number, "date": a.invoice.date,
+                                                  "outstanding": a.outstanding, "amount": a.amount} for a in r.allocations]}
+                                for r in proposals_svc.plan_split(line, rows)]})
+        payments = proposals_svc.split_line(line, rows, user=request.user)
+        return ok({"line_id": line.pk, "payments": [{"id": p.pk, "voucher": p.voucher.number, "party_id": p.party_id,
+                                                     "party": p.party.name, "amount": p.amount} for p in payments]})
+
+    def delete(self, request, line_id: int):
+        line = proposals_svc.undo_split(StatementLine.objects.get(pk=line_id), user=request.user)
         return ok({"line_id": line.pk, "status": line.status})

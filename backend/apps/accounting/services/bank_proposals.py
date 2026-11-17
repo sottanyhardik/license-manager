@@ -43,6 +43,8 @@ SBIN UTIB HDFC ICIC KKBK PUNB BARB IDIB YESB RATN CNRB UBIN BKID IOBA INDB FDRL 
 # Legal-form words carry no identity ("ABC EXIM PVT LTD" is identified by ABC EXIM).
 LEGAL_WORDS = frozenset("PVT PRIVATE LTD LIMITED LLP AND THE CO COMPANY CORP CORPORATION INC OF MS".split())
 MIN_NAME_SCORE = 0.6
+# "BU : 2056141 Transfer 26.11.2025": a bank bulk upload - one debit for several beneficiaries (split it).
+BULK_PATTERN = re.compile(r"^\s*BU\s*:", re.IGNORECASE)
 TRADE_PAYMENT_WINDOW = timedelta(days=DATE_WINDOW_DAYS)
 
 
@@ -108,9 +110,15 @@ class Proposal:
     blocked: str = ""                     # reason the line must not be booked here
 
     @property
+    def is_bulk(self) -> bool:
+        return bool(BULK_PATTERN.match(self.line.narration or ""))
+
+    @property
     def confidence(self) -> str:
         if self.blocked:
             return "blocked"
+        if self.party is None and self.is_bulk:
+            return "bulk"
         if self.party is None:
             return "low" if self.options else "none"
         if self.source == "alias" or (self.score >= 1.0 and (self.exact_bill or (self.allocations and not self.advance))):
@@ -164,7 +172,7 @@ class _Context:
                 continue
             due = self.outstanding[bill.pk]
             exact = exact or due == amount
-            if left <= 0:
+            if left <= 0 or due <= 0:
                 continue
             take = min(due, left)
             out.append(Allocation(bill, due, take))
@@ -413,3 +421,85 @@ def record_payment_for_line(line: StatementLine, *, entity, direction: str, part
     learn_alias(entity, counterparty_key(line.narration), direction, party, user=user)
     audit.record("BANK_LINE_PAYMENT_RECORDED", payment, actor=user, entity=entity, line=line.pk, amount=amount)
     return payment
+
+
+# --- split one bank line into several payments/receipts (bulk uploads "BU : ...") ---------------------
+
+@dataclass
+class SplitRow:
+    party: CompanyModel
+    amount: Decimal
+    allocations: list[Allocation]
+    advance: Decimal
+
+
+def plan_split(line: StatementLine, rows: list[tuple[CompanyModel, Decimal]]) -> list[SplitRow]:
+    """Oldest-first bills for each (party, amount) row against this line's side. Read-only."""
+    ctx = _Context(line.bank_account)
+    direction = _direction(line)
+    out = []
+    for party, amount in rows:
+        allocations, advance, _exact = ctx.allocate(party.pk, direction, amount, line.txn_date)
+        for a in allocations:  # a party listed twice must not settle the same bill twice
+            ctx.outstanding[a.invoice.pk] -= a.amount
+        out.append(SplitRow(party, amount, allocations, advance))
+    return out
+
+
+def _validate_split(line: StatementLine, rows: list[tuple[CompanyModel, Decimal]]) -> None:
+    if not rows:
+        raise AccountingError("Add at least one row.", "no_rows")
+    if any(amount <= 0 for _p, amount in rows):
+        raise AccountingError("Every row needs a positive amount.", "bad_amount")
+    if any(party.pk == line.bank_account.entity.company_id for party, _a in rows):
+        raise AccountingError("A row names the entity itself (an own-account transfer).", "own_account")
+    total, remaining = sum((a for _p, a in rows), ZERO), line_remaining(line)
+    if total != remaining:
+        raise AccountingError(f"Rows total {total} but the bank line has {remaining} unmatched; they must be equal.",
+                              "split_total_mismatch")
+
+
+@transaction.atomic
+def split_line(line: StatementLine, rows: list[tuple[CompanyModel, Decimal]], *, user=None) -> list[Payment]:
+    """Book one payment/receipt per row (each settling that party's bills oldest first, excess = advance)
+    and match them all to the single bank line. All rows or none."""
+    line = StatementLine.objects.select_for_update().select_related("bank_account__entity").get(pk=line.pk)
+    if line.status != LineStatus.UNMATCHED or line.matched_amount:
+        raise AccountingError("This bank line is already (partly) matched.", "already_matched")
+    _validate_split(line, rows)
+    pool = book_pool(line.bank_account, deposit=line.credit > 0)
+    if pool and any("utr" in c.signals for c in candidates_for(line, pool, remaining=line.amount)):
+        raise AccountingError("A book entry with this UTR already exists; match the bank line to it instead.",
+                              "existing_book_entry")
+    entity, direction = line.bank_account.entity, _direction(line)
+    payments = []
+    for row in plan_split(line, rows):
+        payment = record_payment(
+            entity=entity, direction=direction, party=row.party, bank_account=line.bank_account,
+            payment_date=line.txn_date, amount=row.amount, mode="OTHER", reference=line.reference,
+            narration=f"Bank (split): {line.narration}", allocations=[(a.invoice, a.amount) for a in row.allocations],
+            user=user,
+        )
+        _match(line, payment.voucher, row.amount, BankMatch.SPLIT, user)
+        payments.append(payment)
+    refresh_line_status(line)
+    audit.record("BANK_LINE_SPLIT", line, actor=user, entity=entity, payments=[p.pk for p in payments],
+                 parties=[p.party_id for p in payments])
+    return payments
+
+
+@transaction.atomic
+def undo_split(line: StatementLine, *, user=None) -> StatementLine:
+    """Reverse every payment a split booked and unmatch the line (back to UNMATCHED)."""
+    line = StatementLine.objects.select_for_update().get(pk=line.pk)
+    matches = list(BankMatch.objects.filter(statement_line=line, is_active=True, method=BankMatch.SPLIT)
+                   .select_related("voucher__payment"))
+    if not matches:
+        raise AccountingError("This bank line has no split to undo.", "not_a_split")
+    for match in matches:
+        unmatch(match, reason="Undo split", user=user)
+        reverse_payment(match.voucher.payment, reason=f"Undo split of bank line {line.pk}", user=user,
+                        reversal_date=match.voucher.date)
+    audit.record("BANK_LINE_SPLIT_UNDONE", line, actor=user, entity=matches[0].voucher.entity)
+    line.refresh_from_db()
+    return line

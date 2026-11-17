@@ -85,6 +85,7 @@ class StatementLine(models.Model):
 class BankMatch(AuditModel):
     AUTO_REFERENCE, AUTO_AMOUNT, MANUAL, SUSPENSE = "AUTO_REFERENCE", "AUTO_AMOUNT", "MANUAL", "SUSPENSE"
     PROPOSAL = "PROPOSAL"  # a confirmed invoice proposal: the receipt/payment was booked from this bank line
+    SPLIT = "SPLIT"  # one bank line (e.g. a "BU :" bulk upload) split into several payments/receipts
     statement_line = models.ForeignKey(StatementLine, on_delete=models.PROTECT, related_name="matches")
     voucher = models.ForeignKey(Voucher, on_delete=models.PROTECT, related_name="bank_matches")
     amount = models.DecimalField(max_digits=20, decimal_places=2)

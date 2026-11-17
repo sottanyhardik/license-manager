@@ -278,3 +278,77 @@ class RecordPaymentFromBankLineTests(TestCase):
         mismatch = self._post(self.approver, bank_account_id=other_bank.pk)
         self.assertEqual(mismatch.status_code, 400, mismatch.content)
         self.assertFalse(Payment.objects.exists())
+
+
+class SplitBulkLineTests(TestCase):
+    """'BU : <batch>' bank bulk uploads: one debit split into one payment per supplier, matched to the one line."""
+
+    def setUp(self):
+        self.lm = h.company("Labdhi Mercantile LLP", gst="27AAAFL0000A1Z5")
+        self.entity = h.books(self.lm)
+        self.bank = h.bank(self.entity, opening=D("0"))
+        self.a = h.company("Alpha Exim Pvt Ltd")
+        self.b = h.company("Beta Traders")
+        self.bill_a = posted(h.trade("PURCHASE", self.a, self.lm, D("50000.00"), on=date(2026, 5, 1)))
+        self.bill_b = posted(h.trade("PURCHASE", self.b, self.lm, D("20000.00"), on=date(2026, 5, 2)))
+        self.due_a, self.due_b = outstanding(self.bill_a), outstanding(self.bill_b)
+        total = self.due_a + self.due_b - D("10000.00")
+        csv = f"Date,Narration,Ref No,Withdrawal Amt,Deposit Amt\n26/05/2026,BU : 2056141 Transfer 26.05.2026,,{total},\n"
+        import_statement(self.bank, file_name="s.csv", content=csv.encode())
+        self.line = StatementLine.objects.get(bank_account=self.bank)
+        self.total = total
+        self.approver = client_with("ACCOUNTS_APPROVER")
+        self.viewer = client_with("ACCOUNTS_VIEWER")
+
+    def test_bulk_line_is_flagged(self):
+        p = proposal_for(self.line)
+        self.assertEqual((p.is_bulk, p.confidence), (True, "bulk"))
+        body = self.viewer.get(f"/api/accounting/bank-accounts/{self.bank.pk}/proposals/", {"confidence": "bulk"}).json()
+        self.assertEqual((body["summary"]["bulk"], body["proposals"][0]["is_bulk"]), (1, True))
+
+    def test_split_books_one_payment_per_row_matched_to_the_line(self):
+        from apps.accounting.services.bank_proposals import split_line
+        rows = [(self.a, self.due_a - D("5000.00")), (self.b, self.due_b - D("5000.00"))]
+        payments = split_line(self.line, rows)
+        self.assertEqual([(p.party, p.direction, p.amount) for p in payments],
+                         [(self.a, "PAYMENT", rows[0][1]), (self.b, "PAYMENT", rows[1][1])])
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.status, LineStatus.MATCHED)
+        self.assertEqual(sorted(m.method for m in self.line.matches.all()), [BankMatch.SPLIT, BankMatch.SPLIT])
+        self.assertEqual((outstanding(self.bill_a), outstanding(self.bill_b)), (D("5000.00"), D("5000.00")))
+
+    def test_rows_must_add_up_and_nothing_posts_otherwise(self):
+        from apps.accounting.services.bank_proposals import split_line
+        with self.assertRaises(AccountingError) as err:
+            split_line(self.line, [(self.a, D("100.00"))])
+        self.assertEqual(err.exception.code, "split_total_mismatch")
+        with self.assertRaises(AccountingError):
+            split_line(self.line, [(self.a, self.total - D("1.00")), (self.lm, D("1.00"))])  # own account
+        self.assertFalse(Payment.objects.exists())
+
+    def test_same_party_twice_never_settles_a_bill_twice(self):
+        from apps.accounting.services.bank_proposals import plan_split
+        first, second = plan_split(self.line, [(self.a, self.due_a - D("5000.00")), (self.a, D("8000.00"))])
+        self.assertEqual([a.amount for a in first.allocations], [self.due_a - D("5000.00")])
+        self.assertEqual([a.amount for a in second.allocations], [D("5000.00")])
+        self.assertEqual(second.advance, D("3000.00"))
+
+    def test_api_dry_run_book_and_undo(self):
+        url = f"/api/accounting/statement-lines/{self.line.pk}/split/"
+        rows = [{"party_id": self.a.pk, "amount": str(self.due_a - D("5000.00"))},
+                {"party_id": self.b.pk, "amount": str(self.due_b - D("5000.00"))}]
+        preview = self.viewer.post(url, {"rows": rows, "dry_run": True}, format="json")
+        self.assertEqual(preview.status_code, 403)  # read-only roles cannot even plan a posting
+        preview = self.approver.post(url, {"rows": rows, "dry_run": True}, format="json")
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual(preview.json()["rows"][0]["allocations"][0]["invoice_id"], self.bill_a.pk)
+        self.assertFalse(Payment.objects.exists())
+        booked = self.approver.post(url, {"rows": rows}, format="json")
+        self.assertEqual(booked.status_code, 200, booked.content)
+        self.assertEqual(len(booked.json()["payments"]), 2)
+        self.assertEqual(self.viewer.delete(url).status_code, 403)
+        undone = self.approver.delete(url)
+        self.assertEqual(undone.status_code, 200, undone.content)
+        self.assertEqual(undone.json()["status"], "UNMATCHED")
+        self.assertEqual((outstanding(self.bill_a), outstanding(self.bill_b)), (self.due_a, self.due_b))
+        self.assertEqual(Payment.objects.filter(status="REVERSED").count(), 2)

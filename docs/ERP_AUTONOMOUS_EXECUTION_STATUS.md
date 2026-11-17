@@ -178,6 +178,10 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   **Pick bank transaction** (party-ranked unmatched lines; `POST payments/` + optional `statement_line_id` posts and
   matches once, partial allowed). Tests: backend 120 passed; vitest 863 + Payments 4; typecheck/lint/build pass; real
   accounting e2e 10/10, 0 HTTP 500s.
+- Later (same day, owner requests): saves on pick, no select/confirm (`10474eaa`); 10 s Undo via reversal (`5a4a81ab`,
+  `ef2c1330`); **BU bulk-upload split** — one line → one payment per supplier, all matched to the line, all-or-none,
+  undo reverses all (`946f486a`, `9fbb10ea`; no schema change). Tests: backend 126 passed; vitest 867; frontend gate
+  exit 0; accounting e2e 10/10. Final integrated backend gate: run by session "accounting nav integration".
 - Open: bank name/IFSC for account id 2 (owner); no e2e that confirms a proposal on seeded data yet.
 - Next: owner reviews proposals in the UI and confirms; add an e2e confirm flow to `seed_accounting_e2e`.
 <!-- CHECKPOINT:accounting-banking-proposals:END -->

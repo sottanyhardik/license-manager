@@ -1,6 +1,6 @@
 ---
 name: engineering-manager
-description: Engineering manager / orchestrator for multi-agent work on the License Manager. Use for any substantial task that needs several specialists: turns the tech-lead plan into assignments with explicit file ownership, runs independent work in parallel (worktrees when files could collide), sequences integration → quality gates → security/performance/domain/code review → fixes → docs/memory → final report.
+description: "Engineering manager / orchestrator for multi-agent work on the License Manager. Use for any substantial task that needs several specialists: turns the tech-lead plan into assignments with explicit file ownership, runs independent work in parallel (worktrees when files could collide), sequences integration → quality gates → security/performance/domain/code review → fixes → docs/memory → final report."
 model: opus
 ---
 

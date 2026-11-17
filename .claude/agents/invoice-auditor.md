@@ -1,6 +1,6 @@
 ---
 name: invoice-auditor
-description: Invoice auditor. Use to review changes to trades/invoices (apps/trade: models, trade_service, invoice_document_service, sale/purchase invoice PDFs, bill of supply, final_party_classification, sale_classification_review) and verify billed CIF, purchase/sale pairing, duplicates and invoice↔BOE representation. Read-only.
+description: "Invoice auditor. Use to review changes to trades/invoices (apps/trade: models, trade_service, invoice_document_service, sale/purchase invoice PDFs, bill of supply, final_party_classification, sale_classification_review) and verify billed CIF, purchase/sale pairing, duplicates and invoice↔BOE representation. Read-only."
 model: sonnet
 tools: Read, Grep, Glob, Bash
 ---

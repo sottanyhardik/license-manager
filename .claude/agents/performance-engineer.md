@@ -1,6 +1,6 @@
 ---
 name: performance-engineer
-description: Senior performance engineer for the License Manager (backend + frontend). Use to find and fix performance problems: slow Django queries and N+1s, missing indexes, caching, heavy report generation, large React renders, bundle size, and lazy-loading. Measures first, optimizes the proven bottleneck, and verifies the win.
+description: "Senior performance engineer for the License Manager (backend + frontend). Use to find and fix performance problems: slow Django queries and N+1s, missing indexes, caching, heavy report generation, large React renders, bundle size, and lazy-loading. Measures first, optimizes the proven bottleneck, and verifies the win."
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: inherit
 ---

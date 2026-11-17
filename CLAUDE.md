@@ -6,10 +6,6 @@ Django master-data service (`master-data-service/`) and its Python client
 (`mds-client/`). Domain: Indian DGFT import/export licences (DFIA/Advance),
 SION norms, allotments, bills of entry (BOE), trades/invoices, CIF balances.
 
-Previous version of this file (documentation-only mode) is backed up in
-`.claude/backups/2026-11-15-pre-ecc/CLAUDE.md`; its rules now live in
-`.claude/rules/documentation-mode.md` and apply when working in `docs/`.
-
 ## 1. Index first — MANDATORY before reading/editing source (every chat + every subagent)
 
 `.claude/index/` is rebuilt automatically (SessionStart + PostToolUse hooks, zero chat tokens).
@@ -57,19 +53,8 @@ Workflow detail + agent/skill catalogs: `docs/development-environment/`.
 
 ## 3. Orchestration protocol (substantial / multi-area tasks only)
 
-Full detail: `docs/claude/ORCHESTRATION.md`. Short form:
-
-1. Clarify requirements (`product-manager` if vague) → 2. consult memory
-   (`.claude/memory/`) + index → 3. plan (`tech-lead`; `solutions-architect` /
-   `django-architect` / `react-architect` for design) → 4. `engineering-manager`
-   assigns work with **file ownership** (one owner per file; parallel agents get
-   disjoint files or `isolation: "worktree"`) → 5. implement (specialists, in
-   parallel where independent) → 6. integrate → 7. quality gates
-   (`scripts/dev/quality-gate.sh`) → 8. `security-auditor`, `performance-engineer`,
-   domain auditors as relevant → 9. independent `code-reviewer` (+ ECC
-   language reviewers) → 10. fix → 11. update docs + `.claude/memory/` →
-   12. final report (`/report` format).
-
+Run `/orchestrate` (full protocol: `docs/claude/ORCHESTRATION.md`). Parallel agents
+need **file ownership** (one owner per file; disjoint files or `isolation: "worktree"`).
 Small tasks (a few tool calls): just do them — don't spawn agents.
 
 Model routing: `haiku` for lookups/exploration, `sonnet` for implementation and
@@ -102,3 +87,13 @@ deletion/irreversible data operations. Never print or commit secrets (`.env*`,
 - Skills: `.claude/skills/` · Commands: `.claude/commands/` (`/orchestrate`, `/quality-gate`, `/cif-audit`, `/review-diff`, `/report`, `/remember`, `/session-summary`)
 - Project memory: `.claude/memory/` (index: `.claude/memory/README.md`)
 - Setup/troubleshooting: `docs/claude/INSTALLATION.md`, `docs/claude/TROUBLESHOOTING.md`
+
+## 7. Autonomous execution (permanent, owner rule 2026-11-17)
+
+Before any task: read `docs/ERP_AUTONOMOUS_EXECUTION_STATUS.md` (its `CHECKPOINT:<workstream>` blocks are
+printed at SessionStart) and continue from the last verified checkpoint. Within an explicitly requested task,
+run implement → focused test → fix → verify → document without waiting for repeated prompts; wait for running
+commands/gates instead of duplicating them; capture exit codes and logs; rerun only affected tests; full gates
+once per integration. Update the tracker after each verified milestone. Ask only for destructive, irreversible,
+production, push/deploy, new-dependency or business-policy decisions. Full rules:
+`.claude/rules/autonomous-execution.md` (subordinate to `.claude/rules/safety.md`).

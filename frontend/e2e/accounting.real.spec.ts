@@ -19,7 +19,7 @@ const ROUTES = [
     // frontend round 2026-11-17
     "masters/accounts", "masters/groups", "masters/parties", "ledgers/customers", "ledgers/suppliers", "entities",
     "vouchers/journal", "vouchers/payment", "vouchers/receipt", "vouchers/contra", "vouchers/sales", "vouchers/purchase",
-    "banking/transactions", "banking/unmatched", "banking/reconciliation", "reports/party-outstanding",
+    "banking/transactions", "banking/unmatched", "banking/proposals", "banking/reconciliation", "reports/party-outstanding",
     "reports/voucher-register", "reports/register/expense", "reports/register/sales",
 ];
 

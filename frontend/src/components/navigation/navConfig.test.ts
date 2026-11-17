@@ -33,7 +33,7 @@ const EXPECTED = {
         ["Bills & Expenses", "/accounting/invoices"], ["Expense Register", "/accounting/reports/register/expense"],
         ["Income Register", "/accounting/reports/register/sales"], ["Loans & Interest", "/accounting/loans"],
         ["Bank Accounts", "/accounting/banking"], ["Bank Transactions", "/accounting/banking/transactions"],
-        ["Unmatched Transactions", "/accounting/banking/unmatched"], ["Bank Reconciliation", "/accounting/banking/reconciliation"],
+        ["Unmatched Transactions", "/accounting/banking/unmatched"], ["Invoice Proposals", "/accounting/banking/proposals"], ["Bank Reconciliation", "/accounting/banking/reconciliation"],
         ["Suspense", "/accounting/banking/suspense"],
         ["Trial Balance", "/accounting/reports/trial-balance"], ["Profit & Loss", "/accounting/reports/profit-loss"],
         ["Balance Sheet", "/accounting/reports/balance-sheet"], ["Cash Flow", "/accounting/reports/cash-flow"],

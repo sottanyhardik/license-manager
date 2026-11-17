@@ -43,6 +43,7 @@ export const ACCOUNTING_GROUPS: SectionGroup[] = [
             { to: `${A}/banking`, label: "Bank Accounts" },
             { to: `${A}/banking/transactions`, label: "Bank Transactions" },
             { to: `${A}/banking/unmatched`, label: "Unmatched Transactions" },
+            { to: `${A}/banking/proposals`, label: "Invoice Proposals" },
             { to: `${A}/banking/reconciliation`, label: "Bank Reconciliation" },
             { to: `${A}/banking/suspense`, label: "Suspense" },
             { to: `${A}/banking/workbench`, label: "Reconciliation Workbench" },

@@ -134,6 +134,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
                     { path: "/accounting/banking",                label: "Bank Accounts",          icon: "database" },
                     { path: "/accounting/banking/transactions",   label: "Bank Transactions",      icon: "list-ul" },
                     { path: "/accounting/banking/unmatched",      label: "Unmatched Transactions", icon: "exclamation-circle" },
+                    { path: "/accounting/banking/proposals",      label: "Invoice Proposals",      icon: "receipt" },
                     { path: "/accounting/banking/reconciliation", label: "Bank Reconciliation",    icon: "check2-square" },
                     { path: "/accounting/banking/suspense",       label: "Suspense",               icon: "exclamation-triangle" },
                 ],

@@ -11,6 +11,7 @@ import {
 
 import { useAccounting } from "./AccountingContext";
 import { useAccountingAccess } from "./useAccountingAccess";
+import BankProposals from "./BankProposals";
 import { Pager } from "./TradeTracking";
 import { useGuardedAction } from "./useGuardedAction";
 import { formatMoney, isMoneyInput, sumMoney } from "./money";
@@ -365,6 +366,7 @@ export default function Banking() {
                 </>)}</WithBank>} />
                 <Route path="unmatched/*" element={<WithBank base="unmatched">{(bank) => (
                     <Workbench bank={bank} initialStatus="UNMATCHED,PARTIAL" title="Unmatched transactions" />)}</WithBank>} />
+                <Route path="proposals/*" element={<WithBank base="proposals">{(bank) => <BankProposals bank={bank} />}</WithBank>} />
                 <Route path="reconciliation/*" element={<WithBank base="reconciliation">{(bank) => <Reconciliation bank={bank} />}</WithBank>} />
                 <Route path="workbench/*" element={<BankWorkbenchPage />} />
                 <Route path="suspense" element={<Suspense />} />

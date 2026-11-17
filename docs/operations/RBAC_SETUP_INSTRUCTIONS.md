@@ -26,6 +26,9 @@ REPORT_VIEWER
 TL_GENERATE
 LEDGER_MANAGER
 ACCOUNT_ACCESS
+ACCOUNTS_VIEWER      # Accounting workspace (created by migration accounting/0003)
+ACCOUNTS_MANAGER
+ACCOUNTS_APPROVER
 ```
 
 ## Database Setup
@@ -79,7 +82,19 @@ user.groups.set(groups)
 print(user.get_role_codes())
 ```
 
-Superusers bypass role checks, but assigning explicit groups can still make support and auditing easier.
+Superusers bypass role checks **and** automatically belong to every role (2026-11-17):
+
+- every existing superuser receives every existing role on each `migrate` (`post_migrate`);
+- a newly created role is granted to every superuser;
+- a newly created or promoted superuser receives every role;
+- removing a role from a superuser (Django Admin, the user-management API, `groups.set()`) is re-granted on commit.
+
+Only `is_superuser=True` users are affected. Ordinary users and `is_staff` admins keep exactly
+the roles assigned to them, so give accounting users the `ACCOUNTS_*` role they need through
+Users & Roles. Demoting a superuser does not strip their roles; remove them explicitly.
+Paths that bypass model signals (`QuerySet.update(is_superuser=True)`, raw SQL, `loaddata`)
+need `python manage.py sync_superuser_roles` (idempotent). Code: `apps/accounts/superuser_roles.py`,
+`apps/accounts/signals.py`; tests: `apps/accounts/tests/test_superuser_role_automation.py`.
 
 ## Verify API Access
 

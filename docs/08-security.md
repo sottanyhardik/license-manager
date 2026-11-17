@@ -39,6 +39,12 @@
 
 All permission classes follow the pattern: superusers bypass everything.
 
+Superusers also automatically **belong** to every role group, so code that reads membership
+directly (`has_any_role`, `/me` `roles`, role-filtered user lists) treats them consistently.
+Mechanism, scope and the `sync_superuser_roles` command: `docs/operations/RBAC_SETUP_INSTRUCTIONS.md`
+§ Assign Roles. Accounting roles (`ACCOUNTS_VIEWER/MANAGER/APPROVER`) are assignable through
+`GET /api/auth/users/available-roles/` like every other role.
+
 ### Role-Based Access in Frontend
 
 `ProtectedRoute` component checks roles before rendering:

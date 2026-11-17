@@ -1,8 +1,8 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const get = vi.fn();
 const post = vi.fn();
@@ -28,13 +28,15 @@ const mk = (id: number, over: Record<string, unknown> = {}) => ({
 const HIGH = mk(1);
 const LOW = mk(2, { confidence: "low", party: null, source: "", allocations: [], advance: "0.00" });
 
+let booked = new Set<number>();  // lines the "server" has matched (they leave the proposals list)
+
 function respond(url: string, config?: { params?: Record<string, unknown> }) {
     if (url === "accounting/entities/") return { data: { books: [BOOKS], discovered: [] } };
     if (url === "accounting/bank-accounts/") return { data: [BANK] };
     if (url === "accounting/bank-accounts/3/proposals/") {
         const wantsLow = String(config?.params?.confidence ?? "").includes("low");
         return { data: { bank_account_id: 3, summary: { high: 1, medium: 0, low: 1, none: 0, total: 2 },
-            proposals: wantsLow ? [HIGH, LOW] : [HIGH] } };
+            proposals: (wantsLow ? [HIGH, LOW] : [HIGH]).filter((p) => !booked.has(p.line.id)) } };
     }
     if (url === "accounting/statement-lines/1/proposal/") return { data: mk(1, { party: { id: 555, name: "Other Co", gstin: null }, source: "chosen" }) };
     if (url === "accounting/narration-aliases/") return { data: { aliases: [] } };
@@ -60,8 +62,9 @@ function renderAt(roles: string[] = ["ACCOUNTS_APPROVER"]) {
 }
 
 describe("BankProposals", () => {
+    afterEach(() => { vi.useRealTimers(); });
     beforeEach(() => {
-        get.mockReset(); post.mockReset(); del.mockReset();
+        get.mockReset(); post.mockReset(); del.mockReset(); booked = new Set();
         get.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => Promise.resolve(respond(url, config)));
     });
 
@@ -100,6 +103,40 @@ describe("BankProposals", () => {
         await userEvent.click(within(dialog).getByRole("button", { name: "Post" }));
         await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/bank-accounts/3/proposals/confirm/", { items: [{ line_id: 1, party_id: 555 }] }));
         expect(await screen.findByText("1 line confirmed")).toBeInTheDocument();
+    });
+
+    async function confirmLine1(user: ReturnType<typeof userEvent.setup>) {
+        post.mockImplementation((url: string) => {
+            if (url.endsWith("/proposals/confirm/")) { booked.add(1); return Promise.resolve({ data: { confirmed: [{ line_id: 1, payment_id: 5, voucher: "RV-1" }], errors: [] } }); }
+            booked.delete(1);
+            return Promise.resolve({ data: { line_id: 1, status: "UNMATCHED" } });
+        });
+        renderAt();
+        await screen.findByText("NEFT ACME 1");
+        await user.click(screen.getByRole("checkbox", { name: "Select line 1" }));
+        await user.click(screen.getByRole("button", { name: "Confirm selected (1)" }));
+        await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Post" }));
+        return (await screen.findByText("Matched · RV-1")).closest("tr")!;
+    }
+
+    it("shows a confirmed line as matched with Undo, and Undo reverses it", async () => {
+        const user = userEvent.setup();
+        const row = await confirmLine1(user);
+        expect(within(row).getByRole("checkbox", { name: "Select line 1" })).toBeDisabled();
+        await user.click(within(row).getByRole("button", { name: "Undo line 1" }));
+        await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/bank-proposals/5/undo/", {}));
+        await waitFor(() => expect(screen.queryByText("Matched · RV-1")).not.toBeInTheDocument());
+        expect(await screen.findByText("NEFT ACME 1")).toBeInTheDocument();  // back as an open proposal
+    });
+
+    it("removes a matched line from the list after the undo window", async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        const row = await confirmLine1(user);
+        expect(within(row).getByRole("button", { name: "Undo line 1" })).toHaveTextContent(/Undo \((10|9)s\)/);
+        await act(async () => { vi.advanceTimersByTime(10_500); });
+        await waitFor(() => expect(screen.queryByText("NEFT ACME 1")).not.toBeInTheDocument());
+        expect(post).not.toHaveBeenCalledWith(expect.stringContaining("/undo/"), expect.anything());
     });
 
     it("hides confirm and selection for a viewer", async () => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -53,6 +53,10 @@ const CONF_TONE: Record<Confidence, string> = {
     none: "bg-slate-100 text-slate-700 ring-slate-500/20",
 };
 const SOURCE_LABEL: Record<string, string> = { alias: "learned", name: "name match" };
+
+/** Confirmed lines stay on screen as "Matched" this long, with Undo; then they leave the list. */
+export const UNDO_SECONDS = 10;
+interface Recent { proposal: Proposal; payment_id: number; voucher: string; until: number }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -131,6 +135,21 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
     const [selected, setSelected] = useState<number[]>([]);
     const [result, setResult] = useState<ConfirmResponse | null>(null);
     const [showAliases, setShowAliases] = useState(false);
+    const [recent, setRecent] = useState<Record<number, Recent>>({});
+    const [now, setNow] = useState(() => Date.now());
+    const hasRecent = Object.keys(recent).length > 0;
+    useEffect(() => {
+        if (!hasRecent) return undefined;
+        const timer = window.setInterval(() => {
+            const t = Date.now();
+            setNow(t);
+            setRecent((r) => {
+                const kept = Object.entries(r).filter(([, v]) => v.until > t);
+                return kept.length === Object.keys(r).length ? r : Object.fromEntries(kept);
+            });
+        }, 250);
+        return () => window.clearInterval(timer);
+    }, [hasRecent]);
     const confParam = CONFIDENCES.filter((c) => conf.includes(c.id)).map((c) => c.id).join(",");
 
     const q = useQuery({
@@ -150,6 +169,13 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
         onSuccess: (r) => {
             setResult(r);
             const done = new Set(r.confirmed.map((c) => c.line_id));
+            const byLine = new Map(effective.map((p) => [p.line.id, p]));
+            const until = Date.now() + UNDO_SECONDS * 1000;
+            setNow(Date.now());
+            setRecent((cur) => ({ ...cur, ...Object.fromEntries(r.confirmed.flatMap((c) => {
+                const proposal = byLine.get(c.line_id);
+                return proposal ? [[c.line_id, { proposal, payment_id: c.payment_id, voucher: c.voucher, until }]] : [];
+            })) }));
             setSelected((s) => s.filter((id) => !done.has(id)));
             setOverrides((o) => Object.fromEntries(Object.entries(o).filter(([id]) => !done.has(Number(id)))));
             if (r.confirmed.length) toast.success(`${plural(r.confirmed.length, "line")} posted`);
@@ -157,9 +183,20 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
         },
         onError: notifyError,
     });
+    const undo = useMutation({
+        mutationFn: (r: Recent) => acctPost<{ line_id: number; status: string }>(`bank-proposals/${r.payment_id}/undo/`, {}),
+        onSuccess: (res, r) => {
+            setRecent((cur) => Object.fromEntries(Object.entries(cur).filter(([id]) => Number(id) !== res.line_id)));
+            toast.success(`${r.voucher} reversed — the bank line is unmatched again`);
+            void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
+        },
+        onError: notifyError,
+    });
 
     const effective = (q.data?.proposals ?? []).map((p) => overrides[p.line.id] ?? p);
-    const eligible = (p: Proposal) => !!p.party && !p.blocked;
+    const recentRows = Object.values(recent).map((r) => r.proposal);
+    const rows = [...recentRows, ...effective.filter((p) => !recent[p.line.id])];
+    const eligible = (p: Proposal) => !!p.party && !p.blocked && !recent[p.line.id];
     const chosen = effective.filter((p) => selected.includes(p.line.id) && eligible(p));
     const receipts = chosen.filter((p) => p.direction === "RECEIPT");
     const payments = chosen.filter((p) => p.direction === "PAYMENT");
@@ -205,7 +242,7 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                     </div>
                 )}
                 <QueryState isLoading={q.isLoading} error={q.error} onRetry={() => void q.refetch()}>
-                    <DataGrid rows={effective} rowKey={(p) => p.line.id} caption="Invoice proposals"
+                    <DataGrid rows={rows} rowKey={(p) => p.line.id} caption="Invoice proposals"
                         empty="No unmatched lines need a party — try Auto-match on Bank Transactions." columns={[
                         ...(canApprove ? [{ key: "sel", header: (
                             <input type="checkbox" aria-label="Select all proposals" checked={allSelected}
@@ -220,7 +257,7 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                         { key: "a", header: "Amount", numeric: true, cell: (p) => (
                             <span><Amount value={p.line.amount} /> <span className="text-xs text-slate-500">{p.direction === "RECEIPT" ? "Cr" : "Dr"}</span></span>) },
                         { key: "p", header: "Proposed party", cell: (p) => (
-                            <PartyCell p={p} canWrite={canWrite} overridden={!!overrides[p.line.id]} busy={preview.isPending}
+                            <PartyCell p={p} canWrite={canWrite && !recent[p.line.id]} overridden={!!overrides[p.line.id]} busy={preview.isPending}
                                        onPick={(partyId) => preview.mutate({ lineId: p.line.id, partyId })}
                                        onReset={() => setOverrides((o) => Object.fromEntries(Object.entries(o).filter(([id]) => Number(id) !== p.line.id)))} />) },
                         { key: "b", header: "Bills to settle", cell: (p) => (
@@ -229,8 +266,17 @@ export default function BankProposals({ bank }: { bank: BankAccount }) {
                                 {formatMoney(p.advance, { blankZero: true }) && <div className="text-amber-700">Advance <Amount value={p.advance} /></div>}
                                 {p.allocations.length === 0 && !p.party && <span className="text-slate-400">—</span>}
                             </div>) },
-                        { key: "c", header: "Confidence", cell: (p) => (
-                            <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset ${CONF_TONE[p.confidence]}`}>{p.confidence}</span>) },
+                        { key: "c", header: "Confidence", cell: (p) => {
+                            const r = recent[p.line.id];
+                            if (!r) return <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset ${CONF_TONE[p.confidence]}`}>{p.confidence}</span>;
+                            const left = Math.max(0, Math.ceil((r.until - now) / 1000));
+                            return (
+                                <div className="flex flex-col items-start gap-1" role="status" aria-live="polite">
+                                    <span className="inline-flex rounded-md bg-emerald-600 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-white">Matched · {r.voucher}</span>
+                                    {canApprove && <Button size="sm" variant="outline" disabled={undo.isPending} aria-label={`Undo line ${p.line.id}`}
+                                                           onClick={() => undo.mutate(r)}>Undo ({left}s)</Button>}
+                                </div>);
+                        } },
                     ]} />
                 </QueryState>
             </Panel>

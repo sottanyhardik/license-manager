@@ -183,7 +183,7 @@ function BoeCardItem({
 
             const boeTitleEl = item.bill_of_entry_number ? (
                 <Link
-                    to={`/bill-of-entries/${item.id}/edit`}
+                    to={`/bill-of-entries/${item.id}`}
                     onClick={() => {
                         saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' });
                     }}

@@ -66,6 +66,7 @@ const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
 const LicenseLedgerPackageReadiness = lazyLoadWithRetry(() => import("../pages/LicenseLedgerPackageReadiness"));
 const LicenseDownloadRequests = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequests"));
 const LicenseDownloadRequestDetail = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequestDetail"));
+const BoeDetailPage = lazy(() => import("../pages/bill-of-entry/BoeDetailPage"));
 const LicenseOverviewPage = lazy(() => import("../pages/license-overview/LicenseOverviewPage"));
 const LicensePlanningWorkspace = lazy(() => import("../pages/planning/LicensePlanningWorkspace"));
 const PDFViewer = lazy(() => import("../pages/PDFViewer"));
@@ -185,6 +186,12 @@ export default function AppRoutes() {
                 <Route path="/bill-of-entries/create" element={
                     <ProtectedRoute requiredRole={ROLES.BOE_MANAGER}>
                         <AdminLayout><MasterForm /></AdminLayout>
+                    </ProtectedRoute>
+                } />
+                {/* Static `/create` outranks the dynamic `:id`; `/:id/edit` has more segments. */}
+                <Route path="/bill-of-entries/:id" element={
+                    <ProtectedRoute requiredAnyRole={BOE_LIST_ROLES}>
+                        <AdminLayout><BoeDetailPage /></AdminLayout>
                     </ProtectedRoute>
                 } />
                 <Route path="/bill-of-entries/:id/edit" element={

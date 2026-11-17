@@ -1,0 +1,51 @@
+{
+  "response": {
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "disposition": "attachment; filename=\"BOE Report - <TODAY>.xlsx\"",
+    "status": 200
+  },
+  "workbook": {
+    "sheet_names": [
+      "Bill of Entries"
+    ],
+    "sheets": [
+      {
+        "auto_filter": null,
+        "cells": [
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A1",
+            "type": "str",
+            "value": "Bill of Entry Report"
+          },
+          {
+            "bold": false,
+            "bordered": false,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A2",
+            "type": "str",
+            "value": "Total INR: ₹0.00    Total FC: $0.00    <TODAY>"
+          }
+        ],
+        "column_widths": {
+          "A": 22.0
+        },
+        "dimensions": "A1:R2",
+        "freeze_panes": null,
+        "max_column": 18,
+        "max_row": 2,
+        "merged": [
+          "A1:R1",
+          "A2:R2"
+        ],
+        "title": "Bill of Entries"
+      }
+    ]
+  }
+}

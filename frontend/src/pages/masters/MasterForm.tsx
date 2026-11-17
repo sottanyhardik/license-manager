@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../../api/axios";
@@ -19,6 +19,8 @@ import LicenseParsePanel from "./LicenseParsePanel";
 import TradeMetaBadges from "./TradeMetaBadges";
 import BoeParsePanel from "./BoeParsePanel";
 import { cn } from "@/lib/utils";
+import { StickyFormBar } from "@/components/form/StickyFormBar";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -251,8 +253,36 @@ export default function MasterForm({
         .join(" ");
     const isLicenseForm = entityName === "licenses";
 
+    // ---------- BOE-only: unsaved-change protection ----------
+    // BrowserRouter is not a data router, so useBlocker is unavailable: guard
+    // beforeunload + in-app links + Cancel/Back. Dirty is measured against the
+    // snapshot taken once the record (edit) / defaults (create) have loaded.
+    const isBoeForm = entityName === 'bill-of-entries';
+    const [boeBaseline, setBoeBaseline] = useState<string | null>(null);
+    const boeSnapshot = isBoeForm ? JSON.stringify(formData) : "";
+    const boeReady = isBoeForm && !loading && (metadata.form_fields?.length ?? 0) > 0 &&
+        (!isEdit || String(formData.id) === String(recordId));
+    useEffect(() => { setBoeBaseline(null); }, [entityName, recordId]);
+    useEffect(() => {
+        if (boeReady && boeBaseline === null) setBoeBaseline(boeSnapshot);
+    }, [boeReady, boeBaseline, boeSnapshot]);
+    const boeDirty = isBoeForm && boeBaseline !== null && boeSnapshot !== boeBaseline;
+    const { confirmLeave, bypass: bypassUnsavedGuard } = useUnsavedChangesGuard({ dirty: boeDirty, enabled: isBoeForm });
+
+    // Wrapped callbacks handed to the submit hook (BOE only): a successful save
+    // navigates to the list / fires onSuccess|onClose, which is our confirmation
+    // that the save succeeded. Any other programmatic navigation is guarded.
+    const submitNavigate = useCallback(((to: any, options?: any) => {
+        if (to === '/bill-of-entries') bypassUnsavedGuard();
+        else if (typeof to === 'string' && !confirmLeave()) return;
+        return navigate(to, options);
+    }) as typeof navigate, [navigate, bypassUnsavedGuard, confirmLeave]);
+    // Modal save keeps the form mounted: re-baseline so the guard re-arms for later edits.
+    const submitOnSuccess = useMemo(() => onSuccess ? ((savedId: number | string) => { bypassUnsavedGuard(); setBoeBaseline(null); onSuccess(savedId); }) : undefined, [onSuccess, bypassUnsavedGuard]);
+    const submitOnClose = useMemo(() => onClose ? (() => { bypassUnsavedGuard(); onClose(); }) : undefined, [onClose, bypassUnsavedGuard]);
+
     // ---------- Hook 3: form submit ----------
-    const { handleSubmit } = useMasterFormSubmit({
+    const { handleSubmit: handleSubmitBase } = useMasterFormSubmit({
         entityName,
         recordId,
         isEdit,
@@ -261,13 +291,22 @@ export default function MasterForm({
         metadata,
         boePdfFile,
         entityTitle,
-        onSuccess,
-        onClose,
-        navigate,
+        onSuccess: isBoeForm ? submitOnSuccess : onSuccess,
+        onClose: isBoeForm ? submitOnClose : onClose,
+        navigate: isBoeForm ? submitNavigate : navigate,
         setSaving,
         setError,
         setFieldErrors,
     });
+
+    // Double-submit protection (BOE only): ignore re-entry while a save is in flight.
+    const submittingRef = useRef(false);
+    const handleSubmit = async (e: React.FormEvent) => {
+        if (!isBoeForm) return handleSubmitBase(e);
+        if (submittingRef.current || saving) { e.preventDefault(); return; }
+        submittingRef.current = true;
+        try { await handleSubmitBase(e); } finally { submittingRef.current = false; }
+    };
 
     // ---------- BOE / License PDF parse panel handlers ----------
     const handleParseBoePdf = async () => {
@@ -710,8 +749,9 @@ export default function MasterForm({
     }
 
     return (
-        <div className={cn("min-h-screen bg-background", isLicenseForm && "license-form-workspace")}>
+        <div className={cn("min-h-screen bg-background", isLicenseForm && "license-form-workspace", isBoeForm && "pb-24 sm:pb-6")}>
             {/* Compact Header */}
+            <StickyFormBar position="top" enabled={isBoeForm} label="Bill of Entry header" className="mb-6">
             <div className={cn("mb-6 flex items-center justify-between gap-4", isLicenseForm && "sticky top-0 z-20 -mx-1 border-b border-border/70 bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90")}>
                 <div className="flex-1">
                     <h2 className="mb-1 flex items-center gap-2 font-semibold text-base text-foreground leading-snug">
@@ -739,13 +779,25 @@ export default function MasterForm({
                             );
                         })()}
                     </h2>
-                    <p className="text-xs text-muted-foreground">{isEdit ? 'Update existing record' : 'Create a new record'}</p>
+                    <p className="text-xs text-muted-foreground">
+                        {isEdit ? 'Update existing record' : 'Create a new record'}
+                        {isBoeForm && (
+                            <span
+                                role="status"
+                                data-testid="boe-form-state"
+                                className={cn("ml-2 font-medium", boeDirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
+                            >
+                                {boeDirty ? "• Unsaved changes" : isEdit ? "• Saved" : "• New"}
+                            </span>
+                        )}
+                    </p>
                 </div>
                 <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                        if (isBoeForm && !confirmLeave()) return;
                         if (isModal && onClose) { onClose(); return; }
                         navigateToList(navigate, entityName, { preserveFilters: true });
                     }}
@@ -755,8 +807,9 @@ export default function MasterForm({
                     <span>Back</span>
                 </Button>
             </div>
+            </StickyFormBar>
 
-            <div className={cn("overflow-hidden rounded-lg border border-border bg-card shadow-0", isLicenseForm && "border-border/70 shadow-0")}>
+            <div className={cn("overflow-hidden rounded-lg border border-border bg-card shadow-0", isLicenseForm && "border-border/70 shadow-0", isBoeForm && "overflow-visible")}>
                 <div className={cn("border-b border-border/70 px-6 py-4", isLicenseForm && "px-4 py-3 sm:px-6")}>
                     <div className="flex items-center justify-between gap-3">
                         <h3 className="mb-0 flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1074,7 +1127,8 @@ export default function MasterForm({
                         )}
 
                         {/* Action Buttons */}
-                        <div className={cn("mt-6 flex flex-wrap items-center gap-3 border-t border-border/70 pt-4", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(26,58,82,0.06)] backdrop-blur sm:-mx-6 sm:px-6")}>
+                        <StickyFormBar position="bottom" enabled={isBoeForm} label="Bill of Entry form actions" className="mt-6">
+                        <div className={cn("mt-6 flex flex-wrap items-center gap-3 border-t border-border/70 pt-4", isBoeForm && "mt-0 border-t-0 pt-0", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(26,58,82,0.06)] backdrop-blur sm:-mx-6 sm:px-6")}>
                             <Button
                                 type="submit"
                                 size="lg"
@@ -1115,6 +1169,7 @@ export default function MasterForm({
                                 variant="outline"
                                 size="lg"
                                 onClick={() => {
+                                    if (isBoeForm && !confirmLeave()) return;
                                     if (isModal && onClose) { onClose(); return; }
                                     navigateToList(navigate, entityName, { preserveFilters: true });
                                 }}
@@ -1124,6 +1179,7 @@ export default function MasterForm({
                                 <span>Cancel</span>
                             </Button>
                         </div>
+                        </StickyFormBar>
                     </form>
                 </div>
             </div>

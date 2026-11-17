@@ -20,6 +20,10 @@ Lead updates the status column. Line refs at base `9fc44ad3` unless marked post-
 | WS4 | Pin the current BOE API and service behaviour with tests only, so WS5 and the owner decisions are made deliberately. No production code change. | backend-test-engineer (sonnet) | — | low (tests only) | done — 56 new tests, verified |
 | WS5 | Hardening that changes no business semantics or success response shape: ProtectedError returns 400 on update, the BOE-side merge is audited and locked, export drops its per-BOE SUM queries, retrieve no longer loads the object twice, and bulk hide/restore normalises ids. | backend-engineer (sonnet), reviewed by cif-balance-auditor | WS4 | medium (merge audit path changes in two endpoints; the reconciliation tests at test_reconciliation.py:465-564 must stay green) | done — reviewed by cif-balance-auditor + django-reviewer |
 | WS6 | Write the docs in `docs/erp-architecture/` (this folder). Docs only. | technical-writer | WS3/WS5 for the *verify after* items | low | done — lead refreshed WS3/WS5 items |
+| B1 | BOE detail page at `/bill-of-entries/:id`; shared `buildBoeRecordTabs`; card number links to detail. Deferred item 3. | frontend | Phase A | low | implemented, pending lead verification/final gate |
+| B2 | BOE-only dirty guard, sticky header/footer, save wrapper in MasterForm (gated on `isBoeForm`). Deferred item 4. | frontend | Phase A | low | implemented, pending lead verification/final gate (review: 2 medium open) |
+| B3 | Move BOE create/update into `boe_service.save_boe_with_rows`; serializer 878 to 418 lines; architecture baseline 4 to 0. Deferred item 8. | backend | Phase A | medium | implemented, pending lead verification/final gate (Opus review requested) |
+| B4 | Move export to `services/exporters/` with 20 golden tests and 14 snapshots; views_export thin. Deferred item 9. | backend | Phase A | low | implemented, pending lead verification/final gate |
 
 ## Owner escalations (verbatim — FORBIDDEN to implement until decided)
 
@@ -65,6 +69,8 @@ Item 14 is done by WS6.
 | 4 | BOE Playwright workflow spec (`frontend/e2e/boe-workflow.spec.ts`, 8 tests) | Found 3 real defects, fixed at the shared source: (a) Add New link rendered dark text on blue in **all** registers — the unlayered `a[class*="text-"]` reset in `styles/tailwind.css` beat `text-white`; (b) legacy `.entity-card-stat-label` used `--tb-text-tertiary` (3.6:1, fails AA) instead of the Licence label token; (c) icon-only Add New below `sm` had no accessible name (also failed `trades.accessibility.spec`) |
 | 5 | Review fixes | Edit Options Merge gated on `canWrite` (matches card); dead `boeRecordKeys` removed; Overview shows INR to paise (`fmtInrExact`) and unit price at the backend's 0.001 scale; ProtectedError 400 no longer leaks model labels (logged server-side); reconciliation merge with non-integer ids returns 400 (+test) |
 | 6 | Gates | see "Verification evidence" |
+| 7 | Phase A (D1-D15) | commit `f202cedb`; backend 3339 passed / 1 xfail; frontend 814/814; Playwright 29/29 mocked; 0 false 400s on 1044 local BOEs; no pending migrations |
+| 8 | Phase B (B1-B4) | Implemented in working tree; targeted tests only; reviews: B3 approve (read-only), others approve_with_fixes. Pending lead verification, final gate and Opus review. Merge not done. See `docs/boe-modernization/final-audit.md` |
 
 ## Verification evidence (post-change)
 

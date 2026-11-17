@@ -1,15 +1,10 @@
 import { useState } from "react";
 
 import { ActionMenu, type ActionMenuItem } from "@/components/shared";
-import { DetailTabs, type DetailTab } from "@/components/workspace";
+import { DetailTabs } from "@/components/workspace";
 
-import { BoeItemsTable } from "./BoeItemsTable";
-import { OverviewTab } from "./tabs/OverviewTab";
-import { BoeDetailsTab } from "./tabs/BoeDetailsTab";
-import { LicenceMappingTab } from "./tabs/LicenceMappingTab";
-import { AllotmentMappingTab } from "./tabs/AllotmentMappingTab";
-import { DocumentsTab } from "./tabs/DocumentsTab";
-import type { BoeDetailRow, BoeListItem } from "./types";
+import { buildBoeRecordTabs } from "./boeRecordTabs";
+import type { BoeListItem } from "./types";
 
 export type BoeRecordTabId =
     | "overview"
@@ -37,23 +32,9 @@ export interface BoeRecordWorkspaceProps {
 export default function BoeRecordWorkspace({ item, actionItems, onTransferLetter }: BoeRecordWorkspaceProps) {
     const [tab, setTab] = useState<BoeRecordTabId>("overview");
     const recordKey = `boe:${item.id}`;
-    const rows: BoeDetailRow[] = item.item_details || [];
     const label = item.bill_of_entry_number || item.id;
 
-    const tabs: DetailTab[] = [
-        { id: "overview", label: "Overview", render: () => <OverviewTab item={item} /> },
-        { id: "boe-details", label: "BOE Details", render: () => <BoeDetailsTab boeId={item.id} /> },
-        { id: "import-items", label: "Import Items", render: () => <BoeItemsTable rows={rows} /> },
-        { id: "licence-mapping", label: "Licence Mapping", render: () => <LicenceMappingTab rows={rows} /> },
-        { id: "allotment-mapping", label: "Allotment Mapping", render: () => <AllotmentMappingTab allotment={item.allotment} /> },
-        {
-            id: "documents",
-            label: "Documents",
-            render: () => (
-                <DocumentsTab boeNumber={item.bill_of_entry_number} boePdfCopy={item.boe_pdf_copy} rows={rows} onTransferLetter={onTransferLetter} />
-            ),
-        },
-    ];
+    const tabs = buildBoeRecordTabs(item, { onTransferLetter });
 
     return (
         <div role="region" id={`boe-content-${item.id}`} aria-label={`BOE ${label} details`}>

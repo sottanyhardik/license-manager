@@ -1,0 +1,116 @@
+{
+  "response": {
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "disposition": "attachment; filename=\"Port BOE Report - <TODAY>.xlsx\"",
+    "status": 200
+  },
+  "workbook": {
+    "sheet_names": [
+      "Port BOE List"
+    ],
+    "sheets": [
+      {
+        "auto_filter": null,
+        "cells": [
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A1",
+            "type": "str",
+            "value": "Port BOE Report — <TODAY>"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A2",
+            "type": "str",
+            "value": "BOE Number"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "B2",
+            "type": "str",
+            "value": "BOE Date"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "C2",
+            "type": "str",
+            "value": "Port"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "D2",
+            "type": "str",
+            "value": "Company"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "E2",
+            "type": "str",
+            "value": "Quantity (KGS)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "F2",
+            "type": "str",
+            "value": "Total CIF INR"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "G2",
+            "type": "str",
+            "value": "Item Name"
+          }
+        ],
+        "column_widths": {
+          "A": 30.0,
+          "B": 10.0,
+          "C": 6.0,
+          "D": 9.0,
+          "E": 16.0,
+          "F": 15.0,
+          "G": 11.0
+        },
+        "dimensions": "A1:G2",
+        "freeze_panes": null,
+        "max_column": 7,
+        "max_row": 2,
+        "merged": [
+          "A1:G1"
+        ],
+        "title": "Port BOE List"
+      }
+    ]
+  }
+}

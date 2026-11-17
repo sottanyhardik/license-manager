@@ -231,7 +231,6 @@ VIEW_WRITE_BASELINE = {('accounts', 'password'): 2,
  ('trade', 'views_invoice_documents'): 2}
 # Rule: direct financial-model writes outside services, (app, basename, Model) -> count.
 FINANCIAL_WRITE_BASELINE = {('allotment', 'backfill_allocation_status', 'AllotmentItems'): 1,
- ('bill_of_entry', 'serializers', 'RowDetails'): 4,
  ('core', 'clean_duplicate_rowdetails', 'RowDetails'): 1,
  ('core', 'ledger', 'LicenseImportItemsModel'): 2,
  ('core', 'ledger', 'RowDetails'): 2,

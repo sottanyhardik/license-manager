@@ -1,0 +1,14 @@
+{
+  "pdf": {
+    "page_count": 1,
+    "pages": [
+      "Bill of Entry Report\nTotal CIF (FC): $0.00 | Total CIF (INR): 0.00\n Generated on: <GENERATED>\n"
+    ],
+    "starts_with_pdf_magic": true
+  },
+  "response": {
+    "content_type": "application/pdf",
+    "disposition": "inline; filename=\"BOE Report - <TODAY>.pdf\"",
+    "status": 200
+  }
+}

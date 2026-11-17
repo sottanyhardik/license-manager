@@ -1,0 +1,14 @@
+{
+  "pdf": {
+    "page_count": 1,
+    "pages": [
+      "Bill of Entry Report\nExch. Rate\n01-03-2025\nUSD\n84.5000\nEUR\n91.2500\nGBP\n107.1000\nCNY\n11.6500\nTotal CIF (FC): $310.10 | Total CIF (INR): 26,189.58\n Generated on: <GENERATED>\nAcme Foods Pvt Ltd\nItem: SUGAR REFINED\nSr\nNo\nBOE\nNumber\nBOE\nDate\nPort\nQty\n(KGS)\nUnit\nPrice ($)\nValue\n ($)\nExch.\n Rate\nItem\nName\nInvoice\nExporter\nLicense\n No.\nLic. Date\nLic. Port\nItem\n Sr.\nBOE\nQty.\nBOE $.\nBOE CIF\n 1\n 9000002\n 05-03-2025\n INMAA1\n 2,000\n 0.15\n 300.00\n 84.50\n SUGAR\nREFINED\n --\nAcme Foods…\n 0311000001\n10-01-2024\n INMUN1\n 1\n 2,000\n 300.00\n 25,350.00\n Port Total\n(INMAA1)\n 2,000\n 300.00\n 25,350.00\nGrand Total:\nQty: 2,000 KGS\nCIF (FC): $300.00\nCIF (INR): 25,350.00\nBeta Traders\nItem: PALM OIL\nSr\nNo\nBOE\nNumber\nBOE\nDate\nPort\nQty\n(KGS)\nUnit\nPrice ($)\nValue\n ($)\nExch.\n Rate\nItem\nName\nInvoice\nExporter\nLicense\n No.\nLic. Date\nLic. Port\nItem\n Sr.\nBOE\nQty.\nBOE $.\nBOE CIF\n 1\n 9000004\n 02-03-2025\n INMAA1\n 100\n 0.10\n 10.10\n 83.12\n PALM OIL\n --\nBeta Traders\n 0311000002\n20-02-2024\n INMAA1\n 1\n 100\n 10.10\n 839.58\n Port Total\n(INMAA1)\n 100\n 10.10\n 839.58\nGrand Total:\nQty: 100 KGS\nCIF (FC): $10.10\nCIF (INR): 839.58\n"
+    ],
+    "starts_with_pdf_magic": true
+  },
+  "response": {
+    "content_type": "application/pdf",
+    "disposition": "inline; filename=\"BOE Report - <TODAY>.pdf\"",
+    "status": 200
+  }
+}

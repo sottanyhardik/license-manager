@@ -3,14 +3,248 @@ boe_service.py — domain logic for the Bill of Entry app.
 
 All functions accept model instances, dicts, and primitives.
 No DRF Request objects enter this module.
-Raises ValueError for invalid domain operations.
+Raises ValueError for invalid domain operations (the BOE save path raises
+DRF ValidationError to keep the API 400 shapes).
 """
 from __future__ import annotations
 
 import logging
+from decimal import ROUND_HALF_EVEN, Decimal
 from typing import Any
 
+from django.db import transaction
+from django.db.models import ProtectedError
+from rest_framework.exceptions import ValidationError
+
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails, genuinely_hidden_boe_ids
+from apps.core.constants import DEBIT, DEC_0
+from apps.license.services.effective_cif_mode import (
+    INDIVIDUAL_ITEM,
+    resolve_effective_cif_mode,
+)
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Nested-row write guards (moved from api/serializers.py, ADR-003)
+# ---------------------------------------------------------------------------
+DEC_CENT = Decimal('0.01')
+DEC_MILLI = Decimal('0.001')
+
+# Financial fields of a RowDetails row and the precision the nested serializer
+# accepts them at.  A frozen (ledger-imported) row is compared at this precision
+# so a client that echoes the row back exactly as it was serialized never trips
+# the D3 "frozen rows are immutable" guard.
+FROZEN_ROW_FIELD_PRECISION = {
+    'cif_fc': DEC_CENT,
+    'cif_inr': DEC_CENT,
+    'qty': DEC_MILLI,
+}
+
+
+def _item_pk(value):
+    """Primary key of a nested `sr_number` value (model instance, dict or id)."""
+    if isinstance(value, dict):
+        return value.get('id')
+    if hasattr(value, 'pk'):
+        return value.pk
+    return value
+
+
+def _frozen_row_changes(payload_row: dict, frozen_row: RowDetails) -> list[str]:
+    """Field names whose payload value differs from the stored frozen row."""
+    changed = []
+    sr_number = payload_row.get('sr_number')
+    if sr_number is not None and _item_pk(sr_number) != frozen_row.sr_number_id:
+        changed.append('sr_number')
+    for field, precision in FROZEN_ROW_FIELD_PRECISION.items():
+        if field not in payload_row or payload_row[field] is None:
+            continue
+        # Same rounding as the read path (DRF DecimalField default,
+        # ROUND_HALF_EVEN) so an echoed serialization compares equal.
+        requested = Decimal(str(payload_row[field])).quantize(precision, rounding=ROUND_HALF_EVEN)
+        stored = Decimal(str(getattr(frozen_row, field) or 0)).quantize(precision, rounding=ROUND_HALF_EVEN)
+        if requested != stored:
+            changed.append(field)
+    return changed
+
+
+def _resolve_payload_target(payload_row: dict, existing_by_id: dict, existing_by_key: dict):
+    """The persisted BOE row a nested payload row will write to, mirroring
+    `BillOfEntrySerializer.update`: by `id` when it belongs to this BOE, else by
+    the (sr_number, DEBIT) upsert key.  None means a brand-new row."""
+    row_id = payload_row.get('id')
+    if row_id and row_id in existing_by_id:
+        return existing_by_id[row_id]
+    transaction_type = payload_row.get('transaction_type', DEBIT)
+    return existing_by_key.get((_item_pk(payload_row.get('sr_number')), transaction_type))
+
+
+def _ceiling_scope(item) -> tuple[str, int]:
+    """Which persisted rows debit `item`'s live ledger.
+
+    Mirrors the branch in `ItemBalanceCalculator.calculate_item_credit_debit`
+    (read-only reuse; the math is not re-derived): an item with no CIF of its
+    own is debited licence-wide, otherwise only by rows on that exact item.
+    """
+    if not item.cif_fc or item.cif_fc == 0:
+        return ('licence', item.license_id)
+    return ('item', item.pk)
+
+
+def _row_in_scope(item, scope: tuple[str, int]) -> bool:
+    kind, pk = scope
+    if kind == 'licence':
+        return item.license_id == pk
+    return item.pk == pk
+
+
+def check_individual_item_cif_ceiling(boe, item_rows, *, lock: bool) -> None:
+    """INDIVIDUAL_ITEM CIF ceiling for a whole nested `item_details` payload
+    (owner decisions D12/D13).
+
+    For every import item X referenced by a writable payload row whose licence
+    is in INDIVIDUAL_ITEM mode, the post-write total of this BOE's DEBIT rows in
+    X's ledger scope must fit in X's live ledger balance with this BOE's own
+    currently-counted debit in that scope added back:
+
+        new_total(scope) <= credit(X) - debit(X) + own_counted(scope)
+
+    * own_counted only includes rows the ledger counts today (DEBIT, not
+      frozen, BOE not genuinely hidden).  A row moved to another item/licence
+      gets no credit on its new item: its old debit is not in the new scope.
+    * Frozen rows are excluded on both sides: they are never written by this
+      form (D3) and stay in the ledger unchanged.
+    * Multiple payload rows on the same scope are summed.
+    * A write that does not increase this BOE's consumption of the scope
+      (new_total <= current raw total) never fails, so an unchanged or
+      decreased row is accepted even when the item is already over-utilised.
+
+    `lock=True` (inside the save transaction) takes SELECT ... FOR UPDATE on
+    the import items (and licence, for licence-wide scopes) before reading the
+    ledger, so two concurrent BOE writes on the same item are serialised and the
+    second one re-checks against the first one's committed debit.
+    """
+    from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+    from apps.license.services.balance_calculator import ItemBalanceCalculator
+
+    if not item_rows:
+        return
+
+    existing_rows = []
+    if boe is not None and boe.pk:
+        existing_rows = list(
+            RowDetails.objects.filter(bill_of_entry=boe).select_related('sr_number')
+        )
+    existing_by_id = {row.pk: row for row in existing_rows}
+    existing_by_key = {(row.sr_number_id, row.transaction_type): row for row in existing_rows}
+
+    # (payload index, item, cif_fc) for every row the update will actually write.
+    writable = []
+    for index, payload_row in enumerate(item_rows):
+        # Only DEBIT rows debit the ledger; other transaction types are not
+        # part of the ceiling.
+        if payload_row.get('transaction_type', DEBIT) != DEBIT:
+            continue
+        target = _resolve_payload_target(payload_row, existing_by_id, existing_by_key)
+        if target is not None and (target.is_frozen or target.transaction_type != DEBIT):
+            continue
+        # The nested update only writes keys present in the payload, so a row
+        # that targets an existing row without sr_number/cif_fc keeps the stored
+        # value: count it at that stored value (otherwise new_total is
+        # understated and the ceiling can be bypassed in a licence-wide scope).
+        item_id = _item_pk(payload_row.get('sr_number'))
+        if not item_id and target is not None:
+            item_id = target.sr_number_id
+        cif = payload_row.get('cif_fc')
+        if cif is None and target is not None:
+            cif = target.cif_fc
+        if not item_id or cif is None:
+            continue
+        writable.append((index, item_id, Decimal(str(cif))))
+    if not writable:
+        return
+
+    item_ids = sorted({item_id for _, item_id, _ in writable})
+    items = {
+        item.pk: item
+        for item in LicenseImportItemsModel.objects.filter(pk__in=item_ids).select_related('license')
+    }
+    individual_ids = sorted(
+        pk for pk, item in items.items()
+        if resolve_effective_cif_mode(item.license) == INDIVIDUAL_ITEM
+    )
+    if not individual_ids:
+        return
+
+    if lock:
+        # Licences before items, each in pk order, to avoid lock-order deadlocks.
+        licence_ids = sorted({
+            items[pk].license_id for pk in individual_ids if _ceiling_scope(items[pk])[0] == 'licence'
+        })
+        if licence_ids:
+            list(LicenseDetailsModel.objects.select_for_update().filter(pk__in=licence_ids).order_by('pk'))
+        locked = LicenseImportItemsModel.objects.select_for_update().filter(pk__in=individual_ids).order_by('pk')
+        for item in locked:
+            # Re-read under the lock; keep the already-loaded licence object.
+            item.license = items[item.pk].license
+            items[item.pk] = item
+
+    boe_hidden = bool(boe is not None and boe.pk and boe.pk in genuinely_hidden_boe_ids(boe_ids=[boe.pk]))
+    old_rows = [
+        row for row in existing_rows
+        if not row.is_frozen and row.transaction_type == DEBIT
+    ]
+
+    errors: dict[int, str] = {}
+    for item_pk in individual_ids:
+        item = items[item_pk]
+        scope = _ceiling_scope(item)
+        scoped_new = [
+            (index, cif) for index, row_item_id, cif in writable
+            if row_item_id in items and _row_in_scope(items[row_item_id], scope)
+        ]
+        new_total = sum((cif for _, cif in scoped_new), DEC_0)
+        old_raw = sum(
+            (Decimal(str(row.cif_fc or 0)) for row in old_rows if _row_in_scope(row.sr_number, scope)),
+            DEC_0,
+        )
+        if new_total <= old_raw:
+            continue
+        own_counted = DEC_0 if boe_hidden else old_raw
+        credit, debit = ItemBalanceCalculator.calculate_item_credit_debit(item)
+        available = credit - debit + own_counted
+        if new_total <= available:
+            continue
+        shown = max(available, DEC_0)
+        prefix = 'Combined CIF' if len(scoped_new) > 1 else 'CIF'
+        message = (
+            f'{prefix} {new_total} exceeds the available CIF {shown} '
+            f'for import source row {item.pk}.'
+        )
+        for index, _ in scoped_new:
+            errors.setdefault(index, message)
+
+    if errors:
+        raise ValidationError({
+            'item_details': [
+                {'cif_fc': [errors[index]]} if index in errors else {}
+                for index in range(len(item_rows))
+            ]
+        })
+
+
+def _protected_row_ids(protected_objects, candidate_row_ids) -> list[int]:
+    """Ids of the RowDetails in `candidate_row_ids` that `protected_objects`
+    (from a ProtectedError) point at through any FK to RowDetails."""
+    row_ids: set[int] = set()
+    for obj in protected_objects:
+        for field in obj._meta.concrete_fields:
+            if field.is_relation and field.related_model is RowDetails:
+                value = getattr(obj, field.attname)
+                if value in candidate_row_ids:
+                    row_ids.add(value)
+    return sorted(row_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -989,3 +1223,269 @@ def restore_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
         "restored_by": _username(user),
         "restored_at": now.isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Save orchestration (ADR-003: moved out of BillOfEntrySerializer.create/update)
+# ---------------------------------------------------------------------------
+# Raises rest_framework ValidationError (not ValueError) for write rejections so
+# the API keeps its 400 shapes; the serializer layer re-uses these checks for
+# early, unlocked feedback.
+
+HIDDEN_INVOICE_NO_MESSAGE = (
+    'This bill of entry is hidden; its invoice number cannot be changed here. '
+    'Restore the bill of entry (restore-boe) first.'
+)
+
+_UNSET = object()
+
+# Keys of a nested payload row that are not RowDetails columns.  Nested payloads
+# can include BOE-level planning metadata from an annotated/read representation;
+# it belongs to the header, not RowDetails, and passing it to update_or_create
+# raises a FieldError when a row is created by `sr_number`.
+_NON_ROW_COLUMNS = frozenset({
+    'id', 'sr_number', 'license_number', 'item_description', 'hs_code',
+    'planning_mapping_status', 'planning_mapping_source',
+})
+
+
+def invoice_no_change_blocked(boe, invoice_no) -> bool:
+    """D1: True when `invoice_no` would change a genuinely hidden BOE."""
+    if boe is None or not boe.pk or invoice_no == boe.invoice_no:
+        return False
+    return boe.pk in genuinely_hidden_boe_ids(boe_ids=[boe.pk])
+
+
+def reject_null_date_collision(boe_number, boe_date, exclude_pk=None) -> None:
+    """D7: a create without `bill_of_entry_date` must not silently overwrite
+    (same port) or duplicate (other port) an existing BOE with the same
+    number.  Dated duplicates are still rejected by DRF's
+    UniqueTogetherValidator before this point.  `existing_boe_id` is returned
+    as a plain integer; the caller already holds BOE create permission, which
+    implies BOE read."""
+    if boe_date is not None:
+        return
+    existing_qs = BillOfEntryModel.objects.filter(bill_of_entry_number=boe_number)
+    if exclude_pk is not None:
+        existing_qs = existing_qs.exclude(pk=exclude_pk)
+    existing_id = existing_qs.order_by('pk').values_list('pk', flat=True).first()
+    if existing_id is None:
+        return
+    exc = ValidationError({
+        'bill_of_entry_date': [
+            'Bill of entry date is required: a bill of entry with this number '
+            'already exists.'
+        ],
+    })
+    exc.detail['existing_boe_id'] = existing_id
+    raise exc
+
+
+def save_boe_with_rows(*, instance=None, validated_data, item_rows=None, allotments=None, user=None):
+    """Create (`instance is None`) or update a Bill of Entry with its nested rows.
+
+    Runs in one `transaction.atomic()` (a savepoint under the view's
+    transaction) so the row locks taken by the D1 / D12-D13 re-checks are held
+    until every write is done.  Order of enforcement is part of the contract:
+
+    create: D7 null-date collision -> D12/D13 ceiling (locked) -> header
+            update_or_create -> allotment M2M + is_boe -> rows.
+    update: D7 -> D1 (hidden invoice_no, under BOE row lock) -> D12/D13 ceiling
+            (locked) -> header -> D14 planning target -> allotments -> rows
+            (D3: frozen rows never written or deleted).
+
+    `item_rows` / `allotments`: on create None/[] mean "nothing"; on update
+    None means "leave untouched", an empty `allotments` list is ignored (it
+    cannot clear the last link), an empty `item_rows` list deletes every
+    non-frozen row.  `user` only fills missing audit fields.
+    """
+    validated_data = dict(validated_data)
+    user_pk = getattr(user, 'pk', None)
+    with transaction.atomic():
+        if instance is None:
+            if user_pk is not None:
+                validated_data.setdefault('created_by', user)
+                validated_data.setdefault('modified_by', user)
+            return _create_boe(validated_data, item_rows or [], allotments or [])
+        if user_pk is not None:
+            validated_data.setdefault('modified_by', user)
+        return _update_boe(instance, validated_data, item_rows, allotments)
+
+
+def _create_boe(validated_data, item_rows, allotments):
+    # update_or_create avoids an IntegrityError on the unique_together
+    # constraint (bill_of_entry_number, bill_of_entry_date, port).
+    boe_number = validated_data.pop('bill_of_entry_number')
+    boe_date = validated_data.pop('bill_of_entry_date', None)
+    port = validated_data.pop('port', None)
+    reject_null_date_collision(boe_number, boe_date)
+    check_individual_item_cif_ceiling(None, item_rows, lock=True)
+    boe, _ = BillOfEntryModel.objects.update_or_create(
+        bill_of_entry_number=boe_number,
+        bill_of_entry_date=boe_date,
+        port=port,
+        defaults=validated_data,
+    )
+
+    if allotments:
+        boe.allotment.set(allotments)
+        # Mark all associated allotments as having BOE
+        for allotment in allotments:
+            allotment.is_boe = True
+            allotment.save()
+
+    for item_data in item_rows:
+        RowDetails.objects.create(bill_of_entry=boe, **item_data)
+    return boe
+
+
+def _update_boe(instance, validated_data, item_rows, allotments):
+    planning_target_item = validated_data.pop('planning_target_item', _UNSET)
+
+    # D7 on update: an effectively undated BOE must not share its number with
+    # another BOE (excluding itself).
+    effective_date = validated_data.get('bill_of_entry_date', instance.bill_of_entry_date)
+    if effective_date is None:
+        reject_null_date_collision(
+            validated_data.get('bill_of_entry_number', instance.bill_of_entry_number),
+            effective_date,
+            exclude_pk=instance.pk,
+        )
+
+    if 'invoice_no' in validated_data and validated_data['invoice_no'] != instance.invoice_no:
+        # D1 re-check under the BOE row lock: the hidden state may have changed
+        # between validation and save.
+        locked = BillOfEntryModel.objects.select_for_update().only('pk', 'invoice_no').get(pk=instance.pk)
+        if invoice_no_change_blocked(locked, validated_data['invoice_no']):
+            raise ValidationError({'invoice_no': HIDDEN_INVOICE_NO_MESSAGE})
+
+    if item_rows:
+        check_individual_item_cif_ceiling(instance, item_rows, lock=True)
+
+    for attr, value in validated_data.items():
+        setattr(instance, attr, value)
+    instance.save()
+
+    if planning_target_item is not _UNSET:
+        # D14: persist the FK itself (it used to be popped and dropped, leaving
+        # MAPPED_EXPLICIT with a NULL target).
+        instance.planning_target_item = planning_target_item
+        instance.planning_mapping_status = "MAPPED_EXPLICIT" if planning_target_item else "UNMAPPED_AMBIGUOUS"
+        instance.planning_mapping_source = "USER_SELECTED" if planning_target_item else ""
+        instance.save(update_fields=[
+            "planning_target_item", "planning_mapping_status", "planning_mapping_source", "modified_on",
+        ])
+
+    # Only when explicitly provided with values.
+    if allotments is not None and len(allotments) > 0:
+        _replace_allotments(instance, allotments)
+
+    if item_rows is not None:
+        kept_ids = _upsert_rows(instance, item_rows)
+        _delete_orphan_rows(instance, kept_ids)
+        # Clear cached properties to force recalculation
+        if hasattr(instance, 'item_details_cached'):
+            delattr(instance, 'item_details_cached')
+        if hasattr(instance, 'get_licenses'):
+            delattr(instance, 'get_licenses')
+    return instance
+
+
+def _replace_allotments(instance, allotments) -> None:
+    """Set the BOE's allotment M2M and keep `Allotment.is_boe` in step: newly
+    linked allotments are flagged; removed ones are unflagged unless another
+    BOE still links them."""
+    from apps.allotment.models import AllotmentModel
+
+    old_ids = set(instance.allotment.values_list('id', flat=True))
+    instance.allotment.set(allotments)
+    new_ids = {a.id for a in allotments}
+
+    for allotment in allotments:
+        if allotment.id not in old_ids:
+            allotment.is_boe = True
+            allotment.save()
+
+    for allotment_id in old_ids - new_ids:
+        allotment = AllotmentModel.objects.get(id=allotment_id)
+        if not allotment.bill_of_entry.exclude(id=instance.id).exists():
+            allotment.is_boe = False
+            allotment.save()
+
+
+def _upsert_rows(instance, item_rows) -> list[int]:
+    """Write the nested rows; returns the ids that must survive the orphan
+    sweep.  Frozen (ledger-imported) rows are never written (D3)."""
+    kept_ids: list[int] = []
+    for item_data in item_rows:
+        sr_number_id = _item_pk(item_data.get('sr_number'))
+        if not sr_number_id:
+            continue
+        transaction_type = item_data.get('transaction_type', DEBIT)
+        item_id = item_data.get('id')
+        clean = {k: v for k, v in item_data.items() if k not in _NON_ROW_COLUMNS}
+
+        if item_id:
+            try:
+                row = RowDetails.objects.get(id=item_id, bill_of_entry=instance)
+            except RowDetails.DoesNotExist:
+                # Unknown id: upsert by key to avoid duplicates.
+                clean['sr_number_id'] = sr_number_id
+                row, _ = RowDetails.objects.update_or_create(
+                    bill_of_entry=instance, sr_number_id=sr_number_id,
+                    transaction_type=transaction_type, defaults=clean,
+                )
+                kept_ids.append(row.id)
+                continue
+            if not row.is_frozen:
+                for key, value in clean.items():
+                    setattr(row, key, value)
+                row.sr_number_id = sr_number_id
+                row.save()
+            kept_ids.append(item_id)
+            continue
+
+        existing = RowDetails.objects.filter(
+            bill_of_entry=instance, sr_number_id=sr_number_id, transaction_type=transaction_type,
+        ).first()
+        if existing and existing.is_frozen:
+            kept_ids.append(existing.id)
+            continue
+        clean['sr_number_id'] = sr_number_id
+        row, _ = RowDetails.objects.update_or_create(
+            bill_of_entry=instance, sr_number_id=sr_number_id,
+            transaction_type=transaction_type, defaults=clean,
+        )
+        kept_ids.append(row.id)
+    return kept_ids
+
+
+def _delete_orphan_rows(instance, kept_ids) -> None:
+    """Delete rows the payload left out (never frozen ones, D3).  Rows still
+    referenced by a PROTECT FK (e.g. reconciliation allocations) raise
+    ProtectedError; surface that as a 400 instead of a 500.  The savepoint
+    keeps the outer transaction usable; raising rolls the whole update back."""
+    orphan_rows = RowDetails.objects.filter(
+        bill_of_entry=instance
+    ).exclude(id__in=kept_ids).exclude(is_frozen=True)
+    try:
+        with transaction.atomic():
+            orphan_rows.delete()
+    except ProtectedError as exc:
+        orphan_ids = set(orphan_rows.values_list('id', flat=True))
+        protected_row_ids = _protected_row_ids(exc.protected_objects, orphan_ids) or sorted(orphan_ids)
+        # Model labels are logged, not returned, so internal app/model names
+        # are not exposed to API clients.
+        logger.info(
+            "BOE %s update blocked: rows %s referenced by %s",
+            instance.pk, protected_row_ids,
+            sorted({obj._meta.label for obj in exc.protected_objects}),
+        )
+        raise ValidationError({
+            'item_details': (
+                "Cannot remove item row(s) "
+                f"{', '.join(str(row_id) for row_id in protected_row_ids)}: "
+                "still referenced by existing reconciliation/allocation records. "
+                "Resolve those references first."
+            )
+        }) from exc

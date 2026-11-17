@@ -134,9 +134,10 @@ class TestBillOfEntryAPI:
         self, authenticated_client, test_bill_of_entry, monkeypatch
     ):
         """Test optional openpyxl failure path returns a service-unavailable response."""
-        from apps.bill_of_entry import views_export
+        # The availability check moved into the exporter service (Phase B B4).
+        from apps.bill_of_entry.services.exporters import grouped_xlsx
 
-        monkeypatch.setattr(views_export, 'OPENPYXL_AVAILABLE', False)
+        monkeypatch.setattr(grouped_xlsx, 'OPENPYXL_AVAILABLE', False)
         url = reverse('bill_of_entry:bill-of-entries-export-bill-of-entries')
         response = authenticated_client.get(url, {'_export': 'xlsx'})
 

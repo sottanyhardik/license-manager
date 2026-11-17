@@ -1,0 +1,1308 @@
+{
+  "response": {
+    "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "disposition": "attachment; filename=\"BOE Report - <TODAY>.xlsx\"",
+    "status": 200
+  },
+  "workbook": {
+    "sheet_names": [
+      "Bill of Entries"
+    ],
+    "sheets": [
+      {
+        "auto_filter": null,
+        "cells": [
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A1",
+            "type": "str",
+            "value": "Bill of Entry Report"
+          },
+          {
+            "bold": false,
+            "bordered": false,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A2",
+            "type": "str",
+            "value": "Total INR: ₹14,492.26    Total FC: $171.50    <TODAY>"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A4",
+            "type": "str",
+            "value": "Acme Foods Pvt Ltd"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "A5",
+            "type": "str",
+            "value": "Item: SUGAR REFINED"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A6",
+            "type": "str",
+            "value": "Sr No"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "B6",
+            "type": "str",
+            "value": "BOE Number"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "C6",
+            "type": "str",
+            "value": "BOE Date"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "D6",
+            "type": "str",
+            "value": "Port"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "E6",
+            "type": "str",
+            "value": "Quantity (KGS)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "F6",
+            "type": "str",
+            "value": "Unit Price ($)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "G6",
+            "type": "str",
+            "value": "Value ($)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "H6",
+            "type": "str",
+            "value": "Exchange Rate"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "I6",
+            "type": "str",
+            "value": "Total CIF INR"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "J6",
+            "type": "str",
+            "value": "Item Name"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "K6",
+            "type": "str",
+            "value": "Invoice"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "L6",
+            "type": "str",
+            "value": "Exporter"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "M6",
+            "type": "str",
+            "value": "License No."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "N6",
+            "type": "str",
+            "value": "License Date"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "O6",
+            "type": "str",
+            "value": "License Port"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "P6",
+            "type": "str",
+            "value": "Item Sr."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "Q6",
+            "type": "str",
+            "value": "BOE Qty."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "R6",
+            "type": "str",
+            "value": "BOE $."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "S6",
+            "type": "str",
+            "value": "BOE CIF"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A7",
+            "type": "int",
+            "value": 1
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "B7",
+            "type": "str",
+            "value": "9000001"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "C7",
+            "type": "str",
+            "value": "01-03-2025"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "D7",
+            "type": "str",
+            "value": "INMUN1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "General",
+            "ref": "E7",
+            "type": "int",
+            "value": 1250
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "F7",
+            "type": "float",
+            "value": 0.1
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "G7",
+            "type": "float",
+            "value": 120.75
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "H7",
+            "type": "float",
+            "value": 84.5
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "₹#,##0.00",
+            "ref": "I7",
+            "type": "float",
+            "value": 10203.38
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "J7",
+            "type": "str",
+            "value": "SUGAR REFINED"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "K7",
+            "type": "str",
+            "value": "INV-1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "L7",
+            "type": "str",
+            "value": "Acme Foods Pvt Ltd"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "M7",
+            "type": "str",
+            "value": "0311000001"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "N7",
+            "type": "str",
+            "value": "10-01-2024"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "O7",
+            "type": "str",
+            "value": "INMUN1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "P7",
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "General",
+            "ref": "Q7",
+            "type": "int",
+            "value": 1000
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "R7",
+            "type": "float",
+            "value": 100.5
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "₹#,##0.00",
+            "ref": "S7",
+            "type": "float",
+            "value": 8492.25
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "B8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "C8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "D8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "E8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "F8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "G8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "H8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "I8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "J8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "K8",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "L8",
+            "type": "str",
+            "value": "Acme Foods Pvt Ltd"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "M8",
+            "type": "str",
+            "value": "0311000001"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "N8",
+            "type": "str",
+            "value": "10-01-2024"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "O8",
+            "type": "str",
+            "value": "INMUN1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "P8",
+            "type": "str",
+            "value": "2"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "General",
+            "ref": "Q8",
+            "type": "int",
+            "value": 250
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "R8",
+            "type": "float",
+            "value": 20.25
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "S8",
+            "type": "float",
+            "value": 1711.13
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "00D9EAF7",
+            "h_align": "left",
+            "number_format": "General",
+            "ref": "L9",
+            "type": "str",
+            "value": "Total DFIA allocation"
+          },
+          {
+            "bold": false,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "M9",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "N9",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "O9",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": false,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "P9",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "00B8D8F0",
+            "h_align": "right",
+            "number_format": "#,##0",
+            "ref": "Q9",
+            "type": "float",
+            "value": 1250.625
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "00B8D8F0",
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "R9",
+            "type": "float",
+            "value": 120.75
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": "00D9EAF7",
+            "h_align": null,
+            "number_format": "General",
+            "ref": "S9",
+            "type": "NoneType",
+            "value": null
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "C10",
+            "type": "str",
+            "value": "Total"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "#,##0",
+            "ref": "E10",
+            "type": "int",
+            "value": 1250
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "#,##0.00",
+            "ref": "G10",
+            "type": "float",
+            "value": 120.75
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "₹#,##0.00",
+            "ref": "I10",
+            "type": "float",
+            "value": 10203.38
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A12",
+            "type": "str",
+            "value": "Grand Total:"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "right",
+            "number_format": "#,##0",
+            "ref": "E12",
+            "type": "int",
+            "value": 1250
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "G12",
+            "type": "float",
+            "value": 120.75
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "H12",
+            "type": "str",
+            "value": "CIF INR: ₹10,203.38"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A15",
+            "type": "str",
+            "value": "Beta Traders"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "A16",
+            "type": "str",
+            "value": "Item: PALM OIL"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A17",
+            "type": "str",
+            "value": "Sr No"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "B17",
+            "type": "str",
+            "value": "BOE Number"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "C17",
+            "type": "str",
+            "value": "BOE Date"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "D17",
+            "type": "str",
+            "value": "Port"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "E17",
+            "type": "str",
+            "value": "Quantity (KGS)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "F17",
+            "type": "str",
+            "value": "Unit Price ($)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "G17",
+            "type": "str",
+            "value": "Value ($)"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "H17",
+            "type": "str",
+            "value": "Exchange Rate"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "I17",
+            "type": "str",
+            "value": "Total CIF INR"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "J17",
+            "type": "str",
+            "value": "Item Name"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "K17",
+            "type": "str",
+            "value": "Invoice"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "L17",
+            "type": "str",
+            "value": "Exporter"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "M17",
+            "type": "str",
+            "value": "License No."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "N17",
+            "type": "str",
+            "value": "License Date"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "O17",
+            "type": "str",
+            "value": "License Port"
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "P17",
+            "type": "str",
+            "value": "Item Sr."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "Q17",
+            "type": "str",
+            "value": "BOE Qty."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "R17",
+            "type": "str",
+            "value": "BOE $."
+          },
+          {
+            "bold": true,
+            "bordered": true,
+            "fill": "001e3a8a",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "S17",
+            "type": "str",
+            "value": "BOE CIF"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A18",
+            "type": "int",
+            "value": 1
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "B18",
+            "type": "str",
+            "value": "9000003"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "C18",
+            "type": "str",
+            "value": "02-03-2025"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "D18",
+            "type": "str",
+            "value": "INMUN1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "General",
+            "ref": "E18",
+            "type": "int",
+            "value": 500
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "F18",
+            "type": "float",
+            "value": 0.1
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "G18",
+            "type": "float",
+            "value": 50.75
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "H18",
+            "type": "float",
+            "value": 84.51
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "₹#,##0.00",
+            "ref": "I18",
+            "type": "float",
+            "value": 4288.88
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "J18",
+            "type": "str",
+            "value": "PALM OIL"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "K18",
+            "type": "str",
+            "value": "INV-3"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "L18",
+            "type": "str",
+            "value": "Beta Traders"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "M18",
+            "type": "str",
+            "value": "0311000002"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "N18",
+            "type": "str",
+            "value": "20-02-2024"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "O18",
+            "type": "str",
+            "value": "INMAA1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "P18",
+            "type": "str",
+            "value": "1"
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "General",
+            "ref": "Q18",
+            "type": "int",
+            "value": 500
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "R18",
+            "type": "float",
+            "value": 50.75
+          },
+          {
+            "bold": false,
+            "bordered": true,
+            "fill": null,
+            "h_align": "right",
+            "number_format": "₹#,##0.00",
+            "ref": "S18",
+            "type": "float",
+            "value": 4288.88
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "General",
+            "ref": "C19",
+            "type": "str",
+            "value": "Total"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "#,##0",
+            "ref": "E19",
+            "type": "int",
+            "value": 500
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "#,##0.00",
+            "ref": "G19",
+            "type": "float",
+            "value": 50.75
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": null,
+            "h_align": null,
+            "number_format": "₹#,##0.00",
+            "ref": "I19",
+            "type": "float",
+            "value": 4288.88
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "A21",
+            "type": "str",
+            "value": "Grand Total:"
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "right",
+            "number_format": "#,##0",
+            "ref": "E21",
+            "type": "int",
+            "value": 500
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "right",
+            "number_format": "#,##0.00",
+            "ref": "G21",
+            "type": "float",
+            "value": 50.75
+          },
+          {
+            "bold": true,
+            "bordered": false,
+            "fill": "00f1f5f9",
+            "h_align": "center",
+            "number_format": "General",
+            "ref": "H21",
+            "type": "str",
+            "value": "CIF INR: ₹4,288.88"
+          }
+        ],
+        "column_widths": {
+          "A": 22.0,
+          "B": 12.0,
+          "C": 12.0,
+          "D": 10.0,
+          "E": 16.0,
+          "F": 16.0,
+          "G": 11.0,
+          "H": 21.0,
+          "I": 15.0,
+          "J": 15.0,
+          "K": 10.0,
+          "L": 22.0,
+          "M": 13.0,
+          "N": 14.0,
+          "O": 14.0,
+          "P": 10.0,
+          "Q": 10.0,
+          "R": 10.0,
+          "S": 10.0
+        },
+        "dimensions": "A1:S21",
+        "freeze_panes": null,
+        "max_column": 19,
+        "max_row": 21,
+        "merged": [
+          "A12:B12",
+          "A15:R15",
+          "A16:S16",
+          "A1:R1",
+          "A21:B21",
+          "A2:R2",
+          "A4:R4",
+          "A5:S5",
+          "H12:I12",
+          "H21:I21",
+          "L9:P9"
+        ],
+        "title": "Bill of Entries"
+      }
+    ]
+  }
+}

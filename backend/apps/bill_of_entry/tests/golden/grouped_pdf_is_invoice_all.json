@@ -1,0 +1,15 @@
+{
+  "pdf": {
+    "page_count": 2,
+    "pages": [
+      "Bill of Entry Report\nExch. Rate\n01-03-2025\nUSD\n84.5000\nEUR\n91.2500\nGBP\n107.1000\nCNY\n11.6500\nTotal CIF (FC): $481.60 | Total CIF (INR): 40,681.84\n Generated on: <GENERATED>\nAcme Foods Pvt Ltd\nItem: SUGAR REFINED\nSr\nNo\nBOE\nNumber\nBOE\nDate\nPort\nQty\n(KGS)\nUnit\nPrice ($)\nValue\n ($)\nExch.\n Rate\nItem\nName\nInvoice\nExporter\nLicense\n No.\nLic. Date\nLic. Port\nItem\n Sr.\nBOE\nQty.\nBOE $.\nBOE CIF\n 1\n 9000002\n 05-03-2025\n INMAA1\n 2,000\n 0.15\n 300.00\n 84.50\n SUGAR\nREFINED\n --\nAcme Foods…\n 0311000001\n10-01-2024\n INMUN1\n 1\n 2,000\n 300.00\n 25,350.00\n Port Total\n(INMAA1)\n 2,000\n 300.00\n 25,350.00\n 2\n 9000001\n 01-03-2025\n INMUN1\n 1,250\n 0.10\n 120.75\n 84.50\n SUGAR\nREFINED\n INV-1\nAcme Foods…\n 0311000001\n10-01-2024\n INMUN1\n 1\n 1,000\n 100.50\n 8,492.25\nAcme Foods…\n 0311000001\n10-01-2024\n INMUN1\n 2\n 250\n 20.25\n 1,711.13\nTotal DFIA allocation\n 1,250\n 120.75\n Port Total\n(INMUN1)\n 1,250\n 120.75\n 10,203.38\nGrand Total:\nQty: 3,250 KGS\nCIF (FC): $420.75\nCIF (INR): 35,553.38\nBeta Traders\nItem: PALM OIL\nSr\nNo\nBOE\nNumber\nBOE\nDate\nPort\nQty\n(KGS)\nUnit\nPrice ($)\nValue\n ($)\nExch.\n Rate\nItem\nName\nInvoice\nExporter\nLicense\n No.\nLic. Date\nLic. Port\nItem\n Sr.\nBOE\nQty.\nBOE $.\nBOE CIF\n 1\n 9000004\n 02-03-2025\n INMAA1\n 100\n 0.10\n 10.10\n 83.12\n PALM OIL\n --\nBeta Traders\n 0311000002\n20-02-2024\n INMAA1\n 1\n 100\n 10.10\n 839.58\n",
+      "Sr\nNo\nBOE\nNumber\nBOE\nDate\nPort\nQty\n(KGS)\nUnit\nPrice ($)\nValue\n ($)\nExch.\n Rate\nItem\nName\nInvoice\nExporter\nLicense\n No.\nLic. Date\nLic. Port\nItem\n Sr.\nBOE\nQty.\nBOE $.\nBOE CIF\n Port Total\n(INMAA1)\n 100\n 10.10\n 839.58\n 2\n 9000003\n 02-03-2025\n INMUN1\n 500\n 0.10\n 50.75\n 84.51\n PALM OIL\n INV-3\nBeta Traders\n 0311000002\n20-02-2024\n INMAA1\n 1\n 500\n 50.75\n 4,288.88\n Port Total\n(INMUN1)\n 500\n 50.75\n 4,288.88\nGrand Total:\nQty: 600 KGS\nCIF (FC): $60.85\nCIF (INR): 5,128.46\n"
+    ],
+    "starts_with_pdf_magic": true
+  },
+  "response": {
+    "content_type": "application/pdf",
+    "disposition": "inline; filename=\"BOE Report - <TODAY>.pdf\"",
+    "status": 200
+  }
+}

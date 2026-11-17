@@ -57,7 +57,10 @@ async function mockApi(page: Page, roles: string[]) {
     if (pathname.endsWith("/auth/me/")) return json(user);
     if (/\/bill-of-entries\/\d+\/update-invoice-no\/$/.test(pathname)) return json({ success: true });
     const detail = pathname.match(/\/bill-of-entries\/(\d+)\/$/);
-    if (detail) return json(BOES.find((b) => String(b.id) === detail[1]) ?? {});
+    if (detail) {
+      const found = BOES.find((b) => String(b.id) === detail[1]);
+      return found ? json(found) : route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ detail: "Not found." }) });
+    }
     if (pathname.endsWith("/bill-of-entries/")) return json(listEnvelope(BOES));
     if (/\/allotments\/301\/$/.test(pathname)) {
       return json({ id: 301, company_name: "Alpha Imports", item_name: "Palm oil", required_quantity: "12", cif_inr: "1000", cif_fc: "12", allotment_details: [] });
@@ -135,6 +138,54 @@ test.describe("BOE register (compact ERP register, Licence parity)", () => {
     await card(page, "7012345").locator('button[title="View details"]').first().click();
     await expect(page.getByRole("button", { name: "Actions for BOE 7012345" })).toHaveCount(0);
     await expect(page.getByRole("menuitem", { name: "Transfer Letter" })).toHaveCount(0);
+  });
+});
+
+test.describe("BOE detail route", () => {
+  test("direct navigation opens Overview; refresh and deep link keep the tab; back/forward work", async ({ page }) => {
+    await mockApi(page, ["BOE_MANAGER"]);
+    await page.goto("/bill-of-entries/201", { waitUntil: "networkidle" });
+    await expect(page.getByRole("heading", { name: "BOE 7012345" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toContainText("₹12,34,567.89");
+
+    await page.getByRole("tab", { name: "Import Items" }).click();
+    await expect(page).toHaveURL(/\/bill-of-entries\/201\?tab=import-items$/);
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.getByRole("tab", { name: "Import Items" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toContainText("Palm oil");
+
+    await page.goto("/bill-of-entries/201?tab=boe-details", { waitUntil: "networkidle" });
+    await expect(page.getByRole("tabpanel")).toContainText("Beta CHA");
+  });
+
+  test("register link opens the detail page; Back and browser back return to the register", async ({ page }) => {
+    await mockApi(page, ["BOE_MANAGER"]);
+    await page.goto("/bill-of-entries", { waitUntil: "networkidle" });
+    await page.getByRole("link", { name: "7012345", exact: true }).click();
+    await expect(page).toHaveURL(/\/bill-of-entries\/201$/);
+    await expect(page.getByRole("heading", { name: "BOE 7012345" })).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/bill-of-entries(\?.*)?$/);
+    await expect(page.getByRole("link", { name: "7012345", exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page.getByRole("heading", { name: "BOE 7012345" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(page).toHaveURL(/\/bill-of-entries(\?.*)?$/);
+    await expect(page.getByRole("link", { name: "7012345", exact: true })).toBeVisible();
+  });
+
+  test("Edit stays reachable from the actions menu; unknown id shows not-found", async ({ page }) => {
+    await mockApi(page, ["BOE_MANAGER"]);
+    await page.goto("/bill-of-entries/201", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "More actions for BOE 7012345" }).click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
+    await expect(page).toHaveURL(/\/bill-of-entries\/201\/edit$/);
+
+    await page.goto("/bill-of-entries/999", { waitUntil: "networkidle" });
+    await expect(page.getByText("Bill of entry not found")).toBeVisible();
   });
 });
 

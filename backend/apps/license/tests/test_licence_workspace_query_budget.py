@@ -159,12 +159,13 @@ class ListEndpointBudgets(_Base):
         self.assertLessEqual(q_large, large_cap)
 
     def test_boe_list_budget(self):
-        # Proves: BOE list is N+1 (~6 queries per BOE: get_authoritative_available_cif -> available_value_calculated SUMs). 19 at 1 BOE, 48 at 6.
-        self._list_budget("/api/bill-of-entries/?is_invoice=all&page_size=50", 20, 50)
+        # Proves: BOE list is N+1 (~6 queries per BOE: get_authoritative_available_cif -> available_value_calculated SUMs).
+        # 22 at 1 BOE, 51 at 6: the batched per-page invoice_status lookup (cb2abf5c) adds a flat +3 (was 19 / 48).
+        self._list_budget("/api/bill-of-entries/?is_invoice=all&page_size=50", 23, 53)
 
     def test_boe_list_default_filter_budget(self):
         # Proves: the default is_invoice filter (no param) does not change the per-row cost.
-        self._list_budget("/api/bill-of-entries/?page_size=50", 20, 50)
+        self._list_budget("/api/bill-of-entries/?page_size=50", 23, 53)
 
     def test_allotment_list_budget(self):
         # Proves: allotment list is flat (annotations + two prefetches).

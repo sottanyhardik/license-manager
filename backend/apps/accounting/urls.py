@@ -45,6 +45,7 @@ urlpatterns = [
     path("accounting/bank-accounts/<int:bank_id>/proposals/confirm/", b.BankProposalConfirmView.as_view(),
          name="bank-proposals-confirm"),
     path("accounting/statement-lines/<int:line_id>/proposal/", b.LineProposalView.as_view(), name="line-proposal"),
+    path("accounting/parties/<int:party_id>/bank-lines/", b.PartyBankLinesView.as_view(), name="party-bank-lines"),
     path("accounting/narration-aliases/", b.NarrationAliasView.as_view(), name="narration-aliases"),
     path("accounting/narration-aliases/<int:alias_id>/", b.NarrationAliasView.as_view(), name="narration-alias"),
     path("accounting/suspense/", b.SuspenseView.as_view(), name="suspense"),

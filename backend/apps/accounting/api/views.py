@@ -350,6 +350,8 @@ class PaymentListView(ApproverView):
 
     def post(self, request):
         e = entity_from(request)
+        if param(request, "statement_line_id"):  # additive: the bank transaction it came through (posted + matched)
+            return self._post_for_line(request, e)
         p = pay_svc.record_payment(
             entity=e, direction=param(request, "direction", required=True),
             party=CompanyModel.objects.get(pk=as_int(param(request, "party_id", required=True), "party_id")),
@@ -358,6 +360,24 @@ class PaymentListView(ApproverView):
             payment_date=as_date(param(request, "date"), "date"), amount=as_money(param(request, "amount")),
             tds_amount=as_money(param(request, "tds_amount"), "tds_amount", "0"),
             mode=param(request, "mode", "NEFT"), reference=param(request, "reference", "") or "",
+            narration=param(request, "narration", "") or "",
+            allocations=_allocations(e, request.data.get("allocations")), user=request.user,
+        )
+        return ok(payment_dict(p), status.HTTP_201_CREATED)
+
+    def _post_for_line(self, request, e):
+        from apps.accounting.models import StatementLine
+        from apps.accounting.services import bank_proposals
+        line = StatementLine.objects.select_related("bank_account").get(
+            pk=as_int(param(request, "statement_line_id"), "statement_line_id"), bank_account__entity=e)
+        if param(request, "bank_account_id") and as_int(param(request, "bank_account_id"), "bank_account_id") != line.bank_account_id:
+            raise ValidationError({"bank_account_id": "Does not match the bank of the chosen bank transaction."})
+        p = bank_proposals.record_payment_for_line(
+            line, entity=e, direction=param(request, "direction", required=True),
+            party=CompanyModel.objects.get(pk=as_int(param(request, "party_id", required=True), "party_id")),
+            amount=as_money(param(request, "amount")), tds_amount=as_money(param(request, "tds_amount"), "tds_amount", "0"),
+            payment_date=as_date(param(request, "date"), "date") if param(request, "date") else None,
+            mode=param(request, "mode", "") or "", reference=param(request, "reference", "") or "",
             narration=param(request, "narration", "") or "",
             allocations=_allocations(e, request.data.get("allocations")), user=request.user,
         )

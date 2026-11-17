@@ -19,7 +19,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 
 from apps.accounting.domain.money import ZERO
 from apps.accounting.domain.statement import extract_utr
@@ -312,3 +312,77 @@ def confirm_many(bank: BankAccount, items: list[tuple[int, int]], *, user=None) 
             continue
         confirmed.append({"line_id": line_id, "payment_id": payment.pk, "voucher": payment.voucher.number})
     return {"confirmed": confirmed, "errors": errors}
+
+
+# --- record payment/receipt screen: pick the bank transaction it came through ------------------------
+
+def party_bank_lines(entity, party: CompanyModel, direction: str, *, search: str = "", limit: int = 50) -> list[dict]:
+    """Unmatched / partly matched bank lines of these books on one side, ranked for ``party``
+    (learned alias first, then name match). Without ``search`` only lines that look like this party."""
+    qs = StatementLine.objects.filter(bank_account__entity=entity,
+                                      status__in=[LineStatus.UNMATCHED, LineStatus.PARTIAL]).select_related("bank_account")
+    qs = qs.filter(credit__gt=0) if direction == PaymentDirection.RECEIPT else qs.filter(debit__gt=0)
+    if search:
+        qs = qs.filter(Q(narration__icontains=search) | Q(reference__icontains=search))
+    keys = [a for a in NarrationAlias.objects.filter(entity=entity, party=party, direction=direction)
+            .values_list("key", flat=True)]
+    rows = []
+    for line in qs.order_by("-txn_date", "-id")[:2000]:
+        key = counterparty_key(line.narration)
+        padded = f" {key} "
+        if any(f" {k} " in padded for k in keys):
+            score, source = 1.0, "alias"
+        else:
+            score, source = name_score(key, party.name), "name"
+        if not search and score < MIN_NAME_SCORE:
+            continue
+        rows.append({"line": line, "score": score, "source": source if score else "",
+                     "remaining": line.amount - line.matched_amount, "mode": _mode(line.narration)})
+    rows.sort(key=lambda r: (-r["score"], -r["line"].txn_date.toordinal(), -r["line"].pk))
+    return rows[:limit]
+
+
+@transaction.atomic
+def record_payment_for_line(line: StatementLine, *, entity, direction: str, party: CompanyModel, amount,
+                            tds_amount=ZERO, payment_date=None, mode: str = "", reference: str = "",
+                            narration: str = "", allocations=None, user=None) -> Payment:
+    """Post a payment/receipt that came through ``line`` and match the line to it in one transaction.
+    The same never-book-twice guards as ``confirm_proposal``; a line may be settled in parts."""
+    line = StatementLine.objects.select_for_update().select_related("bank_account__entity").get(pk=line.pk)
+    bank = line.bank_account
+    if bank.entity_id != entity.pk:
+        raise AccountingError("The bank transaction belongs to another entity.", "cross_entity")
+    if direction != _direction(line):
+        raise AccountingError("A deposit is a receipt and a withdrawal is a payment; switch the direction.",
+                              "direction_mismatch")
+    if line.status not in (LineStatus.UNMATCHED, LineStatus.PARTIAL):
+        raise AccountingError("This bank transaction is already matched.", "already_matched")
+    if party.pk == entity.company_id:
+        raise AccountingError("This is the entity itself (an own-account transfer), not a customer or supplier.",
+                              "own_account")
+    remaining = line_remaining(line)
+    if amount > remaining:
+        raise AccountingError(f"Amount exceeds the bank transaction's unmatched {remaining}.", "over_match")
+    reference = (reference or line.reference or extract_utr(line.narration)).strip()
+    pool = book_pool(bank, deposit=line.credit > 0)
+    if pool and any("utr" in c.signals for c in candidates_for(line, pool, remaining=remaining)):
+        raise AccountingError("A book entry with this UTR already exists; match the bank line to it instead.",
+                              "existing_book_entry")
+    if reference and Payment.objects.filter(entity=entity, direction=direction, status=DocStatus.POSTED,
+                                            reference=reference).exists():
+        raise AccountingError("A payment with this UTR is already booked; match the bank line to it instead.",
+                              "reference_already_booked")
+    trade_payment = _trade_payment_conflict(Proposal(line=line, direction=direction, counterparty="", party=party))
+    if trade_payment:
+        raise AccountingError(f"Trade payment #{trade_payment} records this money; post it from Trade "
+                              "(payments/from-trade-payment) so it is booked once.", "trade_payment_exists")
+    payment = record_payment(
+        entity=entity, direction=direction, party=party, bank_account=bank, payment_date=payment_date or line.txn_date,
+        amount=amount, tds_amount=tds_amount, mode=mode or _mode(line.narration), reference=reference,
+        narration=narration or f"Bank: {line.narration}", allocations=allocations, user=user,
+    )
+    _match(line, payment.voucher, amount, BankMatch.MANUAL, user)
+    refresh_line_status(line)
+    learn_alias(entity, counterparty_key(line.narration), direction, party, user=user)
+    audit.record("BANK_LINE_PAYMENT_RECORDED", payment, actor=user, entity=entity, line=line.pk, amount=amount)
+    return payment

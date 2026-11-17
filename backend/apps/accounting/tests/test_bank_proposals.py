@@ -189,3 +189,68 @@ class BankProposalApiTests(TestCase):
         self.assertEqual(self.viewer.delete(f"/api/accounting/narration-aliases/{aliases[0]['id']}/").status_code, 403)
         self.assertEqual(self.approver.delete(f"/api/accounting/narration-aliases/{aliases[0]['id']}/").status_code, 200)
         self.assertFalse(NarrationAlias.objects.exists())
+
+
+class RecordPaymentFromBankLineTests(TestCase):
+    """Record payment / receipt screen: pick the bank transaction; posting also matches it."""
+
+    def setUp(self):
+        self.lm = h.company("Labdhi Mercantile LLP", gst="27AAAFL0000A1Z5")
+        self.entity = h.books(self.lm)
+        self.bank = h.bank(self.entity, opening=D("0"))
+        self.customer = h.company("Jash Mercantile Pvt Ltd")
+        self.inv = posted(h.trade("SALE", self.lm, self.customer, D("10000.00"), on=date(2026, 5, 1)))
+        self.due = outstanding(self.inv)
+        csv = ("Date,Narration,Ref No,Withdrawal Amt,Deposit Amt\n"
+               f"15/05/2026,IMPS 522627002894 JASH MERCAN,522627002894,,{self.due}\n"
+               "16/05/2026,NEFT SOMEONE ELSE,,,700.00\n17/05/2026,RTGS JASH MERCANTILE,,300.00,\n")
+        import_statement(self.bank, file_name="s.csv", content=csv.encode())
+        self.line = StatementLine.objects.get(bank_account=self.bank, narration__startswith="IMPS")
+        self.approver = client_with("ACCOUNTS_APPROVER")
+        self.viewer = client_with("ACCOUNTS_VIEWER")
+
+    def _post(self, client, **extra):
+        body = {"entity": self.lm.pk, "direction": "RECEIPT", "party_id": self.customer.pk, "amount": str(self.due),
+                "statement_line_id": self.line.pk, "allocations": [{"invoice_id": self.inv.pk, "amount": str(self.due)}]}
+        return client.post("/api/accounting/payments/", {**body, **extra}, format="json")
+
+    def test_party_bank_lines_are_ranked_and_side_filtered(self):
+        r = self.viewer.get(f"/api/accounting/parties/{self.customer.pk}/bank-lines/",
+                            {"entity": self.lm.pk, "direction": "RECEIPT"})
+        self.assertEqual(r.status_code, 200, r.content)
+        lines = r.json()["lines"]
+        self.assertEqual([ln["id"] for ln in lines], [self.line.pk])  # the withdrawal and the other party are out
+        self.assertEqual((lines[0]["mode"], lines[0]["source"], lines[0]["remaining"]), ("IMPS", "name", str(self.due)))
+        searched = self.viewer.get(f"/api/accounting/parties/{self.customer.pk}/bank-lines/",
+                                   {"entity": self.lm.pk, "direction": "RECEIPT", "search": "SOMEONE"}).json()["lines"]
+        self.assertEqual(len(searched), 1)
+
+    def test_post_with_bank_line_books_and_matches_once(self):
+        self.assertEqual(self._post(self.viewer).status_code, 403)
+        r = self._post(self.approver)
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual((r.json()["reference"], r.json()["mode"], r.json()["date"]), ("522627002894", "IMPS", "2026-05-15"))
+        self.line.refresh_from_db()
+        self.assertEqual((self.line.status, self.line.matches.get().method), (LineStatus.MATCHED, BankMatch.MANUAL))
+        self.assertEqual(outstanding(self.inv), D("0.00"))
+        self.assertTrue(NarrationAlias.objects.filter(key="JASH MERCAN", party=self.customer).exists())
+        again = self._post(self.approver)
+        self.assertEqual((again.status_code, again.json()["code"]), (400, "already_matched"))
+
+    def test_line_can_be_settled_in_parts_but_not_beyond_it(self):
+        half = (self.due / 2).quantize(D("0.01"))
+        r = self._post(self.approver, amount=str(half), allocations=[{"invoice_id": self.inv.pk, "amount": str(half)}],
+                       reference="PART-1")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.status, LineStatus.PARTIAL)
+        over = self._post(self.approver, amount=str(self.due), allocations=[], reference="PART-2")
+        self.assertEqual((over.status_code, over.json()["code"]), (400, "over_match"))
+
+    def test_direction_and_bank_must_agree_with_the_line(self):
+        wrong = self._post(self.approver, direction="PAYMENT", allocations=[])
+        self.assertEqual((wrong.status_code, wrong.json()["code"]), (400, "direction_mismatch"))
+        other_bank = h.bank(self.entity, number="999888777666")
+        mismatch = self._post(self.approver, bank_account_id=other_bank.pk)
+        self.assertEqual(mismatch.status_code, 400, mismatch.content)
+        self.assertFalse(Payment.objects.exists())

@@ -232,3 +232,23 @@ class NarrationAliasView(ApproverView):
     def delete(self, request, alias_id: int):
         proposals_svc.forget_alias(NarrationAlias.objects.select_related("entity").get(pk=alias_id), user=request.user)
         return ok({"deleted": alias_id})
+
+
+class PartyBankLinesView(AccountingView):
+    """GET parties/<party_id>/bank-lines/?entity=&direction=RECEIPT|PAYMENT&search=
+    Unmatched bank transactions for the record-payment screen, ranked for the party (read-only)."""
+
+    def get(self, request, party_id: int):
+        e = entity_from(request)
+        direction = param(request, "direction", required=True)
+        if direction not in ("RECEIPT", "PAYMENT"):
+            raise ValidationError({"direction": "RECEIPT or PAYMENT."})
+        party = CompanyModel.objects.get(pk=party_id)
+        rows = proposals_svc.party_bank_lines(e, party, direction, search=param(request, "search", "") or "")
+        return ok({"lines": [{
+            "id": r["line"].pk, "bank_account_id": r["line"].bank_account_id,
+            "bank": f"{r['line'].bank_account.bank_name} {r['line'].bank_account.account_number}".strip(),
+            "txn_date": r["line"].txn_date, "narration": r["line"].narration, "reference": r["line"].reference,
+            "amount": r["line"].amount, "remaining": r["remaining"], "status": r["line"].status,
+            "mode": r["mode"], "score": round(r["score"], 2), "source": r["source"],
+        } for r in rows]})

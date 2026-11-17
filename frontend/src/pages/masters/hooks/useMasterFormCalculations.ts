@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import api from "../../../api/axios";
+import * as boeApi from "@/api/boeApi";
 
 export interface UseMasterFormCalculationsOptions {
     entityName: string | null | undefined;
@@ -74,7 +75,7 @@ export function useMasterFormCalculations({
                     let firstCompany: any = null;
 
                     for (const allotmentId of allotmentIds) {
-                        const { data } = await api.get(`bill-of-entries/fetch-allotment-details/?allotment_id=${allotmentId}`);
+                        const data = await boeApi.fetchAllotmentDetails(allotmentId);
 
                         // Use exchange_rate, product_name, port, and company from first allotment
                         if (!firstExchangeRate && data.exchange_rate) {

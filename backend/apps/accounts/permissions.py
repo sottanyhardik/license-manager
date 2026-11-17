@@ -58,7 +58,15 @@ class AllotmentPermission(BaseRolePermission):
 
 
 class BillOfEntryPermission(BaseRolePermission):
-    """Permission class for Bill of Entry operations"""
+    """Permission class for Bill of Entry operations.
+
+    Owner decision D2 (BOE modernization): BOE_VIEWER / ACCOUNT_ACCESS /
+    TL_GENERATE are read-only here — every non-safe method (create, edit,
+    delete, merge, resolve-dispute, update-product-name, bulk actions,
+    parse-pdf) requires BOE_MANAGER. The single viewer write exception,
+    `update-invoice-no`, is gated by `AccountAccessPermission` instead
+    (see `BillOfEntryViewSet.get_permissions`).
+    """
     required_roles_for_read = ['BOE_MANAGER', 'BOE_VIEWER', 'ACCOUNT_ACCESS', 'TL_GENERATE']
     required_roles_for_write = ['BOE_MANAGER']
 
@@ -152,13 +160,24 @@ class AccountAccessPermission(permissions.BasePermission):
     Accounts team: read BOE list + update invoice_no only.
     All safe methods (GET) AND the dedicated update-invoice-no action are allowed.
     Full BOE create/edit/delete requires BOE_MANAGER.
+
+    Owner decision D2: BOE_VIEWER keeps exactly this one write exception.
+    Non-safe methods are only granted for the `update_invoice_no` action, so
+    attaching this class to any other write action denies it by default
+    instead of silently widening viewer/accounts access.
     """
     _roles = ['ACCOUNT_ACCESS', 'BOE_MANAGER', 'BOE_VIEWER']
+    _write_actions = frozenset({'update_invoice_no'})
 
     def has_permission(self, request, view):
         if request.user and request.user.is_superuser:
             return True
         if not request.user or not request.user.is_authenticated:
+            return False
+        if (
+            request.method not in permissions.SAFE_METHODS
+            and getattr(view, 'action', None) not in self._write_actions
+        ):
             return False
         return request.user.has_any_role(self._roles)
 
@@ -166,12 +185,13 @@ class AccountAccessPermission(permissions.BasePermission):
 class TransferLetterPermission(permissions.BasePermission):
     """
     Allows users who can generate transfer letters.
-    Granted to: TL_GENERATE role, plus any entity manager/viewer role
-    (since managers can already do everything, including generating TLs).
+    Granted to: TL_GENERATE role, plus entity manager roles and the
+    allotment/trade viewer roles. BOE_VIEWER is deliberately excluded
+    (owner decision): a read-only BOE role must not generate transfer letters.
     """
     _allowed = [
         'TL_GENERATE',
-        'BOE_MANAGER', 'BOE_VIEWER',
+        'BOE_MANAGER',
         'ALLOTMENT_MANAGER', 'ALLOTMENT_VIEWER',
         'TRADE_MANAGER', 'TRADE_VIEWER',
         'LICENSE_MANAGER',

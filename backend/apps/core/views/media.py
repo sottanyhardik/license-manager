@@ -26,6 +26,7 @@ from django.apps import apps
 from django.conf import settings
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
+from django.utils.http import content_disposition_header
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -100,6 +101,37 @@ def _required_read_roles(rel_path):
     return None
 
 
+_BOE_PREFIX = "boe_copies/"
+
+
+def _boe_download_meta(rel_path, full_path):
+    """Download metadata for a BOE copy (D10): ``(filename, content_type, as_attachment)``.
+
+    - filename: ``BOE_<NUMBER>_<DD-MM-YYYY>.pdf`` from the owning BOE row. FALLBACK:
+      when that BOE has no number/date (``boe_copy_filename`` raises ValueError) or
+      no row owns the path (superuser-only case), the stored basename is used —
+      identifiers are never invented. Stored files are never renamed or moved.
+    - inline + ``application/pdf`` only when the bytes start with ``%PDF-``;
+      anything else is forced to ``attachment`` + ``application/octet-stream``.
+    """
+    from apps.bill_of_entry.services.boe_documents import PDF_SIGNATURE, boe_copy_filename
+
+    BillOfEntryModel = apps.get_model("bill_of_entry", "BillOfEntryModel")
+    boe = BillOfEntryModel.objects.filter(boe_pdf_copy=rel_path).order_by("id").first()
+    filename = os.path.basename(full_path)
+    if boe is not None:
+        try:
+            filename = boe_copy_filename(boe)
+        except ValueError:
+            pass  # documented fallback: stored basename
+
+    with open(full_path, "rb") as fh:
+        is_pdf = fh.read(len(PDF_SIGNATURE)) == PDF_SIGNATURE
+    if is_pdf:
+        return filename, "application/pdf", False
+    return filename, "application/octet-stream", True
+
+
 class ProtectedMediaView(APIView):
     """Serve a file from ``MEDIA_ROOT`` only to authenticated users.
 
@@ -137,6 +169,9 @@ class ProtectedMediaView(APIView):
         filename = os.path.basename(full)
         internal_prefix = getattr(settings, "MEDIA_X_ACCEL_REDIRECT", "")
 
+        if rel.startswith(_BOE_PREFIX):
+            return self._serve_boe_copy(rel, full, internal_prefix)
+
         if internal_prefix:
             # Production: let nginx serve the bytes from its internal location.
             resp = HttpResponse(status=200)
@@ -144,7 +179,23 @@ class ProtectedMediaView(APIView):
             # Let nginx infer content-type/length from the file it serves.
             del resp["Content-Type"]
             resp["Content-Disposition"] = f'inline; filename="{filename}"'
+            resp["X-Content-Type-Options"] = "nosniff"
             return resp
 
         # Development / no reverse proxy: stream directly.
-        return FileResponse(open(full, "rb"), as_attachment=False, filename=filename)
+        resp = FileResponse(open(full, "rb"), as_attachment=False, filename=filename)
+        resp["X-Content-Type-Options"] = "nosniff"
+        return resp
+
+    @staticmethod
+    def _serve_boe_copy(rel, full, internal_prefix):
+        """BOE copy branch (D10): safe name, sniff-checked type, nosniff."""
+        filename, content_type, as_attachment = _boe_download_meta(rel, full)
+        if internal_prefix:
+            resp = HttpResponse(status=200, content_type=content_type)
+            resp["X-Accel-Redirect"] = internal_prefix.rstrip("/") + "/" + rel
+        else:
+            resp = FileResponse(open(full, "rb"), content_type=content_type)
+        resp["Content-Disposition"] = content_disposition_header(as_attachment, filename)
+        resp["X-Content-Type-Options"] = "nosniff"
+        return resp

@@ -5,20 +5,16 @@ Two entry points call the same `boe_service.merge_boe`:
   * POST /api/bill-of-entries/{target}/merge/        (BOE workspace)
   * POST reconciliation:reconciliation-merge-boe     (Reconciliation panel)
 
-Pinned today:
+Pinned:
   * audit: both entry points write exactly one MERGE_BOE log (WS5 moved the
     write into `merge_boe`; the BOE-side endpoint previously wrote none);
-  * exchange_rate: `merge_boe` saves the target with update_fields=["port"]
-    only, so a merge that changes the INR/FC totals leaves the stored rate stale;
-  * stored balances: rows move by queryset .update() (no signals), so the
-    stored LicenseBalance is not refreshed;
-  * hidden source -> visible target is accepted and the source's debit
-    becomes a visible debit on the target.
+  * exchange_rate: D4 (flipped) — the survivor's rate is recomputed with the
+    RowDetails-signal helper and persisted;
+  * stored balances: D4 (flipped) — every affected licence/item is refreshed
+    on commit by the existing helpers;
+  * hidden source -> visible target: D4 (flipped) — rejected with 400.
 
-CURRENT BEHAVIOUR — owner decision pending: BUSINESS-RULE (stored balances)
-("merge_boe moves rows with queryset .update() ... Persist exchange_rate ...
-refresh touched licences on_commit? Reject merges where exactly one BOE is
-genuinely hidden?").
+Frozen priority / both-frozen / idempotency: test_boe_merge_frozen_priority.py.
 """
 from decimal import Decimal
 
@@ -93,7 +89,10 @@ class BoeMergeIntegrityTests(BoeApiFixtureMixin, TestCase):
             cif_fc=Decimal("1000.00"), cif_inr=Decimal("100000.00"), qty=Decimal("10.000"),
         )
 
-        response = self.client.post(boe_detail_url(target.id, "merge/"), {"source_boe_id": source.id}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                boe_detail_url(target.id, "merge/"), {"source_boe_id": source.id}, format="json",
+            )
 
         self.assertEqual(response.status_code, 200, response.data)
         target.refresh_from_db()
@@ -101,28 +100,42 @@ class BoeMergeIntegrityTests(BoeApiFixtureMixin, TestCase):
         self.assertEqual(target.get_total_inr, Decimal("184500"))
         recomputed = (target.get_total_inr / target.get_total_fc).quantize(Decimal("0.0001"))
         self.assertEqual(recomputed, Decimal("92.2500"))
-        # CURRENT BEHAVIOUR — owner decision pending: BUSINESS-RULE (stored balances)
-        # (save(update_fields=["port"]) drops the recomputed exchange_rate).
-        self.assertEqual(target.exchange_rate, Decimal("84.5000"))
-        self.assertEqual(Decimal(str(response.data["boe"]["exchange_rate"])), Decimal("84.5000"))
+        # D4 (flipped from the stale 84.5000): the recomputed rate is persisted
+        # and returned.
+        self.assertEqual(target.exchange_rate, Decimal("92.2500"))
+        self.assertEqual(Decimal(str(response.data["boe"]["exchange_rate"])), Decimal("92.2500"))
 
-    def test_stored_balance_not_refreshed_by_merge(self):
+    def test_stored_balances_refreshed_by_merge(self):
+        from apps.core.scripts.calculate_balance import update_balance_values
+        from apps.license.models import LicenseBalance, LicenseImportItemsModel
+
         target = self.make_boe(self.company)
         source = self.make_boe(self.company)
         self.make_debit_row(source, self.item_a, cif_fc=Decimal("500.00"))
         update_license_flags(self.license)
+        update_balance_values(LicenseImportItemsModel.objects.get(pk=self.item_a.pk))
         self.license.refresh_from_db()
-        stored_before = self.license.balance_cif
-        self.assertEqual(stored_before, Decimal("9500.00"))
+        self.assertEqual(self.license.balance_cif, Decimal("9500.00"))
+        item_debited = LicenseImportItemsModel.objects.get(pk=self.item_a.pk).debited_value
+        # Make both stored caches stale so the refresh is observable.
+        LicenseBalance.objects.filter(license_id=self.license.pk).update(balance_cif=Decimal("1.00"))
+        LicenseImportItemsModel.objects.filter(pk=self.item_a.pk).update(debited_value=Decimal("0"))
 
-        self.client.post(boe_detail_url(target.id, "merge/"), {"source_boe_id": source.id}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                boe_detail_url(target.id, "merge/"), {"source_boe_id": source.id}, format="json",
+            )
 
+        self.assertEqual(response.status_code, 200, response.data)
         # Same licence, same debit: the live figure is unchanged by a pure move.
         self.assertEqual(LicenseBalanceCalculator.calculate_financial_balance(self.license), Decimal("9500.00"))
         self.license.refresh_from_db()
-        self.assertEqual(self.license.balance_cif, stored_before)
+        # D4 (flipped from "not refreshed"): recomputed by update_license_flags /
+        # update_balance_values on commit.
+        self.assertEqual(self.license.balance_cif, Decimal("9500.00"))
+        self.assertEqual(LicenseImportItemsModel.objects.get(pk=self.item_a.pk).debited_value, item_debited)
 
-    def test_merging_hidden_source_into_visible_target(self):
+    def test_merging_hidden_source_into_visible_target_is_rejected(self):
         # A Purchase trade makes the hidden/visible split move the balance.
         self.make_purchase_trade(self.company, self.item_a, cif_fc=Decimal("4000.00"))
         target = self.make_boe(self.company)
@@ -131,35 +144,112 @@ class BoeMergeIntegrityTests(BoeApiFixtureMixin, TestCase):
         moved_row = self.make_debit_row(source, self.item_b, cif_fc=Decimal("2000.00"))
         hide_boe(source, user=None, reason="Previous owner")
         self.assertIn(source.id, genuinely_hidden_boe_ids(boe_ids=[source.id]))
-        self.assertEqual(LicenseBalanceCalculator.calculate_boe_debit_total(self.license), Decimal("1000.00"))
         self.license.refresh_from_db()
         stored_before = self.license.balance_cif
-        # (10000 - 2000 hidden - 4000 purchase) + 4000 purchase - 1000 visible
         self.assertEqual(stored_before, Decimal("7000.00"))
-        source_id = source.id
 
-        response = self.client.post(boe_detail_url(target.id, "merge/"), {"source_boe_id": source_id}, format="json")
+        response = self.client.post(boe_detail_url(target.id, "merge/"), {"source_boe_id": source.id}, format="json")
 
-        # CURRENT BEHAVIOUR — owner decision pending: BUSINESS-RULE (stored balances)
-        # (merge is accepted although exactly one side is genuinely hidden).
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertFalse(BillOfEntryModel.objects.filter(id=source_id).exists())
-        self.assertEqual(RowDetails.objects.get(id=moved_row.id).bill_of_entry_id, target.id)
-        target.refresh_from_db()
-        self.assertEqual(target.invoice_no, "")
-        self.assertEqual(genuinely_hidden_boe_ids(boe_ids=[target.id]), set())
-
-        # The previously-hidden debit now counts as a visible BOE debit ...
-        self.assertEqual(LicenseBalanceCalculator.calculate_boe_debit_total(self.license), Decimal("3000.00"))
-        # ... the source's HIDE_BOE log survives with its BOE FK nulled ...
-        self.assertTrue(
-            ReconciliationLog.objects.filter(
-                action=ReconciliationLog.ACTION_HIDE_BOE, bill_of_entry__isnull=True,
-            ).exists()
-        )
-        # ... the live balance moves (0 opening + 4000 purchase - 3000 visible) ...
-        self.assertEqual(LicenseBalanceCalculator.calculate_financial_balance(self.license), Decimal("1000.00"))
-        # ... and the stored balance was not recomputed.
+        # D4 (flipped from 200): exactly one side genuinely hidden -> 400.
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(list(response.data.keys()), ["error"])
+        self.assertIn("hidden", response.data["error"])
+        self.assertTrue(BillOfEntryModel.objects.filter(id=source.id).exists())
+        self.assertEqual(RowDetails.objects.get(id=moved_row.id).bill_of_entry_id, source.id)
+        self.assertIn(source.id, genuinely_hidden_boe_ids(boe_ids=[source.id]))
+        self.assertEqual(LicenseBalanceCalculator.calculate_boe_debit_total(self.license), Decimal("1000.00"))
+        self.assertFalse(self._merge_logs().exists())
         self.license.refresh_from_db()
-        # CURRENT BEHAVIOUR — owner decision pending: BUSINESS-RULE (stored balances)
         self.assertEqual(self.license.balance_cif, stored_before)
+
+    def test_merging_visible_source_into_hidden_target_is_rejected(self):
+        target = self.make_boe(self.company)
+        source = self.make_boe(self.company)
+        self.make_debit_row(target, self.item_a, cif_fc=Decimal("1000.00"))
+        self.make_debit_row(source, self.item_b, cif_fc=Decimal("2000.00"))
+        hide_boe(target, user=None, reason="Previous owner")
+
+        response = self.client.post(
+            reverse("reconciliation:reconciliation-merge-boe"),
+            {"target_boe_id": target.id, "source_boe_id": source.id}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(list(response.data.keys()), ["detail"])
+        self.assertTrue(BillOfEntryModel.objects.filter(id=source.id).exists())
+        self.assertFalse(self._merge_logs().exists())
+
+
+@override_settings(CACHES=LOCMEM_CACHES)
+class MergeReviewFixTests(BoeApiFixtureMixin, TestCase):
+    def setUp(self):
+        self.company = self.make_company()
+        self.license = self.make_license(self.company)
+        self.item_a = self.make_item(self.license, 1)
+        self.item_b = self.make_item(self.license, 2)
+        LicenseExportItemModel.objects.create(license=self.license, cif_fc=Decimal("10000.00"))
+        self.user = self.make_role_user("BOE_MANAGER", "TRADE_MANAGER")
+
+    def _merge(self, target, source_id):
+        from apps.bill_of_entry.services import boe_service
+
+        with self.captureOnCommitCallbacks(execute=True):
+            return boe_service.merge_boe(target, source_id, user=self.user)
+
+    def test_exchange_rate_is_forced_even_for_sub_one_movement(self):
+        target = self.make_boe(self.company)
+        source = self.make_boe(self.company)
+        # row rate 84.5 vs stored 84.50 -> |diff| < 1: only force=True writes it.
+        RowDetails.objects.create(
+            bill_of_entry=target, sr_number=self.item_a, transaction_type=DEBIT,
+            cif_fc=Decimal("100.00"), cif_inr=Decimal("8400.00"), qty=Decimal("1.000"),
+        )
+        self.make_debit_row(source, self.item_b, cif_fc=Decimal("100.00"))
+        BillOfEntryModel.objects.filter(pk=target.pk).update(exchange_rate=Decimal("84.5000"))
+
+        result = self._merge(target, source.id)
+
+        survivor = BillOfEntryModel.objects.get(pk=result["target_boe_id"])
+        self.assertEqual(survivor.exchange_rate, Decimal("84.2500"))  # (8400+8450)/200
+
+    def _linked(self, with_invoice=False):
+        plain = self.make_boe(self.company)
+        other = self.make_boe(self.company)
+        self.make_debit_row(plain, self.item_a, cif_fc=Decimal("100.00"))
+        self.make_debit_row(other, self.item_b, cif_fc=Decimal("100.00"))
+        return plain, other
+
+    def test_merge_rejected_when_removed_boe_has_trade_links_both_orders(self):
+        from apps.bill_of_entry.services import boe_service
+
+        for linked_is_target in (False, True):
+            plain, other = self._linked()
+            linked, free = (plain, other) if linked_is_target else (other, plain)
+            trade = self.make_purchase_trade(self.company, self.item_a, cif_fc=Decimal("10.00"))
+            trade.boes.add(linked)
+            # Unswapped: removed == requested source.  Swapped: frozen priority
+            # makes the linked BOE the removed one although it was the target.
+            if linked_is_target:
+                RowDetails.objects.filter(bill_of_entry=free).update(is_frozen=True)
+                target, source = linked, free
+            else:
+                target, source = free, linked
+            with self.assertRaisesMessage(ValueError, "trades/invoices"):
+                with self.captureOnCommitCallbacks(execute=True):
+                    boe_service.merge_boe(target, source.id, user=self.user)
+            self.assertTrue(BillOfEntryModel.objects.filter(pk=linked.pk).exists())
+            self.assertTrue(trade.boes.filter(pk=linked.pk).exists())
+
+    def test_merge_refreshes_allotment_targets_exactly_once(self):
+        from unittest import mock
+
+        target = self.make_boe(self.company)
+        source = self.make_boe(self.company)
+        allotment = self.make_allotment(self.company, item=self.item_a, cif_fc=Decimal("500.00"))
+        source.allotment.add(allotment)
+        with mock.patch("apps.license.signals._refresh_balances_for_allotments") as signal_refresh, \
+                mock.patch("apps.bill_of_entry.services.boe_service._refresh_licenses") as merge_refresh:
+            self._merge(target, source.id)
+
+        signal_refresh.assert_not_called()
+        self.assertEqual(merge_refresh.call_count, 1)

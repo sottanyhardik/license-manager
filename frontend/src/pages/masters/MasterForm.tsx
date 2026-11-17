@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../../api/axios";
+import * as boeApi from "@/api/boeApi";
 import { openDocument, toProtectedMediaPath } from "../../utils/documentDownload";
 import AuthedImage from "../../components/AuthedImage";
 import NestedFieldArray from "./NestedFieldArray";
@@ -286,7 +287,7 @@ export default function MasterForm({
                 delete snapshot.created_by;
                 delete snapshot.modified_on;
                 delete snapshot.modified_by;
-                await api.patch(`bill-of-entries/${recordId}/`, snapshot);
+                await boeApi.updateBOE(recordId, snapshot);
                 toast.info("BOE saved before fetch");
             } catch {
                 // Non-blocking — proceed with fetch even if auto-save fails
@@ -294,19 +295,15 @@ export default function MasterForm({
         }
 
         try {
-            const fd = new FormData();
-            fd.append("file", boePdfFile);
-            const { data } = await api.post("bill-of-entries/parse-pdf/", fd, {
-                headers: { "Content-Type": "multipart/form-data" },
-            });
+            const data = await boeApi.parsePdf(boePdfFile);
             const { parsed, prefill, matched_allotment_id, matched_company_id, matched_port_id, company_created, licences, existing_boe_id } = data;
 
             // Build patch — only fields we successfully extracted/matched
             const patch: Record<string, any> = {};
             if (parsed.be_number) patch.bill_of_entry_number = parsed.be_number;
             if (parsed.be_date) patch.bill_of_entry_date = parsed.be_date;
-            if (matched_company_id) patch.company = parseInt(matched_company_id, 10);
-            if (matched_port_id) patch.port = parseInt(matched_port_id, 10);
+            if (matched_company_id) patch.company = parseInt(String(matched_company_id), 10);
+            if (matched_port_id) patch.port = parseInt(String(matched_port_id), 10);
             if (matched_allotment_id) patch.allotment = [matched_allotment_id];
             if (prefill.exchange_rate) patch.exchange_rate = String(prefill.exchange_rate);
             if (parsed.item_description) patch.product_name = parsed.item_description;
@@ -324,7 +321,7 @@ export default function MasterForm({
                 };
                 const byItem = new Map<number, any>();
                 for (const l of matchedRows) {
-                    const key = parseInt(l.matched_item_id, 10);
+                    const key = parseInt(String(l.matched_item_id), 10);
                     const existing = byItem.get(key) || { sr_number: key, cif_inr: 0, cif_fc: 0, qty: 0 };
                     existing.cif_inr += toNum(l.cif_inr);
                     existing.cif_fc  += toNum(l.cif_fc);
@@ -383,6 +380,13 @@ export default function MasterForm({
             if (matched_allotment_id) bits.push(`matched allotment #${matched_allotment_id}`);
             bits.push(`${(licences || []).length} licence row(s), ${unmatched} unmatched`);
             toast.success(bits.join(" · "));
+            if (data.unmatched_company || data.company_creation_skipped_reason) {
+                const who = typeof data.unmatched_company === "string" ? ` "${data.unmatched_company}"` : "";
+                toast.warning(
+                    data.company_creation_skipped_reason
+                        || `Buyer${who} matched no company. No company was created; pick one manually.`,
+                );
+            }
         } catch (err: any) {
             console.error("BOE parse error", err);
             const msg = err?.response?.data?.detail || "Failed to parse BOE PDF";

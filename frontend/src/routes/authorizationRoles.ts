@@ -39,7 +39,8 @@ export const REPORT_ROLES: Role[] = [
 export const LICENSE_ROLES: Role[] = [ROLES.LICENSE_MANAGER, ROLES.LICENSE_VIEWER];
 export const ALLOTMENT_ROLES: Role[] = [ROLES.ALLOTMENT_MANAGER, ROLES.ALLOTMENT_VIEWER];
 export const BOE_LIST_ROLES: Role[] = [ROLES.BOE_MANAGER, ROLES.BOE_VIEWER, ROLES.TL_GENERATE, ROLES.ACCOUNT_ACCESS];
-export const BOE_TRANSFER_LETTER_ROLES: Role[] = [ROLES.BOE_MANAGER, ROLES.BOE_VIEWER, ROLES.TL_GENERATE];
+/** BOE transfer-letter access. BOE_VIEWER removed (owner decision: viewers may not generate TLs; backend TransferLetterPermission denies it). */
+export const BOE_TRANSFER_LETTER_ROLES: Role[] = [ROLES.BOE_MANAGER, ROLES.TL_GENERATE];
 export const TRADE_ROLES: Role[] = [ROLES.TRADE_MANAGER, ROLES.TRADE_VIEWER];
 export const RECONCILIATION_ROLES: Role[] = [ROLES.BOE_MANAGER, ROLES.TRADE_MANAGER, ROLES.ACCOUNT_ACCESS];
 /** Mirrors ReconciliationPermission.read_roles (backend/apps/accounts/permissions.py). */

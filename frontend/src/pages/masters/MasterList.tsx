@@ -5,6 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../../api/axios";
 import {boeApi} from "../../api";
+import * as boeApiTyped from "@/api/boeApi";
+import { qk } from "@/lib/queryKeys";
+import {useBulkUpdateProductNames, useUpdateBoeInvoiceNo} from "@/features/bill-of-entry/useBoeRowActions";
 import AdvancedFilter from "../../components/AdvancedFilter";
 import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters";
 import DataPagination from "../../components/DataPagination";
@@ -31,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Layers, Loader2, MapPin, Network, Plus, RefreshCw, Target, Trash2, X } from "lucide-react";
-import { ROLES } from '../../routes/authorizationRoles';
+import { ROLES, BOE_TRANSFER_LETTER_ROLES } from '../../routes/authorizationRoles';
 
 type TradeListItem = {
     id: number;
@@ -164,7 +167,9 @@ export default function MasterList() {
         : isSuperAdmin() || hasRole(ROLES.USER_MANAGER);
 
     // ACCOUNT_ACCESS users can edit invoice_no on BOE items only
-    const canEditInvoice = canWrite || hasRole(ROLES.ACCOUNT_ACCESS);
+    const canEditInvoice = canWrite || hasAnyRole([ROLES.ACCOUNT_ACCESS, ROLES.BOE_VIEWER]);
+    // Mirrors backend TransferLetterPermission (BOE_VIEWER excluded by owner decision).
+    const canTransferLetter = hasAnyRole(BOE_TRANSFER_LETTER_ROLES);
     const [error, setError] = useState("");
 
     // Pagination state
@@ -268,7 +273,6 @@ export default function MasterList() {
 
     const [editingInvoiceId, setEditingInvoiceId] = useState(null);
     const [invoiceDraft, setInvoiceDraft] = useState('');
-    const [invoiceSaving, setInvoiceSaving] = useState(false);
 
     // Standalone loading flag for the "Fetch All Products" bulk action (not list loading)
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
@@ -278,12 +282,14 @@ export default function MasterList() {
     const [mergeBoeTarget, setMergeBoeTarget] = useState(null);
     const [mergeBoeSource, setMergeBoeSource] = useState(null);
     const [mergeBoeLoading, setMergeBoeLoading] = useState(false);
+    const [mergeError, setMergeError] = useState('');
     const [mergeCandidates, setMergeCandidates] = useState([]);
     const [mergeCandidatesLoading, setMergeCandidatesLoading] = useState(false);
 
     const openMergeModal = async (item) => {
         setMergeBoeTarget(item);
         setMergeBoeSource(null);
+        setMergeError('');
         setShowMergeModal(true);
         setMergeCandidatesLoading(true);
         try {
@@ -307,13 +313,19 @@ export default function MasterList() {
     const doMerge = async () => {
         if (!mergeBoeTarget || !mergeBoeSource) return;
         setMergeBoeLoading(true);
+        setMergeError('');
         try {
-            const resp = await boeApi.mergeBOE<{ message?: string }>(mergeBoeTarget.id, mergeBoeSource.id);
-            toast.success(resp.message || 'BOE merged successfully');
+            const resp = await boeApi.mergeBOE(mergeBoeTarget.id, mergeBoeSource.id);
+            toast.success(boeApiTyped.describeBoeMerge(resp, mergeBoeTarget.id));
             closeMergeModal();
             invalidateList();
+            // Merge moves items/links between licences: refresh every cached BOE view.
+            void qc.invalidateQueries({ queryKey: qk.boes.all });
         } catch (err) {
-            toast.error(err.response?.data?.error || 'Failed to merge BOE');
+            // Rejections (frozen both, hidden mismatch, trade/invoice links) arrive as {error}.
+            const msg = boeApiTyped.extractBoeError(err, 'Failed to merge BOE');
+            setMergeError(msg);
+            toast.error(msg);
         } finally {
             setMergeBoeLoading(false);
         }
@@ -330,17 +342,13 @@ export default function MasterList() {
     };
 
     const saveInvoiceEdit = async (itemId) => {
-        setInvoiceSaving(true);
         try {
-            // Dedicated endpoint — accessible to ACCOUNT_ACCESS (and BOE_MANAGER).
+            // Dedicated endpoint — accessible to ACCOUNT_ACCESS, BOE_VIEWER (D2) and BOE_MANAGER.
             // Does NOT require full BOE edit permission.
-            await api.post(`bill-of-entries/${itemId}/update-invoice-no/`, { invoice_no: invoiceDraft.trim() });
+            await updateInvoiceNo.mutateAsync({ id: itemId, invoiceNo: invoiceDraft.trim() });
             setEditingInvoiceId(null);
-            invalidateList();
-        } catch (e) {
-            toast.error('Failed to update invoice number');
-        } finally {
-            setInvoiceSaving(false);
+        } catch {
+            // toast shown by the mutation's onError; keep the editor open
         }
     };
 
@@ -568,6 +576,9 @@ export default function MasterList() {
     const invalidateList = useCallback(() => {
         qc.invalidateQueries({ queryKey: ['entity-list', entityName] });
     }, [qc, entityName]);
+
+    const updateInvoiceNo = useUpdateBoeInvoiceNo(invalidateList);
+    const bulkUpdateProductNames = useBulkUpdateProductNames();
 
     // Fetch DGFT ownership for a single license — extracted from inline card
     const handleFetchOwnership = useCallback(async (item: { id: number; license_number?: string }) => {
@@ -890,16 +901,17 @@ export default function MasterList() {
         if (!confirmed) return;
         setBulkActionLoading(true); setError("");
         try {
-            const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
-            if (response.data.success) {
-                toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
+            const data = await bulkUpdateProductNames.mutateAsync();
+            if (data.success) {
+                toast.success(data.message || `Processed ${data.total} BOEs: ${data.updated} updated, ${data.skipped} skipped`);
                 invalidateList();
             } else {
                 setError('Failed to update product names');
             }
         } catch (err) {
-            setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
-            toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+            const message = boeApiTyped.extractBoeError(err, 'Failed to update product names');
+            setError(message);
+            toast.error(message);
         } finally {
             setBulkActionLoading(false);
         }
@@ -1052,6 +1064,7 @@ export default function MasterList() {
                             data={data}
                             canWrite={canWrite}
                             canEditInvoice={canEditInvoice}
+                            canTransferLetter={canTransferLetter}
                             entityName={entityName}
                             filterParams={filterParams}
                             currentPage={currentPage}
@@ -1065,7 +1078,7 @@ export default function MasterList() {
                             editingInvoiceId={editingInvoiceId}
                             invoiceDraft={invoiceDraft}
                             setInvoiceDraft={setInvoiceDraft}
-                            invoiceSaving={invoiceSaving}
+                            invoiceSaving={updateInvoiceNo.isPending}
                             startInvoiceEdit={startInvoiceEdit}
                             cancelInvoiceEdit={cancelInvoiceEdit}
                             saveInvoiceEdit={saveInvoiceEdit}
@@ -1443,6 +1456,7 @@ export default function MasterList() {
                                     label: 'Transfer Letter',
                                     icon: 'FileText',
                                     className: 'btn btn-outline-warning',
+                                    showIf: () => canTransferLetter,
                                     onClick: (item) => {
                                         setTransferLetterType('boe');
                                         setTransferLetterEntityId(item.id);
@@ -1457,12 +1471,12 @@ export default function MasterList() {
                                         const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
                                         if (!confirmed) { return; }
                                         try {
-                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
-                                            toast.success(response.data.message || 'Product name updated successfully');
+                                            const data = await boeApiTyped.updateProductName(item.id);
+                                            toast.success(data.message || 'Product name updated successfully');
                                             // Refresh the list to show updated product name
                                             invalidateList();
                                         } catch (err) {
-                                            toast.error(err.response?.data?.message || err.response?.data?.error || 'Failed to update product name');
+                                            toast.error(boeApiTyped.extractBoeError(err, 'Failed to update product name'));
                                         }
                                     },
                                     showIf: (item) => !item.product_name || item.product_name.trim() === ''
@@ -1567,6 +1581,7 @@ export default function MasterList() {
                     mergeBoeSource={mergeBoeSource}
                     setMergeBoeSource={setMergeBoeSource}
                     mergeBoeLoading={mergeBoeLoading}
+                    mergeError={mergeError}
                     doMerge={doMerge}
                 />
             )}

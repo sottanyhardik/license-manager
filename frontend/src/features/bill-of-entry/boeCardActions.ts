@@ -1,33 +1,28 @@
-import { toast } from "sonner";
+import { CheckCircle2, FileText, Layers, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
-import api from "@/api/axios";
+import type { ActionMenuItem } from "@/components/shared";
 import { saveFilterState } from "@/utils/filterPersistence";
 
 import type { BoeDetailRow, BoeListItem } from "./types";
 
 export interface BoeActionContext {
     canWrite: boolean;
+    canTransferLetter: boolean;
     entityName: string;
     filterParams: Record<string, unknown>;
     currentPage: number;
     pageSize: number;
     navigate: (path: string) => void;
     onDelete: (item: BoeListItem) => void;
-    invalidateList: () => void;
-    confirmDangerousAction: (title: string, message: string) => Promise<unknown>;
     onTransferLetter: (id: number) => void;
     onMerge: (item: BoeListItem) => void;
 }
 
-export interface BoeCardAction {
-    icon: string;
-    title: string;
-    tone?: string;
-    onClick: () => void | Promise<void>;
+/** Confirmed, mutation-backed handlers supplied by `useBoeRowActions`. */
+export interface BoeActionHandlers {
+    resolveDispute: () => void | Promise<void>;
+    updateProductName: () => void | Promise<void>;
 }
-
-type ApiError = { response?: { data?: { detail?: string; message?: string } } };
-const errorData = (err: unknown) => (err as ApiError)?.response?.data;
 
 /** Save the register's filters/pagination, then open the BOE edit page. */
 export function persistAndEditBoe(item: BoeListItem, ctx: BoeActionContext): void {
@@ -37,50 +32,29 @@ export function persistAndEditBoe(item: BoeListItem, ctx: BoeActionContext): voi
 }
 
 /**
- * The BOE card's actions, moved verbatim out of BoeCardList (same order, icons,
- * tones, endpoints and navigation targets). Every write action is gated on
- * `canWrite`; the server already requires BOE_MANAGER for them.
+ * The one action set per expanded BOE (shared ActionMenu, like the Licence
+ * card): Edit, Transfer Letter, Merge, Resolve Dispute, Update Product Name,
+ * then Delete (danger). Every write action is gated on `canWrite`; the server
+ * requires BOE_MANAGER for them. Delete is confirmed by the `onDelete` caller;
+ * Resolve Dispute / Update Product Name confirm inside `useBoeRowActions`.
  */
-export function buildBoeActions(item: BoeListItem, ctx: BoeActionContext): BoeCardAction[] {
-    const { canWrite, onDelete, invalidateList, confirmDangerousAction, onTransferLetter, onMerge } = ctx;
-    const disputeRows = ((item.item_details || []) as BoeDetailRow[]).filter(r => r.is_dispute);
-    const hasDispute = disputeRows.length > 0;
-    const actions: (BoeCardAction | false)[] = [
+export function buildBoeActionItems(item: BoeListItem, ctx: BoeActionContext, handlers: BoeActionHandlers): ActionMenuItem[] {
+    const { canWrite, canTransferLetter, onDelete, onTransferLetter, onMerge } = ctx;
+    const hasDispute = ((item.item_details || []) as BoeDetailRow[]).some(r => r.is_dispute);
+    const needsProductName = !item.product_name || item.product_name.trim() === '';
+    const items: (ActionMenuItem | false)[] = [
+        canWrite && { id: 'edit', label: 'Edit', icon: Pencil, onSelect: () => persistAndEditBoe(item, ctx) },
+        canTransferLetter && { id: 'transfer-letter', label: 'Transfer Letter', icon: FileText, onSelect: () => onTransferLetter(item.id) },
+        canWrite && { id: 'merge', label: 'Merge BOE', icon: Layers, onSelect: () => onMerge(item) },
         canWrite && hasDispute && {
-            icon: 'check2-circle', title: 'Resolve Dispute', tone: 'danger',
-            onClick: async () => {
-                const confirmed = await confirmDangerousAction('Resolve Dispute', `Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`);
-                if (!confirmed) return;
-                try {
-                    const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
-                    toast.success(response.data.message || 'Dispute resolved');
-                    invalidateList();
-                } catch (err) {
-                    toast.error(errorData(err)?.detail || errorData(err)?.message || 'Failed to resolve dispute');
-                }
-            }
+            id: 'resolve-dispute', label: 'Resolve Dispute', icon: CheckCircle2,
+            onSelect: () => { void handlers.resolveDispute(); },
         },
-        { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
-            onClick: () => onTransferLetter(item.id) },
-        canWrite && { icon: 'intersect', title: 'Merge BOE', tone: 'info',
-            onClick: () => onMerge(item) },
-        canWrite && (!item.product_name || item.product_name.trim() === '') && {
-            icon: 'arrow-repeat', title: 'Update Product Name', tone: 'info',
-            onClick: async () => {
-                const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
-                if (!confirmed) return;
-                try {
-                    const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
-                    toast.success(response.data.message || 'Product name updated');
-                    invalidateList();
-                } catch (err) {
-                    toast.error(errorData(err)?.message || 'Failed to update product name');
-                }
-            }
+        canWrite && needsProductName && {
+            id: 'update-product-name', label: 'Update Product Name', icon: RefreshCw,
+            onSelect: () => { void handlers.updateProductName(); },
         },
-        canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
-            onClick: () => persistAndEditBoe(item, ctx) },
-        canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => onDelete(item) },
+        canWrite && { id: 'delete', label: 'Delete', icon: Trash2, tone: 'danger', onSelect: () => onDelete(item), separatorBefore: true },
     ];
-    return actions.filter((a): a is BoeCardAction => Boolean(a));
+    return items.filter((a): a is ActionMenuItem => Boolean(a));
 }

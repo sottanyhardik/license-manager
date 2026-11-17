@@ -447,6 +447,50 @@ class RowDetails(AuditModel):
 # -----------------------------
 # Signals for stock updates
 # -----------------------------
+from django.db.models.signals import pre_save  # noqa: E402  (kept inside the signal section)
+
+# Attribute names set on a RowDetails instance by `capture_previous_row_relationship`
+# (pre_save) and read by the post_save refresh triggers here and in
+# apps.license.signals.update_license_on_boe_item_change (owner decision D5).
+PREVIOUS_SR_NUMBER_ATTR = "_previous_sr_number_id"
+PREVIOUS_LICENSE_ATTR = "_previous_sr_license_id"
+
+
+def _schedule(job) -> None:
+    try:
+        transaction.on_commit(job)
+    except Exception as e:
+        logger.debug("on_commit not available, invoking balance update immediately: %s", e)
+        job()
+
+
+@receiver(pre_save, sender=RowDetails, dispatch_uid="capture_previous_row_relationship")
+def capture_previous_row_relationship(sender, instance, raw=False, update_fields=None, **kwargs):
+    """D5: remember the row's stored licence item/licence BEFORE the save so the
+    post_save triggers can also refresh the OLD item and OLD licence when the
+    row is moved. Reads the DB value (not an in-memory snapshot). Skipped for
+    new rows, fixture loads, and saves whose update_fields exclude sr_number."""
+    setattr(instance, PREVIOUS_SR_NUMBER_ATTR, None)
+    setattr(instance, PREVIOUS_LICENSE_ATTR, None)
+    if raw or instance._state.adding or not instance.pk:
+        return
+    if update_fields is not None and not ({"sr_number", "sr_number_id"} & set(update_fields)):
+        return
+    try:
+        previous = (
+            RowDetails.objects.filter(pk=instance.pk)
+            .values_list("sr_number_id", "sr_number__license_id")
+            .first()
+        )
+    except Exception as e:
+        logger.warning("Could not read previous sr_number for RowDetails pk=%s: %s", instance.pk, e)
+        return
+    if previous is None or previous[0] == instance.sr_number_id:
+        return
+    setattr(instance, PREVIOUS_SR_NUMBER_ATTR, previous[0])
+    setattr(instance, PREVIOUS_LICENSE_ATTR, previous[1])
+
+
 def _update_balance_sync(item_id: int) -> None:
     """Update balance values synchronously (faster than Celery task)."""
     try:
@@ -463,20 +507,22 @@ def _update_balance_sync(item_id: int) -> None:
 
 @receiver(post_save, sender=RowDetails, dispatch_uid="update_stock_on_save")
 def update_stock(sender, instance, **kwargs):
-    """Update stock balance synchronously after save."""
-    item = instance.sr_number
-    if not item:
+    """Update stock balance after commit for the row's item and, when the row
+    was moved to another item (D5), for the previous item as well."""
+    item_ids = []
+    if instance.sr_number_id:
+        item_ids.append(instance.sr_number_id)
+    previous_item_id = getattr(instance, PREVIOUS_SR_NUMBER_ATTR, None)
+    if previous_item_id and previous_item_id not in item_ids:
+        item_ids.append(previous_item_id)
+    if not item_ids:
         return
 
-    # Update immediately instead of scheduling a task
     def _job():
-        _update_balance_sync(item.id)
+        for item_id in item_ids:
+            _update_balance_sync(item_id)
 
-    try:
-        transaction.on_commit(_job)
-    except Exception as e:
-        logger.debug("on_commit not available, invoking balance update immediately: %s", e)
-        _job()
+    _schedule(_job)
 
 
 @receiver(post_delete, sender=RowDetails)

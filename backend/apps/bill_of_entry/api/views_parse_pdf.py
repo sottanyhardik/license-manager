@@ -5,9 +5,11 @@ for matched company, port, and license items in the local database.
 """
 from __future__ import annotations
 
+import logging
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -15,12 +17,24 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import BillOfEntryPermission
+from apps.accounts.permissions import BillOfEntryPermission, CompanyPermission
 from apps.allotment.models import AllotmentModel
 from apps.bill_of_entry.models import BillOfEntryModel
 from apps.bill_of_entry.parsers.boe_pdf import parse_boe_pdf
+from apps.bill_of_entry.services.boe_documents import validate_boe_pdf
 from apps.core.models import CompanyModel, ExchangeRateModel, PortModel
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+
+logger = logging.getLogger(__name__)
+
+_PARSE_FAILED_DETAIL = "Failed to parse PDF. Check that it is an ICEGATE Bill of Entry PDF."
+_TRUTHY = frozenset({"true", "1", "yes", "on"})
+
+# Why a requested company auto-create was skipped (additive response field).
+SKIP_NOT_REQUESTED = "not_requested"
+SKIP_NO_PERMISSION = "no_company_write_permission"
+SKIP_MDS_MANAGED = "company_master_managed_by_mds"
+SKIP_INCOMPLETE = "missing_iec_or_name"
 
 
 def _decimal(value, default=None):
@@ -38,26 +52,70 @@ def _match_port(port_code: str | None):
     return PortModel.objects.filter(code__iexact=port_code).first()
 
 
-def _match_or_create_company(parsed: dict[str, Any], create_if_missing: bool):
+def _user_can_write_company(user) -> bool:
+    """Same write role set CompanyViewSet enforces (CompanyPermission)."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    return user.has_any_role(CompanyPermission.required_roles_for_write)
+
+
+def _company_mds_managed() -> bool:
+    """True when the MDS write cutover owns CompanyModel writes.
+
+    Mirrors ``MasterViewSet._mds_active``: MDS is the write authority then, so a
+    local ORM create here would bypass it — the caller must skip creation."""
+    from django.conf import settings
+
+    if not getattr(settings, "MDS_ENABLED", False):
+        return False
+    try:
+        from apps.core.mds_write import mds_active_for
+    except Exception:  # noqa: BLE001 - mds_client not installed -> local behaviour
+        return False
+    return mds_active_for(CompanyModel)
+
+
+def _company_create_skip_reason(user, requested: bool, iec: str, name: str) -> str | None:
+    """Return why creation must be skipped, or None when it is allowed (D9)."""
+    if not requested:
+        return SKIP_NOT_REQUESTED
+    if not (iec and name):
+        return SKIP_INCOMPLETE
+    if not _user_can_write_company(user):
+        return SKIP_NO_PERMISSION
+    if _company_mds_managed():
+        return SKIP_MDS_MANAGED
+    return None
+
+
+def _match_or_create_company(parsed: dict[str, Any], create_if_missing: bool, user=None):
+    """Match by IEC then name; create only when requested AND permitted (D9).
+
+    Returns ``(company, created, skip_reason)``; ``skip_reason`` is None when a
+    company was matched or created."""
     iec = (parsed.get("iec") or "").strip()
     name = (parsed.get("buyer_name") or "").strip()
     company = None
-    created = False
 
     if iec:
         company = CompanyModel.objects.filter(iec=iec).first()
     if not company and name:
         company = CompanyModel.objects.filter(name__iexact=name).first()
+    if company:
+        return company, False, None
 
-    if not company and create_if_missing and iec and name:
-        company = CompanyModel.objects.create(
-            iec=iec,
-            name=name,
-            address_line_1=(parsed.get("buyer_address") or "").strip(),
-        )
-        created = True
+    skip_reason = _company_create_skip_reason(user, create_if_missing, iec, name)
+    if skip_reason:
+        return None, False, skip_reason
 
-    return company, created
+    company = CompanyModel.objects.create(
+        iec=iec,
+        name=name,
+        address_line_1=(parsed.get("buyer_address") or "").strip(),
+    )
+    return company, True, None
 
 
 def _match_allotment_by_invoice(invoice_no: str | None):
@@ -192,7 +250,9 @@ class BOEPdfParseView(APIView):
     """
     POST /api/bill-of-entries/parse-pdf/
         multipart-form: file=<BOE PDF>
-        optional form: create_company=true|false (default true)
+        optional form: create_company=true|false (default false — D9; creation
+        also requires CompanyPermission write roles and no MDS write cutover
+        for CompanyModel, otherwise the unmatched company info is returned)
 
     Returns a JSON object suitable for prefilling AllotmentFormModal.
     """
@@ -209,10 +269,19 @@ class BOEPdfParseView(APIView):
             )
 
         try:
-            parsed = parse_boe_pdf(upload)
-        except Exception as exc:
+            validate_boe_pdf(upload)
+        except DjangoValidationError as exc:
             return Response(
-                {"detail": f"Failed to parse PDF: {exc}"},
+                {"detail": " ".join(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            parsed = parse_boe_pdf(upload)
+        except Exception:  # noqa: BLE001 - never echo parser internals (D9)
+            logger.exception("BOE PDF parse failed for upload by user id=%s", request.user.pk)
+            return Response(
+                {"detail": _PARSE_FAILED_DETAIL},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -226,8 +295,10 @@ class BOEPdfParseView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        create_company = str(request.data.get("create_company", "true")).lower() != "false"
-        company, company_created = _match_or_create_company(parsed, create_company)
+        create_company = str(request.data.get("create_company", "false")).strip().lower() in _TRUTHY
+        company, company_created, company_skip_reason = _match_or_create_company(
+            parsed, create_company, request.user,
+        )
         port = _match_port(parsed.get("port_code"))
         allotment = _match_allotment_by_invoice(parsed.get("invoice_no"))
         # A BOE is unique by number and date.  Tell the create form about an
@@ -276,6 +347,14 @@ class BOEPdfParseView(APIView):
             "existing_boe_id": existing_boe.id if existing_boe else None,
             "matched_company_id": company.id if company else None,
             "company_created": company_created,
+            # Additive (D9): why no company was auto-created, plus the parsed
+            # company details so the user can pick/create it explicitly.
+            "company_creation_skipped_reason": company_skip_reason,
+            "unmatched_company": None if company else {
+                "iec": (parsed.get("iec") or "").strip() or None,
+                "name": (parsed.get("buyer_name") or "").strip() or None,
+                "address": (parsed.get("buyer_address") or "").strip() or None,
+            },
             "matched_port_id": port.id if port else None,
             "licences": licences,
         })

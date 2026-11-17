@@ -67,30 +67,35 @@ class NestedRowOmissionTests(BoeApiFixtureMixin, TestCase):
         self.boe.refresh_from_db()
         self.assertNotEqual(self.boe.comments, "edited")
 
-    def test_omitting_frozen_row_deletes_it(self):
+    def test_omitting_frozen_row_keeps_it(self):
         RowDetails.objects.filter(id=self.omitted.id).update(is_frozen=True)
 
         response = self._patch_keep_only(self.client_for(self.user))
 
         self.assertEqual(response.status_code, 200, response.data)
-        # CURRENT BEHAVIOUR — owner decision pending: BUSINESS-RULE
-        # (nested update deletes frozen ledger rows left out of the payload).
-        self.assertFalse(RowDetails.objects.filter(id=self.omitted.id).exists())
+        # FLIPPED by owner decision D3 (was: the omitted frozen row was deleted).
+        self.assertTrue(RowDetails.objects.filter(id=self.omitted.id).exists())
         self.assertTrue(RowDetails.objects.filter(id=self.kept.id).exists())
 
-    def test_frozen_row_sent_with_new_values_is_left_unchanged(self):
-        """Contrast: a frozen row that IS in the payload is kept untouched."""
+    def test_frozen_row_sent_with_new_values_is_rejected_400(self):
+        """A frozen row that IS in the payload with changed values is rejected."""
         RowDetails.objects.filter(id=self.omitted.id).update(is_frozen=True)
 
         response = self.client_for(self.user).patch(boe_detail_url(self.boe.id), {
+            "comments": "edited",
             "item_details": [
                 self.row_payload(self.item_keep, Decimal("100.00"), Decimal("10.000"), row_id=self.kept.id),
                 self.row_payload(self.item_omit, Decimal("999.00"), Decimal("99.000"), row_id=self.omitted.id),
             ],
         }, format="json")
 
-        self.assertEqual(response.status_code, 200, response.data)
+        # FLIPPED by owner decision D3 (was: 200 with the change silently dropped).
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn(str(self.omitted.id), str(response.data["item_details"][1]))
+        self.assertEqual(response.data["item_details"][0], {})
         self.assertEqual(RowDetails.objects.get(id=self.omitted.id).cif_fc, Decimal("200.000"))
+        self.boe.refresh_from_db()
+        self.assertNotEqual(self.boe.comments, "edited")
 
 
 @override_settings(CACHES=LOCMEM_CACHES)
@@ -98,8 +103,9 @@ class NullDateDuplicatePostTests(BoeApiFixtureMixin, TestCase):
     """BOE POST is an `update_or_create` upsert on (number, date, port) while
     the DB constraint is (number, date).
 
-    CURRENT BEHAVIOUR — owner decision pending: API CONTRACT (POST upsert vs
-    unique (number, date); null-date BOEs silently overwritten or duplicated).
+    FLIPPED by owner decision D7 (was: null-date BOEs silently overwritten or
+    duplicated): a create without a date whose number already exists is a 400
+    carrying `existing_boe_id`.
     """
 
     def setUp(self):
@@ -117,26 +123,27 @@ class NullDateDuplicatePostTests(BoeApiFixtureMixin, TestCase):
             "comments": comments,
         }, format="json")
 
-    def test_same_port_null_date_second_post_overwrites(self):
+    def test_same_port_null_date_second_post_is_rejected_400(self):
         first = self._post(self.port_a, "first")
         second = self._post(self.port_a, "second")
 
         self.assertEqual(first.status_code, 201, first.data)
-        # CURRENT BEHAVIOUR — owner decision pending: API CONTRACT
-        self.assertEqual(second.status_code, 201, second.data)
-        self.assertEqual(second.data["id"], first.data["id"])
+        # FLIPPED by owner decision D7 (was: 201 overwriting the first BOE).
+        self.assertEqual(second.status_code, 400, second.data)
+        self.assertIn("bill_of_entry_date", second.data)
+        self.assertEqual(second.data["existing_boe_id"], first.data["id"])
         self.assertEqual(BillOfEntryModel.objects.filter(bill_of_entry_number="NULLDATE01").count(), 1)
-        self.assertEqual(BillOfEntryModel.objects.get(id=first.data["id"]).comments, "second")
+        self.assertEqual(BillOfEntryModel.objects.get(id=first.data["id"]).comments, "first")
 
-    def test_different_port_null_date_second_post_duplicates(self):
+    def test_different_port_null_date_second_post_is_rejected_400(self):
         first = self._post(self.port_a, "first")
         second = self._post(self.port_b, "second")
 
         self.assertEqual(first.status_code, 201, first.data)
-        # CURRENT BEHAVIOUR — owner decision pending: API CONTRACT
-        self.assertEqual(second.status_code, 201, second.data)
-        self.assertNotEqual(second.data["id"], first.data["id"])
-        self.assertEqual(BillOfEntryModel.objects.filter(bill_of_entry_number="NULLDATE01").count(), 2)
+        # FLIPPED by owner decision D7 (was: 201 creating a duplicate BOE).
+        self.assertEqual(second.status_code, 400, second.data)
+        self.assertEqual(second.data["existing_boe_id"], first.data["id"])
+        self.assertEqual(BillOfEntryModel.objects.filter(bill_of_entry_number="NULLDATE01").count(), 1)
 
     def test_dated_duplicate_post_is_rejected_400(self):
         first = self._post(self.port_a, "first", date="2026-03-01")
@@ -176,11 +183,10 @@ class HideBoesBulkStringIdTests(BoeApiFixtureMixin, TestCase):
 
 @override_settings(CACHES=LOCMEM_CACHES)
 class IndividualItemCeilingTests(BoeApiFixtureMixin, TestCase):
-    """Nested INDIVIDUAL_ITEM CIF ceiling (RowDetailsSerializer.validate).
+    """Nested INDIVIDUAL_ITEM CIF ceiling (`check_individual_item_cif_ceiling`).
 
-    CURRENT BEHAVIOUR — owner decision pending: "the nested INDIVIDUAL_ITEM
-    CIF ceiling may not add back the row's own debit on edit
-    (serializers.py:82-111)".
+    FLIPPED by owner decisions D12/D13 (was: the row's own debit was not added
+    back, so an unchanged re-save failed).
     """
 
     def setUp(self):
@@ -202,12 +208,18 @@ class IndividualItemCeilingTests(BoeApiFixtureMixin, TestCase):
             )],
         }, format="json")
 
-    def test_unchanged_resave_hits_ceiling_without_own_debit(self):
-        # Live item balance is 1000 - 600 = 400; the row's own 600 is NOT
-        # added back because the nested child serializer has no instance.
+    def test_unchanged_resave_adds_back_own_debit(self):
+        # Live item balance is 1000 - 600 = 400; the row's own 600 is now
+        # added back, so the ceiling for this row is 1000.
         response = self._resave(Decimal("600.00"))
 
-        # CURRENT BEHAVIOUR — owner decision pending: nested INDIVIDUAL_ITEM ceiling
+        # FLIPPED by owner decision D13 (was: 400 on cif_fc).
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(RowDetails.objects.get(id=self.row.id).cif_fc, Decimal("600.000"))
+
+    def test_resave_above_ceiling_with_own_debit_is_rejected(self):
+        response = self._resave(Decimal("1000.01"))
+
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn("cif_fc", response.data["item_details"][0])
         self.assertEqual(RowDetails.objects.get(id=self.row.id).cif_fc, Decimal("600.000"))

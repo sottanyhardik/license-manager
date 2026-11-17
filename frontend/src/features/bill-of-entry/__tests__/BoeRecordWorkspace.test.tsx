@@ -52,7 +52,7 @@ describe("BOE record workspace (expanded card)", () => {
         expect(screen.getAllByRole("region", { name: /^BOE .* details$/ })).toHaveLength(2);
         const regionB = screen.getByRole("region", { name: "BOE 7012346 details" });
         // B opens on its own default tab, not A's last tab; A keeps its state.
-        expect(within(regionB).getByRole("tab", { name: "Import Items" })).toHaveAttribute("aria-selected", "true");
+        expect(within(regionB).getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
         expect(within(regionA).getByRole("tab", { name: "BOE Details" })).toHaveAttribute("aria-selected", "true");
         expect(screen.getByText("CHA of 201")).toBeInTheDocument();
         await user.click(within(regionB).getByRole("tab", { name: "BOE Details" }));
@@ -81,7 +81,7 @@ describe("BOE record workspace (expanded card)", () => {
             await user.click(screen.getByRole("tab", { name: tab }));
             await waitFor(() => expect([...tabRequests()].sort()).toEqual([...expected].sort()));
         };
-        await step("Overview", []);
+        expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
         await step("BOE Details", ["bill-of-entries/203/"]);
         await step("Import Items", []);
         await step("Licence Mapping", []);
@@ -89,7 +89,6 @@ describe("BOE record workspace (expanded card)", () => {
         expect(await screen.findByText("ALLOT-INV-302")).toBeInTheDocument();
         expect(screen.getByText("ALLOT-INV-303")).toBeInTheDocument();
         await step("Documents", []);
-        await step("Edit Options", []);
     });
 
     it("renders the requested tabs (Invoices, Reconciliation, Activity omitted) and values as received", async () => {
@@ -99,9 +98,8 @@ describe("BOE record workspace (expanded card)", () => {
         await user.click(within(cardFor(201)).getByTitle("View details"));
         expect(screen.getByRole("tablist", { name: "BOE 7012345 sections" })).toBeInTheDocument();
         expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
-            "Overview", "BOE Details", "Import Items", "Licence Mapping", "Allotment Mapping", "Documents", "Edit Options",
+            "Overview", "BOE Details", "Import Items", "Licence Mapping", "Allotment Mapping", "Documents",
         ]);
-        await user.click(screen.getByRole("tab", { name: "Overview" }));
         // Amounts are formatted for display only, at the backend's scale (INR to paise).
         const overview = screen.getByRole("tabpanel");
         expect(within(overview).getByText("₹12,34,567.89")).toBeInTheDocument();
@@ -121,24 +119,26 @@ describe("BOE record workspace (expanded card)", () => {
         await user.click(within(cardFor(201)).getByTitle("View details"));
         const tabsRoot = screen.getByRole("tablist", { name: "BOE 7012345 sections" }).parentElement;
         expect(tabsRoot).toHaveClass("min-w-0", "[&_[role=tablist]]:flex-nowrap", "[&_[role=tablist]]:overflow-x-auto", "[&_[role=tab]]:shrink-0");
-        expect(screen.getByRole("tab", { name: "Import Items" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     });
 
-    it("Edit Options keeps the card's gating and handlers", async () => {
+    it("has no Edit Options tab; ActionMenu keeps the card's gating and handlers", async () => {
         const user = userEvent.setup();
         renderBoeList("BOE_VIEWER");
         await ready();
         await user.click(within(cardFor(201)).getByTitle("View details"));
-        await user.click(screen.getByRole("tab", { name: "Edit Options" }));
-        expect(screen.queryByRole("button", { name: "Edit BOE" })).toBeNull();
-        expect(screen.getByRole("button", { name: "Generate Transfer Letter" })).toBeInTheDocument();
+        expect(screen.queryByRole("tab", { name: "Edit Options" })).toBeNull();
+        // Viewer: no write actions and no Transfer Letter, so no menu at all.
+        expect(screen.queryByRole("button", { name: "Actions for BOE 7012345" })).toBeNull();
+        await user.click(screen.getByRole("tab", { name: "Documents" }));
+        expect(screen.queryByRole("button", { name: "Transfer Letter" })).toBeNull();
         cleanup();
 
         renderBoeList("BOE_MANAGER");
         await ready();
         await user.click(within(cardFor(201)).getByTitle("View details"));
-        await user.click(screen.getByRole("tab", { name: "Edit Options" }));
-        await user.click(screen.getByRole("button", { name: "Edit BOE" }));
+        await user.click(screen.getByRole("button", { name: "Actions for BOE 7012345" }));
+        await user.click(screen.getByRole("menuitem", { name: "Edit" }));
         expect(await screen.findByTestId("edit-page")).toHaveTextContent("edit 201");
     });
 
@@ -147,10 +147,10 @@ describe("BOE record workspace (expanded card)", () => {
         renderBoeList("BOE_MANAGER");
         await ready();
         await user.click(within(cardFor(201)).getByTitle("View details"));
-        const items = screen.getByRole("tab", { name: "Import Items" });
+        const items = screen.getByRole("tab", { name: "Overview" });
         act(() => items.focus());
         await user.keyboard("{ArrowRight}");
-        expect(screen.getByRole("tab", { name: "Licence Mapping" })).toHaveFocus();
-        expect(screen.getByRole("tab", { name: "Licence Mapping" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "BOE Details" })).toHaveFocus();
+        expect(screen.getByRole("tab", { name: "BOE Details" })).toHaveAttribute("aria-selected", "true");
     });
 });

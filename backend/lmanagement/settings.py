@@ -255,6 +255,16 @@ MEDIA_ROOT = BASE_DIR / "media"
 # so nginx serves the bytes via X-Accel-Redirect. Leave empty in dev to stream via Django.
 MEDIA_X_ACCEL_REDIRECT = os.getenv("MEDIA_X_ACCEL_REDIRECT", "")
 
+# Max size (MB) of an uploaded ICEGATE BOE PDF (parse-pdf + BOE copy upload).
+# See apps.bill_of_entry.services.boe_documents.validate_boe_pdf. A non-numeric
+# or non-positive value falls back to the safe default of 10 MB.
+try:
+    BOE_PDF_MAX_UPLOAD_MB = int(os.getenv("BOE_PDF_MAX_UPLOAD_MB", "10"))
+except ValueError:
+    BOE_PDF_MAX_UPLOAD_MB = 10
+if BOE_PDF_MAX_UPLOAD_MB <= 0:
+    BOE_PDF_MAX_UPLOAD_MB = 10
+
 # ---------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------

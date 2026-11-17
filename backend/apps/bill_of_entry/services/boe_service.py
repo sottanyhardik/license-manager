@@ -7,7 +7,10 @@ Raises ValueError for invalid domain operations.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -200,145 +203,314 @@ def resolve_dispute(boe) -> dict[str, Any]:
 # BOE merge
 # ---------------------------------------------------------------------------
 
+def _parse_merge_source_id(source_boe_id) -> int:
+    if source_boe_id in (None, "") or isinstance(source_boe_id, bool):
+        raise ValueError("source_boe_id is required")
+    try:
+        return int(str(source_boe_id).strip())
+    except (TypeError, ValueError):
+        raise ValueError("source_boe_id must be an integer id")
+
+
+def _choose_merge_survivor(requested_target, requested_source, frozen_row_ids) -> tuple[Any, Any, bool]:
+    """D4 frozen priority: when exactly one BOE carries frozen (ledger) rows
+    it survives, whatever the argument order.  Otherwise the requested target
+    survives (existing rule).  Returns ``(survivor, removed, swapped)``."""
+    target_frozen = bool(frozen_row_ids.get(requested_target.id))
+    source_frozen = bool(frozen_row_ids.get(requested_source.id))
+    if source_frozen and not target_frozen:
+        return requested_source, requested_target, True
+    return requested_target, requested_source, False
+
+
+def _plan_merge_rows(survivor, removed) -> tuple[list[int], list[int], list[int]]:
+    """Split the removed BOE's rows into ``(move, skip, skipped_frozen)``.
+
+    A row whose (sr_number, transaction_type) already exists on the survivor
+    (or on an earlier moved row) is skipped and cascade-deletes with the
+    removed BOE — the existing rule.  Frozen rows are never deleted, so a
+    skipped frozen row is reported separately and blocks the merge."""
+    existing_combos = set(survivor.item_details.values_list("sr_number_id", "transaction_type"))
+    move, skip, skipped_frozen = [], [], []
+    rows = removed.item_details.order_by("id").values("id", "sr_number_id", "transaction_type", "is_frozen")
+    for row in rows:
+        combo = (row["sr_number_id"], row["transaction_type"])
+        if combo not in existing_combos:
+            move.append(row["id"])
+            existing_combos.add(combo)
+            continue
+        skip.append(row["id"])
+        if row["is_frozen"]:
+            skipped_frozen.append(row["id"])
+    return move, skip, skipped_frozen
+
+
+def _reject_protected_duplicates(skipped_row_ids) -> None:
+    # A skipped duplicate remains attached to the removed BOE and would
+    # therefore be cascade-deleted with it.  Reconciliation annotations
+    # deliberately protect their RowDetails FK, so reject the entire merge
+    # *before* any row move, allotment transfer, or deletion (one bounded
+    # query across all duplicate rows, not N+1 relation checks).
+    from django.db.models import Q
+
+    from apps.bill_of_entry.models import RowDetails
+
+    if not skipped_row_ids:
+        return
+    protected_duplicates = list(
+        RowDetails.objects.filter(id__in=skipped_row_ids)
+        .filter(
+            Q(invoice_allocations__isnull=False)
+            | Q(allotment_allocations__isnull=False)
+            | Q(external_invoice_links__isnull=False)
+        )
+        .values("id", "sr_number_id", "transaction_type")
+        .distinct()
+    )
+    if protected_duplicates:
+        row_ids = ", ".join(str(row["id"]) for row in protected_duplicates)
+        raise ValueError(
+            "BOE merge cannot be completed because duplicate source row(s) "
+            f"{row_ids} are referenced by reconciliation/allocation records. "
+            "Resolve those references before merging."
+        )
+
+
+def _merge_affected_targets(boe_ids, allotment_ids) -> tuple[list[int], list[int]]:
+    """Every licence and licence import item whose stored balances a merge
+    can change, captured BEFORE any mutation: the rows of both BOEs (moved,
+    kept and cascade-deleted), the items allotted by the transferred
+    allotments, and the items billed by trades linked to either BOE (the
+    removed BOE's trade links go with it).  Returns sorted
+    ``(license_ids, item_ids)``."""
+    from apps.bill_of_entry.models import RowDetails
+    from apps.license.models import LicenseImportItemsModel
+
+    pairs = set(
+        RowDetails.objects.filter(bill_of_entry_id__in=boe_ids)
+        .values_list("sr_number_id", "sr_number__license_id")
+    )
+    if allotment_ids:
+        pairs.update(
+            LicenseImportItemsModel.objects.filter(allotment_details__allotment_id__in=allotment_ids)
+            .values_list("id", "license_id")
+        )
+    pairs.update(
+        LicenseImportItemsModel.objects.filter(trade_lines__trade__boes__id__in=boe_ids)
+        .values_list("id", "license_id")
+    )
+    item_ids = sorted({item_id for item_id, _ in pairs if item_id})
+    license_ids = sorted({license_id for _, license_id in pairs if license_id})
+    return license_ids, item_ids
+
+
+def _schedule_merge_refresh(license_ids, item_ids) -> None:
+    """Refresh the stored balances of every affected licence and item after
+    the merge commits, using only the existing refresh helpers
+    (``update_license_flags`` via ``_refresh_licenses``; ``update_balance_values``
+    via the RowDetails signal helper).  No balance math lives here."""
+    from django.db import transaction
+
+    from apps.bill_of_entry.models import _update_balance_sync
+
+    def _job():
+        # One guard per licence so a failure on one does not leave the others stale.
+        for license_id in license_ids:
+            try:
+                _refresh_licenses([license_id])
+            except Exception:
+                logger.exception("BOE merge: licence balance refresh failed for %s", license_id)
+        for item_id in item_ids:
+            _update_balance_sync(item_id)
+
+    transaction.on_commit(_job)
+
+
+def _merge_audit_snapshot(boe) -> dict[str, Any]:
+    """Header fields of the BOE that a merge deletes, kept in the audit log."""
+    return {
+        "id": boe.id,
+        "bill_of_entry_number": boe.bill_of_entry_number,
+        "bill_of_entry_date": boe.bill_of_entry_date.isoformat() if boe.bill_of_entry_date else None,
+        "port_id": boe.port_id,
+        "company_id": boe.company_id,
+        "invoice_no": boe.invoice_no,
+        "invoice_date": boe.invoice_date.isoformat() if boe.invoice_date else None,
+        "product_name": boe.product_name,
+        "exchange_rate": str(boe.exchange_rate),
+        "boe_pdf_copy": boe.boe_pdf_copy.name if boe.boe_pdf_copy else None,
+    }
+
+
 def merge_boe(target_boe, source_boe_id: int, *, user=None) -> dict[str, Any]:
     """
-    Merge a source BOE into target_boe.
+    Merge two BOEs into one surviving BOE (owner decision D4).
 
-    - Moves RowDetails from source to target (skips duplicate sr_number+transaction_type)
-    - Transfers allotments from source to target
-    - Updates target's port to source's port
-    - Deletes source BOE
-    - Writes one ``ReconciliationLog`` (ACTION_MERGE_BOE) on the target
+    Survivor (frozen priority): when exactly one of the two BOEs carries
+    ``RowDetails.is_frozen`` (ledger) rows it survives regardless of the
+    argument order (``swapped=True`` when that is the requested source);
+    otherwise the requested target survives.  Then:
 
-    The merge runs inside a single DB transaction; both BOE rows are locked
-    (``select_for_update``, ordered by id to avoid deadlocks) before any
-    change, and the audit log is written in that same transaction.
+    - RowDetails move from the removed BOE to the survivor; a row whose
+      (sr_number, transaction_type) already exists on the survivor is
+      skipped and cascade-deletes with the removed BOE (existing rule).
+      Frozen rows are never deleted or edited: when a frozen row would be
+      skipped (both BOEs frozen with an overlapping item), the merge is
+      rejected.  Skipped rows protected by reconciliation records also
+      reject the merge.
+    - Allotments transfer to the survivor; the survivor takes the requested
+      source's port (unchanged rule).
+    - The survivor's exchange_rate is recomputed and persisted with the same
+      helper the RowDetails signals use.
+    - Exactly one ``ReconciliationLog`` (ACTION_MERGE_BOE) on the survivor.
+    - Stored balances of every affected licence/item are refreshed on commit.
 
-    Args:
-        target_boe:    BillOfEntryModel instance (the merge destination).
-        source_boe_id: PK of the BOE to merge from (will be deleted).
-        user:          acting user for the audit log (may be None).
+    Rejected: missing/invalid/same id, a BOE that no longer exists (an
+    already-completed merge re-run cannot move rows twice), exactly one of
+    the two BOEs genuinely hidden.
+
+    Both BOE rows are locked (``select_for_update``, ordered by id to avoid
+    deadlocks) inside one transaction before any read that drives a change.
 
     Returns:
-        dict with: success, message, boe (serialized target).
+        dict with: success, message, boe (serialized survivor), and the
+        additive keys target_boe_id (survivor id) and swapped (bool).
 
     Raises:
-        ValueError: When source_boe_id is not provided, source == target,
-            source not found, or a skipped duplicate row is protected by a
-            reconciliation record.
+        ValueError: on every rejection above (message says "not found" only
+            when a BOE does not exist).
     """
     from django.db import transaction as db_transaction
-    from django.db.models import Q
-    from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
+
     from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
+    from apps.bill_of_entry.models import (
+        BillOfEntryModel, RowDetails, _recalculate_boe_exchange_rate, genuinely_hidden_boe_ids,
+    )
+    from apps.license.signals import suppress_boe_allotment_refresh
     from apps.reconciliation.models import ReconciliationLog
 
-    if not source_boe_id:
-        raise ValueError("source_boe_id is required")
-
-    try:
-        source_boe = BillOfEntryModel.objects.only("id").get(id=source_boe_id)
-    except BillOfEntryModel.DoesNotExist:
-        raise ValueError(f"Source BOE with id={source_boe_id} not found")
-
-    if target_boe.id == source_boe.id:
+    source_id = _parse_merge_source_id(source_boe_id)
+    requested_target_id = target_boe.id
+    if requested_target_id == source_id:
         raise ValueError("Cannot merge a BOE with itself")
+    if not BillOfEntryModel.objects.filter(id=source_id).exists():
+        raise ValueError(f"Source BOE with id={source_id} not found")
 
     with db_transaction.atomic():
-        # Lock both BOE rows (ordered by id so two concurrent merges of the
-        # same pair cannot deadlock) and work on the locked instances.
         locked = {
             boe.id: boe
             for boe in BillOfEntryModel.objects.select_for_update()
-            .filter(id__in=[target_boe.id, source_boe.id])
+            .filter(id__in=[requested_target_id, source_id])
             .order_by("id")
         }
-        if source_boe.id not in locked:
-            raise ValueError(f"Source BOE with id={source_boe_id} not found")
-        if target_boe.id not in locked:
-            raise ValueError(f"Target BOE with id={target_boe.id} not found")
-        target_boe = locked[target_boe.id]
-        source_boe = locked[source_boe.id]
-        source_id = source_boe.id
+        if source_id not in locked:
+            raise ValueError(f"Source BOE with id={source_id} not found")
+        if requested_target_id not in locked:
+            raise ValueError(f"Target BOE with id={requested_target_id} not found")
+        requested_target = locked[requested_target_id]
+        requested_source = locked[source_id]
 
-        # Find combos already in target to avoid unique-constraint violations
-        existing_combos = set(
-            target_boe.item_details.values_list("sr_number_id", "transaction_type")
-        )
-
-        rows_to_move = []
-        skipped_row_ids = []
-        for row in source_boe.item_details.values("id", "sr_number_id", "transaction_type"):
-            combo = (row["sr_number_id"], row["transaction_type"])
-            if combo not in existing_combos:
-                rows_to_move.append(row["id"])
-                existing_combos.add(combo)
-            else:
-                skipped_row_ids.append(row["id"])
-
-        # A skipped duplicate remains attached to the source BOE and would
-        # therefore be cascade-deleted with it.  Reconciliation annotations
-        # deliberately protect their RowDetails FK, so reject the entire
-        # merge *before* any row move, allotment transfer, or deletion.  This
-        # is a single bounded query across all duplicate rows, not N+1
-        # relation checks.
-        protected_duplicates = list(
-            RowDetails.objects.filter(id__in=skipped_row_ids)
-            .filter(
-                Q(invoice_allocations__isnull=False)
-                | Q(allotment_allocations__isnull=False)
-                | Q(external_invoice_links__isnull=False)
-            )
-            .values("id", "sr_number_id", "transaction_type")
-            .distinct()
-        )
-        if protected_duplicates:
-            row_ids = ", ".join(str(row["id"]) for row in protected_duplicates)
+        hidden_ids = genuinely_hidden_boe_ids(boe_ids=list(locked))
+        if len(hidden_ids) == 1:
             raise ValueError(
-                "BOE merge cannot be completed because duplicate source row(s) "
-                f"{row_ids} are referenced by reconciliation/allocation records. "
-                "Resolve those references before merging."
+                "BOE merge rejected: exactly one of the two bills of entry is hidden "
+                "(previous-owner utilisation). Restore the hidden bill of entry or hide "
+                "the other one before merging."
             )
 
-        skipped_count = len(skipped_row_ids)
+        frozen_row_ids: dict[int, list[int]] = {}
+        for boe_id, row_id in (
+            RowDetails.objects.filter(bill_of_entry_id__in=list(locked), is_frozen=True)
+            .order_by("id").values_list("bill_of_entry_id", "id")
+        ):
+            frozen_row_ids.setdefault(boe_id, []).append(row_id)
+        survivor, removed, swapped = _choose_merge_survivor(requested_target, requested_source, frozen_row_ids)
+        if removed.license_trades.exists() or removed.invoices.exists():
+            # Deleting a BOE drops its trade links and cascades its invoices;
+            # never drop them silently, in either merge direction.
+            reason = (
+                f"it carries frozen ledger rows, so bill of entry {survivor.id} must survive, but "
+                if swapped else ""
+            )
+            raise ValueError(
+                f"BOE merge rejected: bill of entry {removed.id} would be removed ({reason}"
+                f"it is linked to trades/invoices that would be lost). "
+                "Move those links first."
+            )
 
-        # Use queryset .update() to bypass RowDetails.save() frozen-row guard —
-        # we are only reassigning the BOE FK, not editing financial data.
-        moved_count = RowDetails.objects.filter(id__in=rows_to_move).update(bill_of_entry=target_boe)
+        rows_to_move, skipped_row_ids, skipped_frozen = _plan_merge_rows(survivor, removed)
+        if skipped_frozen:
+            raise ValueError(
+                "BOE merge rejected: both bills of entry carry frozen ledger rows for the "
+                f"same item(s); frozen row(s) {', '.join(map(str, skipped_frozen))} would be "
+                "deleted. Frozen rows cannot be merged away."
+            )
+        _reject_protected_duplicates(skipped_row_ids)
 
-        # Transfer allotments
-        for allotment in source_boe.allotment.all():
-            target_boe.allotment.add(allotment)
+        removed_allotment_ids = list(removed.allotment.values_list("id", flat=True))
+        license_ids, item_ids = _merge_affected_targets(list(locked), removed_allotment_ids)
+        port_id = requested_source.port_id
+        removed_snapshot = _merge_audit_snapshot(removed)
+        removed_id = removed.id
 
-        source_port = source_boe.port
+        # Queryset .update() bypasses RowDetails.save()'s frozen-row guard on
+        # purpose: only the BOE FK is reassigned, never values or ids.
+        moved_count = RowDetails.objects.filter(id__in=rows_to_move).update(bill_of_entry=survivor)
+        # Merge schedules its own refresh below; keep the M2M / delete
+        # handlers from refreshing the same targets a second time.
+        with suppress_boe_allotment_refresh():
+            if removed_allotment_ids:
+                survivor.allotment.add(*removed_allotment_ids)
 
-        # Delete source BOE (frees unique constraint; unmoved rows cascade-delete)
-        source_boe.delete()
+            # Frees the (number, date) constraint; skipped rows cascade-delete.
+            removed.delete()
 
-        # Update target port to the correct port from source
-        target_boe.port = source_port
-        target_boe.save(update_fields=["port"])
+        survivor.port_id = port_id
+        survivor.save(update_fields=["port"])
+        _recalculate_boe_exchange_rate(survivor.id, force=True)
+        survivor.refresh_from_db(fields=["exchange_rate"])
 
         message = (
             f"Merged successfully. {moved_count} item(s) moved, "
-            f"{skipped_count} skipped (duplicate)."
+            f"{len(skipped_row_ids)} skipped (duplicate)."
         )
         ReconciliationLog.objects.create(
             action=ReconciliationLog.ACTION_MERGE_BOE,
-            bill_of_entry=target_boe,
-            before={"target_boe_id": target_boe.id, "source_boe_id": source_id},
-            after={"message": message},
+            bill_of_entry=survivor,
+            before={
+                "target_boe_id": requested_target_id,
+                "source_boe_id": source_id,
+                "surviving_boe_id": survivor.id,
+                "removed_boe_id": removed_id,
+                "swapped": swapped,
+                "frozen_row_ids": {str(k): v for k, v in frozen_row_ids.items()},
+                "removed_boe": removed_snapshot,
+            },
+            after={
+                "message": message,
+                "target_boe_id": survivor.id,
+                "swapped": swapped,
+                "moved_row_ids": rows_to_move,
+                "skipped_row_ids": skipped_row_ids,
+                "transferred_allotment_ids": removed_allotment_ids,
+                "exchange_rate": str(survivor.exchange_rate),
+                "refreshed_license_ids": license_ids,
+                "refreshed_item_ids": item_ids,
+            },
             user=user if getattr(user, "is_authenticated", False) else None,
         )
+        _schedule_merge_refresh(license_ids, item_ids)
 
     refreshed = BillOfEntryModel.objects.select_related(
         "company", "port"
-    ).prefetch_related("item_details").get(id=target_boe.id)
+    ).prefetch_related("item_details").get(id=survivor.id)
     serializer = BillOfEntrySerializer(refreshed)
     return {
         "success": True,
         "message": message,
         "boe": serializer.data,
+        "target_boe_id": survivor.id,
+        "swapped": swapped,
     }
 
 
@@ -346,9 +518,21 @@ def merge_boe(target_boe, source_boe_id: int, *, user=None) -> dict[str, Any]:
 # Invoice-number update
 # ---------------------------------------------------------------------------
 
+HIDDEN_INVOICE_NO_MESSAGE = (
+    "This bill of entry is hidden; its invoice number cannot be changed here. "
+    "Restore the bill of entry (restore-boe) first."
+)
+
+
 def update_invoice_no(boe, invoice_no: str) -> dict[str, Any]:
     """
     Update only the invoice_no field on a BOE.
+
+    Owner decision D1: on a GENUINELY hidden BOE (``genuinely_hidden_boe_ids``)
+    a change is rejected — hiding/un-hiding must go through ``hide_boe`` /
+    ``restore_boe`` so the HIDE_BOE/RESTORE_BOE audit and the licence refresh
+    happen.  Re-sending the unchanged value is a no-op success.  A legacy
+    free-text ``'OTH'`` on a never-hidden BOE stays editable.
 
     Args:
         boe:        BillOfEntryModel instance.
@@ -356,10 +540,30 @@ def update_invoice_no(boe, invoice_no: str) -> dict[str, Any]:
 
     Returns:
         dict with: id, invoice_no, message.
+
+    Raises:
+        ValueError: the BOE is genuinely hidden and the value would change.
     """
+    from django.db import transaction
+
+    from apps.bill_of_entry.models import BillOfEntryModel, genuinely_hidden_boe_ids
+
+    if invoice_no is not None and not isinstance(invoice_no, str):
+        raise ValueError("invoice_no must be a string")
     invoice_no = (invoice_no or "").strip()
-    boe.invoice_no = invoice_no
-    boe.save(update_fields=["invoice_no"])
+    with transaction.atomic():
+        locked = BillOfEntryModel.objects.select_for_update().only("id", "invoice_no").get(pk=boe.pk)
+        if locked.id in genuinely_hidden_boe_ids(boe_ids=[locked.id]):
+            if invoice_no == (locked.invoice_no or ""):
+                boe.invoice_no = locked.invoice_no
+                return {
+                    "id": boe.id,
+                    "invoice_no": boe.invoice_no,
+                    "message": "Invoice number unchanged",
+                }
+            raise ValueError(HIDDEN_INVOICE_NO_MESSAGE)
+        boe.invoice_no = invoice_no
+        boe.save(update_fields=["invoice_no"])
     return {
         "id": boe.id,
         "invoice_no": boe.invoice_no,
@@ -419,13 +623,16 @@ def _apply_hide(boe, user, reason: str) -> tuple[list[int], str | None]:
     """
     from django.db import transaction
 
-    from apps.bill_of_entry.models import OTH_INVOICE_MARKER
+    from apps.bill_of_entry.models import OTH_INVOICE_MARKER, genuinely_hidden_boe_ids
     from apps.reconciliation.models import ReconciliationLog
 
     license_ids = _licenses_touched_by(boe)
 
     previous_invoice_no = boe.invoice_no
-    was_hidden = previous_invoice_no == OTH_INVOICE_MARKER
+    # D6: hidden state comes from the audit history, never from the raw
+    # 'OTH' text — a legacy free-text 'OTH' invoice is recorded as
+    # not-hidden, so `_apply_restore` can give it back verbatim.
+    was_hidden = boe.id in genuinely_hidden_boe_ids(boe_ids=[boe.id])
 
     with transaction.atomic():
         boe.invoice_no = OTH_INVOICE_MARKER
@@ -448,37 +655,78 @@ def _apply_hide(boe, user, reason: str) -> tuple[list[int], str | None]:
     return license_ids, previous_invoice_no
 
 
-def _apply_restore(boe, user, reason: str) -> tuple[list[int], str | None] | None:
+def _preserved_invoice_no(boe) -> str | None:
+    """The invoice_no to give back on restore (D6).
+
+    Reads the FIRST ``HIDE_BOE`` log of the current hidden episode (every
+    HIDE_BOE after the latest RESTORE_BOE): a repeated hide of an already
+    hidden BOE records ``'OTH'`` as its "previous" value and must not mask
+    the real pre-hide invoice.  A preserved ``'OTH'`` is returned only when
+    that log states the BOE was NOT hidden at the time (a legitimate legacy
+    'OTH' invoice); otherwise it is ambiguous and ``None`` is returned, as
+    before.
+    """
+    from apps.bill_of_entry.models import OTH_INVOICE_MARKER
+    from apps.reconciliation.models import ReconciliationLog
+
+    logs = (
+        ReconciliationLog.objects
+        .filter(
+            bill_of_entry=boe,
+            action__in=[ReconciliationLog.ACTION_HIDE_BOE, ReconciliationLog.ACTION_RESTORE_BOE],
+        )
+        .order_by("-created_on", "-id")
+        .values_list("action", "before")
+    )
+    episode_start = None
+    first_ever = True  # no RESTORE_BOE precedes the episode: it is the BOE's first audit log
+    for action, before in logs:
+        if action == ReconciliationLog.ACTION_RESTORE_BOE:
+            first_ever = False
+            break
+        episode_start = before
+    if not isinstance(episode_start, dict):
+        return None
+    preserved = episode_start.get("invoice_no")
+    if not preserved:
+        return None
+    if (
+        preserved == OTH_INVOICE_MARKER
+        and episode_start.get("is_hidden") is not False
+        and not first_ever
+    ):
+        return None
+    return preserved
+
+
+def _apply_restore(boe, user, reason: str, *, hidden_ids=None) -> tuple[list[int], str | None] | None:
     """
     The actual mutation + audit log for restoring ONE BOE — factored out
     of `restore_boe` so `restore_boes_bulk` can call it per-item and defer
     `update_license_flags` (see `_apply_hide`'s docstring for the same
-    reasoning). Returns `None` (no-op) if `boe.invoice_no` isn't currently
-    `OTH_INVOICE_MARKER`. Does NOT call `update_license_flags` itself.
+    reasoning). Returns `None` (no-op) unless the BOE is GENUINELY hidden
+    (`genuinely_hidden_boe_ids`, owner decision D6) — a never-hidden BOE
+    whose invoice text happens to be 'OTH' is left untouched. Does NOT call
+    `update_license_flags` itself.
+
+    Args:
+        hidden_ids: optional pre-computed `genuinely_hidden_boe_ids` result
+            (the bulk path computes it once for the whole batch).
 
     Returns `(license_ids, restored_invoice_no)` or `None`.
     """
     from django.db import transaction
 
-    from apps.bill_of_entry.models import OTH_INVOICE_MARKER
+    from apps.bill_of_entry.models import OTH_INVOICE_MARKER, genuinely_hidden_boe_ids
     from apps.reconciliation.models import ReconciliationLog
 
-    if boe.invoice_no != OTH_INVOICE_MARKER:
+    if hidden_ids is None:
+        hidden_ids = genuinely_hidden_boe_ids(boe_ids=[boe.id])
+    if boe.id not in hidden_ids:
         return None
 
     license_ids = _licenses_touched_by(boe)
-
-    last_hide = (
-        ReconciliationLog.objects
-        .filter(bill_of_entry=boe, action=ReconciliationLog.ACTION_HIDE_BOE)
-        .order_by("-created_on")
-        .first()
-    )
-    restored_invoice_no = None
-    if last_hide and isinstance(last_hide.before, dict):
-        preserved = last_hide.before.get("invoice_no")
-        if preserved and preserved != OTH_INVOICE_MARKER:
-            restored_invoice_no = preserved
+    restored_invoice_no = _preserved_invoice_no(boe)
 
     with transaction.atomic():
         boe.invoice_no = restored_invoice_no
@@ -564,8 +812,9 @@ def hide_boe(boe, user, reason: str = "") -> dict[str, Any]:
 
 def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
     """
-    Un-hides `boe`: only acts when `invoice_no` currently equals
-    `OTH_INVOICE_MARKER` (an already-visible BOE is left untouched).
+    Un-hides `boe`: only acts when the BOE is GENUINELY hidden
+    (`genuinely_hidden_boe_ids` — D6; an already-visible BOE, including one
+    with a legitimate legacy 'OTH' invoice, is left untouched).
     Restores `invoice_no` to whatever it was immediately before the most
     recent `hide_boe` call — see `_apply_restore`'s docstring for where
     that's read back from, falling back to blank/`None` if no such log row
@@ -698,17 +947,18 @@ def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
 def restore_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
     """Bulk sibling of `restore_boe` — same per-item processing / once-per-
     licence-recompute shape as `hide_boes_bulk`. A BOE that isn't currently
-    hidden is simply skipped (not an error, same as `restore_boe`'s own
-    no-op case)."""
+    genuinely hidden (D6) is simply skipped (not an error, same as
+    `restore_boe`'s own no-op case)."""
     from django.utils import timezone
 
-    from apps.bill_of_entry.models import BillOfEntryModel
+    from apps.bill_of_entry.models import BillOfEntryModel, genuinely_hidden_boe_ids
 
     reason = (reason or "").strip()
     now = timezone.now()
 
     boe_ids, unparseable = _normalise_boe_ids(boe_ids)
     boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=boe_ids)}
+    hidden_ids = genuinely_hidden_boe_ids(boe_ids=list(boes))
     restored: list[dict[str, Any]] = []
     skipped: list[int] = []
     failed: list[dict[str, Any]] = [
@@ -721,7 +971,7 @@ def restore_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
         if boe is None:
             failed.append({"id": boe_id, "error": "No BOE matches that id."})
             continue
-        result = _apply_restore(boe, user, reason)
+        result = _apply_restore(boe, user, reason, hidden_ids=hidden_ids)
         if result is None:
             skipped.append(boe_id)
             continue

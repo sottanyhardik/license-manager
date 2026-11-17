@@ -129,10 +129,12 @@ test.describe("BOE register (compact ERP register, Licence parity)", () => {
     await page.goto("/bill-of-entries", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { level: 1, name: "Bills of Entry" })).toBeVisible();
     await expect(page.getByRole("link", { name: /add new/i })).toHaveCount(0);
-    for (const title of ["Merge BOE", "Edit", "Delete", "Resolve Dispute", "Update Product Name"]) {
-      await expect(page.locator(`button[title="${title}"]`)).toHaveCount(0);
-    }
-    await expect(page.locator('button[title="Transfer Letter"]').first()).toBeVisible();
+    // D2: viewers may edit the invoice number inline; they get no menu actions
+    // (no Transfer Letter - owner decision - and no write actions).
+    await expect(card(page, "7012345").locator('button[title="Click to edit invoice number"]')).toBeVisible();
+    await card(page, "7012345").locator('button[title="View details"]').first().click();
+    await expect(page.getByRole("button", { name: "Actions for BOE 7012345" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Transfer Letter" })).toHaveCount(0);
   });
 });
 
@@ -145,12 +147,13 @@ test.describe("BOE record workspace", () => {
     await card(page, "7012345").locator('button[title="View details"]').first().click();
     const tabs = page.getByRole("tablist", { name: "BOE 7012345 sections" });
     await expect(tabs).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Import Items" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("region", { name: "BOE 7012345 details" })).toContainText("Palm oil");
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toContainText("₹12,34,567.89");
+    await expect(page.getByRole("tab", { name: "Edit Options" })).toHaveCount(0);
 
     const before = requests.length;
-    await page.getByRole("tab", { name: "Overview" }).click();
-    await expect(page.getByRole("tabpanel")).toContainText("₹12,34,567.89");
+    await page.getByRole("tab", { name: "Import Items" }).click();
+    await expect(page.getByRole("region", { name: "BOE 7012345 details" })).toContainText("Palm oil");
     expect(requests.slice(before)).toEqual([]);
 
     await page.getByRole("tab", { name: "BOE Details" }).click();

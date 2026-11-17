@@ -6,11 +6,12 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
+from django.db import transaction
 from django.dispatch import receiver
 from django.utils import timezone
 
 from apps.allotment.models import AllotmentItems
-from apps.bill_of_entry.models import RowDetails
+from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.core.models import CompanyModel, ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
 from apps.license.services.product_norm_guard import is_olive_oil_item_name_allowed
@@ -543,6 +544,112 @@ def update_license_on_boe_item_change(sender, instance, **kwargs):
     license_obj = _related_license(instance, "sr_number")
     if license_obj:
         update_license_flags(license_obj)
+
+    # D5: a row moved to an item on ANOTHER licence also changes the previous
+    # licence's balance. The previous licence id is captured from the DB by
+    # apps.bill_of_entry.models.capture_previous_row_relationship (pre_save);
+    # refreshed once, and only when it differs from the current licence.
+    from apps.bill_of_entry.models import PREVIOUS_LICENSE_ATTR
+
+    previous_license_id = getattr(instance, PREVIOUS_LICENSE_ATTR, None)
+    if previous_license_id and previous_license_id != getattr(license_obj, "pk", None):
+        previous_license = LicenseDetailsModel.objects.filter(pk=previous_license_id).first()
+        if previous_license is not None:
+            update_license_flags(previous_license)
+
+
+_BOE_ALLOTMENT_PRE_CLEAR_ATTR = "_boe_allotment_pre_clear_ids"
+_boe_refresh_state = threading.local()
+
+
+@contextmanager
+def suppress_boe_allotment_refresh():
+    """Suppress the BOE<->allotment refresh handlers on this thread.  For
+    callers (BOE merge) that schedule their own refresh of the same targets."""
+    prev = getattr(_boe_refresh_state, "suppressed", False)
+    _boe_refresh_state.suppressed = True
+    try:
+        yield
+    finally:
+        _boe_refresh_state.suppressed = prev
+
+
+def _schedule_allotment_refresh(allotment_ids) -> None:
+    if not allotment_ids or getattr(_boe_refresh_state, "suppressed", False):
+        return
+    allotment_ids = set(allotment_ids)
+
+    def _job():
+        _refresh_balances_for_allotments(allotment_ids)
+
+    try:
+        transaction.on_commit(_job)
+    except Exception:
+        _job()
+
+
+def _refresh_balances_for_allotments(allotment_ids) -> None:
+    """Refresh stored balances that depend on BOE<->allotment linkage (D12):
+    each affected licence (update_license_flags) and each allotted import
+    item (update_balance_values). Uses only the existing refresh helpers."""
+    from apps.core.scripts.calculate_balance import update_balance_values
+
+    items = list(
+        LicenseImportItemsModel.objects.filter(allotment_details__allotment_id__in=allotment_ids)
+        .select_related("license")
+        .distinct()
+        .order_by("pk")
+    )
+    licences = {}
+    for item in items:
+        if item.license_id and item.license_id not in licences:
+            licences[item.license_id] = item.license
+    for license_obj in licences.values():
+        try:
+            update_license_flags(license_obj)
+        except Exception:
+            logger.exception("BOE-allotment link refresh failed for license %s", license_obj.pk)
+    for item in items:
+        try:
+            update_balance_values(item)
+        except Exception:
+            logger.exception("BOE-allotment link refresh failed for import item %s", item.pk)
+
+
+@receiver(
+    m2m_changed,
+    sender=BillOfEntryModel.allotment.through,
+    dispatch_uid="refresh_balances_on_boe_allotment_change",
+)
+def refresh_balances_on_boe_allotment_change(sender, instance, action, reverse, pk_set, **kwargs):
+    """D12: linking/unlinking a BOE and an allotment changes ALLOTMENT CIF
+    (a BOE-linked allotment contributes 0) — refresh the stored balances after
+    commit. Handles both sides of the M2M and clear() (ids captured pre_clear)."""
+    if action == "pre_clear":
+        if not reverse:
+            setattr(instance, _BOE_ALLOTMENT_PRE_CLEAR_ATTR, set(instance.allotment.values_list("pk", flat=True)))
+        else:
+            setattr(instance, _BOE_ALLOTMENT_PRE_CLEAR_ATTR, set(instance.bill_of_entry.values_list("pk", flat=True)))
+        return
+    if action not in {"post_add", "post_remove", "post_clear"}:
+        return
+
+    if action == "post_clear":
+        changed = getattr(instance, _BOE_ALLOTMENT_PRE_CLEAR_ATTR, None) or set()
+        setattr(instance, _BOE_ALLOTMENT_PRE_CLEAR_ATTR, None)
+    else:
+        changed = set(pk_set or ())
+    if not changed:
+        return
+    allotment_ids = {instance.pk} if reverse else changed
+    _schedule_allotment_refresh(allotment_ids)
+
+
+@receiver(pre_delete, sender=BillOfEntryModel, dispatch_uid="refresh_balances_on_boe_delete")
+def refresh_balances_on_boe_delete(sender, instance, **kwargs):
+    """Deleting a BOE removes its allotment links without m2m_changed; the
+    allotments it consumed contribute ALLOTMENT CIF again, so refresh them."""
+    _schedule_allotment_refresh(set(instance.allotment.values_list("pk", flat=True)))
 
 
 # Signals for balance updates on Trade Line items

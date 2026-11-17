@@ -45,7 +45,6 @@ describe("named role sets", () => {
             ],
             "BOE_TRANSFER_LETTER_ROLES": [
               "BOE_MANAGER",
-              "BOE_VIEWER",
               "TL_GENERATE",
             ],
             "INCENTIVE_LICENSE_ROLES": [

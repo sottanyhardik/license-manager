@@ -12,7 +12,7 @@ type Props = {
     boeNumber?: string | null;
     boePdfCopy?: string | null;
     rows: BoeDetailRow[];
-    onTransferLetter: () => void;
+    onTransferLetter?: () => void;
 };
 
 /**
@@ -38,10 +38,12 @@ export function DocumentsTab({ boeNumber, boePdfCopy, rows, onTransferLetter }: 
                     ) : (
                         <span className="self-center text-sm text-muted-foreground">No BOE copy uploaded.</span>
                     )}
-                    <Button type="button" size="sm" variant="outline" className={OUTLINE_TOKENS} onClick={onTransferLetter}>
-                        <FileText aria-hidden="true" />
-                        Transfer Letter
-                    </Button>
+                    {onTransferLetter && (
+                        <Button type="button" size="sm" variant="outline" className={OUTLINE_TOKENS} onClick={onTransferLetter}>
+                            <FileText aria-hidden="true" />
+                            Transfer Letter
+                        </Button>
+                    )}
                 </div>
             </section>
             <LicenceCopiesSection rows={rows} emptyDescription="No licence rows are mapped to this BOE." />

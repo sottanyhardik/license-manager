@@ -1,4 +1,5 @@
 # bill_of_entry/views/boe.py
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
@@ -105,6 +106,9 @@ BaseBillOfEntryViewSet = MasterViewSet.create_viewset(
     BillOfEntrySerializer,
     config=BOE_VIEWSET_CONFIG
 )
+
+
+_MAX_PK = 2147483647
 
 
 class BillOfEntryViewSet(BaseBillOfEntryViewSet):
@@ -226,11 +230,32 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         if not allotment_id:
             return Response({'error': 'allotment_id is required'}, status=400)
 
+        # Owner decision D8: invalid id -> 400, unknown allotment -> 404.
+        try:
+            allotment_pk = int(allotment_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'allotment_id must be an integer'}, status=400)
+        boe_pk = None
+        if boe_id:
+            try:
+                boe_pk = int(boe_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'boe_id must be an integer'}, status=400)
+        # D8 range: ids must fit a 32-bit positive AutoField.
+        if not 1 <= allotment_pk <= _MAX_PK:
+            return Response({'error': 'allotment_id must be an integer'}, status=400)
+        if boe_pk is not None and not 1 <= boe_pk <= _MAX_PK:
+            return Response({'error': 'boe_id must be an integer'}, status=400)
+
         try:
             return Response(boe_service.fetch_allotment_item_details(
-                allotment_id=allotment_id,
-                boe_id=boe_id or None,
+                allotment_id=allotment_pk,
+                boe_id=boe_pk,
             ))
+        except ObjectDoesNotExist:
+            # Only the allotment lookup can raise here: the service swallows
+            # a missing boe_id (new-BOE case).
+            return Response({'error': 'Allotment not found'}, status=404)
         except Exception as e:
             return Response(api_error('Failed to fetch allotment details', e, __name__), status=500)
 
@@ -279,7 +304,13 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
     def update_invoice_no(self, request, pk=None):
         """Update invoice_no field (ACCOUNT_ACCESS or BOE_MANAGER only)."""
         boe = get_object_or_404(BillOfEntryModel, pk=pk)
-        return Response(boe_service.update_invoice_no(boe, invoice_no=request.data.get('invoice_no', '')))
+        try:
+            result = boe_service.update_invoice_no(boe, invoice_no=request.data.get('invoice_no', ''))
+        except ValueError as exc:
+            # Owner decision D1: the service rejects invoice_no changes on a
+            # genuinely hidden BOE (use restore/hide instead).
+            return Response({'error': str(exc)}, status=400)
+        return Response(result)
 
 
 # Add grouped export functionality

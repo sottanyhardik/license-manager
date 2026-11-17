@@ -99,10 +99,19 @@ class MergeAuditTests(BoeApiFixtureMixin, TestCase):
 
         log = self._logs().get()
         self.assertEqual(log.bill_of_entry_id, target.id)
-        self.assertEqual(log.before, {"target_boe_id": target.id, "source_boe_id": source_id})
-        self.assertEqual(log.after, {"message": result["message"]})
+        # D4 (flipped from exact {target_boe_id, source_boe_id} / {message}):
+        # the payload is extended additively (swapped flag, moved row ids, ...).
+        self.assertEqual(log.before["target_boe_id"], target.id)
+        self.assertEqual(log.before["source_boe_id"], source_id)
+        self.assertEqual(log.before["swapped"], False)
+        self.assertEqual(log.after["message"], result["message"])
+        self.assertEqual(log.after["swapped"], False)
+        self.assertEqual(len(log.after["moved_row_ids"]), 1)
         self.assertEqual(log.user_id, self.user.id)
-        self.assertEqual(set(result.keys()), {"success", "message", "boe"})
+        # D4 (flipped from {success, message, boe}): additive keys.
+        self.assertEqual(set(result.keys()), {"success", "message", "boe", "target_boe_id", "swapped"})
+        self.assertEqual(result["target_boe_id"], target.id)
+        self.assertFalse(result["swapped"])
 
     def test_service_without_user_logs_null_user(self):
         target = self.make_boe(self.company)

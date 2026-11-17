@@ -8,7 +8,8 @@
  * (after the swap it lives in the "Import Items" tab).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 
@@ -97,84 +98,66 @@ describe("BOE card register presentation (recorded before extraction)", () => {
         });
     }
 
-    it("title link and Edit action navigate to the edit page (BOE_MANAGER)", async () => {
+    /** Expand the card and open its consolidated ActionMenu; returns the menu item labels. */
+    async function menuLabels(user: ReturnType<typeof userEvent.setup>, card: HTMLElement) {
+        await user.click(within(card).getByTitle("View details"));
+        await user.click(within(card).getByRole("button", { name: /^Actions for BOE/ }));
+        return screen.queryAllByRole("menuitem").map((m) => m.textContent?.trim());
+    }
+
+    it("collapsed cards carry no action icons; actions live in the workspace ActionMenu (D11)", async () => {
+        renderBoeList("BOE_MANAGER");
+        await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
+        for (const card of boeCards()) {
+            for (const t of ["Edit", "Delete", "Transfer Letter", "Merge BOE"]) expect(within(card).queryByTitle(t)).toBeNull();
+        }
+    });
+
+    it("Edit menu item navigates to the edit page (BOE_MANAGER)", async () => {
         const user = userEvent.setup();
         renderBoeList("BOE_MANAGER");
         await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
-        await user.click(within(boeCards()[0]).getByTitle("Edit"));
+        await menuLabels(user, boeCards()[0]);
+        await user.click(screen.getByRole("menuitem", { name: "Edit" }));
         expect(await screen.findByTestId("edit-page")).toHaveTextContent("edit 201");
     });
 
-    it("viewers get no Edit/Delete actions and no invoice editing", async () => {
+    it("viewers (D2) get the invoice chip but no menu actions at all (no Transfer Letter, no write actions)", async () => {
+        const user = userEvent.setup();
         renderBoeList("BOE_VIEWER");
         await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
         for (const card of boeCards()) {
-            expect(within(card).queryByTitle("Edit")).toBeNull();
-            expect(within(card).queryByTitle("Delete")).toBeNull();
-            expect(within(card).queryByTitle("Click to edit invoice number")).toBeNull();
+            expect(within(card).getByTitle("Click to edit invoice number")).toBeInTheDocument();
+            await user.click(within(card).getByTitle("View details"));
+            expect(within(card).queryByRole("button", { name: /^Actions for BOE/ })).toBeNull();
+            expect(within(card).queryByRole("button", { name: "Transfer Letter" })).toBeNull();
+            await user.click(within(card).getByTitle("Hide details"));
         }
     });
 
-    it("viewers get no Resolve Dispute, Merge BOE or Update Product Name actions", async () => {
-        renderBoeList("BOE_VIEWER");
+    it("ACCOUNT_ACCESS gets the invoice chip only; TL_GENERATE gets Transfer Letter only", async () => {
+        const user = userEvent.setup();
+        renderBoeList("ACCOUNT_ACCESS");
         await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
-        for (const card of boeCards()) {
-            expect(within(card).queryByTitle("Resolve Dispute")).toBeNull();
-            expect(within(card).queryByTitle("Merge BOE")).toBeNull();
-            expect(within(card).queryByTitle("Update Product Name")).toBeNull();
-            expect(within(card).getByTitle("Transfer Letter")).toBeInTheDocument();
-        }
+        const card = boeCards()[0];
+        expect(within(card).getByTitle("Click to edit invoice number")).toBeInTheDocument();
+        await user.click(within(card).getByTitle("View details"));
+        expect(within(card).queryByRole("button", { name: /^Actions for BOE/ })).toBeNull();
+        cleanup();
+
+        renderBoeList("TL_GENERATE");
+        await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
+        expect(within(boeCards()[0]).queryByTitle("Click to edit invoice number")).toBeNull();
+        expect(await menuLabels(user, boeCards()[0])).toEqual(["Transfer Letter"]);
     });
 
-    it("managers keep Resolve Dispute, Merge BOE and Update Product Name where applicable", async () => {
+    it("managers get Resolve Dispute, Merge and Update Product Name where applicable, Delete last", async () => {
+        const user = userEvent.setup();
         renderBoeList("BOE_MANAGER");
         await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
-        const [c201, c202, , c204] = boeCards();
-        expect(within(c201).queryByTitle("Resolve Dispute")).toBeNull();
-        expect(within(c202).getByTitle("Resolve Dispute")).toBeInTheDocument();
-        expect(within(c202).getByTitle("Update Product Name")).toBeInTheDocument();
-        expect(within(c204).getByTitle("Merge BOE")).toBeInTheDocument();
-    });
-});
-
-describe("BoeCardList states and inline invoice editor", () => {
-    afterEach(() => cleanup());
-
-    function props(overrides: Partial<BoeCardListProps> = {}): BoeCardListProps {
-        return {
-            loading: false, data: BOE_FIXTURE, canWrite: false, canEditInvoice: true, entityName: "bill-of-entries",
-            filterParams: {}, currentPage: 1, pageSize: 25, navigate: vi.fn(), onDelete: vi.fn(), invalidateList: vi.fn(),
-            confirmDangerousAction: vi.fn(), onTransferLetter: vi.fn(), onMerge: vi.fn(), editingInvoiceId: null,
-            invoiceDraft: "", setInvoiceDraft: vi.fn(), invoiceSaving: false, startInvoiceEdit: vi.fn(),
-            cancelInvoiceEdit: vi.fn(), saveInvoiceEdit: vi.fn(), ...overrides,
-        };
-    }
-
-    it("loading renders a status region with the loading copy", () => {
-        render(<BoeCardList {...props({ loading: true })} />);
-        expect(screen.getByRole("status", { name: "Loading Bill of Entries..." })).toBeInTheDocument();
-    });
-
-    it("empty list keeps the empty-state copy", () => {
-        render(<BoeCardList {...props({ data: [] })} />);
-        const status = screen.getByRole("status");
-        expect(status).toHaveTextContent("No bill of entries found");
-        expect(status).toHaveTextContent("Try adjusting filters or create a new BOE.");
-    });
-
-    it("Enter saves, Escape and the labelled icon button cancel", async () => {
-        const user = userEvent.setup();
-        const p = props({ editingInvoiceId: 201, invoiceDraft: "INV-201" });
-        render(<MemoryRouter><BoeCardList {...p} /></MemoryRouter>);
-        const input = screen.getByRole("textbox", { name: "Invoice number" });
-        expect(input).toHaveFocus();
-        await user.keyboard("{Enter}");
-        expect(p.saveInvoiceEdit).toHaveBeenCalledWith(201);
+        const [c201, c202] = boeCards();
+        expect(await menuLabels(user, c201)).toEqual(["Edit", "Transfer Letter", "Merge BOE", "Delete"]);
         await user.keyboard("{Escape}");
-        expect(p.cancelInvoiceEdit).toHaveBeenCalledTimes(1);
-        await user.click(screen.getByRole("button", { name: "Cancel invoice edit" }));
-        expect(p.cancelInvoiceEdit).toHaveBeenCalledTimes(2);
-        await user.click(screen.getByRole("button", { name: "Save" }));
-        expect(p.saveInvoiceEdit).toHaveBeenCalledTimes(2);
+        expect(await menuLabels(user, c202)).toEqual(["Edit", "Transfer Letter", "Merge BOE", "Resolve Dispute", "Update Product Name", "Delete"]);
     });
 });

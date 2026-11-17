@@ -184,12 +184,8 @@ class BoeCrudContractTests(BoeApiFixtureMixin, TestCase):
         self.assertEqual(response.data["port_name"], "Test Port")
         self.assertEqual(response.data["planning_target_item_name"], item_name.name)
 
-    def test_patch_planning_target_item_is_not_persisted(self):
-        """CURRENT BEHAVIOUR (bug found by WS4, not in the escalation list):
-        `BillOfEntrySerializer.update` pops `planning_target_item` and only
-        derives `planning_mapping_status/source` from it -- it never assigns
-        the FK itself. So a PATCH reports MAPPED_EXPLICIT while the stored
-        target stays NULL. Pinned so a fix is a deliberate, visible change."""
+    def test_patch_planning_target_item_is_persisted(self):
+        """D14: PATCH planning_target_item is stored and echoed back."""
         from apps.core.models import ItemNameModel
 
         item_name = ItemNameModel.objects.create(name=f"Plan Target {uuid.uuid4().hex[:6]}")
@@ -201,11 +197,11 @@ class BoeCrudContractTests(BoeApiFixtureMixin, TestCase):
 
         self.assertEqual(response.status_code, 200, response.data)
         boe.refresh_from_db()
-        self.assertIsNone(boe.planning_target_item_id)
+        self.assertEqual(boe.planning_target_item_id, item_name.id)
         self.assertEqual(boe.planning_mapping_status, "MAPPED_EXPLICIT")
         self.assertEqual(boe.planning_mapping_source, "USER_SELECTED")
-        self.assertIsNone(response.data["planning_target_item"])
-        self.assertNotIn("planning_target_item_name", response.data)
+        self.assertEqual(response.data["planning_target_item"], item_name.id)
+        self.assertEqual(response.data["planning_target_item_name"], item_name.name)
 
     def test_delete_invoiced_boe_is_404_unless_is_invoice_all(self):
         boe = self.make_boe(self.company, invoice_no="INV-1")
@@ -286,9 +282,8 @@ class BoeRoleMatrixTests(BoeApiFixtureMixin, TestCase):
         expected = {
             "BOE_MANAGER": 200,
             "ACCOUNT_ACCESS": 200,
-            # CURRENT BEHAVIOUR — owner decision pending: PERMISSION / API CONTRACT
-            # (AccountAccessPermission._roles lets read-only BOE_VIEWER POST
-            # update-invoice-no; contradicts docstrings + frontend canEditInvoice).
+            # OWNER DECISION D2: BOE_VIEWER is read-only with exactly ONE write
+            # exception -- update-invoice-no stays allowed (confirmed, not flipped).
             "BOE_VIEWER": 200,
             "TL_GENERATE": 403,
             "LICENSE_MANAGER": 403,
@@ -359,6 +354,19 @@ class BoeFetchAllotmentDetailsContractTests(BoeApiFixtureMixin, TestCase):
         # Floats, not Decimal strings, today.
         self.assertIsInstance(response.data["exchange_rate"], float)
 
+    def test_out_of_range_ids_are_400_error_shape(self):
+        for params in (
+            {"allotment_id": 2147483648},
+            {"allotment_id": 0},
+            {"allotment_id": -1},
+            {"allotment_id": 1, "boe_id": 2147483648},
+            {"allotment_id": 1, "boe_id": -5},
+        ):
+            with self.subTest(params=params):
+                response = self.client.get(self.URL, params)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(set(response.data.keys()), {"error"})
+
     def test_excludes_items_already_on_the_boe(self):
         allotment = self.make_allotment(self.company, item=self.item_a, cif_fc=Decimal("1000.00"))
         AllotmentItems.objects.create(
@@ -378,19 +386,23 @@ class BoeFetchAllotmentDetailsContractTests(BoeApiFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data, {"error": "allotment_id is required"})
 
-    def test_unknown_allotment_id_is_500(self):
-        # CURRENT BEHAVIOUR — owner decision pending: API CONTRACT
-        # (fetch-allotment-details maps every error to 500; proposal: 404 unknown).
+    def test_unknown_allotment_id_is_404(self):
+        # FLIPPED by owner decision D8 (was: 500 "Failed to fetch allotment details").
         response = self.client.get(self.URL, {"allotment_id": 999999999})
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.data, {"error": "Failed to fetch allotment details"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.data, {"error": "Allotment not found"})
 
-    def test_non_integer_allotment_id_is_500(self):
-        # CURRENT BEHAVIOUR — owner decision pending: API CONTRACT
-        # (proposal: 400 for a non-integer id, same {'error'} shape).
+    def test_non_integer_allotment_id_is_400(self):
+        # FLIPPED by owner decision D8 (was: 500 "Failed to fetch allotment details").
         response = self.client.get(self.URL, {"allotment_id": "abc"})
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.data, {"error": "Failed to fetch allotment details"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data, {"error": "allotment_id must be an integer"})
+
+    def test_non_integer_boe_id_is_400(self):
+        # Owner decision D8 (invalid id -> 400) applied to the optional boe_id too.
+        response = self.client.get(self.URL, {"allotment_id": 1, "boe_id": "x1"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data, {"error": "boe_id must be an integer"})
 
 
 @override_settings(CACHES=LOCMEM_CACHES)
@@ -530,7 +542,9 @@ class BoeMergeEndpointContractTests(BoeApiFixtureMixin, TestCase):
         response = self.client.post(boe_detail_url(target.id, "merge/"), {"source_boe_id": source.id}, format="json")
 
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(set(response.data.keys()), {"success", "message", "boe"})
+        self.assertEqual(set(response.data.keys()), {"success", "message", "boe", "target_boe_id", "swapped"})
+        self.assertEqual(response.data["target_boe_id"], target.id)
+        self.assertFalse(response.data["swapped"])
         self.assertTrue(response.data["success"])
         self.assertEqual(response.data["message"], "Merged successfully. 1 item(s) moved, 0 skipped (duplicate).")
         self.assertEqual(set(response.data["boe"].keys()), BOE_RESPONSE_KEYS_NO_PORT_NO_PLAN)

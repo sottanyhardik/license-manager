@@ -51,7 +51,7 @@ export const LIST_RESPONSE = {
     inline_editable: [], current_page: 1, total_pages: 1, page_size: 25, has_next: false, has_previous: false,
 };
 
-export type Role = "BOE_MANAGER" | "BOE_VIEWER" | "ACCOUNT_ACCESS";
+export type Role = "BOE_MANAGER" | "BOE_VIEWER" | "ACCOUNT_ACCESS" | "TL_GENERATE";
 
 export function authFor(role: Role) {
     const roles = [role];

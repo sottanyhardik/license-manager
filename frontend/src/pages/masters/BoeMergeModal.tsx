@@ -10,11 +10,13 @@ interface BoeMergeModalProps {
     mergeBoeSource: any;
     setMergeBoeSource: (updater: any) => void;
     mergeBoeLoading: boolean;
+    /** Server `{error}` from a rejected merge. */
+    mergeError?: string;
     doMerge: () => void;
 }
 
 /** BOE merge modal — extracted verbatim from MasterList. */
-export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCandidatesLoading, mergeCandidates, mergeBoeSource, setMergeBoeSource, mergeBoeLoading, doMerge }: BoeMergeModalProps) {
+export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCandidatesLoading, mergeCandidates, mergeBoeSource, setMergeBoeSource, mergeBoeLoading, mergeError, doMerge }: BoeMergeModalProps) {
     return (
                 <div className="fixed inset-0 z-[1060] flex items-center justify-center bg-black/45 p-3" onClick={closeMergeModal}>
                     <div role="dialog" aria-modal="true" aria-labelledby="merge-boe-title" className="max-h-[calc(100dvh-1.5rem)] w-[560px] max-w-[95vw] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-[0_8px_32px_rgba(0,0,0,0.18)]" onClick={e => e.stopPropagation()}>
@@ -98,6 +100,12 @@ export default function BoeMergeModal({ mergeBoeTarget, closeMergeModal, mergeCa
                                     <li>Items from source will be moved to target (duplicates skipped)</li>
                                     <li>Source BOE ({mergeBoeSource.port_name}) will be permanently deleted</li>
                                 </ul>
+                            </div>
+                        )}
+
+                        {mergeError && (
+                            <div role="alert" className="my-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                {mergeError}
                             </div>
                         )}
 

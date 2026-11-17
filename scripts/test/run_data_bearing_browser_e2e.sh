@@ -48,7 +48,7 @@ psql -d "$DB_NAME" -c "GRANT ALL ON SCHEMA public TO \"$DB_USER\"" >/dev/null
 
 cd "$ROOT_DIR"
 DB_NAME="$DB_NAME" "$PYTHON_BIN" backend/manage.py migrate --noinput
-DB_NAME="$DB_NAME" "$PYTHON_BIN" backend/manage.py seed_browser_2509
+DB_NAME="$DB_NAME" "$PYTHON_BIN" backend/manage.py "${LM_E2E_SEED:-seed_browser_2509}"
 DB_NAME="$DB_NAME" "$PYTHON_BIN" backend/manage.py runserver "127.0.0.1:$BACKEND_PORT" --noreload >"/tmp/license-manager-e2e-backend.log" 2>&1 &
 BACKEND_PID=$!
 

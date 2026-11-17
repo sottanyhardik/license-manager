@@ -16,6 +16,7 @@ ALLOWED_EDGES = {
     # ADR-004: accounting depends on core + trade one-way; trade must never import accounting.
     ("accounting", "accounts"),
     ("accounting", "core"),
+    ("accounting", "license"),  # E2E seed command creates licence fixtures (test_* DB only)
     ("accounting", "trade"),
     ("accounts", "core"),
     ("allotment", "accounts"),
@@ -240,6 +241,9 @@ FINANCIAL_WRITE_BASELINE = {('allotment', 'backfill_allocation_status', 'Allotme
  ('license', 'delete_licenses_by_exporter', 'RowDetails'): 1,
  ('license', 'header', 'LicenseBalance'): 1,
  ('license', 'parse_existing_license_copies', 'LicenseImportItemsModel'): 1,
+ ('accounting', 'seed_accounting_e2e', 'LicenseImportItemsModel'): 1,  # disposable test_* E2E seed
+ ('accounting', 'seed_accounting_e2e', 'LicenseTrade'): 1,
+ ('accounting', 'seed_accounting_e2e', 'LicenseTradeLine'): 1,
  ('license', 'seed_browser_2509', 'AllotmentItems'): 2,
  ('license', 'seed_browser_2509', 'AllotmentModel'): 2,
  ('license', 'seed_browser_2509', 'LicenseBalance'): 2,

@@ -100,22 +100,30 @@ Rules for every workstream in this file: `.claude/rules/autonomous-execution.md`
 The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept for history.
 
 <!-- CHECKPOINT:boe:BEGIN -->
-**BOE — last verified checkpoint (2026-11-17)**
-- Branch `feature/v5` (local; push needs owner approval). Verified: `3ece31f0` (iteration 1), `f202cedb` (Phase A, D1–D15),
-  `d47041f5` (autonomous workflow), `9f012089` (Phase B), `48e7207b` (Licence + BOE UI modernization, shell cleanup), BOE invoice status (authoritative `invoice_status`, see api-contract-standards.md).
-- Evidence: Phase B integrated tree BE gate exit 0 (3395 passed / 1 pre-existing xfail); UI commit FE gate PASS
-  833/833 + typecheck + lint + build; Playwright 38/38 mocked, serial (check port 41731 is free first — another
-  session's dev server on that port makes Playwright test the wrong tree).
-- Open (low): Licence `$-250.75` sign format (pinned owner decision); Tasks FAB near Dashboard "View all" at 768px;
-  live-backend Playwright not run
-  (needs credentials); licence detail page (`pages/license-overview/**`) not modernized — has uncommitted user edits.
-- Perf follow-up (protected balance code): BOE list ~8 queries/row from per-row authoritative_available_cif (local: 818 queries / 3.3 s per 100 rows).
-- Owner items: nginx `nosniff` reload by ops (not deployed); `git push`.
+**BOE — last verified checkpoint (2026-11-17, integration sweep)**
+- Branch `feature/v5` (local only; 17 commits ahead of origin, 0 behind; push needs owner approval).
+- All completed BOE work is integrated: `3ece31f0` (iteration 1), `f202cedb` (Phase A, D1–D15), `d47041f5` (autonomous
+  workflow), `9f012089` (Phase B), `48e7207b` (Licence + BOE UI), `66feb25f` (tracker), `cb2abf5c` (authoritative
+  `invoice_status`). Integration sweep (owner request): branches/worktrees checked by patch equivalence; no further
+  completed BOE work found. **No tests were run for the sweep.**
+- Preserved, NOT integrated (in progress / other owners / stale base): `lm-impl-boe-perf` and
+  `license-manager-implementation` uncommitted BOE perf edits (2026-11-16, old `bill_of_entry/serializers.py` paths, now
+  shims); `T-022` untracked `pages/boe-workspace/` prototype (superseded); `boe-erp` worktree deferred perf + low-item
+  WIP (stopped, untested) — backup patch `~/lm_backups/boe-erp-wip-deferred-perf-2026-11-17.patch`.
+- Non-BOE branches with unapplied commits (other workstreams, left alone): `feature/version5`, `orch/T-*`,
+  `feature/erp-*` (OD track incl. protected balance code), `master` (session log), `fix/trades-list-ordering`,
+  `feature/v5-throttle-retry`, `docs/t2f-lifecycle-audit`, `worktree-agent-*`, `docs/erp-accounting-audit`
+  (accounting UI already integrated under a different hash).
+- Deferred: (1) BOE list perf — ~818 queries / 3.3 s per 100 rows from per-row available-CIF (protected balance code;
+  separate authorization); (2) Invoice Status filter single-select vs multi-value API; (3) nginx `nosniff` ops reload.
+- Uncommitted by design: root `CLAUDE.md` §7 pointer (file also holds another session's edits).
 <!-- CHECKPOINT:boe:END -->
 
 | Date | BOE milestone | Commit | Evidence |
 |---|---|---|---|
 | 2026-11-17 | Iteration 1 | `3ece31f0` | BE 3152 passed/1 pre-existing xfail; FE 807/807; Playwright 29/29 mocked |
+| 2026-11-17 | Authoritative invoice_status | `cb2abf5c` | backend suite 552 passed; FE 836/836; Playwright 16/16 mocked; live read-only API check 1044 BOEs |
+| 2026-11-17 | Integration sweep (no tests run) | this commit | patch-equivalence check of all branches/worktrees |
 | 2026-11-17 | Licence + BOE UI modernization | `48e7207b` | FE 833/833 + typecheck + lint + build; Playwright 38/38 mocked |
 | 2026-11-17 | Phase B | `9f012089` | BE gate exit 0, 3395 passed/1 pre-existing xfail; FE 836/836; Playwright 21/21 mocked |
 | 2026-11-17 | Iteration 2 Phase A (D1–D15) | `f202cedb` | BE gate exit 0, 3339 passed/1 pre-existing xfail; FE 814/814; Playwright 29/29 mocked; 1044 local BOEs echo-validated, 0 false 400s |

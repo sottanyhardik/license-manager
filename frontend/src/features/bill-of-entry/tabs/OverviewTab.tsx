@@ -1,7 +1,8 @@
 import { FieldGrid, type FieldSpec } from "@/components/shared/FieldGrid";
+import { fmtFc2, fmtInrExact, fmtQty } from "../format";
 import type { BoeListItem } from "../types";
 
-/** Fields the list row already carries; values exactly as received. */
+/** Fields the list row already carries; amounts use the card formatters, other values as received. */
 const OVERVIEW_FIELDS: FieldSpec[] = [
     { key: "bill_of_entry_number", label: "BOE Number" },
     { key: "bill_of_entry_date", label: "BOE Date" },
@@ -18,5 +19,15 @@ const OVERVIEW_FIELDS: FieldSpec[] = [
 ];
 
 export function OverviewTab({ item }: { item: BoeListItem }) {
-    return <FieldGrid record={item} fields={OVERVIEW_FIELDS} />;
+    // Display-only formatting of backend values; nothing is recomputed. The record
+    // view keeps the backend's full scale: INR to paise (DEC_0 = 0.00) and unit
+    // price to 0.001 (get_unit_price), unlike the compact card.
+    const record = {
+        ...item,
+        total_inr: fmtInrExact(item.total_inr),
+        total_fc: fmtFc2(item.total_fc),
+        total_quantity: fmtQty(item.total_quantity),
+        unit_price: fmtQty(item.unit_price),
+    };
+    return <FieldGrid record={record} fields={OVERVIEW_FIELDS} />;
 }

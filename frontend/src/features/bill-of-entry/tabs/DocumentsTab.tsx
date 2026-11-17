@@ -2,9 +2,8 @@ import { FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/shared";
+import { LicenceCopiesSection } from "@/components/workspace";
 import { openDocument } from "@/utils/documentDownload";
-import { openLicenseCopyPdf } from "@/utils/licenseCopyPdf";
 
 import { OUTLINE_TOKENS } from "@/lib/display";
 import type { BoeDetailRow } from "../types";
@@ -22,10 +21,6 @@ type Props = {
  * requested until a button is pressed.
  */
 export function DocumentsTab({ boeNumber, boePdfCopy, rows, onTransferLetter }: Props) {
-    const licences = new Map<number, string>();
-    rows.forEach((r) => {
-        if (r.license_id && r.license_number && !licences.has(r.license_id)) licences.set(r.license_id, r.license_number);
-    });
     const openCopy = () => {
         if (!boePdfCopy) return;
         openDocument(boePdfCopy).catch(() => toast.error("Failed to open BOE copy"));
@@ -49,29 +44,7 @@ export function DocumentsTab({ boeNumber, boePdfCopy, rows, onTransferLetter }: 
                     </Button>
                 </div>
             </section>
-            <section aria-label="Licence copies">
-                <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">Licence copies</h4>
-                {licences.size === 0 ? (
-                    <EmptyState title="No licence documents" description="No licence rows are mapped to this BOE." />
-                ) : (
-                    <div className="flex flex-wrap gap-2">
-                        {[...licences].map(([licenseId, licenseNumber]) => (
-                            <Button
-                                key={licenseId}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className={OUTLINE_TOKENS}
-                                onClick={() => { void openLicenseCopyPdf(licenseId, licenseNumber); }}
-                                aria-label={`Open License Copy PDF for ${licenseNumber}`}
-                            >
-                                <FileText aria-hidden="true" />
-                                {licenseNumber}
-                            </Button>
-                        ))}
-                    </div>
-                )}
-            </section>
+            <LicenceCopiesSection rows={rows} emptyDescription="No licence rows are mapped to this BOE." />
         </div>
     );
 }

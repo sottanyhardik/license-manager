@@ -11,7 +11,7 @@ type Props = {
     onMerge: () => void;
 };
 
-/** Existing card actions only, same handlers and gating (Edit is BOE_MANAGER only). */
+/** Existing card actions only, same handlers and gating as the card (Edit and Merge are BOE_MANAGER only). */
 export function EditOptionsTab({ canWrite, onEdit, onTransferLetter, onMerge }: Props) {
     return (
         <div className="flex flex-wrap gap-2">
@@ -25,10 +25,12 @@ export function EditOptionsTab({ canWrite, onEdit, onTransferLetter, onMerge }: 
                 <FileText aria-hidden="true" />
                 Generate Transfer Letter
             </Button>
-            <Button type="button" size="sm" variant="outline" className={OUTLINE_TOKENS} onClick={onMerge}>
-                <Layers aria-hidden="true" />
-                Merge with duplicate BOE
-            </Button>
+            {canWrite && (
+                <Button type="button" size="sm" variant="outline" className={OUTLINE_TOKENS} onClick={onMerge}>
+                    <Layers aria-hidden="true" />
+                    Merge with duplicate BOE
+                </Button>
+            )}
         </div>
     );
 }

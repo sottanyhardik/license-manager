@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { boeApi } from "@/api";
-import { InlineError, LoadingState } from "@/components/shared";
+import { QueryBoundary } from "@/components/shared";
+import { qk } from "@/lib/queryKeys";
 
 import { FieldGrid, type FieldSpec } from "@/components/shared/FieldGrid";
-import { boeRecordKeys } from "../format";
 import type { BoeListItem } from "../types";
 
 const DETAIL_FIELDS: FieldSpec[] = [
@@ -23,12 +23,14 @@ const DETAIL_FIELDS: FieldSpec[] = [
 ];
 
 /** Full record from the existing `bill-of-entries/:id/` endpoint (same one the edit and transfer-letter pages read). */
-export function BoeDetailsTab({ boeId, recordKey }: { boeId: number; recordKey: string }) {
-    const { data, isPending, isError, error, refetch } = useQuery({
-        queryKey: boeRecordKeys.detail(recordKey),
+export function BoeDetailsTab({ boeId }: { boeId: number }) {
+    const query = useQuery({
+        queryKey: qk.boes.detail(boeId),
         queryFn: () => boeApi.fetchBOE<BoeListItem>(boeId),
     });
-    if (isPending) return <LoadingState variant="skeleton-rows" rows={3} label="Loading bill of entry" />;
-    if (isError || !data) return <InlineError error={error} onRetry={() => { void refetch(); }} title="Could not load bill of entry" />;
-    return <FieldGrid record={data} fields={DETAIL_FIELDS} />;
+    return (
+        <QueryBoundary query={query} rows={3} loadingLabel="Loading bill of entry" errorTitle="Could not load bill of entry">
+            {(data) => <FieldGrid record={data} fields={DETAIL_FIELDS} />}
+        </QueryBoundary>
+    );
 }

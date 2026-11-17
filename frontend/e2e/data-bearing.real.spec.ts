@@ -129,7 +129,7 @@ test.describe("isolated data-bearing operational workflows", () => {
     for (const [route, evidence] of [
       ["/licenses", "3411008090"],
       ["/planning", "Planning"],
-      ["/bill-of-entries", "Bill Of Entries"],
+      ["/bill-of-entries", "Bills of Entry"],
       ["/trades", "Trades"],
       ["/license-ledger", "License Ledger"],
       ["/reports/license-purchase-profit", "Purchase"],

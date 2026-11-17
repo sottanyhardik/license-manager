@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DetailTabs } from "./DetailTabs";
 import { ModuleAccordion } from "./ModuleAccordion";
+import { LicenceCopiesSection } from "./LicenceCopiesSection";
+
+vi.mock("@/utils/licenseCopyPdf", () => ({ openLicenseCopyPdf: vi.fn(() => Promise.resolve()) }));
+import { openLicenseCopyPdf } from "@/utils/licenseCopyPdf";
 
 function Probe({ label, onMount }: { label: string; onMount?: () => void }) {
     onMount?.();
@@ -95,5 +99,42 @@ describe("ModuleAccordion", () => {
         render(<ModuleAccordion sections={sections} persistKey="license:1:ledger" />);
         expect(screen.getByRole("button", { name: "One" })).toHaveAttribute("aria-expanded", "false");
         expect(screen.getByRole("button", { name: "Two" })).toHaveAttribute("aria-expanded", "true");
+    });
+});
+
+describe("LicenceCopiesSection", () => {
+    it("shows one button per distinct licence (first number wins) and opens its copy on click only", async () => {
+        const open = openLicenseCopyPdf as unknown as ReturnType<typeof vi.fn>;
+        open.mockClear();
+        render(
+            <LicenceCopiesSection
+                emptyDescription="none"
+                rows={[
+                    { license_id: 11, license_number: "0310000011" },
+                    { license_id: 11, license_number: "DUPLICATE" },
+                    { license_id: 12, license_number: "0310000012" },
+                    { license_id: 13, license_number: null },
+                    { license_id: null, license_number: "NO-ID" },
+                ]}
+            />,
+        );
+        const section = screen.getByRole("region", { name: "Licence copies" });
+        expect(section).toBeInTheDocument();
+        const buttons = screen.getAllByRole("button");
+        expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+            "Open License Copy PDF for 0310000011",
+            "Open License Copy PDF for 0310000012",
+        ]);
+        expect(open).not.toHaveBeenCalled();
+        await userEvent.click(screen.getByRole("button", { name: "Open License Copy PDF for 0310000012" }));
+        expect(open).toHaveBeenCalledWith(12, "0310000012");
+    });
+
+    it("renders the empty state with the caller's description", () => {
+        render(<LicenceCopiesSection rows={[]} emptyDescription="No licence rows are mapped to this BOE." />);
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("No licence documents");
+        expect(status).toHaveTextContent("No licence rows are mapped to this BOE.");
+        expect(screen.queryByRole("button")).toBeNull();
     });
 });

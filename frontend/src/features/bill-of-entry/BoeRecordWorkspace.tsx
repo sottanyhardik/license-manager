@@ -44,7 +44,7 @@ export default function BoeRecordWorkspace({ item, canWrite, onEdit, onTransferL
 
     const tabs: DetailTab[] = [
         { id: "overview", label: "Overview", render: () => <OverviewTab item={item} /> },
-        { id: "boe-details", label: "BOE Details", render: () => <BoeDetailsTab boeId={item.id} recordKey={recordKey} /> },
+        { id: "boe-details", label: "BOE Details", render: () => <BoeDetailsTab boeId={item.id} /> },
         { id: "import-items", label: "Import Items", render: () => <BoeItemsTable rows={rows} /> },
         { id: "licence-mapping", label: "Licence Mapping", render: () => <LicenceMappingTab rows={rows} /> },
         { id: "allotment-mapping", label: "Allotment Mapping", render: () => <AllotmentMappingTab allotment={item.allotment} /> },
@@ -69,7 +69,7 @@ export default function BoeRecordWorkspace({ item, canWrite, onEdit, onTransferL
                 tabs={tabs}
                 value={tab}
                 onValueChange={(id) => setTab(id as BoeRecordTabId)}
-                className="min-h-[120px]"
+                className="min-h-[120px] min-w-0 [&_[role=tablist]]:flex-nowrap [&_[role=tablist]]:overflow-x-auto [&_[role=tab]]:shrink-0"
                 ariaLabel={`BOE ${label} sections`}
             />
         </div>

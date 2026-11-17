@@ -1,8 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-
-import api from "@/api/axios";
-import { qk } from "@/lib/queryKeys";
-import { EmptyState, InlineError, LoadingState } from "@/components/shared";
+import { EmptyState, QueryBoundary } from "@/components/shared";
+import { useAllotmentDetail } from "@/features/allotment/useAllotmentDetail";
 
 import { FieldGrid, type FieldSpec } from "@/components/shared/FieldGrid";
 
@@ -26,18 +23,13 @@ function allotmentIds(value: unknown): number[] {
 }
 
 function LinkedAllotment({ id }: { id: number }) {
-    const { data, isPending, isError, error, refetch } = useQuery({
-        queryKey: qk.allotments.detail(id),
-        queryFn: async ({ signal }) => (await api.get(`allotments/${id}/`, { signal })).data as Record<string, unknown>,
-        staleTime: 30_000,
-        refetchOnWindowFocus: false,
-    });
+    const query = useAllotmentDetail(id);
     return (
         <section aria-label={`Allotment ${id}`} className="rounded-md border border-border/70 p-3">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">Allotment #{id}</h4>
-            {isPending ? <LoadingState variant="skeleton-rows" rows={2} label={`Loading allotment ${id}`} />
-                : isError || !data ? <InlineError error={error} onRetry={() => { void refetch(); }} title={`Could not load allotment ${id}`} />
-                    : <FieldGrid record={data} fields={ALLOTMENT_FIELDS} />}
+            <QueryBoundary query={query} rows={2} loadingLabel={`Loading allotment ${id}`} errorTitle={`Could not load allotment ${id}`}>
+                {(data) => <FieldGrid record={data} fields={ALLOTMENT_FIELDS} />}
+            </QueryBoundary>
         </section>
     );
 }

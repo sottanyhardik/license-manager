@@ -200,7 +200,7 @@ def resolve_dispute(boe) -> dict[str, Any]:
 # BOE merge
 # ---------------------------------------------------------------------------
 
-def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
+def merge_boe(target_boe, source_boe_id: int, *, user=None) -> dict[str, Any]:
     """
     Merge a source BOE into target_boe.
 
@@ -208,12 +208,16 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
     - Transfers allotments from source to target
     - Updates target's port to source's port
     - Deletes source BOE
+    - Writes one ``ReconciliationLog`` (ACTION_MERGE_BOE) on the target
 
-    The merge runs inside a single DB transaction.
+    The merge runs inside a single DB transaction; both BOE rows are locked
+    (``select_for_update``, ordered by id to avoid deadlocks) before any
+    change, and the audit log is written in that same transaction.
 
     Args:
         target_boe:    BillOfEntryModel instance (the merge destination).
         source_boe_id: PK of the BOE to merge from (will be deleted).
+        user:          acting user for the audit log (may be None).
 
     Returns:
         dict with: success, message, boe (serialized target).
@@ -227,14 +231,13 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
     from django.db.models import Q
     from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
     from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
+    from apps.reconciliation.models import ReconciliationLog
 
     if not source_boe_id:
         raise ValueError("source_boe_id is required")
 
     try:
-        source_boe = BillOfEntryModel.objects.prefetch_related(
-            "item_details", "allotment"
-        ).get(id=source_boe_id)
+        source_boe = BillOfEntryModel.objects.only("id").get(id=source_boe_id)
     except BillOfEntryModel.DoesNotExist:
         raise ValueError(f"Source BOE with id={source_boe_id} not found")
 
@@ -242,6 +245,22 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
         raise ValueError("Cannot merge a BOE with itself")
 
     with db_transaction.atomic():
+        # Lock both BOE rows (ordered by id so two concurrent merges of the
+        # same pair cannot deadlock) and work on the locked instances.
+        locked = {
+            boe.id: boe
+            for boe in BillOfEntryModel.objects.select_for_update()
+            .filter(id__in=[target_boe.id, source_boe.id])
+            .order_by("id")
+        }
+        if source_boe.id not in locked:
+            raise ValueError(f"Source BOE with id={source_boe_id} not found")
+        if target_boe.id not in locked:
+            raise ValueError(f"Target BOE with id={target_boe.id} not found")
+        target_boe = locked[target_boe.id]
+        source_boe = locked[source_boe.id]
+        source_id = source_boe.id
+
         # Find combos already in target to avoid unique-constraint violations
         existing_combos = set(
             target_boe.item_details.values_list("sr_number_id", "transaction_type")
@@ -300,16 +319,25 @@ def merge_boe(target_boe, source_boe_id: int) -> dict[str, Any]:
         target_boe.port = source_port
         target_boe.save(update_fields=["port"])
 
+        message = (
+            f"Merged successfully. {moved_count} item(s) moved, "
+            f"{skipped_count} skipped (duplicate)."
+        )
+        ReconciliationLog.objects.create(
+            action=ReconciliationLog.ACTION_MERGE_BOE,
+            bill_of_entry=target_boe,
+            before={"target_boe_id": target_boe.id, "source_boe_id": source_id},
+            after={"message": message},
+            user=user if getattr(user, "is_authenticated", False) else None,
+        )
+
     refreshed = BillOfEntryModel.objects.select_related(
         "company", "port"
     ).prefetch_related("item_details").get(id=target_boe.id)
     serializer = BillOfEntrySerializer(refreshed)
     return {
         "success": True,
-        "message": (
-            f"Merged successfully. {moved_count} item(s) moved, "
-            f"{skipped_count} skipped (duplicate)."
-        ),
+        "message": message,
         "boe": serializer.data,
     }
 
@@ -577,6 +605,35 @@ def restore_boe(boe, user, reason: str = "") -> dict[str, Any]:
     }
 
 
+def _normalise_boe_ids(boe_ids) -> tuple[list[int], list[Any]]:
+    """Normalise a client-supplied id list for the bulk hide/restore paths.
+
+    Returns ``(ids, unparseable)``: ``ids`` are the ints (``int`` or numeric
+    ``str`` input) de-duplicated in first-seen order; ``unparseable`` keeps
+    the raw values that are not a whole-number id (bools, floats, ``None``,
+    non-numeric strings, ...) so the caller can report them as failed.
+    """
+    ids: list[int] = []
+    seen: set[int] = set()
+    unparseable: list[Any] = []
+    for raw in boe_ids:
+        value = None
+        if isinstance(raw, int) and not isinstance(raw, bool):
+            value = raw
+        elif isinstance(raw, str):
+            try:
+                value = int(raw.strip())
+            except ValueError:
+                value = None
+        if value is None:
+            unparseable.append(raw)
+            continue
+        if value not in seen:
+            seen.add(value)
+            ids.append(value)
+    return ids, unparseable
+
+
 def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
     """
     Bulk sibling of `hide_boe` — processes every id in `boe_ids`
@@ -588,7 +645,9 @@ def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
     spanning multiple licences — see module docstring.
 
     Args:
-        boe_ids: iterable of `BillOfEntryModel` pks.
+        boe_ids: iterable of `BillOfEntryModel` pks (ints or numeric strings;
+            normalised to ints and de-duplicated in order — see
+            `_normalise_boe_ids`; unparseable values are reported in `failed`).
         user: acting User for the audit fields (may be None).
         reason: free-text reason, stored on every affected `ReconciliationLog` entry.
 
@@ -605,9 +664,12 @@ def hide_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
     reason = (reason or "").strip()
     now = timezone.now()
 
-    boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=list(boe_ids))}
+    boe_ids, unparseable = _normalise_boe_ids(boe_ids)
+    boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=boe_ids)}
     hidden: list[dict[str, Any]] = []
-    failed: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = [
+        {"id": raw, "error": "No BOE matches that id."} for raw in unparseable
+    ]
     all_license_ids: set[int] = set()
 
     for boe_id in boe_ids:
@@ -645,10 +707,13 @@ def restore_boes_bulk(boe_ids, user, reason: str = "") -> dict[str, Any]:
     reason = (reason or "").strip()
     now = timezone.now()
 
-    boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=list(boe_ids))}
+    boe_ids, unparseable = _normalise_boe_ids(boe_ids)
+    boes = {boe.id: boe for boe in BillOfEntryModel.objects.filter(pk__in=boe_ids)}
     restored: list[dict[str, Any]] = []
     skipped: list[int] = []
-    failed: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = [
+        {"id": raw, "error": "No BOE matches that id."} for raw in unparseable
+    ]
     all_license_ids: set[int] = set()
 
     for boe_id in boe_ids:

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthContext } from "../../context/AuthContext";
@@ -38,14 +39,28 @@ vi.mock("../../api/axios", () => ({
 
 // Mock the dedicated API services (only boeApi is used, for bill-of-entries).
 vi.mock("../../api", () => ({
-  boeApi: { fetchBOEList: vi.fn(() => Promise.resolve(META)) },
+  boeApi: {
+    fetchBOEList: vi.fn(() => Promise.resolve(META)),
+    exportBOEPortExcel: vi.fn(() => Promise.resolve(new Blob())),
+  },
   masterApi: {},
   licenseApi: {},
   allotmentApi: {},
 }));
 
+// Spy on the dangerous-action confirmation (resolves "confirmed"); the rest of the hook stays real.
+const { confirmSpy } = vi.hoisted(() => ({ confirmSpy: vi.fn(() => Promise.resolve(true)) }));
+vi.mock("../../hooks/useConfirmDialog.jsx", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../hooks/useConfirmDialog")>();
+  return {
+    ...actual,
+    useConfirmDialog: () => ({ ...actual.useConfirmDialog(), confirmDangerousAction: confirmSpy }),
+  };
+});
+
 import MasterList from "./MasterList";
 import api from "../../api/axios";
+import { boeApi } from "../../api";
 
 const authValue = {
   user: { id: 1, username: "t", is_superuser: true, roles: [] },
@@ -171,5 +186,52 @@ describe("MasterList smoke", () => {
     expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Yes" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "No" })).toBeInTheDocument();
+  });
+
+  describe("bill-of-entries register actions", () => {
+    it("links Add New to the BOE create route", async () => {
+      renderAt("bill-of-entries");
+      const addNew = await screen.findByRole("link", { name: /Add New/ });
+      expect(addNew).toHaveAttribute("href", "/bill-of-entries/create");
+    });
+
+    it("keeps Excel/PDF as buttons and moves Port-wise Excel into the action menu", async () => {
+      const user = userEvent.setup();
+      renderAt("bill-of-entries");
+      expect(await screen.findByRole("button", { name: "Export to Excel" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Export to PDF" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /port-wise BOE Excel/i })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "More bill of entry actions" }));
+      await user.click(await screen.findByRole("menuitem", { name: "Port-wise Excel" }));
+      await waitFor(() => expect(boeApi.exportBOEPortExcel).toHaveBeenCalledTimes(1));
+    });
+
+    it("confirms before bulk-updating empty product names", async () => {
+      const user = userEvent.setup();
+      const post = api.post as unknown as ReturnType<typeof vi.fn>;
+      post.mockResolvedValueOnce({ data: { success: true, message: "done" } });
+      renderAt("bill-of-entries");
+
+      await user.click(await screen.findByRole("button", { name: "More bill of entry actions" }));
+      const menu = await screen.findByRole("menu");
+      await user.click(within(menu).getByRole("menuitem", { name: "Update all empty product names" }));
+
+      await waitFor(() => expect(post).toHaveBeenCalledWith("bill-of-entries/bulk-update-product-names/"));
+      expect(confirmSpy).toHaveBeenCalledWith("Bulk Update Product Names", expect.stringContaining("empty product_name"));
+      expect(confirmSpy.mock.invocationCallOrder[0]).toBeLessThan(post.mock.invocationCallOrder[0]);
+    });
+
+    it("does not post the bulk update when the confirmation is declined", async () => {
+      const user = userEvent.setup();
+      confirmSpy.mockResolvedValueOnce(false);
+      renderAt("bill-of-entries");
+
+      await user.click(await screen.findByRole("button", { name: "More bill of entry actions" }));
+      await user.click(await screen.findByRole("menuitem", { name: "Update all empty product names" }));
+
+      await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(1));
+      expect(api.post).not.toHaveBeenCalled();
+    });
   });
 });

@@ -8,7 +8,8 @@
  * (after the swap it lives in the "Import Items" tab).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/api/axios", () => ({
@@ -25,6 +26,7 @@ vi.mock("@/api/axios", () => ({
     },
 }));
 
+import BoeCardList, { type BoeCardListProps } from "../BoeCardList";
 import { BOE_FIXTURE, LIST_RESPONSE, boeCards, normaliseIds, renderBoeList, type Role } from "./fixtures";
 
 function LIST() {
@@ -78,7 +80,7 @@ describe("BOE card register presentation (recorded before extraction)", () => {
                     const input = within(card).getByPlaceholderText("Invoice number") as HTMLInputElement;
                     expect(input.value).toBe(item.invoice_no || "");
                     entry.editingChip = normaliseIds((input.parentElement as HTMLElement).outerHTML);
-                    await user.click(within(card).getByRole("button", { name: "✕" }));
+                    await user.click(within(card).getByRole("button", { name: "Cancel invoice edit" }));
                     expect(within(card).queryByPlaceholderText("Invoice number")).toBeNull();
                 }
 
@@ -111,5 +113,68 @@ describe("BOE card register presentation (recorded before extraction)", () => {
             expect(within(card).queryByTitle("Delete")).toBeNull();
             expect(within(card).queryByTitle("Click to edit invoice number")).toBeNull();
         }
+    });
+
+    it("viewers get no Resolve Dispute, Merge BOE or Update Product Name actions", async () => {
+        renderBoeList("BOE_VIEWER");
+        await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
+        for (const card of boeCards()) {
+            expect(within(card).queryByTitle("Resolve Dispute")).toBeNull();
+            expect(within(card).queryByTitle("Merge BOE")).toBeNull();
+            expect(within(card).queryByTitle("Update Product Name")).toBeNull();
+            expect(within(card).getByTitle("Transfer Letter")).toBeInTheDocument();
+        }
+    });
+
+    it("managers keep Resolve Dispute, Merge BOE and Update Product Name where applicable", async () => {
+        renderBoeList("BOE_MANAGER");
+        await waitFor(() => expect(boeCards()).toHaveLength(BOE_FIXTURE.length));
+        const [c201, c202, , c204] = boeCards();
+        expect(within(c201).queryByTitle("Resolve Dispute")).toBeNull();
+        expect(within(c202).getByTitle("Resolve Dispute")).toBeInTheDocument();
+        expect(within(c202).getByTitle("Update Product Name")).toBeInTheDocument();
+        expect(within(c204).getByTitle("Merge BOE")).toBeInTheDocument();
+    });
+});
+
+describe("BoeCardList states and inline invoice editor", () => {
+    afterEach(() => cleanup());
+
+    function props(overrides: Partial<BoeCardListProps> = {}): BoeCardListProps {
+        return {
+            loading: false, data: BOE_FIXTURE, canWrite: false, canEditInvoice: true, entityName: "bill-of-entries",
+            filterParams: {}, currentPage: 1, pageSize: 25, navigate: vi.fn(), onDelete: vi.fn(), invalidateList: vi.fn(),
+            confirmDangerousAction: vi.fn(), onTransferLetter: vi.fn(), onMerge: vi.fn(), editingInvoiceId: null,
+            invoiceDraft: "", setInvoiceDraft: vi.fn(), invoiceSaving: false, startInvoiceEdit: vi.fn(),
+            cancelInvoiceEdit: vi.fn(), saveInvoiceEdit: vi.fn(), ...overrides,
+        };
+    }
+
+    it("loading renders a status region with the loading copy", () => {
+        render(<BoeCardList {...props({ loading: true })} />);
+        expect(screen.getByRole("status", { name: "Loading Bill of Entries..." })).toBeInTheDocument();
+    });
+
+    it("empty list keeps the empty-state copy", () => {
+        render(<BoeCardList {...props({ data: [] })} />);
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("No bill of entries found");
+        expect(status).toHaveTextContent("Try adjusting filters or create a new BOE.");
+    });
+
+    it("Enter saves, Escape and the labelled icon button cancel", async () => {
+        const user = userEvent.setup();
+        const p = props({ editingInvoiceId: 201, invoiceDraft: "INV-201" });
+        render(<MemoryRouter><BoeCardList {...p} /></MemoryRouter>);
+        const input = screen.getByRole("textbox", { name: "Invoice number" });
+        expect(input).toHaveFocus();
+        await user.keyboard("{Enter}");
+        expect(p.saveInvoiceEdit).toHaveBeenCalledWith(201);
+        await user.keyboard("{Escape}");
+        expect(p.cancelInvoiceEdit).toHaveBeenCalledTimes(1);
+        await user.click(screen.getByRole("button", { name: "Cancel invoice edit" }));
+        expect(p.cancelInvoiceEdit).toHaveBeenCalledTimes(2);
+        await user.click(screen.getByRole("button", { name: "Save" }));
+        expect(p.saveInvoiceEdit).toHaveBeenCalledTimes(2);
     });
 });

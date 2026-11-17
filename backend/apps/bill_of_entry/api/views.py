@@ -195,8 +195,9 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
     def retrieve(self, request, *args, **kwargs):
         """Include current BOE's allotments in metadata for edit mode."""
         response = super().retrieve(request, *args, **kwargs)
-        instance = self.get_object()
-        current_allotment_ids = list(instance.allotment.values_list('id', flat=True))
+        # The serialized `allotment` field already holds the BOE's allotment
+        # pks (from the prefetch), so no second get_object()/query is needed.
+        current_allotment_ids = list(response.data.get('allotment') or [])
 
         if 'metadata' in response.data and current_allotment_ids:
             fields = response.data['metadata'].get('fields', {})
@@ -261,7 +262,7 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
         source_boe_id = request.data.get('source_boe_id')
 
         try:
-            result = boe_service.merge_boe(target_boe, source_boe_id=source_boe_id)
+            result = boe_service.merge_boe(target_boe, source_boe_id=source_boe_id, user=request.user)
         except ValueError as exc:
             msg = str(exc)
             status_code = 404 if "not found" in msg else 400

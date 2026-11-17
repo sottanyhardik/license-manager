@@ -8,6 +8,7 @@ from django.db.models import Prefetch
 from django.http import HttpResponse
 from rest_framework.decorators import action
 
+from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
 from apps.bill_of_entry.models import RowDetails
 from apps.core.models import ExchangeRateModel
 from apps.core.utils.pdf_utils import create_pdf_exporter
@@ -767,6 +768,8 @@ def add_grouped_export_action(viewset_class):
 
         row = 3
         for boe in queryset:
+            # Totals from the prefetched rows (identical Decimals, no per-BOE SUM queries).
+            BillOfEntrySerializer._seed_totals_from_prefetch(boe)
             boe_number = boe.bill_of_entry_number or '--'
             boe_date = boe.bill_of_entry_date.strftime('%d-%m-%Y') if boe.bill_of_entry_date else '--'
             port_code = boe.port.code if boe.port else '--'
@@ -819,6 +822,8 @@ def add_grouped_export_action(viewset_class):
         grouped_data = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
 
         for boe in queryset:
+            # Totals from the prefetched rows (identical Decimals, no per-BOE SUM queries).
+            BillOfEntrySerializer._seed_totals_from_prefetch(boe)
             company_name = boe.company.name if boe.company else "Unknown"
             port_code = boe.port.code if boe.port else "Unknown Port"
             # Normalize product name: uppercase, strip spaces for grouping

@@ -462,6 +462,19 @@ class ReconciliationWriteActionTests(ReconciliationFixtureMixin, TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_merge_boe_rejects_non_integer_ids_with_400(self):
+        company = self.make_company()
+        target_boe = self.make_boe(company)
+        url = reverse("reconciliation:reconciliation-merge-boe")
+        for payload in (
+            {"target_boe_id": target_boe.id, "source_boe_id": "abc"},
+            {"target_boe_id": "x1", "source_boe_id": target_boe.id},
+        ):
+            response = self.client.post(url, payload, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertIn("detail", response.data)
+        self.assertTrue(BillOfEntryModel.objects.filter(id=target_boe.id).exists())
+
     def test_merge_boe_delegates_to_boe_service_and_logs(self):
         company = self.make_company()
         license_obj = self.make_license(company)

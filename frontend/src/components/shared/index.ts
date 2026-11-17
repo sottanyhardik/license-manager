@@ -8,3 +8,4 @@ export * from "./ActivityTimeline";
 export * from "./EmptyState";
 export * from "./InlineError";
 export * from "./LoadingState";
+export * from "./QueryBoundary";

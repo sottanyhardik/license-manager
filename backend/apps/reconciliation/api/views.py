@@ -175,19 +175,19 @@ class ReconciliationViewSet(viewsets.ViewSet):
                 {"detail": "target_boe_id and source_boe_id are required."}, status=400
             )
 
+        try:
+            target_boe_id = int(target_boe_id)
+            source_boe_id = int(source_boe_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "target_boe_id and source_boe_id must be integers."}, status=400
+            )
         target_boe = get_object_or_404(BillOfEntryModel, pk=target_boe_id)
-        before = {"target_boe_id": target_boe.id, "source_boe_id": int(source_boe_id)}
 
         try:
-            with transaction.atomic():
-                result = boe_service.merge_boe(target_boe, int(source_boe_id))
-                ReconciliationLog.objects.create(
-                    action=ReconciliationLog.ACTION_MERGE_BOE,
-                    bill_of_entry=target_boe,
-                    before=before,
-                    after={"message": result["message"]},
-                    user=_actor(request),
-                )
+            # `merge_boe` is atomic and writes the MERGE_BOE ReconciliationLog
+            # inside its own transaction (shared with the BOE-side endpoint).
+            result = boe_service.merge_boe(target_boe, source_boe_id, user=_actor(request))
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=400)
 

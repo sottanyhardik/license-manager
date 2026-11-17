@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthContext } from "../../context/AuthContext";
@@ -191,11 +191,41 @@ describe("other entities: header + filter DOM unchanged", () => {
       expect(html).toMatchSnapshot();
     });
   }
-  it("bill-of-entries", async () => {
+});
+
+describe("compact register layout (licenses + bill-of-entries)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    getMock.mockImplementation(() => Promise.resolve({ data: META }));
+  });
+  // Deliberately re-recorded when BOE moved onto the compact register toolbar (WS1).
+  it("bill-of-entries header + filter DOM", async () => {
+    getMock.mockImplementation(() => Promise.resolve({ data: { ...META, filter_config: { company: { type: "icontains", label: "Company" }, is_boe: { type: "exact", label: "BOE" } } } }));
     const { boeApi } = await import("../../api");
     (boeApi.fetchBOEList as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ...META, filter_config: { company: { type: "icontains", label: "Company" } } });
     const { container } = renderAt("/masters/bill-of-entries");
     await waitFor(() => expect(screen.getByText("Company")).toBeInTheDocument());
     expect(container.innerHTML.split('class="surface-card')[0]).toMatchSnapshot();
   });
+  for (const [entity, path, title] of [
+    ["licenses", "/licenses", "Licenses"],
+    ["bill-of-entries", "/masters/bill-of-entries", "Bills of Entry"],
+  ] as const) {
+    it(`${entity}: one h1 and actions inside the filter toolbar`, async () => {
+      if (entity === "bill-of-entries") {
+        const { boeApi } = await import("../../api");
+        (boeApi.fetchBOEList as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(META);
+      }
+      const { container } = renderAt(path);
+      await waitFor(() => expect(screen.getByText("Scheme Code")).toBeInTheDocument());
+      const headings = screen.getAllByRole("heading", { level: 1 });
+      expect(headings).toHaveLength(1);
+      expect(headings[0]).toHaveTextContent(title);
+      expect(container.querySelector(".app-page-header")).toBeNull();
+      const toolbar = screen.getByRole("button", { name: /^Filters/ }).parentElement!;
+      expect(within(toolbar).getByRole("button", { name: "Export to Excel" })).toBeInTheDocument();
+      expect(within(toolbar).getByRole("link", { name: /Add New/ })).toBeInTheDocument();
+    });
+  }
 });

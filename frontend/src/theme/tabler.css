@@ -1001,7 +1001,8 @@ article.entity-card + article.entity-card { margin-top: 4px; }
 }
 .entity-card-stat-label {
     font-size: 10.5px !important;
-    color: var(--tb-text-tertiary) !important;
+    /* Same token as Licence card labels (text-muted-foreground); tertiary failed AA (3.6:1). */
+    color: var(--tb-text-secondary) !important;
     letter-spacing: 0.06em;
     font-weight: var(--tb-fw-semibold);
     text-transform: uppercase;

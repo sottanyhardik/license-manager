@@ -1,5 +1,8 @@
 # bill_of_entry/serializers.py
+import logging
 from decimal import Decimal, ROUND_HALF_UP
+from django.db import transaction
+from django.db.models import ProtectedError
 from rest_framework import serializers
 
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
@@ -9,6 +12,21 @@ from apps.license.services.effective_cif_mode import (
     effective_source_row_cif_available,
     resolve_effective_cif_mode,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _protected_row_ids(protected_objects, candidate_row_ids) -> list[int]:
+    """Ids of the RowDetails in `candidate_row_ids` that `protected_objects`
+    (from a ProtectedError) point at through any FK to RowDetails."""
+    row_ids: set[int] = set()
+    for obj in protected_objects:
+        for field in obj._meta.concrete_fields:
+            if field.is_relation and field.related_model is RowDetails:
+                value = getattr(obj, field.attname)
+                if value in candidate_row_ids:
+                    row_ids.add(value)
+    return sorted(row_ids)
 
 
 class RowDetailsSerializer(serializers.ModelSerializer):
@@ -451,12 +469,37 @@ class BillOfEntrySerializer(serializers.ModelSerializer):
                     )
                     updated_item_ids.append(item_instance.id)
 
-            # Delete items that were not in the update list
-            RowDetails.objects.filter(
+            # Delete items that were not in the update list.  Rows still
+            # referenced by a PROTECT FK (e.g. reconciliation allocations)
+            # raise ProtectedError; surface that as a 400 instead of a 500.
+            # The savepoint keeps the outer perform_update transaction usable;
+            # raising rolls the whole update back.
+            orphan_rows = RowDetails.objects.filter(
                 bill_of_entry=instance
             ).exclude(
                 id__in=updated_item_ids
-            ).delete()
+            )
+            try:
+                with transaction.atomic():
+                    orphan_rows.delete()
+            except ProtectedError as exc:
+                orphan_ids = set(orphan_rows.values_list('id', flat=True))
+                protected_row_ids = _protected_row_ids(exc.protected_objects, orphan_ids) or sorted(orphan_ids)
+                # Model labels are logged, not returned, so internal app/model
+                # names are not exposed to API clients.
+                logger.info(
+                    "BOE %s update blocked: rows %s referenced by %s",
+                    instance.pk, protected_row_ids,
+                    sorted({obj._meta.label for obj in exc.protected_objects}),
+                )
+                raise serializers.ValidationError({
+                    'item_details': (
+                        "Cannot remove item row(s) "
+                        f"{', '.join(str(row_id) for row_id in protected_row_ids)}: "
+                        "still referenced by existing reconciliation/allocation records. "
+                        "Resolve those references first."
+                    )
+                }) from exc
 
             # Clear cached properties to force recalculation
             if hasattr(instance, 'item_details_cached'):

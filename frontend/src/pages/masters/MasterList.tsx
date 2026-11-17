@@ -28,6 +28,7 @@ import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { BookCheck, Building2, Calendar, CalendarX, CloudDownload, Eye, FileSpreadsheet, FileText, Fingerprint, Layers, Loader2, MapPin, Network, Plus, RefreshCw, Target, Trash2, X } from "lucide-react";
 import { ROLES } from '../../routes/authorizationRoles';
@@ -44,6 +45,8 @@ type TradeGroup =
     | { type: "pair"; sale: TradeListItem; purchase: TradeListItem; pairKey: string };
 
 const EMPTY_LIST: any[] = [];
+/** Entities that use the compact register layout (toolbar header instead of PageHeader). */
+const COMPACT_REGISTER = new Set(["licenses", "bill-of-entries"]);
 
 /**
  * Keeps the list's existing linked-trade presentation while avoiding an O(n²)
@@ -859,7 +862,12 @@ export default function MasterList() {
         }
     };
 
-    const entityTitle = entityName
+    // Entities rendered with the compact register toolbar (breadcrumb + h1 + actions inside the filter bar).
+    const isCompactRegister = !!entityName && COMPACT_REGISTER.has(entityName);
+    const entityTitles: Record<string, string> = {
+        "bill-of-entries": "Bills of Entry",
+    };
+    const entityTitle = (entityName && entityTitles[entityName]) || entityName
         ?.split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
@@ -874,6 +882,29 @@ export default function MasterList() {
         ? (entityDescriptions[entityName] || `Manage ${entityTitle?.toLowerCase()} records`)
         : "Manage records and operational data";
 
+    const handleBulkUpdateProductNames = async () => {
+        const confirmed = await confirmDangerousAction(
+            'Bulk Update Product Names',
+            'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
+        );
+        if (!confirmed) return;
+        setBulkActionLoading(true); setError("");
+        try {
+            const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
+            if (response.data.success) {
+                toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
+                invalidateList();
+            } else {
+                setError('Failed to update product names');
+            }
+        } catch (err) {
+            setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+            toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
     const headerActions = (
                     <>
                         <Button variant="outline" size="sm" onClick={() => handleExport('xlsx')} title="Export to Excel" aria-label="Export to Excel">
@@ -885,43 +916,27 @@ export default function MasterList() {
                             <span className="hidden sm:inline">{pdfLoading ? "Generating…" : "PDF"}</span>
                         </Button>
                         {entityName === 'bill-of-entries' && (
-                            <Button variant="outline" size="sm" onClick={handlePortExcelExport} title="Download port-wise BOE Excel" aria-label="Download port-wise BOE Excel">
-                                <FileSpreadsheet className="size-3.5" aria-hidden="true" />
-                                <span className="hidden sm:inline">Port Excel</span>
-                            </Button>
-                        )}
-                        {entityName === 'bill-of-entries' && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                title="Update all empty product names in entire database"
-                                disabled={bulkActionLoading}
-                                onClick={async () => {
-                                    const confirmed = await confirmDangerousAction(
-                                        'Bulk Update Product Names',
-                                        'This will update product names for ALL BOEs with empty product_name in the entire database. This may take some time. Continue?'
-                                    );
-                                    if (!confirmed) return;
-                                    setBulkActionLoading(true); setError("");
-                                    try {
-                                        const response = await api.post(`bill-of-entries/bulk-update-product-names/`);
-                                        if (response.data.success) {
-                                            toast.success(response.data.message || `Processed ${response.data.total} BOEs: ${response.data.updated} updated, ${response.data.skipped} skipped`);
-                                            invalidateList();
-                                        } else {
-                                            setError('Failed to update product names');
-                                        }
-                                    } catch (err) {
-                                        setError(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
-                                        toast.error(err.response?.data?.error || err.response?.data?.message || 'Failed to update product names');
-                                    } finally {
-                                        setBulkActionLoading(false);
-                                    }
-                                }}
-                            >
-                                <RefreshCw className="size-3.5" />
-                                <span className="hidden sm:inline">Fetch All</span>
-                            </Button>
+                            <ActionMenu
+                                label="More bill of entry actions"
+                                items={[
+                                    {
+                                        id: "boe-port-excel",
+                                        label: "Port-wise Excel",
+                                        icon: FileSpreadsheet,
+                                        onSelect: () => { void handlePortExcelExport(); },
+                                    },
+                                    {
+                                        id: "boe-bulk-update-product-names",
+                                        label: "Update all empty product names",
+                                        icon: RefreshCw,
+                                        tone: "danger",
+                                        separatorBefore: true,
+                                        disabled: bulkActionLoading,
+                                        disabledReason: "Product name update in progress",
+                                        onSelect: () => { void handleBulkUpdateProductNames(); },
+                                    },
+                                ]}
+                            />
                         )}
                         {canWrite && (
                             <Button asChild size="sm">
@@ -929,6 +944,7 @@ export default function MasterList() {
                                     to={entityName === 'licenses' ? '/licenses/create' :
                                         entityName === 'allotments' ? '/allotments/create' :
                                         entityName === 'trades' ? '/trades/create' :
+                                        entityName === 'bill-of-entries' ? '/bill-of-entries/create' :
                                         `/masters/${entityName}/create`}
                                     onClick={() => {
                                         saveFilterState(entityName, {
@@ -937,8 +953,10 @@ export default function MasterList() {
                                             search: ''
                                         });
                                     }}
+                                    aria-label="Add New"
+                                    title="Add New"
                                 >
-                                    <Plus className="size-3.5" />
+                                    <Plus className="size-3.5" aria-hidden="true" />
                                     <span className="hidden sm:inline">Add New</span>
                                 </Link>
                             </Button>
@@ -949,7 +967,7 @@ export default function MasterList() {
     return (
         <div className="min-h-screen bg-background">
             {/* Unified PageHeader for all master entities */}
-            {entityName !== 'licenses' && <PageHeader
+            {!isCompactRegister && <PageHeader
                 pretitle={
                     <>
                         <a
@@ -995,7 +1013,7 @@ export default function MasterList() {
                 defaultFilters={entityName === 'allotments' ? getDefaultFilters(entityName) : (metadata.default_filters || {})}
                 resetToDefaults={entityName === 'allotments'}
                 isUpdating={isRefreshing}
-                {...(entityName === 'licenses' ? {
+                {...(isCompactRegister ? {
                     collapsible: true,
                     layout: 'grid' as const,
                     toolbarStart: (
@@ -1022,8 +1040,8 @@ export default function MasterList() {
             />
 
             {/* Table */}
-            <div className={cn("surface-card mt-4", entityName === "licenses" && "mt-3 overflow-hidden border-border/70 shadow-sm")}>
-                <div className={cn("p-3.5", entityName === "licenses" && "p-2 sm:p-3")}>
+            <div className={cn("surface-card mt-4", isCompactRegister && "mt-3 overflow-hidden border-border/70 shadow-sm")}>
+                <div className={cn("p-3.5", isCompactRegister && "p-2 sm:p-3")}>
                     {isRefreshing && !loading && (
                         <div role="status" className="mb-2 text-xs text-muted-foreground">Updating results…</div>
                     )}

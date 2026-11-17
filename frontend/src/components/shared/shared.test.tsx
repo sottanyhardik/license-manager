@@ -10,6 +10,7 @@ import { ConfirmProvider, useConfirm, ConfirmDialog } from "./ConfirmDialog";
 import { SearchInput } from "./SearchInput";
 import { DateRangePicker } from "./DateRangePicker";
 import { ActivityTimeline } from "./ActivityTimeline";
+import { QueryBoundary } from "./QueryBoundary";
 
 describe("StatusBadge", () => {
     it.each(TONES)("applies token classes for %s without raw palette or hex", (tone) => {
@@ -164,5 +165,50 @@ describe("SearchInput / DateRangePicker / ActivityTimeline", () => {
         rerender(<ActivityTimeline items={[]} state={{ status: "error", error: new Error("boom") }} onRetry={onRetry} />);
         await userEvent.click(screen.getByRole("button", { name: "Retry" }));
         expect(onRetry).toHaveBeenCalled();
+    });
+});
+
+describe("QueryBoundary", () => {
+    const base = { data: undefined as { name: string } | undefined, isPending: false, isError: false, error: null as unknown, refetch: vi.fn() };
+
+    it("shows a labelled skeleton while pending", () => {
+        const { container } = render(
+            <QueryBoundary query={{ ...base, isPending: true }} rows={2} loadingLabel="Loading thing" errorTitle="Could not load thing">
+                {(d) => <p>{d.name}</p>}
+            </QueryBoundary>,
+        );
+        expect(screen.getByRole("status", { name: "Loading thing" })).toBeInTheDocument();
+        expect(container.querySelectorAll("[data-slot='skeleton']").length).toBe(2);
+    });
+
+    it("shows the error title and retries via refetch", async () => {
+        const refetch = vi.fn();
+        render(
+            <QueryBoundary query={{ ...base, isError: true, error: new Error("boom"), refetch }} loadingLabel="Loading thing" errorTitle="Could not load thing">
+                {(d) => <p>{d.name}</p>}
+            </QueryBoundary>,
+        );
+        expect(screen.getByText("Could not load thing")).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+        expect(refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("treats settled-without-data as an error", () => {
+        render(
+            <QueryBoundary query={base} loadingLabel="Loading thing" errorTitle="Could not load thing">
+                {(d) => <p>{d.name}</p>}
+            </QueryBoundary>,
+        );
+        expect(screen.getByText("Could not load thing")).toBeInTheDocument();
+    });
+
+    it("renders children with the data", () => {
+        render(
+            <QueryBoundary query={{ ...base, data: { name: "Loaded value" } }} loadingLabel="Loading thing" errorTitle="Could not load thing">
+                {(d) => <p>{d.name}</p>}
+            </QueryBoundary>,
+        );
+        expect(screen.getByText("Loaded value")).toBeInTheDocument();
+        expect(screen.queryByRole("status")).toBeNull();
     });
 });

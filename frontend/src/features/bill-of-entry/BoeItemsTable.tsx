@@ -4,7 +4,7 @@ import DetailTable from "@/components/primitives/DetailTable";
 import { cn } from "@/lib/utils";
 import { openLicenseCopyPdf } from "@/utils/licenseCopyPdf";
 
-import { fmtInr, fmtQty } from "./format";
+import { fmtFc2, fmtInr, fmtQty } from "./format";
 import type { BoeDetailRow } from "./types";
 
 /**
@@ -39,7 +39,7 @@ export function BoeItemsTable({ rows }: { rows: BoeDetailRow[] }) {
                 { key: 'qty',              label: 'Qty',       align: 'right', nowrap: true,
                     render: v => fmtQty(v) },
                 { key: 'cif_fc',           label: 'CIF (FC)',  align: 'right', nowrap: true,
-                    render: v => v ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                    render: v => fmtFc2(v) },
                 { key: 'cif_inr',          label: 'CIF (INR)', align: 'right', nowrap: true, bold: true,
                     render: v => fmtInr(v) },
             ]}

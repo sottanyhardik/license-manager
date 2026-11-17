@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
-import { Inbox, Pencil, PlusCircle, Receipt } from "lucide-react";
+import { Pencil, PlusCircle, Receipt, X } from "lucide-react";
 
-import api from "@/api/axios";
 import EntityCard from "@/components/primitives/EntityCard";
+import { EmptyState, LoadingState } from "@/components/shared";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { saveFilterState } from "@/utils/filterPersistence";
 
 import BoeRecordWorkspace from "./BoeRecordWorkspace";
-import { fmtInr, fmtQty } from "./format";
+import { buildBoeActions, persistAndEditBoe, type BoeActionContext } from "./boeCardActions";
+import { fmtFc2, fmtInr, fmtQty } from "./format";
 import type { BoeListItem } from "./types";
 
 export interface BoeCardListProps {
@@ -75,19 +77,16 @@ export default function BoeCardList({
             return next;
         });
     };
+    const actionCtx: BoeActionContext = {
+        canWrite, entityName, filterParams, currentPage, pageSize, navigate,
+        onDelete: handleDelete, invalidateList, confirmDangerousAction, onTransferLetter, onMerge: openMergeModal,
+    };
 
     return (
         loading ? (
-            <div className="text-center py-5">
-                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                <div className="mt-2 text-muted-foreground">Loading Bill of Entries...</div>
-            </div>
+            <LoadingState variant="skeleton-rows" label="Loading Bill of Entries..." />
         ) : data.length === 0 ? (
-            <div className="empty-state">
-                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
-                <div className="empty-title">No bill of entries found</div>
-                <div className="empty-sub">Try adjusting filters or create a new BOE.</div>
-            </div>
+            <EmptyState size="page" title="No bill of entries found" description="Try adjusting filters or create a new BOE." />
         ) : (
             <div>
                 {data.map(item => {
@@ -98,18 +97,35 @@ export default function BoeCardList({
                         ? (editingInvoiceId === item.id
                             ? (
                                 <span className="inline-flex items-center gap-1">
-                                    <input
+                                    <Input
                                         autoFocus
+                                        aria-label="Invoice number"
                                         value={invoiceDraft}
                                         onChange={e => setInvoiceDraft(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') saveInvoiceEdit(item.id); if (e.key === 'Escape') cancelInvoiceEdit(); }}
                                         placeholder="Invoice number"
-                                        className="w-40 rounded-md border border-success px-2 py-0.5 text-[0.82rem] outline-none"
+                                        className="h-7 w-40 rounded-md border-success px-2 py-0.5 text-[0.82rem]"
                                     />
-                                    <button type="button" onClick={() => saveInvoiceEdit(item.id)} disabled={invoiceSaving} className="cursor-pointer rounded-md bg-success px-2 py-0.5 text-xs text-white disabled:opacity-50">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => saveInvoiceEdit(item.id)}
+                                        disabled={invoiceSaving}
+                                        className="h-7 rounded-md bg-success px-2 text-xs text-white hover:bg-success/90 focus-visible:ring-success/40"
+                                    >
                                         {invoiceSaving ? '…' : 'Save'}
-                                    </button>
-                                    <button type="button" onClick={cancelInvoiceEdit} className="cursor-pointer rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">✕</button>
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={cancelInvoiceEdit}
+                                        aria-label="Cancel invoice edit"
+                                        title="Cancel invoice edit"
+                                        className="size-7 rounded-md border border-border bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                    >
+                                        <X className="size-3.5" aria-hidden="true" />
+                                    </Button>
                                 </span>
                             )
                             : (
@@ -159,47 +175,11 @@ export default function BoeCardList({
                             statusBadges={[]}
                             summary={[
                                 { label: 'CIF (INR)', value: fmtInr(item.total_inr) },
-                                { label: 'CIF (FC)',  value: item.total_fc ? Number(item.total_fc).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                { label: 'CIF (FC)',  value: fmtFc2(item.total_fc) },
                                 { label: 'Qty (MT)',  value: fmtQty(item.total_quantity) },
-                                { label: 'Unit Price', value: item.unit_price ? Number(item.unit_price).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—' },
+                                { label: 'Unit Price', value: fmtFc2(item.unit_price) },
                             ]}
-                            actions={[
-                                hasDispute && {
-                                    icon: 'check2-circle', title: 'Resolve Dispute', tone: 'danger',
-                                    onClick: async () => {
-                                        const confirmed = await confirmDangerousAction('Resolve Dispute', `Resolve ${disputeRows.length} dispute row(s) on BOE ${item.bill_of_entry_number}? This clears the dispute flag on all flagged rows.`);
-                                        if (!confirmed) return;
-                                        try {
-                                            const response = await api.post(`bill-of-entries/${item.id}/resolve-dispute/`);
-                                            toast.success(response.data.message || 'Dispute resolved');
-                                            invalidateList();
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.detail || err.response?.data?.message || 'Failed to resolve dispute');
-                                        }
-                                    }
-                                },
-                                { icon: 'file-earmark-text', title: 'Transfer Letter', tone: 'warning',
-                                    onClick: () => onTransferLetter(item.id) },
-                                { icon: 'intersect', title: 'Merge BOE', tone: 'info',
-                                    onClick: () => openMergeModal(item) },
-                                (!item.product_name || item.product_name.trim() === '') && {
-                                    icon: 'arrow-repeat', title: 'Update Product Name', tone: 'info',
-                                    onClick: async () => {
-                                        const confirmed = await confirmDangerousAction('Update Product Name', `Update product name for BOE ${item.bill_of_entry_number}?`);
-                                        if (!confirmed) return;
-                                        try {
-                                            const response = await api.post(`bill-of-entries/${item.id}/update-product-name/`);
-                                            toast.success(response.data.message || 'Product name updated');
-                                            invalidateList();
-                                        } catch (err) {
-                                            toast.error(err.response?.data?.message || 'Failed to update product name');
-                                        }
-                                    }
-                                },
-                                canWrite && { icon: 'pencil', title: 'Edit', tone: 'primary',
-                                    onClick: () => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/bill-of-entries/${item.id}/edit`); } },
-                                canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => handleDelete(item) },
-                            ].filter(Boolean)}
+                            actions={buildBoeActions(item, actionCtx)}
                             viewOpen={expandedBoeRows.has(item.id)}
                             ariaExpanded={expandedBoeRows.has(item.id)}
                             ariaControls={`boe-detail-${item.id}`}
@@ -209,7 +189,7 @@ export default function BoeCardList({
                                 <BoeRecordWorkspace
                                     item={item}
                                     canWrite={canWrite}
-                                    onEdit={() => { saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: '' }); navigate(`/bill-of-entries/${item.id}/edit`); }}
+                                    onEdit={() => persistAndEditBoe(item, actionCtx)}
                                     onTransferLetter={() => onTransferLetter(item.id)}
                                     onMerge={() => openMergeModal(item)}
                                 />

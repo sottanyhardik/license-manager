@@ -102,11 +102,26 @@ describe("BOE record workspace (expanded card)", () => {
             "Overview", "BOE Details", "Import Items", "Licence Mapping", "Allotment Mapping", "Documents", "Edit Options",
         ]);
         await user.click(screen.getByRole("tab", { name: "Overview" }));
-        expect(screen.getByText("1234567.89")).toBeInTheDocument();
-        expect(screen.getByText("12.3456")).toBeInTheDocument();
+        // Amounts are formatted for display only, at the backend's scale (INR to paise).
+        const overview = screen.getByRole("tabpanel");
+        expect(within(overview).getByText("₹12,34,567.89")).toBeInTheDocument();
+        expect(within(overview).getByText("15,000.5")).toBeInTheDocument();
+        expect(within(overview).getByText("12.346")).toBeInTheDocument();
+        expect(within(overview).getByText("1,215.03")).toBeInTheDocument();
+        expect(within(overview).queryByText("1234567.89")).toBeNull();
         await user.click(screen.getByRole("tab", { name: "Licence Mapping" }));
         expect(screen.getByRole("button", { name: "Open License Copy PDF for 0310123456" })).toBeInTheDocument();
         expect(screen.getByText("GE")).toBeInTheDocument();
+    });
+
+    it("uses the Licence tab-strip layout (single scrollable row)", async () => {
+        const user = userEvent.setup();
+        renderBoeList("BOE_MANAGER");
+        await ready();
+        await user.click(within(cardFor(201)).getByTitle("View details"));
+        const tabsRoot = screen.getByRole("tablist", { name: "BOE 7012345 sections" }).parentElement;
+        expect(tabsRoot).toHaveClass("min-w-0", "[&_[role=tablist]]:flex-nowrap", "[&_[role=tablist]]:overflow-x-auto", "[&_[role=tab]]:shrink-0");
+        expect(screen.getByRole("tab", { name: "Import Items" })).toHaveAttribute("aria-selected", "true");
     });
 
     it("Edit Options keeps the card's gating and handlers", async () => {

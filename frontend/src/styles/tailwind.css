@@ -386,6 +386,13 @@ a[class*="text-"],
 [class*="bg-destructive"] a[class*="text-"] {
     color: inherit;
 }
+/* The reset above is unlayered, so it also beats the layered `text-white`
+   utility: the default Button variant (`bg-blue-600 text-white`) rendered as
+   <Button asChild><Link> inherited dark body text on blue (axe contrast 3:1 on
+   the Licence and BOE "Add New" links). Restore the explicit white text. */
+a[class~="text-white"] {
+    color: var(--color-white, #fff);
+}
 
 /* ── Enterprise operating-density defaults ────────────────────────────────
    Shared, presentation-only refinements. They intentionally work with both

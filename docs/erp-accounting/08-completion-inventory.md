@@ -72,18 +72,37 @@ Legend:
 ### Consolidated in this pass
 | Source | New commit | What |
 |---|---|---|
-| `acct-ui` worktree `862755a7` | `b5f0d3f8` | Accounting UI/navigation readiness: role gating, breadcrumbs, absolute links (fixes broken section tabs on deep pages), Retry, P&L detail sign, viewport e2e + screenshots |
-| `fix/trades-list-ordering` `bdf613ee` | `1efb04bf` | Deterministic nulls-last trades list ordering + regression test file (complete, small, no API change) |
-| `docs/t2f-lifecycle-audit` `d5ca8fa1` | `18f62820` | Trade-to-finance lifecycle audit (docs) |
-| `feature/erp-implementation` docs (`e6dfc9b7` tree) | this commit | `docs/erp-transformation/*` and `docs/security/OD-06-exposure-assessment.md`, docs only, with a provenance note |
+| `acct-ui` worktree `862755a7` | `644f800f` | Accounting UI/navigation readiness: role gating, breadcrumbs, absolute links (fixes broken section tabs on deep pages), Retry, P&L detail sign, viewport e2e + screenshots |
+| `fix/trades-list-ordering` `bdf613ee` | `f0344260` | Deterministic nulls-last trades list ordering + regression test file (complete, small, no API change) |
+| `docs/t2f-lifecycle-audit` `d5ca8fa1` | `f47b6337` | Trade-to-finance lifecycle audit (docs) |
+| `feature/erp-implementation` docs (`e6dfc9b7` tree) | `a8073a21` | `docs/erp-transformation/*` and `docs/security/OD-06-exposure-assessment.md`, docs only, with a provenance note |
+
+### Consolidated in the second pass (shared-checkout WIP, owner-approved items only)
+| Area | Commit | What | Status |
+|---|---|---|---|
+| Trade line pricing T1–T4 | `89a2e030` | Server-side `amount_inr` pricing, `amount_override` + reason (migration `trade/0012`, additive), 3-dp rate, header totals recomputed on line delete, TradeForm override control | COMPLETED (not re-tested in this pass) |
+| Licence A-1 + M2M | `7fad3583` | Signed/over-utilised quantity fields (floored balance unchanged), M2M-linked allotment = full consumption (`outstanding_cif_fc`), business-rules.md section | COMPLETED (not re-tested in this pass) |
+| Audit docs | `6777aee4` | `docs/audits/*`, trade-to-finance gap matrix, decision register, quantity report | COMPLETED |
+| Claude config | `615c750e` | `CLAUDE.md` §7 autonomous-execution pointer; agent YAML quoting | COMPLETED |
+| Tally ERP | this commit | `docs/tally-erp/INTEGRATION_STATUS.md`. The in-app engine is the Tally replacement; there is no Tally connector anywhere | see that file |
 
 Earlier accounting commits already on `feature/v5`:
 `706af329`, `411642b9`, `1e124b66`, `7f6dfdaa`, `acfde967`, `fc8049ba`, `121a9653`, `73ecb37b`, `43131b80`.
+
+## A2. IN PROGRESS — preserved uncommitted in the shared checkout (not merged)
+| Item | Why not merged | Next step |
+|---|---|---|
+| A-2 stored `available_quantity` excludes hidden BOEs (`core/scripts/calculate_balance.py`, `license/tests/test_stored_available_quantity_hidden.py`) | **Not approved** (owner, 2026-11-17); the file itself says "do not commit" | Owner decision on A-2 (doc 11 §9), then a `cif-balance-auditor` review |
+| Licence overview-transactions endpoint `licenses/<id>/overview-transactions/` (view, service, test, `urls.py`, `licenseApi.ts`, `useLicenseOverviewTransactions` + test) | No approval record found; the hook is used by no screen; it is a new CIF-aggregation API surface | Owner confirmation + UI wiring + `cif-balance-auditor` review |
+| `.idea/*`, `.DS_Store` (and a staged `.idea` deletion) | Personal IDE state | Never commit |
+
+Backup of all shared-checkout WIP before this pass: `~/lm_backups/wip-main-checkout-2026-11-17-consolidation/`.
 
 ## B. INCOMPLETE — DEFERRED — NOT YET IMPLEMENTED
 
 | Item | State in code | Next step |
 |---|---|---|
+| Tally connector (voucher XML export, chart/TB import, sync) | Not implemented in any branch; see `docs/tally-erp/INTEGRATION_STATUS.md` | After the owner/CA decides the system of record (D6/AD-02) |
 | Excel/PDF export of accounting reports | No export endpoint or button (the licence modules have server-side exports) | Add server-side XLSX export per report, reusing the existing exporter pattern |
 | PDF bank statement import | Refused with guidance; CSV/XLSX only | Add a bank-specific PDF parser per bank format |
 | Opening-balance import (trial balance + open bills) | Only a manual OPENING journal; no bulk import screen | Add an upload of the CA trial balance and open bills, posted through `post_voucher` |
@@ -108,6 +127,7 @@ Earlier accounting commits already on `feature/v5`:
 | GST treatment of licence (HSN 4907) trades; currently none (Bill of Supply) | Output/input GST on trade invoices |
 | Which TDS sections and rates apply (none seeded) | TDS on purchases, commission, expenses |
 | Inventory costing: periodic (current) vs perpetual | Closing-stock automation, FY2 opening stock, automatic elimination of unrealised intercompany profit (today: warning + manual reserve) |
+| System of record: in-app books vs Tally, and the cut-over date (D6 / AD-02) | Whether to build a Tally export or an opening-balance import first |
 | Historical posting on production | Needs a sanitised-snapshot rehearsal and approval (rehearsed locally on a copy: 482 trades, 0 differences) |
 | Per-user entity access control | OD-04 keeps the system single-tenant; any accounting role sees all entities |
 
@@ -116,3 +136,7 @@ Not run: unit, integration, API, frontend, Playwright and quality gates. The thr
 their own sessions (UI round: vitest 817, tsc/eslint/build, real-backend Playwright 10/10, nav specs 10/10; trades
 ordering fix: regression test file included). The next step is to run the backend and frontend gates once on
 `feature/v5`.
+
+**Second pass (2026-11-17, later):** again no tests were run. Commits `89a2e030`, `7fad3583`, `6777aee4`, `615c750e`
+carry tests written by their originating sessions; they have not been executed on `feature/v5`. Next: run
+`scripts/dev/quality-gate.sh backend` and `frontend` once, including `migrate` of `trade/0012` on a local test DB.

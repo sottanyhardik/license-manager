@@ -116,7 +116,7 @@ for review and push approval.
 
 ## 8. UI/navigation readiness round and consolidation (2026-11-17, later)
 
-**UI round** (`b5f0d3f8` on `feature/v5`):
+**UI round** (`644f800f` on `feature/v5`):
 - Actions are gated by role, mirroring `AccountingPermission`, so viewers and managers never see a button the API
   refuses.
 - Breadcrumbs reuse the shared `ModuleWorkspace` `Breadcrumbs`. An "All Reports" menu item makes every report page
@@ -135,3 +135,18 @@ Screenshots: `docs/erp-accounting/screenshots/` (24 files: desktop/tablet/mobile
 banking workbench, trial balance, P&L, balance sheet, vouchers).
 
 **Consolidation:** see `08-completion-inventory.md`. **No tests were run for the consolidation step itself.**
+
+## 9. Second consolidation pass — Tally ERP + remaining completed work (2026-11-17, later)
+
+Commits added to `feature/v5` (each inspected before committing; secret scan clean; only listed paths committed):
+- `89a2e030`: trade line pricing T1–T4 (+ migration `trade/0012`, additive: two columns with defaults).
+- `7fad3583`: licence A-1 signed quantity fields + M2M full consumption. **BUSINESS-RULE** (display and additive API
+  fields only; the canonical floored item balance is unchanged; owner-approved 2026-11-17).
+- `6777aee4`: audit docs. `615c750e`: Claude config.
+- This commit: `docs/tally-erp/INTEGRATION_STATUS.md`, this section, the inventory, the tracker, and a correction of
+  three pre-rebase hashes in these docs (`b5f0d3f8`→`644f800f`, `1efb04bf`→`f0344260`, `18f62820`→`f47b6337`).
+
+Not merged (IN PROGRESS, preserved in the shared checkout): A-2 (not approved) and the overview-transactions endpoint
+(unapproved, unwired). Tally: no connector exists anywhere; the accounting engine is the Tally replacement.
+
+**No tests, migrations or Playwright were run in this pass.** Nothing in it is described as verified.

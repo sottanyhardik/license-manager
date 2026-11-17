@@ -17,8 +17,10 @@ interface AccountingContextValue extends Selection {
     isLoading: boolean;
     setEntityId: (id: number | null) => void;
     setFy: (fy: string | null) => void;
-    /** Common query params for entity-scoped endpoints. */
+    /** Common query params for entity-scoped report endpoints. */
     scope: { entity: number | undefined; fy: string | undefined };
+    /** Date window of the selected FY for list endpoints (start/end filters). */
+    fyRange: { start: string; end: string };
     refetchEntities: () => void;
 }
 
@@ -42,6 +44,11 @@ function store(sel: Selection): void {
     }
 }
 
+export function fyDates(label: string): { start: string; end: string } {
+    const y = Number(label.slice(0, 4));
+    return { start: `${y}-04-01`, end: `${y + 1}-03-31` };
+}
+
 export function currentFyLabel(today = new Date()): string {
     const y = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
     return `${y}-${String(y + 1).slice(-2)}`;
@@ -60,11 +67,12 @@ export function AccountingProvider({ children }: { children: ReactNode }) {
 
     const value = useMemo<AccountingContextValue>(() => ({
         entityId, fy, entities, discovered: data?.discovered ?? [], entity, isLoading,
-        setEntityId: (id) => setSelection((s) => { const next = { ...s, entityId: id }; store(next); return next; }),
-        setFy: (label) => setSelection((s) => { const next = { ...s, fy: label }; store(next); return next; }),
+        setEntityId: (id) => { const next = { ...selection, entityId: id }; store(next); setSelection(next); },
+        setFy: (label) => { const next = { ...selection, fy: label }; store(next); setSelection(next); },
         scope: { entity: entityId ?? undefined, fy: fy ?? undefined },
+        fyRange: fyDates(fy),
         refetchEntities: () => { void refetch(); },
-    }), [entityId, fy, entities, data, entity, isLoading, refetch]);
+    }), [entityId, fy, entities, data, entity, isLoading, refetch, selection]);
 
     return <AccountingContext.Provider value={value}>{children}</AccountingContext.Provider>;
 }

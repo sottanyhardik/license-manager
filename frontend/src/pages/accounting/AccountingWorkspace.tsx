@@ -41,7 +41,7 @@ function fyOptions(): string[] {
 function WorkspaceHeader() {
     const { entities, entityId, setEntityId, fy, setFy, entity } = useAccounting();
     return (
-        <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-slate-200 bg-white/90 px-4 pt-3 backdrop-blur">
+        <div className="-mx-4 mb-4 border-b border-slate-200 bg-white/90 px-4 pt-3 backdrop-blur sm:sticky sm:top-0 sm:z-20">
             <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <span className="grid size-9 place-items-center rounded-lg bg-slate-900 text-white">
@@ -91,13 +91,13 @@ function NeedsEntity({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }
 
-export default function AccountingWorkspace() {
+function WorkspaceRoutes() {
+    const { entityId } = useAccounting();
+    // Keyed by entity: switching entity remounts every page, so no draft (bank account, party,
+    // allocations, confirmation text) can leak from one entity's books into another's.
     return (
-        <AccountingProvider>
-            <div className="px-4 pb-10">
-                <WorkspaceHeader />
-                <Suspense fallback={<PageLoader />}>
-                    <Routes>
+        <Suspense fallback={<PageLoader />}>
+            <Routes key={entityId ?? "none"}>
                         <Route index element={<Navigate to="dashboard" replace />} />
                         <Route path="dashboard" element={<NeedsEntity><Dashboard /></NeedsEntity>} />
                         <Route path="trades" element={<NeedsEntity><TradeTracking /></NeedsEntity>} />
@@ -111,8 +111,17 @@ export default function AccountingWorkspace() {
                         <Route path="migration" element={<NeedsEntity><Migration /></NeedsEntity>} />
                         <Route path="setup" element={<Setup />} />
                         <Route path="*" element={<Navigate to="dashboard" replace />} />
-                    </Routes>
-                </Suspense>
+            </Routes>
+        </Suspense>
+    );
+}
+
+export default function AccountingWorkspace() {
+    return (
+        <AccountingProvider>
+            <div className="px-4 pb-10">
+                <WorkspaceHeader />
+                <WorkspaceRoutes />
             </div>
         </AccountingProvider>
     );

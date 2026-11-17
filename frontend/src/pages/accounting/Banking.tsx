@@ -10,6 +10,8 @@ import {
 } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { Pager } from "./TradeTracking";
+import { useGuardedAction } from "./useGuardedAction";
 import { formatMoney, isMoneyInput, sumMoney } from "./money";
 import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
 
@@ -40,7 +42,7 @@ function BankAccounts() {
                 { key: "n", header: "Bank", cell: (b) => `${b.bank_name}${b.is_cash ? " (cash)" : ""}` },
                 { key: "a", header: "Account no.", cell: (b) => b.account_number },
                 { key: "i", header: "IFSC", cell: (b) => b.ifsc || "—" },
-                { key: "bal", header: "Book balance", numeric: true, cell: (b) => <Amount value={b.book_balance} to={`../reports/general-ledger?account=${b.account_id}`} /> },
+                { key: "bal", header: "Book balance", numeric: true, cell: (b) => <Amount value={b.book_balance} to={`/accounting/reports/general-ledger?account=${b.account_id}`} /> },
                 { key: "go", header: <span className="sr-only">Open</span>, cell: (b) => <Link className="text-sm text-blue-700 hover:underline" to={`workbench/${b.id}`}>Reconcile →</Link> },
             ]} />
             <form className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-6" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
@@ -93,6 +95,7 @@ function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void
         queryFn: () => acctGet<{ candidates: Candidate[] }>(`statement-lines/${line.id}/candidates/`) });
     const [split, setSplit] = useState<Record<number, string>>({});
     const [reason, setReason] = useState("");
+    const { guard, dialog } = useGuardedAction();
     const total = sumMoney(Object.values(split).filter(isMoneyInput));
     const match = useMutation({
         mutationFn: () => acctPost(`statement-lines/${line.id}/match/`, { allocations: Object.entries(split)
@@ -104,7 +107,7 @@ function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void
         onSuccess: () => { toast.success("Moved to suspense — resolve it from the Suspense tab"); onDone(); }, onError: notifyError,
     });
     const unmatch = useMutation({
-        mutationFn: (matchId: number) => acctPost(`bank-matches/${matchId}/unmatch/`, { reason: "Matched in error" }),
+        mutationFn: (matchId: number) => acctPost(`bank-matches/${matchId}/unmatch/`, { reason: reason.trim() }),
         onSuccess: () => { toast.success("Match removed (history kept)"); onDone(); }, onError: notifyError,
     });
     return (
@@ -113,13 +116,16 @@ function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void
             {line.matches.length > 0 && (
                 <ul className="mb-2 space-y-1 text-xs">{line.matches.map((m) => (
                     <li key={m.id} className={m.is_active ? "" : "text-slate-400 line-through"}>
-                        {m.method} → <Link className="text-blue-700" to={`../../../vouchers/${m.voucher_id}`}>{m.voucher_number}</Link> {formatMoney(m.amount)}
-                        {m.is_active && m.method !== "SUSPENSE" && <button type="button" className="ml-2 text-red-700 hover:underline" onClick={() => unmatch.mutate(m.id)}>unmatch</button>}
+                        {m.method} → <Link className="text-blue-700" to={`/accounting/vouchers/${m.voucher_id}`}>{m.voucher_number}</Link> {formatMoney(m.amount)}
+                        {m.is_active && m.method !== "SUSPENSE" && <button type="button" className="ml-2 text-red-700 hover:underline disabled:opacity-50" disabled={!reason.trim() || unmatch.isPending}
+                            title={reason.trim() ? "" : "Enter a reason first"} aria-label={`Unmatch ${m.voucher_number}`}
+                            onClick={() => void guard({ title: "Remove match", severity: "danger", confirmText: "Unmatch",
+                                message: `Remove the match to ${m.voucher_number} (₹ ${formatMoney(m.amount)})? The history is kept.` }, () => unmatch.mutate(m.id))}>unmatch</button>}
                     </li>))}</ul>
             )}
             <QueryState isLoading={cands.isLoading} error={cands.error}>
                 <DataGrid rows={cands.data?.candidates ?? []} rowKey={(c) => c.voucher.id} empty="No book entry on this side of the bank ledger. Record the payment/receipt, or move the line to suspense." caption="Candidates" columns={[
-                    { key: "v", header: "Voucher", cell: (c) => <Link className="text-blue-700" to={`../../../vouchers/${c.voucher.id}`}>{c.voucher.number}</Link> },
+                    { key: "v", header: "Voucher", cell: (c) => <Link className="text-blue-700" to={`/accounting/vouchers/${c.voucher.id}`}>{c.voucher.number}</Link> },
                     { key: "d", header: "Date", cell: (c) => c.voucher.date },
                     { key: "p", header: "Party", cell: (c) => c.party || c.voucher.narration },
                     { key: "s", header: "Signals", cell: (c) => <span className="text-xs text-slate-600">{c.signals.join(" · ")}</span> },
@@ -132,11 +138,15 @@ function LineMatcher({ line, onDone }: { line: StatementLine; onDone: () => void
             </QueryState>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <input className={inputCls} placeholder="Reason (for suspense)" value={reason} aria-label="Suspense reason" onChange={(e) => setReason(e.target.value)} />
-                    <Button size="sm" variant="outline" disabled={!reason.trim() || suspense.isPending} onClick={() => suspense.mutate()}>Move to suspense</Button>
+                    <input className={inputCls} placeholder="Reason (suspense / unmatch)" value={reason} aria-label="Reason for suspense or unmatch" onChange={(e) => setReason(e.target.value)} />
+                    <Button size="sm" variant="outline" disabled={!reason.trim() || suspense.isPending} onClick={() => void guard({
+                        title: "Move to suspense", confirmText: "Post to suspense",
+                        message: `Post ₹ ${formatMoney(line.unmatched)} of this bank line to Bank Suspense (not to income or expense) until it is identified?`,
+                    }, () => suspense.mutate())}>Move to suspense</Button>
                 </div>
                 <Button size="sm" disabled={total === "0.00" || match.isPending} onClick={() => match.mutate()}>Match {formatMoney(total)}{Object.keys(split).length > 1 ? " (split)" : ""}</Button>
             </div>
+            {dialog}
         </div>
     );
 }
@@ -149,9 +159,10 @@ function Workbench({ bank }: { bank: BankAccount }) {
     const { entityId } = useAccounting();
     const refresh = useRefresh();
     const [status, setStatus] = useState("UNMATCHED,PARTIAL");
+    const [pageNo, setPageNo] = useState(1);
     const [open, setOpen] = useState<number | null>(null);
-    const lines = useQuery({ queryKey: acctKeys.of(entityId, "lines", bank.id, status),
-        queryFn: () => acctGet<Paged<StatementLine>>(`bank-accounts/${bank.id}/lines/`, { status, page_size: 200 }) });
+    const lines = useQuery({ queryKey: acctKeys.of(entityId, "lines", bank.id, status, pageNo),
+        queryFn: () => acctGet<Paged<StatementLine>>(`bank-accounts/${bank.id}/lines/`, { status, page: pageNo, page_size: 100 }) });
     const auto = useMutation({
         mutationFn: () => acctPost<Record<string, number>>(`bank-accounts/${bank.id}/auto-match/`),
         onSuccess: (r) => { toast.success(`Auto-matched: ${r.utr ?? 0} by UTR, ${r.amount ?? 0} by amount; ${(r.ambiguous ?? 0) + (r.unmatched ?? 0)} left for review`); void refresh(); },
@@ -159,7 +170,7 @@ function Workbench({ bank }: { bank: BankAccount }) {
     });
     return (
         <Panel title={`Statement lines — ${bank.bank_name} ${bank.account_number}`} actions={<>
-            <select className={inputCls} value={status} aria-label="Line status" onChange={(e) => setStatus(e.target.value)}>
+            <select className={inputCls} value={status} aria-label="Line status" onChange={(e) => { setStatus(e.target.value); setPageNo(1); }}>
                 <option value="UNMATCHED,PARTIAL">Needs attention</option><option value="">All lines</option>
                 {["UNMATCHED", "PARTIAL", "MATCHED", "SUSPENSE", "RESOLVED"].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -180,8 +191,9 @@ function Workbench({ bank }: { bank: BankAccount }) {
                                 {open === l.id ? "Close" : "Match…"}</Button>) },
                     ]} />
                     {open !== null && lines.data?.results.find((l) => l.id === open) && (
-                        <LineMatcher line={lines.data.results.find((l) => l.id === open)!} onDone={() => void refresh()} />
+                        <LineMatcher key={open} line={lines.data.results.find((l) => l.id === open)!} onDone={() => void refresh()} />
                     )}
+                    <Pager page={pageNo} hasNext={!!lines.data?.next} onPage={setPageNo} />
                 </div>
             </QueryState>
         </Panel>
@@ -224,7 +236,7 @@ function Reconciliation({ bank }: { bank: BankAccount }) {
                         </div>
                         <div className="space-y-3">
                             <DataGrid rows={b.unpresented} rowKey={(u) => u.voucher_id} empty="None." caption="In books, not on statement" columns={[
-                                { key: "d", header: "In books, not on statement", cell: (u) => <Link className="text-blue-700" to={`../../../vouchers/${u.voucher_id}`}>{u.number} · {u.date}</Link> },
+                                { key: "d", header: "In books, not on statement", cell: (u) => <Link className="text-blue-700" to={`/accounting/vouchers/${u.voucher_id}`}>{u.number} · {u.date}</Link> },
                                 { key: "a", header: "Amount", numeric: true, cell: (u) => <Amount value={u.deposit ? u.amount : `-${u.amount}`} /> },
                             ]} />
                             <DataGrid rows={b.unrecorded} rowKey={(u) => u.line_id} empty="None." caption="On statement, not in books" columns={[
@@ -264,6 +276,7 @@ function Suspense() {
     const q = useQuery({ queryKey: acctKeys.of(entityId, "suspense"), queryFn: () => acctGet<SuspenseRow[]>("suspense/", { entity: entityId }) });
     const accounts = useQuery({ queryKey: acctKeys.of(entityId, "accounts"), queryFn: () => acctGet<{ accounts: Account[] }>("accounts/", { entity: entityId }) });
     const [target, setTarget] = useState<Record<number, { account_id: string; note: string; voucher_id: string }>>({});
+    const { guard, dialog } = useGuardedAction();
     const resolve = useMutation({
         mutationFn: ({ id, mode }: { id: number; mode: "reclassify" | "match" }) => {
             const t = target[id];
@@ -291,13 +304,19 @@ function Suspense() {
                         <div className="flex flex-wrap items-center gap-1">
                             <select className={`${inputCls} w-48`} aria-label="Reclassify to" value={target[s.id]?.account_id ?? ""} onChange={(e) => set(s.id, { account_id: e.target.value })}>
                                 <option value="">Reclassify to…</option>{choices.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</select>
-                            <input className={`${inputCls} w-24`} placeholder="or voucher id" aria-label="Existing voucher id" value={target[s.id]?.voucher_id ?? ""} onChange={(e) => set(s.id, { voucher_id: e.target.value })} />
+                            <input inputMode="numeric" className={`${inputCls} w-24`} placeholder="or voucher id" aria-label="Existing voucher id" value={target[s.id]?.voucher_id ?? ""} onChange={(e) => set(s.id, { voucher_id: e.target.value.replace(/\D/g, "") })} />
                             <input className={`${inputCls} w-40`} placeholder="Resolution note" aria-label="Resolution note" value={target[s.id]?.note ?? ""} onChange={(e) => set(s.id, { note: e.target.value })} />
-                            <Button size="sm" disabled={!target[s.id]?.note || (!target[s.id]?.account_id && !target[s.id]?.voucher_id)}
-                                    onClick={() => resolve.mutate({ id: s.id, mode: target[s.id]?.voucher_id ? "match" : "reclassify" })}>Resolve</Button>
+                            <Button size="sm" disabled={resolve.isPending || !target[s.id]?.note || (!target[s.id]?.account_id && !target[s.id]?.voucher_id)}
+                                    onClick={() => void guard({
+                                        title: "Resolve suspense", confirmText: "Resolve",
+                                        message: target[s.id]?.voucher_id
+                                            ? `Reverse the suspense entry and match the bank line to voucher #${target[s.id]?.voucher_id}?`
+                                            : `Post a journal moving ₹ ${formatMoney(s.amount)} out of Suspense to the chosen account?`,
+                                    }, () => resolve.mutate({ id: s.id, mode: target[s.id]?.voucher_id ? "match" : "reclassify" }))}>Resolve</Button>
                         </div>) },
                 ]} />
             </QueryState>
+            {dialog}
         </Panel>
     );
 }

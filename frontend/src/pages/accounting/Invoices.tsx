@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type Account, type Invoice, type Paged } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { formatMoney } from "./money";
+import { useGuardedAction } from "./useGuardedAction";
 import { isMoneyInput, sumMoney } from "./money";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { Pager } from "./TradeTracking";
@@ -20,11 +22,13 @@ const KINDS = [
 ];
 
 function InvoiceList() {
-    const { entityId } = useAccounting();
+    const { entityId, fyRange } = useAccounting();
     const [params, setParams] = useSearchParams();
-    const f = { kind: params.get("kind") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "", page: Number(params.get("page") ?? 1) };
+    const f = { kind: params.get("kind") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
+        page: Math.max(1, Number(params.get("page")) || 1) };
     const set = (p: Record<string, string>) => setParams({ ...Object.fromEntries(params), page: "1", ...p });
-    const q = useQuery({ queryKey: acctKeys.of(entityId, "invoices", f), queryFn: () => acctGet<Paged<Invoice>>("invoices/", { entity: entityId, ...f, page_size: 50 }) });
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "invoices", f, fyRange.start),
+        queryFn: () => acctGet<Paged<Invoice>>("invoices/", { entity: entityId, ...f, ...fyRange, page_size: 50 }) });
     return (
         <Panel title="Bills, invoices, expenses and notes" actions={<>
             <input className={inputCls} placeholder="Number" defaultValue={f.search} aria-label="Search bills"
@@ -61,6 +65,7 @@ function InvoiceDetail() {
     const { entityId } = useAccounting();
     const qc = useQueryClient();
     const [reason, setReason] = useState("");
+    const { guard, dialog } = useGuardedAction();
     const q = useQuery({ queryKey: acctKeys.of(entityId, "invoice", id), queryFn: () => acctGet<Invoice>(`invoices/${id}/`) });
     const act = useMutation({
         mutationFn: (action: string) => acctPost<Invoice>(`invoices/${id}/${action}/`, { reason }),
@@ -73,12 +78,20 @@ function InvoiceDetail() {
             {i && (
                 <Panel title={<span>{i.kind.replace(/_/g, " ")} {i.number} <StatusBadge status={i.status} /> <StatusBadge status={i.payment_status} /></span>}
                        actions={<>
-                           {i.status === "DRAFT" && <Button size="sm" variant="outline" onClick={() => act.mutate("confirm")}>Confirm</Button>}
-                           {(i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" onClick={() => act.mutate("post")}>Post</Button>}
-                           {(i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" variant="ghost" onClick={() => act.mutate("cancel")}>Cancel</Button>}
+                           {i.status === "DRAFT" && <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => act.mutate("confirm")}>Confirm</Button>}
+                           {(i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" disabled={act.isPending} onClick={() => void guard({
+                               title: "Post bill", confirmText: "Post",
+                               message: `Post ${i.number} for ${i.party}: net ₹ ${formatMoney(i.net_amount)} (TDS ₹ ${formatMoney(i.tds_amount)})? Posted bills can only be reversed.`,
+                           }, () => act.mutate("post"))}>Post</Button>}
+                           {(i.status === "DRAFT" || i.status === "CONFIRMED") && <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => void guard({
+                               title: "Cancel bill", severity: "danger", confirmText: "Cancel bill", message: `Cancel the unposted bill ${i.number}?`,
+                           }, () => act.mutate("cancel"))}>Cancel</Button>}
                            {i.status === "POSTED" && (<>
                                <input className={inputCls} placeholder="Reversal reason" value={reason} aria-label="Reversal reason" onChange={(e) => setReason(e.target.value)} />
-                               <Button size="sm" variant="destructive" disabled={!reason.trim()} onClick={() => act.mutate("reverse")}>Reverse</Button>
+                               <Button size="sm" variant="destructive" disabled={!reason.trim() || act.isPending} onClick={() => void guard({
+                                   title: "Reverse bill", severity: "danger", confirmText: "Reverse",
+                                   message: `Reverse ${i.number} (₹ ${formatMoney(i.net_amount)})? Its settlements must be reversed first.`,
+                               }, () => act.mutate("reverse"))}>Reverse</Button>
                            </>)}
                        </>}>
                     <dl className="mb-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-6">
@@ -88,7 +101,7 @@ function InvoiceDetail() {
                         <div><dt className="text-xs text-slate-500">GST</dt><dd><Amount value={sumMoney([i.cgst, i.sgst, i.igst])} /></dd></div>
                         <div><dt className="text-xs text-slate-500">TDS {i.tds_section ?? ""}</dt><dd><Amount value={i.tds_amount} /></dd></div>
                         <div><dt className="text-xs text-slate-500">Net / outstanding</dt><dd><Amount value={i.net_amount} /> / <Amount value={i.outstanding} /></dd></div>
-                        {i.voucher_id && <div><dt className="text-xs text-slate-500">Voucher</dt><dd><Link className="text-blue-700" to={`../../vouchers/${i.voucher_id}`}>{i.voucher_number}</Link></dd></div>}
+                        {i.voucher_id && <div><dt className="text-xs text-slate-500">Voucher</dt><dd><Link className="text-blue-700" to={`/accounting/vouchers/${i.voucher_id}`}>{i.voucher_number}</Link></dd></div>}
                         {i.trade_id && <div><dt className="text-xs text-slate-500">Trade</dt><dd><Link className="text-blue-700" to={`/trades/${i.trade_id}/edit`}>#{i.trade_id}</Link></dd></div>}
                     </dl>
                     <DataGrid rows={i.lines ?? []} rowKey={(l) => l.line_no} caption="Lines" columns={[
@@ -102,12 +115,13 @@ function InvoiceDetail() {
                     <h3 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Settlements</h3>
                     <DataGrid rows={i.settlements ?? []} rowKey={(s) => s.id} empty="Not settled yet." caption="Settlements" columns={[
                         { key: "date", header: "Date", cell: (s) => s.date },
-                        { key: "v", header: "Voucher", cell: (s) => <Link className="text-blue-700" to={`../../vouchers/${s.voucher_id}`}>{s.voucher_number}</Link> },
+                        { key: "v", header: "Voucher", cell: (s) => <Link className="text-blue-700" to={`/accounting/vouchers/${s.voucher_id}`}>{s.voucher_number}</Link> },
                         { key: "a", header: "Amount", numeric: true, cell: (s) => <Amount value={s.amount} /> },
                         { key: "s", header: "Active", cell: (s) => (s.is_active ? "Yes" : "Reversed") },
                     ]} />
                 </Panel>
             )}
+            {dialog}
         </QueryState>
     );
 }
@@ -134,7 +148,7 @@ function NewInvoice() {
             lines: lines.map((l) => ({ account_id: Number(l.account_id), description: l.description, amount: l.amount, gst_rate: l.gst_rate || "0",
                 allocation: l.trade_ids.trim() ? { method: l.method, trade_ids: l.trade_ids.split(",").map((t) => Number(t.trim())).filter(Boolean) } : null })),
         }),
-        onSuccess: (inv) => { toast.success("Draft saved"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); navigate(`../${inv.id}`); },
+        onSuccess: (inv) => { toast.success("Draft saved"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); navigate(`/accounting/invoices/${inv.id}`); },
         onError: notifyError,
     });
     return (
@@ -152,9 +166,10 @@ function NewInvoice() {
                         <option value="">No TDS</option>{(tds.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.code} — {s.description} (from {s.effective_from})</option>)}
                     </select></Field>
                 {(head.kind === "DEBIT_NOTE" || head.kind === "CREDIT_NOTE") && (
-                    <Field label="Adjusts bill id"><input inputMode="numeric" className={inputCls} value={head.against_invoice_id} onChange={(e) => setHead({ ...head, against_invoice_id: e.target.value })} /></Field>)}
+                    <Field label="Adjusts bill id"><input inputMode="numeric" className={inputCls} value={head.against_invoice_id} onChange={(e) => setHead({ ...head, against_invoice_id: e.target.value.replace(/\D/g, "") })} /></Field>)}
             </div>
-            <table className="mt-4 w-full text-sm">
+            <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-sm">
+                <caption className="sr-only">Bill lines</caption>
                 <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Account / category</th><th>Description</th><th className="text-right">Taxable</th><th className="text-right">GST %</th><th>Allocate to trade ids</th><th>By</th></tr></thead>
                 <tbody>{lines.map((l, i) => (
                     <tr key={i}>
@@ -167,7 +182,7 @@ function NewInvoice() {
                         <td><select className={inputCls} value={l.method} aria-label={`Allocation method line ${i + 1}`} onChange={(e) => setLine(i, { method: e.target.value })}>
                             <option value="VALUE">Value</option><option value="QUANTITY">Quantity / weight (kg)</option></select></td>
                     </tr>))}</tbody>
-            </table>
+            </table></div>
             <div className="mt-3 flex items-center justify-between">
                 <Button size="sm" variant="ghost" onClick={() => setLines([...lines, { account_id: "", description: "", amount: "", gst_rate: "0", trade_ids: "", method: "VALUE" }])}>+ Line</Button>
                 <span className="text-sm text-slate-600">Taxable total <Amount value={sumMoney(lines.map((l) => (isMoneyInput(l.amount) ? l.amount : "0")))} /> · GST is split CGST/SGST or IGST from GSTIN state codes on save</span>

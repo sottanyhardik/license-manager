@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type BankAccount, type Invoice, type Paged, type Payment } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
-import { formatMoney, isMoneyInput, sumMoney } from "./money";
+import { useGuardedAction } from "./useGuardedAction";
+import { formatMoney, isMoneyInput, isZero, sumMoney } from "./money";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { Pager } from "./TradeTracking";
 import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
@@ -17,6 +18,7 @@ const RECEIVABLE = "SALES,COMMISSION_RECEIVABLE";
 
 function RecordPayment({ onDone }: { onDone: () => void }) {
     const { entityId } = useAccounting();
+    const { guard, dialog } = useGuardedAction();
     const [direction, setDirection] = useState<"PAYMENT" | "RECEIPT">("PAYMENT");
     const [party, setParty] = useState<Party | null>(null);
     const [form, setForm] = useState({ bank_account_id: "", date: new Date().toISOString().slice(0, 10), amount: "", tds_amount: "",
@@ -37,7 +39,7 @@ function RecordPayment({ onDone }: { onDone: () => void }) {
     const save = useMutation({
         mutationFn: () => acctPost<Payment>("payments/", { entity: entityId, direction, party_id: party?.id, ...form,
             tds_amount: direction === "RECEIPT" ? form.tds_amount || "0" : "0",
-            allocations: Object.entries(alloc).filter(([, a]) => isMoneyInput(a) && a !== "0").map(([id, amount]) => ({ invoice_id: Number(id), amount })) }),
+            allocations: Object.entries(alloc).filter(([, a]) => isMoneyInput(a) && !isZero(a)).map(([id, amount]) => ({ invoice_id: Number(id), amount })) }),
         onSuccess: (p) => { toast.success(`${p.voucher_number} posted`); setAlloc({}); setForm({ ...form, amount: "", tds_amount: "", reference: "" }); onDone(); },
         onError: notifyError,
     });
@@ -77,6 +79,9 @@ function RecordPayment({ onDone }: { onDone: () => void }) {
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Open bills of {party.name}</h3>
                         <Button size="sm" variant="outline" onClick={autoAllocate} disabled={!isMoneyInput(form.amount)}>Allocate oldest first</Button>
                     </div>
+                    {(bills.data?.count ?? 0) > (bills.data?.results.length ?? 0) && (
+                        <p className="mb-2 text-xs text-amber-700" role="status">Showing the first {bills.data?.results.length} of {bills.data?.count} posted bills; allocate the rest after posting.</p>
+                    )}
                     <DataGrid rows={open} rowKey={(b) => b.id} empty="No open bills — the amount stays on account as an advance." caption="Open bills" columns={[
                         { key: "no", header: "Bill", cell: (b) => b.number },
                         { key: "date", header: "Date", cell: (b) => b.date },
@@ -91,20 +96,24 @@ function RecordPayment({ onDone }: { onDone: () => void }) {
             )}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span>Allocated <b>{formatMoney(allocated)}</b> · On account (advance) <b className={unallocated.startsWith("-") ? "text-red-700" : ""}>{formatMoney(unallocated)}</b></span>
-                <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>Post {direction === "PAYMENT" ? "payment" : "receipt"}</Button>
+                <Button disabled={!valid || save.isPending} onClick={() => void guard({
+                    title: direction === "PAYMENT" ? "Post payment" : "Post receipt", confirmText: "Post",
+                    message: `${direction === "PAYMENT" ? "Pay" : "Receive"} ₹ ${formatMoney(form.amount)} ${direction === "PAYMENT" ? "to" : "from"} ${party?.name ?? ""}; allocate ₹ ${formatMoney(allocated)} to bills and keep ₹ ${formatMoney(unallocated)} on account?`,
+                }, () => save.mutate())}>Post {direction === "PAYMENT" ? "payment" : "receipt"}</Button>
             </div>
+            {dialog}
         </Panel>
     );
 }
 
 export default function Payments() {
-    const { entityId } = useAccounting();
+    const { entityId, fyRange } = useAccounting();
     const qc = useQueryClient();
     const [params, setParams] = useSearchParams();
-    const pageNo = Number(params.get("page") ?? 1);
+    const pageNo = Math.max(1, Number(params.get("page")) || 1);
     const direction = params.get("direction") ?? "";
-    const q = useQuery({ queryKey: acctKeys.of(entityId, "payments", direction, pageNo),
-        queryFn: () => acctGet<Paged<Payment>>("payments/", { entity: entityId, direction, page: pageNo, page_size: 50 }) });
+    const q = useQuery({ queryKey: acctKeys.of(entityId, "payments", direction, pageNo, fyRange.start),
+        queryFn: () => acctGet<Paged<Payment>>("payments/", { entity: entityId, direction, page: pageNo, page_size: 50, ...fyRange }) });
     const refresh = () => qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) });
     return (
         <div className="space-y-4">
@@ -115,7 +124,7 @@ export default function Payments() {
                 <QueryState isLoading={q.isLoading} error={q.error}>
                     <DataGrid rows={q.data?.results ?? []} rowKey={(p) => p.id} caption="Payments" columns={[
                         { key: "date", header: "Date", cell: (p) => p.date },
-                        { key: "v", header: "Voucher", cell: (p) => p.voucher_id ? <Link className="text-blue-700 hover:underline" to={`../vouchers/${p.voucher_id}`}>{p.voucher_number}</Link> : "—" },
+                        { key: "v", header: "Voucher", cell: (p) => p.voucher_id ? <Link className="text-blue-700 hover:underline" to={`/accounting/vouchers/${p.voucher_id}`}>{p.voucher_number}</Link> : "—" },
                         { key: "d", header: "Type", cell: (p) => p.direction },
                         { key: "party", header: "Party", cell: (p) => p.party },
                         { key: "ref", header: "UTR / ref", cell: (p) => p.reference || (p.trade_payment_id ? `trade payment #${p.trade_payment_id}` : "—") },

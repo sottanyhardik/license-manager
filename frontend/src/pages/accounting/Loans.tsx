@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPost, type BankAccount, type Money } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useGuardedAction } from "./useGuardedAction";
 import { isMoneyInput } from "./money";
 import PartyPicker, { type Party } from "./PartyPicker";
 import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
@@ -22,6 +23,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 function LoanActions({ loan, onDone }: { loan: Loan; onDone: () => void }) {
     const [f, setF] = useState({ date: today(), principal: "", interest: "", tds: "" });
+    const { guard, dialog } = useGuardedAction();
     const act = useMutation({
         mutationFn: (action: string) => acctPost(`loans/${loan.id}/${action}/`, { ...f, principal: f.principal || "0", interest: f.interest || "0", tds: f.tds || "0" }),
         onSuccess: (_d, a) => { toast.success(`${a} posted`); onDone(); }, onError: notifyError,
@@ -30,12 +32,20 @@ function LoanActions({ loan, onDone }: { loan: Loan; onDone: () => void }) {
     return (
         <div className="flex flex-wrap items-end gap-1">
             <input type="date" className={`${inputCls} w-36`} aria-label="Date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
-            <Button size="sm" variant="outline" onClick={() => act.mutate("accrue")}>Accrue to date</Button>
+            <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => void guard({
+                title: "Accrue interest", confirmText: "Accrue", message: `Post interest on loan with ${loan.party} up to ${f.date}?`,
+            }, () => act.mutate("accrue"))}>Accrue to date</Button>
             <input inputMode="decimal" className={`${inputCls} w-28`} placeholder="Principal" aria-label="Principal repaid" value={f.principal} onChange={(e) => setF({ ...f, principal: e.target.value })} />
             <input inputMode="decimal" className={`${inputCls} w-24`} placeholder="Interest" aria-label="Interest paid" value={f.interest} onChange={(e) => setF({ ...f, interest: e.target.value })} />
             <input inputMode="decimal" className={`${inputCls} w-20`} placeholder="TDS" aria-label="TDS" value={f.tds} onChange={(e) => setF({ ...f, tds: e.target.value })} />
-            <Button size="sm" disabled={!(f.principal || f.interest)} onClick={() => act.mutate("repay")}>Record repayment</Button>
-            <Button size="sm" variant="ghost" onClick={() => act.mutate("close")}>Close</Button>
+            <Button size="sm" disabled={!(f.principal || f.interest) || act.isPending} onClick={() => void guard({
+                title: "Record repayment", confirmText: "Post",
+                message: `Principal ₹ ${f.principal || "0"}, interest ₹ ${f.interest || "0"}, TDS ₹ ${f.tds || "0"} on ${f.date}?`,
+            }, () => act.mutate("repay"))}>Record repayment</Button>
+            <Button size="sm" variant="ghost" disabled={act.isPending} onClick={() => void guard({
+                title: "Close loan", severity: "danger", confirmText: "Close", message: "Close the loan? No further interest will accrue.",
+            }, () => act.mutate("close"))}>Close</Button>
+            {dialog}
         </div>
     );
 }
@@ -78,11 +88,11 @@ export default function Loans() {
                         { key: "p", header: "Party", cell: (l) => l.party },
                         { key: "d", header: "Type", cell: (l) => (l.direction === "GIVEN" ? "Given" : "Taken") },
                         { key: "r", header: "Rate", numeric: true, cell: (l) => `${l.interest_rate}%` },
-                        { key: "po", header: "Principal o/s", numeric: true, cell: (l) => <Amount value={l.principal_outstanding} to={`../reports/general-ledger?account=${l.principal_account_id}`} /> },
-                        { key: "io", header: "Interest o/s", numeric: true, cell: (l) => <Amount value={l.interest_outstanding} to={`../reports/general-ledger?account=${l.interest_account_id}`} /> },
+                        { key: "po", header: "Principal o/s", numeric: true, cell: (l) => <Amount value={l.principal_outstanding} to={`/accounting/reports/general-ledger?account=${l.principal_account_id}`} /> },
+                        { key: "io", header: "Interest o/s", numeric: true, cell: (l) => <Amount value={l.interest_outstanding} to={`/accounting/reports/general-ledger?account=${l.interest_account_id}`} /> },
                         { key: "s", header: "Status", cell: (l) => <StatusBadge status={l.status === "ACTIVE" ? "OPEN" : "RESOLVED"} /> },
                         { key: "a", header: "Actions", cell: (l) => <LoanActions loan={l} onDone={() => void refresh()} /> },
-                        { key: "x", header: "Last accrual", cell: (l) => { const a = l.accruals[l.accruals.length - 1]; return a ? (a.voucher_id ? <Link className="text-blue-700" to={`../vouchers/${a.voucher_id}`}>{a.period_end}</Link> : a.period_end) : "—"; } },
+                        { key: "x", header: "Last accrual", cell: (l) => { const a = l.accruals[l.accruals.length - 1]; return a ? (a.voucher_id ? <Link className="text-blue-700" to={`/accounting/vouchers/${a.voucher_id}`}>{a.period_end}</Link> : a.period_end) : "—"; } },
                     ]} />
                 </QueryState>
             </Panel>

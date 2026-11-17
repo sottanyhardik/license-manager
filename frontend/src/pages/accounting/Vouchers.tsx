@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { acctDelete, acctGet, acctKeys, acctPost, type Account, type Paged, type Voucher } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useGuardedAction } from "./useGuardedAction";
 import { isMoneyInput, sumMoney } from "./money";
 import { Pager } from "./TradeTracking";
 import { Amount, DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
@@ -15,14 +16,14 @@ const TYPES = ["", "PURCHASE", "SALES", "PAYMENT", "RECEIPT", "CONTRA", "JOURNAL
     "COMMISSION", "LOAN_DISBURSEMENT", "LOAN_REPAYMENT", "INTEREST_ACCRUAL", "OPENING", "ADJUSTMENT", "REVERSAL"];
 
 function VoucherList() {
-    const { entityId } = useAccounting();
+    const { entityId, fyRange } = useAccounting();
     const [params, setParams] = useSearchParams();
     const filters = { type: params.get("type") ?? "", status: params.get("status") ?? "", search: params.get("search") ?? "",
-        page: Number(params.get("page") ?? 1) };
+        page: Math.max(1, Number(params.get("page")) || 1) };
     const set = (patch: Record<string, string>) => setParams({ ...Object.fromEntries(params), page: "1", ...patch });
     const q = useQuery({
-        queryKey: acctKeys.of(entityId, "vouchers", filters),
-        queryFn: () => acctGet<Paged<Voucher>>("vouchers/", { entity: entityId, ...filters, page_size: 50 }),
+        queryKey: acctKeys.of(entityId, "vouchers", filters, fyRange.start),
+        queryFn: () => acctGet<Paged<Voucher>>("vouchers/", { entity: entityId, ...filters, ...fyRange, page_size: 50 }),
     });
     return (
         <div className="space-y-4">
@@ -60,28 +61,41 @@ function VoucherDetail() {
     const qc = useQueryClient();
     const navigate = useNavigate();
     const [reason, setReason] = useState("");
+    const [alloc, setAlloc] = useState({ invoice_id: "", amount: "" });
+    const { guard, dialog } = useGuardedAction();
     const q = useQuery({ queryKey: acctKeys.of(entityId, "voucher", id), queryFn: () => acctGet<Voucher>(`vouchers/${id}/`) });
     const done = (msg: string) => { toast.success(msg); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); };
     const post = useMutation({ mutationFn: () => acctPost(`vouchers/${id}/post/`), onSuccess: () => done("Posted"), onError: notifyError });
     const reverse = useMutation({
         mutationFn: () => acctPost<Voucher>(`vouchers/${id}/reverse/`, { reason }),
-        onSuccess: (rev) => { done("Reversal posted"); navigate(`../${rev.id}`); }, onError: notifyError,
+        onSuccess: (rev) => { done("Reversal posted"); navigate(`/accounting/vouchers/${rev.id}`); }, onError: notifyError,
     });
-    const remove = useMutation({ mutationFn: () => acctDelete(`vouchers/${id}/`), onSuccess: () => { done("Draft deleted"); navigate(".."); }, onError: notifyError });
+    const allocate = useMutation({
+        mutationFn: () => acctPost(`vouchers/${id}/allocate/`, { allocations: [{ invoice_id: Number(alloc.invoice_id), amount: alloc.amount }] }),
+        onSuccess: () => { done("Allocated to the bill"); setAlloc({ invoice_id: "", amount: "" }); }, onError: notifyError,
+    });
+    const remove = useMutation({ mutationFn: () => acctDelete(`vouchers/${id}/`), onSuccess: () => { done("Draft deleted"); navigate("/accounting/vouchers"); }, onError: notifyError });
     const v = q.data;
     return (
         <QueryState isLoading={q.isLoading} error={q.error}>
             {v && (
                 <Panel title={<span>{v.number ?? "Draft voucher"} <span className="ml-2"><StatusBadge status={v.status} /></span></span>}
                        actions={<>
-                           {v.status === "DRAFT" && <Button size="sm" onClick={() => post.mutate()}>Post</Button>}
-                           {v.status === "DRAFT" && <Button size="sm" variant="outline" onClick={() => remove.mutate()}>Delete draft</Button>}
+                           {v.status === "DRAFT" && <Button size="sm" disabled={post.isPending} onClick={() => void guard({
+                               title: "Post voucher", confirmText: "Post", message: `Post this ${v.voucher_type.toLowerCase()} voucher for ₹ ${v.total}? It becomes immutable.`,
+                           }, () => post.mutate())}>Post</Button>}
+                           {v.status === "DRAFT" && <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => void guard({
+                               title: "Delete draft", severity: "danger", confirmText: "Delete", message: "Delete this draft voucher? Drafts have no ledger effect.",
+                           }, () => remove.mutate())}>Delete draft</Button>}
                            {v.status === "POSTED" && v.voucher_type !== "REVERSAL" && (
                                <>
                                    <input className={inputCls} placeholder="Reason for reversal" value={reason}
                                           onChange={(e) => setReason(e.target.value)} aria-label="Reversal reason" />
                                    <Button size="sm" variant="destructive" disabled={!reason.trim() || reverse.isPending}
-                                           onClick={() => reverse.mutate()}>Reverse</Button>
+                                           onClick={() => void guard({
+                                               title: "Reverse voucher", severity: "danger", confirmText: "Reverse",
+                                               message: `Post an exact reversal of ${v.number} (₹ ${v.total})? Document vouchers must be reversed from their bill/payment.`,
+                                           }, () => reverse.mutate())}>Reverse</Button>
                                </>
                            )}
                        </>}>
@@ -90,12 +104,12 @@ function VoucherDetail() {
                         <div><dt className="text-xs text-slate-500">Type</dt><dd>{v.voucher_type.replace(/_/g, " ")}</dd></div>
                         <div><dt className="text-xs text-slate-500">Source</dt><dd>{v.source_type} {v.source_id ?? ""} {v.source_event}</dd></div>
                         <div><dt className="text-xs text-slate-500">Posted by</dt><dd>{v.posted_by ?? "—"}</dd></div>
-                        {v.reversal_of_id && <div><dt className="text-xs text-slate-500">Reverses</dt><dd><Link className="text-blue-700" to={`../${v.reversal_of_id}`}>#{v.reversal_of_id}</Link></dd></div>}
-                        {v.reversed_by_id && <div><dt className="text-xs text-slate-500">Reversed by</dt><dd><Link className="text-blue-700" to={`../${v.reversed_by_id}`}>#{v.reversed_by_id}</Link></dd></div>}
+                        {v.reversal_of_id && <div><dt className="text-xs text-slate-500">Reverses</dt><dd><Link className="text-blue-700" to={`/accounting/vouchers/${v.reversal_of_id}`}>#{v.reversal_of_id}</Link></dd></div>}
+                        {v.reversed_by_id && <div><dt className="text-xs text-slate-500">Reversed by</dt><dd><Link className="text-blue-700" to={`/accounting/vouchers/${v.reversed_by_id}`}>#{v.reversed_by_id}</Link></dd></div>}
                     </dl>
                     <p className="mb-3 text-sm text-slate-700">{v.narration}</p>
                     <DataGrid rows={v.lines ?? []} rowKey={(l) => l.line_no} caption="Voucher lines" columns={[
-                        { key: "acct", header: "Account", cell: (l) => <Link className="text-blue-700 hover:underline" to={`../../reports/general-ledger?account=${l.account_id}`}>{l.account_code} {l.account}</Link> },
+                        { key: "acct", header: "Account", cell: (l) => <Link className="text-blue-700 hover:underline" to={`/accounting/reports/general-ledger?account=${l.account_id}`}>{l.account_code} {l.account}</Link> },
                         { key: "narr", header: "Narration", cell: (l) => l.narration },
                         { key: "trade", header: "Trade", cell: (l) => l.trade_id ? <Link className="text-blue-700" to={`/trades/${l.trade_id}/edit`}>#{l.trade_id}</Link> : "" },
                         { key: "dr", header: "Debit", numeric: true, cell: (l) => <Amount value={l.debit} blankZero /> },
@@ -103,6 +117,13 @@ function VoucherDetail() {
                     ]} footer={<tr><td className="px-3 py-1.5" colSpan={3}>Total</td>
                         <td className="px-3 py-1.5 text-right"><Amount value={sumMoney((v.lines ?? []).map((l) => l.debit))} /></td>
                         <td className="px-3 py-1.5 text-right"><Amount value={sumMoney((v.lines ?? []).map((l) => l.credit))} /></td></tr>} />
+                    {v.status === "POSTED" && v.voucher_type === "JOURNAL" && (
+                        <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); allocate.mutate(); }}>
+                            <Field label="Allocate on-account amount to bill id"><input inputMode="numeric" className={`${inputCls} w-28`} value={alloc.invoice_id} onChange={(e) => setAlloc({ ...alloc, invoice_id: e.target.value.replace(/\D/g, "") })} /></Field>
+                            <Field label="Amount"><input inputMode="decimal" className={`${inputCls} w-32`} value={alloc.amount} onChange={(e) => setAlloc({ ...alloc, amount: e.target.value })} /></Field>
+                            <Button size="sm" type="submit" disabled={!alloc.invoice_id || !isMoneyInput(alloc.amount) || allocate.isPending}>Allocate</Button>
+                        </form>
+                    )}
                     {!!v.audit?.length && (
                         <ol className="mt-4 space-y-1 border-l-2 border-slate-200 pl-3 text-xs text-slate-600">
                             {v.audit.map((a, i) => <li key={i}><span className="font-semibold">{a.action}</span> · {a.actor ?? "system"} · {a.at}</li>)}
@@ -110,6 +131,7 @@ function VoucherDetail() {
                     )}
                 </Panel>
             )}
+            {dialog}
         </QueryState>
     );
 }
@@ -134,7 +156,7 @@ function NewJournal() {
         mutationFn: () => acctPost<Voucher>("vouchers/", { entity: entityId, ...form,
             lines: lines.filter((l) => l.account_id).map((l) => ({ account_id: Number(l.account_id), debit: l.debit || "0",
                 credit: l.credit || "0", narration: l.narration })) }),
-        onSuccess: (v) => { toast.success("Draft saved — an approver can now post it"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); navigate(`../${v.id}`); },
+        onSuccess: (v) => { toast.success("Draft saved — an approver can now post it"); void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); navigate(`/accounting/vouchers/${v.id}`); },
         onError: notifyError,
     });
     const setLine = (i: number, patch: Partial<DraftLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -146,7 +168,8 @@ function NewJournal() {
                 <Field label="Date"><input type="date" className={inputCls} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
                 <div className="sm:col-span-2"><Field label="Narration"><input className={inputCls} value={form.narration} onChange={(e) => setForm({ ...form, narration: e.target.value })} /></Field></div>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
+                <caption className="sr-only">Voucher lines</caption>
                 <thead className="text-left text-xs text-slate-500"><tr><th className="py-1">Account</th><th>Narration</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead>
                 <tbody>
                     {lines.map((l, i) => (
@@ -164,7 +187,7 @@ function NewJournal() {
                 <tfoot><tr className="font-semibold"><td colSpan={2} className="py-2">
                     <Button size="sm" variant="ghost" onClick={() => setLines([...lines, { account_id: "", debit: "", credit: "", narration: "" }])}>+ Line</Button></td>
                     <td className="text-right"><Amount value={dr} /></td><td className="text-right"><Amount value={cr} /></td></tr></tfoot>
-            </table>
+            </table></div>
             <div className="mt-3 flex items-center justify-between">
                 <p className={`text-sm ${dr === cr ? "text-emerald-700" : "text-red-700"}`} role="status">
                     {dr === cr ? "Balanced" : `Difference ${sumMoney([dr, `-${cr}`])}`}

@@ -5,9 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { acctGet, acctKeys, type Account, type Money } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
-import { drCr, formatMoney } from "./money";
+import { drCr, formatMoney, isMoneyInput } from "./money";
 import { LedgerTable, type Ledger } from "./PartyLedger";
-import { Amount, DataGrid, inputCls, Panel, QueryState, StatusBadge } from "./ui";
+import { Amount, DataGrid, Field, inputCls, Panel, QueryState, StatusBadge } from "./ui";
 
 const REPORTS = [
     ["trial-balance", "Trial Balance"], ["profit-loss", "Profit & Loss"], ["balance-sheet", "Balance Sheet"],
@@ -26,7 +26,7 @@ function useReport<T>(name: string, extra: Record<string, string | number | unde
     });
 }
 
-const glLink = (accountId: number | null) => (accountId ? `../general-ledger?account=${accountId}` : undefined);
+const glLink = (accountId: number | null) => (accountId ? `/accounting/reports/general-ledger?account=${accountId}` : undefined);
 
 interface TbRow { account_id: number | null; code: string; name: string; group: string; opening_debit: Money; opening_credit: Money;
     debit: Money; credit: Money; closing_debit: Money; closing_credit: Money }
@@ -167,7 +167,7 @@ function GeneralLedger() {
                 <option value="">Choose an account…</option>
                 {(accounts.data?.accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
             </select>}>
-            {account ? <QueryState isLoading={q.isLoading} error={q.error}>{q.data && <LedgerTable ledger={q.data} voucherBase="../../vouchers" />}</QueryState>
+            {account ? <QueryState isLoading={q.isLoading} error={q.error}>{q.data && <LedgerTable ledger={q.data} voucherBase="/accounting/vouchers" />}</QueryState>
                 : <p className="text-sm text-slate-500">Select an account, or click any figure in another report.</p>}
         </Panel>
     );
@@ -203,7 +203,7 @@ function RegisterTable({ rows, totals }: { rows: RegRow[]; totals?: Record<strin
     return (
         <DataGrid rows={rows} rowKey={(r) => r.invoice_id} empty="No documents in this period." caption="Register" columns={[
             { key: "d", header: "Date", cell: (r) => r.date },
-            { key: "n", header: "Number", cell: (r) => <Link className="text-blue-700 hover:underline" to={`../../invoices/${r.invoice_id}`}>{r.number}</Link> },
+            { key: "n", header: "Number", cell: (r) => <Link className="text-blue-700 hover:underline" to={`/accounting/invoices/${r.invoice_id}`}>{r.number}</Link> },
             { key: "p", header: "Party", cell: (r) => r.party },
             { key: "g", header: "GSTIN", cell: (r) => r.party_gstin ?? "" },
             { key: "t", header: "Taxable", numeric: true, cell: (r) => <Amount value={r.taxable} /> },
@@ -297,7 +297,7 @@ function Books({ cash }: { cash: boolean }) {
     return (
         <QueryState isLoading={q.isLoading} error={q.error}>
             <div className="space-y-4">{(q.data ?? []).map((l) => (
-                <Panel key={l.account_id} title={`${l.code} ${l.name} — closing ${drCr(l.closing)}`}><LedgerTable ledger={l} voucherBase="../../vouchers" /></Panel>))}
+                <Panel key={l.account_id} title={`${l.code} ${l.name} — closing ${drCr(l.closing)}`}><LedgerTable ledger={l} voucherBase="/accounting/vouchers" /></Panel>))}
                 {q.data?.length === 0 && <p className="text-sm text-slate-500">No {cash ? "cash" : "bank"} accounts.</p>}</div>
         </QueryState>
     );
@@ -306,14 +306,16 @@ function Books({ cash }: { cash: boolean }) {
 function Consolidated() {
     const { entities, fy } = useAccounting();
     const [ids, setIds] = useState<number[]>(entities.map((e) => e.id));
+    const [reserve, setReserve] = useState("");
+    const sortedIds = [...ids].sort((a, b) => a - b);
     const start = fy ? `${fy.slice(0, 4)}-04-01` : undefined;
     const end = fy ? `${Number(fy.slice(0, 4)) + 1}-03-31` : undefined;
     const q = useQuery({
-        queryKey: [...acctKeys.all, "consolidated", ids, fy],
+        queryKey: [...acctKeys.all, "consolidated", sortedIds, fy, reserve],
         queryFn: () => acctGet<{ entities: { entity_id: number; name: string; net_sales: Money; gross_profit: Money; net_profit: Money }[];
             eliminations: { intercompany_sales: Money; intercompany_purchases: Money; eliminated: Money; unmatched_difference: Money; intercompany_balance_difference: Money };
-            profit_and_loss: { net_sales: Money; gross_profit: Money; net_profit: Money };
-            balance_sheet: { total_assets: Money; total_liabilities: Money } }>("reports/consolidated/", { entities: ids.join(","), start, end }),
+            profit_and_loss: { net_sales: Money; gross_profit: Money; net_profit: Money }; warnings: string[];
+            balance_sheet: { total_assets: Money; total_liabilities: Money } }>("reports/consolidated/", { entities: sortedIds.join(","), start, end, stock_reserve: isMoneyInput(reserve) ? reserve : undefined }),
         enabled: ids.length > 0,
     });
     const d = q.data;
@@ -323,8 +325,14 @@ function Consolidated() {
                 {entities.map((e) => <label key={e.id} className="flex items-center gap-1"><input type="checkbox" checked={ids.includes(e.id)}
                     onChange={(ev) => setIds(ev.target.checked ? [...ids, e.id] : ids.filter((x) => x !== e.id))} /> {e.name}</label>)}
             </fieldset>
+            <div className="mb-3 max-w-sm"><Field label="Stock reserve (unrealised intercompany profit in closing stock)"
+                hint="Entered by the accountant; cannot be derived from periodic-method books">
+                <input inputMode="decimal" className={inputCls} value={reserve} onChange={(e) => setReserve(e.target.value)} /></Field></div>
             <QueryState isLoading={q.isLoading && ids.length > 0} error={q.error}>
                 {d && (<div className="space-y-4">
+                    {d.warnings.length > 0 && (
+                        <ul role="alert" className="list-disc rounded-md border border-amber-200 bg-amber-50 p-3 pl-7 text-sm text-amber-900">
+                            {d.warnings.map((w) => <li key={w}>{w}</li>)}</ul>)}
                     <DataGrid rows={d.entities} rowKey={(e) => e.entity_id} caption="Entity comparison" columns={[
                         { key: "n", header: "Entity", cell: (e) => e.name },
                         { key: "s", header: "Net sales", numeric: true, cell: (e) => <Amount value={e.net_sales} /> },

@@ -34,44 +34,44 @@ export default function AccountingDashboard() {
                 <div className="space-y-6">
                     <section aria-label="Performance" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <StatCard compact label="Net sales" value={money(d.sales)} icon={TrendingUp} tone="primary"
-                                  onClick={() => navigate("../reports/profit-loss")} />
+                                  onClick={() => navigate("/accounting/reports/profit-loss")} />
                         <StatCard compact label="Purchases" value={money(d.purchases)} icon={Receipt}
-                                  onClick={() => navigate("../reports/register?kind=purchase")} />
+                                  onClick={() => navigate("/accounting/reports/register?kind=purchase")} />
                         <StatCard compact label="Gross profit" value={money(d.gross_profit)} icon={Scale} tone="success"
-                                  onClick={() => navigate("../reports/profit-loss")} />
+                                  onClick={() => navigate("/accounting/reports/profit-loss")} />
                         <StatCard compact label="Net profit" value={money(d.net_profit)} icon={Coins}
                                   tone={d.net_profit.startsWith("-") ? "danger" : "success"}
-                                  onClick={() => navigate("../reports/profit-loss")} />
+                                  onClick={() => navigate("/accounting/reports/profit-loss")} />
                     </section>
                     <section aria-label="Position" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <StatCard compact label="Bank balance" value={money(d.bank_balance)} icon={Landmark}
-                                  onClick={() => navigate("../banking")} />
+                                  onClick={() => navigate("/accounting/banking")} />
                         <StatCard compact label="Cash balance" value={money(d.cash_balance)} icon={Wallet}
-                                  onClick={() => navigate("../reports/cash-book")} />
+                                  onClick={() => navigate("/accounting/reports/cash-book")} />
                         <StatCard compact label="Receivables" value={money(d.receivables)} icon={ArrowDownLeft}
                                   secondaryValue={`Overdue ₹ ${formatMoney(d.overdue_receivables)}`}
-                                  onClick={() => navigate("../reports/receivables-ageing")} />
+                                  onClick={() => navigate("/accounting/reports/receivables-ageing")} />
                         <StatCard compact label="Payables" value={money(d.payables)} icon={ArrowUpRight}
                                   secondaryValue={`Overdue ₹ ${formatMoney(d.overdue_payables)}`}
-                                  onClick={() => navigate("../reports/payables-ageing")} />
+                                  onClick={() => navigate("/accounting/reports/payables-ageing")} />
                     </section>
                     <section aria-label="Work queue" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <StatCard compact label="Unposted bills" value={d.unposted_invoices} icon={FileClock}
-                                  tone={d.unposted_invoices ? "warning" : "primary"} onClick={() => navigate("../trades?status=PENDING")} />
+                                  tone={d.unposted_invoices ? "warning" : "primary"} onClick={() => navigate("/accounting/trades?status=PENDING")} />
                         <StatCard compact label="Unmatched bank lines" value={d.unmatched_bank_lines} icon={Banknote}
-                                  tone={d.unmatched_bank_lines ? "warning" : "primary"} onClick={() => navigate("../banking")} />
+                                  tone={d.unmatched_bank_lines ? "warning" : "primary"} onClick={() => navigate("/accounting/banking")} />
                         <StatCard compact label="Open suspense" value={d.open_suspense} icon={AlertTriangle}
-                                  tone={d.open_suspense ? "danger" : "primary"} onClick={() => navigate("../banking/suspense")} />
+                                  tone={d.open_suspense ? "danger" : "primary"} onClick={() => navigate("/accounting/banking/suspense")} />
                         <StatCard compact label="Draft vouchers" value={d.draft_vouchers} icon={FileClock}
-                                  onClick={() => navigate("../vouchers?status=DRAFT")} />
+                                  onClick={() => navigate("/accounting/vouchers?status=DRAFT")} />
                     </section>
                     <section aria-label="Tax and loans" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <StatCard compact label="GST net payable (FY)" value={money(d.gst_net_payable)} icon={Receipt}
-                                  onClick={() => navigate("../reports/gst")} />
+                                  onClick={() => navigate("/accounting/reports/gst")} />
                         <StatCard compact label="TDS payable" value={money(d.tds_payable)} icon={HandCoins}
-                                  onClick={() => navigate("../reports/tds")} />
+                                  onClick={() => navigate("/accounting/reports/tds")} />
                         <StatCard compact label="Loans outstanding (net)" value={money(d.loan_outstanding)} icon={Landmark}
-                                  onClick={() => navigate("../loans")} />
+                                  onClick={() => navigate("/accounting/loans")} />
                     </section>
                 </div>
             )}

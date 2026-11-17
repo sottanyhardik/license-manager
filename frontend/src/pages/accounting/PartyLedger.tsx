@@ -15,7 +15,7 @@ export interface LedgerRow {
 }
 export interface Ledger { account_id: number | null; code?: string; name?: string; opening: Money; closing: Money; rows: LedgerRow[] }
 
-export function LedgerTable({ ledger, voucherBase = "../vouchers" }: { ledger: Ledger; voucherBase?: string }) {
+export function LedgerTable({ ledger, voucherBase = "/accounting/vouchers" }: { ledger: Ledger; voucherBase?: string }) {
     return (
         <DataGrid rows={ledger.rows} rowKey={(r) => `${r.voucher_id}-${r.date}-${r.balance}`} caption="Ledger" empty="No entries in this period."
                   footer={<tr><td className="px-3 py-1.5" colSpan={5}>Opening {drCr(ledger.opening)}</td>
@@ -57,7 +57,7 @@ export default function PartyLedger() {
                         <Panel title={`Ledger — ${party.name}`}><LedgerTable ledger={q.data} /></Panel>
                         <Panel title="Outstanding bills (bill-wise)">
                             <DataGrid rows={q.data.open_bills} rowKey={(b) => b.invoice_id} empty="Nothing outstanding." caption="Open bills" columns={[
-                                { key: "no", header: "Bill", cell: (b) => <Link className="text-blue-700 hover:underline" to={`../invoices/${b.invoice_id}`}>{b.number}</Link> },
+                                { key: "no", header: "Bill", cell: (b) => <Link className="text-blue-700 hover:underline" to={`/accounting/invoices/${b.invoice_id}`}>{b.number}</Link> },
                                 { key: "k", header: "Kind", cell: (b) => b.kind.replace(/_/g, " ") },
                                 { key: "d", header: "Date", cell: (b) => b.date },
                                 { key: "due", header: "Due", cell: (b) => b.due_date ?? "—" },

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { acctGet, acctKeys, acctPatch, acctPost, type Account, type EntityBooks } from "@/api/accountingApi";
 
 import { useAccounting } from "./AccountingContext";
+import { useGuardedAction } from "./useGuardedAction";
 import { DataGrid, Field, inputCls, notifyError, Panel, QueryState, StatusBadge } from "./ui";
 
 function ActivateBooks() {
@@ -41,6 +42,7 @@ function ActivateBooks() {
 
 function EntitySettings() {
     const { entityId } = useAccounting();
+    const { guard, dialog } = useGuardedAction();
     const qc = useQueryClient();
     const q = useQuery({ queryKey: acctKeys.of(entityId, "entity"), queryFn: () => acctGet<EntityBooks>(`entities/${entityId}/`), enabled: !!entityId });
     const save = useMutation({
@@ -51,29 +53,39 @@ function EntitySettings() {
         mutationFn: ({ id, locked }: { id: number; locked: boolean }) => acctPost(`periods/${id}/lock/`, { locked }),
         onSuccess: () => { void qc.invalidateQueries({ queryKey: acctKeys.entity(entityId) }); }, onError: notifyError,
     });
-    if (!entityId) return null;
+    if (!entityId) return <p className="text-sm text-slate-600">Start books for an entity above to configure it.</p>;
     const e = q.data;
+    const saveIfChanged = (field: "default_credit_days" | "state_code", value: string) => {
+        if (e && String(e[field] ?? "") !== value) save.mutate({ [field]: value });
+    };
     return (
         <QueryState isLoading={q.isLoading} error={q.error}>
             {e && (
                 <Panel title={`Books settings — ${e.name}`}>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                         <Field label="Books start date"><span className="h-9 py-2 text-sm">{e.books_start_date}</span></Field>
-                        <Field label="Default credit days"><input inputMode="numeric" className={inputCls} defaultValue={e.default_credit_days}
-                            onBlur={(ev) => save.mutate({ default_credit_days: ev.target.value })} /></Field>
-                        <Field label="GST state code" hint="From GSTIN; drives CGST+SGST vs IGST"><input className={inputCls} defaultValue={e.state_code}
-                            onBlur={(ev) => save.mutate({ state_code: ev.target.value })} /></Field>
-                        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" defaultChecked={e.require_maker_checker}
-                            onChange={(ev) => save.mutate({ require_maker_checker: ev.target.checked })} /> Maker-checker for manual vouchers</label>
+                        <Field label="Default credit days"><input key={`cd-${e.id}`} inputMode="numeric" className={inputCls} defaultValue={e.default_credit_days}
+                            onBlur={(ev) => saveIfChanged("default_credit_days", ev.target.value)} /></Field>
+                        <Field label="GST state code" hint="From GSTIN; drives CGST+SGST vs IGST"><input key={`sc-${e.id}`} className={inputCls} defaultValue={e.state_code}
+                            onBlur={(ev) => saveIfChanged("state_code", ev.target.value)} /></Field>
+                        <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={e.require_maker_checker} disabled={save.isPending}
+                            onChange={(ev) => save.mutate({ require_maker_checker: ev.target.checked })} /> Maker-checker (bills, manual vouchers, reversals)</label>
                     </div>
+                    {dialog}
                     {(e.financial_years ?? []).map((fy) => (
                         <div key={fy.id} className="mt-4">
                             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">FY {fy.label} periods</h3>
                             <div className="flex flex-wrap gap-1">{fy.periods.map((p) => (
-                                <button key={p.id} type="button" aria-pressed={p.status === "LOCKED"} onClick={() => lock.mutate({ id: p.id, locked: p.status !== "LOCKED" })}
+                                <button key={p.id} type="button" aria-pressed={p.status === "LOCKED"} disabled={lock.isPending}
+                                        aria-label={`${p.start_date.slice(0, 7)} ${p.status === "LOCKED" ? "locked" : "open"}`}
+                                        onClick={() => p.status === "LOCKED"
+                                            ? void guard({ title: "Unlock period", severity: "danger", confirmText: "Unlock",
+                                                message: `Unlock ${p.start_date.slice(0, 7)}? Postings into this month become possible again.` },
+                                            () => lock.mutate({ id: p.id, locked: false }))
+                                            : lock.mutate({ id: p.id, locked: true })}
                                         className={`rounded-md border px-2 py-1 text-xs ${p.status === "LOCKED" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700 hover:border-slate-400"}`}
                                         title={p.status === "LOCKED" ? "Locked — click to unlock" : "Open — click to lock"}>
-                                    {p.start_date.slice(0, 7)} {p.status === "LOCKED" ? "🔒" : ""}</button>))}</div>
+                                    {p.start_date.slice(0, 7)}<span aria-hidden="true">{p.status === "LOCKED" ? " 🔒" : ""}</span></button>))}</div>
                         </div>
                     ))}
                 </Panel>

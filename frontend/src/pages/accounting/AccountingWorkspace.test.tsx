@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,5 +64,18 @@ describe("AccountingWorkspace", () => {
         expect(within(row).getByText("NOT ACCOUNTED")).toBeInTheDocument();
         expect(within(row).getByText("10,00,000.00")).toBeInTheDocument();
         expect(within(row).getByRole("button", { name: "Post to books" })).toBeEnabled();
+    });
+
+    it("asks for confirmation before posting a trade and only posts after confirming", async () => {
+        post.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith("from-trade/") ? { id: 99 } : {} }));
+        renderAt("/accounting/trades");
+        const row = (await screen.findByText("LML/2026-27/0001")).closest("tr")!;
+        within(row).getByRole("button", { name: "Post to books" }).click();
+        const dialog = await screen.findByRole("alertdialog");
+        expect(within(dialog).getByText(/10,00,000\.00/)).toBeInTheDocument();
+        expect(post).not.toHaveBeenCalled();
+        within(dialog).getByRole("button", { name: "Post" }).click();
+        await waitFor(() => expect(post).toHaveBeenCalledWith("accounting/invoices/99/post/", {}));
+        expect(post).toHaveBeenCalledWith("accounting/invoices/from-trade/", { trade_id: 11 });
     });
 });

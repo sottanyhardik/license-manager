@@ -252,3 +252,12 @@ class PartyBankLinesView(AccountingView):
             "amount": r["line"].amount, "remaining": r["remaining"], "status": r["line"].status,
             "mode": r["mode"], "score": round(r["score"], 2), "source": r["source"],
         } for r in rows]})
+
+
+class UndoProposalView(ApproverView):
+    """POST bank-proposals/<payment_id>/undo/  Unmatch + reverse a confirmed proposal (line back to unmatched)."""
+
+    def post(self, request, payment_id: int):
+        from apps.accounting.models import Payment
+        line = proposals_svc.undo_confirmation(Payment.objects.get(pk=payment_id), user=request.user)
+        return ok({"line_id": line.pk, "status": line.status})

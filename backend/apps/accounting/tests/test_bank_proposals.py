@@ -82,6 +82,24 @@ class BankProposalTests(TestCase):
             confirm_proposal(line, party=self.customer)
         self.assertEqual(again.exception.code, "already_matched")
 
+    def test_undo_puts_the_line_back_and_nets_the_books(self):
+        from apps.accounting.selectors.ledger import account_balance
+        from apps.accounting.services.bank_proposals import undo_confirmation
+        due = outstanding(self.old)
+        line, = self._import(f"15/05/2026,522627002894-IMPS CIB JASH MERCAN,522627002894,,{due},\n")
+        payment = confirm_proposal(line, party=self.customer)
+        line = undo_confirmation(payment)
+        self.assertEqual((line.status, line.matched_amount), (LineStatus.UNMATCHED, D("0.00")))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "REVERSED")
+        self.assertEqual(outstanding(self.old), due)  # the bill is open again
+        self.assertEqual(account_balance(self.bank.account), D("0.00"))
+        self.assertFalse(NarrationAlias.objects.exists())  # the alias it taught is forgotten
+        self.assertEqual(proposal_for(line).blocked, "")  # it can be proposed and confirmed again
+        confirm_proposal(line, party=self.customer)
+        with self.assertRaises(AccountingError):
+            undo_confirmation(payment)  # already reversed
+
     def test_excess_stays_on_account_as_advance(self):
         total = outstanding(self.old) + outstanding(self.new)
         line, = self._import(f"15/05/2026,NEFT JASH MERCANTILE,,,{total + D('2500.00')},\n")
@@ -175,6 +193,12 @@ class BankProposalApiTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(len(r.json()["confirmed"]), 1)
         self.assertEqual(outstanding(self.inv), D("0.00"))
+        payment_id = r.json()["confirmed"][0]["payment_id"]
+        undo_url = f"/api/accounting/bank-proposals/{payment_id}/undo/"
+        self.assertEqual(self.viewer.post(undo_url).status_code, 403)
+        undone = self.approver.post(undo_url)
+        self.assertEqual(undone.status_code, 200, undone.content)
+        self.assertEqual(undone.json()["status"], "UNMATCHED")
 
     def test_preview_with_another_party_and_alias_list_delete(self):
         other = h.company("Some Other Party")

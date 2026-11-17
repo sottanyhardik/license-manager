@@ -30,9 +30,9 @@ from apps.accounting.models import (
 from apps.core.models import CompanyModel
 
 from . import AccountingError, audit
-from .banking import DATE_WINDOW_DAYS, _match, book_pool, candidates_for, line_remaining, refresh_line_status
+from .banking import DATE_WINDOW_DAYS, _match, book_pool, candidates_for, line_remaining, refresh_line_status, unmatch
 from .invoices import outstanding_map
-from .payments import record_payment
+from .payments import record_payment, reverse_payment
 
 # Transport / channel words and bank codes that say nothing about the counterparty.
 CHANNEL_WORDS = frozenset("""
@@ -293,6 +293,33 @@ def confirm_proposal(line: StatementLine, *, party: CompanyModel, user=None, lea
     audit.record("BANK_PROPOSAL_CONFIRMED", payment, actor=user, entity=entity, line=line.pk,
                  bills=[a.invoice.number for a in proposal.allocations], advance=proposal.advance)
     return payment
+
+
+@transaction.atomic
+def undo_confirmation(payment: Payment, *, user=None) -> StatementLine:
+    """Undo a confirmed proposal: unmatch the bank line, reverse the receipt/payment (posted entries are
+    immutable, so a reversal voucher on the same date nets it off) and roll back the alias it taught."""
+    payment = Payment.objects.select_for_update(of=("self",)).select_related("entity", "party", "voucher").get(pk=payment.pk)
+    if payment.status != DocStatus.POSTED:
+        raise AccountingError("Only a posted receipt/payment can be undone.", "not_posted")
+    matches = list(BankMatch.objects.filter(voucher=payment.voucher, is_active=True, method=BankMatch.PROPOSAL)
+                   .select_related("statement_line"))
+    if not matches:
+        raise AccountingError("This receipt/payment was not booked from a bank proposal.", "not_a_proposal")
+    line = matches[0].statement_line
+    for match in matches:
+        unmatch(match, reason="Undo bank proposal", user=user)
+    reverse_payment(payment, reason=f"Undo bank proposal (line {line.pk})", user=user, reversal_date=payment.date)
+    alias = NarrationAlias.objects.filter(entity=payment.entity, key=counterparty_key(line.narration),
+                                          direction=payment.direction, party=payment.party).first()
+    if alias is not None:
+        if alias.hits <= 1:
+            alias.delete()
+        else:
+            NarrationAlias.objects.filter(pk=alias.pk).update(hits=F("hits") - 1)
+    audit.record("BANK_PROPOSAL_UNDONE", payment, actor=user, entity=payment.entity, line=line.pk)
+    line.refresh_from_db()
+    return line
 
 
 def confirm_many(bank: BankAccount, items: list[tuple[int, int]], *, user=None) -> dict:

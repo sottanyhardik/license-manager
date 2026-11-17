@@ -393,7 +393,7 @@ ProductDescriptionViewSet = MasterViewSet.create_viewset(
 UnitPriceViewSet = MasterViewSet.create_viewset(
     UnitPriceModel,
     UnitPriceSerializer,
-    config=enhance_config_with_fk(UnitPriceModel, {"form_fields": ["name", "label"]}),
+    config=enhance_config_with_fk(UnitPriceModel, {"form_fields": ["name", "label", "unit_price"]}),
 )
 
 GroupViewSet = MasterViewSet.create_viewset(
@@ -654,5 +654,10 @@ NotificationNumberViewSet = MasterViewSet.create_viewset(
     },
 )
 NotificationNumberViewSet.lookup_field = "code"
-# Allow slashes in the code (e.g. "025/2023") via URL-encoded `%2F`.
-NotificationNumberViewSet.lookup_value_regex = "[^/]+"
+# Real codes contain slashes (e.g. "025/2023"). Clients send them URL-encoded
+# (`025%2F2023`), but Django decodes `%2F` before routing, so the lookup must
+# accept "/"-separated non-empty segments. `[^/]+` made every such record 404
+# on detail/edit/delete. The list-level `export/` route is registered first.
+# NOTE: a future `@action(detail=True)` here would be shadowed by this pattern
+# (`025/2023/<action>/` reads as code `025/2023/<action>`) — use a list action.
+NotificationNumberViewSet.lookup_value_regex = "[^/]+(?:/[^/]+)*"

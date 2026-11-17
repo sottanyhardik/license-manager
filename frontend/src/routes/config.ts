@@ -13,7 +13,20 @@ export interface EntityRouteConfig {
     entity: string;
     icon: string;
     deprecated?: boolean;
+    /** Groups the master on the Masters hub and in the Masters menu. */
+    category: MasterCategory;
+    /** One-line purpose shown on the Masters hub. */
+    description?: string;
 }
+
+/** Master categories, in display order. */
+export const MASTER_CATEGORIES = [
+    "Parties & places",
+    "Items & SION norms",
+    "Licence & customs reference",
+    "Rates & pricing",
+] as const;
+export type MasterCategory = typeof MASTER_CATEGORIES[number];
 
 export interface ReportRouteConfig {
     path: string;
@@ -83,54 +96,19 @@ export const routes: RouteConfig[] = [
 
 // Master data entities configuration
 export const masterEntities: EntityRouteConfig[] = [
-    {
-        path: "/masters/companies",
-        label: "Companies",
-        entity: "companies",
-        icon: "building",
-    },
-    {
-        path: "/masters/ports",
-        label: "Ports",
-        entity: "ports",
-        icon: "geo-alt",
-    },
-    {
-        path: "/masters/hs-codes",
-        label: "HS Codes",
-        entity: "hs-codes",
-        icon: "upc-scan",
-    },
-    {
-        path: "/masters/head-norms",
-        label: "Head Norms",
-        entity: "head-norms",
-        icon: "list-ul",
-    },
-    {
-        path: "/masters/sion-classes",
-        label: "SION Classes",
-        entity: "sion-classes",
-        icon: "diagram-3",
-    },
-    {
-        path: "/masters/groups",
-        label: "Groups",
-        entity: "groups",
-        icon: "folder",
-    },
-    {
-        path: "/masters/item-names",
-        label: "Item Names",
-        entity: "item-names",
-        icon: "tags",
-    },
-    {
-        path: "/masters/exchange-rates",
-        label: "Exchange Rates",
-        entity: "exchange-rates",
-        icon: "currency-exchange",
-    },
+    { path: "/masters/companies",            label: "Companies",            entity: "companies",            icon: "building",          category: "Parties & places",            description: "Exporters, importers and trading parties" },
+    { path: "/masters/ports",                label: "Ports",                entity: "ports",                icon: "geo-alt",           category: "Parties & places",            description: "Customs ports of registration and clearance" },
+    { path: "/masters/hs-codes",             label: "HS Codes",             entity: "hs-codes",             icon: "upc-scan",          category: "Items & SION norms",          description: "Tariff codes and their product descriptions" },
+    { path: "/masters/head-norms",           label: "Head Norms",           entity: "head-norms",           icon: "list-ul",           category: "Items & SION norms",          description: "SION head norms" },
+    { path: "/masters/sion-classes",         label: "SION Classes",         entity: "sion-classes",         icon: "diagram-3",         category: "Items & SION norms",          description: "SION norm classes with export and import items" },
+    { path: "/masters/groups",               label: "Groups",               entity: "groups",               icon: "folder",            category: "Items & SION norms",          description: "Item groups" },
+    { path: "/masters/item-names",           label: "Item Names",           entity: "item-names",           icon: "tags",              category: "Items & SION norms",          description: "Import item names used in planning and reports" },
+    { path: "/masters/scheme-codes",         label: "Scheme Codes",         entity: "scheme-codes",         icon: "badge-tm",          category: "Licence & customs reference", description: "DGFT scheme codes on licences" },
+    { path: "/masters/notification-numbers", label: "Notification Numbers", entity: "notification-numbers", icon: "file-earmark-text", category: "Licence & customs reference", description: "Customs notifications (e.g. 025/2023)" },
+    { path: "/masters/purchase-statuses",    label: "Purchase Statuses",    entity: "purchase-statuses",    icon: "check2-square",     category: "Licence & customs reference", description: "Licence purchase status codes and their order" },
+    { path: "/masters/transfer-letters",     label: "Transfer Letters",     entity: "transfer-letters",     icon: "file-earmark-arrow-up", category: "Licence & customs reference", description: "Transfer letter templates" },
+    { path: "/masters/exchange-rates",       label: "Exchange Rates",       entity: "exchange-rates",       icon: "currency-exchange", category: "Rates & pricing",             description: "Customs exchange rates by date" },
+    { path: "/masters/unit-prices",          label: "Unit Prices",          entity: "unit-prices",          icon: "currency-rupee",    category: "Rates & pricing",             description: "Reference unit prices" },
 ];
 // Report entities configuration
 export const reportEntities: ReportRouteConfig[] = [

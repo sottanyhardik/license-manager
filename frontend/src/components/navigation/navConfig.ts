@@ -5,7 +5,7 @@
  * routes/config.ts (also consumed by the command palette), and every role gate
  * mirrors the guard on the matching route in AppRoutes.
  */
-import { masterEntities, reportEntities } from "../../routes/config";
+import { MASTER_CATEGORIES, masterEntities, reportEntities } from "../../routes/config";
 import {
     ACCOUNTING_ROLES, ALLOTMENT_ROLES, BOE_LIST_ROLES, INCENTIVE_LICENSE_ROLES, LEDGER_READ_ROLES, LEDGER_UPLOAD_ROLES,
     LICENSE_ROLES, RECONCILIATION_ISSUES_ROLES, RECONCILIATION_ROLES, REPORT_ROLES, ROLES, TRADE_ROLES,
@@ -173,9 +173,15 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         label: "Masters",
         icon: "database",
         columns: 2,
-        sections: [{
-            items: masterEntities.filter(m => !m.deprecated).map(({ path, label, icon }) => ({ path, label, icon })),
-        }],
+        sections: [
+            { items: [{ path: "/masters", label: "Masters overview", icon: "database" }] },
+            ...MASTER_CATEGORIES.map(category => ({
+                label: category,
+                items: masterEntities
+                    .filter(m => !m.deprecated && m.category === category)
+                    .map(({ path, label, icon }) => ({ path, label, icon })),
+            })),
+        ],
     },
 ];
 

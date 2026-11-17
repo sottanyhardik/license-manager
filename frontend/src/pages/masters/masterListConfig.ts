@@ -6,6 +6,31 @@
  * the eventual config-driven <EntityTable> has a home for column/action configs.
  */
 
+/**
+ * Masters whose detail route is keyed by a field other than the primary key
+ * (`lookup_field` on the backend viewset, `apps/core/views/views.py`).
+ * Building their URLs from `id` would 404 — or address another record whose
+ * code happens to equal that id.
+ */
+export const MASTER_LOOKUP_FIELDS: Readonly<Record<string, string>> = {
+  "scheme-codes": "code",
+  "notification-numbers": "code",
+};
+
+/**
+ * URL-safe record key for `/masters/<entity>/<key>/` (API) and
+ * `/masters/<entity>/<key>/edit` (UI). Codes such as `025/2023` are encoded.
+ */
+export function getMasterRecordKey(entityName: string, item: { id?: unknown } & Record<string, unknown>): string {
+  const field = MASTER_LOOKUP_FIELDS[entityName] ?? "id";
+  const value = item[field];
+  if (value === null || value === undefined || value === "") {
+    // Never build `masters/<entity>//` — that would address the list endpoint.
+    throw new Error(`${entityName} record has no ${field}`);
+  }
+  return encodeURIComponent(String(value));
+}
+
 /** Default list filters applied when a Master entity list first loads. */
 export function getDefaultFilters(entityName: string): Record<string, string> {
   switch (entityName) {

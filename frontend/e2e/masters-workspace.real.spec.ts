@@ -1,0 +1,105 @@
+import { expect, test, type Page } from "@playwright/test";
+
+/**
+ * REAL BACKEND WORKFLOW — Masters workspace (generic master framework).
+ *
+ * Opt-in: run through `scripts/test/run_data_bearing_browser_e2e.sh e2e/masters-workspace.real.spec.ts`,
+ * which creates a fresh `test_*` database, seeds it (`seed_browser_2509`, superuser
+ * login) and sets LM_REAL_E2E=1. Never point it at a shared database.
+ */
+const realBackendEnabled = process.env.LM_REAL_E2E === "1";
+const CODE = "E2E/9901"; // slash-coded like real notifications (025/2023)
+const PORT_CODE = "INE2E1";
+
+async function signIn(page: Page) {
+    await page.goto("/login", { waitUntil: "networkidle" });
+    await page.locator("#login-username").fill(process.env.LM_USERNAME || "hardik");
+    await page.locator("#login-password").fill(process.env.LM_PASSWORD || "admin@123");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL("**/dashboard");
+}
+
+/** Search the list and wait until the debounced request has narrowed it to CODE only. */
+async function searchUntilOnly(page: Page, term: string) {
+    await page.getByPlaceholder(/Search by/).first().fill(term);
+    await expect(page.getByText(CODE, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Edit/ })).toHaveCount(1);
+}
+
+async function authGet<T>(page: Page, path: string): Promise<{ status: number; body: T | null }> {
+    return page.evaluate(async (url) => {
+        const access = localStorage.getItem("access");
+        const response = await fetch(`/api/${url}`, { headers: access ? { Authorization: `Bearer ${access}` } : {} });
+        return { status: response.status, body: response.ok ? await response.json() : null };
+    }, path);
+}
+
+test.describe("Masters workspace on the real backend", () => {
+    test.skip(!realBackendEnabled, "Requires the isolated local browser harness; never points at a shared database.");
+    test.describe.configure({ mode: "serial" });
+
+    test("hub lists every category and opens a master", async ({ page }) => {
+        const errors: string[] = [];
+        page.on("pageerror", error => errors.push(error.message));
+        await signIn(page);
+        await page.goto("/masters", { waitUntil: "networkidle" });
+        await expect(page.getByRole("heading", { name: "Masters", level: 1 })).toBeVisible();
+        for (const category of ["Parties & places", "Items & SION norms", "Licence & customs reference", "Rates & pricing"]) {
+            await expect(page.getByRole("heading", { name: category })).toBeVisible();
+        }
+        // Counts come from the real API; the seeded scenario has at least one company.
+        await expect(page.getByTestId("master-count-companies")).not.toHaveText("—");
+        await expect(page.getByTestId("master-count-companies")).toHaveText(/^[1-9][\d,]*$/);
+
+        await page.getByRole("searchbox", { name: "Search masters" }).fill("notification");
+        await expect(page.getByRole("link", { name: /Companies/ })).toHaveCount(0);
+        await page.getByRole("link", { name: /Notification Numbers/ }).click();
+        await page.waitForURL("**/masters/notification-numbers");
+        expect(errors).toEqual([]);
+    });
+
+    test("create, search, edit and delete a slash-coded notification number", async ({ page }) => {
+        await signIn(page);
+        await page.goto("/masters/notification-numbers/create", { waitUntil: "networkidle" });
+        await page.locator("#field-code").fill(CODE);
+        await page.locator("#field-label").fill("E2E notification");
+        await page.getByRole("button", { name: "Create" }).click();
+        await page.waitForURL(/\/masters\/notification-numbers$/);
+
+        const created = await authGet<{ code: string; label: string }>(page, `masters/notification-numbers/${encodeURIComponent(CODE)}/`);
+        expect(created.status).toBe(200);
+        expect(created.body?.label).toBe("E2E notification");
+
+        await searchUntilOnly(page, "E2E/99");
+
+        await page.getByRole("button", { name: /Edit/ }).first().click();
+        await page.waitForURL(`**/masters/notification-numbers/${encodeURIComponent(CODE)}/edit`);
+        await expect(page.locator("#field-label")).toHaveValue("E2E notification");
+        await page.locator("#field-label").fill("E2E notification renamed");
+        await page.getByRole("button", { name: "Update" }).click();
+        await page.waitForURL(/\/masters\/notification-numbers$/);
+        const edited = await authGet<{ label: string }>(page, `masters/notification-numbers/${encodeURIComponent(CODE)}/`);
+        expect(edited.body?.label).toBe("E2E notification renamed");
+        // The list we return to must show the saved value, not a cached page.
+        await expect(page.getByText("E2E notification renamed", { exact: true })).toBeVisible();
+
+        await searchUntilOnly(page, "E2E/99");
+        await page.getByRole("button", { name: "Delete" }).first().click();
+        await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+        await expect(page.getByText(CODE, { exact: true })).toHaveCount(0);
+        expect((await authGet(page, `masters/notification-numbers/${encodeURIComponent(CODE)}/`)).status).toBe(404);
+    });
+
+    test("create and find a port (pk-keyed master)", async ({ page }) => {
+        await signIn(page);
+        await page.goto("/masters/ports/create", { waitUntil: "networkidle" });
+        await page.locator("#field-code").fill(PORT_CODE);
+        await page.locator("#field-name").fill("E2E Browser Port");
+        await page.getByRole("button", { name: "Create" }).click();
+        await page.waitForURL(/\/masters\/ports$/);
+        await page.getByPlaceholder(/Search by/).first().fill("E2E Browser Port");
+        await expect(page.getByText(PORT_CODE, { exact: true })).toBeVisible();
+        const listed = await authGet<{ count: number }>(page, `masters/ports/?search=${PORT_CODE}`);
+        expect(listed.body?.count).toBe(1);
+    });
+});

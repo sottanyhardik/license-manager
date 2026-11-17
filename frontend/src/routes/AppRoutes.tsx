@@ -42,6 +42,7 @@ const Settings = lazyLoadWithRetry(() => import("../pages/Settings"));
 const Profile = lazyLoadWithRetry(() => import("../pages/Profile"));
 const MasterList = lazyLoadWithRetry(() => import("../pages/masters/MasterList"));
 const MasterForm = lazyLoadWithRetry(() => import("../pages/masters/MasterForm"));
+const MastersHub = lazyLoadWithRetry(() => import("../pages/masters/MastersHub"));
 const AllotmentAction = lazyLoadWithRetry(() => import("../pages/AllotmentAction"));
 const BOETransferLetter = lazyLoadWithRetry(() => import("../pages/BOETransferLetter"));
 
@@ -331,6 +332,11 @@ export default function AppRoutes() {
                 } />
 
                 {/* Master CRUD */}
+                <Route path="/masters" element={
+                    <ProtectedRoute>
+                        <AdminLayout><MastersHub /></AdminLayout>
+                    </ProtectedRoute>
+                } />
                 <Route path="/masters/:entity" element={
                     <ProtectedRoute>
                         <AdminLayout><MasterList /></AdminLayout>

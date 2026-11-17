@@ -51,9 +51,13 @@ const EXPECTED = {
         ["SION E126 Report", "/reports/parle/sion-e126"], ["SION E132 Report", "/reports/parle/sion-e132"],
     ],
     Masters: [
+        ["Masters overview", "/masters"],
         ["Companies", "/masters/companies"], ["Ports", "/masters/ports"], ["HS Codes", "/masters/hs-codes"],
         ["Head Norms", "/masters/head-norms"], ["SION Classes", "/masters/sion-classes"], ["Groups", "/masters/groups"],
-        ["Item Names", "/masters/item-names"], ["Exchange Rates", "/masters/exchange-rates"],
+        ["Item Names", "/masters/item-names"], ["Scheme Codes", "/masters/scheme-codes"],
+        ["Notification Numbers", "/masters/notification-numbers"], ["Purchase Statuses", "/masters/purchase-statuses"],
+        ["Transfer Letters", "/masters/transfer-letters"], ["Exchange Rates", "/masters/exchange-rates"],
+        ["Unit Prices", "/masters/unit-prices"],
     ],
 };
 
@@ -105,6 +109,8 @@ describe("resolveActiveNavPath", () => {
         ["/license-ledger/download-requests", "/license-ledger/download-requests"],
         ["/reports/parle/sion-e126", "/reports/parle/sion-e126"],
         ["/masters/ports/3", "/masters/ports"],
+        ["/masters", "/masters"],
+        ["/masters/notification-numbers/025%2F2023/edit", "/masters/notification-numbers"],
         ["/profile", null],
         ["/licenses-archive", null],
     ])("%s → %s", (pathname, expected) => {

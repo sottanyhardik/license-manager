@@ -1,6 +1,7 @@
 import { Inbox, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveFilterState } from "../../../utils/filterPersistence";
+import { getMasterRecordKey } from "../masterListConfig";
 
 interface GenericMasterCardsProps {
     loading: boolean;
@@ -13,6 +14,8 @@ interface GenericMasterCardsProps {
     pageSize: number;
     navigate: (path: string) => void;
     onDelete: (item: any) => void;
+    /** Edit/Delete are shown only to users the API lets write (defaults to true). */
+    canWrite?: boolean;
 }
 
 export default function GenericMasterCards({
@@ -26,6 +29,7 @@ export default function GenericMasterCards({
     pageSize,
     navigate,
     onDelete,
+    canWrite = true,
 }: GenericMasterCardsProps) {
     if (loading) {
         return (
@@ -82,7 +86,7 @@ export default function GenericMasterCards({
                         })}
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1.5 self-center">
+                    {canWrite && <div className="flex shrink-0 items-center gap-1.5 self-center">
                         <button
                             type="button"
                             onClick={() => {
@@ -91,7 +95,7 @@ export default function GenericMasterCards({
                                     pagination: { currentPage, pageSize },
                                     search: "",
                                 });
-                                navigate(`/masters/${entityName}/${item.id}/edit`);
+                                navigate(`/masters/${entityName}/${getMasterRecordKey(entityName, item)}/edit`);
                             }}
                             title="Edit"
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs text-primary hover:bg-primary/10"
@@ -102,11 +106,12 @@ export default function GenericMasterCards({
                             type="button"
                             onClick={() => onDelete(item)}
                             title="Delete"
+                            aria-label="Delete"
                             className="flex cursor-pointer items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs text-destructive hover:bg-destructive/20"
                         >
                             <Trash2 className="size-4" aria-hidden="true" />
                         </button>
-                    </div>
+                    </div>}
                 </div>
             ))}
         </div>

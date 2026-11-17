@@ -195,9 +195,12 @@ describe("TopNav click / touch interaction", () => {
             hrefs.push(...within(screen.getByRole("menu")).getAllByRole("menuitem").map(a => a.getAttribute("href") ?? ""));
             fireEvent.click(trigger(name));
         }
-        expect(hrefs).toHaveLength(5 + 5 + 12 + 8);
+        // Masters: overview + 13 registered masters (masterEntities, grouped by category).
+        expect(hrefs).toHaveLength(5 + 5 + 12 + 14);
         expect(hrefs).toContain("/reports/parle/sion-e132");
         expect(hrefs).toContain("/masters/exchange-rates");
+        expect(hrefs).toContain("/masters");
+        expect(hrefs).toContain("/masters/notification-numbers");
     });
 });
 

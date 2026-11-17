@@ -26,7 +26,7 @@ import GenericMasterCards from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
 import BoeTable from "@/features/bill-of-entry/BoeTable";
-import {getDefaultFilters} from "./masterListConfig";
+import {getDefaultFilters, getMasterRecordKey} from "./masterListConfig";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import PageHeader from "@/components/PageHeader";
@@ -682,7 +682,7 @@ export default function MasterList() {
                 if (entityName === 'licenses' || entityName === 'allotments' || entityName === 'trades' || entityName === 'incentive-licenses') {
                     apiPath = `${entityName}/${item.id}/`;
                 } else {
-                    apiPath = `masters/${entityName}/${item.id}/`;
+                    apiPath = `masters/${entityName}/${getMasterRecordKey(entityName, item)}/`;
                 }
                 await api.delete(apiPath);
             }
@@ -741,7 +741,7 @@ export default function MasterList() {
             } else if (entityName === 'bill-of-entries') {
                 apiPath = `bill-of-entries/${item.id}/`;
             } else {
-                apiPath = `masters/${entityName}/${item.id}/`;
+                apiPath = `masters/${entityName}/${getMasterRecordKey(entityName, item)}/`;
             }
 
             await api.patch(apiPath, { [field]: newValue });
@@ -763,7 +763,9 @@ export default function MasterList() {
             } else if (entityName === 'bill-of-entries') {
                 apiPath = `bill-of-entries/${itemId}/`;
             } else {
-                apiPath = `masters/${entityName}/${itemId}/`;
+                // Tables pass only `id`; code-keyed masters are addressed by code.
+                const row = (data || []).find((d) => d.id === itemId) ?? { id: itemId };
+                apiPath = `masters/${entityName}/${getMasterRecordKey(entityName, row)}/`;
             }
 
             await api.patch(apiPath, { [fieldName]: newValue });
@@ -1497,6 +1499,7 @@ export default function MasterList() {
                             pageSize={pageSize}
                             navigate={navigate}
                             onDelete={handleDelete}
+                            canWrite={canWrite}
                         />
                     ))}
 

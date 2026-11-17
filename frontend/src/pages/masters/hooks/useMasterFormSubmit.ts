@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../../../api/axios";
 import { formatDateForInput, parseDate as parseDateUtil } from "../../../utils/dateFormatter";
@@ -63,6 +64,7 @@ export function useMasterFormSubmit({
     setError,
     setFieldErrors,
 }: UseMasterFormSubmitOptions) {
+    const queryClient = useQueryClient();
     // Use centralized date parser from utility
     const parseDate = (dateString: any) => parseDateUtil(dateString);
 
@@ -448,6 +450,10 @@ export function useMasterFormSubmit({
 
             // Show success message
             toast.success(isEdit ? `${entityTitle} updated successfully` : `${entityTitle} created successfully`);
+
+            // The list caches pages for 30 s (global staleTime); without this the
+            // list we redirect to shows the record as it was before the save.
+            queryClient.invalidateQueries({ queryKey: ['entity-list', entityName] });
 
             // If modal mode, call onSuccess and onClose
             if (isModal && onSuccess) {

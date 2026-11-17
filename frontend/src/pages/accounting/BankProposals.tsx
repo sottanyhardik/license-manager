@@ -52,7 +52,7 @@ const CONF_TONE: Record<Confidence, string> = {
     low: "bg-amber-50 text-amber-800 ring-amber-600/20",
     none: "bg-slate-100 text-slate-700 ring-slate-500/20",
 };
-const SOURCE_LABEL: Record<string, string> = { alias: "learned", name: "name match", chosen: "chosen" };
+const SOURCE_LABEL: Record<string, string> = { alias: "learned", name: "name match" };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -97,7 +97,7 @@ function PartyCell({ p, canWrite, onPick, onReset, overridden, busy }: {
             {p.party ? (
                 <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-medium">{p.party.name}</span>
-                    {p.source && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{SOURCE_LABEL[p.source] ?? p.source}</span>}
+                    {SOURCE_LABEL[p.source] && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{SOURCE_LABEL[p.source]}</span>}
                 </div>
             ) : <span className="text-xs text-slate-500">No party proposed</span>}
             {p.party?.gstin && <div className="text-xs text-slate-500">{p.party.gstin}</div>}

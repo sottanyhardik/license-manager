@@ -91,7 +91,8 @@ describe("BankProposals", () => {
         const row = (await screen.findByText("NEFT ACME 1")).closest("tr")!;
         await userEvent.selectOptions(within(row).getByRole("combobox", { name: "Suggested parties for line 1" }), "555");
         await waitFor(() => expect(get).toHaveBeenCalledWith("accounting/statement-lines/1/proposal/", expect.objectContaining({ params: { party_id: 555 } })));
-        expect(await within(row).findByText("chosen")).toBeInTheDocument();
+        expect(await within(row).findByText("Other Co", { selector: "span, div, p, b, strong" })).toBeInTheDocument();
+        expect(within(row).queryByText(/^chosen$/i)).not.toBeInTheDocument();
         await userEvent.click(screen.getByRole("checkbox", { name: "Select line 1" }));
         await userEvent.click(screen.getByRole("button", { name: "Confirm selected (1)" }));
         const dialog = await screen.findByRole("alertdialog");

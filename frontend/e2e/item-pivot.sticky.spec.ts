@@ -34,14 +34,20 @@ test("Item Pivot keeps its measured sticky stack aligned while scrolling and hor
       const banner = stack.querySelector("[data-item-pivot-notification]")!;
       const rows = Array.from(stack.querySelectorAll("[data-item-pivot-header-tier]"));
       const first = rows[0].querySelector("th")!;
+      // The first tier's own height comes from a cell that spans only that row
+      // (the rowSpan=2 frozen cells cover both tiers).  The two tiers can differ
+      // in height, so tier 2 must start where tier 1 ends — not one tier-2
+      // height below tier 1's top.
+      const firstTier = rows[0].querySelector("th:not([rowspan])") ?? first;
       const second = rows[1].querySelector("th:not([rowspan])")!;
       const visibleBody = Array.from(stack.querySelectorAll("tbody tr td")).find(cell => rect(cell).top >= rect(second).bottom - 1)!;
-      return { nav: rect(nav), banner: rect(banner), first: rect(first), second: rect(second), body: rect(visibleBody), backgrounds: [getComputedStyle(first).backgroundColor, getComputedStyle(second).backgroundColor] };
+      return { nav: rect(nav), banner: rect(banner), first: rect(first), firstTier: rect(firstTier), second: rect(second), body: rect(visibleBody), backgrounds: [getComputedStyle(first).backgroundColor, getComputedStyle(second).backgroundColor] };
     });
     if (y > 0) {
       expect(Math.abs(geometry.banner.top - geometry.nav.bottom)).toBeLessThanOrEqual(2);
       expect(Math.abs(geometry.first.top - geometry.banner.bottom)).toBeLessThanOrEqual(2);
-      expect(Math.abs(geometry.second.top - (geometry.first.top + geometry.second.height))).toBeLessThanOrEqual(2);
+      expect(Math.abs(geometry.firstTier.top - geometry.first.top)).toBeLessThanOrEqual(2);
+      expect(Math.abs(geometry.second.top - geometry.firstTier.bottom)).toBeLessThanOrEqual(2);
       expect(geometry.body.top).toBeGreaterThanOrEqual(geometry.second.bottom - 1);
     }
     expect(geometry.backgrounds.every(background => background !== "rgba(0, 0, 0, 0)")).toBeTruthy();

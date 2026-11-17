@@ -160,10 +160,13 @@ def line_remaining(line: StatementLine) -> Decimal:
 
 
 def unmatched_book_vouchers(bank: BankAccount, *, deposit: bool, as_of: date | None = None):
-    """Posted vouchers touching the bank ledger on the given side with an unmatched balance."""
+    """Posted vouchers touching the bank ledger on the given side with an unmatched balance.
+    Opening balances are the statement's starting point, not transactions to match; reversals
+    net against their originals."""
     side = Q(lines__account=bank.account) & (Q(lines__debit__gt=0) if deposit else Q(lines__credit__gt=0))
     qs = (Voucher.objects.filter(side, status=VoucherStatus.POSTED)
-          .exclude(voucher_type=VoucherType.REVERSAL).distinct().select_related("payment__party")
+          .exclude(voucher_type__in=[VoucherType.REVERSAL, VoucherType.OPENING]).distinct()
+          .select_related("payment__party")
           .order_by("date", "id"))
     if as_of:
         qs = qs.filter(date__lte=as_of)
@@ -180,7 +183,7 @@ class Candidate:
     signals: tuple[str, ...]
 
 
-def _party_name(voucher: Voucher) -> str:
+def party_name(voucher: Voucher) -> str:
     payment = getattr(voucher, "payment", None)
     return payment.party.name if payment else ""
 
@@ -203,7 +206,7 @@ def candidates_for(line: StatementLine) -> list[Candidate]:
         days = abs((voucher.date - line.txn_date).days)
         if days <= DATE_WINDOW_DAYS:
             signals.append(f"date±{days}d"); score += max(0, 15 - 2 * days)
-        party = _party_name(voucher)
+        party = party_name(voucher)
         tokens = [t for t in party.upper().split() if len(t) > 3]
         if tokens and any(t in narration for t in tokens):
             signals.append("party_name"); score += 10

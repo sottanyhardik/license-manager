@@ -316,3 +316,32 @@ class LicenseBalanceLedgerPermission(permissions.BasePermission):
             # silently allowing a new action nobody has gated yet.
             return False
         return all(request.user.has_any_role(roles) for roles in role_sets)
+
+
+ACCOUNTS_READ_ROLES = ['ACCOUNTS_VIEWER', 'ACCOUNTS_MANAGER', 'ACCOUNTS_APPROVER']
+ACCOUNTS_WRITE_ROLES = ['ACCOUNTS_MANAGER', 'ACCOUNTS_APPROVER']
+ACCOUNTS_APPROVE_ROLES = ['ACCOUNTS_APPROVER']
+
+
+class AccountingPermission(permissions.BasePermission):
+    """Accounting workspace (apps.accounting).
+
+    Reads: any accounting role. Writes: the view declares ``write_level`` = "write"
+    (draft/enter: manager or approver) or "approve" (post, reverse, lock periods,
+    execute migrations, maintain chart/tax rules: approver only). A write view without
+    a declared level is denied by default.
+    """
+
+    def has_permission(self, request, view):
+        if request.user and request.user.is_superuser:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return request.user.has_any_role(ACCOUNTS_READ_ROLES)
+        level = getattr(view, 'write_level', None)
+        if level == 'write':
+            return request.user.has_any_role(ACCOUNTS_WRITE_ROLES)
+        if level == 'approve':
+            return request.user.has_any_role(ACCOUNTS_APPROVE_ROLES)
+        return False

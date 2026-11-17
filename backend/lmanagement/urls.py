@@ -48,6 +48,7 @@ urlpatterns = [
     path("api/", include("apps.trade.urls", namespace="trade")),
     path("api/", include("apps.reconciliation.urls", namespace="reconciliation")),
     path("api/", include("apps.tasks.urls", namespace="tasks")),
+    path("api/", include("apps.accounting.urls", namespace="accounting")),
     path("api/masters/", include("apps.core.urls", namespace="masters")),
     path("api/sync/", include("apps.core.sync.urls", namespace="sync")),
 

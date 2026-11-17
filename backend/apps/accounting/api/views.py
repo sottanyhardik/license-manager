@@ -201,7 +201,7 @@ class VoucherReverseView(ApproverView):
     def post(self, request, voucher_id: int):
         v = Voucher.objects.get(pk=voucher_id)
         when = param(request, "date")
-        rev = posting.reverse_voucher(v, reason=param(request, "reason", required=True),
+        rev = posting.reverse_manual_voucher(v, reason=param(request, "reason", required=True),
                                       reversal_date=as_date(when, "date") if when else None, user=request.user)
         return ok(voucher_dict(rev, lines=True), status.HTTP_201_CREATED)
 

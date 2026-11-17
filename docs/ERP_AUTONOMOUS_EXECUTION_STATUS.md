@@ -33,27 +33,56 @@ Status legend: **Implemented** (code), **Tested** (automated tests green), **Dry
 | F Party ledgers & settlement | Implemented + Tested (bill-wise, advances, multi-bill, notes, TDS) | `services/payments.py` |
 | G Entity-wise P&L | Implemented + Tested (P&L agrees with ledger) | `selectors/reports.py` |
 | H Banking | Implemented + Tested (CSV/XLSX, dedupe, UTR→amount match, split/partial, suspense, reclass, BRS = 0 diff) | `services/banking.py`; `tests/test_banking.py` |
-| I Reconciliation workbench | Backend done; UI pending | — |
-| J Expenses/commission/loans | Implemented + Tested | `services/loans.py` |
-| K Historical migration | Implemented + Tested on test DB (dry run, execute, reconcile, idempotent). **Not run on any real DB.** | `services/migration.py` |
-| L/M Reports + consolidation | Implemented + Tested (TB, P&L, BS, CF, ageing, registers, TDS/GST, profitability, consolidation) | `selectors/reports.py` |
-| N Licence protection | Not touched; accounting never reads/writes licence CIF | licence suites to run in gate |
-| O Accountant workspace (UI) | **Next** | — |
-| API | **Next** | — |
+| I Reconciliation workbench | Implemented + Tested (API + UI: upload, auto/manual/split match, unmatch, suspense, BRS) | `api/views_banking.py`, `frontend/src/pages/accounting/Banking.tsx` |
+| J Expenses/commission/loans | Implemented + Tested | `services/loans.py`, `services/invoices.py` |
+| K Historical migration | Implemented + Tested on the test DB (dry run, execute, reconcile, idempotent). **Not run on any real DB.** | `services/migration.py`, Migration Center UI |
+| L/M Reports + consolidation | Implemented + Tested | `selectors/reports.py`, Reports UI |
+| N Licence protection | No licence code changed. Full `apps/` suite incl. licence/CIF regression green | see Tests |
+| O Accountant workspace (UI) | Implemented + Tested (vitest smoke + money unit tests; tsc + build pass) | `frontend/src/pages/accounting/*` |
+| API | Implemented + Tested (permissions, Decimal strings, HTTP workflow) | `apps/accounting/api/*`, `urls.py` |
+| P Independent review | 5 high + 8 medium findings **fixed with regression tests** (`tests/test_review_regressions.py`) | see below |
 
-## Tests
+## Independent review (2026-11-17) — outcomes
 
-- 2026-11-17 baseline: `apps/trade apps/accounts` 87 passed, 1 xfailed.
-- `apps/accounting` 52 passed; `tests/architecture` 9 passed (accounting added to governed apps; edges accounting→core/trade/accounts).
+| Finding | Fix |
+|---|---|
+| H1 a reversed debit/credit note left its settlement active | `reverse_invoice` deactivates the note's settlements |
+| H2 the generic voucher reverse bypassed the document lifecycle | `reverse_manual_voucher`: only MANUAL/BANK_OPENING vouchers; document vouchers are reversed from their document |
+| H3 suspense reclassification could over-allocate or settle the wrong direction | Σ allocations ≤ suspense amount; direction + party-ledger checks |
+| H4 a contra between own banks could be matched on only one side | matched amount computed per bank account |
+| H5 resync kept the stale party/entity/kind | resync moves the bill to the corrected party/entity/kind (only when unsettled) |
+| M1 a migration DB error aborted the run | per-record `DatabaseError` → FAILED with reason |
+| M2 `trade_ids` did not scope payments | payments filtered by their trade |
+| M3 identical same-day loan repayments merged | per-loan event sequence |
+| M4 as-of ageing/BRS used later settlements/matches | as-of filters |
+| M5 a reversed payment left its statement line MATCHED | line status refreshed |
+| M6 cash flow pro-rata was inexact | exact direct method (each counter-line contributes −its net) |
+| M7 TDS threshold fixed at draft time | TDS recomputed at posting under the invoice lock |
+| M8 resync compared settled vs gross | compares vs the recomputed net (rolls back otherwise) |
+| Low | zero-weight allocation → 400; period row lock vs posting race; reversal in a locked period → today; dashboard overdue = everything past due |
+| Open (low) | resolved suspense can't be re-opened; no guard against booking customer TDS both on the bill and on the receipt; per-user entity scoping (any accounting role sees all entities, consistent with OD-04) |
+
+## Tests (2026-11-17, local Postgres 18, isolated test DBs)
+
+- Baseline before changes: `apps/trade apps/accounts` 87 passed, 1 xfailed.
+- Full backend after the engine/API/UI commits: `pytest apps` **3065 passed, 1 xfailed** (incl. all licence/CIF suites);
+  `pytest tests` **246 passed**.
+- After the review fixes: `apps/accounting` **69 passed**, `tests/architecture` **9 passed**; flake8, ruff, `makemigrations --check`
+  clean.
+- Frontend: `vitest run` all suites pass (726 + 2 new accounting tests); `tsc --noEmit` clean; `eslint` 0 errors (3 fast-refresh
+  warnings); `vite build` OK. Playwright not run (no live backend/browser session in this job).
 
 ## Known limits / approval blockers
 
 - PDF statement import is not supported (refused with guidance). CSV and XLSX are supported.
-- GST on licence trades and the applicable TDS sections need CA confirmation (AD-05).
-- Production migration execution needs owner approval plus a sanitised snapshot rehearsal (OD-17).
-- Merging into `feature/v5` and any push need owner approval.
+- **Policy (CA):** GST treatment of licence trades (currently none, matching the Bill of Supply); which TDS sections and rates apply;
+  perpetual vs periodic inventory costing.
+- **Approval:** executing the historical migration on production (rehearse on the sanitised snapshot OD-17 first); merging into
+  `feature/v5` / pushing; changed trade DELETE behaviour for trades with posted accounting (now refused with 400).
+- Navigation: one "Accounting" group was added to `TopNav.tsx`. The nav-redesign session must carry it into `navConfig.ts`.
 
 ## Next exact action
 
-Build the DRF API (`apps/accounting/api`, `/api/accounting/…`, `AccountingPermission`), then the frontend accountant
-workspace (`/accounting/*`), then run the gates.
+Owner: confirm the policy items above, then approve (a) cherry-picking this branch into `feature/v5` and (b) a migration dry run
+on the sanitised snapshot. Engineering next: Playwright e2e for the purchase → bank reconciliation flow against a dev server;
+resolve the open low-severity items.

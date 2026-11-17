@@ -206,3 +206,18 @@ def delete_draft(voucher: Voucher, *, user=None) -> None:
         raise AccountingError("Posted vouchers cannot be deleted; reverse them instead.", "posted_immutable")
     audit.record("VOUCHER_DRAFT_DELETED", voucher, actor=user, total=voucher.total)
     voucher.delete()
+
+
+#: Vouchers owned by a document must be reversed through that document's own service so its
+#: status, settlements and bank matches stay consistent (invoice -> reverse_invoice, payment ->
+#: reverse_payment, suspense -> resolve, loans/migration -> their services).
+DIRECTLY_REVERSIBLE_SOURCES = ("MANUAL", "BANK_OPENING")
+
+
+def reverse_manual_voucher(voucher: Voucher, *, reason: str, reversal_date: date | None = None, user=None) -> Voucher:
+    if voucher.source_type not in DIRECTLY_REVERSIBLE_SOURCES:
+        raise AccountingError(
+            f"This voucher belongs to a {voucher.source_type.lower().replace('_', ' ')}; reverse it from that document.",
+            "document_owned",
+        )
+    return reverse_voucher(voucher, reason=reason, reversal_date=reversal_date, user=user)

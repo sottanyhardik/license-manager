@@ -12,7 +12,7 @@ import hashlib
 import io
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
@@ -24,13 +24,14 @@ from apps.accounting.domain.statement import (
     StatementFormatError, detect_mapping, find_header_row, fingerprint, normalise_row,
 )
 from apps.accounting.models import (
-    Account, BankAccount, BankMatch, Invoice, LineStatus, StatementImport, StatementLine, SuspenseItem, Voucher,
-    VoucherLine, VoucherStatus, VoucherType,
+    Account, BankAccount, BankMatch, Invoice, LineStatus, PaymentDirection, StatementImport, StatementLine, SuspenseItem, Voucher,
+    VoucherStatus, VoucherType,
 )
 
 from . import AccountingError, audit
 from .chart import system_account
 from .invoices import allocate
+from .payments import check_direction
 from .posting import cr, dr, post_voucher, reverse_voucher
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -146,16 +147,24 @@ def _bank_side_amount(voucher: Voucher, account: Account, deposit: bool) -> Deci
     return (agg["d"] or ZERO) - (agg["c"] or ZERO) if deposit else (agg["c"] or ZERO) - (agg["d"] or ZERO)
 
 
-def voucher_matched(voucher: Voucher) -> Decimal:
-    return BankMatch.objects.filter(voucher=voucher, is_active=True).aggregate(t=Sum("amount"))["t"] or ZERO
+def voucher_matched(voucher: Voucher, bank: BankAccount, as_of: date | None = None) -> Decimal:
+    """Matched amount of ``voucher`` on *this* bank's statement (a contra hits two banks)."""
+    qs = BankMatch.objects.filter(voucher=voucher, is_active=True, statement_line__bank_account=bank)
+    if as_of is not None:
+        qs = qs.filter(statement_line__txn_date__lte=as_of)
+    return qs.aggregate(t=Sum("amount"))["t"] or ZERO
 
 
-def voucher_unmatched(voucher: Voucher, bank: BankAccount, deposit: bool) -> Decimal:
-    return _bank_side_amount(voucher, bank.account, deposit) - voucher_matched(voucher)
+def voucher_unmatched(voucher: Voucher, bank: BankAccount, deposit: bool, as_of: date | None = None) -> Decimal:
+    return _bank_side_amount(voucher, bank.account, deposit) - voucher_matched(voucher, bank, as_of)
 
 
-def line_remaining(line: StatementLine) -> Decimal:
-    used = line.matches.filter(is_active=True).aggregate(t=Sum("amount"))["t"] or ZERO
+def line_remaining(line: StatementLine, as_of: date | None = None) -> Decimal:
+    """Unmatched part of a statement line (optionally counting only book entries dated <= as_of)."""
+    qs = line.matches.filter(is_active=True)
+    if as_of is not None:
+        qs = qs.filter(voucher__date__lte=as_of)
+    used = qs.aggregate(t=Sum("amount"))["t"] or ZERO
     return line.amount - used
 
 
@@ -170,7 +179,7 @@ def unmatched_book_vouchers(bank: BankAccount, *, deposit: bool, as_of: date | N
           .order_by("date", "id"))
     if as_of:
         qs = qs.filter(date__lte=as_of)
-    return [v for v in qs if voucher_unmatched(v, bank, deposit) > 0]
+    return [v for v in qs if voucher_unmatched(v, bank, deposit, as_of) > 0]
 
 
 # --- matching ------------------------------------------------------------------------------------
@@ -215,7 +224,7 @@ def candidates_for(line: StatementLine) -> list[Candidate]:
     return sorted(out, key=lambda c: (-c.score, abs((c.voucher.date - line.txn_date).days), c.voucher.pk))
 
 
-def _refresh_line_status(line: StatementLine) -> StatementLine:
+def refresh_line_status(line: StatementLine) -> StatementLine:
     remaining = line_remaining(line)
     matched = line.amount - remaining
     has_suspense = line.matches.filter(is_active=True, method=BankMatch.SUSPENSE).exists()
@@ -278,7 +287,7 @@ def auto_match(bank: BankAccount, *, user=None) -> dict:
                 result["amount"] += 1
             else:
                 result["ambiguous" if exact else "unmatched"] += 1
-        _refresh_line_status(line)
+        refresh_line_status(line)
     return dict(result)
 
 
@@ -292,7 +301,7 @@ def manual_match(line: StatementLine, allocations: list[tuple[Voucher, Decimal]]
         raise AccountingError("Split total exceeds the statement line's unmatched amount.", "over_match")
     for voucher, amount in allocations:
         _match(line, voucher, amount, BankMatch.MANUAL, user)
-    return _refresh_line_status(line)
+    return refresh_line_status(line)
 
 
 @transaction.atomic
@@ -305,7 +314,7 @@ def unmatch(match: BankMatch, *, reason: str, user=None) -> StatementLine:
     match.is_active = False
     match.save(update_fields=["is_active", "modified_on"])
     audit.record("BANK_UNMATCHED", match, actor=user, entity=match.voucher.entity, reason=reason)
-    return _refresh_line_status(match.statement_line)
+    return refresh_line_status(match.statement_line)
 
 
 # --- suspense -----------------------------------------------------------------------------------
@@ -335,7 +344,7 @@ def move_to_suspense(line: StatementLine, *, reason: str, owner=None, user=None,
                                        is_receipt=deposit, reason=reason, owner=owner, follow_up_on=follow_up_on)
     BankMatch.objects.create(statement_line=line, voucher=voucher, amount=amount, method=BankMatch.SUSPENSE)
     audit.record("SUSPENSE_OPENED", item, actor=user, entity=entity, amount=amount, reason=reason)
-    _refresh_line_status(line)
+    refresh_line_status(line)
     return item
 
 
@@ -361,10 +370,14 @@ def reclassify_suspense(item: SuspenseItem, *, target: Account, note: str, user=
     voucher, _ = post_voucher(entity=item.entity, voucher_type=VoucherType.JOURNAL,
                               voucher_date=resolution_date or item.voucher.date, lines=lines, narration=narr,
                               source_type="SUSPENSE", source_id=item.pk, source_event="RECLASSIFY", user=user)
-    for invoice, amount in allocations or []:
-        if target.kind != "PARTY" or invoice.party_id != target.party_id:
+    allocations = allocations or []
+    if sum((to_money(a) for _i, a in allocations), ZERO) > item.amount:
+        raise AccountingError("Allocations exceed the suspense amount.", "over_allocation")
+    for invoice, amount in allocations:
+        if target.kind != "PARTY" or invoice.party_id != target.party_id or invoice.entity_id != item.entity_id:
             raise AccountingError("Bills can only be allocated when reclassifying to that party's ledger.",
                                   "party_mismatch")
+        check_direction(PaymentDirection.RECEIPT if item.is_receipt else PaymentDirection.PAYMENT, invoice)
         allocate(invoice, voucher, amount, user=user)
     _close_item(item, voucher, note, user)
     return item
@@ -383,7 +396,7 @@ def resolve_suspense_by_match(item: SuspenseItem, voucher: Voucher, *, note: str
     line = item.statement_line
     _match(line, voucher, item.amount, BankMatch.MANUAL, user)
     _close_item(item, reversal, note, user)
-    _refresh_line_status(line)
+    refresh_line_status(line)
     return item
 
 
@@ -395,7 +408,7 @@ def _close_item(item: SuspenseItem, voucher: Voucher, note: str, user) -> None:
                              "modified_on"])
     audit.record("SUSPENSE_RESOLVED", item, actor=user, entity=item.entity, voucher=voucher.number, note=note)
     if item.statement_line_id:
-        _refresh_line_status(item.statement_line)
+        refresh_line_status(item.statement_line)
 
 
 # --- reconciliation -------------------------------------------------------------------------------
@@ -411,13 +424,14 @@ def bank_reconciliation(bank: BankAccount, as_of: date) -> dict:
     for deposit in (True, False):
         for v in unmatched_book_vouchers(bank, deposit=deposit, as_of=as_of):
             unpresented.append({"voucher_id": v.pk, "number": v.number, "date": v.date, "deposit": deposit,
-                                "amount": voucher_unmatched(v, bank, deposit)})
-    unrecorded = [  # on the statement, not yet in books
-        {"line_id": ln.pk, "date": ln.txn_date, "narration": ln.narration, "reference": ln.reference,
-         "deposit": ln.credit > 0, "amount": line_remaining(ln), "status": ln.status}
-        for ln in StatementLine.objects.filter(bank_account=bank, txn_date__lte=as_of,
-                                               status__in=[LineStatus.UNMATCHED, LineStatus.PARTIAL])
-    ]
+                                "amount": voucher_unmatched(v, bank, deposit, as_of)})
+    unrecorded = []  # on the statement, not yet in books (as they stood on as_of)
+    for ln in StatementLine.objects.filter(bank_account=bank, txn_date__lte=as_of):
+        remaining = line_remaining(ln, as_of)
+        if remaining > 0:
+            unrecorded.append({"line_id": ln.pk, "date": ln.txn_date, "narration": ln.narration,
+                               "reference": ln.reference, "deposit": ln.credit > 0, "amount": remaining,
+                               "status": ln.status})
     uncleared_deposits = sum((i["amount"] for i in unpresented if i["deposit"]), ZERO)
     unpresented_payments = sum((i["amount"] for i in unpresented if not i["deposit"]), ZERO)
     unrecorded_credits = sum((i["amount"] for i in unrecorded if i["deposit"]), ZERO)

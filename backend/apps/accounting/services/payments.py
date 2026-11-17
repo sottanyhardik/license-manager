@@ -10,7 +10,7 @@ from django.db.models import Sum
 from apps.accounting.domain.money import ZERO, to_money
 from apps.accounting.models import (
     PAYABLE_KINDS, RECEIVABLE_KINDS, Account, AccountKind, BankAccount, BankMatch, DocStatus, EntityBooks, Invoice,
-    Payment, PaymentDirection, VoucherType,
+    Payment, PaymentDirection, StatementLine, VoucherType,
 )
 from apps.core.models import CompanyModel
 
@@ -44,7 +44,7 @@ def create_bank_account(entity: EntityBooks, *, bank_name: str, account_number: 
     return bank
 
 
-def _check_direction(direction: str, invoice: Invoice) -> None:
+def check_direction(direction: str, invoice: Invoice) -> None:
     ok = invoice.kind in PAYABLE_KINDS if direction == PaymentDirection.PAYMENT else invoice.kind in RECEIVABLE_KINDS
     if not ok:
         raise AccountingError(f"A {direction.lower()} cannot settle a {invoice.get_kind_display().lower()}.",
@@ -70,7 +70,7 @@ def record_payment(*, entity: EntityBooks, direction: str, party: CompanyModel, 
     for invoice, _amt in allocations:
         if invoice.party_id != party.pk or invoice.entity_id != entity.pk:
             raise AccountingError(f"Bill {invoice.number} belongs to another party or entity.", "party_mismatch")
-        _check_direction(direction, invoice)
+        check_direction(direction, invoice)
     if sum((to_money(a) for _i, a in allocations), ZERO) > amount + tds_amount:
         raise AccountingError("Allocations exceed the payment amount.", "over_allocation")
 
@@ -116,7 +116,7 @@ def allocate_payment(payment: Payment, invoice: Invoice, amount, *, user=None):
         raise AccountingError("The payment is not posted.", "not_posted")
     if invoice.party_id != payment.party_id or invoice.entity_id != payment.entity_id:
         raise AccountingError("Bill and payment belong to different parties or entities.", "party_mismatch")
-    _check_direction(payment.direction, invoice)
+    check_direction(payment.direction, invoice)
     if amount > unallocated(payment):
         raise AccountingError(f"Only {unallocated(payment)} of this payment is unallocated.", "over_allocation")
     return allocate(invoice, payment.voucher, amount, payment=payment, user=user)
@@ -129,7 +129,11 @@ def reverse_payment(payment: Payment, *, reason: str, user=None, reversal_date: 
         raise AccountingError("Only posted payments can be reversed.", "not_posted")
     reverse_voucher(payment.voucher, reversal_date=reversal_date, reason=reason, user=user)
     payment.settlements.filter(is_active=True).update(is_active=False)
+    lines = list(StatementLine.objects.filter(matches__voucher=payment.voucher, matches__is_active=True).distinct())
     BankMatch.objects.filter(voucher=payment.voucher, is_active=True).update(is_active=False)
+    from .banking import refresh_line_status
+    for line in lines:  # those statement lines are unmatched again and must reappear in the workbench/BRS
+        refresh_line_status(line)
     payment.status = DocStatus.REVERSED
     payment.save(update_fields=["status", "modified_on"])
     audit.record("PAYMENT_REVERSED", payment, actor=user, reason=reason)

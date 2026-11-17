@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 
 from apps.accounting.domain.money import ZERO
 from apps.accounting.models import (
@@ -35,6 +35,7 @@ class Classified:
     financial_year: str
     reasons: list[str] = field(default_factory=list)
     label: str = ""
+    trade_id: int | None = None
 
 
 def classify_trades(entity: EntityBooks) -> list[Classified]:
@@ -64,7 +65,7 @@ def classify_trades(entity: EntityBooks) -> list[Classified]:
                 reasons.append(f"Lines {view.lines_total} ≠ subtotal {view.subtotal}")
             cls = REVIEW if reasons else READY
         out.append(Classified("TRADE", trade.pk, cls, view.total, fy, reasons,
-                              f"{trade.direction} {view.invoice_number}"))
+                              f"{trade.direction} {view.invoice_number}", trade.pk))
         for tp in trade.payments.all():
             if tp.pk in accounted_payments:
                 pcls, preasons = ALREADY, []
@@ -73,7 +74,7 @@ def classify_trades(entity: EntityBooks) -> list[Classified]:
             else:
                 pcls, preasons = REVIEW, ["Trade invoice not postable yet"]
             out.append(Classified("TRADE_PAYMENT", tp.pk, pcls, tp.amount, fy_bounds(tp.date)[0], preasons,
-                                  f"Payment on {view.invoice_number}"))
+                                  f"Payment on {view.invoice_number}", trade.pk))
     return out
 
 
@@ -111,7 +112,7 @@ def execute(entity: EntityBooks, *, bank_account: BankAccount | None, confirm: b
         raise AccountingError("Execution requires explicit confirmation (confirm=true).", "confirm_required")
     if bank_account is not None and bank_account.entity_id != entity.pk:
         raise AccountingError("The bank account belongs to another entity.", "cross_entity")
-    items = [i for i in classify_trades(entity) if trade_ids is None or i.source_type != "TRADE" or i.source_id in trade_ids]
+    items = [i for i in classify_trades(entity) if trade_ids is None or i.trade_id in trade_ids]
     run = MigrationRun.objects.create(entity=entity, mode=MigrationRun.EXECUTE, parameters={
         "bank_account_id": bank_account.pk if bank_account else None, "trade_ids": trade_ids})
     records = []
@@ -153,6 +154,8 @@ def _try(fn, reasons):
         return MIGRATED, reasons
     except AccountingError as exc:
         return FAILED, reasons + [str(exc)]
+    except DatabaseError as exc:  # e.g. duplicate invoice number for the party, concurrent run
+        return FAILED, reasons + [f"Database rejected the record: {exc.__class__.__name__}: {str(exc)[:200]}"]
 
 
 def reconcile(entity: EntityBooks) -> dict:

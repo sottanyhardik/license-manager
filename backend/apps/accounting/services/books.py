@@ -82,7 +82,8 @@ def open_period_for(entity: EntityBooks, d: date) -> tuple[FinancialYear, Accoun
     fy = ensure_financial_year(entity, d)
     if fy.status == FinancialYear.CLOSED:
         raise AccountingError(f"Financial year {fy.label} is closed.", "fy_closed")
-    period = fy.periods.get(start_date__lte=d, end_date__gte=d)
+    # Row lock (inside the caller's transaction) so a concurrent period lock cannot race a posting.
+    period = fy.periods.select_for_update().get(start_date__lte=d, end_date__gte=d)
     if period.status == AccountingPeriod.LOCKED:
         raise AccountingError(f"The accounting period {period.start_date:%b %Y} is locked.", "period_locked")
     return fy, period

@@ -84,7 +84,7 @@ class PurchaseScenarioTests(TestCase):
         self.assertEqual(account_balance(supplier_acct), D("0.00"))
 
     def test_tds_threshold_excess_mode(self):
-        from apps.accounting.services.invoices import LineInput, create_invoice
+        from apps.accounting.services.invoices import create_invoice
         section = h.tds_section(code="194Q", rate="0.100", threshold="5000000.00", mode="EXCESS")
         acct = system_account(self.entity, "PURCHASES")
         first = create_invoice(entity=self.entity, kind="PURCHASE", party=self.supplier, number="A",

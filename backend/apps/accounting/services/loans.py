@@ -11,7 +11,9 @@ from django.db import transaction
 
 from apps.accounting.domain.interest import BalanceSegment, accrue, month_end
 from apps.accounting.domain.money import ZERO, to_money
-from apps.accounting.models import Account, AccountKind, BankAccount, EntityBooks, Loan, LoanAccrual, VoucherType
+from apps.accounting.models import (
+    Account, AccountKind, BankAccount, EntityBooks, Loan, LoanAccrual, Voucher, VoucherType,
+)
 from apps.accounting.selectors.ledger import account_balance, posted_lines
 from apps.core.models import CompanyModel
 
@@ -52,7 +54,11 @@ def create_loan(*, entity: EntityBooks, party: CompanyModel, direction: str, pri
     return loan
 
 
+@transaction.atomic
 def disburse_loan(loan: Loan, *, amount, on: date, user=None):
+    loan = Loan.objects.select_for_update().select_related("bank_account__account", "principal_account").get(pk=loan.pk)
+    if loan.status == Loan.CLOSED:
+        raise AccountingError("The loan is closed.", "loan_closed")
     amount = to_money(amount)
     bank = loan.bank_account.account
     given = loan.direction == Loan.GIVEN
@@ -60,8 +66,15 @@ def disburse_loan(loan: Loan, *, amount, on: date, user=None):
         [dr(bank, amount), cr(loan.principal_account, amount)]
     voucher, _ = post_voucher(entity=loan.entity, voucher_type=VoucherType.LOAN_DISBURSEMENT, voucher_date=on,
                               lines=lines, narration=f"Loan #{loan.pk} disbursement", source_type="LOAN",
-                              source_id=loan.pk, source_event=f"DISBURSE:{on.isoformat()}:{amount}", user=user)
+                              source_id=loan.pk, source_event=f"DISBURSE#{_next_event_no(loan, 'DISBURSE')}",
+                              user=user)
     return voucher
+
+
+def _next_event_no(loan: Loan, prefix: str) -> int:
+    """Per-loan sequence (caller holds the loan row lock or a fresh loan), so two genuine identical
+    repayments on one day are two vouchers, never silently merged."""
+    return Voucher.objects.filter(source_type="LOAN", source_id=loan.pk, source_event__startswith=f"{prefix}#").count() + 1
 
 
 def principal_outstanding(loan: Loan, *, end: date | None = None) -> Decimal:
@@ -156,7 +169,7 @@ def record_repayment(loan: Loan, *, on: date, principal=ZERO, interest=ZERO, tds
     voucher, _ = post_voucher(entity=loan.entity, voucher_type=VoucherType.LOAN_REPAYMENT, voucher_date=on,
                               lines=lines, narration=f"Loan #{loan.pk} repayment {reference}".strip(),
                               source_type="LOAN", source_id=loan.pk,
-                              source_event=f"REPAY:{on.isoformat()}:{principal}:{interest}:{reference}", user=user)
+                              source_event=f"REPAY#{_next_event_no(loan, 'REPAY')}", user=user)
     audit.record("LOAN_REPAYMENT", loan, actor=user, principal=principal, interest=interest, tds=tds)
     return voucher
 

@@ -115,13 +115,26 @@ def resync_trade_invoice(invoice: Invoice, *, user=None, reason: str = "Trade ed
     view = view_of(get_trade(invoice.trade_id))
     if view.version == invoice.source_version:
         return invoice
+    if invoice.status in (DocStatus.CANCELLED, DocStatus.REVERSED):
+        raise AccountingError("This trade invoice is cancelled/reversed; it cannot be re-synced.", "not_active")
     was_posted = invoice.status == DocStatus.POSTED
     settled = settled_amount(invoice)
-    if was_posted and view.total < settled:
-        raise AccountingError(f"The trade total {view.total} is below the amount already settled {settled}.",
-                              "below_settled")
+    identity_changed = (view.entity_company_id, view.party_company_id, view.kind) != (
+        invoice.entity_id, invoice.party_id, invoice.kind)
+    if identity_changed:
+        # Counterparty, own entity or direction changed: the bill moves to another ledger/side.
+        if settled > 0:
+            raise AccountingError("The trade's party/entity/direction changed but the bill is already settled; "
+                                  "reverse its settlements first.", "identity_changed_settled")
+        new_entity = EntityBooks.objects.filter(pk=view.entity_company_id, is_active=True).first()
+        if new_entity is None or not view.party_company_id:
+            raise AccountingError("The trade's new own side has no active books or no counterparty.", "no_books")
     if was_posted:
-        reverse_voucher(invoice.voucher, reversal_date=max(invoice.date, invoice.voucher.date), reason=reason, user=user)
+        reverse_voucher(invoice.voucher, reversal_date=_open_reversal_date(invoice.voucher), reason=reason, user=user)
+    if identity_changed:
+        invoice.entity = new_entity
+        invoice.party = CompanyModel.objects.get(pk=view.party_company_id)
+        invoice.kind = view.kind
     invoice.lines.all().delete()
     invoice.taxable_amount, invoice.roundoff = view.subtotal, view.roundoff
     invoice.gross_amount = view.total
@@ -133,10 +146,24 @@ def resync_trade_invoice(invoice: Invoice, *, user=None, reason: str = "Trade ed
     invoice.save()
     _write_trade_lines(invoice, view, invoice.trade_id)
     apply_tds(invoice)
-    audit.record("INVOICE_RESYNCED", invoice, actor=user, version=view.version, reason=reason)
+    if invoice.net_amount < settled:  # rolls back the reversal too (atomic)
+        raise AccountingError(f"The new net amount {invoice.net_amount} is below the amount already settled {settled}.",
+                              "below_settled")
+    audit.record("INVOICE_RESYNCED", invoice, actor=user, version=view.version, reason=reason,
+                 identity_changed=identity_changed)
     if was_posted:
         invoice = post_invoice(invoice, user=user)
     return invoice
+
+
+def _open_reversal_date(voucher: Voucher) -> date:
+    """Reverse on the original date when its period is open, otherwise today (locked periods stay untouched)."""
+    from .books import open_period_for
+    try:
+        open_period_for(voucher.entity, voucher.date)
+        return voucher.date
+    except AccountingError:
+        return max(timezone.localdate(), voucher.date)
 
 
 # --- standalone invoices (expense, commission, notes, non-trade purchase/sales) ------------------
@@ -230,7 +257,11 @@ def _expand_allocations(lines: list[LineInput]) -> list[LineInput]:
             weights = [trades[t].total_amount for t in trade_ids]
         else:
             raise AccountingError("Allocation method must be VALUE or QUANTITY (weight in kg).", "bad_allocation")
-        parts = allocate_pro_rata(to_money(ln.amount), [Decimal(w) for w in weights])
+        try:
+            parts = allocate_pro_rata(to_money(ln.amount), [Decimal(w) for w in weights])
+        except ValueError as exc:
+            raise AccountingError(f"Cannot allocate by {method.lower()}: the trades have no {method.lower()}.",
+                                  "bad_allocation") from exc
         for trade_id, part in zip(trade_ids, parts):
             if part:
                 out.append(LineInput(ln.account, part, f"{ln.description} (alloc {method.lower()})".strip(),
@@ -344,6 +375,8 @@ def post_invoice(invoice: Invoice, *, user=None) -> Invoice:
         raise AccountingError("Confirm the invoice before posting.", "not_confirmed")
     if invoice.trade_id and trade_drift(invoice):
         raise AccountingError("The trade changed since this invoice was linked; re-sync first.", "trade_drift")
+    if invoice.tds_section_id:  # thresholds depend on what is posted *now*, not when the draft was made
+        apply_tds(invoice)
     if invoice.net_amount <= 0 and invoice.kind not in NOTE_KINDS:
         raise AccountingError("Nothing to post: the invoice amount is zero.", "zero_amount")
     # Each posting of the same invoice (first post, re-post after a trade edit) has its own sequence number.
@@ -389,6 +422,8 @@ def reverse_invoice(invoice: Invoice, *, reason: str, user=None, reversal_date: 
     if settled_amount(invoice) > 0:
         raise AccountingError("Reverse or re-allocate the settlements on this bill first.", "has_settlements")
     reverse_voucher(invoice.voucher, reversal_date=reversal_date, reason=reason, user=user)
+    if invoice.kind in NOTE_KINDS:  # a reversed note no longer reduces the bill it adjusted
+        Settlement.objects.filter(note=invoice, is_active=True).update(is_active=False)
     invoice.status = DocStatus.REVERSED
     invoice.save(update_fields=["status", "modified_on"])
     audit.record("INVOICE_REVERSED", invoice, actor=user, reason=reason)
@@ -397,14 +432,18 @@ def reverse_invoice(invoice: Invoice, *, reason: str, user=None, reversal_date: 
 
 # --- bill-wise settlement ------------------------------------------------------------------------
 
-def settled_amount(invoice: Invoice) -> Decimal:
-    return invoice.settlements.filter(is_active=True).aggregate(t=Sum("amount"))["t"] or ZERO
+def settled_amount(invoice: Invoice, as_of: date | None = None) -> Decimal:
+    qs = invoice.settlements.filter(is_active=True)
+    if as_of is not None:
+        qs = qs.filter(voucher__date__lte=as_of)
+    return qs.aggregate(t=Sum("amount"))["t"] or ZERO
 
 
-def outstanding(invoice: Invoice) -> Decimal:
+def outstanding(invoice: Invoice, as_of: date | None = None) -> Decimal:
+    """Open amount of a posted bill (optionally as it stood on ``as_of``)."""
     if invoice.status != DocStatus.POSTED:
         return ZERO
-    return invoice.net_amount - settled_amount(invoice)
+    return invoice.net_amount - settled_amount(invoice, as_of)
 
 
 def allocate(invoice: Invoice, voucher: Voucher, amount: Decimal, *, payment=None, note: Invoice | None = None,

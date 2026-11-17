@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from django.db.models import Sum
 
-from apps.accounting.domain.money import ZERO, q2
+from apps.accounting.domain.money import ZERO
 from apps.accounting.models import (
     PAYABLE_KINDS, PL_NATURES, RECEIVABLE_KINDS, Account, AccountKind, DocStatus, EntityBooks, Invoice, Loan,
     Nature, ReportHead, SuspenseItem, VoucherLine,
@@ -133,12 +133,14 @@ def cash_flow(entity: EntityBooks, start: date, end: date) -> dict:
         by_voucher[ln.voucher_id].append(ln)
     for vlines in by_voucher.values():
         cash_move = sum((ln.debit - ln.credit for ln in vlines if ln.account_id in cash_ids), ZERO)
-        others = [ln for ln in vlines if ln.account_id not in cash_ids]
-        weight = sum((abs(ln.debit - ln.credit) for ln in others), ZERO)
-        if not cash_move or not weight:
+        if not cash_move:
             continue  # contra between bank accounts, or no cash effect
-        for ln in others:
-            share = q2(cash_move * abs(ln.debit - ln.credit) / weight)
+        # Exact direct method: each counter-line explains -(its own net) of the cash movement, so the
+        # sections always sum to the cash moved (e.g. TDS withheld on interest nets against interest).
+        for ln in vlines:
+            if ln.account_id in cash_ids:
+                continue
+            share = ln.credit - ln.debit
             head = accts[ln.account_id].group.report_head
             section = ("financing" if head in (H.LOANS_TAKEN, H.CAPITAL) else
                        "investing" if head in (H.FIXED_ASSETS, H.LOANS_GIVEN) else "operating")
@@ -163,7 +165,7 @@ def ageing(entity: EntityBooks, *, receivable: bool, as_of: date) -> dict:
     parties: dict[int, dict] = {}
     totals = {f"{lo}-{hi or '+'}": ZERO for lo, hi in AGEING_BUCKETS} | {"not_due": ZERO, "total": ZERO}
     for bill in bills:
-        due = outstanding(bill)
+        due = outstanding(bill, as_of)
         if due <= 0:
             continue
         ref = bill.due_date or bill.date
@@ -349,7 +351,7 @@ def dashboard(entity: EntityBooks, start: date, end: date) -> dict:
     cash_bal = sum((account_balance(a, end=end) for a in bank_cash if a.kind == AccountKind.CASH), ZERO)
     recv = ageing(entity, receivable=True, as_of=end)["totals"]
     pay = ageing(entity, receivable=False, as_of=end)["totals"]
-    overdue = lambda t: t["total"] - t["not_due"] - t["0-30"]  # noqa: E731
+    overdue = lambda t: t["total"] - t["not_due"]  # noqa: E731  (anything past its due date)
     return {
         "entity_id": entity.pk, "start": start, "end": end,
         "sales": pl["net_sales"], "purchases": pl["lines"]["purchases"]["amount"],

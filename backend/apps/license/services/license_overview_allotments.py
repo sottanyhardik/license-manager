@@ -31,6 +31,8 @@ from django.db.models import DecimalField, Sum
 
 from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.core.constants import DEC_0, DEC_000
+from apps.core.utils.decimal_utils import to_decimal
+from apps.license.services.balance_calculator import LicenseBalanceCalculator
 
 
 def list_allotment_rows(license_obj) -> List[Dict[str, Any]]:
@@ -67,6 +69,20 @@ def list_allotment_rows(license_obj) -> List[Dict[str, Any]]:
         .distinct()
     )
 
+    # Outstanding (still-reserved) CIF per allotment, taken verbatim from the
+    # Balance Engine's per-row `contributed` annotation — the exact rows
+    # `LicenseBalanceCalculator.calculate_allotment` sums for ALLOTMENT CIF.
+    # `cif_fc` above stays the gross allotted amount; summing it across rows
+    # double counts allotments already represented by BOEs (their CIF is in
+    # BOE CIF). One extra query; no new formula.
+    outstanding_by_allotment_id: Dict[int, Any] = {}
+    for allotment_id, contributed in LicenseBalanceCalculator.get_allotment_rows(license_obj).values_list(
+        "allotment_id", "contributed"
+    ):
+        outstanding_by_allotment_id[allotment_id] = (
+            outstanding_by_allotment_id.get(allotment_id, DEC_0) + to_decimal(contributed, DEC_0)
+        )
+
     rows: List[Dict[str, Any]] = []
     for allotment in allotments:
         agg = by_allotment_id[allotment.id]
@@ -77,6 +93,7 @@ def list_allotment_rows(license_obj) -> List[Dict[str, Any]]:
             "product": allotment.item_name,
             "quantity": agg["qty"] or DEC_000,
             "cif_fc": agg["cif_fc"] or DEC_0,
+            "outstanding_cif_fc": outstanding_by_allotment_id.get(allotment.id, DEC_0),
             "status": _allotment_status(allotment, is_linked_to_boe=allotment.id in linked_allotment_ids),
         })
     return rows

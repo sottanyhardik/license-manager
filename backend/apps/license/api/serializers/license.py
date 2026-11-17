@@ -214,6 +214,18 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     # this item, each with its own remaining availability after allocations.
     planning_options = serializers.SerializerMethodField(read_only=True)
 
+    # Approved A-1 (doc 11 §9): server-authoritative item quantity, ADDITIVE.
+    # Exactly `ItemBalanceCalculator.calculate_available_quantity_for_items`
+    # (floored at 0) plus the over-use shortfall from the same expression
+    # unfloored.  String Decimal at 3dp; existing fields are unchanged.
+    # Emitted only when the caller opts in via
+    # `context['include_canonical_quantity']` (the licence detail, read by
+    # CustomsLedgerSection / LicenseBalanceModal, does); every other payload
+    # of this serializer stays byte-for-byte and query-count identical.
+    available_quantity_canonical = serializers.SerializerMethodField(read_only=True)
+    over_utilised_quantity = serializers.SerializerMethodField(read_only=True)
+    is_quantity_over_utilised = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = LicenseImportItemsModel
         fields = ['id', 'serial_number', 'license', 'hs_code', 'items', 'items_detail', 'description', 'quantity',
@@ -221,7 +233,8 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
                   'allotted_quantity', 'allotted_value', 'debited_quantity', 'boe_debited_quantity', 'debited_value', 'planned_quantity',
                   'license_number', 'license_date', 'license_expiry_date',
                   'notification_number', 'exporter_name', 'notes', 'hs_code_detail', 'hs_code_label', 'balance_cif_fc',
-                  'is_restricted', 'condition_type', 'billed_no_boe', 'billed_no_boe_qty', 'planning_options']
+                  'is_restricted', 'condition_type', 'billed_no_boe', 'billed_no_boe_qty', 'planning_options',
+                  'available_quantity_canonical', 'over_utilised_quantity', 'is_quantity_over_utilised']
         # Allow partial updates and skip unique validation during deserialization
         # The update logic in the parent serializer handles uniqueness properly
         extra_kwargs = {
@@ -430,6 +443,61 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
             return float(value) if value is not None else 0.0
         return float(obj.available_value_calculated or 0)
 
+    def _unfloored_available_quantity(self, obj):
+        """Signed engine available quantity for *obj* (see
+        `ItemBalanceCalculator.calculate_unfloored_available_quantity_for_items`).
+
+        Batched: callers may pass `self.context['canonical_quantity_map']`;
+        otherwise the first lookup computes the map once for every item in the
+        enclosing list serializer (or just *obj* when standalone) and caches it
+        in the shared context, so a page never costs one engine call per row.
+        """
+        qty_map = self.context.get('canonical_quantity_map')
+        if qty_map is None or obj.id not in qty_map:
+            from apps.license.services.balance_calculator import ItemBalanceCalculator
+
+            items = [obj]
+            parent = getattr(self, 'parent', None)
+            siblings = getattr(parent, 'instance', None) if isinstance(parent, serializers.ListSerializer) else None
+            if siblings is not None:
+                sibling_items = [item for item in siblings if isinstance(item, LicenseImportItemsModel)]
+                if any(item.id == obj.id for item in sibling_items):
+                    items = sibling_items
+            computed = ItemBalanceCalculator.calculate_unfloored_available_quantity_for_items(items)
+            qty_map = {**(qty_map or {}), **computed}
+            self.context['canonical_quantity_map'] = qty_map
+        return qty_map[obj.id]
+
+    @staticmethod
+    def _qty_3dp(value) -> str:
+        from decimal import ROUND_HALF_UP
+        from apps.core.constants import DEC_000
+        return str(value.quantize(DEC_000, rounding=ROUND_HALF_UP))
+
+    CANONICAL_QUANTITY_FIELDS = ('available_quantity_canonical', 'over_utilised_quantity', 'is_quantity_over_utilised')
+
+    def _include_canonical_quantity(self) -> bool:
+        return bool(self.context.get('include_canonical_quantity'))
+
+    def get_available_quantity_canonical(self, obj):
+        from apps.core.constants import DEC_0
+        if not self._include_canonical_quantity():
+            return None
+        unfloored = self._unfloored_available_quantity(obj)
+        return self._qty_3dp(unfloored if unfloored >= DEC_0 else DEC_0)
+
+    def get_over_utilised_quantity(self, obj):
+        from apps.core.constants import DEC_0
+        if not self._include_canonical_quantity():
+            return None
+        return self._qty_3dp(max(-self._unfloored_available_quantity(obj), DEC_0))
+
+    def get_is_quantity_over_utilised(self, obj):
+        # Same definition as doc 11 §7: flagged iff the 3dp shortfall is > 0.
+        from decimal import Decimal
+        over = self.get_over_utilised_quantity(obj)
+        return None if over is None else Decimal(over) > 0
+
     def get_planning_options(self, obj):
         """
         Return all LicenseItemPlan rows for this import item, formatted with the
@@ -447,6 +515,9 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+        if not self._include_canonical_quantity():
+            for name in self.CANONICAL_QUANTITY_FIELDS:
+                representation.pop(name, None)
         # Add hs_code nested data for display
         if instance.hs_code:
             representation['hs_code_detail'] = {
@@ -896,6 +967,16 @@ class LicenseDetailsSerializer(LicenseWriteMixin, serializers.ModelSerializer):
             from apps.license.services.balance_calculator import ItemBalanceCalculator
             item_ids = [item.id for item in instance.import_license.all()]
             self.context['boe_debited_quantity_map'] = ItemBalanceCalculator.calculate_debited_quantity_for_items(item_ids)
+
+        # Approved A-1 canonical quantity fields: one bulk engine pass for this
+        # licence's nested import items (nested rows have no list instance to
+        # batch from, see `LicenseImportItemSerializer._unfloored_available_quantity`).
+        if not is_list_view and 'canonical_quantity_map' not in self.context:
+            from apps.license.services.balance_calculator import ItemBalanceCalculator
+            self.context['include_canonical_quantity'] = True
+            self.context['canonical_quantity_map'] = (
+                ItemBalanceCalculator.calculate_unfloored_available_quantity_for_items(instance.import_license.all())
+            )
 
         # Same batching for the nested import items' live available_value /
         # balance_cif_fc (see `LicenseImportItemSerializer.get_available_value`)

@@ -2067,6 +2067,28 @@ class ItemBalanceCalculator:
             (always floored at 0), matching what a per-item
             `calculate_available_quantity(item)` call would return.
         """
+        unfloored = ItemBalanceCalculator.calculate_unfloored_available_quantity_for_items(items)
+        return {
+            item_id: available if available >= DEC_0 else DEC_0
+            for item_id, available in unfloored.items()
+        }
+
+    @staticmethod
+    def calculate_unfloored_available_quantity_for_items(items) -> dict:
+        """
+        The exact expression behind `calculate_available_quantity_for_items`
+        (`quantity - BOE debited (hidden excluded) - outstanding AT-type
+        allotted - unpaired direct SALE quantity`) WITHOUT the zero floor —
+        that method floors this result, so the two can never diverge.  A
+        negative value is the over-utilised quantity (approved A-1,
+        doc 11 §9: `over_utilised_quantity = max(-unfloored, 0)`).
+
+        Args:
+            items: iterable of already-fetched `LicenseImportItemsModel`.
+
+        Returns:
+            `{item_id: Decimal}` (signed), present for every item in `items`.
+        """
         items = list(items)
         if not items:
             return {}
@@ -2086,8 +2108,7 @@ class ItemBalanceCalculator:
             debited = debited_map.get(item.id, DEC_0)
             outstanding_qty, _outstanding_cif = outstanding_map.get(item.id, (DEC_0, DEC_0))
             direct_sale_qty = direct_sale_map.get(item.id, DEC_0)
-            available = total_quantity - debited - outstanding_qty - direct_sale_qty
-            result[item.id] = available if available >= DEC_0 else DEC_0
+            result[item.id] = total_quantity - debited - outstanding_qty - direct_sale_qty
         return result
 
     @classmethod

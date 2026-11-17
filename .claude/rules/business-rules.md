@@ -49,6 +49,14 @@ allotments/plans clamp locally to `max(balance, 0)`, so allocation and planning 
 The two engines (customs vs financial) remain separate by design: the financial engine carries the billed
 term; do not merge them without an owner decision.
 
+## DECIDED 2026-11-17 — M2M-linked allotment = full consumption; trade line pricing T1–T4
+
+Owner decision: an allotment linked to a BOE via the `BillOfEntryModel.allotment` M2M contributes 0 to ALLOTMENT CIF
+(no partial remainder); formal `BOEAllotmentAllocation` netting stays partial; BOE debit counted once. Trade line
+`amount_inr` is server-computed on API writes (paise, 3-dp rate) unless an explicit `amount_override` with reason;
+CIF INR inconsistency > 1.00 INR is accepted with a warning. Details:
+`docs/decisions/2026-11-17-trade-line-pricing-and-m2m-consumption.md`.
+
 ## Mandatory for any change in these paths
 
 1. Characterization test first (current behaviour pinned) → 2. change → 3. run the

@@ -69,7 +69,10 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
     }
 
     const totalQty = rows.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
-    const totalCif = rows.reduce((s, a) => s + (Number(a.cif_fc) || 0), 0);
+    // Display-only sums. Gross includes BOE-linked allotments (already in BOE
+    // CIF); outstanding is the engine's ALLOTMENT CIF component.
+    const grossCif = rows.reduce((s, a) => s + (Number(a.cif_fc) || 0), 0);
+    const outstandingCif = rows.reduce((s, a) => s + (Number(a.outstanding_cif_fc) || 0), 0);
 
     return (
         <div>
@@ -123,11 +126,18 @@ export default function AllotmentsTab({ licenseId, isActive }: AllotmentsTabProp
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
                 <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-primary">
-                    <Package className="size-3.5" /> Total Allotted
+                    <Package className="size-3.5" /> Outstanding Allotted
                 </span>
                 <div className="flex items-center gap-4">
-                    <span className="text-xs text-primary">Qty: <b>{fmtNum(totalQty)}</b></span>
-                    <span className="text-base font-bold tabular-nums text-primary">{fmtNum(totalCif)}</span>
+                    {/* Gross qty (incl. BOE-linked); outstanding-quantity semantics await OD-QTY. */}
+                    <span className="text-xs text-primary">Gross qty: <b>{fmtNum(totalQty)}</b></span>
+                    <span className="text-xs text-primary">
+                        Gross allotted (incl. BOE-linked): <b className="tabular-nums">{fmtNum(grossCif)}</b>
+                    </span>
+                    <span className="text-xs text-primary">
+                        Outstanding CIF:{" "}
+                        <b className="text-base tabular-nums" data-testid="allotments-outstanding-cif">{fmtNum(outstandingCif)}</b>
+                    </span>
                 </div>
             </div>
         </div>

@@ -84,7 +84,12 @@ export interface LicenseOverviewAllotmentRow {
     /** Free-text `AllotmentModel.item_name` — no product FK exists. */
     product: string | null;
     quantity: number;
+    /** Gross allotted CIF (includes allotments already represented by BOEs). */
     cif_fc: number;
+    /** Still-reserved CIF counted in ALLOTMENT CIF — the Balance Engine's
+     * per-row `contributed` (0 once a BOE represents the allotment). Sum this,
+     * not `cif_fc`, for an allotment utilisation total. */
+    outstanding_cif_fc: number;
     status: OverviewAllotmentStatus;
 }
 

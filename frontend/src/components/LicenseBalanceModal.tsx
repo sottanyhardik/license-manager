@@ -11,6 +11,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FileText, FileSpreadsheet, X, Loader2, Check, CheckCircle, Inbox, Package, PenSquare, Pencil, Plus } from "lucide-react";
 import OverUtilisedBadge from "./OverUtilisedBadge";
+import { Badge } from "@/components/ui/badge";
+import { isQuantityOverUtilised, overUsedLabel, serverAvailableQuantity } from "@/pages/license-overview/quantityFields";
 import { buildLicenseEndpoint, formatFiniteDecimal, normalizeItemOptions, normalizeLicenseBalanceData, normalizeUsageData } from "./licenseBalanceHelpers";
 
 const normalizeArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
@@ -1022,15 +1024,14 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
                                                                                     <div className="row">
                                                                                         <div className="flex-1">
                                                                                             <small className="text-muted">
-                                                                                                Balance Quantity = Total Quantity - Debited Qty - Allotted Qty
+                                                                                                Balance Quantity = Available quantity (server)
                                                                                             </small>
                                                                                         </div>
                                                                                         <div className="flex-1 text-right">
                                                                                             <strong>
-                                                                                                Balance: {formatFiniteDecimal(
-                                                                                                    Number(item.quantity || 0) -
-                                                                                                    Number(item.debited_quantity || 0) -
-                                                                                                    Number(item.allotted_quantity || 0)
+                                                                                                Balance: {formatFiniteDecimal(serverAvailableQuantity(item))}
+                                                                                                {isQuantityOverUtilised(item) && (
+                                                                                                    <Badge variant="destructive" className="ml-2">{overUsedLabel(item)}</Badge>
                                                                                                 )}
                                                                                             </strong>
                                                                                         </div>

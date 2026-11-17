@@ -20,6 +20,8 @@ const make = (n: number): LicenseOverviewAllotmentRow[] =>
         product: `Product ${i}`,
         quantity: 100 + i,
         cif_fc: 5000 + i * 10,
+        // Engine semantics: a BOE-linked allotment has no outstanding CIF.
+        outstanding_cif_fc: STATUSES[i % 4] === "Linked to BOE" ? 0 : 5000 + i * 10,
         status: STATUSES[i % 4],
     }));
 
@@ -58,10 +60,15 @@ describe("AllotmentsTab (always table, D3)", () => {
         expect(screen.queryByRole("link")).not.toBeInTheDocument();
     });
 
-    it("leaves the existing client totals untouched", () => {
+    it("footer shows outstanding allotted (excludes BOE-linked) and gross separately", () => {
+        // rows: ALT-100 Linked to BOE 5000, ALT-101 Approved 5010, ALT-102 Allotted 5020
         hook.data = make(3);
         render(<AllotmentsTab licenseId={1} isActive />);
-        expect(screen.getByText(/Total Allotted/)).toBeInTheDocument();
-        expect(screen.getByText(fmtNum(15030))).toBeInTheDocument();
+        expect(screen.getByText(/Outstanding Allotted/)).toBeInTheDocument();
+        expect(screen.queryByText(/Total Allotted/)).not.toBeInTheDocument();
+        // gross (old, double-counting footer figure) kept as a labelled secondary value
+        expect(screen.getByText(/Gross allotted/)).toHaveTextContent(fmtNum(15030));
+        // headline = engine ALLOTMENT CIF component: 5010 + 5020
+        expect(screen.getByText(/Outstanding CIF:/)).toHaveTextContent(fmtNum(10030));
     });
 });

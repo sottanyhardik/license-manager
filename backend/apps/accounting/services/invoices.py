@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -35,7 +35,10 @@ TRADE_LINE_ROLE = {
     "PURCHASE": "PURCHASES", "SALES": "SALES",
     "COMMISSION_PAYABLE": "COMMISSION_EXPENSE", "COMMISSION_RECEIVABLE": "COMMISSION_INCOME",
 }
-INTERCOMPANY_ROLE = {"PURCHASES": "INTERCOMPANY_PURCHASES", "SALES": "INTERCOMPANY_SALES"}
+INTERCOMPANY_ROLE = {
+    "PURCHASES": "INTERCOMPANY_PURCHASES", "SALES": "INTERCOMPANY_SALES",
+    "COMMISSION_EXPENSE": "INTERCOMPANY_COMMISSION_EXPENSE", "COMMISSION_INCOME": "INTERCOMPANY_COMMISSION_INCOME",
+}
 
 
 # --- trade-linked invoices -----------------------------------------------------------------------
@@ -69,13 +72,23 @@ def invoice_from_trade(trade_id: int, *, user=None, credit_days: int | None = No
         )
     party = CompanyModel.objects.get(pk=view.party_company_id)
     days = entity.default_credit_days if credit_days is None else credit_days
-    invoice = Invoice.objects.create(
-        entity=entity, kind=view.kind, party=party, number=view.invoice_number, date=view.invoice_date,
-        credit_days=days, due_date=view.invoice_date + timedelta(days=days), trade_id=trade.pk,
-        taxable_amount=view.subtotal, roundoff=view.roundoff, gross_amount=view.total, net_amount=view.total,
-        source_version=view.version, narration=f"Trade #{trade.pk} {trade.direction} {view.invoice_number}",
-        tds_section=tds_section,
-    )
+    if Invoice.objects.filter(entity=entity, kind=view.kind, party=party, number=view.invoice_number).exists():
+        raise AccountingError(f"Another bill {view.invoice_number} already exists for {party.name}; correct the trade's "
+                              "invoice number first.", "duplicate_number")
+    try:
+        with transaction.atomic():
+            invoice = Invoice.objects.create(
+                entity=entity, kind=view.kind, party=party, number=view.invoice_number, date=view.invoice_date,
+                credit_days=days, due_date=view.invoice_date + timedelta(days=days), trade_id=trade.pk,
+                taxable_amount=view.subtotal, roundoff=view.roundoff, gross_amount=view.total, net_amount=view.total,
+                source_version=view.version, narration=f"Trade #{trade.pk} {trade.direction} {view.invoice_number}",
+                tds_section=tds_section,
+            )
+    except IntegrityError:  # concurrent double-click: the first link wins
+        existing = Invoice.objects.filter(trade_id=trade_id).first()
+        if existing:
+            return existing
+        raise AccountingError("Could not link the trade (duplicate bill number).", "duplicate_number")
     _write_trade_lines(invoice, view, trade.pk)
     if tds_section:
         apply_tds(invoice)
@@ -129,8 +142,10 @@ def resync_trade_invoice(invoice: Invoice, *, user=None, reason: str = "Trade ed
         new_entity = EntityBooks.objects.filter(pk=view.entity_company_id, is_active=True).first()
         if new_entity is None or not view.party_company_id:
             raise AccountingError("The trade's new own side has no active books or no counterparty.", "no_books")
+    repost_date = None
     if was_posted:
-        reverse_voucher(invoice.voucher, reversal_date=_open_reversal_date(invoice.voucher), reason=reason, user=user)
+        repost_date = _open_reversal_date(invoice.voucher)
+        reverse_voucher(invoice.voucher, reversal_date=repost_date, reason=reason, user=user, _system=True)
     if identity_changed:
         invoice.entity = new_entity
         invoice.party = CompanyModel.objects.get(pk=view.party_company_id)
@@ -152,7 +167,8 @@ def resync_trade_invoice(invoice: Invoice, *, user=None, reason: str = "Trade ed
     audit.record("INVOICE_RESYNCED", invoice, actor=user, version=view.version, reason=reason,
                  identity_changed=identity_changed)
     if was_posted:
-        invoice = post_invoice(invoice, user=user)
+        # Re-post on the original date when open, else on the same open date as the reversal.
+        invoice = post_invoice(invoice, user=user, voucher_date=repost_date, _system=True)
     return invoice
 
 
@@ -217,6 +233,9 @@ def create_invoice(*, entity: EntityBooks, kind: str, party: CompanyModel, numbe
     InvoiceLine.objects.bulk_create(rows)
     _recompute_totals(invoice)
     apply_tds(invoice)
+    if against_invoice is not None and invoice.net_amount > against_invoice.net_amount:
+        raise AccountingError(f"The note ({invoice.net_amount}) exceeds the bill it adjusts "
+                              f"({against_invoice.net_amount}).", "note_exceeds_bill")
     audit.record("INVOICE_CREATED", invoice, actor=user, kind=kind, number=invoice.number)
     return invoice
 
@@ -300,21 +319,32 @@ def apply_tds(invoice: Invoice) -> Invoice:
                .filter(party=invoice.party, section_code=section.code, valid_from__lte=invoice.date,
                        valid_to__gte=invoice.date).first())
         prior = _prior_tds_base(invoice, section.code)
-        tds = compute_tds(rule, invoice.taxable_amount, prior, invoice.party.pan, ldc.rate if ldc else None)
-        rate = ldc.rate if ldc else (Decimal(tds * 100 / invoice.taxable_amount).quantize(Decimal("0.001"))
-                                     if invoice.taxable_amount and tds else ZERO)
+        first_crossing = section.threshold_aggregate > 0 and prior <= section.threshold_aggregate
+        prior_untaxed = _prior_tds_base(invoice, section.code, untaxed_only=True) if first_crossing else ZERO
+        ldc_remaining = None
+        if ldc and ldc.amount_limit is not None:
+            used = (Invoice.objects.filter(entity=invoice.entity, party=invoice.party, tds_section__code=section.code,
+                                           date__gte=ldc.valid_from, date__lte=ldc.valid_to, status=DocStatus.POSTED)
+                    .exclude(pk=invoice.pk).aggregate(t=Sum("taxable_amount"))["t"] or ZERO)
+            ldc_remaining = ldc.amount_limit - used
+        tds = compute_tds(rule, invoice.taxable_amount, prior, invoice.party.pan, ldc.rate if ldc else None,
+                          prior_untaxed=prior_untaxed, lower_rate_limit=ldc_remaining)
+        rate = (Decimal(tds * 100 / invoice.taxable_amount).quantize(Decimal("0.001"))
+                if invoice.taxable_amount and tds else ZERO)  # effective rate (may include FULL-mode catch-up)
     invoice.tds_amount, invoice.tds_rate = tds, rate
     invoice.net_amount = invoice.gross_amount - tds
     invoice.save(update_fields=["tds_amount", "tds_rate", "net_amount", "modified_on"])
     return invoice
 
 
-def _prior_tds_base(invoice: Invoice, code: str) -> Decimal:
+def _prior_tds_base(invoice: Invoice, code: str, *, untaxed_only: bool = False) -> Decimal:
     _label, start, end = fy_bounds(invoice.date)
-    agg = (Invoice.objects.filter(entity=invoice.entity, party=invoice.party, tds_section__code=code,
-                                  date__gte=start, date__lte=end, status=DocStatus.POSTED)
-           .exclude(pk=invoice.pk).aggregate(t=Sum("taxable_amount")))
-    return agg["t"] or ZERO
+    qs = (Invoice.objects.filter(entity=invoice.entity, party=invoice.party, tds_section__code=code,
+                                 date__gte=start, date__lte=end, status=DocStatus.POSTED)
+          .exclude(pk=invoice.pk))
+    if untaxed_only:
+        qs = qs.filter(tds_amount=0)
+    return qs.aggregate(t=Sum("taxable_amount"))["t"] or ZERO
 
 
 # --- lifecycle -----------------------------------------------------------------------------------
@@ -367,12 +397,18 @@ def voucher_lines_for(invoice: Invoice) -> list[LineSpec]:
 
 
 @transaction.atomic
-def post_invoice(invoice: Invoice, *, user=None) -> Invoice:
+def post_invoice(invoice: Invoice, *, user=None, voucher_date: date | None = None,
+                 _system: bool = False) -> Invoice:
+    """Post a confirmed invoice once. ``voucher_date`` defaults to the invoice date (a re-post after a
+    trade edit uses an open-period date when the invoice's own period is locked)."""
     invoice = Invoice.objects.select_for_update().select_related("entity", "party").get(pk=invoice.pk)
     if invoice.status == DocStatus.POSTED:
         return invoice  # exactly-once: repeated delivery is a no-op
     if invoice.status != DocStatus.CONFIRMED:
         raise AccountingError("Confirm the invoice before posting.", "not_confirmed")
+    if (not _system and invoice.entity.require_maker_checker and invoice.created_by_id
+            and getattr(user, "pk", None) == invoice.created_by_id):
+        raise AccountingError("Maker-checker: the bill must be posted by a different user.", "maker_checker")
     if invoice.trade_id and trade_drift(invoice):
         raise AccountingError("The trade changed since this invoice was linked; re-sync first.", "trade_drift")
     if invoice.tds_section_id:  # thresholds depend on what is posted *now*, not when the draft was made
@@ -382,7 +418,7 @@ def post_invoice(invoice: Invoice, *, user=None) -> Invoice:
     # Each posting of the same invoice (first post, re-post after a trade edit) has its own sequence number.
     prior = Voucher.objects.filter(source_type="INVOICE", source_id=invoice.pk, reversal_of__isnull=True).count()
     voucher, _ = post_voucher(
-        entity=invoice.entity, voucher_type=VOUCHER_TYPE_FOR[invoice.kind], voucher_date=invoice.date,
+        entity=invoice.entity, voucher_type=VOUCHER_TYPE_FOR[invoice.kind], voucher_date=voucher_date or invoice.date,
         lines=voucher_lines_for(invoice), narration=invoice.narration or f"{invoice.get_kind_display()} {invoice.number}",
         source_type="INVOICE", source_id=invoice.pk, source_event="POST" if prior == 0 else f"POST#{prior + 1}",
         source_version=invoice.source_version or "1", user=user,
@@ -439,10 +475,22 @@ def settled_amount(invoice: Invoice, as_of: date | None = None) -> Decimal:
     return qs.aggregate(t=Sum("amount"))["t"] or ZERO
 
 
+def applied_amount(note: Invoice, as_of: date | None = None) -> Decimal:
+    qs = note.note_settlements.filter(is_active=True)
+    if as_of is not None:
+        qs = qs.filter(voucher__date__lte=as_of)
+    return qs.aggregate(t=Sum("amount"))["t"] or ZERO
+
+
 def outstanding(invoice: Invoice, as_of: date | None = None) -> Decimal:
-    """Open amount of a posted bill (optionally as it stood on ``as_of``)."""
+    """Open amount of a posted bill (optionally as it stood on ``as_of``).
+
+    For a debit/credit note this is its *unapplied credit* (normally 0 once applied to its bill);
+    notes are never bills that fall due."""
     if invoice.status != DocStatus.POSTED:
         return ZERO
+    if invoice.kind in NOTE_KINDS:
+        return invoice.net_amount - applied_amount(invoice, as_of)
     return invoice.net_amount - settled_amount(invoice, as_of)
 
 
@@ -471,6 +519,45 @@ def payment_status(invoice: Invoice, today: date | None = None) -> str:
     if invoice.status != DocStatus.POSTED:
         return invoice.status
     due = outstanding(invoice)
+    if invoice.kind in NOTE_KINDS:
+        return "APPLIED" if due <= 0 else "UNAPPLIED_CREDIT"
+    if due <= 0:
+        return "PAID"
+    today = today or timezone.localdate()
+    if invoice.due_date and invoice.due_date < today:
+        return "OVERDUE"
+    return "PARTIALLY_PAID" if due < invoice.net_amount else "UNPAID"
+
+
+# --- batch helpers (avoid one query per bill in lists/reports) ---------------------------------
+
+def outstanding_map(invoices, as_of: date | None = None) -> dict[int, Decimal]:
+    """{invoice_id: outstanding} for many invoices in two grouped queries."""
+    invoices = list(invoices)
+    ids = [i.pk for i in invoices]
+    bills = Settlement.objects.filter(invoice_id__in=ids, is_active=True)
+    notes = Settlement.objects.filter(note_id__in=ids, is_active=True)
+    if as_of is not None:
+        bills, notes = bills.filter(voucher__date__lte=as_of), notes.filter(voucher__date__lte=as_of)
+    settled = {r["invoice_id"]: r["t"] for r in bills.values("invoice_id").annotate(t=Sum("amount"))}
+    applied = {r["note_id"]: r["t"] for r in notes.values("note_id").annotate(t=Sum("amount"))}
+    out = {}
+    for inv in invoices:
+        if inv.status != DocStatus.POSTED:
+            out[inv.pk] = ZERO
+        elif inv.kind in NOTE_KINDS:
+            out[inv.pk] = inv.net_amount - applied.get(inv.pk, ZERO)
+        else:
+            out[inv.pk] = inv.net_amount - settled.get(inv.pk, ZERO)
+    return out
+
+
+def status_for(invoice: Invoice, due: Decimal, today: date | None = None) -> str:
+    """payment_status() given a precomputed outstanding amount."""
+    if invoice.status != DocStatus.POSTED:
+        return invoice.status
+    if invoice.kind in NOTE_KINDS:
+        return "APPLIED" if due <= 0 else "UNAPPLIED_CREDIT"
     if due <= 0:
         return "PAID"
     today = today or timezone.localdate()

@@ -115,14 +115,29 @@ class ReviewRegressionTests(TestCase):
         self.assertEqual(ageing(self.entity, receivable=False, as_of=date(2026, 5, 31))["totals"]["total"], D("10000.00"))
         self.assertEqual(ageing(self.entity, receivable=False, as_of=date(2026, 6, 30))["totals"]["total"], D("0"))
 
-    def test_m5_reversed_payment_reopens_its_statement_line(self):
+    def test_bounced_cheque_reconciles_and_past_brs_is_stable(self):
+        """Reversing a cleared receipt keeps its bank match; the reversal matches the bank's return line."""
         p = record_payment(entity=self.entity, direction="RECEIPT", party=self.customer, bank_account=self.bank,
-                           payment_date=date(2026, 5, 2), amount=D("300"), reference="UTR123456789012")
-        import_statement(self.bank, file_name="s.csv",
-                         content=b"Date,Narration,Ref,Debit,Credit,Balance\n02/05/2026,NEFT,UTR123456789012,,300.00,300.00\n")
+                           payment_date=date(2026, 5, 20), amount=D("1000"), reference="CHQ000111")
+        import_statement(self.bank, file_name="may.csv",
+                         content=b"Date,Narration,Ref,Debit,Credit,Balance\n20/05/2026,CHQ DEP,CHQ000111,,1000.00,1000.00\n")
         auto_match(self.bank)
-        reverse_payment(p, reason="bounced")
-        self.assertEqual(StatementLine.objects.get().status, LineStatus.UNMATCHED)
+        self.assertEqual(bank_reconciliation(self.bank, date(2026, 5, 31))["difference"], D("0.00"))
+        reverse_payment(p, reason="cheque returned", reversal_date=date(2026, 6, 10))
+        self.assertEqual(StatementLine.objects.get().status, LineStatus.MATCHED)  # the deposit really happened
+        self.assertEqual(bank_reconciliation(self.bank, date(2026, 5, 31))["difference"], D("0.00"))  # past is stable
+        import_statement(self.bank, file_name="jun.csv",
+                         content=b"Date,Narration,Ref,Debit,Credit,Balance\n10/06/2026,CHQ RETURN,CHQ000111,1000.00,,0.00\n")
+        auto_match(self.bank)
+        self.assertEqual(set(StatementLine.objects.values_list("status", flat=True)), {LineStatus.MATCHED})
+        brs = bank_reconciliation(self.bank, date(2026, 6, 30))
+        self.assertEqual((brs["difference"], brs["unpresented"], brs["book_balance"]), (D("0.00"), [], D("0.00")))
+
+    def test_payment_reversed_before_reaching_bank_nets_off(self):
+        p = record_payment(entity=self.entity, direction="PAYMENT", party=self.supplier, bank_account=self.bank,
+                           payment_date=date(2026, 5, 2), amount=D("300"))
+        reverse_payment(p, reason="entered twice", reversal_date=date(2026, 5, 3))
+        self.assertEqual(bank_reconciliation(self.bank, date(2026, 5, 31))["unpresented"], [])
 
     def test_m6_cash_flow_is_exact_with_tds_on_interest(self):
         loan = create_loan(entity=self.entity, party=self.customer, direction="TAKEN", principal=D("1000"),
@@ -147,7 +162,8 @@ class ReviewRegressionTests(TestCase):
                            invoice_date=date(2026, 5, 2), tds_section=section, lines=[LineInput(acct, D("20000"))])
         post(a)
         b = post(b)
-        self.assertEqual(b.tds_amount, D("200.00"))
+        # FULL mode: crossing the 30,000 aggregate makes TDS due on the whole 40,000 (catch-up of bill A).
+        self.assertEqual(b.tds_amount, D("400.00"))
 
     def test_manual_voucher_reverse_still_allowed(self):
         from apps.accounting.services.posting import create_draft, post_draft

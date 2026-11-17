@@ -9,8 +9,8 @@ from django.db.models import Sum
 
 from apps.accounting.domain.money import ZERO, to_money
 from apps.accounting.models import (
-    PAYABLE_KINDS, RECEIVABLE_KINDS, Account, AccountKind, BankAccount, BankMatch, DocStatus, EntityBooks, Invoice,
-    Payment, PaymentDirection, StatementLine, VoucherType,
+    PAYABLE_KINDS, RECEIVABLE_KINDS, Account, AccountKind, BankAccount, DocStatus, EntityBooks, Invoice,
+    Payment, PaymentDirection, VoucherType,
 )
 from apps.core.models import CompanyModel
 
@@ -73,6 +73,9 @@ def record_payment(*, entity: EntityBooks, direction: str, party: CompanyModel, 
         check_direction(direction, invoice)
     if sum((to_money(a) for _i, a in allocations), ZERO) > amount + tds_amount:
         raise AccountingError("Allocations exceed the payment amount.", "over_allocation")
+    if tds_amount and any(inv.tds_amount for inv, _a in allocations):
+        raise AccountingError("TDS on this bill is already booked on the invoice; do not enter it again on the receipt.",
+                              "tds_already_on_bill")
 
     payment = Payment.objects.create(
         entity=entity, direction=direction, party=party, bank_account=bank_account, date=payment_date, amount=amount,
@@ -129,11 +132,9 @@ def reverse_payment(payment: Payment, *, reason: str, user=None, reversal_date: 
         raise AccountingError("Only posted payments can be reversed.", "not_posted")
     reverse_voucher(payment.voucher, reversal_date=reversal_date, reason=reason, user=user)
     payment.settlements.filter(is_active=True).update(is_active=False)
-    lines = list(StatementLine.objects.filter(matches__voucher=payment.voucher, matches__is_active=True).distinct())
-    BankMatch.objects.filter(voucher=payment.voucher, is_active=True).update(is_active=False)
-    from .banking import refresh_line_status
-    for line in lines:  # those statement lines are unmatched again and must reappear in the workbench/BRS
-        refresh_line_status(line)
+    # Bank matches are kept: the bank really moved (e.g. a cheque that later bounced). The reversal
+    # voucher is a new book entry that matches the bank's return line; a payment and its reversal
+    # that never reached the bank net off in the reconciliation (see banking.unmatched_book_vouchers).
     payment.status = DocStatus.REVERSED
     payment.save(update_fields=["status", "modified_on"])
     audit.record("PAYMENT_REVERSED", payment, actor=user, reason=reason)
@@ -141,23 +142,117 @@ def reverse_payment(payment: Payment, *, reason: str, user=None, reversal_date: 
 
 
 @transaction.atomic
-def account_trade_payment(trade_payment_id: int, *, bank_account: BankAccount, user=None) -> Payment:
-    """Account an existing LicenseTradePayment exactly once and settle it against the trade's bill."""
-    existing = Payment.objects.filter(trade_payment_id=trade_payment_id).first()
-    if existing:
-        return existing
+def account_trade_payment(trade_payment_id: int, *, bank_account: BankAccount | None, user=None,
+                          existing_payment: Payment | None = None) -> Payment:
+    """Account an existing LicenseTradePayment exactly once.
+
+    * Normal case: post a payment/receipt and settle it against the trade's posted bill.
+    * The same cash was already entered as a manual payment/receipt (``existing_payment``): link it,
+      post nothing (never count the cash twice).
+    * The bill is already settled by other documents: refuse with ``possible_duplicate`` instead of
+      posting the cash again as an unexplained advance.
+    * Trade dated before books start (covered by opening balances) but paid within the books
+      period: post on account against the party (no bill to settle).
+    """
+    linked = Payment.objects.filter(trade_payment_id=trade_payment_id).first()
+    if linked:
+        return linked
     from apps.trade.models import LicenseTradePayment
+
+    from .invoices import entity_for_trade
     tp = LicenseTradePayment.objects.select_related("trade").get(pk=trade_payment_id)
-    invoice = Invoice.objects.filter(trade_id=tp.trade_id).first()
-    if invoice is None or invoice.status != DocStatus.POSTED:
-        raise AccountingError("Post the trade's invoice before accounting its payments.", "invoice_not_posted")
-    if bank_account.entity_id != invoice.entity_id:
-        raise AccountingError("The bank account belongs to another entity.", "cross_entity")
+    invoice = Invoice.objects.filter(trade_id=tp.trade_id, status=DocStatus.POSTED).first()
+    entity = invoice.entity if invoice else entity_for_trade(tp.trade)
+    if entity is None:
+        raise AccountingError("The trade's own company has no active books.", "no_books")
+    if existing_payment is not None:
+        return _link_existing(tp, existing_payment, entity, user)
+    if bank_account is None or bank_account.entity_id != entity.pk:
+        raise AccountingError("Choose a bank account of this entity.", "cross_entity")
+    if tp.date < entity.books_start_date:
+        raise AccountingError("This trade payment is dated before the books start; it is in the opening balances.",
+                              "before_books_start")
+    amount = to_money(tp.amount)
+    if invoice is None:
+        trade_date = tp.trade.invoice_date
+        if trade_date is None or trade_date >= entity.books_start_date:
+            raise AccountingError("Post the trade's invoice before accounting its payments.", "invoice_not_posted")
+        return _post_on_account(tp, entity, bank_account, amount, user)
+    due = outstanding(invoice)
+    if amount > due:
+        raise AccountingError(
+            f"The bill {invoice.number} has only {due} outstanding; this {amount} may already be recorded as a "
+            "separate payment/receipt. Link that document instead of posting the cash again.", "possible_duplicate")
     direction = PaymentDirection.PAYMENT if invoice.kind in PAYABLE_KINDS else PaymentDirection.RECEIPT
-    alloc = min(to_money(tp.amount), outstanding(invoice))
     return record_payment(
-        entity=invoice.entity, direction=direction, party=invoice.party, bank_account=bank_account,
-        payment_date=tp.date, amount=tp.amount, reference="", mode="OTHER",
+        entity=entity, direction=direction, party=invoice.party, bank_account=bank_account,
+        payment_date=tp.date, amount=amount, reference="", mode="OTHER",
         narration=f"Trade payment #{tp.pk} on {invoice.number}: {tp.note}".strip(),
-        allocations=[(invoice, alloc)] if alloc > 0 else [], trade_payment_id=tp.pk, user=user,
+        allocations=[(invoice, amount)], trade_payment_id=tp.pk, user=user,
     )
+
+
+def _trade_direction(trade) -> str:
+    return PaymentDirection.PAYMENT if trade.direction in ("PURCHASE", "COMMISSION_PURCHASE") else PaymentDirection.RECEIPT
+
+
+def _link_existing(tp, payment: Payment, entity: EntityBooks, user) -> Payment:
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
+    from apps.accounting.selectors.trade_source import view_of
+    view = view_of(tp.trade)
+    if payment.entity_id != entity.pk or payment.party_id != view.party_company_id:
+        raise AccountingError("The payment belongs to another entity or party.", "party_mismatch")
+    if payment.direction != _trade_direction(tp.trade) or payment.status != DocStatus.POSTED:
+        raise AccountingError("The payment's direction/status does not fit this trade payment.", "direction_mismatch")
+    if payment.trade_payment_id:
+        raise AccountingError("That payment is already linked to another trade payment.", "already_linked")
+    if payment.amount != to_money(tp.amount):
+        raise AccountingError("Amounts differ; link only the document that records this exact cash.", "amount_mismatch")
+    Payment.objects.filter(pk=payment.pk).update(trade_payment_id=tp.pk)
+    payment.trade_payment_id = tp.pk
+    audit.record("TRADE_PAYMENT_LINKED", payment, actor=user, trade_payment=tp.pk)
+    return payment
+
+
+def _post_on_account(tp, entity: EntityBooks, bank_account: BankAccount, amount: Decimal, user) -> Payment:
+    from apps.accounting.selectors.trade_source import view_of
+    view = view_of(tp.trade)
+    if not view.party_company_id:
+        raise AccountingError("The trade has no counterparty company.", "no_party")
+    return record_payment(
+        entity=entity, direction=_trade_direction(tp.trade), party=CompanyModel.objects.get(pk=view.party_company_id),
+        bank_account=bank_account, payment_date=tp.date, amount=amount, mode="OTHER",
+        narration=f"Trade payment #{tp.pk} on pre-books trade {view.invoice_number} (on account; bill is in "
+                  f"opening balances): {tp.note}".strip(),
+        trade_payment_id=tp.pk, user=user,
+    )
+
+
+# --- on-account amounts from any settling voucher (e.g. suspense reclassified to a party) ---------
+
+def voucher_party_unallocated(voucher, party_account_obj, *, receipt_side: bool) -> Decimal:
+    """Party-side amount of ``voucher`` not yet allocated to bills."""
+    from django.db.models import Sum as _Sum
+    agg = voucher.lines.filter(account=party_account_obj).aggregate(d=_Sum("debit"), c=_Sum("credit"))
+    side = (agg["c"] or ZERO) - (agg["d"] or ZERO) if receipt_side else (agg["d"] or ZERO) - (agg["c"] or ZERO)
+    used = voucher.settlements.filter(is_active=True).aggregate(t=_Sum("amount"))["t"] or ZERO
+    return side - used
+
+
+@transaction.atomic
+def allocate_on_account(voucher, invoice: Invoice, amount, *, user=None):
+    """Allocate the on-account part of a posted settling voucher (journal/suspense reclassification)."""
+    from apps.accounting.models import Voucher, VoucherStatus
+    voucher = Voucher.objects.select_for_update().get(pk=voucher.pk)
+    amount = to_money(amount)
+    if voucher.status != VoucherStatus.POSTED or voucher.entity_id != invoice.entity_id:
+        raise AccountingError("The voucher is not a posted voucher of this entity.", "not_posted")
+    payment = Payment.objects.filter(voucher=voucher).first()
+    if payment:
+        return allocate_payment(payment, invoice, amount, user=user)
+    receipt_side = invoice.kind in RECEIVABLE_KINDS
+    acct = party_account(invoice.entity, invoice.party, payable=not receipt_side)
+    free = voucher_party_unallocated(voucher, acct, receipt_side=receipt_side)
+    if amount > free:
+        raise AccountingError(f"Only {free} of this voucher is unallocated for {invoice.party.name}.", "over_allocation")
+    return allocate(invoice, voucher, amount, user=user)

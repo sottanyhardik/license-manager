@@ -5,6 +5,7 @@ Uses the same posting engine as live transactions. Never invents values, never s
 """
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -21,6 +22,8 @@ from . import AccountingError, audit
 from .books import fy_bounds
 from .invoices import confirm_invoice, invoice_from_trade, post_invoice
 from .payments import account_trade_payment
+
+logger = logging.getLogger(__name__)
 
 ALREADY, READY, REVIEW, EXCEPTION = "ALREADY_ACCOUNTED", "READY", "NEEDS_REVIEW", "EXCEPTION"
 MIGRATED, FAILED, SKIPPED = "MIGRATED", "FAILED", "SKIPPED"
@@ -66,11 +69,16 @@ def classify_trades(entity: EntityBooks) -> list[Classified]:
             cls = REVIEW if reasons else READY
         out.append(Classified("TRADE", trade.pk, cls, view.total, fy, reasons,
                               f"{trade.direction} {view.invoice_number}", trade.pk))
+        pre_books = bool(view.invoice_date and view.invoice_date < entity.books_start_date)
         for tp in trade.payments.all():
             if tp.pk in accounted_payments:
                 pcls, preasons = ALREADY, []
+            elif tp.date < entity.books_start_date:
+                pcls, preasons = REVIEW, ["Paid before books start (covered by opening balances)"]
             elif cls in (READY, ALREADY):
                 pcls, preasons = READY, []
+            elif pre_books and view.party_company_id:
+                pcls, preasons = READY, ["Trade is in opening balances; payment posts on account against the party"]
             else:
                 pcls, preasons = REVIEW, ["Trade invoice not postable yet"]
             out.append(Classified("TRADE_PAYMENT", tp.pk, pcls, tp.amount, fy_bounds(tp.date)[0], preasons,
@@ -155,7 +163,8 @@ def _try(fn, reasons):
     except AccountingError as exc:
         return FAILED, reasons + [str(exc)]
     except DatabaseError as exc:  # e.g. duplicate invoice number for the party, concurrent run
-        return FAILED, reasons + [f"Database rejected the record: {exc.__class__.__name__}: {str(exc)[:200]}"]
+        logger.warning("migration item rejected by the database", exc_info=exc)
+        return FAILED, reasons + [f"Database rejected the record ({exc.__class__.__name__}); see server log."]
 
 
 def reconcile(entity: EntityBooks) -> dict:

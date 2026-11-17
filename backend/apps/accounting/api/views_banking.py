@@ -49,6 +49,8 @@ class StatementUploadView(AccountingView):
         upload = request.FILES.get("file")
         if upload is None:
             raise ValidationError({"file": "Attach a CSV or Excel statement."})
+        if upload.size > banking.MAX_UPLOAD_BYTES:  # refuse before reading the body into memory
+            raise ValidationError({"file": "Statement file is larger than 10 MB."})
         mapping = request.data.get("column_mapping")
         if isinstance(mapping, str) and mapping.strip():
             import json

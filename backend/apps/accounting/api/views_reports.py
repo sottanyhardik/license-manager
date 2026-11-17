@@ -1,6 +1,8 @@
 """Reports (all from the GL), loans and the historical migration center."""
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
@@ -87,7 +89,9 @@ class ConsolidatedView(AccountingView):
         _l, fy_start, fy_end = fy_bounds(timezone.localdate())
         start = as_date(param(request, "start"), "start", fy_start)
         end = as_date(param(request, "end"), "end", fy_end)
-        return ok(reports.consolidated(entities, start, end))
+        reserve = param(request, "stock_reserve")
+        return ok(reports.consolidated(entities, start, end,
+                                       stock_reserve=as_money(reserve, "stock_reserve") if reserve else Decimal("0.00")))
 
 
 # --- loans ----------------------------------------------------------------------------------------

@@ -60,6 +60,7 @@ DEFAULT_ACCOUNTS = [
     ("3002", "Intercompany Sales", "SAL", AccountKind.GENERAL, "INTERCOMPANY_SALES"),
     ("3003", "Sales Returns", "SRT", AccountKind.GENERAL, "SALES_RETURNS"),
     ("3101", "Commission Received", "CMI", AccountKind.GENERAL, "COMMISSION_INCOME"),
+    ("3102", "Intercompany Commission Received", "CMI", AccountKind.GENERAL, "INTERCOMPANY_COMMISSION_INCOME"),
     ("3201", "Interest Received", "INI", AccountKind.GENERAL, "INTEREST_INCOME"),
     ("3301", "Foreign Exchange Gain/Loss", "FXG", AccountKind.GENERAL, "FOREX"),
     ("3401", "Round Off", "OTI", AccountKind.GENERAL, "ROUND_OFF"),
@@ -73,6 +74,7 @@ DEFAULT_ACCOUNTS = [
     ("4103", "Customs and Clearing", "CUS", AccountKind.GENERAL, "CUSTOMS"),
     ("4104", "Port Charges", "CUS", AccountKind.GENERAL, "PORT_CHARGES"),
     ("4201", "Commission Paid", "CMX", AccountKind.GENERAL, "COMMISSION_EXPENSE"),
+    ("4203", "Intercompany Commission Paid", "CMX", AccountKind.GENERAL, "INTERCOMPANY_COMMISSION_EXPENSE"),
     ("4202", "Brokerage", "CMX", AccountKind.GENERAL, "BROKERAGE"),
     ("4301", "Bank Charges", "BKC", AccountKind.GENERAL, "BANK_CHARGES"),
     ("4401", "Rent", "OPX", AccountKind.GENERAL, "RENT"),
@@ -107,6 +109,8 @@ def ensure_default_chart(entity: EntityBooks) -> int:
     for code, name, group_code, kind, role in DEFAULT_ACCOUNTS:
         if Account.objects.filter(entity=entity, system_role=role).exists():
             continue
+        if Account.objects.filter(entity=entity, code=code).exists():  # accountant reused the code: keep theirs
+            code = f"S-{role}"[:32]
         Account.objects.create(entity=entity, code=code, name=name, group=groups[group_code], kind=kind, system_role=role)
         created += 1
     return created

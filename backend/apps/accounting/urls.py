@@ -19,6 +19,7 @@ urlpatterns = [
     path("accounting/vouchers/<int:voucher_id>/", v.VoucherDetailView.as_view(), name="voucher-detail"),
     path("accounting/vouchers/<int:voucher_id>/post/", v.VoucherPostView.as_view(), name="voucher-post"),
     path("accounting/vouchers/<int:voucher_id>/reverse/", v.VoucherReverseView.as_view(), name="voucher-reverse"),
+    path("accounting/vouchers/<int:voucher_id>/allocate/", v.VoucherAllocateView.as_view(), name="voucher-allocate"),
     path("accounting/invoices/", v.InvoiceListView.as_view(), name="invoices"),
     path("accounting/invoices/from-trade/", v.InvoiceFromTradeView.as_view(), name="invoice-from-trade"),
     path("accounting/invoices/<int:invoice_id>/", v.InvoiceDetailView.as_view(), name="invoice-detail"),

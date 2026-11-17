@@ -231,9 +231,11 @@ class InvoiceListView(AccountingView):
         kinds = param(request, "kind")
         if kinds:
             qs = qs.filter(kind__in=str(kinds).split(","))
-        for f in ("status", "party_id", "trade_id"):
+        if param(request, "status"):
+            qs = qs.filter(status=param(request, "status"))
+        for f in ("party_id", "trade_id"):
             if param(request, f):
-                qs = qs.filter(**{f: param(request, f)})
+                qs = qs.filter(**{f: as_int(param(request, f), f)})
         if param(request, "start"):
             qs = qs.filter(date__gte=as_date(param(request, "start"), "start"))
         if param(request, "end"):
@@ -323,9 +325,16 @@ class PaymentListView(ApproverView):
     def get(self, request):
         e = entity_from(request)
         qs = Payment.objects.filter(entity=e).select_related("party", "voucher").order_by("-date", "-id")
-        for f in ("direction", "status", "party_id", "bank_account_id"):
+        for f in ("direction", "status"):
             if param(request, f):
                 qs = qs.filter(**{f: param(request, f)})
+        for f in ("party_id", "bank_account_id"):
+            if param(request, f):
+                qs = qs.filter(**{f: as_int(param(request, f), f)})
+        if param(request, "start"):
+            qs = qs.filter(date__gte=as_date(param(request, "start"), "start"))
+        if param(request, "end"):
+            qs = qs.filter(date__lte=as_date(param(request, "end"), "end"))
         if param(request, "search"):
             qs = qs.filter(reference__icontains=param(request, "search"))
         return ok(page(request, qs, payment_dict))
@@ -362,11 +371,30 @@ class PaymentActionView(ApproverView):
 
 
 class TradePaymentAccountView(ApproverView):
+    """POST {trade_payment_id, bank_account_id} posts it; {trade_payment_id, existing_payment_id} links an
+    already-recorded payment/receipt instead (no posting, no double-counted cash)."""
+
     def post(self, request):
-        bank = BankAccount.objects.get(pk=as_int(param(request, "bank_account_id", required=True), "bank_account_id"))
-        p = pay_svc.account_trade_payment(as_int(param(request, "trade_payment_id", required=True), "trade_payment_id"),
-                                          bank_account=bank, user=request.user)
+        existing = param(request, "existing_payment_id")
+        bank_id = param(request, "bank_account_id")
+        if not existing and not bank_id:
+            raise ValidationError({"bank_account_id": "Choose the bank account, or the existing payment to link."})
+        p = pay_svc.account_trade_payment(
+            as_int(param(request, "trade_payment_id", required=True), "trade_payment_id"),
+            bank_account=BankAccount.objects.get(pk=as_int(bank_id, "bank_account_id")) if bank_id else None,
+            existing_payment=Payment.objects.get(pk=as_int(existing, "existing_payment_id")) if existing else None,
+            user=request.user)
         return ok(payment_dict(p), status.HTTP_201_CREATED)
+
+
+class VoucherAllocateView(ApproverView):
+    """POST {allocations: [{invoice_id, amount}]}: allocate the on-account part of a settling voucher."""
+
+    def post(self, request, voucher_id: int):
+        v = Voucher.objects.get(pk=voucher_id)
+        for invoice, amount in _allocations(v.entity, request.data.get("allocations")):
+            pay_svc.allocate_on_account(v, invoice, amount, user=request.user)
+        return ok(voucher_dict(Voucher.objects.get(pk=v.pk), lines=True))
 
 
 # --- trade tracking -------------------------------------------------------------------------------

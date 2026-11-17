@@ -119,8 +119,8 @@ class LoanTests(TestCase):
         loan = create_loan(entity=self.entity, party=self.lender, direction="GIVEN", principal=D("100000.00"),
                            interest_rate=D("10"), start_date=date(2026, 4, 1), bank_account=self.bank)
         accrue_interest(loan, period_end=date(2026, 4, 30))
-        record_repayment(loan, on=date(2026, 4, 30), principal=D("100000.00"), interest=interest_outstanding(loan))
-        close_loan(loan, on=date(2026, 4, 30))
+        record_repayment(loan, on=date(2026, 5, 1), principal=D("100000.00"), interest=interest_outstanding(loan))
+        close_loan(loan, on=date(2026, 5, 1))
         loan.refresh_from_db()
         self.assertEqual((principal_outstanding(loan), interest_outstanding(loan)), (D("0"), D("0")))
         accruals = loan.accruals.count()

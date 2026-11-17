@@ -56,6 +56,8 @@ def add_cost_centre(entity: EntityBooks, *, code: str, name: str, user=None) -> 
 def configure_books(entity: EntityBooks, *, default_credit_days: int | None = None,
                     require_maker_checker: bool | None = None, state_code: str | None = None,
                     tan: str | None = None, user=None) -> EntityBooks:
+    before = {"default_credit_days": entity.default_credit_days, "require_maker_checker": entity.require_maker_checker,
+              "state_code": entity.state_code, "tan": entity.tan}
     if default_credit_days is not None:
         entity.default_credit_days = default_credit_days
     if require_maker_checker is not None:
@@ -65,7 +67,11 @@ def configure_books(entity: EntityBooks, *, default_credit_days: int | None = No
     if tan is not None:
         entity.tan = tan[:10]
     entity.save()
-    audit.record("BOOKS_CONFIGURED", entity, actor=user, entity=entity)
+    after = {"default_credit_days": entity.default_credit_days, "require_maker_checker": entity.require_maker_checker,
+             "state_code": entity.state_code, "tan": entity.tan}
+    changes = {k: [before[k], after[k]] for k in before if before[k] != after[k]}
+    if changes:
+        audit.record("BOOKS_CONFIGURED", entity, actor=user, entity=entity, changes=changes)
     return entity
 
 

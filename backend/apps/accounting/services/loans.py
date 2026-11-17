@@ -68,6 +68,7 @@ def disburse_loan(loan: Loan, *, amount, on: date, user=None):
                               lines=lines, narration=f"Loan #{loan.pk} disbursement", source_type="LOAN",
                               source_id=loan.pk, source_event=f"DISBURSE#{_next_event_no(loan, 'DISBURSE')}",
                               user=user)
+    audit.record("LOAN_DISBURSED", loan, actor=user, amount=amount, voucher=voucher.number)
     return voucher
 
 
@@ -155,6 +156,10 @@ def record_repayment(loan: Loan, *, on: date, principal=ZERO, interest=ZERO, tds
     if principal > principal_outstanding(loan):
         raise AccountingError("Repayment exceeds the principal outstanding.", "over_repayment")
     accrue_interest(loan, period_end=on - timedelta(days=1), user=user)  # interest up to the day before
+    last = loan.accruals.order_by("-period_end").first()
+    # Backdated repayment: interest already accrued past ``on`` was computed on the old balance.
+    accrued_after = (on, last.period_end) if last and last.period_end >= on else None
+    before = accrue(_segments(loan, *accrued_after), loan.interest_rate, loan.compound) if accrued_after else None
     bank = loan.bank_account.account
     given = loan.direction == Loan.GIVEN
     cash = principal + interest - tds
@@ -170,8 +175,34 @@ def record_repayment(loan: Loan, *, on: date, principal=ZERO, interest=ZERO, tds
                               lines=lines, narration=f"Loan #{loan.pk} repayment {reference}".strip(),
                               source_type="LOAN", source_id=loan.pk,
                               source_event=f"REPAY#{_next_event_no(loan, 'REPAY')}", user=user)
+    if accrued_after:
+        _true_up(loan, accrued_after, before, user)
     audit.record("LOAN_REPAYMENT", loan, actor=user, principal=principal, interest=interest, tds=tds)
     return voucher
+
+
+def _true_up(loan: Loan, window: tuple[date, date], before: Decimal, user) -> None:
+    """Re-accrue [window] on the post-repayment balances and post the difference (normally negative)."""
+    after = accrue(_segments(loan, *window), loan.interest_rate, loan.compound)
+    diff = after - before
+    if not diff:
+        return
+    given = loan.direction == Loan.GIVEN
+    pl = system_account(loan.entity, "INTEREST_INCOME" if given else "INTEREST_EXPENSE")
+    amount = abs(diff)
+    # Positive diff = more interest; negative = interest over-accrued, reverse the excess.
+    if given:
+        lines = [dr(loan.interest_account, amount), cr(pl, amount)] if diff > 0 else \
+            [dr(pl, amount), cr(loan.interest_account, amount)]
+    else:
+        lines = [dr(pl, amount), cr(loan.interest_account, amount)] if diff > 0 else \
+            [dr(loan.interest_account, amount), cr(pl, amount)]
+    post_voucher(entity=loan.entity, voucher_type=VoucherType.INTEREST_ACCRUAL, voucher_date=window[1], lines=lines,
+                 narration=f"Interest true-up on loan #{loan.pk} for backdated repayment ({window[0]:%d-%m-%Y}.."
+                           f"{window[1]:%d-%m-%Y})",
+                 source_type="LOAN", source_id=loan.pk, source_event=f"TRUEUP#{_next_event_no(loan, 'TRUEUP')}",
+                 user=user)
+    audit.record("LOAN_INTEREST_TRUE_UP", loan, actor=user, difference=diff)
 
 
 @transaction.atomic

@@ -136,13 +136,18 @@ def _mark_posted(voucher: Voucher, user) -> None:
 
 
 @transaction.atomic
-def reverse_voucher(voucher: Voucher, *, reversal_date: date | None = None, reason: str, user=None) -> Voucher:
-    """Post an exact negating voucher and flag the original REVERSED. History is preserved."""
+def reverse_voucher(voucher: Voucher, *, reversal_date: date | None = None, reason: str, user=None,
+                    _system: bool = False) -> Voucher:
+    """Post an exact negating voucher and flag the original REVERSED. History is preserved.
+    With maker-checker on, a user cannot reverse a voucher they posted (system re-syncs excepted)."""
     if not reason.strip():
         raise AccountingError("A reversal reason is required.", "reason_required")
-    voucher = Voucher.objects.select_for_update().get(pk=voucher.pk)
+    voucher = Voucher.objects.select_for_update().select_related("entity").get(pk=voucher.pk)
     if voucher.status != VoucherStatus.POSTED:
         raise AccountingError(f"Only posted vouchers can be reversed (status {voucher.status}).", "not_posted")
+    if (not _system and voucher.entity.require_maker_checker and voucher.posted_by_id
+            and getattr(user, "pk", None) == voucher.posted_by_id):
+        raise AccountingError("Maker-checker: a different user must reverse this voucher.", "maker_checker")
     lines = [LineSpec(ln.account, ln.credit, ln.debit, f"Reversal: {ln.narration}", ln.trade_id, ln.cost_centre_id)
              for ln in voucher.lines.select_related("account")]
     reversal, _ = post_voucher(

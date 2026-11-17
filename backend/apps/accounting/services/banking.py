@@ -16,7 +16,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.accounting.domain.money import ZERO, to_money
@@ -25,7 +25,7 @@ from apps.accounting.domain.statement import (
 )
 from apps.accounting.models import (
     Account, BankAccount, BankMatch, Invoice, LineStatus, PaymentDirection, StatementImport, StatementLine, SuspenseItem, Voucher,
-    VoucherStatus, VoucherType,
+    VoucherLine, VoucherStatus, VoucherType,
 )
 
 from . import AccountingError, audit
@@ -40,18 +40,33 @@ DATE_WINDOW_DAYS = 7
 
 # --- import -------------------------------------------------------------------------------------
 
+MAX_ROWS = 50_000
+MAX_XLSX_UNCOMPRESSED = 100 * 1024 * 1024
+
+
 def _read_rows(file_name: str, content: bytes) -> tuple[str, list[list[object]]]:
     name = file_name.lower()
     if len(content) > MAX_UPLOAD_BYTES:
         raise AccountingError("Statement file is larger than 10 MB.", "file_too_large")
     if name.endswith((".xlsx", ".xlsm")):
+        import zipfile
+
         from openpyxl import load_workbook
         try:
+            with zipfile.ZipFile(io.BytesIO(content)) as zf:  # zip-bomb guard before parsing
+                if sum(i.file_size for i in zf.infolist()) > MAX_XLSX_UNCOMPRESSED:
+                    raise AccountingError("The Excel file expands to more than 100 MB.", "file_too_large")
             wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        except Exception as exc:  # openpyxl raises many types for corrupt files
-            raise AccountingError(f"Could not read the Excel file: {exc}", "bad_file") from exc
-        ws = wb.worksheets[0]
-        return "XLSX", [list(r) for r in ws.iter_rows(values_only=True)]
+        except AccountingError:
+            raise
+        except Exception as exc:  # openpyxl/zipfile raise many types for corrupt files
+            raise AccountingError("Could not read the Excel file (corrupt or not .xlsx).", "bad_file") from exc
+        rows = []
+        for r in wb.worksheets[0].iter_rows(values_only=True):
+            rows.append(list(r))
+            if len(rows) > MAX_ROWS:
+                raise AccountingError(f"The statement has more than {MAX_ROWS} rows; split it.", "too_many_rows")
+        return "XLSX", rows
     if name.endswith((".csv", ".txt")):
         for encoding in ("utf-8-sig", "cp1252"):
             try:
@@ -63,7 +78,12 @@ def _read_rows(file_name: str, content: bytes) -> tuple[str, list[list[object]]]
             raise AccountingError("Could not decode the CSV file.", "bad_file")
         sample = text[:8192]
         delimiter = max(",;\t|", key=sample.count)
-        return "CSV", [row for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
+        rows = []
+        for row in csv.reader(io.StringIO(text), delimiter=delimiter):
+            rows.append(row)
+            if len(rows) > MAX_ROWS:
+                raise AccountingError(f"The statement has more than {MAX_ROWS} rows; split it.", "too_many_rows")
+        return "CSV", rows
     if name.endswith(".pdf"):
         raise AccountingError("PDF statements are not supported yet; export CSV or Excel from net banking.",
                               "pdf_unsupported")
@@ -168,18 +188,51 @@ def line_remaining(line: StatementLine, as_of: date | None = None) -> Decimal:
     return line.amount - used
 
 
-def unmatched_book_vouchers(bank: BankAccount, *, deposit: bool, as_of: date | None = None):
-    """Posted vouchers touching the bank ledger on the given side with an unmatched balance.
-    Opening balances are the statement's starting point, not transactions to match; reversals
-    net against their originals."""
-    side = Q(lines__account=bank.account) & (Q(lines__debit__gt=0) if deposit else Q(lines__credit__gt=0))
-    qs = (Voucher.objects.filter(side, status=VoucherStatus.POSTED)
-          .exclude(voucher_type__in=[VoucherType.REVERSAL, VoucherType.OPENING]).distinct()
-          .select_related("payment__party")
-          .order_by("date", "id"))
+UNMATCHABLE_TYPES = (VoucherType.OPENING,)
+BOOK_STATUSES = (VoucherStatus.POSTED, VoucherStatus.REVERSED)
+
+
+def _book_amounts(bank: BankAccount, as_of: date | None) -> dict[int, Decimal]:
+    """Net debit on the bank ledger per voucher (posted or reversed — both moved the books)."""
+    qs = (VoucherLine.objects.filter(account=bank.account, voucher__status__in=BOOK_STATUSES)
+          .exclude(voucher__voucher_type__in=UNMATCHABLE_TYPES))
     if as_of:
-        qs = qs.filter(date__lte=as_of)
-    return [v for v in qs if voucher_unmatched(v, bank, deposit, as_of) > 0]
+        qs = qs.filter(voucher__date__lte=as_of)
+    return {r["voucher_id"]: (r["d"] or ZERO) - (r["c"] or ZERO)
+            for r in qs.values("voucher_id").annotate(d=Sum("debit"), c=Sum("credit"))}
+
+
+def _matched_amounts(bank: BankAccount, as_of: date | None) -> dict[int, Decimal]:
+    qs = BankMatch.objects.filter(is_active=True, statement_line__bank_account=bank)
+    if as_of:
+        qs = qs.filter(statement_line__txn_date__lte=as_of)
+    return {r["voucher_id"]: r["t"] for r in qs.values("voucher_id").annotate(t=Sum("amount"))}
+
+
+def book_pool(bank: BankAccount, *, deposit: bool, as_of: date | None = None) -> list[tuple[Voucher, Decimal]]:
+    """Book entries on one side of the bank ledger that are not (fully) on the statement yet.
+
+    A voucher and its reversal that never reached the bank (both wholly unmatched, reversal dated
+    on/before ``as_of``) net off and are left out. A reversal of a voucher that *did* clear (e.g. a
+    bounced cheque) stays in, so the bank's return line can be matched to it.
+    """
+    amounts = _book_amounts(bank, as_of)
+    matched = _matched_amounts(bank, as_of)
+    unmatched = {vid: abs(net) - matched.get(vid, ZERO) for vid, net in amounts.items()}
+    pairs = Voucher.objects.filter(pk__in=list(amounts), reversal_of_id__in=list(amounts)).values_list("pk", "reversal_of_id")
+    excluded: set[int] = set()
+    for rev_id, orig_id in pairs:
+        if unmatched.get(rev_id) == abs(amounts[rev_id]) and unmatched.get(orig_id) == abs(amounts[orig_id]):
+            excluded |= {rev_id, orig_id}
+    wanted = [vid for vid, net in amounts.items()
+              if vid not in excluded and ((net > 0) == deposit) and net != 0 and unmatched[vid] > 0]
+    vouchers = (Voucher.objects.filter(pk__in=wanted).select_related("payment__party", "reversal_of__payment__party")
+                .order_by("date", "id"))
+    return [(v, unmatched[v.pk]) for v in vouchers]
+
+
+def unmatched_book_vouchers(bank: BankAccount, *, deposit: bool, as_of: date | None = None):
+    return [v for v, _u in book_pool(bank, deposit=deposit, as_of=as_of)]
 
 
 # --- matching ------------------------------------------------------------------------------------
@@ -192,21 +245,29 @@ class Candidate:
     signals: tuple[str, ...]
 
 
-def party_name(voucher: Voucher) -> str:
+def _payment_of(voucher: Voucher):
     payment = getattr(voucher, "payment", None)
+    if payment is None and voucher.reversal_of_id:
+        payment = getattr(voucher.reversal_of, "payment", None)
+    return payment
+
+
+def party_name(voucher: Voucher) -> str:
+    payment = _payment_of(voucher)
     return payment.party.name if payment else ""
 
 
-def candidates_for(line: StatementLine) -> list[Candidate]:
+def candidates_for(line: StatementLine, pool: list[tuple[Voucher, Decimal]] | None = None) -> list[Candidate]:
     """Ranked book entries for a statement line. Scores are signals for humans, not auto-posting."""
     bank, deposit = line.bank_account, line.credit > 0
     remaining = line_remaining(line)
     narration = f"{line.narration} {line.reference}".upper()
     out = []
-    for voucher in unmatched_book_vouchers(bank, deposit=deposit):
-        unmatched = voucher_unmatched(voucher, bank, deposit)
+    for voucher, unmatched in (pool if pool is not None else book_pool(bank, deposit=deposit)):
+        if unmatched <= 0:
+            continue
         signals, score = [], 0
-        payment = getattr(voucher, "payment", None)
+        payment = _payment_of(voucher)
         ref = (payment.reference if payment else "").upper()
         if ref and (ref == line.reference.upper() or ref in narration):
             signals.append("utr"); score += 100
@@ -215,8 +276,7 @@ def candidates_for(line: StatementLine) -> list[Candidate]:
         days = abs((voucher.date - line.txn_date).days)
         if days <= DATE_WINDOW_DAYS:
             signals.append(f"date±{days}d"); score += max(0, 15 - 2 * days)
-        party = party_name(voucher)
-        tokens = [t for t in party.upper().split() if len(t) > 3]
+        tokens = [t for t in party_name(voucher).upper().split() if len(t) > 3]
         if tokens and any(t in narration for t in tokens):
             signals.append("party_name"); score += 10
         if score:
@@ -251,8 +311,11 @@ def _match(line: StatementLine, voucher: Voucher, amount: Decimal, method: str, 
         raise AccountingError("Match amount must be positive.", "bad_amount")
     if voucher.entity_id != line.bank_account.entity_id:
         raise AccountingError("The voucher belongs to another entity.", "cross_entity")
-    if voucher.status != VoucherStatus.POSTED:
-        raise AccountingError("Only posted, unreversed vouchers can be matched.", "not_posted")
+    # Serialise concurrent matches of the same voucher (two lines/users) before checking its balance.
+    voucher = Voucher.objects.select_for_update().get(pk=voucher.pk)
+    if voucher.status not in BOOK_STATUSES or voucher.voucher_type in UNMATCHABLE_TYPES:
+        raise AccountingError("Only posted (or reversed) book entries can be matched; opening balances cannot.",
+                              "not_posted")
     if amount > line_remaining(line):
         raise AccountingError(f"Match {amount} exceeds the line's unmatched {line_remaining(line)}.", "over_match")
     if amount > voucher_unmatched(voucher, line.bank_account, deposit):
@@ -266,27 +329,34 @@ def _match(line: StatementLine, voucher: Voucher, amount: Decimal, method: str, 
 
 @transaction.atomic
 def auto_match(bank: BankAccount, *, user=None) -> dict:
-    """Stage 1: UTR/reference. Stage 2: exact amount with a unique best date/party candidate.
-    Ambiguous lines stay UNMATCHED with suggestions; nothing is posted."""
+    """Stage 1: a single UTR/reference candidate. Stage 2: a single exact-amount candidate inside the
+    date window (a party-name hit breaks a tie). Anything else stays UNMATCHED with suggestions.
+    Nothing is posted. The book pool is computed once per side and updated in memory."""
     result = Counter()
-    lines = StatementLine.objects.select_for_update().filter(
+    lines = list(StatementLine.objects.select_for_update().select_related("bank_account").filter(
         bank_account=bank, status__in=[LineStatus.UNMATCHED, LineStatus.PARTIAL]
-    ).order_by("txn_date", "id")
+    ).order_by("txn_date", "id"))
+    pools = {True: book_pool(bank, deposit=True), False: book_pool(bank, deposit=False)}
     for line in lines:
-        cands = candidates_for(line)
+        pool = pools[line.credit > 0]
+        cands = candidates_for(line, pool)
         remaining = line_remaining(line)
         utr = [c for c in cands if "utr" in c.signals]
+        exact = [c for c in cands if "exact_amount" in c.signals and any(s.startswith("date") for s in c.signals)]
+        if len(exact) > 1:
+            named = [c for c in exact if "party_name" in c.signals]
+            exact = named if len(named) == 1 else exact
         if len(utr) == 1:
-            _match(line, utr[0].voucher, min(remaining, utr[0].unmatched), BankMatch.AUTO_REFERENCE, user)
+            chosen, method, amount = utr[0], BankMatch.AUTO_REFERENCE, min(remaining, utr[0].unmatched)
             result["utr"] += 1
+        elif len(exact) == 1:
+            chosen, method, amount = exact[0], BankMatch.AUTO_AMOUNT, remaining
+            result["amount"] += 1
         else:
-            exact = [c for c in cands if "exact_amount" in c.signals and any(s.startswith("date") for s in c.signals)]
-            best = [c for c in exact if c.score == exact[0].score] if exact else []
-            if len(best) == 1:
-                _match(line, best[0].voucher, remaining, BankMatch.AUTO_AMOUNT, user)
-                result["amount"] += 1
-            else:
-                result["ambiguous" if exact else "unmatched"] += 1
+            result["ambiguous" if (exact or len(utr) > 1) else "unmatched"] += 1
+            continue
+        _match(line, chosen.voucher, amount, method, user)
+        pools[line.credit > 0] = [(v, u - amount if v.pk == chosen.voucher.pk else u) for v, u in pool]
         refresh_line_status(line)
     return dict(result)
 
@@ -422,9 +492,9 @@ def bank_reconciliation(bank: BankAccount, as_of: date) -> dict:
     statement_balance = last.balance if last else None
     unpresented = []  # in books, not yet on the statement
     for deposit in (True, False):
-        for v in unmatched_book_vouchers(bank, deposit=deposit, as_of=as_of):
+        for v, amount in book_pool(bank, deposit=deposit, as_of=as_of):
             unpresented.append({"voucher_id": v.pk, "number": v.number, "date": v.date, "deposit": deposit,
-                                "amount": voucher_unmatched(v, bank, deposit, as_of)})
+                                "amount": amount})
     unrecorded = []  # on the statement, not yet in books (as they stood on as_of)
     for ln in StatementLine.objects.filter(bank_account=bank, txn_date__lte=as_of):
         remaining = line_remaining(ln, as_of)

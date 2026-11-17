@@ -105,13 +105,18 @@ def balance_sheet(entity: EntityBooks, as_of: date) -> dict:
         head = acct.group.report_head
         if acct.kind == AccountKind.PARTY:
             head = H.RECEIVABLES if net > 0 else H.PAYABLES
+        elif acct.kind in (AccountKind.BANK, AccountKind.CASH) and net < 0:
+            head = "BANK_OVERDRAFT"  # a credit bank balance is a liability, not a negative asset
         heads[head] += net
     assets = {hd.value: heads[hd] for hd in BS_ASSET_HEADS if heads[hd]}
     liabilities = {hd.value: -heads[hd] for hd in BS_LIAB_HEADS if heads[hd]}
+    if heads["BANK_OVERDRAFT"]:
+        liabilities["BANK_OVERDRAFT"] = -heads["BANK_OVERDRAFT"]
     liabilities["PROFIT_AND_LOSS"] = profit
     total_assets = sum(assets.values(), ZERO)
     total_liab = sum(liabilities.values(), ZERO)
-    labels = dict(ReportHead.choices) | {"PROFIT_AND_LOSS": "Profit & Loss account (cumulative)"}
+    labels = dict(ReportHead.choices) | {"PROFIT_AND_LOSS": "Profit & Loss account (cumulative)",
+                                         "BANK_OVERDRAFT": "Bank overdraft"}
     return {"entity_id": entity.pk, "as_of": as_of,
             "assets": [{"head": k, "label": labels[k], "amount": v} for k, v in assets.items()],
             "liabilities": [{"head": k, "label": labels[k], "amount": v} for k, v in liabilities.items()],
@@ -131,10 +136,16 @@ def cash_flow(entity: EntityBooks, start: date, end: date) -> dict:
     by_voucher: dict[int, list[VoucherLine]] = defaultdict(list)
     for ln in lines:
         by_voucher[ln.voucher_id].append(ln)
-    for vlines in by_voucher.values():
+    opening_in_period = ZERO
+    opening_vouchers = set(posted_lines(entity).filter(voucher__voucher_type="OPENING", voucher__date__gte=start,
+                                                       voucher__date__lte=end).values_list("voucher_id", flat=True))
+    for vid, vlines in by_voucher.items():
         cash_move = sum((ln.debit - ln.credit for ln in vlines if ln.account_id in cash_ids), ZERO)
         if not cash_move:
             continue  # contra between bank accounts, or no cash effect
+        if vid in opening_vouchers:  # an opening balance is where cash starts, not a cash flow
+            opening_in_period += cash_move
+            continue
         # Exact direct method: each counter-line explains -(its own net) of the cash movement, so the
         # sections always sum to the cash moved (e.g. TDS withheld on interest nets against interest).
         for ln in vlines:
@@ -146,7 +157,7 @@ def cash_flow(entity: EntityBooks, start: date, end: date) -> dict:
                        "investing" if head in (H.FIXED_ASSETS, H.LOANS_GIVEN) else "operating")
             sections[section] += share
             detail[section][accts[ln.account_id].group.name] += share
-    opening = sum((account_balance(accts[i], end=start - timedelta(days=1)) for i in cash_ids), ZERO)
+    opening = sum((account_balance(accts[i], end=start - timedelta(days=1)) for i in cash_ids), ZERO) + opening_in_period
     closing = sum((account_balance(accts[i], end=end) for i in cash_ids), ZERO)
     net = sum(sections.values(), ZERO)
     return {"entity_id": entity.pk, "start": start, "end": end, "opening_cash": opening, "closing_cash": closing,
@@ -158,14 +169,15 @@ AGEING_BUCKETS = ((0, 30), (31, 60), (61, 90), (91, 180), (181, None))
 
 
 def ageing(entity: EntityBooks, *, receivable: bool, as_of: date) -> dict:
-    from apps.accounting.services.invoices import outstanding
+    from apps.accounting.services.invoices import outstanding_map
     kinds = RECEIVABLE_KINDS if receivable else PAYABLE_KINDS
-    bills = Invoice.objects.filter(entity=entity, kind__in=kinds, status=DocStatus.POSTED, date__lte=as_of) \
-        .select_related("party")
+    bills = list(Invoice.objects.filter(entity=entity, kind__in=kinds, status=DocStatus.POSTED, date__lte=as_of)
+                 .select_related("party"))
+    open_amounts = outstanding_map(bills, as_of)
     parties: dict[int, dict] = {}
     totals = {f"{lo}-{hi or '+'}": ZERO for lo, hi in AGEING_BUCKETS} | {"not_due": ZERO, "total": ZERO}
     for bill in bills:
-        due = outstanding(bill, as_of)
+        due = open_amounts[bill.pk]
         if due <= 0:
             continue
         ref = bill.due_date or bill.date
@@ -185,18 +197,20 @@ def ageing(entity: EntityBooks, *, receivable: bool, as_of: date) -> dict:
 
 
 def register(entity: EntityBooks, kinds, start: date, end: date) -> dict:
-    from apps.accounting.services.invoices import outstanding, payment_status
+    from apps.accounting.services.invoices import outstanding_map, status_for
     rows = []
     totals = defaultdict(lambda: ZERO)
-    for inv in (Invoice.objects.filter(entity=entity, kind__in=kinds, date__gte=start, date__lte=end)
-                .exclude(status=DocStatus.CANCELLED).select_related("party", "voucher", "tds_section")
-                .order_by("date", "id")):
+    invoices = list(Invoice.objects.filter(entity=entity, kind__in=kinds, date__gte=start, date__lte=end)
+                    .exclude(status=DocStatus.CANCELLED).select_related("party", "voucher", "tds_section")
+                    .order_by("date", "id"))
+    open_amounts = outstanding_map(invoices)
+    for inv in invoices:
         row = {"invoice_id": inv.pk, "number": inv.number, "date": inv.date, "kind": inv.kind,
                "party_id": inv.party_id, "party": inv.party.name, "party_gstin": inv.party.gst_number,
                "taxable": inv.taxable_amount, "cgst": inv.cgst, "sgst": inv.sgst, "igst": inv.igst,
                "gross": inv.gross_amount, "tds_section": inv.tds_section.code if inv.tds_section else "",
-               "tds": inv.tds_amount, "net": inv.net_amount, "status": payment_status(inv),
-               "outstanding": outstanding(inv), "voucher_id": inv.voucher_id,
+               "tds": inv.tds_amount, "net": inv.net_amount, "status": status_for(inv, open_amounts[inv.pk]),
+               "outstanding": open_amounts[inv.pk], "voucher_id": inv.voucher_id,
                "voucher_number": inv.voucher.number if inv.voucher else None, "trade_id": inv.trade_id}
         rows.append(row)
         if inv.status == DocStatus.POSTED:
@@ -297,9 +311,32 @@ def loan_register(entity: EntityBooks, as_of: date) -> list[dict]:
     return rows
 
 
-def consolidated(entities: list[EntityBooks], start: date, end: date) -> dict:
-    """Sum of separate books with intercompany elimination. Statutory books are never mixed:
-    this is a read-only report; elimination entries are computed, not posted into any entity."""
+IC_FLOWS = (  # (credit-side role, debit-side role, P&L lines they sit in)
+    ("INTERCOMPANY_SALES", "INTERCOMPANY_PURCHASES", "gross_sales", "purchases"),
+    ("INTERCOMPANY_COMMISSION_INCOME", "INTERCOMPANY_COMMISSION_EXPENSE", "commission_income", "commission_expense"),
+)
+
+
+def _ic_flow(entity: EntityBooks, role: str, others: set[int], start: date, end: date) -> Decimal:
+    """Debit-positive movement on ``role`` in vouchers whose counterparty is another entity of the group."""
+    from apps.accounting.models import Voucher
+    if not others:
+        return ZERO
+    vids = Voucher.objects.filter(entity=entity, lines__account__intercompany_entity_id__in=others).values("pk")
+    agg = (posted_lines(entity).filter(account__system_role=role, voucher_id__in=vids,
+                                       voucher__date__gte=start, voucher__date__lte=end)
+           .aggregate(d=Sum("debit"), c=Sum("credit")))
+    return (agg["d"] or ZERO) - (agg["c"] or ZERO)
+
+
+def consolidated(entities: list[EntityBooks], start: date, end: date, *, stock_reserve: Decimal = ZERO) -> dict:
+    """Sum of separate books with intercompany elimination, computed only for dealings *within* the
+    selected group. Read-only: elimination entries are never posted into any entity's books.
+
+    Unrealised intercompany profit in closing stock cannot be derived from periodic-method books; the
+    accountant supplies it as ``stock_reserve`` (reduces group gross profit and inventory) and the
+    report warns whenever group stock and intercompany purchases coexist.
+    """
     ids = {e.pk for e in entities}
     pl_totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
     per_entity = []
@@ -309,38 +346,55 @@ def consolidated(entities: list[EntityBooks], start: date, end: date) -> dict:
                            "gross_profit": pl["gross_profit"], "net_profit": pl["net_profit"]})
         for key, line in pl["lines"].items():
             pl_totals[key] += line["amount"]
-    ic_sales = sum((-account_balance(_role(e, "INTERCOMPANY_SALES"), start=start, end=end) for e in entities), ZERO)
-    ic_purch = sum((account_balance(_role(e, "INTERCOMPANY_PURCHASES"), start=start, end=end) for e in entities), ZERO)
+    flows = {}
+    for credit_role, debit_role, credit_line, debit_line in IC_FLOWS:
+        income = sum((-_ic_flow(e, credit_role, ids - {e.pk}, start, end) for e in entities), ZERO)
+        cost = sum((_ic_flow(e, debit_role, ids - {e.pk}, start, end) for e in entities), ZERO)
+        eliminated = min(income, cost)
+        pl_totals[credit_line] -= eliminated
+        pl_totals[debit_line] -= eliminated
+        flows[credit_role] = {"income": income, "cost": cost, "eliminated": eliminated, "difference": income - cost}
+    pl_totals["stock_change"] += stock_reserve  # unrealised profit reverses out of closing stock
     ic_balances = []
     for e in entities:
-        for acct in Account.objects.filter(entity=e, kind=AccountKind.PARTY, intercompany_entity_id__in=ids):
+        for acct in Account.objects.filter(entity=e, kind=AccountKind.PARTY, intercompany_entity_id__in=ids - {e.pk}):
             ic_balances.append({"entity_id": e.pk, "counterparty_entity_id": acct.intercompany_entity_id,
                                 "account_id": acct.pk, "balance": account_balance(acct, end=end)})
-    eliminated_revenue = min(ic_sales, ic_purch)
-    pl_totals["gross_sales"] -= eliminated_revenue
-    pl_totals["purchases"] -= eliminated_revenue
     net_sales = pl_totals["gross_sales"] + pl_totals["sales_returns"]
     cogs = sum((pl_totals[k] for k in DIRECT_COSTS), ZERO)
     indirect = sum((pl_totals[k] for k in ("commission_expense", "bank_charges", "operating_expenses",
                                           "interest_expense")), ZERO)
     other = sum((pl_totals[k] for k in ("forex", "commission_income", "interest_income", "other_income")), ZERO)
     bs = [balance_sheet(e, end) for e in entities]
-    ic_net = sum((b["balance"] for b in ic_balances), ZERO)
+    ic_receivable = sum((b["balance"] for b in ic_balances if b["balance"] > 0), ZERO)
+    ic_payable = -sum((b["balance"] for b in ic_balances if b["balance"] < 0), ZERO)
+    group_stock = sum((a["amount"] for b in bs for a in b["assets"] if a["head"] == "INVENTORY"), ZERO)
+    sales = flows["INTERCOMPANY_SALES"]
+    warnings = []
+    if group_stock and sales["cost"] and not stock_reserve:
+        warnings.append("Group closing stock exists and entities bought from each other: unrealised intercompany "
+                        "profit in that stock is not eliminated automatically — enter a stock reserve.")
+    if any(f["difference"] for f in flows.values()):
+        warnings.append("Intercompany income and cost do not agree; investigate before relying on the eliminations.")
+    if ic_receivable != ic_payable:
+        warnings.append("Intercompany receivables and payables do not agree.")
+    total_assets = sum((b["total_assets"] for b in bs), ZERO) - ic_receivable - stock_reserve
+    total_liab = sum((b["total_liabilities"] for b in bs), ZERO) - ic_payable - stock_reserve
     return {
         "entities": per_entity, "start": start, "end": end,
-        "eliminations": {"intercompany_sales": ic_sales, "intercompany_purchases": ic_purch,
-                         "eliminated": eliminated_revenue, "unmatched_difference": ic_sales - ic_purch,
-                         "intercompany_balances": ic_balances, "intercompany_balance_difference": ic_net},
+        "eliminations": {"intercompany_sales": sales["income"], "intercompany_purchases": sales["cost"],
+                         "eliminated": sales["eliminated"], "unmatched_difference": sales["difference"],
+                         "commission": flows["INTERCOMPANY_COMMISSION_INCOME"],
+                         "intercompany_balances": ic_balances, "intercompany_receivable": ic_receivable,
+                         "intercompany_payable": ic_payable,
+                         "intercompany_balance_difference": ic_receivable - ic_payable,
+                         "stock_reserve": stock_reserve, "group_closing_stock": group_stock},
         "profit_and_loss": {"lines": dict(pl_totals), "net_sales": net_sales, "gross_profit": net_sales - cogs,
                             "net_profit": net_sales - cogs - indirect + other},
-        "balance_sheet": {"total_assets": sum((b["total_assets"] for b in bs), ZERO) - _ic_receivable(ic_balances),
-                          "total_liabilities": sum((b["total_liabilities"] for b in bs), ZERO) - _ic_receivable(ic_balances)},
+        "balance_sheet": {"total_assets": total_assets, "total_liabilities": total_liab,
+                          "balanced": total_assets == total_liab},
+        "warnings": warnings,
     }
-
-
-def _ic_receivable(ic_balances: list[dict]) -> Decimal:
-    """Intercompany receivables eliminated against the matching payables (gross assets & liabilities fall)."""
-    return sum((b["balance"] for b in ic_balances if b["balance"] > 0), ZERO)
 
 
 def dashboard(entity: EntityBooks, start: date, end: date) -> dict:

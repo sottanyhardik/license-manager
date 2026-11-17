@@ -117,11 +117,12 @@ def party_ledger(entity: EntityBooks, party_id: int, *, start: date, end: date) 
     if account is None:
         return {"account_id": None, "opening": ZERO, "closing": ZERO, "rows": [], "open_bills": []}
     data = general_ledger(account, start=start, end=end)
-    from apps.accounting.services.invoices import outstanding, payment_status
-    bills = Invoice.objects.filter(entity=entity, party_id=party_id, status="POSTED").order_by("date", "id")
+    from apps.accounting.services.invoices import outstanding_map, status_for
+    bills = list(Invoice.objects.filter(entity=entity, party_id=party_id, status="POSTED").order_by("date", "id"))
+    due = outstanding_map(bills, end)
     data["open_bills"] = [
         {"invoice_id": b.pk, "number": b.number, "kind": b.kind, "date": b.date, "due_date": b.due_date,
-         "amount": b.net_amount, "outstanding": outstanding(b), "status": payment_status(b), "trade_id": b.trade_id}
-        for b in bills if outstanding(b) > 0
+         "amount": b.net_amount, "outstanding": due[b.pk], "status": status_for(b, due[b.pk]), "trade_id": b.trade_id}
+        for b in bills if due[b.pk] > 0
     ]
     return data

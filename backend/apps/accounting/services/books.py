@@ -65,6 +65,7 @@ def ensure_financial_year(entity: EntityBooks, d: date) -> FinancialYear:
             entity=entity, label=label, defaults={"start_date": start, "end_date": end}
         )
         if created:
+            audit.record("FINANCIAL_YEAR_OPENED", fy, entity=entity, label=label)
             month_start = start
             for n in range(1, 13):
                 AccountingPeriod.objects.create(

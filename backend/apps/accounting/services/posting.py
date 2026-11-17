@@ -205,6 +205,34 @@ def post_draft(voucher: Voucher, *, user=None) -> Voucher:
 
 
 @transaction.atomic
+def update_draft(voucher: Voucher, *, voucher_type: str, voucher_date: date, lines: list[LineSpec],
+                 narration: str, user=None) -> Voucher:
+    """Replace a manual draft's header and lines. Drafts have no ledger effect; posted vouchers stay
+    immutable (DB triggers 0002/0004). The editor becomes the maker, so maker-checker still holds:
+    whoever changed the content cannot also post it when the flag is on."""
+    voucher = Voucher.objects.select_for_update().select_related("entity").get(pk=voucher.pk)
+    if voucher.status != VoucherStatus.DRAFT:
+        raise AccountingError("Only draft vouchers can be edited; reverse a posted voucher instead.", "posted_immutable")
+    if voucher.source_type != "MANUAL" or voucher_type not in MANUAL_TYPES:
+        raise AccountingError("Only manual journal, contra, opening and adjustment drafts are edited here.",
+                              "bad_manual_type")
+    entity = voucher.entity
+    lines = _normalise(lines)
+    total = validate_lines(entity, lines)
+    fy, _ = open_period_for(entity, voucher_date)
+    voucher.financial_year, voucher.voucher_type, voucher.date = fy, voucher_type, voucher_date
+    voucher.narration, voucher.total = narration, total
+    if getattr(user, "is_authenticated", False):
+        voucher.created_by = user
+    voucher.save(update_fields=["financial_year", "voucher_type", "date", "narration", "total", "created_by",
+                                "modified_on"])
+    voucher.lines.all().delete()
+    _write_lines(voucher, lines)
+    audit.record("VOUCHER_DRAFT_EDITED", voucher, actor=user, total=total)
+    return voucher
+
+
+@transaction.atomic
 def delete_draft(voucher: Voucher, *, user=None) -> None:
     voucher = Voucher.objects.select_for_update().get(pk=voucher.pk)
     if voucher.status != VoucherStatus.DRAFT:

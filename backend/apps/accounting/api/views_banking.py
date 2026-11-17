@@ -1,6 +1,7 @@
 """Banking API: bank accounts, statement upload, workbench, matching, suspense, reconciliation."""
 from __future__ import annotations
 
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -76,7 +77,8 @@ class StatementLineListView(AccountingView):
         if param(request, "end"):
             qs = qs.filter(txn_date__lte=as_date(param(request, "end"), "end"))
         if param(request, "search"):
-            qs = qs.filter(narration__icontains=param(request, "search"))
+            term = param(request, "search")
+            qs = qs.filter(Q(narration__icontains=term) | Q(reference__icontains=term))  # UTR / cheque no. too
         return ok(page(request, qs, line_dict))
 
 

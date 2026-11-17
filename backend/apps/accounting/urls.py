@@ -15,6 +15,7 @@ urlpatterns = [
     path("accounting/accounts/<int:account_id>/", v.AccountDetailView.as_view(), name="account-detail"),
     path("accounting/cost-centres/", v.CostCentreView.as_view(), name="cost-centres"),
     path("accounting/parties/", v.PartySearchView.as_view(), name="parties"),
+    path("accounting/parties/summary/", v.PartySummaryView.as_view(), name="party-summary"),
     path("accounting/vouchers/", v.VoucherListView.as_view(), name="vouchers"),
     path("accounting/vouchers/<int:voucher_id>/", v.VoucherDetailView.as_view(), name="voucher-detail"),
     path("accounting/vouchers/<int:voucher_id>/post/", v.VoucherPostView.as_view(), name="voucher-post"),

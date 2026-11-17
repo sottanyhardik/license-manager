@@ -398,6 +398,53 @@ def consolidated(entities: list[EntityBooks], start: date, end: date, *, stock_r
     }
 
 
+def unallocated_advances(entity: EntityBooks, as_of: date) -> dict:
+    """Posted payments/receipts not yet allocated to bills (advances / on-account), by direction.
+    Same definition as `services.payments.unallocated`: party amount (bank + TDS) − active settlements."""
+    from apps.accounting.models import Payment, Settlement
+    used = dict(Settlement.objects.filter(payment__entity=entity, is_active=True, payment__date__lte=as_of)
+                .values("payment_id").annotate(t=Sum("amount")).values_list("payment_id", "t"))
+    out = {"PAYMENT": ZERO, "RECEIPT": ZERO}
+    for p in Payment.objects.filter(entity=entity, status=DocStatus.POSTED, date__lte=as_of):
+        free = p.party_amount - (used.get(p.pk) or ZERO)
+        if free > 0:
+            out[p.direction] += free
+    return {"paid": out["PAYMENT"], "received": out["RECEIPT"]}
+
+
+def party_summary(entity: EntityBooks, *, as_of: date, search: str = "") -> dict:
+    """One row per party that has a ledger in these books: closing ledger balance (debit-positive, from
+    the GL), open receivable/payable bills (from `ageing`) and customer/supplier classification."""
+    accounts = Account.objects.filter(entity=entity, kind=AccountKind.PARTY, party__isnull=False).select_related("party")
+    if search:
+        accounts = accounts.filter(party__name__icontains=search)
+    balances = balances_by_account(entity, end=as_of)
+    recv = {r["party_id"]: r for r in ageing(entity, receivable=True, as_of=as_of)["parties"]}
+    pay = {r["party_id"]: r for r in ageing(entity, receivable=False, as_of=as_of)["parties"]}
+    kinds = defaultdict(set)
+    for pid, kind in (Invoice.objects.filter(entity=entity).exclude(status=DocStatus.CANCELLED)
+                      .values_list("party_id", "kind").distinct()):
+        kinds[pid].add(kind)
+    rows, totals = [], {"debit_balance": ZERO, "credit_balance": ZERO, "receivable": ZERO, "payable": ZERO}
+    for acct in accounts.order_by("party__name"):
+        d, c = balances.get(acct.pk, (ZERO, ZERO))
+        bal = d - c
+        r, p = recv.get(acct.party_id), pay.get(acct.party_id)
+        row = {"party_id": acct.party_id, "party": acct.party.name, "gstin": acct.party.gst_number,
+               "account_id": acct.pk, "account_code": acct.code, "balance": bal,
+               "receivable": r["total"] if r else ZERO, "payable": p["total"] if p else ZERO,
+               "open_bills": len(r["bills"]) if r else 0, "open_payable_bills": len(p["bills"]) if p else 0,
+               "is_customer": bool(kinds[acct.party_id] & set(RECEIVABLE_KINDS)),
+               "is_supplier": bool(kinds[acct.party_id] & set(PAYABLE_KINDS)),
+               "is_active": acct.is_active}
+        totals["debit_balance"] += max(bal, ZERO)
+        totals["credit_balance"] += max(-bal, ZERO)
+        totals["receivable"] += row["receivable"]
+        totals["payable"] += row["payable"]
+        rows.append(row)
+    return {"as_of": as_of, "parties": rows, "totals": totals}
+
+
 def dashboard(entity: EntityBooks, start: date, end: date) -> dict:
     from apps.accounting.models import LineStatus, StatementLine, Voucher
     pl = profit_and_loss(entity, start, end)
@@ -422,4 +469,6 @@ def dashboard(entity: EntityBooks, start: date, end: date) -> dict:
         "gst_net_payable": gst_register(entity, start, end)["net_payable"],
         "tds_payable": -account_balance(_role(entity, "TDS_PAYABLE"), end=end),
         "loan_outstanding": sum((r["total_outstanding"] for r in loan_register(entity, end)), ZERO),
+        # additive: unallocated advances (payments made / receipts taken, not yet set against bills)
+        **{f"advances_{k}": v for k, v in unallocated_advances(entity, end).items()},
     }

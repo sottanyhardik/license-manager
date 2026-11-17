@@ -187,6 +187,15 @@ class VoucherDetailView(AccountingView):
                          .select_related("actor")]
         return ok(data)
 
+    def patch(self, request, voucher_id: int):
+        """Edit a manual DRAFT (header + full line set). Posted vouchers are refused (reverse instead)."""
+        v = Voucher.objects.select_related("entity").get(pk=voucher_id)
+        v = posting.update_draft(v, voucher_type=param(request, "voucher_type", v.voucher_type),
+                                 voucher_date=as_date(param(request, "date"), "date", v.date),
+                                 lines=_line_specs(v.entity, request.data.get("lines")),
+                                 narration=param(request, "narration", v.narration) or "", user=request.user)
+        return ok(voucher_dict(v, lines=True))
+
     def delete(self, request, voucher_id: int):
         posting.delete_draft(Voucher.objects.get(pk=voucher_id), user=request.user)
         return ok({"deleted": True}, status.HTTP_200_OK)
@@ -463,6 +472,17 @@ class PartySearchView(AccountingView):
         if param(request, "search"):
             qs = qs.filter(name__icontains=param(request, "search"))
         return ok([{"id": c.pk, "name": c.name, "gstin": c.gst_number, "pan": c.pan} for c in qs[:50]])
+
+
+class PartySummaryView(AccountingView):
+    """GET parties/summary/?entity=&as_of=  Per-party ledger balance and open bills (party master = companies)."""
+
+    def get(self, request):
+        from apps.accounting.selectors import reports
+        e = entity_from(request)
+        _start, end, _fy = period_from(request, e)
+        return ok(reports.party_summary(e, as_of=as_date(param(request, "as_of"), "as_of", end),
+                                        search=param(request, "search", "") or ""))
 
 
 class AuditEventView(AccountingView):

@@ -8,6 +8,7 @@ import { MASTER_CATEGORIES, masterEntities } from "../../routes/config";
 import { getMasterRecordKey, MASTER_LOOKUP_FIELDS } from "./masterListConfig";
 import MastersHub from "./MastersHub";
 import GenericMasterCards from "./tables/GenericMasterCards";
+import { ConfirmProvider } from "@/components/shared/ConfirmDialog";
 
 const { getSpy } = vi.hoisted(() => ({ getSpy: vi.fn() }));
 vi.mock("../../api/axios", () => ({ default: { get: getSpy } }));
@@ -123,8 +124,10 @@ describe("GenericMasterCards", () => {
     const renderCards = (extra: Record<string, unknown> = {}) => {
         const navigate = vi.fn();
         const onDelete = vi.fn();
-        render(<MemoryRouter><GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} /></MemoryRouter>);
-        return { navigate, onDelete };
+        const view = render(<ConfirmProvider><MemoryRouter><GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} /></MemoryRouter></ConfirmProvider>);
+        const rerenderCards = (more: Record<string, unknown>) =>
+            view.rerender(<ConfirmProvider><MemoryRouter><GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} {...more} /></MemoryRouter></ConfirmProvider>);
+        return { navigate, onDelete, rerenderCards };
     };
 
     it("links the identifier to the record page by its encoded code", () => {
@@ -161,5 +164,81 @@ describe("GenericMasterCards", () => {
     it("shows the shared empty state", () => {
         renderCards({ data: [] });
         expect(screen.getByText("No notification numbers found")).toBeInTheDocument();
+    });
+
+    describe("bulk actions", () => {
+        const rows = [
+            { id: 1, code: "025/2023", label: "Advance" },
+            { id: 2, code: "040/2006", label: "Old" },
+        ];
+        const bulkMeta = { list_display: ["code", "label"], bulk_actions: ["delete"] };
+
+        it("are not offered without bulk metadata, a handler or write access", () => {
+            renderCards({ data: rows });
+            expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+        });
+
+        it("are not offered to read-only users", () => {
+            renderCards({ data: rows, metadata: bulkMeta, onBulk: vi.fn(), canWrite: false });
+            expect(screen.queryByRole("checkbox", { name: "Select all on page" })).not.toBeInTheDocument();
+        });
+
+        it("select rows, confirm, send raw keys and report each refused record by name", async () => {
+            const user = userEvent.setup();
+            const onBulk = vi.fn().mockResolvedValue({
+                action: "delete", requested: 2, succeeded: 1, failed: 1,
+                results: [{ key: "025/2023", ok: true }, { key: "040/2006", ok: false, error: "Cannot delete: still referenced." }],
+            });
+            renderCards({ data: rows, metadata: bulkMeta, onBulk });
+            const all = screen.getByRole("checkbox", { name: "Select all on page" });
+
+            await user.click(screen.getByRole("checkbox", { name: "Select 025/2023" }));
+            expect(all).toHaveAttribute("data-state", "indeterminate");
+            expect(screen.getByText("1 selected")).toBeInTheDocument();
+            await user.click(all);
+            expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+            await user.click(screen.getByRole("button", { name: "Delete" }));
+            const dialog = screen.getByRole("alertdialog");
+            expect(within(dialog).getByText("Delete 2 records?")).toBeInTheDocument();
+            await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+            expect(onBulk).toHaveBeenCalledWith("delete", ["025/2023", "040/2006"]);
+            const results = await screen.findByTestId("bulk-results");
+            expect(results).toHaveTextContent("1 of 2 deleted");
+            expect(within(results).getByText("040/2006")).toBeInTheDocument();
+            expect(results).toHaveTextContent("Cannot delete: still referenced.");
+            expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+        });
+
+        it("cancelling the confirmation sends nothing", async () => {
+            const user = userEvent.setup();
+            const onBulk = vi.fn();
+            renderCards({ data: rows, metadata: bulkMeta, onBulk });
+            await user.click(screen.getByRole("checkbox", { name: "Select all on page" }));
+            await user.click(screen.getByRole("button", { name: "Delete" }));
+            await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+            expect(onBulk).not.toHaveBeenCalled();
+        });
+
+        it("clears the selection when the page's rows change", async () => {
+            const user = userEvent.setup();
+            const { rerenderCards } = renderCards({ data: rows, metadata: bulkMeta, onBulk: vi.fn() });
+            await user.click(screen.getByRole("checkbox", { name: "Select all on page" }));
+            expect(screen.getByText("2 selected")).toBeInTheDocument();
+            rerenderCards({ data: [{ id: 3, code: "018/2015", label: "Next page" }] });
+            expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+        });
+
+        it("offers activate and deactivate only when the master supports them", () => {
+            renderCards({
+                data: [{ id: 5, code: "Q1", label: "On", is_active: true }],
+                metadata: { list_display: ["code", "label", "is_active"], bulk_actions: ["activate", "deactivate", "delete"] },
+                entityName: "purchase-statuses",
+                onBulk: vi.fn(),
+            });
+            // Buttons appear once something is selected.
+            expect(screen.queryByRole("button", { name: "Activate" })).not.toBeInTheDocument();
+        });
     });
 });

@@ -17,3 +17,8 @@ now resolves codes containing `/` (e.g. `025/2023`); previously 404. Response sh
 **API CONTRACT CHANGE (additive, 2026-11-17):** `GET /api/masters/activity-logs/` accepts `changes_only=1` (successful
 CREATE/UPDATE/DELETE only) and `endpoint=<path>` (exact request path, trailing slash optional). Without them the response is
 unchanged. Permission unchanged (`UserManagementPermission`).
+
+**API CONTRACT CHANGE (additive, 2026-11-18):** `POST /api/masters/<entity>/bulk/` with
+`{"action": "activate"|"deactivate"|"delete", "keys": [...]}` → `{action, requested, succeeded, failed, results: [{key, ok, error?}]}`
+(200; 400 for an unsupported action, empty or >200 keys; 403 for non-writers; 404 where bulk is off). Every
+`create_viewset` list response gains `bulk_actions` (`[]` for licences, BOEs, trades, allotments, incentive, norms, exchange rates).

@@ -31,6 +31,18 @@ async function rowAction(page: Page, action: "Open" | "Edit" | "Delete") {
     await page.getByRole("menuitem", { name: action }).click();
 }
 
+async function authPost<T>(page: Page, path: string, body: unknown): Promise<{ status: number; body: T | null }> {
+    return page.evaluate(async ([url, payload]) => {
+        const access = localStorage.getItem("access");
+        const response = await fetch(`/api/${url}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(access ? { Authorization: `Bearer ${access}` } : {}) },
+            body: JSON.stringify(payload),
+        });
+        return { status: response.status, body: response.ok ? await response.json() : null };
+    }, [path, body] as const);
+}
+
 async function authGet<T>(page: Page, path: string): Promise<{ status: number; body: T | null }> {
     return page.evaluate(async (url) => {
         const access = localStorage.getItem("access");
@@ -150,5 +162,57 @@ test.describe("Masters workspace on the real backend", () => {
         await page.getByRole("link", { name: PORT_CODE, exact: true }).click();
         await expect(page.getByRole("heading", { name: PORT_CODE, level: 1 })).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("masters-port-detail-1440.png") });
+
+        // Same row metrics as the licence register (live UI measured: 50 px rows, 10 px radius, slate-300 border).
+        const rowStyle = (selector: string) => page.locator(selector).first().evaluate((el) => {
+            const cs = getComputedStyle(el);
+            return { h: Math.round(el.getBoundingClientRect().height), radius: cs.borderRadius, border: cs.borderTopColor, font: cs.fontFamily.split(",")[0] };
+        });
+        await page.goto("/masters/ports", { waitUntil: "networkidle" });
+        const masterRow = await rowStyle('ul[aria-label="Ports"] > li > article');
+        await page.goto("/licenses", { waitUntil: "networkidle" });
+        const licenceRow = await rowStyle('ul[aria-label="Licenses"] > li > article');
+        expect({ radius: masterRow.radius, border: masterRow.border, font: masterRow.font }).toEqual({ radius: licenceRow.radius, border: licenceRow.border, font: licenceRow.font });
+        expect(Math.abs(masterRow.h - licenceRow.h)).toBeLessThanOrEqual(6);
+    });
+
+    test("bulk deactivate and bulk delete report every record and keep referenced data", async ({ page }) => {
+        await signIn(page);
+        await page.goto("/masters/purchase-statuses", { waitUntil: "networkidle" });
+        for (const code of ["Y1", "Y2"]) {
+            expect((await authPost(page, "masters/purchase-statuses/", { code, label: `E2E Bulk ${code}`, is_active: true, display_order: 990 })).status).toBe(201);
+        }
+        await page.reload({ waitUntil: "networkidle" });
+        await page.getByPlaceholder(/Search by/).first().fill("E2E Bulk");
+        const list = page.getByRole("list", { name: "Purchase Statuses" });
+        await expect(list.getByRole("listitem")).toHaveCount(2);
+        await page.getByRole("checkbox", { name: "Select all on page" }).click();
+        await expect(page.getByText("2 selected")).toBeVisible();
+        await page.getByRole("button", { name: "Deactivate" }).click();
+        await page.getByRole("alertdialog").getByRole("button", { name: "Deactivate" }).click();
+        await expect(page.getByTestId("bulk-results")).toContainText("2 of 2 deactivated");
+        await expect(list.getByText("Inactive")).toHaveCount(2);
+        const statuses = await authGet<{ results: { code: string; is_active: boolean; id: number }[] }>(page, "masters/purchase-statuses/?search=E2E%20Bulk");
+        expect(statuses.body?.results.map(r => r.is_active)).toEqual([false, false]);
+        // Each bulk change is in that record's own history, like a single edit.
+        const first = statuses.body!.results[0];
+        const history = await authGet<{ action: string }[]>(page,
+            `masters/activity-logs/?changes_only=1&endpoint=${encodeURIComponent(`/api/masters/purchase-statuses/${first.id}/`)}`);
+        expect(history.body?.map(r => r.action)).toContain("UPDATE");
+
+        // Ports: the seeded port is used by licences and must survive; the unused one is deleted.
+        await page.goto("/masters/ports", { waitUntil: "networkidle" });
+        await page.getByPlaceholder(/Search by/).first().fill("E2E");
+        const ports = page.getByRole("list", { name: "Ports" });
+        await expect(ports.getByRole("listitem")).toHaveCount(2);
+        await page.getByRole("checkbox", { name: "Select all on page" }).click();
+        await page.getByRole("button", { name: "Delete" }).click();
+        await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+        const results = page.getByTestId("bulk-results");
+        await expect(results).toContainText("1 of 2 deleted");
+        await expect(results).toContainText("still referenced");
+        await expect(ports.getByRole("listitem")).toHaveCount(1);
+        expect((await authGet<{ count: number }>(page, `masters/ports/?search=${PORT_CODE}`)).body?.count).toBe(0);
+        expect((await authGet<{ count: number }>(page, "masters/ports/?search=E2E")).body?.count).toBe(1);
     });
 });

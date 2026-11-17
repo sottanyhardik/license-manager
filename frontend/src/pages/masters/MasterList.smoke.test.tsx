@@ -115,6 +115,24 @@ describe("MasterList smoke", () => {
     expect(await screen.findByText("Acme Trading")).toBeInTheDocument();
   });
 
+  it("passes the backend's bulk_actions to the generic master rows and posts one bulk request", async () => {
+    const user = userEvent.setup();
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...META, list_display: ["code", "name"], bulk_actions: ["delete"], results: [{ id: 11, code: "INAAA1", name: "Port A" }] },
+    });
+    (api.post as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { action: "delete", requested: 1, succeeded: 1, failed: 0, results: [{ key: "11", ok: true }] },
+    });
+    const confirmSpyWindow = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderAt("ports");
+    await user.click(await screen.findByRole("checkbox", { name: "Select all on page" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("masters/ports/bulk/", { action: "delete", keys: ["11"] }));
+    expect(await screen.findByTestId("bulk-results")).toHaveTextContent("1 of 1 deleted");
+    confirmSpyWindow.mockRestore();
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => Promise.resolve({ data: META }));
+  });
+
   it("renders the licenses entity without crashing", async () => {
     const { container } = renderAt("licenses");
     await waitFor(() => expect(container).not.toBeEmptyDOMElement());

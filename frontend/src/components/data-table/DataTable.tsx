@@ -20,6 +20,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { BulkSelectionSummary } from "@/components/shared/BulkSelectionSummary";
 import { nextSorting } from "./helpers";
 import type { DataTableProps, Density } from "./types";
 
@@ -182,11 +183,8 @@ export function DataTable<T>({
             {(selectedIds.length > 0 && selection?.bulkActions) || (columnVisibility && hideable.length > 0) ? (
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2" data-slot="bulk-actions">
-                        {selectedIds.length > 0 && selection?.bulkActions && (
-                            <>
-                                <span className="text-xs text-muted-foreground" aria-live="polite">{selectedIds.length} selected</span>
-                                {selection.bulkActions(selectedIds)}
-                            </>
+                        {selection?.bulkActions && (
+                            <BulkSelectionSummary count={selectedIds.length}>{selection.bulkActions(selectedIds)}</BulkSelectionSummary>
                         )}
                     </div>
                     {columnVisibility && hideable.length > 0 && (

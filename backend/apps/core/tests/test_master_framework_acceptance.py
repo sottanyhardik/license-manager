@@ -166,6 +166,113 @@ class TestMasterPermissions:
 
 
 @pytest.mark.django_db
+class TestBulkActions:
+    """`POST /api/masters/<entity>/bulk/` — per-record results, one transaction each, audited per record."""
+
+    def test_metadata_advertises_supported_actions(self, reader):
+        assert reader.get(f"{BASE}/purchase-statuses/").json()["bulk_actions"] == ["activate", "deactivate", "delete"]
+        assert reader.get(f"{BASE}/ports/").json()["bulk_actions"] == ["delete"]
+
+    def test_bulk_deactivate_persists_and_audits_each_record(self, manager):
+        from apps.core.models import ActivityLog
+
+        a = PurchaseStatus.objects.create(code="B1", label="Bulk A", is_active=True)
+        b = PurchaseStatus.objects.create(code="B2", label="Bulk B", is_active=True)
+        response = manager.post(f"{BASE}/purchase-statuses/bulk/", {"action": "deactivate", "keys": [a.pk, b.pk]}, format="json")
+        assert response.status_code == 200, response.content
+        assert response.json()["succeeded"] == 2 and response.json()["failed"] == 0
+        assert not PurchaseStatus.objects.filter(pk__in=[a.pk, b.pk], is_active=True).exists()
+        endpoints = set(ActivityLog.objects.filter(extra__bulk=True, action="UPDATE").values_list("endpoint", flat=True))
+        assert endpoints == {f"/api/masters/purchase-statuses/{a.pk}/", f"/api/masters/purchase-statuses/{b.pk}/"}
+        # …and they appear in that record's history exactly like a single edit.
+        history = manager.get(f"{BASE}/activity-logs/", {"endpoint": f"/api/masters/purchase-statuses/{a.pk}/", "changes_only": "1"}).json()
+        assert [row["action"] for row in history] == ["UPDATE"]
+
+    def test_bulk_delete_reports_each_record_and_protects_referenced_ones(self, manager):
+        from apps.core.models import ActivityLog
+
+        free_1 = PortModel.objects.create(code="INBK01", name="Free 1")
+        used = PortModel.objects.create(code="INBK02", name="Used")
+        free_2 = PortModel.objects.create(code="INBK03", name="Free 2")
+        LicenseDetailsModel.objects.create(license_number="0399999002", port=used)
+
+        response = manager.post(f"{BASE}/ports/bulk/", {"action": "delete", "keys": [free_1.pk, used.pk, 999999, free_2.pk]}, format="json")
+        assert response.status_code == 200
+        body = response.json()
+        by_key = {r["key"]: r for r in body["results"]}
+        assert (body["succeeded"], body["failed"]) == (2, 2)
+        assert by_key[str(used.pk)]["ok"] is False and "referenced" in by_key[str(used.pk)]["error"]
+        assert by_key["999999"] == {"key": "999999", "ok": False, "error": "Not found."}
+        # The refused record did not roll back the others, and only real deletes are audited.
+        assert list(PortModel.objects.filter(code__startswith="INBK").values_list("code", flat=True)) == ["INBK02"]
+        assert ActivityLog.objects.filter(extra__bulk=True, action="DELETE").count() == 2
+
+    def test_bulk_delete_slash_coded_records(self, manager):
+        from apps.core.models import ActivityLog
+
+        NotificationNumber.objects.create(code="097/2097", label="Bulk slash")
+        response = manager.post(f"{BASE}/notification-numbers/bulk/", {"action": "delete", "keys": ["097/2097"]}, format="json")
+        assert response.json()["succeeded"] == 1
+        assert not NotificationNumber.objects.filter(code="097/2097").exists()
+        assert ActivityLog.objects.filter(endpoint="/api/masters/notification-numbers/097/2097/", action="DELETE").exists()
+
+    def test_validation(self, manager):
+        port = PortModel.objects.create(code="INBK04", name="x")
+        url = f"{BASE}/ports/bulk/"
+        assert manager.post(url, {"action": "activate", "keys": [port.pk]}, format="json").status_code == 400  # no is_active
+        assert manager.post(url, {"action": "delete", "keys": []}, format="json").status_code == 400
+        assert manager.post(url, {"action": "delete", "keys": list(range(201))}, format="json").status_code == 400
+        assert manager.post(url, {"action": "truncate", "keys": [port.pk]}, format="json").status_code == 400
+        assert PortModel.objects.filter(pk=port.pk).exists()
+
+    def test_readers_cannot_bulk_write(self, reader):
+        port = PortModel.objects.create(code="INBK05", name="x")
+        response = reader.post(f"{BASE}/ports/bulk/", {"action": "delete", "keys": [port.pk]}, format="json")
+        assert response.status_code == 403
+        assert PortModel.objects.filter(pk=port.pk).exists()
+
+    @pytest.mark.parametrize("entity", ["head-norms", "sion-classes", "exchange-rates"])
+    def test_cif_relevant_masters_have_no_bulk_actions(self, manager, entity):
+        """Norms and exchange rates feed licence CIF / SION planning: single edits only."""
+        assert manager.get(f"{BASE}/{entity}/").json()["bulk_actions"] == []
+        assert manager.post(f"{BASE}/{entity}/bulk/", {"action": "delete", "keys": [1]}, format="json").status_code == 404
+
+    def test_mds_outage_stops_the_batch_and_reports_the_rest(self, manager, monkeypatch):
+        from apps.core.mds_write import MasterServiceUnavailable
+        from apps.core.models import ActivityLog
+        from apps.core.views.views import PortViewSet
+
+        ports = [PortModel.objects.create(code=f"INMD{i}", name=f"MDS {i}") for i in range(3)]
+        real_destroy = PortViewSet.perform_destroy
+        calls = []
+
+        def flaky_destroy(self, instance):
+            calls.append(instance.pk)
+            if len(calls) == 2:
+                raise MasterServiceUnavailable()
+            return real_destroy(self, instance)
+
+        monkeypatch.setattr(PortViewSet, "perform_destroy", flaky_destroy)
+        body = manager.post(f"{BASE}/ports/bulk/", {"action": "delete", "keys": [p.pk for p in ports]}, format="json").json()
+        assert [r["ok"] for r in body["results"]] == [True, False, False]
+        assert body["results"][2]["error"].startswith("Not attempted")
+        assert calls == [ports[0].pk, ports[1].pk]  # the third record was never sent
+        assert list(PortModel.objects.filter(code__startswith="INMD").values_list("code", flat=True)) == ["INMD1", "INMD2"]
+        # The failed record's audit row rolled back with it.
+        assert ActivityLog.objects.filter(extra__bulk=True, action="DELETE").count() == 1
+
+    def test_domain_viewsets_have_no_bulk_actions(self, db):
+        """Licences have their own delete rules; the generic bulk path stays off even for a superuser."""
+        admin = _client(User.objects.create_superuser(username="master-acceptance-admin", password="x-Acceptance-1"))
+        LicenseDetailsModel.objects.create(license_number="0399999003")
+        listing = admin.get("/api/licenses/")
+        assert listing.status_code == 200
+        assert listing.json().get("bulk_actions") == []
+        assert admin.post("/api/licenses/bulk/", {"action": "delete", "keys": ["0399999003"]}, format="json").status_code == 404
+        assert LicenseDetailsModel.objects.filter(license_number="0399999003").exists()
+
+
+@pytest.mark.django_db
 class TestRecordHistory:
     """`/api/masters/activity-logs/?endpoint=…&changes_only=1` — a record's successful writes only."""
 

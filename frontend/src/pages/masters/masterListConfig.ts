@@ -22,13 +22,18 @@ export const MASTER_LOOKUP_FIELDS: Readonly<Record<string, string>> = {
  * `/masters/<entity>/<key>/edit` (UI). Codes such as `025/2023` are encoded.
  */
 export function getMasterRecordKey(entityName: string, item: { id?: unknown } & Record<string, unknown>): string {
+  return encodeURIComponent(getMasterRecordLookup(entityName, item));
+}
+
+/** The raw lookup value (`025/2023`, `7`) — what the bulk API takes in `keys`. */
+export function getMasterRecordLookup(entityName: string, item: { id?: unknown } & Record<string, unknown>): string {
   const field = MASTER_LOOKUP_FIELDS[entityName] ?? "id";
   const value = item[field];
   if (value === null || value === undefined || value === "") {
     // Never build `masters/<entity>//` — that would address the list endpoint.
     throw new Error(`${entityName} record has no ${field}`);
   }
-  return encodeURIComponent(String(value));
+  return String(value);
 }
 
 /** Default list filters applied when a Master entity list first loads. */

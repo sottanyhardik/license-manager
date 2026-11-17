@@ -661,3 +661,10 @@ NotificationNumberViewSet.lookup_field = "code"
 # NOTE: a future `@action(detail=True)` here would be shadowed by this pattern
 # (`025/2023/<action>/` reads as code `025/2023/<action>`) — use a list action.
 NotificationNumberViewSet.lookup_value_regex = "[^/]+(?:/[^/]+)*"
+
+# Generic bulk actions stay OFF for masters that feed licence CIF/balance and
+# SION planning (norms cascade to export/import items; exchange rates price
+# CIF). Single edit/delete is unchanged. Enabling bulk here is an owner decision.
+for _viewset in (HeadSIONNormsViewSet, SionNormClassViewSet, SIONExportViewSet, SIONImportViewSet, ExchangeRateViewSet):
+    _viewset.bulk_enabled = False
+del _viewset

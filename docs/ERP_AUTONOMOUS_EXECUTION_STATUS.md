@@ -236,5 +236,10 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   (vitest 895/895 → 99/99 masters after review fixes); real-backend masters 4/4; licence data-bearing 6/6 (+1 live-only skip).
   Review (Sonnet): approve-with-nits; fixed 404 flash after delete + DRF error messages. Endpoint index deferred (B8, 31 ms).
 - No business-rule change. Not pushed. `feature/v5` still at `b099789c` — land with `git merge --ff-only` (owner).
-- Next: bulk actions on generic masters; owner decisions B1 (missing master models), B8 (optional index).
+- Generic bulk actions (2026-11-18): `POST masters/<entity>/bulk/` (`core/services/master_bulk.py`), per-record
+  transaction + audit, MDS-outage stop; UI select page/rows → activate/deactivate/delete with per-record results.
+  Off for domain viewsets and CIF/planning masters (B9). **API CONTRACT (additive).** Tests: backend 60 + architecture 39;
+  backend app-level 3572 passed, 1 xfailed (exit 0); tests/ 246 passed after the services move; frontend gate exit 0 (903/903); real-backend masters 5/5.
+- Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
+  owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

@@ -22,7 +22,7 @@ import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
 import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
-import GenericMasterCards from "./tables/GenericMasterCards";
+import GenericMasterCards, { type MasterBulkAction, type MasterBulkResult } from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
 import BoeTable from "@/features/bill-of-entry/BoeTable";
@@ -541,6 +541,7 @@ export default function MasterList() {
             field_meta: listResponse.field_meta || {},
             default_filters: listResponse.default_filters || {},
             inline_editable: listResponse.inline_editable || [],
+            bulk_actions: listResponse.bulk_actions || [],
         };
     }, [listResponse]);
 
@@ -693,6 +694,23 @@ export default function MasterList() {
             toast.error(err.response?.data?.detail || "Failed to delete record");
         }
     };
+
+    // Generic master bulk actions: one request, per-record results (backend: core/services/master_bulk.py).
+    const handleMasterBulk = useCallback(async (action: MasterBulkAction, keys: string[]): Promise<MasterBulkResult> => {
+        try {
+            const { data: result } = await api.post<MasterBulkResult>(`masters/${entityName}/bulk/`, { action, keys });
+            if (result.failed === 0) toast.success(`${result.succeeded} ${result.succeeded === 1 ? "record" : "records"} updated`);
+            else toast.warning(`${result.succeeded} of ${result.requested} done — ${result.failed} not changed`);
+            return result;
+        } catch (err) {
+            toast.error(err.response?.data?.detail || err.response?.data?.keys?.[0] || err.response?.data?.action?.[0] || "Bulk action failed; nothing was changed");
+            return { action, requested: keys.length, succeeded: 0, failed: keys.length, results: keys.map(key => ({ key, ok: false, error: "Request failed." })) };
+        } finally {
+            invalidateList();
+            qc.invalidateQueries({ queryKey: ['master-count', entityName] });
+            qc.invalidateQueries({ queryKey: ['master-record', entityName] });
+        }
+    }, [entityName, invalidateList, qc]);
 
     // Trade mutations remain owned here so the presentation component cannot
     // alter endpoints, permissions, filter persistence, or cache invalidation.
@@ -1504,6 +1522,7 @@ export default function MasterList() {
                             navigate={navigate}
                             onDelete={handleDelete}
                             canWrite={canWrite}
+                            onBulk={handleMasterBulk}
                         />
                     ))}
 

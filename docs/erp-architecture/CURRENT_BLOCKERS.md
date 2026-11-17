@@ -12,3 +12,4 @@ Only items that need a human. Source of truth for workstream detail: `docs/ERP_A
 | B6 | `git push` of `feature/v5` | Owner approval | Local-only commits |
 | B8 | Optional index on `ActivityLog.endpoint` for record history | Owner approval (schema change) | Not needed yet: measured 31 ms on 184k local rows (`EXPLAIN ANALYZE`); grows linearly with the write log |
 | B7 | Master audit history / active-inactive for masters without the fields | Owner: which masters need `is_active`/history (schema) | Shown where the model has them (`PurchaseStatus.is_active`, `ActivityLog`); not added elsewhere |
+| B9 | Bulk actions on CIF/planning masters (head norms, SION classes, SION export/import, exchange rates) | Owner decision | Off (`bulk_enabled = False` in `core/views/views.py`); single edit/delete unchanged |

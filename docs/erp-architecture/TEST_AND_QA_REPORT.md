@@ -45,3 +45,15 @@ config and new tests; affected core suites ran), full Playwright default suite (
 | Real-backend Playwright `masters-workspace.real` | **4/4**: hub; create → search → edit (encoded URL) → record page → History shows the real UPDATE → delete; port create/search; 390 px no horizontal overflow (hub, list, record) + desktop comparison screenshots |
 | Licence regression, real backend (`data-bearing.real` + `item-pivot.sticky`) | **6 passed**, 1 skipped (`licence-workspace.live`, live-server config only), exit 0 |
 | Note | All real specs in one harness run trip the login rate limit (`Request was throttled`) — a security control, left as is; suites run in separate harness runs |
+
+## 2026-11-18 — Generic master bulk actions + live licence UI parity
+
+| Check | Result |
+|---|---|
+| Live licence UI (`localhost:5173`, user's dev server, read-only, one sign-in) | inspected; measurements in GENERIC_ERP_ARCHITECTURE §5 |
+| Backend bulk acceptance (`TestBulkActions`, 12 incl. parametrised) + `test_mds_write_cutover` + `test_masterdata_delete_protection` | **60 passed** |
+| `tests/architecture` + acceptance | **39 passed** (first gate run caught an ORM write in `views/master_bulk.py` → moved to `core/services/`) |
+| Backend gate app-level (`TEST_DB_NAME=test_lmanagement_e70cgate2`, before the last review fixes) | 3572 passed, 1 xfailed (exit 0); tests/ 246 passed after the services move |
+| Frontend gate | lint PASS (0 errors, 20 warnings unchanged) · typecheck PASS · **vitest 903/903** · build PASS → exit 0 |
+| Real-backend Playwright `masters-workspace.real` | **5/5**: incl. bulk deactivate (persisted + in record history), bulk delete (licence-referenced port refused by name, unused one deleted), master vs licence row style parity |
+| Independent review (Sonnet) | approve-with-nits; fixed: audit row before MDS write, stop batch on MDS outage, bulk off for CIF/planning masters |

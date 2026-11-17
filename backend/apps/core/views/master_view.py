@@ -15,6 +15,8 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.core.services.master_bulk import bulk_actions_for, run_bulk
+
 try:
     import openpyxl
     from openpyxl.styles import Font, Alignment
@@ -281,6 +283,9 @@ class MasterViewSet(viewsets.ModelViewSet):
             "field_meta": config.get("field_meta", {}),
             "default_filters": config.get("default_filters", {}),
             "inline_editable": config.get("inline_editable", []),
+            # Generic bulk actions (`bulk/`): on for core masters only; domain
+            # viewsets (licences, BOEs, trades, …) keep their own delete guards.
+            "bulk_enabled": bool(config.get("bulk_actions", model._meta.app_label == "core")),
         }
 
         # --- Dynamically create the subclass ---
@@ -300,6 +305,7 @@ class MasterViewSet(viewsets.ModelViewSet):
             model_name = attrs["model_name"]
             inline_editable = attrs["inline_editable"]
             default_filters = attrs["default_filters"]
+            bulk_enabled = attrs["bulk_enabled"]
 
             def get_queryset(self):
                 """
@@ -642,6 +648,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                     "field_meta": getattr(self, "field_meta", {}),
                     "default_filters": getattr(self, "default_filters", {}),
                     "inline_editable": getattr(self, "inline_editable", []),
+                    "bulk_actions": bulk_actions_for(self),
 
                     # Pagination metadata
                     "total_pages": total_pages,
@@ -685,6 +692,11 @@ class MasterViewSet(viewsets.ModelViewSet):
                     # Never raise from OPTIONS metadata enrichment
                     pass
                 return response
+
+            @action(detail=False, methods=['post'], url_path='bulk')
+            def bulk(self, request: Request) -> Response:
+                """Activate / deactivate / delete many records, one transaction each (see master_bulk)."""
+                return run_bulk(self, request)
 
             @action(detail=False, methods=['get'], url_path='export')
             def export_data(self, request: Request) -> HttpResponse:

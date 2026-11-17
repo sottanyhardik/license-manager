@@ -117,6 +117,20 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   uncommitted WIP. Local DB `test_lm_upgrade_9b79` is kept (owner).
 <!-- CHECKPOINT:accounting:END -->
 
+<!-- CHECKPOINT:accounting-frontend:BEGIN -->
+**Accounting frontend round — COMPLETED, not tested (2026-11-17)** · details `docs/erp-accounting/09-accounting-frontend-implementation.md`
+- Workspace IA (`pages/accounting/sections.ts`): Dashboard · Masters · Transactions · Ledgers · Banking · Expenses &
+  Income · Reports · Entity-wise · Setup; sidebar mirrors it (`navConfig.ts` + test). Date range inside the FY.
+- New screens: Chart of Accounts, Account Groups, Parties (+detail), Customer/Supplier ledgers, typed voucher books,
+  draft edit, Bank Transactions / Unmatched / Reconciliation, Party Outstanding, Voucher Register, register/:kind,
+  Entity-wise summary; dashboard advances + recent vouchers + activity.
+- Backend (additive): `PATCH vouchers/<id>/` (manual drafts), `GET parties/summary/`, dashboard `advances_*`,
+  statement search on reference. Tests written, not run (`test_frontend_support_api.py`).
+- Checks run: `tsc --noEmit` exit 0; ESLint on changed files 0 errors / 6 warnings; `py_compile` OK. Nothing else.
+- Next: coordinated testing phase (backend accounting tests + architecture, vitest, lint, build, e2e incl. 19 new routes).
+<!-- CHECKPOINT:accounting-frontend:END -->
+
+
 <!-- CHECKPOINT:boe:BEGIN -->
 **BOE — last verified checkpoint (2026-11-17, integration sweep)**
 - Branch `feature/v5` (local only; 17 commits ahead of origin, 0 behind; push needs owner approval).

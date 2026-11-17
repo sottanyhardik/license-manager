@@ -150,3 +150,13 @@ Not merged (IN PROGRESS, preserved in the shared checkout): A-2 (not approved) a
 (unapproved, unwired). Tally: no connector exists anywhere; the accounting engine is the Tally replacement.
 
 **No tests, migrations or Playwright were run in this pass.** Nothing in it is described as verified.
+
+## 10. Accounting frontend round (2026-11-17, later)
+
+The workspace was reorganised into the requested IA (Dashboard, Masters, Transactions, Ledgers, Banking, Expenses &
+Income, Reports, Entity-wise) with real routes only. New screens: chart of accounts, groups, parties, customer/supplier
+ledgers, typed voucher books, draft editing, split banking pages, party outstanding, voucher register and the
+entity-wise summary. Additive backend: draft PATCH, party summary, dashboard advances, UTR search. Details, known issues
+and deferred tests: `09-accounting-frontend-implementation.md`.
+
+Checks: `tsc --noEmit` exit 0; ESLint on changed files 0 errors; `py_compile` OK. **No unit, API, browser or gate run.**

@@ -61,6 +61,19 @@ describe("CommandPalette authorization visibility", () => {
         expect(screen.queryByRole("option", { name: /new license/i })).not.toBeInTheDocument();
     });
 
+    it("hides Accounting commands from users without an accounting role", () => {
+        renderPalette(["LICENSE_VIEWER"]);
+        expect(screen.queryByRole("option", { name: /accounting dashboard/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("option", { name: /trial balance/i })).not.toBeInTheDocument();
+    });
+
+    it("shows Accounting commands to an accounts viewer", () => {
+        renderPalette(["ACCOUNTS_VIEWER"]);
+        expect(screen.getByRole("option", { name: /accounting dashboard/i })).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: /trial balance/i })).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: /bank reconciliation/i })).toBeInTheDocument();
+    });
+
     it("shows every command for a superuser", () => {
         renderPalette([], true);
 

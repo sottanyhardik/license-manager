@@ -119,3 +119,11 @@ before; no accounting figure is computed in JavaScript.
 2. Report exports (XLSX) reusing the existing exporter pattern.
 3. Account group API + UI, if the CA wants custom groups.
 4. Shared `DataTable` with column sort on the long lists.
+
+## 10. Main-navigation visibility (2026-11-17, later)
+
+Accounting was hidden for every non-superuser because the `ACCOUNTS_*` roles could not be assigned (missing from
+backend `ROLE_CODES` / `available-roles`). Fixed, and Accounting commands were added to the command palette.
+Every link in the top-nav Accounting dropdown resolves to a registered workspace route: masters, typed voucher books
+(static routes rank above `:id`), banking, reports and `register/:kind`. See `07-integration-report.md` §11.
+Still deferred: full gates, e2e/browser run, and the items in §6 and §9.

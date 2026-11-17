@@ -26,6 +26,10 @@ ROLE_CODES = [
     'TL_GENERATE',
     'LEDGER_MANAGER',
     'ACCOUNT_ACCESS',
+    # Accounting workspace (groups created by accounting/0003; gate: AccountingPermission).
+    'ACCOUNTS_VIEWER',
+    'ACCOUNTS_MANAGER',
+    'ACCOUNTS_APPROVER',
 ]
 
 

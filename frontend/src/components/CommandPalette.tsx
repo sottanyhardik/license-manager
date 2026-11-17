@@ -17,7 +17,7 @@ import { masterEntities, reportEntities } from "../routes/config";
 import { REPORT_ROLES } from "../routes/authorizationRoles";
 import { Search } from "lucide-react";
 import Icon from "@/components/Icon";
-import { ALLOTMENT_ROLES, BOE_LIST_ROLES, LEDGER_READ_ROLES, LICENSE_ROLES, ROLES, TRADE_ROLES } from "../routes/authorizationRoles";
+import { ACCOUNTING_ROLES, ALLOTMENT_ROLES, BOE_LIST_ROLES, LEDGER_READ_ROLES, LICENSE_ROLES, ROLES, TRADE_ROLES } from "../routes/authorizationRoles";
 
 // ── Command registry ──────────────────────────────────────────────────────────
 
@@ -37,6 +37,16 @@ const BASE_COMMANDS: CommandDef[] = [
     { id: "boe",            label: "Bill of Entries",    icon: "receipt",               path: "/bill-of-entries",        group: "Navigation", roles: BOE_LIST_ROLES },
     { id: "trades",         label: "Trade In & Out",     icon: "arrow-left-right",      path: "/trades",                 group: "Navigation", roles: TRADE_ROLES },
     { id: "ledger",         label: "License Ledger",     icon: "journal-text",          path: "/license-ledger",         group: "Navigation", roles: LEDGER_READ_ROLES },
+    { id: "accounting",     label: "Accounting Dashboard", icon: "speedometer2",        path: "/accounting/dashboard",                group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-accounts",  label: "Chart of Accounts",  icon: "list-ul",               path: "/accounting/masters/accounts",         group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-vouchers",  label: "Vouchers",           icon: "journal-text",          path: "/accounting/vouchers",                 group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-gl",        label: "General Ledger",     icon: "journal-text",          path: "/accounting/reports/general-ledger",   group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-party",     label: "Party Ledger",       icon: "person",                path: "/accounting/party-ledger",             group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-banking",   label: "Banking",            icon: "database",              path: "/accounting/banking",                  group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-brs",       label: "Bank Reconciliation", icon: "check2-square",        path: "/accounting/banking/reconciliation",   group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-tb",        label: "Trial Balance",      icon: "list-ul",               path: "/accounting/reports/trial-balance",    group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-pl",        label: "Profit & Loss",      icon: "graph-up-arrow",        path: "/accounting/reports/profit-loss",      group: "Accounting", roles: ACCOUNTING_ROLES },
+    { id: "acct-bs",        label: "Balance Sheet",      icon: "table",                 path: "/accounting/reports/balance-sheet",    group: "Accounting", roles: ACCOUNTING_ROLES },
     { id: "new-boe",        label: "New Bill of Entry",  icon: "plus-circle",           path: "/bill-of-entries/create", group: "Quick Create", roles: [ROLES.BOE_MANAGER] },
     { id: "new-allotment",  label: "New Allotment",      icon: "plus-circle",           path: "/allotments/create",      group: "Quick Create", roles: [ROLES.ALLOTMENT_MANAGER] },
     { id: "new-license",    label: "New License",        icon: "plus-circle",           path: "/licenses/create",        group: "Quick Create", roles: [ROLES.LICENSE_MANAGER] },

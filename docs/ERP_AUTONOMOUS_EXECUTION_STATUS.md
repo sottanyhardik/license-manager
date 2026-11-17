@@ -128,6 +128,12 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   statement search on reference. Tests written, not run (`test_frontend_support_api.py`).
 - Checks run: `tsc --noEmit` exit 0; ESLint on changed files 0 errors / 6 warnings; `py_compile` OK. Nothing else.
 - Next: coordinated testing phase (backend accounting tests + architecture, vitest, lint, build, e2e incl. 19 new routes).
+- **Nav visibility fix (2026-11-17, later) — VERIFIED (focused):** root cause of "Accounting missing from the top nav" =
+  the menu/route are gated by `ACCOUNTS_VIEWER/MANAGER/APPROVER`, but `ROLE_CODES` (`available-roles`, which feeds
+  the user form + Settings) omitted them, so only superusers could ever see Accounting. Fix: roles added to
+  `ROLE_CODES`; Accounting entries added to the Ctrl-K palette. Tests: `apps/accounts/tests` 21 passed (exit 0,
+  `TEST_DB_NAME=test_lmanagement_acctnav`); vitest CommandPalette + navConfig 20/20 (exit 0); `tsc` exit 0; ESLint
+  exit 0. Owner action: assign an `ACCOUNTS_*` role to each accounting user (Users & Roles). Full gates not run.
 <!-- CHECKPOINT:accounting-frontend:END -->
 
 

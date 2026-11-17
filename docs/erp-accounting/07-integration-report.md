@@ -160,3 +160,19 @@ entity-wise summary. Additive backend: draft PATCH, party summary, dashboard adv
 and deferred tests: `09-accounting-frontend-implementation.md`.
 
 Checks: `tsc --noEmit` exit 0; ESLint on changed files 0 errors; `py_compile` OK. **No unit, API, browser or gate run.**
+
+## 11. Accounting navigation visibility fix (2026-11-17, later)
+
+**Symptom:** the top bar showed Dashboard | Licenses | Operations | Reports | Masters, with no Accounting.
+**Root cause (verified in code):** the Accounting group (`navConfig.ts`) and the `/accounting/*` route are already
+registered, in the requested position, gated by `ACCOUNTING_ROLES` (`ACCOUNTS_VIEWER/MANAGER/APPROVER`, Django
+groups from `accounting/0003`). The backend role list `ROLE_CODES` (`apps/accounts/views/user_management.py`), which
+`GET /api/auth/users/available-roles/` returns to the user form and Settings, did not include those three codes. So
+no admin could grant them, and only superusers saw Accounting. The pages, routes and APIs were not missing. The local
+`frontend/dist` build already contains the Accounting nav.
+**Fix:** the three codes were added to `ROLE_CODES`. Authorization rules (`AccountingPermission`, route guards) are
+unchanged. Side effect: `check_user_roles --assign-all/--assign-viewers/--assign-managers` now include the accounting roles.
+Accounting entries were added to the Ctrl-K command palette (same `ACCOUNTING_ROLES` gate).
+**Tests:** `apps/accounts/tests` 21 passed; vitest CommandPalette + navConfig 20/20; `tsc` and ESLint exit 0.
+**Owner action:** give each accounting user an `ACCOUNTS_*` role. A deployed server still running a build older
+than `7f6dfdaa` also needs a redeploy (not done; needs approval).

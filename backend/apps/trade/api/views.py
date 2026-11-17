@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from django.http import HttpResponse
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
 
 from apps.accounts.permissions import TradePermission
 from apps.core.views import MasterViewSet
@@ -341,7 +341,11 @@ class EnhancedLicenseTradeViewSet(LicenseTradeViewSet):
         trade.save(update_fields=['final_party_status', 'final_party', 'final_party_classification_provenance', 'final_party_resolution_note', 'updated_on'])
         return Response(LicenseTradeSerializer(trade, context={'request': request}).data)
 
-    enforced_list_ordering = ("-invoice_date",)
+    # Newest invoice first; undated trades (``invoice_date`` is nullable) sort
+    # last instead of Postgres' default NULLS FIRST for DESC, and ``-id`` is a
+    # unique tiebreaker so LIMIT/OFFSET pages never repeat or skip trades that
+    # share an invoice date.
+    enforced_list_ordering = (F("invoice_date").desc(nulls_last=True), "-id")
 
     def filter_queryset(self, queryset):
         """Keep the operational trade register in newest-invoice order.

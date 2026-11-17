@@ -217,3 +217,17 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 
 Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-modernization/owner-decisions.md`,
 `docs/erp-architecture/claude-usage-log.md`.
+
+<!-- CHECKPOINT:generic-erp:BEGIN -->
+**Generic ERP + Masters workspace — TESTED (2026-11-17, session "license manager erp modernization")** · hub `docs/erp-architecture/GENERIC_ERP_ARCHITECTURE.md`, results `docs/erp-architecture/TEST_AND_QA_REPORT.md`
+- Generic layer = existing `MasterViewSet.create_viewset` + metadata-driven `MasterList`/`MasterForm` (DR-GEN-1); no second framework.
+- Backend gate on `b099789c`: app-level 3546 passed / 1 xfailed; `tests/` 245 passed + 1 env failure (no `frontend/dist`; 17/17 after build).
+- `31061856` P3 item-pivot sticky: spec assertion wrong (tiers differ in height, abut exactly); real backend 1 passed. **Closes the P3.**
+- `331b9520` Masters workspace: `/masters` hub (category nav, live counts, search), 5 API-only masters now in the UI, code-keyed
+  record URLs, permission-aware card actions, list refresh after save. **API CONTRACT (additive):** slash-coded notification
+  numbers (9/10 local codes) were 404 on detail/edit/delete — now resolve. Tests: backend 38 passed; vitest 127 passed;
+  frontend gate lint/typecheck/build PASS; real-backend Playwright 4/4. Independent review: approve-with-nits, nits fixed.
+- No business-rule change (no CIF/balance/BOE/accounting code touched). Not pushed.
+- Blocked on owner (B1): Customer/Supplier/Country/Currency/Category/UoM/Bank masters have no models — not invented.
+- Next: master detail view + per-record audit timeline from `ActivityLog`; bulk actions on generic masters.
+<!-- CHECKPOINT:generic-erp:END -->

@@ -7,12 +7,16 @@ import ast
 from pathlib import Path
 
 APPS_DIR = Path(__file__).resolve().parents[2] / "apps"
-DOMAIN_APPS = {"license", "allotment", "bill_of_entry", "trade", "reconciliation", "tasks"}
+DOMAIN_APPS = {"license", "allotment", "bill_of_entry", "trade", "reconciliation", "tasks", "accounting"}
 ALL_APPS = DOMAIN_APPS | {"accounts", "core"}
 
 # Baseline of module-level cross-app import edges (from_app, to_app), 2026-11-16.
 # Ratchet: new edges fail. Removing edges is welcome: delete them from this set.
 ALLOWED_EDGES = {
+    # ADR-004: accounting depends on core + trade one-way; trade must never import accounting.
+    ("accounting", "accounts"),
+    ("accounting", "core"),
+    ("accounting", "trade"),
     ("accounts", "core"),
     ("allotment", "accounts"),
     ("allotment", "bill_of_entry"),

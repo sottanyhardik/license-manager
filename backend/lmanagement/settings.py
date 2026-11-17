@@ -147,6 +147,7 @@ INSTALLED_APPS = [
     "apps.trade",
     "apps.reconciliation",
     "apps.tasks",
+    "apps.accounting.apps.AccountingConfig",
 ]
 
 # ---------------------------------------------------------------------

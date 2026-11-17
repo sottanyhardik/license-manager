@@ -118,7 +118,7 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 <!-- CHECKPOINT:accounting:END -->
 
 <!-- CHECKPOINT:accounting-frontend:BEGIN -->
-**Accounting frontend round — TESTED (2026-11-17; licence e2e FAILED, pre-existing)** · details `docs/erp-accounting/09-accounting-frontend-implementation.md`
+**Accounting frontend round — TESTED (2026-11-17; licence data-bearing e2e fixed; 1 P3 open)** · details `docs/erp-accounting/09-accounting-frontend-implementation.md`
 - Workspace IA (`pages/accounting/sections.ts`): Dashboard · Masters · Transactions · Ledgers · Banking · Expenses &
   Income · Reports · Entity-wise · Setup; sidebar mirrors it (`navConfig.ts` + test). Date range inside the FY.
 - New screens: Chart of Accounts, Account Groups, Parties (+detail), Customer/Supplier ledgers, typed voucher books,
@@ -146,11 +146,16 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
     breadcrumbs, desktop/tablet/mobile overflow). Before the fix: 1 failed (4× 500 on parties/summary).
   - Default Playwright suite: 103 passed / 52 failed / 19 skipped. 51 = legacy `responsive.spec.ts` (hardcodes
     `localhost:5175`, unchanged since 2026-09-25; not in CI) — env, not a regression. 1 = item-pivot (needs harness).
-  - **FAILED (P1, pre-existing, Licence):** under the harness (`seed_browser_2509`) `data-bearing.real` (allocate page:
-    no available licence items) and `item-pivot.sticky` ("0 Licenses") fail at HEAD **and at c33f6a1a** → not caused by
-    the accounting work. Root cause under read-only investigation (licence availability = business-rule code; no fix
-    without diagnosis + cif-balance-auditor). 4 later data-bearing tests did not run (serial).
-- Next: fix/decide the licence-availability e2e failure; re-run data-bearing harness; then deferred items.
+  - Licence data-bearing e2e (failing at HEAD and c33f6a1a) → **TESTED after `69fe9b9b`**: root cause = stale seed,
+    not product code (CIF rule intact, diagnosed + bisected): since `0da86766` the purchase line had `cif_fc=0` (balance
+    0.00) and no licence had a `purchase_status`; queue fixture assumed a 10/page queue (25/page since `128417fd`);
+    pivot spec re-toggled the norm off. Also harness cache isolation (`CACHE_KEY_PREFIX`, opt-in, default ""). Result:
+    `data-bearing.real` **5/5 passed**, 0 HTTP 500s; seed command + architecture tests 12 passed; `manage.py check` OK.
+  - **FAILED (P3, open):** `item-pivot.sticky` — sticky tier misaligned 3.375px vs 2px tolerance (spec line 44). Real
+    layout check, tolerance not loosened. Not investigated.
+  - Not fixed (env): legacy `responsive.spec.ts` (hardcoded :5175, not in CI) — needs rewrite or removal (owner call).
+- Next: P3 pivot sticky alignment; then deferred items (report exports, opening-balance import, accrual beat job,
+  DataTable/sort, trade-screen accounting badge).
 <!-- CHECKPOINT:accounting-frontend:END -->
 
 

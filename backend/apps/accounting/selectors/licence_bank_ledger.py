@@ -7,10 +7,18 @@ Linkage is structural, NEVER by amount matching:
   (b) `Payment`s whose `trade_payment.trade` is one of the licence's trades.
 One row per `Payment` (union, de-duplicated). Cancelled / reversed payments are
 excluded; draft, confirmed and posted ones are returned with their status.
+
+`trades` (additive): every licence trade with its bank settlement — the allocations above re-keyed by trade
+(a settlement → its invoice's trade; a trade-payment link → that trade; each allocation counted once). Only
+POSTED payments count towards `bank_settled`; drafts/confirmed ones are listed with their status but do not
+make an invoice paid. A trade with no allocation is UNPAID ("not linked") — never inferred from amounts.
+`bank_direction` is the bank statement side (debit → WITHDRAWAL, credit → DEPOSIT) when the payment is matched
+to a statement line, else the payment direction (PAYMENT → WITHDRAWAL, RECEIPT → DEPOSIT).
 Read-only.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List
 
@@ -23,6 +31,7 @@ from apps.trade.models import LicenseTrade, q2
 
 _ZERO = Decimal("0.00")
 EXCLUDED_STATUSES = (DocStatus.CANCELLED, DocStatus.REVERSED)
+_PURCHASE_DIRECTIONS = (LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE)
 
 
 def _reconciliation(matched: Decimal, amount: Decimal) -> str:
@@ -60,7 +69,7 @@ def licence_bank_ledger(license_obj) -> Dict[str, Any]:
             Payment.objects.filter(trade_payment__trade_id__in=trade_ids).values_list("pk", flat=True)
         )
     if not payment_ids:
-        return _wrap([])
+        return _wrap([], _trade_rows(trade_ids, {}))
 
     payments = list(
         Payment.objects.filter(pk__in=payment_ids)
@@ -77,6 +86,7 @@ def licence_bank_ledger(license_obj) -> Dict[str, Any]:
     )
 
     rows: List[Dict[str, Any]] = []
+    allocations_by_trade: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
     for p in payments:
         licence_sets = [s for s in p.active_settlements if s.invoice_id in invoice_trade]
         settled_all = sum((s.amount for s in p.active_settlements), _ZERO)
@@ -113,12 +123,29 @@ def licence_bank_ledger(license_obj) -> Dict[str, Any]:
             if sl.pk in seen:
                 continue
             seen.add(sl.pk)
-            lines.append({"id": sl.pk, "txn_date": sl.txn_date, "reference": sl.reference, "amount": q2(sl.amount)})
+            lines.append({"id": sl.pk, "txn_date": sl.txn_date, "reference": sl.reference, "amount": q2(sl.amount),
+                          "bank_direction": "WITHDRAWAL" if sl.debit > 0 else "DEPOSIT"})
+        if lines:
+            bank_direction = lines[0]["bank_direction"]
+        else:
+            bank_direction = "WITHDRAWAL" if p.direction == PaymentDirection.PAYMENT else "DEPOSIT"
+        reconciliation = _reconciliation(matched, p.amount)
+        bank_account = str(p.bank_account).strip()
+        for inv in linked_invoices:
+            if inv["trade_id"] is None:
+                continue
+            allocations_by_trade[inv["trade_id"]].append({
+                "payment_id": p.pk, "date": p.date, "bank_account": bank_account, "reference": p.reference,
+                "mode": p.mode, "bank_direction": bank_direction, "bank_amount": q2(p.amount),
+                "allocated": inv["amount"], "payment_unallocated": q2(unallocated), "invoice_number": inv["number"],
+                "reconciliation": reconciliation, "status": p.status,
+                "counted": p.status == DocStatus.POSTED,
+            })
 
         rows.append({
             "payment_id": p.pk,
             "date": p.date,
-            "bank_account": str(p.bank_account).strip(),
+            "bank_account": bank_account,
             "reference": p.reference,
             "mode": p.mode,
             "direction": p.direction,
@@ -128,15 +155,54 @@ def licence_bank_ledger(license_obj) -> Dict[str, Any]:
             "allocated_to_licence": q2(allocated),
             "unallocated": q2(unallocated),
             "invoices": linked_invoices,
-            "reconciliation": _reconciliation(matched, p.amount),
+            "reconciliation": reconciliation,
+            "bank_direction": bank_direction,
             "statement_lines": lines,
         })
-    return _wrap(rows)
+    return _wrap(rows, _trade_rows(trade_ids, allocations_by_trade))
 
 
-def _wrap(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _trade_rows(trade_ids, allocations_by_trade: Dict[int, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Bank settlement per licence trade (posted allocations only count); every trade listed, linked or not."""
+    out: List[Dict[str, Any]] = []
+    trades = (LicenseTrade.objects.filter(pk__in=trade_ids)
+              .values("pk", "direction", "invoice_number", "invoice_date", "total_amount")
+              .order_by("invoice_date", "pk"))
+    for t in trades:
+        allocations = sorted(allocations_by_trade.get(t["pk"], []), key=lambda a: (a["date"], a["payment_id"]))
+        settled = q2(sum((a["allocated"] for a in allocations if a["counted"]), _ZERO))
+        total = q2(t["total_amount"] or _ZERO)
+        outstanding = q2(total - settled)
+        if settled > 0 and outstanding <= 0:
+            status = "PAID"
+        elif settled > 0:
+            status = "PARTIAL"
+        else:
+            status = "UNPAID"
+        out.append({
+            "trade_id": t["pk"],
+            "direction": "PURCHASE" if t["direction"] in _PURCHASE_DIRECTIONS else "SALE",
+            "invoice_number": t["invoice_number"],
+            "invoice_date": t["invoice_date"],
+            "total": total,
+            "bank_settled": settled,
+            "outstanding": outstanding,
+            "status": status,
+            "linked": bool(allocations),
+            "allocations": allocations,
+        })
+    return out
+
+
+def _wrap(rows: List[Dict[str, Any]], trades: List[Dict[str, Any]]) -> Dict[str, Any]:
     def total(key, direction=None):
         return q2(sum((r[key] for r in rows if direction is None or r["direction"] == direction), _ZERO))
+
+    def by_bank_side(key, side):
+        return q2(sum((r[key] for r in rows if r["bank_direction"] == side), _ZERO))
+
+    def outstanding(direction):
+        return q2(sum((t["outstanding"] for t in trades if t["direction"] == direction), _ZERO))
     return {
         "summary": {
             "transaction_count": len(rows),
@@ -144,6 +210,16 @@ def _wrap(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             "total_receipts": total("amount", PaymentDirection.RECEIPT),
             "total_allocated": total("allocated_to_licence"),
             "total_unallocated": total("unallocated"),
+            # Additive — licence-linked bank movement by statement side, and invoice outstanding by bank settlement.
+            "total_withdrawals": by_bank_side("amount", "WITHDRAWAL"),
+            "total_credits": by_bank_side("amount", "DEPOSIT"),
+            "total_allocated_payments": total("allocated_to_licence", PaymentDirection.PAYMENT),
+            "total_allocated_receipts": total("allocated_to_licence", PaymentDirection.RECEIPT),
+            "total_unallocated_withdrawals": by_bank_side("unallocated", "WITHDRAWAL"),
+            "total_unallocated_credits": by_bank_side("unallocated", "DEPOSIT"),
+            "total_outstanding_purchase": outstanding("PURCHASE"),
+            "total_outstanding_sales": outstanding("SALE"),
         },
         "rows": rows,
+        "trades": trades,
     }

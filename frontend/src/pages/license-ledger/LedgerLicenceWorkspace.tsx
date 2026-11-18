@@ -33,6 +33,7 @@ import {
     downloadCustomLedgerPdf, downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
 } from "@/services/licenseLedgerExport";
 import LicenseLedgerDetail from "../LicenseLedgerDetail";
+import LedgerFinancialTab from "./LedgerFinancialTab";
 import { BankPaymentLedgerTab, PurchaseLedgerTab, SaleLedgerTab } from "./PaymentLedgers";
 
 const MasterForm = lazy(() => import("../masters/MasterForm"));
@@ -98,7 +99,8 @@ export default function LedgerLicenceWorkspace({ licenseId, companyId, licenseNu
 
     const tabs: DetailTab[] = [
         { id: "overview", label: "Overview", render: () => <LicenseLedgerDetail embedded section="overview" licenseId={licenseId} itemId={companyId} /> },
-        { id: "ledger", label: "Ledger", render: () => <LicenseLedgerDetail embedded section="ledger" licenseId={licenseId} itemId={companyId} /> },
+        // Full financial view (header, cards, company-wise transactions) + bank payment/receipt details.
+        { id: "ledger", label: "Ledger", render: () => <LedgerFinancialTab licenseId={licenseId} companyId={companyId} canSeeBank={canReadBank} /> },
         { id: "boe-allotment", label: "BOE & Allotments", visible: canReadLicence, render: () => <BoeAllotmentTab licenseId={numericId} /> },
         { id: "invoices", label: "Invoices", visible: canReadLicence, render: () => <InvoicesTab licenseId={numericId} /> },
         { id: "purchase-ledger", label: "Purchase Ledger", visible: canReadLicence, render: () => <PurchaseLedgerTab licenseId={numericId} /> },

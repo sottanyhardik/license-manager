@@ -221,3 +221,98 @@ class LicenceBankLedgerTests(TestCase):
         self.assertEqual(self.get(lic, client_with(superuser=True)).status_code, 200)
         r = self.viewer.get("/api/accounting/licence-bank-ledger/99999999/")
         self.assertEqual(r.status_code, 404)
+
+    # ---- per-trade bank settlement (`trades`) and bank-side summary ----
+    def sibling_trade(self, t, direction, amount, number):
+        """Another trade on the SAME licence (line on the same import item)."""
+        from apps.trade.models import LicenseTrade, LicenseTradeLine
+        seller, buyer = (self.supplier, self.us) if direction == "PURCHASE" else (self.us, self.supplier)
+        other = LicenseTrade.objects.create(direction=direction, from_company=seller, to_company=buyer,
+                                            invoice_number=number, invoice_date=date(2026, 5, 11))
+        LicenseTradeLine.objects.create(trade=other, sr_number=t.lines.first().sr_number, description="sibling",
+                                        mode=LicenseTradeLine.MODE_CIF_INR, qty_kg=D("1.0000"), cif_fc=D(amount),
+                                        exc_rate=D("1.0000"), cif_inr=D(amount), pct=D("100.000"), amount_inr=D(amount))
+        other.refresh_from_db()
+        return other
+
+    def trades_of(self, lic):
+        r = self.get(lic).json()
+        return r, {t["trade_id"]: t for t in r["trades"]}
+
+    def test_trade_bank_status_unpaid_partial_paid_and_not_linked(self):
+        unpaid = h.trade("PURCHASE", self.supplier, self.us, D("1000"))
+        lic = self.lic_of(unpaid)
+        partial = self.sibling_trade(unpaid, "PURCHASE", "1000", "P-PART")
+        full = self.sibling_trade(unpaid, "PURCHASE", "1000", "P-FULL")
+        p1 = self.payment("400.00", reference="UTR-PART")
+        self.settle(p1, self.invoice(partial), "400.00")
+        # Several bank payments settle one invoice: both listed, both counted.
+        p2, p3 = self.payment("600.00", reference="UTR-F1"), self.payment("400.00", reference="UTR-F2")
+        inv_full = self.invoice(full)
+        self.settle(p2, inv_full, "600.00")
+        self.settle(p3, inv_full, "400.00")
+        r, t = self.trades_of(lic)
+        self.assertEqual((t[unpaid.pk]["status"], t[unpaid.pk]["linked"], t[unpaid.pk]["allocations"]), ("UNPAID", False, []))
+        self.assertEqual((t[partial.pk]["status"], t[partial.pk]["bank_settled"], t[partial.pk]["outstanding"]), ("PARTIAL", "400.00", "600.00"))
+        self.assertEqual((t[full.pk]["status"], t[full.pk]["bank_settled"], t[full.pk]["outstanding"]), ("PAID", "1000.00", "0.00"))
+        self.assertEqual([a["reference"] for a in t[full.pk]["allocations"]], ["UTR-F1", "UTR-F2"])
+        self.assertTrue(all(x["direction"] == "PURCHASE" for x in r["trades"]))
+        # Outstanding purchase = 1000 (unpaid) + 600 (partial) + 0.
+        self.assertEqual(r["summary"]["total_outstanding_purchase"], "1600.00")
+        self.assertEqual(r["summary"]["total_outstanding_sales"], "0.00")
+
+    def test_sale_receipts_partial_full_none_and_one_receipt_across_two_invoices_counted_once(self):
+        none = h.trade("SALE", self.us, self.supplier, D("1000"))
+        lic = self.lic_of(none)
+        a = self.sibling_trade(none, "SALE", "500", "S-A")
+        b = self.sibling_trade(none, "SALE", "800", "S-B")
+        receipt = self.payment("1000.00", direction="RECEIPT", reference="UTR-REC")
+        self.settle(receipt, self.invoice(a), "500.00")   # full
+        self.settle(receipt, self.invoice(b), "300.00")   # partial
+        r, t = self.trades_of(lic)
+        self.assertEqual(t[none.pk]["status"], "UNPAID")
+        self.assertEqual((t[a.pk]["status"], t[a.pk]["outstanding"]), ("PAID", "0.00"))
+        self.assertEqual((t[b.pk]["status"], t[b.pk]["outstanding"]), ("PARTIAL", "500.00"))
+        # The bank receipt appears once; its allocation breakdown is per invoice.
+        self.assertEqual(len(r["rows"]), 1)
+        self.assertEqual([x["allocated"] for x in t[a.pk]["allocations"] + t[b.pk]["allocations"]], ["500.00", "300.00"])
+        s = r["summary"]
+        self.assertEqual((s["total_credits"], s["total_withdrawals"]), ("1000.00", "0.00"))
+        self.assertEqual((s["total_allocated_receipts"], s["total_allocated_payments"]), ("800.00", "0.00"))
+        # 200 of the receipt is not allocated to any invoice (unallocated credit).
+        self.assertEqual((s["total_unallocated_credits"], s["total_unallocated_withdrawals"]), ("200.00", "0.00"))
+        self.assertEqual(s["total_outstanding_sales"], "1500.00")
+        self.assertEqual(r["rows"][0]["bank_direction"], "DEPOSIT")
+
+    def test_unallocated_withdrawal_reversed_and_draft_not_counted_bank_side_from_statement(self):
+        t = h.trade("PURCHASE", self.supplier, self.us, D("1000"))
+        lic = self.lic_of(t)
+        inv = self.invoice(t)
+        posted = self.payment("900.00", reference="UTR-POSTED")
+        self.settle(posted, inv, "500.00")   # 400 of the withdrawal stays unallocated
+        self.match(posted, "900.00")          # statement debit → WITHDRAWAL, reconciled
+        draft = self.payment("300.00", status="DRAFT", reference="UTR-DRAFT")
+        self.settle(draft, inv, "300.00")
+        reversed_ = self.payment("200.00", status="REVERSED", reference="UTR-REV")
+        self.settle(reversed_, inv, "200.00")
+        r, trades = self.trades_of(lic)
+        row = trades[t.pk]
+        # Only the POSTED allocation counts; the draft is listed (status DRAFT, not counted); reversed is absent.
+        self.assertEqual((row["bank_settled"], row["outstanding"], row["status"]), ("500.00", "500.00", "PARTIAL"))
+        self.assertEqual(sorted((a["reference"], a["counted"]) for a in row["allocations"]),
+                         [("UTR-DRAFT", False), ("UTR-POSTED", True)])
+        posted_row = next(x for x in r["rows"] if x["reference"] == "UTR-POSTED")
+        self.assertEqual((posted_row["bank_direction"], posted_row["reconciliation"]), ("WITHDRAWAL", "RECONCILED"))
+        self.assertEqual(posted_row["statement_lines"][0]["bank_direction"], "WITHDRAWAL")
+        self.assertEqual(r["summary"]["total_unallocated_withdrawals"], "400.00")
+        self.assertNotIn("UTR-REV", {x["reference"] for x in r["rows"]})
+        # Totals reconcile with the rows.
+        s = r["summary"]
+        self.assertEqual(Decimal(s["total_withdrawals"]), sum(Decimal(x["amount"]) for x in r["rows"] if x["bank_direction"] == "WITHDRAWAL"))
+
+    def test_licence_without_bank_activity_lists_trades_as_not_linked(self):
+        t = h.trade("SALE", self.us, self.supplier, D("750"))
+        r, trades = self.trades_of(self.lic_of(t))
+        self.assertEqual(r["rows"], [])
+        self.assertEqual((trades[t.pk]["status"], trades[t.pk]["linked"], trades[t.pk]["outstanding"]), ("UNPAID", False, "750.00"))
+        self.assertEqual(r["summary"]["total_outstanding_sales"], "750.00")

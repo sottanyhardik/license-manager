@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import { toast } from 'sonner';
@@ -185,7 +185,7 @@ function groupTransactionsByCompany(transactions: CanonicalTransaction[]) {
  * The one column set for the ledger table — reused by the opening starting-state
  * block and by every company group so the two always line up.
  */
-function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCurrency: string }) {
+function LedgerColumnHeader({ isDFIA, billCurrency, bankColumn = false }: { isDFIA: boolean; billCurrency: string; bankColumn?: boolean }) {
     const licenceSuffix = isDFIA ? '($)' : '(₹)';
     const billSuffix = billCurrency === 'USD' ? '($)' : '(₹)';
     return (
@@ -204,6 +204,7 @@ function LedgerColumnHeader({ isDFIA, billCurrency }: { isDFIA: boolean; billCur
                 <th scope="col" className="whitespace-nowrap px-2.5 py-1 text-right font-medium text-success">
                     Purchase Bill {billSuffix}
                 </th>
+                {bankColumn && <th scope="col" className="whitespace-nowrap px-2.5 py-1 text-left font-bold text-foreground">Bank</th>}
             </tr>
         </thead>
     );
@@ -287,9 +288,20 @@ export interface LicenseLedgerDetailProps {
     embedded?: boolean;
     /** `overview` = licence header + reconciliation summary; `ledger` = the transaction tables; default both. */
     section?: 'all' | 'overview' | 'ledger';
+    /** Shown under the financial summary cards (e.g. the licence-linked bank movement summary). */
+    bankSummary?: ReactNode;
+    /**
+     * Bank status per purchase/sale transaction (adds a "Bank" column). `toggle` opens the transaction's
+     * payment-details row rendered by `renderBankDetails`. Display only — figures come from the bank ledger API.
+     */
+    renderBankCell?: (txn: CanonicalTransaction, ui: { expanded: boolean; toggle: () => void; detailsId: string }) => ReactNode;
+    renderBankDetails?: (txn: CanonicalTransaction) => ReactNode;
 }
 
-export default function LicenseLedgerDetail({ licenseId: propLicenseId, itemId: propItemId, embedded = false, section = 'all' }: LicenseLedgerDetailProps = {}) {
+export default function LicenseLedgerDetail({
+    licenseId: propLicenseId, itemId: propItemId, embedded = false, section = 'all', bankSummary, renderBankCell, renderBankDetails,
+}: LicenseLedgerDetailProps = {}) {
+    const [openBankRow, setOpenBankRow] = useState<string | null>(null);
     const params = useParams();
     const licenseId = propLicenseId ?? params.licenseId;
     const itemId = propItemId ?? params.itemId;
@@ -534,6 +546,7 @@ export default function LicenseLedgerDetail({ licenseId: propLicenseId, itemId: 
 
             {/* ── CA summary band ──────────────────────────────── */}
             {showOverview && <LedgerSummaryCards summary={summary} />}
+            {showOverview && bankSummary}
 
             {/* ── Ledger tables ─────────────────────────────────── */}
             {showLedger && (() => {
@@ -642,16 +655,20 @@ export default function LicenseLedgerDetail({ licenseId: propLicenseId, itemId: 
                             {/* Company ledger table */}
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse bg-card text-xs">
-                                    <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} />
+                                    <LedgerColumnHeader isDFIA={isDFIA} billCurrency={billCurrency} bankColumn={Boolean(renderBankCell)} />
                                     <tbody>
                                         {txns.map((txn, ti) => {
                                             const isSale = txn.sale_amount != null;
                                             const isPurchase = txn.purchase_amount != null;
                                             const isCommission = txn.is_commission;
+                                            const bankKey = `${company.company_id ?? ci}:${txn.id ?? ti}`;
+                                            const bankOpen = openBankRow === bankKey;
+                                            const bankDetailsId = `ledger-bank-${String(bankKey).replace(/[^A-Za-z0-9_-]/g, '_')}`;
+                                            const columnCount = (isDFIA ? 9 : 8) + (renderBankCell ? 1 : 0);
 
                                             return (
+                                                <React.Fragment key={ti}>
                                                 <tr
-                                                    key={ti}
                                                     className={cn(
                                                         "border-b",
                                                         isPurchase ? "border-success/20 bg-success/[0.06]"
@@ -684,7 +701,24 @@ export default function LicenseLedgerDetail({ licenseId: propLicenseId, itemId: 
                                                     <td className="px-2.5 py-1 text-right text-xs tabular-nums text-success">
                                                         {formatCurrency(txn.purchase_bill_amount, billCurrency)}
                                                     </td>
+                                                    {renderBankCell && (
+                                                        <td className="px-2.5 py-1 text-xs">
+                                                            {(isPurchase || isSale) ? renderBankCell(txn, {
+                                                                expanded: bankOpen,
+                                                                toggle: () => setOpenBankRow(bankOpen ? null : bankKey),
+                                                                detailsId: bankDetailsId,
+                                                            }) : null}
+                                                        </td>
+                                                    )}
                                                 </tr>
+                                                {bankOpen && renderBankDetails && (
+                                                    <tr className="border-b bg-card">
+                                                        <td colSpan={columnCount} id={bankDetailsId} className="px-3 py-2">
+                                                            {renderBankDetails(txn)}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                </React.Fragment>
                                             );
                                         })}
                                     </tbody>

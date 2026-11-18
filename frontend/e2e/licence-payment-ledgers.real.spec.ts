@@ -125,6 +125,46 @@ test.describe("Licence payment ledgers (real backend)", () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
 
+    test("Ledger tab: licence header, financial cards, company-wise transactions with bank payment/receipt details", async ({ page }, testInfo) => {
+        await signIn(page);
+        const workspace = await openLicence(page);
+        const bank = (await apiGet<{ summary: Record<string, Num>; trades: { invoice_number: string; direction: string; status: string; bank_settled: Num; outstanding: Num }[] }>(page, `accounting/licence-bank-ledger/${LICENCE_ID}/`)).body;
+        const purchase = bank.trades.find(t => t.direction === "PURCHASE")!;
+        const sale = bank.trades.find(t => t.direction === "SALE")!;
+        expect([purchase.status, sale.status]).toEqual(["PARTIAL", "PAID"]);
+
+        await workspace.getByRole("tab", { name: "Ledger", exact: true }).click();
+        const panel = workspace.getByRole("tabpanel");
+        // A — licence header and B — the four financial cards (existing trusted figures).
+        await expect(panel.getByText(LICENCE).first()).toBeVisible();
+        for (const card of ["TOTAL PURCHASE", "TOTAL SALE", "CURRENT BALANCE"]) await expect(panel.getByText(card, { exact: false }).first()).toBeVisible();
+        // Bank movement summary: licence-linked, equal to the backend summary.
+        const summary = panel.getByRole("region", { name: "Bank movement summary" });
+        await expect(summary).toContainText("licence-linked only");
+        await expect(summary).toContainText(inr(bank.summary.total_withdrawals));
+        await expect(summary).toContainText(inr(bank.summary.total_credits));
+        await expect(summary).toContainText(inr(bank.summary.total_outstanding_purchase));
+        // C — company-wise table with a Bank column; purchase partially paid via a bank withdrawal.
+        const purchaseToggle = panel.getByRole("button", { name: `Bank details for invoice ${purchase.invoice_number}` });
+        await expect(purchaseToggle).toContainText("Partially paid");
+        await purchaseToggle.click();
+        const pDetails = panel.getByRole("region", { name: `Bank details for invoice ${purchase.invoice_number}` });
+        const pTable = pDetails.getByRole("table", { name: `Bank transactions for invoice ${purchase.invoice_number}` });
+        await expect(pTable).toContainText("E2E-UTR-PUR-2509");
+        await expect(pTable).toContainText("WITHDRAWAL / DEBIT");
+        await expect(pTable).toContainText("Reconciled");
+        await expect(pDetails).toContainText(`Outstanding ${"₹" + inr(purchase.outstanding)}`);
+        await page.screenshot({ path: testInfo.outputPath("ledger-tab-bank-1440.png"), fullPage: true });
+        // Sale fully received via a bank credit (unreconciled).
+        const saleToggle = panel.getByRole("button", { name: `Bank details for invoice ${sale.invoice_number}` });
+        await expect(saleToggle).toContainText("Received");
+        await saleToggle.click();
+        const sTable = panel.getByRole("table", { name: `Bank transactions for invoice ${sale.invoice_number}` });
+        await expect(sTable).toContainText("DEPOSIT / CREDIT");
+        await expect(sTable).toContainText("Unreconciled");
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+
     test("permissions: trade-only user sees purchase/sale ledgers but no bank ledger (API 403); accounts viewer sees bank", async ({ browser }) => {
         const tradeOnly = await newSession(browser, "e2e_ledger_trade");
         try {
@@ -132,6 +172,9 @@ test.describe("Licence payment ledgers (real backend)", () => {
             await expect(workspace.getByRole("tab", { name: "Purchase Ledger" })).toBeVisible();
             await expect(workspace.getByRole("tab", { name: "Sale Ledger" })).toBeVisible();
             await expect(workspace.getByRole("tab", { name: "Bank Payment Ledger" })).toHaveCount(0);
+            await workspace.getByRole("tab", { name: "Ledger", exact: true }).click();
+            await expect(workspace.getByText("Bank payment and receipt details are shown to accounting roles.")).toBeVisible();
+            await expect(workspace.getByRole("button", { name: /^Bank details for invoice/ })).toHaveCount(0);
             expect((await apiGet(tradeOnly, `accounting/licence-bank-ledger/${LICENCE_ID}/`)).status).toBe(403);
             expect((await apiGet(tradeOnly, `licenses/${LICENCE_ID}/overview-payment-ledgers/`)).status).toBe(200);
         } finally {

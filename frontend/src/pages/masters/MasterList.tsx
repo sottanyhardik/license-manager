@@ -20,7 +20,6 @@ import {saveFilterState, restoreFilterState, shouldRestoreFilters} from "../../u
 import {openPdfPreview} from "../../utils/pdfPreview";
 import LinkTradeModal from "./LinkTradeModal";
 import BoeMergeModal from "./BoeMergeModal";
-import IncentiveLicensesTable from "./tables/IncentiveLicensesTable";
 import AllotmentsTable from "./tables/AllotmentsTable";
 import GenericMasterCards, { type MasterBulkAction, type MasterBulkResult } from "./tables/GenericMasterCards";
 import LicensesTable from "./tables/LicensesTable";
@@ -67,7 +66,9 @@ function usesLegacyNestedView(entityName: string, defs: unknown): boolean {
     return hasNestedCollections(defs) && !MASTER_COLUMNS[entityName]?.nested;
 }
 /** Entities that use the compact register layout (toolbar header instead of PageHeader). */
-const COMPACT_REGISTER = new Set(["licenses", "bill-of-entries"]);
+const COMPACT_REGISTER = new Set(["licenses", "bill-of-entries", "incentive-licenses"]);
+/** Business registers that use the generic rows + inline record (masters always do): entity → API collection. */
+const INLINE_RECORD_REGISTERS: Record<string, string> = { "incentive-licenses": "incentive-licenses/" };
 
 /**
  * Keeps the list's existing linked-trade presentation while avoiding an O(n²)
@@ -176,12 +177,13 @@ export default function MasterList() {
     });
     // `/masters/:entity/:id/edit` is a compatibility entry: show the record URL (the list with the record open on Edit).
     useEffect(() => {
-        if (!entity || !openRecord || !location.pathname.endsWith("/edit")) return;
+        if (!openRecord || !location.pathname.endsWith("/edit")) return;
+        // `/masters/<entity>/<id>/edit` or `/incentive-licenses/<id>/edit` → the same URL without `/edit`.
         navigate(
-            { pathname: `/masters/${entity}/${encodeURIComponent(openRecord)}`, search: location.search },
+            { pathname: location.pathname.replace(/\/edit$/, ""), search: location.search },
             { replace: true, state: { recordTab: "edit" } },
         );
-    }, [entity, openRecord, location.pathname, location.search, navigate]);
+    }, [openRecord, location.pathname, location.search, navigate]);
 
     // Determine the actual entity name - either from params or from path
     const entityName = entity ||
@@ -190,6 +192,10 @@ export default function MasterList() {
         (location.pathname.startsWith('/bill-of-entries') ? 'bill-of-entries' : null) ||
         (location.pathname.startsWith('/trades') ? 'trades' : null) ||
         (location.pathname.startsWith('/incentive-licenses') ? 'incentive-licenses' : null);
+    // Lists whose records open inline in their row (`<base>/:id`): every master + the inline business registers.
+    const inlineRecordApiBase = entityName ? INLINE_RECORD_REGISTERS[entityName] : undefined;
+    const recordBasePath = inlineRecordApiBase ? `/${entityName}` : `/masters/${entityName}`;
+    const hasInlineRecords = Boolean(entity) || Boolean(inlineRecordApiBase);
 
     // Role-based write access per entity
     const {hasAnyRole, isSuperAdmin, hasRole} = useContext(AuthContext);
@@ -731,9 +737,8 @@ export default function MasterList() {
             toast.success("Record deleted successfully");
             invalidateList();
             // The deleted record was open inline: close it instead of showing "Record not found".
-            if (openRecord && !['licenses', 'allotments', 'trades', 'incentive-licenses', 'bill-of-entries'].includes(entityName)
-                && openRecord === getMasterRecordLookup(entityName, item)) {
-                navigate({ pathname: `/masters/${entityName}`, search: location.search });
+            if (openRecord && hasInlineRecords && openRecord === getMasterRecordLookup(entityName, item)) {
+                navigate({ pathname: recordBasePath, search: location.search });
             }
         } catch (err) {
             // DRF refusals arrive as `detail`, a list or a field error (e.g. "referenced by 2 licences").
@@ -1027,6 +1032,7 @@ export default function MasterList() {
                                         entityName === 'allotments' ? '/allotments/create' :
                                         entityName === 'trades' ? '/trades/create' :
                                         entityName === 'bill-of-entries' ? '/bill-of-entries/create' :
+                                        entityName === 'incentive-licenses' ? '/incentive-licenses/create' :
                                         `/masters/${entityName}/create`}
                                     onClick={() => {
                                         saveFilterState(entityName, {
@@ -1205,16 +1211,26 @@ export default function MasterList() {
 
                     {/* Incentive Licenses Card Layout */}
                     {entityName === 'incentive-licenses' && (
-                        <IncentiveLicensesTable
+                        // Same generic rows + inline record (Overview / Details / Edit / History) as the masters.
+                        <GenericMasterCards
                             loading={loading}
                             data={data}
-                            canWrite={canWrite}
+                            metadata={metadata}
                             entityName={entityName}
+                            entityTitle={entityTitle}
                             filterParams={filterParams}
                             currentPage={currentPage}
                             pageSize={pageSize}
                             navigate={navigate}
                             onDelete={handleDelete}
+                            canWrite={canWrite}
+                            apiBase={inlineRecordApiBase}
+                            recordBasePath={recordBasePath}
+                            expandedLookup={openRecord ?? null}
+                            onExpandedChange={(lookup) => {
+                                navigate({ pathname: lookup ? `${recordBasePath}/${encodeURIComponent(lookup)}` : recordBasePath, search: location.search });
+                            }}
+                            initialRecordTab={initialRecordTab}
                         />
                     )}
 
@@ -1562,8 +1578,7 @@ export default function MasterList() {
                             expandedLookup={openRecord ?? null}
                             onExpandedChange={(lookup) => {
                                 // Push (back/forward walks open/closed records); the list query string is kept as-is.
-                                const base = `/masters/${entityName}`;
-                                navigate({ pathname: lookup ? `${base}/${encodeURIComponent(lookup)}` : base, search: location.search });
+                                navigate({ pathname: lookup ? `${recordBasePath}/${encodeURIComponent(lookup)}` : recordBasePath, search: location.search });
                             }}
                             initialRecordTab={initialRecordTab}
                         />

@@ -26,6 +26,8 @@ import { Button } from "@/components/ui/button";
 import { openDocument, toProtectedMediaPath } from "../../utils/documentDownload";
 import { formatMasterRecord } from "./masterDetailFields";
 import { buildMasterDetailLayout, type MasterDocument } from "./masterDetailLayout";
+import { resolveMasterColumns } from "./masterColumns";
+import { formatTruthyInr } from "./masterDisplayFormatters";
 import { NestedRows } from "./tables/NestedRows";
 import MasterForm from "./MasterForm";
 
@@ -49,6 +51,8 @@ export interface MasterRecordPanelProps {
     tabRequest?: { tab: string; n: number };
     /** Shows the Edit tab (same write rule as the row's Edit/Delete); the API still enforces permissions. */
     canWrite?: boolean;
+    /** API collection path (default `masters/<entity>/`; e.g. `incentive-licenses/`). */
+    apiBase?: string;
 }
 
 /** Old tab ids from earlier links. */
@@ -59,11 +63,8 @@ const HISTORY_LABEL: Record<string, string> = { CREATE: "Created", UPDATE: "Upda
 const HISTORY_TONE: Record<string, ActivityItem["tone"]> = { CREATE: "success", UPDATE: "info", DELETE: "danger" };
 const LABEL_CLASS = "text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground";
 
-function masterRecordApiPath(entity: string, lookup: string): string {
-    return `masters/${entity}/${encodeURIComponent(lookup)}/`;
-}
-
-export default function MasterRecordPanel({ entity, lookup, label, initialTab, tabRequest, canWrite = false }: MasterRecordPanelProps) {
+export default function MasterRecordPanel({ entity, lookup, label, initialTab, tabRequest, canWrite = false, apiBase }: MasterRecordPanelProps) {
+    const collection = apiBase ?? `masters/${entity}/`;
     const { hasAnyRole } = useContext(AuthContext);
     const queryClient = useQueryClient();
     const [tab, setTab] = useState(() => tabId(initialTab));
@@ -72,11 +73,11 @@ export default function MasterRecordPanel({ entity, lookup, label, initialTab, t
     useEffect(() => {
         if (requestedTab) setTab(tabId(requestedTab));
     }, [requestedTab, requestNonce]);
-    const apiPath = masterRecordApiPath(entity, lookup);
+    const apiPath = `${collection}${encodeURIComponent(lookup)}/`;
 
     const metadata = useQuery({
         queryKey: ["master-meta", entity],
-        queryFn: async ({ signal }) => (await api.get(`masters/${entity}/`, { params: { page_size: 1 }, signal })).data,
+        queryFn: async ({ signal }) => (await api.get(collection, { params: { page_size: 1 }, signal })).data,
         staleTime: 5 * 60_000,
     });
     const record = useQuery({
@@ -103,6 +104,10 @@ export default function MasterRecordPanel({ entity, lookup, label, initialTab, t
     const data = record.data;
     const { overview, sections, documents, related } = layout;
     const preview = documents.find(d => d.previewable);
+    // Overview shows `inr` columns with the register's ₹ formatter (display only; values come from the API).
+    const inrFields = new Set(resolveMasterColumns(entity, metadata.data ?? {}).columns.filter(c => c.format === "inr").map(c => c.field));
+    const overviewRecord = Object.fromEntries(Object.entries(formatMasterRecord(data, overview))
+        .map(([key, value]) => [key, inrFields.has(key) && value !== null ? formatTruthyInr(data[key] as number | string, "—") : value]));
 
     const accordion: AccordionSection[] = sections.map(section => ({
         id: section.id,
@@ -118,7 +123,7 @@ export default function MasterRecordPanel({ entity, lookup, label, initialTab, t
             render: () => (
                 <div className="space-y-3">
                     {overview.length > 0
-                        ? <FieldGrid record={formatMasterRecord(data, overview)} fields={overview} />
+                        ? <FieldGrid record={overviewRecord} fields={overview} />
                         : <p className="text-sm text-muted-foreground">No summary fields recorded for this record.</p>}
                 </div>
             ),
@@ -171,7 +176,7 @@ export default function MasterRecordPanel({ entity, lookup, label, initialTab, t
             // The audit log API is restricted to user managers (UserManagementPermission).
             visible: hasAnyRole([ROLES.USER_MANAGER]),
             // Same audit endpoint string as the request log records (raw, unencoded key).
-            render: () => <MasterHistory endpoint={`/api/masters/${entity}/${lookup}/`} />,
+            render: () => <MasterHistory endpoint={`/api/${collection}${lookup}/`} />,
         },
     ];
 

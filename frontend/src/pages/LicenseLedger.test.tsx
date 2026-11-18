@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import api from "../api/axios";
@@ -8,7 +9,7 @@ import LicenseLedger from "./LicenseLedger";
 import { normalizeLicenseWiseData } from "./licenseLedgerData";
 
 const navigate = vi.fn();
-vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));
+vi.mock("react-router-dom", () => ({ useNavigate: () => navigate, Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
 vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
 vi.mock("../services/licenseLedgerExport", () => ({
     previewLicenseLedgerPdf: vi.fn(), downloadLicenseLedgerExcel: vi.fn(), createLicenseLedgerPackage: vi.fn(), downloadLicenseLedgerPackage: vi.fn(), downloadCustomLedgerPdf: vi.fn(), relativeApiUrl: (url: string) => url.replace(/^\/api\//, ""), retryLicenseLedgerPackage: vi.fn(),
@@ -33,6 +34,9 @@ vi.mock("../components/AsyncSelectField", () => ({
         </select>
     ),
 }));
+
+const openFilters = () => fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+const openMoreActions = async () => { await userEvent.click(screen.getByRole("button", { name: "More ledger actions" })); };
 
 const mockedApiGet = vi.mocked(api.get);
 const mockedPreviewPdf = vi.mocked(previewLicenseLedgerPdf);
@@ -71,9 +75,17 @@ describe("LicenseLedger fresh filters", () => {
         render(<LicenseLedger />);
         expect(await screen.findByText("LIC-2436")).toBeInTheDocument();
         // Verify core filter controls exist
-        expect(screen.getByText("Filters & Search")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { level: 1, name: "License Ledger" })).toBeInTheDocument();
+        const filtersToggle = screen.getByRole("button", { name: /^Filters/ });
+        expect(filtersToggle).toHaveAttribute("aria-expanded", "false");
+        const panel = screen.getByLabelText("Filters", { selector: "section" });
+        expect(panel).not.toBeVisible();
+        openFilters();
+        expect(panel).toBeVisible();
+        expect(filtersToggle).toHaveAttribute("aria-expanded", "true");
         expect(screen.getByLabelText("Company Filter")).toBeInTheDocument();
         expect(screen.getByRole("spinbutton")).toBeInTheDocument(); // Min Balance
+        expect(screen.getByText("1 licence")).toBeInTheDocument();
         expect(screen.getByLabelText("License Type")).toBeInTheDocument();
         expect(screen.getByLabelText("Norm")).toBeInTheDocument();
         expect(screen.getByLabelText("Status")).toBeInTheDocument();
@@ -94,6 +106,7 @@ describe("LicenseLedger fresh filters", () => {
     it("normalizes independent filters into the new API contract", async () => {
         render(<LicenseLedger />);
         await screen.findByText("LIC-2436");
+        openFilters();
         fireEvent.change(screen.getByLabelText("Company Filter"), { target: { value: "7" } });
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "DFIA" }));
@@ -110,6 +123,7 @@ describe("LicenseLedger fresh filters", () => {
     it("clears dates independently and Clear All restores current-FY defaults", async () => {
         render(<LicenseLedger />);
         await screen.findByText("LIC-2436");
+        openFilters();
         fireEvent.click(screen.getByRole("button", { name: /^Clear$/ }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").has("purchase_date_from")).toBe(false));
         fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
@@ -120,6 +134,7 @@ describe("LicenseLedger fresh filters", () => {
     it("passes the exact filtered query to both shared exporters", async () => {
         render(<LicenseLedger />);
         await screen.findByText("LIC-2436");
+        openFilters();
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "RODTEP" }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("RODTEP"));
@@ -136,6 +151,7 @@ describe("LicenseLedger fresh filters", () => {
     it("uses one accessible License Type select and resets it to All Licenses", async () => {
         render(<LicenseLedger />);
         await screen.findByText("LIC-2436");
+        openFilters();
 
         const select = screen.getByRole("combobox", { name: "License Type" });
         expect(select).toHaveTextContent("All");
@@ -145,8 +161,7 @@ describe("LicenseLedger fresh filters", () => {
         fireEvent.click(screen.getByRole("option", { name: "MEIS" }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("MEIS"));
 
-        const clearAllButtons = screen.getAllByRole("button", { name: /clear all/i });
-        fireEvent.click(clearAllButtons[0]); // Click the first one in the filter header
+        fireEvent.click(screen.getByRole("button", { name: /clear all/i }));
         await waitFor(() => expect(queryFor("license-ledger/license-wise/").get("license_type")).toBe("ALL"));
         expect(screen.getByRole("combobox", { name: "License Type" })).toHaveTextContent("All");
     });
@@ -154,6 +169,7 @@ describe("LicenseLedger fresh filters", () => {
     it("sends the canonical ALL_INCENTIVE value for All Incentive", async () => {
         render(<LicenseLedger />);
         await screen.findByText("LIC-2436");
+        openFilters();
 
         fireEvent.keyDown(screen.getByRole("combobox", { name: "License Type" }), { key: "ArrowDown" });
         fireEvent.click(screen.getByRole("option", { name: "Incentive" }));
@@ -187,15 +203,18 @@ describe("LicenseLedger fresh filters", () => {
         });
         render(<LicenseLedger />);
         await screen.findByText("0311051359");
-        const downloadButton = screen.getByRole("button", { name: /choose.*folder.*start/i });
-        expect(downloadButton).toBeEnabled();
-        fireEvent.click(downloadButton);
+        await openMoreActions();
+        const downloadItem = screen.getByRole("menuitem", { name: /choose.*folder.*start/i });
+        expect(downloadItem).not.toHaveAttribute("data-disabled");
+        await userEvent.click(downloadItem);
         await waitFor(() => expect(mockedCreatePackage).toHaveBeenCalledWith(["2522", "2523"], expect.any(String), expect.any(String)));
         expect(mockedCreatePackage).toHaveBeenCalledTimes(1);
         // Downloading is a blob action: it must not navigate, clear the visible
         // selection, or cause the ledger filters/data to be replaced.
         expect(navigate).not.toHaveBeenCalled();
-        expect(screen.getByRole("button", { name: /choose.*folder.*start/i })).toBeEnabled();
+        await openMoreActions();
+        expect(screen.getByRole("menuitem", { name: /choose.*folder.*start/i })).not.toHaveAttribute("data-disabled");
+        await userEvent.keyboard("{Escape}");
         expect(screen.getByText("0311051359", { exact: true })).toBeInTheDocument();
 
         fireEvent.click(screen.getAllByRole("button", { name: /^PDF$/i })[0]);

@@ -261,6 +261,21 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   Tests: frontend gate exit 0 (lint, typecheck, 924/924 vitest, build); real-backend masters-detail 4/4,
   eight-master 10/10, masters-workspace 6/6 (each exit 0, separate runs). No backend change. Not pushed.
   Open: `/masters/:entity/create` is still a page; editing a code-keyed master's code leaves the open URL on the old code.
+- **ERP workspace modernization (2026-11-18)** — five workspaces on the Licence register pattern:
+  - P1 Licence Edit `b2175d44`: Edit tab inside the expanded licence (embedded `MasterForm`, LICENSE_MANAGER only;
+    menu Edit opens it). Real-backend `licence-edit` 1/1 (validation error in place, cancel, save persisted, list kept, audited).
+  - P2 shared toolbar `5b6a9172`: `WorkspaceToolbar`/`WorkspaceTitle`; `AdvancedFilter` + `MasterList` render through it (DOM same).
+  - P3–P6 (this commit): Ledger Upload (toolbar, format guide from real limits, inline rejection, progress, per-category
+    results — only categories the API returns), Licence Ledger (one toolbar, filters collapsed, secondary actions in a menu,
+    chips, shared states; no request/calculation change), Planning (toolbar, filters collapsed, duplicate actions → one menu),
+    Incentive Licences (compact toolbar + generic rows + inline record Overview/Details/Edit/History; `/incentive-licenses/:id`
+    and `/:id/edit` open inline; old card table removed). Test seed creates LICENSE_VIEWER / INCENTIVE_LICENSE_VIEWER groups.
+  - Evidence: frontend gate exit 0 (934/934); `workspaces.real` 6/6 incl. viewer denied (no Edit, API 403, /403 route);
+    visual: all titles at the Licence toolbar row (y≈93 @1440, was 129), no overflow @1440/390. No financial code touched.
+  - Regression: licence-edit 1/1, masters-detail 4/4, eight-master 10/10, masters-workspace 6/6, licence data-bearing 5/5,
+    visual 1/1 (all exit 0); backend financial/ledger/incentive 203/203 (balance calculator, CIF single source, canonical
+    ledger, BOE/allotment CIF attribution, ledger exports/statement); seed + architecture 12/12. Global mobile 44px
+    touch-target rule no longer distorts Radix switches/checkboxes (index.css).
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

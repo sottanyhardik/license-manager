@@ -80,7 +80,8 @@ label.required::after {
 
 /* ── Touch targets (44px minimum on mobile) ── */
 @media (max-width: 768px) {
-    button,
+    /* Radix switches/checkboxes are <button role=…> with their own fixed size; a 44px min-height distorts them. */
+    button:not([role="switch"]):not([role="checkbox"]),
     a.btn,
     input[type="submit"],
     input[type="button"],

@@ -21,7 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getMasterRecordKey, getMasterRecordLookup } from "../masterListConfig";
 import { formatMasterValue, readMasterField } from "../masterDetailFields";
-import { masterColumnLabel, resolveMasterColumns } from "../masterColumns";
+import { masterColumnLabel, resolveMasterColumns, type MasterColumn } from "../masterColumns";
+import { formatTruthyInr, parseMasterDisplayDate } from "../masterDisplayFormatters";
 import MasterRecordPanel from "../MasterRecordPanel";
 
 export type MasterBulkAction = "activate" | "deactivate" | "delete";
@@ -58,6 +59,10 @@ interface GenericMasterCardsProps {
     onExpandedChange?: (lookup: string | null) => void;
     /** First tab for the record named in the entry URL (old `?tab=` / `/edit` links) — that record only. */
     initialRecordTab?: { lookup: string; tab: string };
+    /** API collection path (default `masters/<entity>/`; e.g. `incentive-licenses/` for a business register). */
+    apiBase?: string;
+    /** Record URL base (default `/masters/<entity>`; e.g. `/incentive-licenses`). */
+    recordBasePath?: string;
 }
 
 /** `is_active` is shown as a status badge, not as a column. */
@@ -83,7 +88,10 @@ export default function GenericMasterCards({
     expandedLookup,
     onExpandedChange,
     initialRecordTab,
+    apiBase,
+    recordBasePath,
 }: GenericMasterCardsProps) {
+    const basePath = recordBasePath ?? `/masters/${entityName}`;
     // The app mounts ConfirmProvider (App.tsx); the browser dialog is only a fallback for bare test harnesses.
     const sharedConfirm = useOptionalConfirm();
     const confirm = (opts: ConfirmOptions) => sharedConfirm ? sharedConfirm(opts) : Promise.resolve(window.confirm(opts.title));
@@ -102,6 +110,7 @@ export default function GenericMasterCards({
         initialTab: tabRequest?.lookup === lookup ? tabRequest.tab : initialRecordTab?.lookup === lookup ? initialRecordTab.tab : undefined,
         tabRequest: tabRequest?.lookup === lookup ? tabRequest : undefined,
         canWrite,
+        apiBase,
     });
     const [pending, setPending] = useState<MasterBulkAction | null>(null);
     // Titles are captured when the request is made: deleted rows leave the refreshed list.
@@ -139,11 +148,20 @@ export default function GenericMasterCards({
         );
     }
 
-    const { columns } = resolveMasterColumns(entityName, metadata);
+    const { columns, badge, expiryField } = resolveMasterColumns(entityName, metadata);
+    // Display only: the register's ₹ formatter for `inr` columns; every other value is shown as received.
+    const cellText = (item: Record<string, unknown>, column: MasterColumn) => {
+        const raw = readMasterField(item, column.field);
+        return column.format === "inr" ? (formatMasterValue(raw) === null ? null : formatTruthyInr(raw as number | string, "—")) : formatMasterValue(raw);
+    };
+    const isExpired = (item: Record<string, unknown>) => {
+        const date = expiryField ? parseMasterDisplayDate(item[expiryField] as string | null | undefined) : null;
+        return Boolean(date && date < new Date());
+    };
     const [primary, ...cells] = columns;
     const fieldMeta: Record<string, { label?: string }> = metadata.field_meta || {};
     const template = columns.map(c => c.width ?? "minmax(8rem,1fr)").join(" ");
-    const hasStatus = data.some(item => STATUS_FIELD in item);
+    const hasStatus = data.some(item => STATUS_FIELD in item) || Boolean(badge) || Boolean(expiryField);
     const showSelect = bulkActions.length > 0;
     const titleOf = (item: Record<string, unknown>) =>
         formatMasterValue(primary ? readMasterField(item, primary.field) : undefined) ?? `#${item.id}`;
@@ -178,7 +196,8 @@ export default function GenericMasterCards({
     };
 
     // The column header and every row use the same slots, so the grid columns line up.
-    const trailClass = cn("flex shrink-0 items-center justify-end gap-2", hasStatus ? "w-[7.5rem]" : "w-8");
+    // Wider status slot only for registers with an extra badge (sold status / expired); masters keep 7.5rem.
+    const trailClass = cn("flex shrink-0 flex-wrap items-center justify-end gap-1.5", badge || expiryField ? "w-[13.5rem]" : hasStatus ? "w-[7.5rem]" : "w-8");
 
     return (
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -259,7 +278,7 @@ export default function GenericMasterCards({
                 {data.map((item, index) => {
                     const lookup = pageKeys[index];
                     const key = getMasterRecordKey(entityName, item);
-                    const detailPath = `/masters/${entityName}/${key}`;
+                    const detailPath = `${basePath}/${key}`;
                     const title = titleOf(item);
                     // Every record expands: the inline panel loads the full record (licence register pattern).
                     const canExpand = true;
@@ -340,7 +359,7 @@ export default function GenericMasterCards({
                                             </dd>
                                         </div>
                                         {cells.map(column => {
-                                            const value = formatMasterValue(readMasterField(item, column.field));
+                                            const value = cellText(item, column);
                                             return (
                                                 <div key={column.field} className={cn("flex min-w-0 items-baseline gap-1 text-xs lg:block", column.align === "end" && "lg:text-right")}>
                                                     <dt className="shrink-0 text-muted-foreground/70 lg:sr-only">{masterColumnLabel(column, fieldMeta)}</dt>
@@ -356,6 +375,11 @@ export default function GenericMasterCards({
                                     </dl>
 
                                     <div className={trailClass}>
+                                        {badge && (() => {
+                                            const state = badge.values[String(item[badge.field] ?? "")] ?? badge.fallback;
+                                            return state ? <StatusBadge tone={state.tone} label={state.label} /> : null;
+                                        })()}
+                                        {isExpired(item) && <StatusBadge tone="neutral" label="Expired" />}
                                         {STATUS_FIELD in item && (
                                             <StatusBadge tone={item[STATUS_FIELD] ? "success" : "neutral"} label={item[STATUS_FIELD] ? "Active" : "Inactive"} />
                                         )}

@@ -8,6 +8,7 @@
  * serializer in `backend/apps/core/views/views.py`). A master without an entry
  * gets `defaultMasterColumns` from its `list_display`.
  */
+import type { Tone } from "@/components/shared/tone";
 import { formatMasterLabel } from "./masterDetailFields";
 
 export interface MasterColumn {
@@ -17,6 +18,8 @@ export interface MasterColumn {
     width?: string;
     mono?: boolean;
     align?: "start" | "end";
+    /** Display format; values are shown as received otherwise. `inr` = the register's ₹ formatter (no recomputation). */
+    format?: "inr";
 }
 
 export interface MasterColumnConfig {
@@ -30,6 +33,10 @@ export interface MasterColumnConfig {
     nested?: MasterNestedCollection[];
     /** File fields (stored media paths) shown under Attachments; a `.docx` also gets the Document tab viewer. */
     documents?: string[];
+    /** A server-provided status field shown as a badge next to Active/Inactive (e.g. incentive sold status). */
+    badge?: { field: string; label: string; values: Record<string, { label: string; tone: Tone }>; fallback?: { label: string; tone: Tone } };
+    /** Date field (DD-MM-YYYY or ISO) whose past value shows an "Expired" badge — same rule the register used. */
+    expiryField?: string;
 }
 
 export interface MasterNestedCollection {
@@ -41,6 +48,7 @@ export interface MasterNestedCollection {
 const code = (field: string, label?: string, width = "minmax(6rem,8rem)"): MasterColumn => ({ field, label, width, mono: true });
 const text = (field: string, label?: string, width = "minmax(10rem,1fr)"): MasterColumn => ({ field, label, width });
 const num = (field: string, label?: string, width = "minmax(5rem,7rem)"): MasterColumn => ({ field, label, width, align: "end" });
+const inr = (field: string, label?: string, width = "minmax(6rem,8rem)"): MasterColumn => ({ field, label, width, align: "end", format: "inr" });
 
 export const MASTER_COLUMNS: Readonly<Record<string, MasterColumnConfig>> = {
     companies: {
@@ -87,6 +95,38 @@ const NOT_A_COLUMN = new Set([
     "created_on", "created_by", "modified_on", "modified_by", "is_active",
 ]);
 
+/**
+ * Business registers (not masters) that use the same generic rows + inline record, keyed by entity.
+ * Fields from each viewset's list serializer (incentive: `backend/apps/license/views_incentive.py`).
+ */
+export const REGISTER_COLUMNS: Readonly<Record<string, MasterColumnConfig>> = {
+    "incentive-licenses": {
+        columns: [
+            code("license_number", "Licence", "minmax(7.5rem,9rem)"),
+            text("license_type", "Type", "minmax(4rem,5rem)"),
+            code("license_date", "Date", "minmax(6rem,7rem)"),
+            code("license_expiry_date", "Expiry", "minmax(6rem,7rem)"),
+            text("exporter_name", "Exporter", "minmax(10rem,2fr)"),
+            text("port_name", "Port", "minmax(6rem,1fr)"),
+            inr("license_value", "Value"),
+            inr("sold_value", "Sold"),
+            inr("balance_value", "Balance"),
+        ],
+        details: ["exporter_iec", "notes"],
+        badge: {
+            field: "sold_status",
+            label: "Sold",
+            // Same labels/tones as the former incentive cards: anything not YES/PARTIAL is Available.
+            values: {
+                YES: { label: "Sold", tone: "danger" },
+                PARTIAL: { label: "Partial", tone: "warning" },
+            },
+            fallback: { label: "Available", tone: "success" },
+        },
+        expiryField: "license_expiry_date",
+    },
+};
+
 export function defaultMasterColumns(metadata: Record<string, any>): MasterColumnConfig {
     const fields: string[] = (metadata.list_display || []).filter((f: string) => !NOT_A_COLUMN.has(f));
     const [first, ...rest] = fields;
@@ -100,7 +140,7 @@ export function defaultMasterColumns(metadata: Record<string, any>): MasterColum
 }
 
 export function resolveMasterColumns(entityName: string, metadata: Record<string, any>): MasterColumnConfig {
-    return MASTER_COLUMNS[entityName] ?? defaultMasterColumns(metadata);
+    return MASTER_COLUMNS[entityName] ?? REGISTER_COLUMNS[entityName] ?? defaultMasterColumns(metadata);
 }
 
 export function masterColumnLabel(column: MasterColumn, fieldMeta: Record<string, { label?: string } | undefined> = {}): string {

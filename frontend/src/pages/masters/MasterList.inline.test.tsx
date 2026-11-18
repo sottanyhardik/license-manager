@@ -60,6 +60,8 @@ function renderAt(path: string) {
                     <Routes>
                         <Route path="/masters/:entity/:id?" element={<MasterList />} />
                         <Route path="/masters/:entity/:id/edit" element={<MasterList />} />
+                        <Route path="/incentive-licenses/:id?" element={<MasterList />} />
+                        <Route path="/incentive-licenses/:id/edit" element={<MasterList />} />
                     </Routes>
                 </MemoryRouter>
             </AuthContext.Provider>
@@ -159,5 +161,50 @@ describe("MasterList: records open inline", () => {
         await user.click(screen.getByRole("menuitem", { name: /Delete/ }));
         await waitFor(() => expect(locationRef!.pathname).toBe("/masters/exchange-rates"));
         expect(deleteSpy).toHaveBeenLastCalledWith("masters/exchange-rates/1/");
+    });
+});
+
+describe("Incentive Licences: same generic rows + inline record", () => {
+    const INC = {
+        id: 7, license_type: "RODTEP", license_number: "INC-777", license_date: "01-04-2026", license_expiry_date: "31-03-2099",
+        exporter_name: "Acme Exports", port_name: "Nhava Sheva", license_value: "100000.00", sold_value: "25000.00",
+        balance_value: "75000.00", sold_status: "PARTIAL", is_active: true,
+    };
+    beforeEach(() => {
+        getSpy.mockReset();
+        sessionStorage.clear();
+        getSpy.mockImplementation((url: string) => {
+            if (url === "incentive-licenses/") {
+                return Promise.resolve({ data: { ...LIST_META, list_display: ["license_number"], search_fields: ["license_number"], results: [INC], count: 1 } });
+            }
+            if (url === "incentive-licenses/7/") return Promise.resolve({ data: INC });
+            if (url === "masters/activity-logs/") return Promise.resolve({ data: [] });
+            return Promise.reject({ response: { status: 404 } });
+        });
+    });
+
+    it("renders compact rows with server values (₹ display only, sold badge) and opens the record inline", async () => {
+        const user = userEvent.setup();
+        renderAt("/incentive-licenses?page=1");
+        const list = await screen.findByRole("list", { name: "Incentive Licenses" });
+        const row = within(list).getByRole("listitem");
+        expect(within(row).getByText("₹1,00,000")).toBeInTheDocument();
+        expect(within(row).getByText("₹75,000")).toBeInTheDocument();
+        expect(within(row).getByText("Partial")).toBeInTheDocument();
+        expect(within(row).getByText("Active")).toBeInTheDocument();
+
+        await user.click(within(row).getByRole("link", { name: "INC-777" }));
+        const region = await screen.findByRole("region", { name: "INC-777 details" });
+        expect(await within(region).findByRole("tab", { name: "Overview", selected: true })).toBeInTheDocument();
+        expect(locationRef!.pathname).toBe("/incentive-licenses/7");
+        expect(getSpy).toHaveBeenCalledWith("incentive-licenses/7/", expect.anything());
+        expect(within(region).getByText("₹25,000")).toBeInTheDocument();
+    });
+
+    it("the old /incentive-licenses/:id/edit URL opens the record on its Edit tab", async () => {
+        renderAt("/incentive-licenses/7/edit");
+        const region = await screen.findByRole("region", { name: "INC-777 details" });
+        expect(await within(region).findByRole("tab", { name: "Edit", selected: true })).toBeInTheDocument();
+        await waitFor(() => expect(locationRef!.pathname).toBe("/incentive-licenses/7"));
     });
 });

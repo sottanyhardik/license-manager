@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
@@ -118,6 +119,11 @@ class Command(BaseCommand):
             raise CommandError(
                 f"Licence {LICENSE_NUMBER} exists with id {existing_by_number.pk}; expected {LICENSE_ID}."
             )
+
+        # Viewer role groups (names only) so browser permission tests can create a read-only user through the real
+        # user API — UserManagementSerializer assigns only groups that already exist, and a fresh test DB has none.
+        for code in ("LICENSE_VIEWER", "INCENTIVE_LICENSE_VIEWER"):
+            Group.objects.get_or_create(name=code)
 
         username = os.environ.get("LM_USERNAME", "hardik")
         password = os.environ.get("LM_PASSWORD", "admin@123")

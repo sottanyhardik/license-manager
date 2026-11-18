@@ -244,7 +244,8 @@ export default function AppRoutes() {
                 } />
 
                 {/* Incentive License CRUD */}
-                <Route path="/incentive-licenses" element={
+                {/* List + record opened inline in its row (`/incentive-licenses/:id`); static `/create` outranks it. */}
+                <Route path="/incentive-licenses/:id?" element={
                     <ProtectedRoute requiredAnyRole={INCENTIVE_LICENSE_ROLES}>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
@@ -254,9 +255,11 @@ export default function AppRoutes() {
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
+                {/* Old edit-page URL: the list with the record open on its Edit tab (shown to INCENTIVE_LICENSE_MANAGER
+                    only; the API enforces IncentiveLicensePermission on save). */}
                 <Route path="/incentive-licenses/:id/edit" element={
-                    <ProtectedRoute requiredRole={ROLES.INCENTIVE_LICENSE_MANAGER}>
-                        <AdminLayout><MasterForm /></AdminLayout>
+                    <ProtectedRoute requiredAnyRole={INCENTIVE_LICENSE_ROLES}>
+                        <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
 

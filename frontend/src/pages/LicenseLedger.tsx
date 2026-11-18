@@ -7,12 +7,12 @@ import {
     createLicenseLedgerPackage, downloadCustomLedgerPdf, downloadLicenseLedgerExcel, downloadLicenseLedgerPackage, licenseLedgerExportError, previewLicenseLedgerPdf, relativeApiUrl, retryLicenseLedgerPackage, type LicenseLedgerPackageJob,
 } from '../services/licenseLedgerExport';
 import { choosePackageDirectory, loadDownloadState, SequentialPackageDownloadManager, type DownloadState, type PackageLicence } from '../services/licenseLedgerPackageDownloads';
-import PageHeader from '@/components/PageHeader';
-import EmptyState from '@/components/EmptyState';
+import { ActionMenu, EmptyState, InlineError, LoadingState, type ActionMenuItem } from '@/components/shared';
+import { WorkspaceTitle, WorkspaceToolbar } from '@/components/workspace';
 import AsyncSelectField from '../components/AsyncSelectField';
 import DebouncedSearchInput from '../components/DebouncedSearchInput';
 import DateRangeFilter from '@/components/DateRangeFilter';
-import ActiveFilters, { type ActiveFilterItem } from '@/components/ActiveFilters';
+import type { ActiveFilterItem } from '@/components/ActiveFilters';
 import { getCurrentFinancialYearRange, getPreviousFinancialYearRange } from '../utils/dateRangePresets';
 import { buildLicenseLedgerParams, defaultLicenseLedgerFilters, type LicenseLedgerFilters } from './licenseLedgerFilters';
 import { normalizeLicenseWiseData, type LicenseWiseData } from './licenseLedgerData';
@@ -25,8 +25,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
     ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar,
-    BadgeCheck, CalendarCheck, CalendarRange, FileSpreadsheet, FileText, Filter,
-    Globe, Inbox, Loader2, Trophy, XCircle,
+    CalendarCheck, CalendarRange, Download, FileSpreadsheet, FileText, FolderDown,
+    Globe, Inbox, ListChecks, Loader2, Trophy, X, XCircle,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate
     return (
         <div className="space-y-2 p-2 sm:p-3" data-testid="transaction-ledger">
             {licenses.map((license) => (
-                <section key={license.license_id} className="overflow-hidden rounded-md border border-border" aria-label={`Transactions for license ${license.license_number}`}>
+                <section key={license.license_id} className="overflow-hidden rounded-lg border border-border/70" aria-label={`Transactions for license ${license.license_number}`}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-primary px-3 py-1.5 text-primary-foreground">
                         <span className="font-bold text-sm">License {license.license_number}</span>
                         <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
@@ -144,13 +144,13 @@ function LicenseWiseLedger({
         return (
         <div className="space-y-2 p-2 sm:p-3" data-testid="company-sion-ledger">
                 {company_groups.map((company) => (
-                    <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-md border border-border">
+                    <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-lg border border-border/70">
                         <h2 className="flex items-center gap-2 bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
                             <Building2 className="size-4" aria-hidden="true" />{company.company_name}
                         </h2>
                         <div className="space-y-2 p-2 sm:p-3">
                             {company.sion_groups.map((sion) => (
-                                <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded border border-border">
+                                <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded-md border border-border/70">
                                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-muted px-3 py-1.5">
                                         <h3 className="text-xs font-bold text-foreground">SION: {sion.label}</h3>
                                         <span className="text-xs text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
@@ -231,7 +231,7 @@ function LicenseWiseLedger({
     return (
         <div className="p-2">
             {licenses.map((lic) => (
-                <div key={lic.license_id} className="mb-4 overflow-hidden rounded-md border border-border">
+                <div key={lic.license_id} className="mb-4 overflow-hidden rounded-lg border border-border/70">
                     {/* ── License header bar ─────────────────────────── */}
                     <div className="flex flex-wrap items-center gap-2 bg-primary px-3 py-1.5 text-xs">
                         <label className="flex size-6 cursor-pointer items-center justify-center rounded bg-white/15" title={`Select ${lic.license_number}`}>
@@ -380,7 +380,7 @@ function SummaryItem({ label, value, tone }: { label: string; value: string; ton
     return (
         <div className="py-1.5 text-center">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
-            <div className={cn("text-xs font-bold tabular-nums", toneClass)}>{value}</div>
+            <div className={cn("text-sm font-bold tabular-nums", toneClass)}>{value}</div>
         </div>
     );
 }
@@ -416,6 +416,8 @@ export default function LicenseLedger() {
     const [downloadState, setDownloadState] = useState<DownloadState | null>(null);
     const [packageFolder, setPackageFolder] = useState<{ selected: string; job: string } | null>(null);
     const [filters, setFilters] = useState<LicenseLedgerFilters>(() => defaultLicenseLedgerFilters());
+    const [loadError, setLoadError] = useState<unknown>(null);
+    const [reloadKey, setReloadKey] = useState(0);
     const requestVersion = useRef(0);
     const managerRef = useRef<SequentialPackageDownloadManager | null>(null);
     const params = buildLicenseLedgerParams(filters);
@@ -452,6 +454,7 @@ export default function LicenseLedger() {
     useEffect(() => {
         const version = ++requestVersion.current;
         setCompanyWiseLoading(true);
+        setLoadError(null);
         Promise.all([
             api.get(`license-ledger/license-wise/?${paramsKey}`),
             api.get(`license-ledger/summary/?${paramsKey}`),
@@ -503,10 +506,11 @@ export default function LicenseLedger() {
             if (version !== requestVersion.current) return;
             toast.error(getApiErrorMessage(error, 'Failed to load License Ledger.'));
             setCompanyWiseData(null);
+            setLoadError(error);
         }).finally(() => {
             if (version === requestVersion.current) setCompanyWiseLoading(false);
         });
-    }, [paramsKey]);
+    }, [paramsKey, reloadKey]);
 
     const updateFilter = <K extends keyof LicenseLedgerFilters>(key: K, value: LicenseLedgerFilters[K]) =>
         setFilters(previous => ({ ...previous, [key]: value }));
@@ -587,47 +591,207 @@ export default function LicenseLedger() {
         (count, company) => count + company.sion_groups.reduce((subtotal, group) => subtotal + group.licenses.length, 0), 0,
     ) ?? visibleLicenses.length;
 
+    const allVisibleSelected = visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id)));
+    const toggleVisibleSelection = () => setSelectedLicenseIds(previous => {
+        const next = new Set(previous);
+        const visibleIds = visibleLicenses.map(license => String(license.license_id));
+        const allSelected = visibleIds.every(id => next.has(id));
+        visibleIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
+        return next;
+    });
+    const activeFilterItems = useMemo(() => buildActiveFilterItems(filters), [filters]);
+    const removeActiveFilter = (key: string) => {
+        const defaults = defaultLicenseLedgerFilters();
+        if (key === 'purchaseDateRange') {
+            setFilters(previous => ({ ...previous, purchaseDateFrom: defaults.purchaseDateFrom, purchaseDateTo: defaults.purchaseDateTo }));
+        } else {
+            const filterKey = key as keyof LicenseLedgerFilters;
+            updateFilter(filterKey, defaults[filterKey]);
+        }
+    };
+
+    const moreActions: ActionMenuItem[] = [
+        { id: 'ledger-downloads', label: 'License Downloads', icon: Download, onSelect: () => navigate('/license-ledger/download-requests') },
+        {
+            id: 'ledger-select-visible',
+            label: allVisibleSelected ? 'Clear Visible' : 'Select Visible',
+            icon: ListChecks,
+            disabled: visibleLicenses.length === 0,
+            disabledReason: 'No licences are visible',
+            onSelect: toggleVisibleSelection,
+        },
+        {
+            id: 'ledger-start-package',
+            label: 'Choose Folder & Start',
+            icon: FolderDown,
+            disabled: packageDownloading || selectedLicenseIds.size === 0,
+            disabledReason: packageDownloading ? 'A package download is starting' : 'Select at least one licence',
+            onSelect: () => { void downloadPackage([...selectedLicenseIds]); },
+        },
+    ];
+
     return (
         <>
-            {/* ── Header ─────────────────────────────────────────── */}
-            <PageHeader
-                pretitle="Ledger"
-                title="License Ledger"
-                description="Review available balances across DFIA and Incentive licenses"
+            <WorkspaceToolbar
+                start={<WorkspaceTitle title="License Ledger" breadcrumbs={[{ label: 'Home', to: '/' }]} count={visibleLicenseCount} countNoun="licence" />}
+                search={
+                    <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
+                        placeholder="License # or exporter..." className="!h-9" />
+                }
+                activeFilterCount={activeFilterItems.length}
+                filterLayout="wide"
+                filters={
+                    <>
+                        <div>
+                            <label id="ledger-company-label" className="mb-1 block text-xs font-semibold text-muted-foreground">Company</label>
+                            <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id"
+                                value={filters.company} onChange={(value: LicenseLedgerFilters['company']) => updateFilter('company', value)}
+                                placeholder="All..." loadOnMount ariaLabel="Company Filter" />
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-min-balance" className="mb-1 block text-xs font-semibold text-muted-foreground">Min Balance</label>
+                            <Input id="ledger-min-balance" type="number" min="0" step="0.01" value={filters.minBalance}
+                                onChange={(event) => updateFilter('minBalance', event.target.value)} placeholder="0.00" className="h-9" />
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-license-type-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Type</label>
+                            <Select value={filters.licenseType} onValueChange={(value) => updateFilter('licenseType', value)}>
+                                <SelectTrigger id="ledger-license-type-filter" className="h-9" aria-label="License Type">
+                                    <SelectValue placeholder="All" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All</SelectItem>
+                                    <SelectItem value="DFIA">DFIA</SelectItem>
+                                    <SelectItem value="ALL_INCENTIVE">Incentive</SelectItem>
+                                    <SelectItem value="RODTEP">RODTEP</SelectItem>
+                                    <SelectItem value="ROSTL">ROSTL</SelectItem>
+                                    <SelectItem value="MEIS">MEIS</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-norm-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Norm</label>
+                            <AsyncSelectField endpoint="masters/sion-classes/?is_active=true" labelField="norm_class" valueField="norm_class"
+                                value={filters.norm} onChange={(value: LicenseLedgerFilters['norm']) => updateFilter('norm', value)}
+                                placeholder="All..." ariaLabel="Norm" />
+                            <p className="mt-0.5 text-xs text-muted-foreground">DFIA only</p>
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-status-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Status</label>
+                            <AsyncSelectField endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
+                                value={filters.purchaseStatus} onChange={(value: LicenseLedgerFilters['purchaseStatus']) => updateFilter('purchaseStatus', value)}
+                                placeholder="All..." ariaLabel="Status" />
+                            <p className="mt-0.5 text-xs text-muted-foreground">DFIA only</p>
+                        </div>
+                        <div>
+                            <label htmlFor="ledger-sort" className="mb-1 block text-xs font-semibold text-muted-foreground">Sort</label>
+                            <select id="ledger-sort" value={filters.ordering} onChange={(event) => updateFilter('ordering', event.target.value)}
+                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm">
+                                <option value="-license_date">Latest</option>
+                                <option value="license_date">Oldest</option>
+                                <option value="-balance_value">High Balance</option>
+                                <option value="balance_value">Low Balance</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2 pt-5">
+                            <Switch id="ledger-active-only" checked={filters.activeOnly} onCheckedChange={(value) => updateFilter('activeOnly', value)} />
+                            <label htmlFor="ledger-active-only" className="text-sm font-medium">Active Only</label>
+                        </div>
+                        <fieldset>
+                            <legend className="mb-1.5 text-xs font-semibold text-muted-foreground">Purchase Bill Status</legend>
+                            <div className="flex flex-wrap gap-2">
+                                {[
+                                    ['ALL', 'All'], ['WITH_PURCHASE_BILL', 'With Bill'], ['NO_PURCHASE_BILL', 'No Bill'],
+                                ].map(([value, label]) => (
+                                    <Button key={value} type="button" size="sm" variant={filters.purchaseBill === value ? 'default' : 'outline'}
+                                        onClick={() => updateFilter('purchaseBill', value)}>{label}</Button>
+                                ))}
+                            </div>
+                        </fieldset>
+                        <div className="sm:col-span-2">
+                            <label htmlFor="ledger-license-numbers" className="mb-1 block text-xs font-semibold text-muted-foreground">Include License Numbers</label>
+                            <Input id="ledger-license-numbers" value={filters.licenseNumbers}
+                                onChange={(event) => updateFilter('licenseNumbers', event.target.value)}
+                                placeholder="e.g., 3111004973, 3111004966" className="h-9 text-sm" />
+                            <p className="mt-0.5 text-xs text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label htmlFor="ledger-exclude-license-numbers" className="mb-1 block text-xs font-semibold text-muted-foreground">Exclude License Numbers</label>
+                            <Input id="ledger-exclude-license-numbers" value={filters.excludeLicenseNumbers}
+                                onChange={(event) => updateFilter('excludeLicenseNumbers', event.target.value)}
+                                placeholder="e.g., 3111004973, 3111004966" className="h-9 text-sm" />
+                            <p className="mt-0.5 text-xs text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
+                        </div>
+                        <div className="border-t border-border/60 pt-3 sm:col-span-2 xl:col-span-4">
+                            <DateRangeFilter label="Purchase Date Range" icon={CalendarRange} hint="(Defaults to current FY: Apr–Mar)"
+                                fromId="ledger-purchase-from" toId="ledger-purchase-to"
+                                fromValue={filters.purchaseDateFrom} toValue={filters.purchaseDateTo}
+                                onFromChange={(value) => updateFilter('purchaseDateFrom', value)}
+                                onToChange={(value) => updateFilter('purchaseDateTo', value)}
+                                onClear={clearPurchaseDates}
+                                presets={[
+                                    { label: 'Current FY', icon: CalendarCheck, range: getCurrentFinancialYearRange },
+                                    { label: 'Previous FY', icon: Calendar, range: getPreviousFinancialYearRange },
+                                ]} />
+                        </div>
+                    </>
+                }
+                filterActions={
+                    <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={clearCompany} disabled={!filters.company}>
+                            <Building2 className="size-3.5" aria-hidden="true" />Clear Company
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={clearAllFilters}>
+                            <XCircle className="size-3.5" aria-hidden="true" />Clear All
+                        </Button>
+                    </div>
+                }
                 actions={
                     <>
-                        <Button asChild variant="outline" size="sm" title="View download requests">
-                            <a href="/license-ledger/download-requests">
-                                <span className="hidden sm:inline">License Downloads</span>
-                                <span className="sm:hidden">Downloads</span>
-                            </a>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={exporting !== null || visibleLicenseCount === 0}
+                            onClick={() => runExport('pdf')}
+                            title="Preview as PDF"
+                            aria-label="Preview license ledger as PDF"
+                        >
+                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
+                            Preview PDF
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
-                            disabled={visibleLicenses.length === 0}
-                            onClick={() => setSelectedLicenseIds(previous => {
-                                const next = new Set(previous);
-                                const visibleIds = visibleLicenses.map(license => String(license.license_id));
-                                const allSelected = visibleIds.every(id => next.has(id));
-                                visibleIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
-                                return next;
-                            })}
-                            title={visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Deselect all visible licenses' : 'Select all visible licenses'}
+                            disabled={exporting !== null || visibleLicenseCount === 0}
+                            onClick={() => runExport('xlsx')}
+                            title="Download as Excel"
+                            aria-label="Download license ledger as Excel"
                         >
-                            <span className="hidden sm:inline">{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear Visible' : 'Select Visible'}</span>
-                            <span className="sm:hidden">{visibleLicenses.every(license => selectedLicenseIds.has(String(license.license_id))) ? 'Clear' : 'Select'}</span>
+                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="size-3.5" aria-hidden="true" />}
+                            Download Excel
                         </Button>
-                        <Button
-                            size="sm"
-                            disabled={packageDownloading || selectedLicenseIds.size === 0}
-                            onClick={() => downloadPackage([...selectedLicenseIds])}
-                            aria-label="Choose destination folder and start package download"
-                        >
-                            {packageDownloading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
-                            <span className="hidden sm:inline">Choose Folder & Start</span>
-                            <span className="sm:hidden">Download</span>
-                        </Button>
+                        <ActionMenu items={moreActions} label="More ledger actions" trigger="button" />
+                    </>
+                }
+            />
+
+
+            {activeFilterItems.length > 0 && (
+                <div role="region" aria-label="Active filters" className="mb-3 flex flex-wrap items-center gap-1.5">
+                    {activeFilterItems.map(item => (
+                        <span key={item.key} className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 py-0.5 pl-2 pr-1 text-xs text-foreground">
+                            {item.label}: {item.value}
+                            <button type="button" onClick={() => removeActiveFilter(item.key)}
+                                aria-label={`Remove ${item.label} filter: ${item.value}`}
+                                className="inline-flex size-4 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+                                <X className="size-3" aria-hidden="true" />
+                            </button>
+                        </span>
+                    ))}
+                    <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clearAllFilters}>Reset filters</Button>
+                </div>
+            )}
+
                         {/* The persistent Download Requests screens supersede this progress block. */}
                         {packageJob && <div className="hidden text-xs text-muted-foreground" role="status" aria-hidden="true">
                             <div>Total: {packageJob.total} · Queued: {packageJob.queued} · Processing: {packageJob.running} · Ready to download: {Math.max(0, packageJob.completed - (downloadState?.downloaded.length ?? 0))} · Downloading: {downloadState?.downloading ? 1 : 0} · Downloaded: {downloadState?.downloaded.length ?? 0} · Failed: {packageJob.failed + (downloadState?.failed.length ?? 0)}</div>
@@ -651,179 +815,13 @@ export default function LicenseLedger() {
                                 {["server_ready", "completed"].includes(item.status) && item.download_url && !downloadState?.downloaded.includes(String(item.license_id ?? item.id)) && <Button size="sm" variant="outline" onClick={() => managerRef.current?.enqueue([item as PackageLicence])}>Download PDF</Button>}
                             </div>)}
                         </div>}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={exporting !== null || visibleLicenseCount === 0}
-                            onClick={() => runExport('pdf')}
-                            title="Preview as PDF"
-                            aria-label="Preview license ledger as PDF"
-                        >
-                            {exporting === 'pdf' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileText className="size-3.5" aria-hidden="true" />}
-                            <span className="hidden sm:inline">Preview PDF</span>
-                            <span className="sm:hidden">Preview</span>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={exporting !== null || visibleLicenseCount === 0}
-                            onClick={() => runExport('xlsx')}
-                            title="Download as Excel"
-                            aria-label="Download license ledger as Excel"
-                        >
-                            {exporting === 'xlsx' ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="size-3.5" aria-hidden="true" />}
-                            <span className="hidden sm:inline">Download Excel</span>
-                            <span className="sm:hidden">Excel</span>
-                        </Button>
-                    </>
-                }
-            />
 
-            <Card className="mb-4">
-                <CardHeader className="border-b px-3 py-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="flex items-center gap-2 text-sm font-semibold">
-                            <Filter className="size-4" aria-hidden="true" /> Filters &amp; Search
-                        </span>
-                        <div className="flex gap-2">
-                            <Button type="button" size="sm" variant="outline" onClick={clearCompany} disabled={!filters.company}>
-                                <Building2 className="size-4" aria-hidden="true" />
-                                <span className="hidden sm:inline">Clear Company</span>
-                                <span className="sm:hidden">Company</span>
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={clearAllFilters}>
-                                <XCircle className="size-4" aria-hidden="true" />
-                                <span className="hidden sm:inline">Clear All</span>
-                                <span className="sm:hidden">Clear</span>
-                            </Button>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-3 p-3">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                        <div className="lg:col-span-1">
-                            <label id="ledger-company-label" className="mb-1 block text-xs font-semibold text-muted-foreground">Company</label>
-                            <AsyncSelectField endpoint="masters/companies/" labelField="name" valueField="id"
-                                value={filters.company} onChange={(value: LicenseLedgerFilters['company']) => updateFilter('company', value)}
-                                placeholder="All..." loadOnMount ariaLabel="Company Filter" />
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label htmlFor="ledger-min-balance" className="mb-1 block text-xs font-semibold text-muted-foreground">Min Balance</label>
-                            <Input id="ledger-min-balance" type="number" min="0" step="0.01" value={filters.minBalance}
-                                onChange={(event) => updateFilter('minBalance', event.target.value)} placeholder="0.00" className="h-9" />
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label htmlFor="ledger-license-type-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Type</label>
-                            <Select value={filters.licenseType} onValueChange={(value) => updateFilter('licenseType', value)}>
-                                <SelectTrigger id="ledger-license-type-filter" className="h-9" aria-label="License Type">
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ALL">All</SelectItem>
-                                    <SelectItem value="DFIA">DFIA</SelectItem>
-                                    <SelectItem value="ALL_INCENTIVE">Incentive</SelectItem>
-                                    <SelectItem value="RODTEP">RODTEP</SelectItem>
-                                    <SelectItem value="ROSTL">ROSTL</SelectItem>
-                                    <SelectItem value="MEIS">MEIS</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label htmlFor="ledger-norm-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Norm</label>
-                            <AsyncSelectField endpoint="masters/sion-classes/?is_active=true" labelField="norm_class" valueField="norm_class"
-                                value={filters.norm} onChange={(value: LicenseLedgerFilters['norm']) => updateFilter('norm', value)}
-                                placeholder="All..." ariaLabel="Norm" />
-                            <p className="mt-0.5 text-xs text-muted-foreground">DFIA only</p>
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label htmlFor="ledger-status-filter" className="mb-1 block text-xs font-semibold text-muted-foreground">Status</label>
-                            <AsyncSelectField endpoint="masters/purchase-statuses/?is_active=true" labelField="label" valueField="code"
-                                value={filters.purchaseStatus} onChange={(value: LicenseLedgerFilters['purchaseStatus']) => updateFilter('purchaseStatus', value)}
-                                placeholder="All..." ariaLabel="Status" />
-                            <p className="mt-0.5 text-xs text-muted-foreground">DFIA only</p>
-                        </div>
-                        <div className="lg:col-span-1">
-                            <label htmlFor="ledger-sort" className="mb-1 block text-xs font-semibold text-muted-foreground">Sort</label>
-                            <select id="ledger-sort" value={filters.ordering} onChange={(event) => updateFilter('ordering', event.target.value)}
-                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm">
-                                <option value="-license_date">Latest</option>
-                                <option value="license_date">Oldest</option>
-                                <option value="-balance_value">High Balance</option>
-                                <option value="balance_value">Low Balance</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Search</label>
-                            <DebouncedSearchInput value={filters.search} onChange={(value: string) => updateFilter('search', value)}
-                                placeholder="License # or exporter..." />
-                        </div>
-                        <div className="flex items-center gap-2 pt-7">
-                            <Switch id="ledger-active-only" checked={filters.activeOnly} onCheckedChange={(value) => updateFilter('activeOnly', value)} />
-                            <label htmlFor="ledger-active-only" className="text-sm font-medium">Active Only</label>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2 rounded-md bg-muted/30 p-2">
-                        <div>
-                            <label htmlFor="ledger-license-numbers" className="mb-1 block text-xs font-semibold text-muted-foreground">Include License Numbers</label>
-                            <Input id="ledger-license-numbers" value={filters.licenseNumbers}
-                                onChange={(event) => updateFilter('licenseNumbers', event.target.value)}
-                                placeholder="e.g., 3111004973, 3111004966" className="text-sm" />
-                            <p className="mt-0.5 text-xs text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
-                        </div>
-
-                        <div>
-                            <label htmlFor="ledger-exclude-license-numbers" className="mb-1 block text-xs font-semibold text-muted-foreground">Exclude License Numbers</label>
-                            <Input id="ledger-exclude-license-numbers" value={filters.excludeLicenseNumbers}
-                                onChange={(event) => updateFilter('excludeLicenseNumbers', event.target.value)}
-                                placeholder="e.g., 3111004973, 3111004966" className="text-sm" />
-                            <p className="mt-0.5 text-xs text-muted-foreground">Comma-separated; spaces and duplicates ignored</p>
-                        </div>
-                    </div>
-
-                    <fieldset>
-                        <legend className="mb-1.5 text-xs font-semibold text-muted-foreground">Purchase Bill Status</legend>
-                        <div className="flex flex-wrap gap-2">
-                            {[
-                                ['ALL', 'All'], ['WITH_PURCHASE_BILL', 'With Bill'], ['NO_PURCHASE_BILL', 'No Bill'],
-                            ].map(([value, label]) => (
-                                <Button key={value} type="button" size="sm" variant={filters.purchaseBill === value ? 'default' : 'outline'}
-                                    onClick={() => updateFilter('purchaseBill', value)}>{label}</Button>
-                            ))}
-                        </div>
-                    </fieldset>
-
-                    <div className="border-t border-border pt-3">
-                        <DateRangeFilter label="Purchase Date Range" icon={CalendarRange} hint="(Defaults to current FY: Apr–Mar)"
-                            fromId="ledger-purchase-from" toId="ledger-purchase-to"
-                            fromValue={filters.purchaseDateFrom} toValue={filters.purchaseDateTo}
-                            onFromChange={(value) => updateFilter('purchaseDateFrom', value)}
-                            onToChange={(value) => updateFilter('purchaseDateTo', value)}
-                            onClear={clearPurchaseDates}
-                            presets={[
-                                { label: 'Current FY', icon: CalendarCheck, range: getCurrentFinancialYearRange },
-                                { label: 'Previous FY', icon: Calendar, range: getPreviousFinancialYearRange },
-                            ]} />
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* ── Active Filters Display ──────────────────────────── */}
-            <LicenseLedgerActiveFiltersDisplay
-                filters={filters}
-                onRemoveFilter={(key) => updateFilter(key as keyof LicenseLedgerFilters, defaultLicenseLedgerFilters()[key as keyof LicenseLedgerFilters])}
-                onClearAll={clearAllFilters}
-            />
-
-            {/* ── Summary cards ──────────────────────────────────── */}
+            {/* ── Summary cards ── */}
             {summary && (
-                <div className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                <div className="mb-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {/* DFIA card */}
-                    <Card className="border-l-[3px] border-l-primary">
-                        <CardHeader className="border-b px-3 py-1.5">
+                    <Card className="rounded-lg border-border/70 border-l-[3px] border-l-primary py-0 shadow-none">
+                        <CardHeader className="border-b border-border/60 px-3 py-1.5">
                             <div className="flex items-center gap-2">
                                 <Globe className="size-4 text-muted-foreground" aria-hidden="true" />
                                 <span className="text-xs font-semibold">DFIA</span>
@@ -847,8 +845,8 @@ export default function LicenseLedger() {
                     </Card>
 
                     {/* Incentive card */}
-                    <Card className="border-l-[3px] border-l-info">
-                        <CardHeader className="border-b px-3 py-1.5">
+                    <Card className="rounded-lg border-border/70 border-l-[3px] border-l-info py-0 shadow-none">
+                        <CardHeader className="border-b border-border/60 px-3 py-1.5">
                             <div className="flex items-center gap-2">
                                 <Trophy className="size-4 text-muted-foreground" aria-hidden="true" />
                                 <span className="text-xs font-semibold">Incentive</span>
@@ -874,225 +872,70 @@ export default function LicenseLedger() {
             )}
 
             {/* ── Transaction ledger ───────────────────────────────── */}
-            <Card>
-                <CardHeader className="border-b px-3 py-1.5">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground">
-                            {visibleLicenseCount} license{visibleLicenseCount !== 1 ? 's' : ''}
-                        </span>
-                        {companyWiseLoading && (
-                            <span className="text-xs text-muted-foreground">Loading…</span>
-                        )}
+            <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
+                {companyWiseLoading ? (
+                    <LoadingState variant="spinner" label="Loading license-wise ledger…" />
+                ) : loadError ? (
+                    <div className="p-3">
+                        <InlineError error={loadError} title="Failed to load License Ledger" onRetry={() => setReloadKey(key => key + 1)} />
                     </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {companyWiseLoading ? (
-                        <div role="status" aria-live="polite" className="flex flex-col items-center gap-2 py-10 text-center">
-                            <span className="inline-block size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
-                            <p className="text-sm text-muted-foreground">Loading license-wise ledger…</p>
-                        </div>
-                    ) : companyWiseData ? (
-                        <LicenseWiseLedger
-                            data={companyWiseData}
-                            navigate={navigate}
-                            selectedLicenseIds={selectedLicenseIds}
-                            onToggleLicense={toggleLicense}
-                            onDownloadLicense={(licenseId) => downloadPackage([licenseId])}
-                            onDownloadCustomLedger={async (licenseId) => {
-                                try { await downloadCustomLedgerPdf(licenseId); toast.success('Custom Ledger PDF download started.'); }
-                                catch (error) { toast.error(licenseLedgerExportError(error, 'Unable to generate the Custom Ledger PDF.')); }
-                            }}
-                        />
-                    ) : (
-                        <EmptyState
-                            icon={Building2}
-                            title="No data"
-                            description="No trades found for the current filters"
-                        />
-                    )}
-                </CardContent>
-            </Card>
+                ) : companyWiseData ? (
+                    <LicenseWiseLedger
+                        data={companyWiseData}
+                        navigate={navigate}
+                        selectedLicenseIds={selectedLicenseIds}
+                        onToggleLicense={toggleLicense}
+                        onDownloadLicense={(licenseId) => downloadPackage([licenseId])}
+                        onDownloadCustomLedger={async (licenseId) => {
+                            try { await downloadCustomLedgerPdf(licenseId); toast.success('Custom Ledger PDF download started.'); }
+                            catch (error) { toast.error(licenseLedgerExportError(error, 'Unable to generate the Custom Ledger PDF.')); }
+                        }}
+                    />
+                ) : (
+                    <EmptyState icon={Building2} title="No data" description="No trades found for the current filters" />
+                )}
+            </div>
         </>
     );
 }
 
-/**
- * ActiveFilters display component for LicenseLedger
- * Shows all currently applied filters with individual remove buttons
- */
-function LicenseLedgerActiveFiltersDisplay({
-    filters,
-    onRemoveFilter,
-    onClearAll,
-}: {
-    filters: LicenseLedgerFilters;
-    onRemoveFilter: (key: keyof LicenseLedgerFilters) => void;
-    onClearAll: () => void;
-}) {
-    const activeFilters: ActiveFilterItem[] = useMemo(() => {
-        const items: ActiveFilterItem[] = [];
-        const defaults = defaultLicenseLedgerFilters();
+/** Applied (non-default) filters, shown as removable chips and counted on the Filters toggle. */
+function buildActiveFilterItems(filters: LicenseLedgerFilters): ActiveFilterItem[] {
+    const defaults = defaultLicenseLedgerFilters();
+    const items: ActiveFilterItem[] = [];
+    const isActive = (key: keyof LicenseLedgerFilters) => {
+        const value = filters[key];
+        if (typeof value === 'boolean') return value !== false;
+        if (typeof value === 'object') return value !== null;
+        return value !== defaults[key] && value !== '' && value !== undefined;
+    };
+    const licenceCount = (csv: string) => csv.split(',').filter(n => n.trim()).length;
+    const plural = (count: number) => `${count} license${count !== 1 ? 's' : ''}`;
 
-        // Helper to check if value differs from default
-        const isActive = (key: keyof LicenseLedgerFilters) => {
-            const value = filters[key];
-            const defaultValue = defaults[key];
-
-            if (Array.isArray(value)) return value.length > 0;
-            if (typeof value === 'boolean') return value !== false;
-            if (typeof value === 'object') return value !== null;
-            return value !== defaultValue && value !== '' && value !== null && value !== undefined;
+    if (isActive('company')) items.push({ key: 'company', label: 'Company', value: String(filters.company) });
+    if (isActive('minBalance')) items.push({ key: 'minBalance', label: 'Min Balance', value: `₹${filters.minBalance}` });
+    if (filters.licenseType && filters.licenseType !== 'ALL') items.push({ key: 'licenseType', label: 'License Type', value: filters.licenseType });
+    if (isActive('norm')) items.push({ key: 'norm', label: 'Norm', value: String(filters.norm) });
+    if (isActive('purchaseStatus')) items.push({ key: 'purchaseStatus', label: 'Purchase Status', value: String(filters.purchaseStatus) });
+    if (filters.ordering && filters.ordering !== defaults.ordering) {
+        const sortLabels: Record<string, string> = {
+            '-license_date': 'Latest', 'license_date': 'Oldest', '-balance_value': 'High Balance', 'balance_value': 'Low Balance',
         };
-
-        // Company filter
-        if (isActive('company')) {
-            items.push({
-                key: 'company',
-                label: 'Company',
-                value: String(filters.company),
-            });
-        }
-
-        // Min Balance filter
-        if (isActive('minBalance')) {
-            items.push({
-                key: 'minBalance',
-                label: 'Min Balance',
-                value: `₹${filters.minBalance}`,
-            });
-        }
-
-        // License Type filter
-        if (filters.licenseType && filters.licenseType !== 'ALL') {
-            items.push({
-                key: 'licenseType',
-                label: 'License Type',
-                value: filters.licenseType,
-            });
-        }
-
-        // Norm filter (DFIA only)
-        if (isActive('norm')) {
-            items.push({
-                key: 'norm',
-                label: 'Norm',
-                value: String(filters.norm),
-            });
-        }
-
-        // Purchase Status filter (DFIA only)
-        if (isActive('purchaseStatus')) {
-            items.push({
-                key: 'purchaseStatus',
-                label: 'Purchase Status',
-                value: String(filters.purchaseStatus),
-            });
-        }
-
-        // Sort filter (if not default)
-        if (filters.ordering && filters.ordering !== '-license_date') {
-            const sortLabels: Record<string, string> = {
-                '-license_date': 'Latest',
-                'license_date': 'Oldest',
-                '-balance_value': 'High Balance',
-                'balance_value': 'Low Balance',
-            };
-            items.push({
-                key: 'ordering',
-                label: 'Sort',
-                value: sortLabels[filters.ordering] || filters.ordering,
-            });
-        }
-
-        // Search filter
-        if (isActive('search')) {
-            items.push({
-                key: 'search',
-                label: 'Search',
-                value: `"${filters.search}"`,
-            });
-        }
-
-        // Active Only filter
-        if (filters.activeOnly === true) {
-            items.push({
-                key: 'activeOnly',
-                label: 'Active Only',
-                value: 'Yes',
-            });
-        }
-
-        // Include License Numbers
-        if (isActive('licenseNumbers')) {
-            const count = filters.licenseNumbers?.split(',').filter(n => n.trim()).length || 0;
-            items.push({
-                key: 'licenseNumbers',
-                label: 'Include Licenses',
-                value: `${count} license${count !== 1 ? 's' : ''}`,
-            });
-        }
-
-        // Exclude License Numbers
-        if (isActive('excludeLicenseNumbers')) {
-            const count = filters.excludeLicenseNumbers?.split(',').filter(n => n.trim()).length || 0;
-            items.push({
-                key: 'excludeLicenseNumbers',
-                label: 'Exclude Licenses',
-                value: `${count} license${count !== 1 ? 's' : ''}`,
-            });
-        }
-
-        // Purchase Bill Status
-        if (filters.purchaseBill && filters.purchaseBill !== 'ALL') {
-            const billLabels: Record<string, string> = {
-                'WITH_PURCHASE_BILL': 'With Bill',
-                'NO_PURCHASE_BILL': 'No Bill',
-            };
-            items.push({
-                key: 'purchaseBill',
-                label: 'Purchase Bill Status',
-                value: billLabels[filters.purchaseBill] || filters.purchaseBill,
-            });
-        }
-
-        // Purchase Date Range
-        if (filters.purchaseDateFrom || filters.purchaseDateTo) {
-            const dateRange = [
-                filters.purchaseDateFrom || '—',
-                filters.purchaseDateTo || '—',
-            ].join(' to ');
-            items.push({
-                key: 'purchaseDateRange',
-                label: 'Purchase Date Range',
-                value: dateRange,
-            });
-        }
-
-        return items;
-    }, [filters]);
-
-    // Don't display if no active filters
-    if (activeFilters.length === 0) {
-        return null;
+        items.push({ key: 'ordering', label: 'Sort', value: sortLabels[filters.ordering] || filters.ordering });
     }
-
-    return (
-        <div className="mb-4">
-            <ActiveFilters
-                filters={activeFilters}
-                onRemove={(key) => {
-                    if (key === 'purchaseDateRange') {
-                        // Special handling for date range
-                        onRemoveFilter('purchaseDateFrom');
-                        onRemoveFilter('purchaseDateTo');
-                    } else {
-                        onRemoveFilter(key as keyof LicenseLedgerFilters);
-                    }
-                }}
-                onClearAll={onClearAll}
-                showCount={true}
-                compact={false}
-            />
-        </div>
-    );
+    if (isActive('search')) items.push({ key: 'search', label: 'Search', value: `"${filters.search}"` });
+    if (filters.activeOnly === true) items.push({ key: 'activeOnly', label: 'Active Only', value: 'Yes' });
+    if (isActive('licenseNumbers')) items.push({ key: 'licenseNumbers', label: 'Include Licenses', value: plural(licenceCount(filters.licenseNumbers)) });
+    if (isActive('excludeLicenseNumbers')) items.push({ key: 'excludeLicenseNumbers', label: 'Exclude Licenses', value: plural(licenceCount(filters.excludeLicenseNumbers)) });
+    if (filters.purchaseBill && filters.purchaseBill !== 'ALL') {
+        const billLabels: Record<string, string> = { 'WITH_PURCHASE_BILL': 'With Bill', 'NO_PURCHASE_BILL': 'No Bill' };
+        items.push({ key: 'purchaseBill', label: 'Purchase Bill Status', value: billLabels[filters.purchaseBill] || filters.purchaseBill });
+    }
+    if (filters.purchaseDateFrom !== defaults.purchaseDateFrom || filters.purchaseDateTo !== defaults.purchaseDateTo) {
+        items.push({
+            key: 'purchaseDateRange', label: 'Purchase Date Range',
+            value: `${filters.purchaseDateFrom || '—'} to ${filters.purchaseDateTo || '—'}`,
+        });
+    }
+    return items;
 }

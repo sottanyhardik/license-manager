@@ -1,40 +1,34 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    FileSpreadsheet, CloudUpload, Upload, FolderOpen, Paperclip, Trash2, X,
+    CloudUpload, Upload, FolderOpen, Trash2, X, RefreshCw,
     FileText, CheckCircle2, XCircle, Hourglass, ListChecks, Info, Lightbulb, Zap, Cog, Loader2,
 } from "lucide-react";
 
 import { useFileUpload } from "../hooks";
 import api from "../api/axios";
-import PageHeader from "@/components/PageHeader";
+import { WorkspaceToolbar, WorkspaceTitle } from "@/components/workspace";
+import { InlineError, StatusBadge, EmptyState } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+    LEDGER_ACCEPT, LEDGER_ACCEPTED_EXTENSIONS, LEDGER_MAX_FILE_BYTES, LEDGER_MAX_FILE_MB,
+    buildAsyncUploadErrorMessage, getFailedLicenses, getLedgerUploadErrorMessage,
+    normalizeLedgerFileTasks, normalizeLedgerUploadErrors, normalizeProgressValue,
+    summarizeLedgerResults,
+    type LedgerFileTask, type LedgerSyncResult, type LedgerUploadError,
+} from "./ledgerUploadHelpers";
 
 const UPLOAD_BATCH_SIZE = 20;
 const POLL_CONCURRENT = 5; // simultaneous status requests per tick
-const MAX_ERROR_DETAILS = 10;
-
-type LedgerTaskRef = {
-    task_id: string;
-    license: string;
-};
-
-type LedgerFileTask = {
-    file: string;
-    total: number;
-    tasks: LedgerTaskRef[];
-};
-
-type LedgerUploadError = {
-    file: string;
-    error: string;
-};
 
 type TaskStatus = {
     state?: string;
@@ -52,102 +46,7 @@ type TaskStatusModalProps = {
     onHide: () => void;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function normalizeText(value: unknown, fallback: string): string {
-    const normalized = String(value ?? "").trim();
-    return normalized || fallback;
-}
-
-function normalizeLedgerFileTasks(value: unknown): LedgerFileTask[] {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-
-    return value.flatMap((fileEntry, fileIndex) => {
-        if (!isRecord(fileEntry) || !Array.isArray(fileEntry.tasks)) {
-            return [];
-        }
-
-        const seenTaskIds = new Set<string>();
-        const tasks = fileEntry.tasks.flatMap((taskEntry) => {
-            if (!isRecord(taskEntry)) {
-                return [];
-            }
-            const taskId = String(taskEntry.task_id ?? "").trim();
-            if (!taskId || seenTaskIds.has(taskId)) {
-                return [];
-            }
-            seenTaskIds.add(taskId);
-            return [{
-                task_id: taskId,
-                license: normalizeText(taskEntry.license, "Unknown license"),
-            }];
-        });
-
-        if (tasks.length === 0) {
-            return [];
-        }
-
-        return [{
-            file: normalizeText(fileEntry.file, `File ${fileIndex + 1}`),
-            total: tasks.length,
-            tasks,
-        }];
-    });
-}
-
-function normalizeLedgerUploadErrors(value: unknown): LedgerUploadError[] {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-
-    return value.flatMap((entry, index) => {
-        if (!isRecord(entry)) {
-            return [];
-        }
-        return [{
-            file: normalizeText(entry.file, `File ${index + 1}`),
-            error: normalizeText(entry.error, "Unknown upload error"),
-        }];
-    });
-}
-
-function buildAsyncUploadErrorMessage(errors: LedgerUploadError[]): string {
-    const shownErrors = errors
-        .slice(0, MAX_ERROR_DETAILS)
-        .map((error) => `${error.file}: ${error.error}`)
-        .join("; ");
-    const remaining = errors.length > MAX_ERROR_DETAILS ? `; ${errors.length - MAX_ERROR_DETAILS} more not shown` : "";
-
-    return `${errors.length} file(s) failed: ${shownErrors}${remaining}`;
-}
-
-function getLedgerUploadErrorMessage(error: unknown): string {
-    if (isRecord(error) && isRecord(error.response) && isRecord(error.response.data)) {
-        const data = error.response.data;
-        const detail = data.error ?? data.detail ?? data.message;
-        if (detail) {
-            return normalizeText(detail, "Upload failed. Please try again.");
-        }
-    }
-    if (error instanceof Error) {
-        return normalizeText(error.message, "Upload failed. Please try again.");
-    }
-
-    return "Upload failed. Please try again.";
-}
-
-function normalizeProgressValue(value: unknown): number {
-    const progress = Number(value);
-    if (!Number.isFinite(progress)) {
-        return 0;
-    }
-
-    return Math.min(100, Math.max(0, Math.round(progress)));
-}
+type FileProgressEntry = { name: string; progress?: number; status?: string };
 
 // Defined outside LedgerUpload so React doesn't remount it on every parent render,
 // which would destroy polling intervals.
@@ -281,6 +180,173 @@ const TaskStatusModal = ({ fileTasks, show, onHide }: TaskStatusModalProps) => {
         </Dialog>
     );
 };
+function UploadProgressList({ fileProgress }: { fileProgress: Record<string, FileProgressEntry> }) {
+    return (
+        <div className="mb-4" role="status" aria-live="polite">
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><CloudUpload className="size-4" aria-hidden="true" />Uploading Files</h3>
+            {Object.entries(fileProgress).map(([index, fileData]) => {
+                const progressValue = fileData.status === "failed" ? 100 : normalizeProgressValue(fileData.progress);
+                return (
+                    <div key={index} className="mb-3">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                            <small className="flex min-w-0 items-center gap-1 text-muted-foreground" title={fileData.name}>
+                                {fileData.status === "completed" ? <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-hidden="true" />
+                                    : fileData.status === "failed" ? <XCircle className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
+                                    : <Hourglass className="size-3.5 shrink-0 text-primary" aria-hidden="true" />}
+                                <span className="truncate">{fileData.name}</span>
+                            </small>
+                            <small className="shrink-0 text-muted-foreground">
+                                {fileData.status === "completed" ? "Done" : fileData.status === "failed" ? "Failed" : `${progressValue}%`}
+                            </small>
+                        </div>
+                        <div
+                            className="h-1.5 overflow-hidden rounded-full bg-muted"
+                            role="progressbar"
+                            aria-label={`${fileData.name} upload progress`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progressValue}
+                        >
+                            <div
+                                className={`h-full ${fileData.status === "completed" ? "bg-success" : fileData.status === "failed" ? "bg-destructive" : "bg-primary"}`}
+                                style={{ width: `${progressValue}%` }}
+                            />
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function FileDetails({ result }: { result: LedgerSyncResult }) {
+    const failed = getFailedLicenses(result);
+    const licenses = result.licenses ?? [];
+    if (licenses.length === 0 && failed.length === 0) return null;
+    return (
+        <div className="space-y-2">
+            {licenses.length > 0 && (
+                <details>
+                    <summary className="cursor-pointer text-xs font-semibold">View License Numbers ({licenses.length})</summary>
+                    <div className="mt-2 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+                        {licenses.map((license, idx) => <StatusBadge key={`${license}-${idx}`} tone="success" label={String(license)} />)}
+                    </div>
+                </details>
+            )}
+            {failed.length > 0 && (
+                <details>
+                    <summary className="cursor-pointer text-xs font-semibold text-destructive">Failed Licenses ({failed.length})</summary>
+                    <Table className="text-xs" containerClassName="mt-2">
+                        <TableHeader>
+                            <TableRow><TableHead>License</TableHead><TableHead>Reason reported by server</TableHead></TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {failed.map((f, idx) => (
+                                <TableRow key={`${f.license}-${idx}`}>
+                                    <TableCell className="font-medium">{f.license}</TableCell>
+                                    <TableCell className="whitespace-normal break-words text-destructive">{f.error}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </details>
+            )}
+        </div>
+    );
+}
+
+function SyncResults({ results }: { results: LedgerSyncResult[] }) {
+    const summary = summarizeLedgerResults(results);
+    return (
+        <Card className="mt-3" role="region" aria-label="Upload results">
+            <CardHeader className="border-b py-3">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+                    <ListChecks className="size-4 text-success" aria-hidden="true" />
+                    Upload Results
+                    <StatusBadge tone={summary.filesFailed === 0 ? "success" : "warning"} label={`${summary.filesSucceeded}/${summary.files} succeeded`} />
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-3">
+                <div className="flex flex-wrap gap-2" aria-label="Result summary">
+                    <StatusBadge tone="success" icon={CheckCircle2} label={`${summary.licensesImported} licenses imported`} />
+                    <StatusBadge tone={summary.licensesFailed > 0 ? "danger" : "neutral"} icon={XCircle} label={`${summary.licensesFailed} licenses failed`} />
+                    <StatusBadge tone={summary.filesFailed > 0 ? "danger" : "neutral"} icon={FileText} label={`${summary.filesFailed} files rejected`} />
+                </div>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>File</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Imported</TableHead>
+                            <TableHead className="text-right">Failed</TableHead>
+                            <TableHead>Details</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {results.map((result, index) => {
+                            const failed = getFailedLicenses(result);
+                            return (
+                                <TableRow key={`${result.fileName}-${index}`} className="align-top">
+                                    <TableCell className="max-w-[16rem] whitespace-normal break-words font-medium">{result.fileName || "Ledger file"}</TableCell>
+                                    <TableCell>
+                                        <StatusBadge
+                                            tone={result.success ? (failed.length > 0 ? "warning" : "success") : "danger"}
+                                            icon={result.success ? CheckCircle2 : XCircle}
+                                            label={result.success ? (failed.length > 0 ? "Partly imported" : "Imported") : "Rejected"}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">{result.success ? (result.licenses?.length ?? 0) : "-"}</TableCell>
+                                    <TableCell className="text-right tabular-nums">{result.success ? failed.length : "-"}</TableCell>
+                                    <TableCell className="min-w-[12rem] whitespace-normal break-words">
+                                        {result.success ? (
+                                            <div className="space-y-2">
+                                                <p>{result.message}</p>
+                                                <FileDetails result={result} />
+                                            </div>
+                                        ) : (
+                                            <p className="text-destructive">{result.error}</p>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+}
+
+function QueuedSummary({ fileTasks, onView }: { fileTasks: LedgerFileTask[]; onView: () => void }) {
+    const queued = fileTasks.reduce((n, f) => n + f.total, 0);
+    return (
+        <Card className="mt-3" role="region" aria-label="Queued for processing">
+            <CardHeader className="border-b py-3">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+                    <Cog className="size-4 text-primary" aria-hidden="true" />
+                    Queued for Processing
+                    <StatusBadge tone="info" label={`${queued} licenses queued`} />
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-3">
+                <Table>
+                    <TableHeader>
+                        <TableRow><TableHead>File</TableHead><TableHead className="text-right">Licenses queued</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {fileTasks.map((f, i) => (
+                            <TableRow key={`${f.file}-${i}`}>
+                                <TableCell className="whitespace-normal break-words font-medium">{f.file}</TableCell>
+                                <TableCell className="text-right tabular-nums">{f.total}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+                <Button type="button" variant="outline" size="sm" onClick={onView}>View processing status</Button>
+            </CardContent>
+        </Card>
+    );
+}
 
 const LedgerUpload = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -309,11 +375,11 @@ const LedgerUpload = () => {
         fileFieldName: "ledger",
         uploadMode: "sequential",
         multiple: true,
-        accept: ".csv,.htm,.html",
-        maxFileSize: 50 * 1024 * 1024,
+        accept: LEDGER_ACCEPT,
+        maxFileSize: LEDGER_MAX_FILE_BYTES,
         timeout: 300000,
-        onSuccess: (results) => {
-            if (results.some((r) => r.success)) {
+        onSuccess: (uploadResults) => {
+            if (uploadResults.some((r) => r.success)) {
                 resetFileInput();
             }
         },
@@ -328,8 +394,8 @@ const LedgerUpload = () => {
         const totalBatches = Math.ceil(files.length / UPLOAD_BATCH_SIZE);
         setBatchProgress({ current: 0, total: totalBatches });
 
-        const allFileTasks = [];
-        const allErrors = [];
+        const allFileTasks: LedgerFileTask[] = [];
+        const allErrors: LedgerUploadError[] = [];
 
         try {
             for (let i = 0; i < files.length; i += UPLOAD_BATCH_SIZE) {
@@ -382,17 +448,16 @@ const LedgerUpload = () => {
     };
 
     const busy = uploading || asyncUploading;
+    const progressEntries = fileProgress as Record<string, FileProgressEntry>;
+    const fileCountLabel = `${files.length} file${files.length > 1 ? "s" : ""}`;
 
     return (
-        <div className="ledger-upload-page space-y-3">
-            {/* Header */}
-            <PageHeader
-                pretitle="Ledger"
-                title="Ledger Upload"
-                description="Upload DFIA license ledger files in CSV or HTM/HTML format"
+        <div className="ledger-upload-page min-w-0 space-y-3">
+            <WorkspaceToolbar
+                start={<WorkspaceTitle title="Ledger Upload" breadcrumbs={[{ label: "Home", to: "/" }]} />}
                 actions={
                     <label className="flex cursor-pointer items-center gap-2.5 text-sm" htmlFor="asyncModeSwitch">
-                        <Switch id="asyncModeSwitch" checked={useAsyncMode} onCheckedChange={setUseAsyncMode} />
+                        <Switch id="asyncModeSwitch" checked={useAsyncMode} onCheckedChange={setUseAsyncMode} disabled={busy} />
                         <span className="flex items-center gap-1 font-medium text-muted-foreground">
                             <Zap className="size-3.5 text-warning" aria-hidden="true" />
                             Async {useAsyncMode ? "(Parallel)" : "(Sync)"}
@@ -403,13 +468,12 @@ const LedgerUpload = () => {
 
             <TaskStatusModal fileTasks={asyncFileTasks} show={showTaskModal} onHide={() => setShowTaskModal(false)} />
 
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-                {/* Main upload */}
-                <div className="lg:col-span-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <div className="min-w-0 lg:col-span-2">
                     <Card className="overflow-hidden border-border/80 shadow-sm">
                         <CardHeader className="border-b py-3">
                             <CardTitle className="flex items-center gap-2 text-sm">
-                                <CloudUpload className="size-4 text-primary" />Upload Files
+                                <CloudUpload className="size-4 text-primary" aria-hidden="true" />Upload Files
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-3">
@@ -421,45 +485,74 @@ const LedgerUpload = () => {
                                 onDragOver={handleDrag}
                                 onDrop={handleDrop}
                                 className={cn(
-                                    "mb-3 flex min-h-[132px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition-colors duration-200",
+                                    "mb-3 flex min-h-[132px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition-colors duration-200 focus-within:ring-2 focus-within:ring-ring",
                                     dragActive ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/60",
+                                    busy && "pointer-events-none opacity-60",
                                 )}
                             >
-                                <CloudUpload className={`mb-1.5 size-8 ${dragActive ? "text-primary" : "text-muted-foreground/60"}`} />
+                                <CloudUpload className={`mb-1.5 size-8 ${dragActive ? "text-primary" : "text-muted-foreground/60"}`} aria-hidden="true" />
                                 <p className="mb-0.5 text-sm font-semibold text-foreground">{dragActive ? "Drop files here" : "Drag & drop ledger files"}</p>
                                 <small className="mb-2 text-xs text-muted-foreground">or click to browse</small>
                                 <span className="pointer-events-none inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
-                                    <FolderOpen className="size-3.5" />Browse Files
+                                    <FolderOpen className="size-3.5" aria-hidden="true" />Browse Files
                                 </span>
-                                <small className="mt-2 block text-xs text-muted-foreground">CSV or HTM/HTML · Max 50MB per file</small>
-                                <input ref={fileInputRef} id="file-input" type="file" accept=".csv,.htm,.html" multiple onChange={handleFileChange} className="hidden" />
+                                <small className="mt-2 block text-xs text-muted-foreground">
+                                    Accepted: {LEDGER_ACCEPTED_EXTENSIONS.join(", ")} · Max {LEDGER_MAX_FILE_MB}MB per file
+                                </small>
+                                <input
+                                    ref={fileInputRef}
+                                    id="file-input"
+                                    type="file"
+                                    accept={LEDGER_ACCEPT}
+                                    multiple
+                                    disabled={busy}
+                                    aria-label="Ledger files"
+                                    aria-describedby="ledger-file-hint"
+                                    onChange={handleFileChange}
+                                    className="sr-only"
+                                />
                             </label>
+                            <p id="ledger-file-hint" className="sr-only">
+                                Accepted file types {LEDGER_ACCEPTED_EXTENSIONS.join(", ")}, maximum {LEDGER_MAX_FILE_MB} megabytes per file. Choosing files replaces the current selection.
+                            </p>
+
+                            {/* Client-side rejection (file type / size) */}
+                            {error && (
+                                <div className="mb-4">
+                                    <InlineError title="File not accepted" error={{ message: error }} />
+                                </div>
+                            )}
 
                             {/* Selected files */}
                             {files.length > 0 && (
                                 <div className="mb-4">
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-                                            <Paperclip className="size-3.5" />{files.length} file{files.length > 1 ? "s" : ""} selected
-                                        </span>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={busy}
-                                            onClick={() => { clearFiles(); resetFileInput(); }}
-                                        >
-                                            <Trash2 className="size-3.5" />Clear All
-                                        </Button>
+                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-sm font-semibold text-muted-foreground">{fileCountLabel} selected</span>
+                                        <div className="flex items-center gap-2">
+                                            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => fileInputRef.current?.click()}>
+                                                <RefreshCw className="size-3.5" aria-hidden="true" />Replace
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={busy}
+                                                onClick={() => { clearFiles(); resetFileInput(); setAsyncError(null); }}
+                                            >
+                                                <Trash2 className="size-3.5" aria-hidden="true" />Clear All
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col gap-2">
+                                    <ul className="flex flex-col gap-2">
                                         {files.map((file, index) => (
-                                            <div key={`${file.name}-${file.lastModified}-${file.size}`} className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
-                                                <FileText className="size-4 shrink-0 text-success" />
+                                            <li key={`${file.name}-${file.lastModified}-${file.size}`} className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
+                                                <FileText className="size-4 shrink-0 text-success" aria-hidden="true" />
                                                 <div className="min-w-0 flex-1">
                                                     <div className="truncate text-sm font-medium" title={file.name}>{file.name}</div>
                                                     <small className="text-muted-foreground">{formatFileSize(file.size)}</small>
                                                 </div>
                                                 <Button
+                                                    type="button"
                                                     variant="outline"
                                                     size="icon"
                                                     className="size-8 shrink-0 text-destructive hover:bg-destructive/10"
@@ -467,143 +560,75 @@ const LedgerUpload = () => {
                                                     onClick={() => removeFile(index)}
                                                     aria-label={`Remove ${file.name}`}
                                                 >
-                                                    <X className="size-3.5" />
+                                                    <X className="size-3.5" aria-hidden="true" />
                                                 </Button>
-                                            </div>
+                                            </li>
                                         ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* Async submission error (request failed, or the server rejected files) */}
+                            {asyncError && (
+                                <div className="mb-4">
+                                    <InlineError title="Upload problem" error={{ message: asyncError }} />
+                                </div>
+                            )}
+
+                            {/* Progress */}
+                            {uploading && Object.keys(progressEntries).length > 0 && <UploadProgressList fileProgress={progressEntries} />}
+                            {asyncUploading && (
+                                <div role="status" aria-live="polite" className="mb-4 space-y-1.5">
+                                    <div className="text-sm text-muted-foreground">
+                                        {batchProgress ? `Uploading batch ${batchProgress.current} of ${batchProgress.total}…` : "Processing…"}
+                                    </div>
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Upload in progress">
+                                        <div className="h-full w-1/3 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
                                     </div>
                                 </div>
                             )}
 
-                            {/* Error */}
-                            {(error || asyncError) && (
-                                <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
-                                    <XCircle className="size-4 shrink-0" />
-                                    <div>{error || asyncError}</div>
-                                </div>
-                            )}
-
-                            {/* Sync progress */}
-                            {uploading && Object.keys(fileProgress).length > 0 && (
-                                <div className="mb-4">
-                                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><CloudUpload className="size-4" />Uploading Files</h3>
-                                    {Object.entries(fileProgress as Record<string, any>).map(([index, fileData]) => {
-                                        const progressValue = fileData.status === "failed" ? 100 : normalizeProgressValue(fileData.progress);
-
-                                        return (
-                                            <div key={index} className="mb-3">
-                                                <div className="mb-1 flex items-center justify-between">
-                                                    <small className="flex max-w-[70%] items-center gap-1 truncate text-muted-foreground" title={fileData.name}>
-                                                        {fileData.status === "completed" ? <CheckCircle2 className="size-3.5 text-success" />
-                                                            : fileData.status === "failed" ? <XCircle className="size-3.5 text-destructive" />
-                                                            : <Hourglass className="size-3.5 text-primary" />}
-                                                        {fileData.name}
-                                                    </small>
-                                                    <small className="text-muted-foreground">
-                                                        {fileData.status === "completed" ? "✓ Done" : fileData.status === "failed" ? "✗ Failed" : `${progressValue}%`}
-                                                    </small>
-                                                </div>
-                                                <div
-                                                    className="h-1.5 overflow-hidden rounded-full bg-muted"
-                                                    role="progressbar"
-                                                    aria-label={`${fileData.name} upload progress`}
-                                                    aria-valuemin={0}
-                                                    aria-valuemax={100}
-                                                    aria-valuenow={progressValue}
-                                                >
-                                                    <div
-                                                        className={`h-full ${fileData.status === "completed" ? "bg-success" : fileData.status === "failed" ? "bg-destructive" : "bg-primary"}`}
-                                                        style={{ width: `${progressValue}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
                             {/* Upload button */}
-                            <Button className="w-full sm:w-auto" onClick={handleUpload} disabled={files.length === 0 || busy}>
+                            <Button type="button" className="w-full sm:w-auto" onClick={handleUpload} disabled={files.length === 0 || busy} aria-busy={busy}>
                                 {busy ? (
                                     <>
-                                        <Loader2 className="size-4 animate-spin" />
-                                        {batchProgress ? `Uploading batch ${batchProgress.current}/${batchProgress.total}…` : `Uploading ${files.length} file${files.length > 1 ? "s" : ""}…`}
+                                        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                                        {batchProgress ? `Uploading batch ${batchProgress.current}/${batchProgress.total}…` : `Uploading ${fileCountLabel}…`}
                                     </>
                                 ) : (
-                                    <><Upload className="size-4" />Upload & Process</>
+                                    <><Upload className="size-4" aria-hidden="true" />Upload & Process</>
                                 )}
                             </Button>
                         </CardContent>
                     </Card>
 
-                    {/* Sync results */}
-                    {results.length > 0 && (
-                        <Card className="mt-3">
-                            <CardHeader className="border-b py-3">
-                                <CardTitle className="flex items-center gap-2 text-sm">
-                                    <ListChecks className="size-4 text-success" />
-                                    Upload Results
-                                    <Badge variant="success">{results.filter((r) => r.success).length}/{results.length} succeeded</Badge>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="max-h-[420px] overflow-y-auto pt-3">
-                                {results.map((result, index) => (
-                                    <div key={`${result.fileName}-${index}`} className={cn(
-                                        "mb-2 rounded-lg border px-3.5 py-2.5 text-sm",
-                                        result.success ? "border-success/30 bg-success/10" : "border-destructive/30 bg-destructive/10",
-                                    )}>
-                                        <div className="flex items-start gap-3">
-                                            {result.success ? <CheckCircle2 className="size-5 shrink-0 text-success" /> : <XCircle className="size-5 shrink-0 text-destructive" />}
-                                            <div className="flex-1">
-                                                <h4 className="mb-1.5 font-semibold text-foreground">{result.fileName || "Ledger file"}</h4>
-                                                {result.success ? (
-                                                    <>
-                                                        <p className="mb-2">{result.message}</p>
-                                                        {result.stats?.total_licenses > 0 && (
-                                                            <div className="mb-2 flex flex-wrap gap-2">
-                                                                <Badge variant="success">{result.stats.total_licenses} Licenses</Badge>
-                                                            </div>
-                                                        )}
-                                                        {result.licenses?.length > 0 && (
-                                                            <details className="mt-2">
-                                                                <summary className="cursor-pointer text-xs font-semibold">View License Numbers ({result.licenses.length})</summary>
-                                                                <div className="mt-2 flex flex-wrap gap-1">
-                                                                    {result.licenses.map((license, idx) => <Badge key={`${license}-${idx}`} variant="success">{license}</Badge>)}
-                                                                </div>
-                                                            </details>
-                                                        )}
-                                                        {result.data?.results?.[0]?.failed?.length > 0 && (
-                                                            <details className="mt-2">
-                                                                <summary className="cursor-pointer text-xs font-semibold text-destructive">Failed Licenses ({result.data.results[0].failed.length})</summary>
-                                                                <div className="mt-2">
-                                                                    {result.data.results[0].failed.map((f, idx) => (
-                                                                        <div key={idx} className="mb-1 text-xs text-destructive"><strong>{f.license}:</strong> {f.error}</div>
-                                                                    ))}
-                                                                </div>
-                                                            </details>
-                                                        )}
-                                                    </>
-                                                ) : (
-                                                    <p className="text-destructive">{result.error}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </CardContent>
-                        </Card>
-                    )}
+                    {results.length > 0
+                        ? <SyncResults results={results as LedgerSyncResult[]} />
+                        : asyncFileTasks.length > 0
+                            ? <QueuedSummary fileTasks={asyncFileTasks} onView={() => setShowTaskModal(true)} />
+                            : !busy && !error && files.length === 0 && (
+                                <Card className="mt-3">
+                                    <CardContent>
+                                        <EmptyState icon={ListChecks} title="No uploads yet" description="Results of your next upload will appear here." />
+                                    </CardContent>
+                                </Card>
+                            )}
                 </div>
 
                 {/* Instructions */}
-                <div className="lg:col-span-1">
-                    <Card className="xl:sticky xl:top-3">
+                <div className="min-w-0 lg:col-span-1">
+                    <Card className="lg:sticky lg:top-3">
                         <CardHeader className="border-b py-3">
                             <CardTitle className="flex items-center gap-2 text-sm">
-                                <Info className="size-4 text-primary" />File Format Guide
+                                <Info className="size-4 text-primary" aria-hidden="true" />File Format Guide
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-3">
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Supported files</div>
+                            <div className="mb-3 flex flex-wrap items-center gap-1">
+                                {LEDGER_ACCEPTED_EXTENSIONS.map((ext) => <Badge key={ext} variant="secondary">{ext}</Badge>)}
+                                <span className="text-xs text-muted-foreground">up to {LEDGER_MAX_FILE_MB}MB each</span>
+                            </div>
                             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Required CSV Columns</div>
                             <div className="mb-3 flex flex-wrap gap-1">
                                 {["Regn.No.", "Regn.Date", "Lic.No.", "Lic.Date", "IEC", "Scheme.Cd.", "Port", "Notification"].map((col) => (
@@ -611,14 +636,14 @@ const LedgerUpload = () => {
                                 ))}
                             </div>
                             <div className="rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-3">
-                                <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-warning">
-                                    <Lightbulb className="size-4" />Important Notes
+                                <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-[var(--tb-warning-text)]">
+                                    <Lightbulb className="size-4" aria-hidden="true" />Important Notes
                                 </div>
                                 <ul className="ml-4 list-disc text-xs text-muted-foreground">
                                     <li className="mb-1">Date format: DD/MM/YYYY</li>
                                     <li className="mb-1">License numbers zero-padded to 10 digits</li>
                                     <li className="mb-1">Credit and Debit transactions auto-processed</li>
-                                    <li className="mb-1">Multiple files supported · Max 50MB</li>
+                                    <li className="mb-1">Multiple files supported · Max {LEDGER_MAX_FILE_MB}MB</li>
                                     <li><strong>Async mode:</strong> each license runs in parallel</li>
                                 </ul>
                             </div>

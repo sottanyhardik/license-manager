@@ -71,25 +71,25 @@ const workspace = (type = "DFIA") => <LedgerLicenceWorkspace licenseId="12" comp
 
 beforeEach(() => { mockedGet.mockReset(); mockedOpen.mockClear(); });
 
-describe("licence workspace — persistent header + eight single-owner tabs", () => {
+describe("licence workspace — persistent header + four single-owner tabs", () => {
     const tabNames = () => screen.getAllByRole("tab").map((t) => t.textContent);
 
-    it("orders the eight tabs; bank tab only for accounting roles", () => {
+    it("orders the four tabs; bank tab only for accounting roles", () => {
         respond({ "ledger_detail": new Error("not needed"), "overview-payment-ledgers": trade([tradeRow()]), "licence-bank-ledger": bank([bankRow()]) });
         render(wrap(workspace()));
-        expect(tabNames()).toEqual(["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger", "BOE & Allotments", "Documents", "Ownership History", "Edit"]);
+        expect(tabNames()).toEqual(["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger"]);
     });
 
-    it("hides the bank tab and Edit without the roles; incentive licences get Ledger / Documents only for readers", () => {
+    it("hides the bank tab without accounting roles", () => {
         respond({ "ledger_detail": new Error("not needed"), "overview-payment-ledgers": trade([tradeRow()]) });
         render(wrap(workspace(), ["LICENSE_VIEWER"]));
-        expect(tabNames()).toEqual(["Ledger", "Purchase Invoices", "Sale Invoices", "BOE & Allotments", "Documents", "Ownership History"]);
+        expect(tabNames()).toEqual(["Ledger", "Purchase Invoices", "Sale Invoices"]);
     });
 
-    it("shows no DFIA-only tabs for an incentive licence", () => {
+    it("shows only the Ledger tab for an incentive licence", () => {
         respond({ "ledger_detail": new Error("not needed") });
         render(wrap(workspace("INCENTIVE"), ["INCENTIVE_LICENSE_VIEWER"]));
-        expect(tabNames()).toEqual(["Ledger", "Documents"]);
+        expect(tabNames()).toEqual(["Ledger"]);
     });
 
     it("a Ledger invoice reference switches to Purchase Invoices and focuses that invoice", async () => {

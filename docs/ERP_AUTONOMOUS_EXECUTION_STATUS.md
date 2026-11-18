@@ -296,4 +296,9 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
     bank-movement block and inline bank rows were removed (duplicates). Gate exit 0 (950/950); e2e one-page 1/1, payment 3/3.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
+- LICENCE LEDGER FOUR TABS (2026-11-18, owner request): the expanded licence workspace now shows exactly Ledger · Purchase Invoices ·
+  Sale Invoices · Bank Payment Ledger. BOE & Allotments, Documents, Ownership History and Edit were removed from the workspace
+  presentation only (components/endpoints untouched). Ledger PDF / Excel / Customs PDF remain on the page toolbar and licence row.
+  Verified: vitest 27/27 (licence-ledger files); full frontend gate exit 0 (950/950 unit, lint, typecheck, build); real-backend
+  `licence-ledger-onepage` 1/1 (exit 0, fresh test DB). Screenshot confirms four tabs. Committed locally, not pushed.
 <!-- CHECKPOINT:generic-erp:END -->

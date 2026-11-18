@@ -349,9 +349,9 @@ describe("LicenseLedger fresh filters", () => {
         routeParams = { licenseId: "2619", itemId: "881" };
         render(wrap());
         const workspace = await screen.findByRole("region", { name: "Licence 0311000001 workspace" });
-        // Persistent header + eight single-owner tabs (Ledger first).
+        // Persistent header + exactly four single-owner tabs (Ledger first).
         expect(within(workspace).getAllByRole("tab").map((t) => t.textContent)).toEqual(
-            ["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger", "BOE & Allotments", "Documents", "Ownership History", "Edit"]);
+            ["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger"]);
         expect(within(workspace).getByRole("tab", { name: "Ledger", selected: true })).toBeInTheDocument();
         await waitFor(() => expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/2619/ledger_detail/?company=881"));
         expect(screen.getByRole("button", { name: "0311000001" })).toHaveAttribute("aria-expanded", "true");

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 /**
  * REAL BACKEND — the one-page Licence Ledger: Category → Company accordion → SION accordion → licence row →
- * inline licence workspace (Overview / Ledger / BOE & Allotments / Invoices / Documents / Edit / History).
+ * inline licence workspace (Ledger / Purchase Invoices / Sale Invoices / Bank Payment Ledger).
  * The former `/license-ledger/:licenseId/:itemId` page URLs open the same page with the licence expanded.
  *
  * Opt-in: `scripts/test/run_data_bearing_browser_e2e.sh e2e/licence-ledger-onepage.real.spec.ts`
@@ -28,7 +28,7 @@ async function apiGet<T>(page: Page, path: string): Promise<T> {
 test.describe("One-page Licence Ledger (real backend)", () => {
     test.skip(!realBackendEnabled, "Requires the isolated local browser harness; never points at a shared database.");
 
-    test("accordions, inline licence workspace with real data in every tab, documents, edit validation, old URLs, back/forward", async ({ page }, testInfo) => {
+    test("accordions, inline licence workspace with real data in its four tabs, old URLs, back/forward", async ({ page }, testInfo) => {
         await signIn(page);
         await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto("/license-ledger", { waitUntil: "networkidle" });
@@ -61,9 +61,9 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         // Overview = the former detail page's header + reconciliation summary, from the same API.
         const detail = await apiGet<{ license_number: string; transactions: unknown[] }>(page, `license-ledger/${LICENCE_ID}/ledger_detail/?company=${companyId}`);
         expect(detail.license_number).toBe(LICENCE);
-        // Persistent licence header + licence-level cards above eight single-owner tabs (Ledger first).
+        // Persistent licence header + licence-level cards above exactly four single-owner tabs (Ledger first).
         const tabs = workspace.getByRole("tab");
-        await expect(tabs).toHaveText(["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger", "BOE & Allotments", "Documents", "Ownership History", "Edit"]);
+        await expect(tabs).toHaveText(["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger"]);
         await expect(workspace.getByRole("tab", { name: "Ledger", exact: true, selected: true })).toBeVisible();
         const header = async () => {
             await expect(workspace.getByText(LICENCE).first()).toBeVisible();
@@ -82,35 +82,7 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         await header();
         await workspace.getByRole("tab", { name: "Sale Invoices" }).click();
         await expect(workspace.getByRole("table", { name: "Sale ledger" })).toBeVisible();
-        // BOE & Allotments / Ownership History tabs.
-        await workspace.getByRole("tab", { name: "BOE & Allotments" }).click();
-        await expect(workspace.getByRole("button", { name: "Bills of Entry", exact: true })).toBeVisible();
-        await expect(workspace.getByRole("button", { name: "Allotments", exact: true })).toBeVisible();
-        await workspace.getByRole("tab", { name: "Ownership History" }).click();
-        await expect(workspace.getByRole("tabpanel")).not.toBeEmpty();
         await header();
-
-        // Documents tab — ledger PDF (authenticated preview), Excel, customs ledger PDF, licence copy.
-        await workspace.getByRole("tab", { name: "Documents" }).click();
-        const pdfResponse = page.waitForResponse(r => r.url().includes("license-ledger/export/") && r.url().includes("pdf"));
-        const [popup] = await Promise.all([page.waitForEvent("popup"), workspace.getByRole("button", { name: "Preview ledger PDF" }).click()]);
-        const pdf = await pdfResponse;
-        expect(pdf.status()).toBe(200);
-        expect(pdf.headers()["content-type"]).toContain("pdf");
-        await popup.close();
-        const [excel] = await Promise.all([page.waitForEvent("download", { timeout: 60_000 }), workspace.getByRole("button", { name: "Download ledger Excel" }).click()]);
-        expect(excel.suggestedFilename()).toMatch(/\.xlsx$/);
-        await expect(workspace.getByRole("button", { name: "Download customs ledger PDF" })).toBeVisible();
-
-        // Edit tab — the licence form inline; validation is shown in place and nothing is saved.
-        await workspace.getByRole("tab", { name: "Edit" }).click();
-        await expect(workspace.locator("#field-license_number")).toHaveValue(LICENCE, { timeout: 15_000 });
-        await workspace.locator("#field-license_number").fill("");
-        await workspace.getByRole("button", { name: "Update" }).click();
-        await expect(workspace.getByText(/Validation Error|required/i).first()).toBeVisible();
-        expect((await apiGet<{ license_number: string }>(page, `licenses/${LICENCE_ID}/`)).license_number).toBe(LICENCE);
-        await workspace.getByRole("button", { name: "Cancel" }).click();
-        await expect(workspace.getByRole("tab", { name: "Ledger", exact: true, selected: true })).toBeVisible();
 
         // Back closes the licence (same page); forward reopens it.
         await page.goBack();

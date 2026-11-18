@@ -33,6 +33,7 @@ import { masterEntities } from "../../routes/config";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import PageHeader from "@/components/PageHeader";
+import { WorkspaceTitle } from "@/components/workspace/WorkspaceToolbar";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/shared";
 import { cn } from "@/lib/utils";
@@ -1097,17 +1098,7 @@ export default function MasterList() {
                 {...(isCompactRegister ? {
                     collapsible: true,
                     layout: 'grid' as const,
-                    toolbarStart: (
-                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                            <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
-                                <a href={breadcrumbParent.to} onClick={(e) => { e.preventDefault(); navigate(breadcrumbParent.to); }} className="text-inherit no-underline hover:underline">{breadcrumbParent.label}</a>
-                                <span className="mx-1.5 opacity-50">/</span>
-                                <span>{entityTitle}</span>
-                            </nav>
-                            <h1 className="text-lg font-semibold leading-tight tracking-tight text-foreground">{entityTitle}</h1>
-                            <span className="text-xs tabular-nums text-muted-foreground">{totalRecords.toLocaleString("en-IN")} record{totalRecords === 1 ? "" : "s"}</span>
-                        </div>
-                    ),
+                    toolbarStart: <WorkspaceTitle title={entityTitle} breadcrumbs={[breadcrumbParent]} count={totalRecords} />,
                     toolbarEnd: headerActions,
                 } : {})}
             />

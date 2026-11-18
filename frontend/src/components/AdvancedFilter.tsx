@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Filter, Loader2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { WorkspaceToolbar } from "@/components/workspace/WorkspaceToolbar";
+import { X } from "lucide-react";
 import Select from "react-select";
 import DebouncedAsyncSelect from "./DebouncedAsyncSelect";
 import DebouncedSearchInput from "./DebouncedSearchInput";
@@ -50,7 +51,6 @@ export default function AdvancedFilter({
     toolbarStart?: ReactNode;
     toolbarEnd?: ReactNode;
 }) {
-    const panelId = useId();
     const [open, setOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(String(initialFilters.search || ""));
     const { search: _search, ...initialFiltersWithoutSearch } = initialFilters;
@@ -327,43 +327,32 @@ export default function AdvancedFilter({
     if (collapsible) {
         const hasFilters = Object.keys(filterConfig).length > 0;
         const fields = [...primaryEntries, ...secondaryEntries].map(([fieldName, config]) => renderFilterField(fieldName, config));
+        // The shared workspace toolbar (Licence register row); this component only supplies its controls.
         return (
-            <div className="mb-3 rounded-lg border border-border/70 bg-card shadow-sm">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-                    {toolbarStart && <div className="min-w-0 flex-1">{toolbarStart}</div>}
-                    {searchFields.length > 0 && (
-                        <div className="w-full sm:w-64 lg:w-72">
-                            <DebouncedSearchInput
-                                value={searchTerm}
-                                onChange={setSearchTerm}
-                                delay={400}
-                                placeholder={`Search by ${searchFields.join(", ")}`}
-                                className="!h-9"
-                            />
-                        </div>
-                    )}
-                    {hasFilters && (
-                        <Button type="button" variant="outline" size="sm" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}>
-                            <Filter className="size-3.5" aria-hidden="true" />
-                            Filters
-                            {activeEntries.length > 0 && <span className="rounded-full bg-primary/15 px-1.5 text-xs text-primary">{activeEntries.length}</span>}
-                            <ChevronDown className={`size-3.5 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-                        </Button>
-                    )}
-                    {isUpdating && <span role="status" className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin motion-reduce:animate-none" />Updating</span>}
-                    {toolbarEnd && <div className="flex flex-wrap items-center gap-2">{toolbarEnd}</div>}
-                </div>
-                {hasFilters && (
-                    <section id={panelId} aria-label="Filters" hidden={!open} className="border-t border-border/60 p-3">
-                        <div className={layout === "grid" ? "grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"}>{fields}</div>
-                        <div className="mt-3 flex justify-end">
-                            <Button type="button" variant="ghost" size="sm" onClick={handleResetFilters} disabled={activeEntries.length === 0 && !searchTerm}>
-                                <X className="size-3.5" aria-hidden="true" />Reset
-                            </Button>
-                        </div>
-                    </section>
+            <WorkspaceToolbar
+                start={toolbarStart}
+                search={searchFields.length > 0 ? (
+                    <DebouncedSearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        delay={400}
+                        placeholder={`Search by ${searchFields.join(", ")}`}
+                        className="!h-9"
+                    />
+                ) : undefined}
+                filters={hasFilters ? fields : undefined}
+                activeFilterCount={activeEntries.length}
+                filtersOpen={open}
+                onFiltersOpenChange={setOpen}
+                isUpdating={isUpdating}
+                actions={toolbarEnd}
+                filterLayout={layout === "grid" ? "grid" : "wide"}
+                filterActions={(
+                    <Button type="button" variant="ghost" size="sm" onClick={handleResetFilters} disabled={activeEntries.length === 0 && !searchTerm}>
+                        <X className="size-3.5" aria-hidden="true" />Reset
+                    </Button>
                 )}
-            </div>
+            />
         );
     }
 

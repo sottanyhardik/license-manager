@@ -282,6 +282,13 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
     `/license-ledger/:licenseId?/:itemId?` is the one route (old detail URLs open the licence inline; off-filter → pinned).
     Real record 2619/881 (0311054050, company LABDHI GLOBAL LLP) verified read-only via `ledger_detail` (200, 3 txns,
     current balance 137,653.62 USD). Tests: gate exit 0 (935/935); e2e one-page 1/1, workspaces 6/6, visual 1/1. No backend change.
+  - Payment ledgers `7e53e3cc` + bank details `44911fd3` (2026-11-18): read-only APIs `licenses/<id>/overview-payment-ledgers/`
+    (LicensePermission) and `accounting/licence-bank-ledger/<id>/` (AccountingPermission; structural links only — settlements /
+    trade-payment link; `trades` = per-invoice posted bank settlement, bank side from the statement line). Backend 170 passed.
+  - NO TABS (2026-11-18): the expanded licence is one continuous workspace — header, cards, company-wise table with inline bank
+    details, Purchase invoices, Sale invoices, Bank payment ledger (accounting roles), BOE & Allotments (expandable),
+    Documents & licence copy actions (+ inline Edit for writers), Ownership History (expandable). Gate exit 0 (951/951);
+    e2e one-page 1/1 (asserts zero tabs), payment ledgers 3/3; screenshot confirms the tab bar is gone.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

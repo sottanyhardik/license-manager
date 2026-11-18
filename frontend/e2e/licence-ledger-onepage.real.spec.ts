@@ -61,25 +61,27 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         // Overview = the former detail page's header + reconciliation summary, from the same API.
         const detail = await apiGet<{ license_number: string; transactions: unknown[] }>(page, `license-ledger/${LICENCE_ID}/ledger_detail/?company=${companyId}`);
         expect(detail.license_number).toBe(LICENCE);
+        // ONE continuous workspace: no tab navigation at all.
+        await expect(workspace.getByRole("tablist")).toHaveCount(0);
+        await expect(workspace.getByRole("tab")).toHaveCount(0);
+        // 1–3: licence header, financial cards, company-wise transactions — all on the page.
         await expect(workspace.getByText(LICENCE).first()).toBeVisible();
-        await page.screenshot({ path: testInfo.outputPath("ledger-onepage-overview-1440.png"), fullPage: true });
-
-        // Ledger = the transaction tables (purchase + sale rows).
-        await workspace.getByRole("tab", { name: "Ledger", exact: true }).click();
+        await expect(workspace.getByText(/TOTAL PURCHASE/i).first()).toBeVisible();
         await expect(workspace.getByText(/Purchase|Sale/).first()).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath("ledger-onepage-overview-1440.png"), fullPage: true });
         await page.screenshot({ path: testInfo.outputPath("ledger-onepage-ledger-1440.png"), fullPage: true });
 
-        // BOE & Allotments / Invoices / History — the licence register's own tabs and endpoints.
-        await workspace.getByRole("tab", { name: "BOE & Allotments" }).click();
-        await expect(workspace.getByRole("button", { name: "Bills of Entry" })).toBeVisible();
-        await expect(workspace.getByRole("button", { name: "Allotments" })).toBeVisible();
-        await workspace.getByRole("tab", { name: "Invoices" }).click();
-        await expect(workspace.getByRole("tabpanel")).not.toBeEmpty();
-        await workspace.getByRole("tab", { name: "History" }).click();
-        await expect(workspace.getByRole("tabpanel")).not.toBeEmpty();
+        // 4–5: purchase and sale invoices as sections (formerly the Invoices tab).
+        await expect(workspace.getByRole("region", { name: "Purchase invoices" })).toBeVisible();
+        await expect(workspace.getByRole("region", { name: "Sale invoices" })).toBeVisible();
+        // 7 / 9: BOE & Allotments and Ownership History expand inline (formerly tabs).
+        await workspace.getByRole("button", { name: "BOE & Allotments" }).click();
+        await expect(workspace.getByRole("button", { name: "Bills of Entry", exact: true })).toBeVisible();
+        await expect(workspace.getByRole("button", { name: "Allotments", exact: true })).toBeVisible();
+        await workspace.getByRole("button", { name: "Ownership History" }).click();
+        await expect(workspace.getByRole("region", { name: "Ownership History" })).not.toBeEmpty();
 
-        // Documents — ledger PDF (authenticated preview), Excel, customs ledger PDF, licence copy.
-        await workspace.getByRole("tab", { name: "Documents" }).click();
+        // 8: documents — ledger PDF (authenticated preview), Excel, customs ledger PDF, licence copy (inline actions).
         const pdfResponse = page.waitForResponse(r => r.url().includes("license-ledger/export/") && r.url().includes("pdf"));
         const [popup] = await Promise.all([page.waitForEvent("popup"), workspace.getByRole("button", { name: "Preview ledger PDF" }).click()]);
         const pdf = await pdfResponse;
@@ -90,15 +92,15 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         expect(excel.suggestedFilename()).toMatch(/\.xlsx$/);
         await expect(workspace.getByRole("button", { name: "Download customs ledger PDF" })).toBeVisible();
 
-        // Edit — the licence form inline; validation is shown in place and nothing is saved.
-        await workspace.getByRole("tab", { name: "Edit" }).click();
+        // 10: Edit — the licence form opens inline on request; validation is shown in place and nothing is saved.
+        await workspace.getByRole("button", { name: "Edit licence" }).click();
         await expect(workspace.locator("#field-license_number")).toHaveValue(LICENCE, { timeout: 15_000 });
         await workspace.locator("#field-license_number").fill("");
         await workspace.getByRole("button", { name: "Update" }).click();
         await expect(workspace.getByText(/Validation Error|required/i).first()).toBeVisible();
         expect((await apiGet<{ license_number: string }>(page, `licenses/${LICENCE_ID}/`)).license_number).toBe(LICENCE);
         await workspace.getByRole("button", { name: "Cancel" }).click();
-        await expect(workspace.getByRole("tab", { name: "Overview", selected: true })).toBeVisible();
+        await expect(workspace.getByRole("region", { name: `Edit licence ${LICENCE}` })).toHaveCount(0);
 
         // Back closes the licence (same page); forward reopens it.
         await page.goBack();
@@ -107,11 +109,12 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         await page.goForward();
         await expect(page.getByRole("region", { name: `Licence ${LICENCE} workspace` })).toBeVisible();
 
-        // Old detail URL (deep link + ?tab) → this page, groups shown, licence expanded on the Ledger tab; survives refresh.
+        // Old detail URL (deep link + ?tab) → this page, groups shown, licence expanded (no tabs); survives refresh.
         await page.goto(`/license-ledger/${LICENCE_ID}/${companyId}?tab=ledger`, { waitUntil: "networkidle" });
         await expect(page.getByRole("heading", { level: 1 })).toHaveText("License Ledger");
         const opened = page.getByRole("region", { name: `Licence ${LICENCE} workspace` });
-        await expect(opened.getByRole("tab", { name: "Ledger", exact: true, selected: true })).toBeVisible();
+        await expect(opened.getByRole("region", { name: "Purchase invoices" })).toBeVisible();
+        await expect(opened.getByRole("tab")).toHaveCount(0);
         await expect(page.getByRole("button", { name: /^E2E Browser Exporter/ })).toHaveAttribute("aria-expanded", "true");
         await page.reload({ waitUntil: "networkidle" });
         await expect(page.getByRole("region", { name: `Licence ${LICENCE} workspace` })).toBeVisible();

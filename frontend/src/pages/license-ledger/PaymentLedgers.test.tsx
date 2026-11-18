@@ -68,37 +68,54 @@ function wrap(ui: ReactNode, roles: string[] | "all" = "all") {
     );
 }
 const workspace = (type = "DFIA") => <LedgerLicenceWorkspace licenseId="12" companyId="3" licenseNumber="0311" licenseType={type} />;
-const tabNames = () => screen.getAllByRole("tab").map((t) => t.textContent);
 
 beforeEach(() => { mockedGet.mockReset(); mockedOpen.mockClear(); });
 
-describe("workspace tabs", () => {
-    it("orders the tabs and shows Bank Payment Ledger to accounting roles", () => {
+describe("continuous licence workspace (no tabs)", () => {
+    const sectionLabels = () => Array.from(document.querySelectorAll<HTMLElement>("[data-testid=ledger-licence-workspace] section[aria-label]"))
+        .map((el) => el.getAttribute("aria-label"));
+
+    it("renders no tab navigation at all and keeps the required section order", () => {
+        respond({ "ledger_detail": new Error("not needed"), "overview-payment-ledgers": trade([tradeRow()]), "licence-bank-ledger": bank([bankRow()]) });
         render(wrap(workspace()));
-        expect(tabNames()).toEqual(["Overview", "Ledger", "BOE & Allotments", "Invoices", "Purchase Ledger", "Sale Ledger", "Bank Payment Ledger", "Documents", "Edit", "History"]);
+        expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+        expect(screen.queryAllByRole("tab")).toHaveLength(0);
+        const order = sectionLabels().filter((l) => ["Purchase invoices", "Sale invoices", "Bank payment ledger", "Documents & licence copy"].includes(l ?? ""));
+        expect(order).toEqual(["Purchase invoices", "Sale invoices", "Bank payment ledger", "Documents & licence copy"]);
+        // Expandable sections replace the old BOE & Allotments / History tabs.
+        expect(screen.getByRole("button", { name: "BOE & Allotments" })).toHaveAttribute("aria-expanded", "false");
+        expect(screen.getByRole("button", { name: "Ownership History" })).toHaveAttribute("aria-expanded", "false");
+        // Documents / Edit are inline actions.
+        expect(screen.getByRole("button", { name: "Preview ledger PDF" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Edit licence" })).toHaveAttribute("aria-expanded", "false");
     });
 
-    it("hides Bank Payment Ledger without an accounting role", () => {
-        render(wrap(workspace(), ["LICENSE_VIEWER"]));
-        const names = tabNames();
-        expect(names).toContain("Purchase Ledger");
-        expect(names).toContain("Sale Ledger");
-        expect(names).not.toContain("Bank Payment Ledger");
-    });
-
-    it("shows none of the three for an incentive licence", () => {
-        render(wrap(workspace("INCENTIVE")));
-        const names = tabNames();
-        for (const n of ["Purchase Ledger", "Sale Ledger", "Bank Payment Ledger"]) expect(names).not.toContain(n);
-    });
-
-    it("loads lazily: nothing is fetched until the tab opens", async () => {
-        respond({ "overview-payment-ledgers": trade([tradeRow()]) });
+    it("loads purchase and sale invoices on the page (no tab click needed)", async () => {
+        respond({ "ledger_detail": new Error("not needed"), "overview-payment-ledgers": trade([tradeRow()], [tradeRow({ trade_id: 99, invoice_number: "S-99" })]), "licence-bank-ledger": bank([bankRow()]) });
         render(wrap(workspace()));
-        expect(mockedGet).not.toHaveBeenCalled();
-        await userEvent.click(screen.getByRole("tab", { name: "Purchase Ledger" }));
-        await screen.findByRole("table", { name: "Purchase ledger" });
+        expect(await screen.findByRole("table", { name: "Purchase ledger" })).toBeInTheDocument();
+        expect(await screen.findByRole("table", { name: "Sale ledger" })).toBeInTheDocument();
         expect(mockedGet).toHaveBeenCalledWith("licenses/12/overview-payment-ledgers/");
+    });
+
+    it("hides the bank payment ledger without an accounting role", () => {
+        respond({ "ledger_detail": new Error("not needed"), "overview-payment-ledgers": trade([tradeRow()]) });
+        render(wrap(workspace(), ["LICENSE_VIEWER"]));
+        const labels = sectionLabels();
+        expect(labels).toContain("Purchase invoices");
+        expect(labels).toContain("Sale invoices");
+        expect(labels).not.toContain("Bank payment ledger");
+        expect(mockedGet).not.toHaveBeenCalledWith("accounting/licence-bank-ledger/12/");
+        expect(screen.queryByRole("button", { name: "Edit licence" })).not.toBeInTheDocument();
+    });
+
+    it("shows none of the DFIA-only sections for an incentive licence", () => {
+        respond({ "ledger_detail": new Error("not needed") });
+        render(wrap(workspace("INCENTIVE")));
+        const labels = sectionLabels();
+        for (const n of ["Purchase invoices", "Sale invoices", "Bank payment ledger"]) expect(labels).not.toContain(n);
+        expect(screen.queryByRole("button", { name: "BOE & Allotments" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Customs ledger PDF" })).not.toBeInTheDocument();
     });
 });
 

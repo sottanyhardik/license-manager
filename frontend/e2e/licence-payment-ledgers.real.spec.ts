@@ -85,8 +85,8 @@ test.describe("Licence payment ledgers (real backend)", () => {
         const receipt = (bank.body.rows as unknown as { reference: string; invoices: { number: string }[] }[]).find(r => r.reference === "E2E-UTR-SAL-2509")!;
         expect(receipt.invoices.map(i => i.number)).toEqual([saleNo]);
 
-        // Purchase Ledger tab (inline): summary = backend totals, Partially paid, allocation with its bank reference.
-        await workspace.getByRole("tab", { name: "Purchase Ledger" }).click();
+        // One continuous workspace (no tabs). Purchase invoices section: backend totals, Partially paid, allocation + bank ref.
+        await expect(workspace.getByRole("tab")).toHaveCount(0);
         const purchaseSummary = workspace.getByLabel("Purchase ledger summary");
         await expect(purchaseSummary).toContainText(inr(trade.purchase.summary.total_amount));
         await expect(purchaseSummary).toContainText(inr(trade.purchase.summary.total_settled));
@@ -100,13 +100,11 @@ test.describe("Licence payment ledgers (real backend)", () => {
         await expect(allocations).toContainText("E2E-UTR-PUR-2509");
         await page.screenshot({ path: testInfo.outputPath("purchase-ledger-1440.png"), fullPage: true });
 
-        // Sale Ledger tab: Paid.
-        await workspace.getByRole("tab", { name: "Sale Ledger" }).click();
+        // Sale invoices section: Paid.
         await expect(workspace.getByLabel("Sale ledger summary")).toContainText(inr(trade.sale.summary.total_settled));
         await expect(workspace.getByRole("table", { name: "Sale ledger" }).locator("[data-slot=badge]", { hasText: /^Paid$/ })).toBeVisible();
 
-        // Bank Payment Ledger tab: two rows (payment + receipt), reconciliation, allocations traceable to invoices.
-        await workspace.getByRole("tab", { name: "Bank Payment Ledger" }).click();
+        // Bank payment ledger section: two rows (payment + receipt), reconciliation, allocations traceable to invoices.
         const bankTable = workspace.getByRole("table", { name: "Bank payment ledger" });
         await expect(bankTable.getByRole("button", { name: /^Show allocations for / })).toHaveCount(2);
         await expect(bankTable.locator("[data-slot=badge]", { hasText: /^Reconciled$/ })).toBeVisible();
@@ -118,14 +116,13 @@ test.describe("Licence payment ledgers (real backend)", () => {
         await expect(bankTable.getByRole("row").filter({ hasText: "E2E-UTR-SAL-2509" })).toContainText(trade.sale.rows[0].invoice_number);
         await page.screenshot({ path: testInfo.outputPath("bank-ledger-1440.png"), fullPage: true });
 
-        // Existing Invoices tab still works; nothing navigated away.
-        await workspace.getByRole("tab", { name: "Invoices" }).click();
-        await expect(workspace.getByRole("tabpanel")).toContainText(purchaseNo);
+        // Invoice data (formerly the Invoices tab) is on the page; nothing navigated away.
+        await expect(workspace.getByRole("region", { name: "Purchase invoices" })).toContainText(purchaseNo);
         await expect(page.getByRole("heading", { level: 1 })).toHaveText("License Ledger");
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
 
-    test("Ledger tab: licence header, financial cards, company-wise transactions with bank payment/receipt details", async ({ page }, testInfo) => {
+    test("financial view: licence header, financial cards, company-wise transactions with bank payment/receipt details", async ({ page }, testInfo) => {
         await signIn(page);
         const workspace = await openLicence(page);
         const bank = (await apiGet<{ summary: Record<string, Num>; trades: { invoice_number: string; direction: string; status: string; bank_settled: Num; outstanding: Num }[] }>(page, `accounting/licence-bank-ledger/${LICENCE_ID}/`)).body;
@@ -133,8 +130,7 @@ test.describe("Licence payment ledgers (real backend)", () => {
         const sale = bank.trades.find(t => t.direction === "SALE")!;
         expect([purchase.status, sale.status]).toEqual(["PARTIAL", "PAID"]);
 
-        await workspace.getByRole("tab", { name: "Ledger", exact: true }).click();
-        const panel = workspace.getByRole("tabpanel");
+        const panel = workspace;
         // A — licence header and B — the four financial cards (existing trusted figures).
         await expect(panel.getByText(LICENCE).first()).toBeVisible();
         for (const card of ["TOTAL PURCHASE", "TOTAL SALE", "CURRENT BALANCE"]) await expect(panel.getByText(card, { exact: false }).first()).toBeVisible();
@@ -169,10 +165,9 @@ test.describe("Licence payment ledgers (real backend)", () => {
         const tradeOnly = await newSession(browser, "e2e_ledger_trade");
         try {
             const workspace = await openLicence(tradeOnly);
-            await expect(workspace.getByRole("tab", { name: "Purchase Ledger" })).toBeVisible();
-            await expect(workspace.getByRole("tab", { name: "Sale Ledger" })).toBeVisible();
-            await expect(workspace.getByRole("tab", { name: "Bank Payment Ledger" })).toHaveCount(0);
-            await workspace.getByRole("tab", { name: "Ledger", exact: true }).click();
+            await expect(workspace.getByRole("region", { name: "Purchase invoices" })).toBeVisible();
+            await expect(workspace.getByRole("region", { name: "Sale invoices" })).toBeVisible();
+            await expect(workspace.getByRole("region", { name: "Bank payment ledger" })).toHaveCount(0);
             await expect(workspace.getByText("Bank payment and receipt details are shown to accounting roles.")).toBeVisible();
             await expect(workspace.getByRole("button", { name: /^Bank details for invoice/ })).toHaveCount(0);
             expect((await apiGet(tradeOnly, `accounting/licence-bank-ledger/${LICENCE_ID}/`)).status).toBe(403);
@@ -184,7 +179,6 @@ test.describe("Licence payment ledgers (real backend)", () => {
         const accounts = await newSession(browser, "e2e_ledger_accounts");
         try {
             const workspace = await openLicence(accounts);
-            await workspace.getByRole("tab", { name: "Bank Payment Ledger" }).click();
             await expect(workspace.getByRole("table", { name: "Bank payment ledger" }).getByRole("button", { name: /^Show allocations for / })).toHaveCount(2);
         } finally {
             await accounts.context().close();

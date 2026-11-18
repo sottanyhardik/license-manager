@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -130,6 +130,32 @@ describe("MasterList smoke", () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("masters/ports/bulk/", { action: "delete", keys: ["11"] }));
     expect(await screen.findByTestId("bulk-results")).toHaveTextContent("1 of 1 deleted");
     confirmSpyWindow.mockRestore();
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => Promise.resolve({ data: META }));
+  });
+
+  it("uses the generic rows for field-definition lists and for configured child collections (SION classes)", async () => {
+    const rate = { id: 1, date: "2026-11-01", usd: "84.10", euro: "91.20", pound_sterling: "107.00", chinese_yuan: "11.60", is_active: true };
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...META, list_display: ["date", "usd", "is_active"], nested_field_defs: [{ field: "is_active", label: "Active", type: "boolean" }], results: [rate] },
+    });
+    const first = renderAt("exchange-rates");
+    expect(await screen.findByRole("list", { name: "Exchange Rates" })).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    first.unmount();
+
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        ...META, list_display: ["norm_class"], nested_field_defs: { export_norm: [{ name: "description" }] },
+        results: [{ id: 2, norm_class: "A3627", description: "Biscuits", export_norm: [{ id: 9, description: "BISCUITS", quantity: "1.000", unit: "kg" }], import_norm: [], notes: [], conditions: [] }],
+      },
+    });
+    renderAt("sion-classes");
+    const list = await screen.findByRole("list", { name: /sion classes/i });
+    expect(within(list).getByRole("link", { name: "A3627" })).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: "Expand A3627" }));
+    const exportItems = await screen.findByRole("region", { name: "Export items" });
+    expect(within(exportItems).getByText("BISCUITS")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Import items" })).not.toBeInTheDocument();
     (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => Promise.resolve({ data: META }));
   });
 

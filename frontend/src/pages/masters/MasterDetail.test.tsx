@@ -101,6 +101,16 @@ describe("MasterDetail", () => {
         expect(getSpy).not.toHaveBeenCalledWith("masters/activity-logs/", expect.anything());
     });
 
+    it("titles a record by the same identifier as its list row (companies: IEC, not modified_on)", async () => {
+        getSpy.mockImplementation((url: string) => {
+            if (url === "masters/companies/") return Promise.resolve({ data: { list_display: ["modified_on", "iec", "name"], form_fields: ["iec", "name"] } });
+            if (url === "masters/companies/7/") return Promise.resolve({ data: { id: 7, iec: "0306084341", name: "ABHISHEK TRADE", modified_on: "2026-11-01T10:00:00Z" } });
+            return Promise.reject({ response: { status: 404 } });
+        });
+        renderAt("/masters/companies/7");
+        expect(await screen.findByRole("heading", { name: "0306084341", level: 1 })).toBeInTheDocument();
+    });
+
     it("explains a missing record", async () => {
         renderAt("/masters/ports/999");
         expect(await screen.findByText("Record not found")).toBeInTheDocument();

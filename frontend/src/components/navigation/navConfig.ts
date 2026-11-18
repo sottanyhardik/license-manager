@@ -35,6 +35,11 @@ export interface NavGroup {
     roles?: readonly Role[];
     /** Dropdown column count on desktop (sections flow into columns). */
     columns?: 1 | 2 | 3;
+    /**
+     * Sections per column for multi-section groups (stacked top to bottom, then the next column).
+     * Omitted = one row of sections (the existing behaviour for Reports / Accounting).
+     */
+    sectionRows?: number;
     sections: NavSection[];
 }
 
@@ -172,7 +177,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         id: "masters",
         label: "Masters",
         icon: "database",
+        // Two columns of category sections, filled top to bottom (overview + 4 categories = 3 rows).
         columns: 2,
+        sectionRows: Math.ceil((MASTER_CATEGORIES.length + 1) / 2),
         sections: [
             { items: [{ path: "/masters", label: "Masters overview", icon: "database" }] },
             ...MASTER_CATEGORIES.map(category => ({

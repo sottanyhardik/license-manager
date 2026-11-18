@@ -19,6 +19,7 @@ import { ActivityTimeline, EmptyState, InlineError, LoadingState, StatusBadge, t
 import { FieldGrid } from "@/components/shared/FieldGrid";
 import { Button } from "@/components/ui/button";
 import { formatMasterRecord, formatMasterValue, masterDetailFields, MASTER_AUDIT_FIELDS, readMasterField } from "./masterDetailFields";
+import { resolveMasterColumns } from "./masterColumns";
 
 interface ActivityLogRow {
     id: number;
@@ -73,7 +74,8 @@ export default function MasterDetail() {
     if (metadata.isError) return <InlineError error={metadata.error} onRetry={() => { void metadata.refetch(); }} title={`Could not load ${config.label} fields`} />;
 
     const data = record.data;
-    const primaryColumn: string | undefined = metadata.data?.list_display?.[0];
+    // Same identifier as the list row (masterColumns), not list_display[0] (e.g. companies list modified_on first).
+    const primaryColumn: string | undefined = resolveMasterColumns(entity, metadata.data ?? {}).columns[0]?.field;
     const title = formatMasterValue(primaryColumn ? readMasterField(data, primaryColumn) : undefined) ?? id;
     // "by" columns arrive as raw user ids on most masters; show them only when the API sends a name.
     const auditFields = MASTER_AUDIT_FIELDS.filter(f => f.key in data && (!f.key.endsWith("_by") || typeof data[f.key] === "string"));

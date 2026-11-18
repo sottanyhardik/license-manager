@@ -1252,6 +1252,11 @@ hr { border-color: var(--tb-border-soft); margin: 16px 0; }
     border-left: 1px solid var(--tb-border-soft);
     padding-left: 4px;
 }
+/* Stacked sections (NavGroup.sectionRows): one column wrapper per column; sections inside a column stack. */
+.tb-nav-menu-column { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tb-nav-menu-column + .tb-nav-menu-column { border-left: 1px solid var(--tb-border-soft); padding-left: 4px; }
+.tb-nav-menu.is-multi .tb-nav-menu-column .tb-nav-menu-section + .tb-nav-menu-section { border-left: 0; padding-left: 0; }
+.tb-nav-menu-column > * + .tb-nav-menu-section { border-top: 1px solid var(--tb-border-soft); margin-top: 3px; padding-top: 2px; }
 .tb-nav-menu-heading {
     padding: 6px 10px 4px;
     font-size: 10.5px;

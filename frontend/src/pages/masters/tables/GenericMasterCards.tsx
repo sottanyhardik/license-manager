@@ -23,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { saveFilterState } from "../../../utils/filterPersistence";
 import { getMasterRecordKey, getMasterRecordLookup } from "../masterListConfig";
 import { formatMasterLabel, formatMasterRecord, formatMasterValue, MASTER_AUDIT_FIELDS, readMasterField } from "../masterDetailFields";
-import { masterColumnLabel, resolveMasterColumns } from "../masterColumns";
+import { masterColumnLabel, resolveMasterColumns, type MasterNestedCollection } from "../masterColumns";
 
 export type MasterBulkAction = "activate" | "deactivate" | "delete";
 
@@ -108,7 +108,7 @@ export default function GenericMasterCards({
         );
     }
 
-    const { columns, details = [] } = resolveMasterColumns(entityName, metadata);
+    const { columns, details = [], nested = [] } = resolveMasterColumns(entityName, metadata);
     const [primary, ...cells] = columns;
     const fieldMeta: Record<string, { label?: string }> = metadata.field_meta || {};
     const template = columns.map(c => c.width ?? "minmax(8rem,1fr)").join(" ");
@@ -226,7 +226,8 @@ export default function GenericMasterCards({
                     const detailPath = `/masters/${entityName}/${key}`;
                     const title = titleOf(item);
                     const extra = detailFieldsOf(item);
-                    const canExpand = extra.length > 0;
+                    const children = nested.filter(c => Array.isArray(item[c.field]) && item[c.field].length > 0);
+                    const canExpand = extra.length > 0 || children.length > 0;
                     const expanded = canExpand && expandedKey === lookup;
                     const isSelected = selected.has(lookup);
                     const regionId = `master-row-${entityName}-${lookup.replace(/[^A-Za-z0-9_-]/g, "_")}`;
@@ -321,7 +322,8 @@ export default function GenericMasterCards({
 
                                 {expanded && (
                                     <div id={regionId} role="region" aria-label={`${title} details`} className="border-t border-border px-3 py-2.5 md:px-4">
-                                        <FieldGrid record={formatMasterRecord(item, extra)} fields={extra} />
+                                        {extra.length > 0 && <FieldGrid record={formatMasterRecord(item, extra)} fields={extra} />}
+                                        {children.map(c => <NestedRows key={c.field} collection={c} rows={item[c.field]} />)}
                                         <Link to={detailPath} onClick={rememberList} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
                                             Open record
                                         </Link>
@@ -333,6 +335,39 @@ export default function GenericMasterCards({
                 })}
             </ul>
         </div>
+    );
+}
+
+/** One child collection of an expanded row as a compact table (same columns config as the rows). */
+function NestedRows({ collection, rows }: { collection: MasterNestedCollection; rows: Record<string, unknown>[] }) {
+    return (
+        <section aria-label={collection.label} className="mt-2 first:mt-0">
+            <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {collection.label} <span className="tabular-nums">({rows.length})</span>
+            </h3>
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                    <thead>
+                        <tr className="text-left text-muted-foreground">
+                            {collection.columns.map(col => (
+                                <th key={col.field} scope="col" className={cn("px-2 py-1 font-medium", col.align === "end" && "text-right")}>{col.label}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, i) => (
+                            <tr key={String(row.id ?? i)} className="border-t border-border/60">
+                                {collection.columns.map(col => (
+                                    <td key={col.field} className={cn("px-2 py-1 text-foreground/80", col.align === "end" && "text-right tabular-nums", col.mono && "font-mono")}>
+                                        {formatMasterValue(readMasterField(row, col.field)) ?? "—"}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     );
 }
 

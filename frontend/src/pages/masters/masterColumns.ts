@@ -23,6 +23,17 @@ export interface MasterColumnConfig {
     columns: MasterColumn[];
     /** Secondary fields for the expanded row; shown only when present in the row data. */
     details?: string[];
+    /**
+     * Child collections in the row data (e.g. SION class -> export/import norms), shown as compact
+     * tables in the expanded row. Only non-empty collections render.
+     */
+    nested?: MasterNestedCollection[];
+}
+
+export interface MasterNestedCollection {
+    field: string;
+    label: string;
+    columns: MasterColumn[];
 }
 
 const code = (field: string, label?: string, width = "minmax(6rem,8rem)"): MasterColumn => ({ field, label, width, mono: true });
@@ -43,6 +54,13 @@ export const MASTER_COLUMNS: Readonly<Record<string, MasterColumnConfig>> = {
     "head-norms": { columns: [text("name", "Head norm", "minmax(12rem,3fr)")] },
     "sion-classes": {
         columns: [code("norm_class", "Norm class"), text("description", "Description", "minmax(14rem,3fr)"), text("head_norm_name", "Head norm", "minmax(8rem,1fr)")],
+        // Fields from SionNormClassNestedSerializer (backend/apps/core/serializers/models.py).
+        nested: [
+            { field: "export_norm", label: "Export items", columns: [text("description", "Description"), num("quantity", "Quantity"), text("unit", "Unit")] },
+            { field: "import_norm", label: "Import items", columns: [num("serial_number", "Sr"), text("description", "Description"), text("hsn_code_label", "HSN code"), num("quantity", "Quantity"), text("unit", "Unit")] },
+            { field: "notes", label: "Notes", columns: [text("note_text", "Note")] },
+            { field: "conditions", label: "Conditions", columns: [text("condition_text", "Condition")] },
+        ],
     },
     groups: { columns: [text("name", "Group", "minmax(12rem,3fr)")] },
     "item-names": {
@@ -54,7 +72,8 @@ export const MASTER_COLUMNS: Readonly<Record<string, MasterColumnConfig>> = {
     "purchase-statuses": { columns: [code("code", "Code", "minmax(4rem,5rem)"), text("label", "Purchase status", "minmax(12rem,3fr)"), num("display_order", "Order", "minmax(4rem,5rem)")] },
     "transfer-letters": { columns: [text("name", "Transfer letter", "minmax(12rem,3fr)")], details: ["tl"] },
     "exchange-rates": {
-        columns: [code("date", "Date", "minmax(6.5rem,8rem)"), num("usd", "USD"), num("euro", "EUR"), num("pound_sterling", "GBP"), num("chinese_yuan", "CNY")],
+        // Rates are the row's content: they share the width (values shown exactly as stored, never rounded).
+        columns: [code("date", "Date", "minmax(6.5rem,8rem)"), num("usd", "USD", "minmax(5rem,1fr)"), num("euro", "EUR", "minmax(5rem,1fr)"), num("pound_sterling", "GBP", "minmax(5rem,1fr)"), num("chinese_yuan", "CNY", "minmax(5rem,1fr)")],
     },
     "unit-prices": { columns: [text("name", "Name", "minmax(10rem,2fr)"), text("label", "Label", "minmax(8rem,1fr)"), num("unit_price", "Unit price")] },
 };

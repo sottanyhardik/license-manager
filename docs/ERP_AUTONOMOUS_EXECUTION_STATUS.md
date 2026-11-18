@@ -243,6 +243,14 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
 - Master rows rebuilt on the licence register anatomy (2026-11-18): `masterColumns.ts` per master, one header row
   (select-all + labels), expandable rows, IEC-led Companies. Frontend gate exit 0 (910/910); real-backend masters 5/5;
   licence regression 6/6. The user's dev server (main checkout) still runs `b099789c`: land with ff-merge to see it.
+- One generic template for all 8 masters (2026-11-18, session "generic master template consolidation"): SION Classes
+  moved off the legacy `AccordionTable` onto `GenericMasterCards`; child norms come from config only
+  (`masterColumns.ts` `nested`: export/import items, notes, conditions → compact tables in the expanded row). Also landed
+  the earlier WIP: Masters menu two-column stacking, record title = list identifier, exchange-rate row widths.
+  One parameterized spec `e2e/masters-seven-pages.real.spec.ts` covers all 8 (now incl. SION nested expansion).
+  Tests: vitest masters 115/115, nav/licence/routes 64/64; tsc exit 0; ESLint exit 0; build exit 0; real-backend
+  eight-master spec 10/10 (exit 0); masters-workspace 6/6 (exit 0). Run the two specs in **separate** harness runs —
+  together they trip the API throttle (429 on `auth/me` → sign-out). No backend change; no business-rule change. Not pushed.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

@@ -213,6 +213,64 @@ test.describe("Masters workspace on the real backend", () => {
         await page.screenshot({ path: testInfo.outputPath("compare-companies-filters-open-1440.png") });
     });
 
+    test("Masters menu: two columns, every registered master once, each opens its workspace and a record", async ({ page }, testInfo) => {
+        await signIn(page);
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto("/masters", { waitUntil: "networkidle" });
+        const trigger = page.locator("[data-nav-trigger]", { hasText: "Masters" });
+        await trigger.click();
+        const menu = page.getByRole("menu");
+        await expect(menu).toBeVisible();
+        const entries = await menu.getByRole("menuitem").evaluateAll(items => items.map(a => ({
+            href: a.getAttribute("href"), label: a.textContent?.trim(), x: Math.round(a.getBoundingClientRect().left),
+        })));
+        const hrefs = entries.map(e => e.href);
+        expect(new Set(hrefs).size, "no duplicate entries").toBe(hrefs.length);
+        expect(hrefs).toEqual(expect.arrayContaining([
+            "/masters", "/masters/companies", "/masters/ports", "/masters/hs-codes", "/masters/head-norms", "/masters/sion-classes",
+            "/masters/groups", "/masters/item-names", "/masters/scheme-codes", "/masters/notification-numbers",
+            "/masters/purchase-statuses", "/masters/transfer-letters", "/masters/exchange-rates", "/masters/unit-prices",
+        ]));
+        expect(hrefs).toHaveLength(14);
+        expect(new Set(entries.map(e => e.x)).size, "two columns").toBe(2);
+        const box = await menu.boundingBox();
+        expect(box!.x + box!.width).toBeLessThanOrEqual(1440);
+        await page.screenshot({ path: testInfo.outputPath("masters-menu-1440.png") });
+        await page.keyboard.press("Escape");
+        await expect(menu).toBeHidden();
+
+        // Keyboard: ArrowDown on the trigger opens the menu and focuses its first entry.
+        await trigger.focus();
+        await page.keyboard.press("ArrowDown");
+        await expect(page.getByRole("menuitem").first()).toBeFocused();
+        await page.keyboard.press("Escape");
+
+        for (const { href, label } of entries) {
+            await page.goto(href!, { waitUntil: "networkidle" });
+            await expect(page.getByRole("heading", { level: 1 }), `${href} title`).toHaveText(href === "/masters" ? "Masters" : label!);
+            if (href === "/masters") continue;
+            const list = page.getByRole("list", { name: label! });
+            const empty = page.getByText(/^No .* found$/);
+            await expect(list.or(empty), `${href} renders rows or the empty state`).toBeVisible();
+            if (await list.isVisible()) {
+                await list.getByRole("listitem").first().getByRole("link").first().click();
+                await expect(page.getByRole("link", { name: label!, exact: true }), `${href} record breadcrumb`).toBeVisible();
+                await expect(page.getByRole("tab", { name: "Details" })).toBeVisible();
+            }
+        }
+
+        // Phone width: the menu still opens and nothing overflows horizontally.
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto("/masters", { waitUntil: "networkidle" });
+        const mobileTrigger = page.locator("[data-nav-trigger]", { hasText: "Masters" });
+        if (await mobileTrigger.isVisible()) {
+            await mobileTrigger.click();
+            await expect(page.getByRole("menu")).toBeVisible();
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath("masters-menu-390.png") });
+    });
+
     test("bulk deactivate and bulk delete report every record and keep referenced data", async ({ page }) => {
         await signIn(page);
         await page.goto("/masters/purchase-statuses", { waitUntil: "networkidle" });

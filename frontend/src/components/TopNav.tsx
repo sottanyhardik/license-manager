@@ -117,6 +117,19 @@ export default function TopNav() {
                         const items = groupItems(group);
                         const columns = group.columns ?? 1;
                         const rows = group.sections.length > 1 ? 1 : Math.ceil(items.length / columns);
+                        const renderSection = (section: (typeof group.sections)[number], index: number) => (
+                            <NavMenuSection key={section.label ?? index} label={group.sections.length > 1 ? section.label : undefined}>
+                                {section.items.map(item => (
+                                    <NavMenuItem key={item.path} to={item.path} icon={item.icon} label={item.label} active={item.path === activePath} />
+                                ))}
+                            </NavMenuSection>
+                        );
+                        // Opt-in stacking: `sectionRows` sections per column, each column its own wrapper so
+                        // short and long sections do not share row heights across columns.
+                        const stacked = group.sectionRows && group.sections.length > 1
+                            ? Array.from({ length: Math.ceil(group.sections.length / group.sectionRows) }, (_, c) =>
+                                group.sections.slice(c * group.sectionRows!, (c + 1) * group.sectionRows!))
+                            : null;
                         return (
                             <NavMenu
                                 key={group.id}
@@ -125,22 +138,16 @@ export default function TopNav() {
                                 label={group.label}
                                 controller={menus}
                                 isActive={isGroupActive(group)}
-                                columns={Math.min(columns, group.sections.length > 1 ? group.sections.length : items.length)}
+                                columns={stacked ? stacked.length : Math.min(columns, group.sections.length > 1 ? group.sections.length : items.length)}
                                 rows={rows}
                             >
-                                {group.sections.map((section, index) => (
-                                    <NavMenuSection key={section.label ?? index} label={group.sections.length > 1 ? section.label : undefined}>
-                                        {section.items.map(item => (
-                                            <NavMenuItem
-                                                key={item.path}
-                                                to={item.path}
-                                                icon={item.icon}
-                                                label={item.label}
-                                                active={item.path === activePath}
-                                            />
-                                        ))}
-                                    </NavMenuSection>
-                                ))}
+                                {stacked
+                                    ? stacked.map((column, c) => (
+                                        <div key={c} role="presentation" className="tb-nav-menu-column">
+                                            {column.map((section, i) => renderSection(section, c * group.sectionRows! + i))}
+                                        </div>
+                                    ))
+                                    : group.sections.map(renderSection)}
                             </NavMenu>
                         );
                     })}

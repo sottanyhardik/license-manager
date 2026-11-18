@@ -27,6 +27,7 @@ import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
 import BoeTable from "@/features/bill-of-entry/BoeTable";
 import {getDefaultFilters, getMasterRecordKey} from "./masterListConfig";
+import { MASTER_COLUMNS } from "./masterColumns";
 import { masterEntities } from "../../routes/config";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
@@ -49,6 +50,20 @@ type TradeGroup =
     | { type: "pair"; sale: TradeListItem; purchase: TradeListItem; pairKey: string };
 
 const EMPTY_LIST: any[] = [];
+
+/**
+ * Nested child collections (e.g. SION class -> export/import norms) arrive as an object keyed by
+ * child field. A list here is column/field definitions (e.g. exchange rates' read-only "Active"),
+ * not nested data, so those masters use the generic rows.
+ */
+function hasNestedCollections(defs: unknown): boolean {
+    return !!defs && typeof defs === "object" && !Array.isArray(defs) && Object.keys(defs).length > 0;
+}
+
+/** Legacy nested view only for masters whose children are not configured on the generic rows (`masterColumns.nested`). */
+function usesLegacyNestedView(entityName: string, defs: unknown): boolean {
+    return hasNestedCollections(defs) && !MASTER_COLUMNS[entityName]?.nested;
+}
 /** Entities that use the compact register layout (toolbar header instead of PageHeader). */
 const COMPACT_REGISTER = new Set(["licenses", "bill-of-entries"]);
 
@@ -1183,7 +1198,7 @@ export default function MasterList() {
                     )}
 
                     {/* Use AccordionTable for entities with nested fields (except licenses, allotments, bill-of-entries), regular DataTable for others */}
-                    {entityName !== 'bill-of-entries' && entityName !== 'allotments' && entityName !== 'licenses' && entityName !== 'trades' && entityName !== 'incentive-licenses' && (metadata.nested_field_defs && Object.keys(metadata.nested_field_defs).length > 0 ? (
+                    {entityName !== 'bill-of-entries' && entityName !== 'allotments' && entityName !== 'licenses' && entityName !== 'trades' && entityName !== 'incentive-licenses' && (usesLegacyNestedView(entityName, metadata.nested_field_defs) ? (
                         <AccordionTable
                             data={data}
                             columns={metadata.list_display || []}
@@ -1641,7 +1656,9 @@ function MasterListActiveFiltersDisplay({
             }
 
             const defaultValue = defaultFilters[key];
-            if (defaultValue !== undefined && value === defaultValue) {
+            // Backend defaults may be typed (`is_active: true`) while applied values are strings ("true"):
+            // an untouched default is not a user-applied filter.
+            if (defaultValue !== undefined && String(value) === String(defaultValue)) {
                 return;
             }
 

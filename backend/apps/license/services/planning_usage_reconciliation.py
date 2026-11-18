@@ -218,6 +218,34 @@ def apply_operational_cif_ceiling(rows, balance_cif):
     return effective_balance
 
 
+def _actual_at_plan(plan):
+    """Actual mapped quantity/CIF the SPLIT_BY_PERCENT planner already netted
+    out of ``planned_quantity`` (recorded in provenance), else ``None``.
+
+    That planner persists only the FUTURE quantity of a split child
+    (target − actual), so the child's theoretical share is planned + actual.
+    Plans without the recorded actual (legacy, zero-usage, STANDARD) keep
+    ``planned_quantity`` as their theoretical quantity, exactly as before.
+    """
+    provenance = plan.allocation_provenance or {}
+    if provenance.get("strategy") != "SPLIT_BY_PERCENT" or provenance.get("actual_target_quantity") is None:
+        return None
+    return (Decimal(str(provenance.get("actual_target_quantity") or 0)),
+            Decimal(str(provenance.get("actual_target_cif") or 0)))
+
+
+def _theoretical_quantity(plan):
+    actual = _actual_at_plan(plan)
+    planned = plan.planned_quantity or ZERO
+    return planned + actual[0] if actual else planned
+
+
+def _theoretical_cif(plan):
+    actual = _actual_at_plan(plan)
+    planned = plan.planned_cif_fc or ZERO
+    return planned + actual[1] if actual else planned
+
+
 def reconcile_license_plans(license_id: int) -> dict:
     """Allocate family usage once across matching theoretical plan lines."""
     usage = aggregate_license_usage(license_id)
@@ -253,7 +281,7 @@ def reconcile_license_plans(license_id: int) -> dict:
             committed = available["boe_used_quantity"] + available["unlinked_allotment_quantity"]
             row_usage[plan.id] = committed
             usage_details[plan.id] = (source_ids, available)
-            theoretical_rows.append({"key": plan.id, "theoretical_qty": plan.planned_quantity or ZERO})
+            theoretical_rows.append({"key": plan.id, "theoretical_qty": _theoretical_quantity(plan)})
 
         # A split may be anchored to one representative import item while its
         # planner basis is the matched import *group* quantity. For a complete
@@ -279,8 +307,9 @@ def reconcile_license_plans(license_id: int) -> dict:
             reconciled_cif = committed_cif + residual_qty * (plan.unit_price or ZERO)
             # With no utilization-driven reallocation, retain a persisted CIF
             # that may come from STANDARD/manual semantics rather than price.
-            if committed_qty == ZERO and reconciled_qty == (plan.planned_quantity or ZERO):
-                reconciled_cif = plan.planned_cif_fc or ZERO
+            # (A split child's theoretical share includes its actual-at-plan.)
+            if committed_qty == ZERO and reconciled_qty == _theoretical_quantity(plan):
+                reconciled_cif = _theoretical_cif(plan)
             raw_remaining_qty = residual_qty
             raw_remaining_cif = max(reconciled_cif - committed_cif, ZERO)
             remaining_qty, remaining_cif = apply_remaining_plan_tolerance(
@@ -313,8 +342,8 @@ def reconcile_license_plans(license_id: int) -> dict:
                 ), ZERO),
                 "effective_used_quantity": committed_qty,
                 "effective_used_cif": committed_cif,
-                "percentage_theoretical_quantity": plan.planned_quantity or ZERO,
-                "percentage_theoretical_cif": plan.planned_cif_fc or ZERO,
+                "percentage_theoretical_quantity": _theoretical_quantity(plan),
+                "percentage_theoretical_cif": _theoretical_cif(plan),
                 "theoretical_quantity": reconciled_qty,
                 "theoretical_cif": reconciled_cif,
                 "reconciled_planned_quantity": reconciled_qty,

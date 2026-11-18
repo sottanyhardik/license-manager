@@ -302,3 +302,22 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   Verified: vitest 27/27 (licence-ledger files); full frontend gate exit 0 (950/950 unit, lint, typecheck, build); real-backend
   `licence-ledger-onepage` 1/1 (exit 0, fresh test DB). Screenshot confirms four tabs. Committed locally, not pushed.
 <!-- CHECKPOINT:generic-erp:END -->
+
+<!-- CHECKPOINT:e126-entitlement:BEGIN -->
+**E126 Vegetable Oil entitlement planning — VERIFIED (2026-11-18, session backend-9b)**
+- Generic read-only planner: `services/entitlement_planning.py` (pure Decimal) + `entitlement_planning_service.py` (DB adapter;
+  rules/percentage rows, `get_debit_rows`, `get_allotment_rows`, `calculate_credit`, `get_balance_cif`) + data profile
+  `sion_planner_config/entitlement_profiles.py` (E126: Sunflower+Olive → OLIVE OIL, PKO separate, refs `E126:ACTION:002:SPLIT`).
+  `GET /api/entitlement-plan/?license_number=&sion=[&export=xlsx]` (LicensePermission). UI: `/planning?license=…&sion=E126&view=simulation`.
+- Auto Plan: `planning_usage_reconciliation` split-child theoretical = planned + provenance `actual_target_quantity`
+  (SPLIT_BY_PERCENT only; everything else unchanged). Reviewed by cif-balance-auditor (APPROVE).
+- Owner-approved LOCAL DB data change: 25 BOE + 2 allotment explicit targets for 3411008089 (`apply_entitlement_targets`,
+  audited in ActivityLog), BOE 5051922 ↔ allotment 10106 linked (ReconciliationLog LINK); licence re-planned (request 19607).
+  Backup: `~/lm_backups/lic2510-before-entitlement-targets-2026-11-18.json`. Production needs the same command run separately.
+- Result 3411008089: PKO remaining 14,039.13 kg / 25,270.43; OLIVE OIL 1,69,077.49 kg; both PARTIALLY UTILIZED.
+- Evidence: backend gate exit 1 only for pre-existing ruff F401 in `accounting/selectors/licence_bank_ledger.py` (44911fd3);
+  app-level 3654 passed/1 xfailed, tests/ 246 passed; planning regression on final code 1283 passed; new tests 66 passed;
+  frontend gate: lint/unit (956)/build PASS, typecheck fixed → exit 0; planning vitest 38 passed. Live browser spec
+  `e2e/e126-entitlement.live.spec.ts` written; NOT RUN (no saved auth state).
+- Open: Auto Plan Olive CIF 8,77,628.98 vs residual 8,80,668.89 (planner reserves PKO at rate; 3,046.18 not re-flowed) — owner decision.
+<!-- CHECKPOINT:e126-entitlement:END -->

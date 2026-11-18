@@ -73,6 +73,11 @@ interface MasterFormProps {
     entityName?: string;
     recordId?: string | number;
     isModal?: boolean;
+    /**
+     * Rendered inside a master record's expanded row (Edit tab): no page wrapper, page header or Back button;
+     * save and cancel stay in place (`onSuccess` / `onClose`, like `isModal`). Same fields, validation and API.
+     */
+    embedded?: boolean;
     onClose?: () => void;
     onSuccess?: (id: number | string) => void;
 }
@@ -80,10 +85,12 @@ interface MasterFormProps {
 export default function MasterForm({
     entityName: propEntityName,
     recordId: propRecordId,
-    isModal = false,
+    isModal: isModalProp = false,
+    embedded = false,
     onClose,
     onSuccess
 }: MasterFormProps) {
+    const isModal = isModalProp || embedded;
     const { entity, id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -749,8 +756,9 @@ export default function MasterForm({
     }
 
     return (
-        <div className={cn("min-h-screen bg-background", isLicenseForm && "license-form-workspace", isBoeForm && "pb-24 sm:pb-6")}>
-            {/* Compact Header */}
+        <div className={cn(embedded ? "min-w-0" : "min-h-screen bg-background", isLicenseForm && "license-form-workspace", isBoeForm && "pb-24 sm:pb-6")}>
+            {/* Compact Header (page only; the expanded record row already names the record) */}
+            {!embedded && (
             <StickyFormBar position="top" enabled={isBoeForm} label="Bill of Entry header" className="mb-6">
             <div className={cn("mb-6 flex items-center justify-between gap-4", isLicenseForm && "sticky top-0 z-20 -mx-1 border-b border-border/70 bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90")}>
                 <div className="flex-1">
@@ -808,9 +816,10 @@ export default function MasterForm({
                 </Button>
             </div>
             </StickyFormBar>
+            )}
 
-            <div className={cn("overflow-hidden rounded-lg border border-border bg-card shadow-0", isLicenseForm && "border-border/70 shadow-0", isBoeForm && "overflow-visible")}>
-                <div className={cn("border-b border-border/70 px-6 py-4", isLicenseForm && "px-4 py-3 sm:px-6")}>
+            <div className={cn(embedded ? "min-w-0" : "overflow-hidden rounded-lg border border-border bg-card shadow-0", isLicenseForm && "border-border/70 shadow-0", isBoeForm && "overflow-visible")}>
+                <div hidden={embedded} className={cn("border-b border-border/70 px-6 py-4", isLicenseForm && "px-4 py-3 sm:px-6")}>
                     <div className="flex items-center justify-between gap-3">
                         <h3 className="mb-0 flex items-center gap-2 text-sm font-semibold text-foreground">
                             <EntityIcon className="size-4 shrink-0" style={{ color: entityColor }} aria-hidden="true" />
@@ -821,7 +830,7 @@ export default function MasterForm({
                         )}
                     </div>
                 </div>
-                <div className={cn("space-y-6 p-6", isLicenseForm && "space-y-4 p-4 sm:p-6")}>
+                <div className={cn(embedded ? "space-y-4" : "space-y-6 p-6", isLicenseForm && "space-y-4 p-4 sm:p-6")}>
                     {error && (
                         <Alert variant="destructive" className="mb-4">
                             <TriangleAlert className="size-4" />
@@ -1131,7 +1140,7 @@ export default function MasterForm({
                         <div className={cn("mt-6 flex flex-wrap items-center gap-3 border-t border-border/70 pt-4", isBoeForm && "mt-0 border-t-0 pt-0", isLicenseForm && "sticky bottom-0 z-10 -mx-4 border-x border-b bg-card/95 px-4 pb-3 pt-3 shadow-[0_-6px_16px_rgba(26,58,82,0.06)] backdrop-blur sm:-mx-6 sm:px-6")}>
                             <Button
                                 type="submit"
-                                size="lg"
+                                size={embedded ? "sm" : "lg"}
                                 disabled={saving}
                             >
                                 {saving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
@@ -1167,7 +1176,7 @@ export default function MasterForm({
                             <Button
                                 type="button"
                                 variant="outline"
-                                size="lg"
+                                size={embedded ? "sm" : "lg"}
                                 onClick={() => {
                                     if (isBoeForm && !confirmLeave()) return;
                                     if (isModal && onClose) { onClose(); return; }

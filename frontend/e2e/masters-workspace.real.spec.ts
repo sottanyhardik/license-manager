@@ -89,31 +89,37 @@ test.describe("Masters workspace on the real backend", () => {
 
         await searchUntilOnly(page, "E2E/99");
 
+        // Edit inline: the record opens in its row on the Edit tab (no edit page); save stays in place.
         await rowAction(page, "Edit");
-        await page.waitForURL(`**/masters/notification-numbers/${encodeURIComponent(CODE)}/edit`);
-        await expect(page.locator("#field-label")).toHaveValue("E2E notification");
-        await page.locator("#field-label").fill("E2E notification renamed");
-        await page.getByRole("button", { name: "Update" }).click();
-        await page.waitForURL(/\/masters\/notification-numbers$/);
-        const edited = await authGet<{ label: string }>(page, `masters/notification-numbers/${encodeURIComponent(CODE)}/`);
-        expect(edited.body?.label).toBe("E2E notification renamed");
+        const editing = page.getByRole("region", { name: `${CODE} details` });
+        await expect(editing.getByRole("tab", { name: "Edit", selected: true })).toBeVisible();
+        await expect(editing.locator("#field-label")).toHaveValue("E2E notification");
+        await editing.locator("#field-label").fill("E2E notification renamed");
+        await editing.getByRole("button", { name: "Update" }).click();
+        await expect.poll(async () => (await authGet<{ label: string }>(page, `masters/notification-numbers/${encodeURIComponent(CODE)}/`)).body?.label)
+            .toBe("E2E notification renamed");
+        expect(new URL(page.url()).pathname).toBe(`/masters/notification-numbers/${encodeURIComponent(CODE)}`);
+        await expect(editing.getByRole("tab", { name: "Overview", selected: true })).toBeVisible();
         // The list we return to must show the saved value, not a cached page.
-        await expect(page.getByText("E2E notification renamed", { exact: true })).toBeVisible();
+        // The row cell (list data, not a cached page) shows the saved value.
+        await expect(page.locator('ul[aria-label="Notification Numbers"] dd[title="E2E notification renamed"]')).toBeVisible();
 
-        // Record page: real fields + the real audit entry the server logged for the PATCH.
+        // Record (inline in its row): real fields + the real audit entry the server logged for the PATCH.
         await searchUntilOnly(page, "E2E/99");
         await page.getByRole("link", { name: CODE, exact: true }).click();
-        await page.waitForURL(`**/masters/notification-numbers/${encodeURIComponent(CODE)}`);
-        await expect(page.getByRole("heading", { name: CODE, level: 1 })).toBeVisible();
-        await expect(page.getByText("E2E notification renamed", { exact: true })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Notification Numbers" })).toHaveAttribute("href", "/masters/notification-numbers");
-        await page.getByRole("tab", { name: "History" }).click();
+        await page.waitForURL(`**/masters/notification-numbers/${encodeURIComponent(CODE)}?**`);
+        const record = () => page.getByRole("region", { name: `${CODE} details` });
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText("Notification Numbers");
+        await record().getByRole("tab", { name: "Details" }).click();
+        await expect(record().getByText("E2E notification renamed", { exact: true })).toBeVisible();
+        await record().getByRole("tab", { name: "History" }).click();
         // The middleware writes the log on a background thread: poll, then expect exactly the one edit.
         await expect.poll(async () => (await authGet<unknown[]>(page,
             `masters/activity-logs/?changes_only=1&endpoint=${encodeURIComponent(`/api/masters/notification-numbers/${CODE}/`)}`)).body?.length ?? 0,
         ).toBe(1);
+        // Refresh keeps the record open inline (the URL is the record URL).
         await page.reload({ waitUntil: "networkidle" });
-        await page.getByRole("tab", { name: "History" }).click();
+        await record().getByRole("tab", { name: "History" }).click();
         // One timeline entry: the real UPDATE, by the signed-in user (tone is announced as sr-only text).
         await expect(page.getByRole("listitem").filter({ hasText: /^Updated/ }).filter({ hasText: "hardik" })).toHaveCount(1);
 
@@ -148,7 +154,7 @@ test.describe("Masters workspace on the real backend", () => {
         }
         await page.screenshot({ path: testInfo.outputPath("masters-ports-list-390.png"), fullPage: true });
         await page.getByRole("link", { name: PORT_CODE, exact: true }).click();
-        await expect(page.getByRole("heading", { name: PORT_CODE, level: 1 })).toBeVisible();
+        await expect(page.getByRole("region", { name: `${PORT_CODE} details` }).getByRole("tab", { name: "Overview" })).toBeVisible();
         await expect.poll(noOverflow).toBeTruthy();
         await page.screenshot({ path: testInfo.outputPath("masters-port-detail-390.png"), fullPage: true });
 
@@ -160,7 +166,7 @@ test.describe("Masters workspace on the real backend", () => {
         await expect(page.getByRole("list", { name: "Ports" })).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("masters-ports-1440.png") });
         await page.getByRole("link", { name: PORT_CODE, exact: true }).click();
-        await expect(page.getByRole("heading", { name: PORT_CODE, level: 1 })).toBeVisible();
+        await expect(page.getByRole("region", { name: `${PORT_CODE} details` }).getByRole("tab", { name: "Overview" })).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("masters-port-detail-1440.png") });
 
         // Same row metrics as the licence register (live UI measured: 50 px rows, 10 px radius, slate-300 border).
@@ -254,8 +260,9 @@ test.describe("Masters workspace on the real backend", () => {
             await expect(list.or(empty), `${href} renders rows or the empty state`).toBeVisible();
             if (await list.isVisible()) {
                 await list.getByRole("listitem").first().getByRole("link").first().click();
-                await expect(page.getByRole("link", { name: label!, exact: true }), `${href} record breadcrumb`).toBeVisible();
-                await expect(page.getByRole("tab", { name: "Details" })).toBeVisible();
+                // The record opens inline in its row; the page is still the master list.
+                await expect(page.getByRole("heading", { level: 1 }), `${href} stays on the list`).toHaveText(label!);
+                await expect(page.getByRole("region", { name: / details$/ }).getByRole("tab", { name: "Details" }), `${href} inline record`).toBeVisible();
             }
         }
 

@@ -82,7 +82,7 @@ function renderAt(entity: string) {
       <AuthContext.Provider value={authValue as never}>
         <MemoryRouter initialEntries={[`/masters/${entity}`]}>
           <Routes>
-            <Route path="/masters/:entity" element={<MasterList />} />
+            <Route path="/masters/:entity/:id?" element={<MasterList />} />
           </Routes>
         </MemoryRouter>
       </AuthContext.Provider>
@@ -143,16 +143,16 @@ describe("MasterList smoke", () => {
     expect(screen.getByText("Active")).toBeInTheDocument();
     first.unmount();
 
-    (api.get as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: {
-        ...META, list_display: ["norm_class"], nested_field_defs: { export_norm: [{ name: "description" }] },
-        results: [{ id: 2, norm_class: "A3627", description: "Biscuits", export_norm: [{ id: 9, description: "BISCUITS", quantity: "1.000", unit: "kg" }], import_norm: [], notes: [], conditions: [] }],
-      },
-    });
+    const sion = { id: 2, norm_class: "A3627", description: "Biscuits", export_norm: [{ id: 9, description: "BISCUITS", quantity: "1.000", unit: "kg" }], import_norm: [], notes: [], conditions: [] };
+    const sionList = { ...META, list_display: ["norm_class"], nested_field_defs: { export_norm: [{ name: "description" }] }, results: [sion] };
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) =>
+      Promise.resolve({ data: url === "masters/sion-classes/2/" ? sion : sionList }));
     renderAt("sion-classes");
     const list = await screen.findByRole("list", { name: /sion classes/i });
     expect(within(list).getByRole("link", { name: "A3627" })).toBeInTheDocument();
     fireEvent.click(within(list).getByRole("button", { name: "Expand A3627" }));
+    // The row opens the full record inline; child norms are its Related records.
+    await userEvent.setup().click(await screen.findByRole("tab", { name: /Related records/ }));
     const exportItems = await screen.findByRole("region", { name: "Export items" });
     expect(within(exportItems).getByText("BISCUITS")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Import items" })).not.toBeInTheDocument();

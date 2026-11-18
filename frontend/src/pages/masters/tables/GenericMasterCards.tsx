@@ -11,20 +11,18 @@
  * and the user can write. Selection is per page (like DataTable) and clears
  * whenever the page's rows change.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, CircleCheck, CircleOff, Eye, Pencil, Trash2, X } from "lucide-react";
 import { ActionMenu, BulkSelectionSummary, EmptyState, LoadingState, StatusBadge, TONE_MAP, type ActionMenuItem } from "@/components/shared";
-import { FieldGrid, type FieldSpec } from "@/components/shared/FieldGrid";
 import { cn } from "@/lib/utils";
 import { useOptionalConfirm, type ConfirmOptions } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { saveFilterState } from "../../../utils/filterPersistence";
 import { getMasterRecordKey, getMasterRecordLookup } from "../masterListConfig";
-import { formatMasterLabel, formatMasterRecord, formatMasterValue, MASTER_AUDIT_FIELDS, readMasterField } from "../masterDetailFields";
+import { formatMasterValue, readMasterField } from "../masterDetailFields";
 import { masterColumnLabel, resolveMasterColumns } from "../masterColumns";
-import { NestedRows } from "./NestedRows";
+import MasterRecordPanel from "../MasterRecordPanel";
 
 export type MasterBulkAction = "activate" | "deactivate" | "delete";
 
@@ -45,12 +43,21 @@ interface GenericMasterCardsProps {
     filterParams: Record<string, any>;
     currentPage: number;
     pageSize: number;
-    navigate: (path: string) => void;
+    /** Kept for callers; records open and edit inline, so the rows never navigate away. */
+    navigate?: (path: string) => void;
     onDelete: (item: any) => void;
     /** Edit/Delete are shown only to users the API lets write (defaults to true). */
     canWrite?: boolean;
     /** Runs one generic bulk request (`POST masters/<entity>/bulk/`). */
     onBulk?: (action: MasterBulkAction, keys: string[]) => Promise<MasterBulkResult>;
+    /**
+     * Controlled expansion (raw record lookup, e.g. from `/masters/:entity/:id`). With `onExpandedChange`
+     * the owner (MasterList) keeps it in the URL; without it the rows keep it locally.
+     */
+    expandedLookup?: string | null;
+    onExpandedChange?: (lookup: string | null) => void;
+    /** First tab for the record named in the entry URL (old `?tab=` / `/edit` links) — that record only. */
+    initialRecordTab?: { lookup: string; tab: string };
 }
 
 /** `is_active` is shown as a status badge, not as a column. */
@@ -70,27 +77,50 @@ export default function GenericMasterCards({
     metadata,
     entityName,
     entityTitle,
-    filterParams,
-    currentPage,
-    pageSize,
-    navigate,
     onDelete,
     canWrite = true,
     onBulk,
+    expandedLookup,
+    onExpandedChange,
+    initialRecordTab,
 }: GenericMasterCardsProps) {
     // The app mounts ConfirmProvider (App.tsx); the browser dialog is only a fallback for bare test harnesses.
     const sharedConfirm = useOptionalConfirm();
     const confirm = (opts: ConfirmOptions) => sharedConfirm ? sharedConfirm(opts) : Promise.resolve(window.confirm(opts.title));
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
-    const [expandedKey, setExpandedKey] = useState<string | null>(null);
+    const [localExpanded, setLocalExpanded] = useState<string | null>(null);
+    const controlled = onExpandedChange !== undefined;
+    const expandedKey = controlled ? (expandedLookup ?? null) : localExpanded;
+    const setExpanded = (lookup: string | null) => (controlled ? onExpandedChange(lookup) : setLocalExpanded(lookup));
+    // Row menu "Edit": open the record (if needed) and switch its panel to the Edit tab.
+    const [tabRequest, setTabRequest] = useState<{ lookup: string; tab: string; n: number } | null>(null);
+    const openOnTab = (lookup: string, tab: string) => {
+        setTabRequest(prev => ({ lookup, tab, n: (prev?.n ?? 0) + 1 }));
+        if (expandedKey !== lookup) setExpanded(lookup);
+    };
+    const panelTabProps = (lookup: string) => ({
+        initialTab: tabRequest?.lookup === lookup ? tabRequest.tab : initialRecordTab?.lookup === lookup ? initialRecordTab.tab : undefined,
+        tabRequest: tabRequest?.lookup === lookup ? tabRequest : undefined,
+        canWrite,
+    });
     const [pending, setPending] = useState<MasterBulkAction | null>(null);
     // Titles are captured when the request is made: deleted rows leave the refreshed list.
     const [outcome, setOutcome] = useState<{ result: MasterBulkResult; titles: Record<string, string> } | null>(null);
 
     const bulkActions: MasterBulkAction[] = canWrite && onBulk ? (metadata.bulk_actions || []) : [];
     const pageKeys = useMemo(() => data.map(item => getMasterRecordLookup(entityName, item)), [data, entityName]);
-    // A new page, filter or refetch replaces the rows: never act on (or keep open) rows the user can no longer see.
-    useEffect(() => { setSelected(new Set()); setExpandedKey(null); }, [pageKeys]);
+    // A new page, filter or refetch replaces the rows: never act on rows the user can no longer see. The URL-owned
+    // open record stays open (it is shown pinned above the list when it is not on this page).
+    useEffect(() => { setSelected(new Set()); if (!controlled) setLocalExpanded(null); }, [pageKeys, controlled]);
+    // A direct link / back navigation to a record brings its row into view only when the row's header is off
+    // screen; opening a visible row (a click) never moves the page, so the list scroll position is kept.
+    useEffect(() => {
+        if (!expandedKey) return;
+        const row = document.querySelector<HTMLElement>(`[data-master-lookup="${CSS.escape(expandedKey)}"]`);
+        if (!row) return;
+        const { top } = row.getBoundingClientRect();
+        if (top < 0 || top > window.innerHeight - 48) row.scrollIntoView({ block: "start" });
+    }, [expandedKey, pageKeys]);
 
     if (loading) return <LoadingState variant="skeleton-rows" rows={6} label={`Loading ${entityTitle ?? "records"}`} />;
 
@@ -109,7 +139,7 @@ export default function GenericMasterCards({
         );
     }
 
-    const { columns, details = [], nested = [] } = resolveMasterColumns(entityName, metadata);
+    const { columns } = resolveMasterColumns(entityName, metadata);
     const [primary, ...cells] = columns;
     const fieldMeta: Record<string, { label?: string }> = metadata.field_meta || {};
     const template = columns.map(c => c.width ?? "minmax(8rem,1fr)").join(" ");
@@ -117,17 +147,6 @@ export default function GenericMasterCards({
     const showSelect = bulkActions.length > 0;
     const titleOf = (item: Record<string, unknown>) =>
         formatMasterValue(primary ? readMasterField(item, primary.field) : undefined) ?? `#${item.id}`;
-    const detailFieldsOf = (item: Record<string, unknown>): FieldSpec[] => [
-        // Only fields with a value, like the licence workspace (no columns of em dashes).
-        ...details.filter(field => formatMasterValue(readMasterField(item, field)) !== null).map(field => ({ key: field, label: formatMasterLabel(field, fieldMeta) })),
-        // Audit timestamps when the master has them; "by" columns only when the API sends a name, not a raw id.
-        ...MASTER_AUDIT_FIELDS.filter(f => f.key in item && !details.includes(f.key) && (!f.key.endsWith("_by") || typeof item[f.key] === "string")),
-    ];
-    const rememberList = () => saveFilterState(entityName, {
-        filters: filterParams,
-        pagination: { currentPage, pageSize },
-        search: "",
-    });
     const allSelected = selected.size > 0 && selected.size === pageKeys.length;
     const toggleSelected = (key: string, on: boolean) => setSelected(prev => {
         const next = new Set(prev);
@@ -220,23 +239,44 @@ export default function GenericMasterCards({
                 )}
             </div>
 
+            {expandedKey && !pageKeys.includes(expandedKey) && (
+                // Opened by URL but not on this page (bookmark, other page/filter): shown pinned, same panel.
+                <article aria-label={`${entityTitle ?? "Record"} ${expandedKey}`} className="min-w-0 overflow-hidden rounded-lg border border-ring/40 bg-card" data-master-lookup={expandedKey}>
+                    <div className="flex items-center gap-x-4 bg-muted/40 px-3 py-2 md:px-4">
+                        <span className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">{expandedKey}</span>
+                        <span className="text-xs text-muted-foreground">Not on this page</span>
+                        <Button type="button" size="icon" variant="ghost" aria-label={`Close ${expandedKey}`} onClick={() => setExpanded(null)}>
+                            <X className="size-4" aria-hidden="true" />
+                        </Button>
+                    </div>
+                    <div role="region" aria-label={`${expandedKey} details`} className="min-w-0 border-t border-border px-3 pb-2 pt-1.5 md:px-4">
+                        <MasterRecordPanel entity={entityName} lookup={expandedKey} label={`${entityTitle ?? entityName} ${expandedKey}`} {...panelTabProps(expandedKey)} />
+                    </div>
+                </article>
+            )}
+
             <ul className="flex min-w-0 flex-col gap-1.5" aria-label={entityTitle ?? entityName}>
                 {data.map((item, index) => {
                     const lookup = pageKeys[index];
                     const key = getMasterRecordKey(entityName, item);
                     const detailPath = `/masters/${entityName}/${key}`;
                     const title = titleOf(item);
-                    const extra = detailFieldsOf(item);
-                    const children = nested.filter(c => Array.isArray(item[c.field]) && item[c.field].length > 0);
-                    const canExpand = extra.length > 0 || children.length > 0;
-                    const expanded = canExpand && expandedKey === lookup;
+                    // Every record expands: the inline panel loads the full record (licence register pattern).
+                    const canExpand = true;
+                    const expanded = expandedKey === lookup;
                     const isSelected = selected.has(lookup);
                     const regionId = `master-row-${entityName}-${lookup.replace(/[^A-Za-z0-9_-]/g, "_")}`;
-                    const toggleExpanded = () => setExpandedKey(prev => (prev === lookup ? null : lookup));
+                    const toggleExpanded = () => setExpanded(expanded ? null : lookup);
+                    // Plain clicks open the record inline; modified clicks keep the link's new-tab behaviour.
+                    const openInline = (event: MouseEvent<HTMLAnchorElement>) => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                        event.preventDefault();
+                        setExpanded(lookup);
+                    };
                     const actions: ActionMenuItem[] = [
-                        { id: "open", label: "Open", icon: Eye, onSelect: () => { rememberList(); navigate(detailPath); } },
+                        { id: "open", label: "Open record", icon: Eye, onSelect: () => setExpanded(lookup) },
                         ...(canWrite ? [
-                            { id: "edit", label: "Edit", icon: Pencil, onSelect: () => { rememberList(); navigate(`${detailPath}/edit`); } },
+                            { id: "edit", label: "Edit", icon: Pencil, onSelect: () => openOnTab(lookup, "edit") },
                             { id: "delete", label: "Delete", icon: Trash2, tone: "danger" as const, separatorBefore: true, onSelect: () => onDelete(item) },
                         ] : []),
                     ];
@@ -244,6 +284,7 @@ export default function GenericMasterCards({
                         <li key={item.id ?? key} className="min-w-0">
                             <article
                                 aria-label={`${entityTitle ?? "Record"} ${title}`}
+                                data-master-lookup={lookup}
                                 data-state={isSelected ? "selected" : undefined}
                                 className={cn(
                                     "min-w-0 overflow-hidden rounded-lg border bg-card transition-colors",
@@ -287,7 +328,8 @@ export default function GenericMasterCards({
                                             <dd className="min-w-0 truncate">
                                                 <Link
                                                     to={detailPath}
-                                                    onClick={rememberList}
+                                                    onClick={openInline}
+                                                    aria-expanded={expanded}
                                                     className={cn(
                                                         "rounded-sm text-base font-semibold tracking-tight text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50",
                                                         primary?.mono && "font-mono",
@@ -322,12 +364,8 @@ export default function GenericMasterCards({
                                 </div>
 
                                 {expanded && (
-                                    <div id={regionId} role="region" aria-label={`${title} details`} className="border-t border-border px-3 py-2.5 md:px-4">
-                                        {extra.length > 0 && <FieldGrid record={formatMasterRecord(item, extra)} fields={extra} />}
-                                        {children.map(c => <NestedRows key={c.field} collection={c} rows={item[c.field]} />)}
-                                        <Link to={detailPath} onClick={rememberList} className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
-                                            Open record
-                                        </Link>
+                                    <div id={regionId} role="region" aria-label={`${title} details`} className="min-w-0 border-t border-border px-3 pb-2 pt-1.5 md:px-4">
+                                        <MasterRecordPanel entity={entityName} lookup={lookup} label={`${entityTitle ?? entityName} ${title}`} {...panelTabProps(lookup)} />
                                     </div>
                                 )}
                             </article>

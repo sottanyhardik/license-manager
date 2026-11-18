@@ -154,26 +154,34 @@ test.describe("Eight master pages on the generic licence register template (real
             }
 
             if (c.nested) {
+                // Child norms are the inline record's Related records.
                 await row.getByRole("button", { name: `Expand ${identifier}` }).click();
+                await row.getByRole("tab", { name: /Related records/ }).click();
                 await expect(row.getByRole("region", { name: c.nested.label }).getByText(c.nested.text, { exact: true })).toBeVisible();
+                await row.getByRole("button", { name: `Collapse ${identifier}` }).click();
             }
 
-            // Record page.
+            // Record opens inline in its row (no separate page): the URL becomes the record URL, the list stays.
             await row.getByRole("link", { name: identifier, exact: true }).click();
-            await expect(page.getByRole("heading", { name: identifier, level: 1 })).toBeVisible();
-            await expect(page.getByRole("link", { name: c.title, exact: true })).toHaveAttribute("href", `/masters/${c.entity}`);
-            await expect(page.getByRole("tab", { name: "Details" })).toBeVisible();
+            await expect(page).toHaveURL(new RegExp(`/masters/${c.entity}/[^/?]+(\\?|$)`));
+            await expect(page.getByRole("heading", { level: 1 })).toHaveText(c.title);
+            await expect(page.getByRole("region", { name: `${identifier} details` }).getByRole("tab", { name: "Details" })).toBeVisible();
 
-            // Edit through the real form; the change persists and shows on the list.
-            await page.getByRole("link", { name: /Edit/ }).click();
-            const input = page.locator(`#field-${c.edit.field}`);
+            // Edit inline (row action → the record's Edit tab, the real generic form); the change persists, no navigation.
+            const recordPath = new URL(page.url()).pathname;
+            await row.getByRole("button", { name: `Actions for ${identifier}` }).click();
+            await page.getByRole("menuitem", { name: "Edit" }).click();
+            const record = page.getByRole("region", { name: `${identifier} details` });
+            await expect(record.getByRole("tab", { name: "Edit", selected: true })).toBeVisible();
+            const input = record.locator(`#field-${c.edit.field}`);
             await expect(input).toBeVisible();
             await input.fill(c.edit.value);
-            await page.getByRole("button", { name: "Update" }).click();
-            await page.waitForURL(new RegExp(`/masters/${c.entity}$`));
+            await record.getByRole("button", { name: "Update" }).click();
             const id = created.body!.id;
-            const saved = await api<Record<string, unknown>>(page, "GET", `masters/${c.entity}/${id}/`);
-            expect(String(saved.body?.[c.edit.field]), `${c.entity}: edit persisted`).toBe(c.edit.value);
+            await expect.poll(async () => String((await api<Record<string, unknown>>(page, "GET", `masters/${c.entity}/${id}/`)).body?.[c.edit.field]),
+                { message: `${c.entity}: edit persisted` }).toBe(c.edit.value);
+            expect(new URL(page.url()).pathname, `${c.entity}: saved in place`).toBe(recordPath);
+            await expect(page.getByRole("heading", { level: 1 })).toHaveText(c.title);
         });
     }
 

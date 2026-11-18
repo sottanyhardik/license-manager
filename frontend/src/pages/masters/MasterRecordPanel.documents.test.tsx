@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthContext } from "../../context/AuthContext";
-import { ConfirmProvider } from "@/components/shared/ConfirmDialog";
 import { sanitizeRenderedLinks } from "@/components/documents/sanitizeRenderedLinks";
-import MasterDetail from "./MasterDetail";
+import MasterRecordPanel from "./MasterRecordPanel";
 
 const { getSpy, renderAsync } = vi.hoisted(() => ({ getSpy: vi.fn(), renderAsync: vi.fn() }));
 vi.mock("../../api/axios", () => ({ default: { get: getSpy, delete: vi.fn() } }));
@@ -24,19 +22,17 @@ const SION = {
     notes: [], conditions: [],
 };
 
+/** `/masters/<entity>/<lookup>[?tab=<id>]` → the inline panel for that record (what the list renders). */
 function renderAt(path: string) {
+    const [route, query = ""] = path.split("?");
+    const [, , entity, lookup] = route.split("/");
+    const initialTab = new URLSearchParams(query).get("tab") ?? undefined;
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const value = { isSuperAdmin: () => true, hasRole: () => true, hasAnyRole: () => true } as unknown as React.ContextType<typeof AuthContext>;
     return render(
         <QueryClientProvider client={client}>
             <AuthContext.Provider value={value}>
-                <ConfirmProvider>
-                    <MemoryRouter initialEntries={[path]}>
-                        <Routes>
-                            <Route path="/masters/:entity/:id" element={<MasterDetail />} />
-                        </Routes>
-                    </MemoryRouter>
-                </ConfirmProvider>
+                <MasterRecordPanel entity={entity} lookup={decodeURIComponent(lookup)} label={`${entity} ${lookup}`} initialTab={initialTab} />
             </AuthContext.Provider>
         </QueryClientProvider>,
     );
@@ -69,11 +65,11 @@ describe("MasterDetail documents, accordion and related records", () => {
         routes(() => Promise.resolve({ data: blob }));
         renderAt("/masters/transfer-letters/41");
 
-        expect(await screen.findByRole("heading", { name: "LABDHI NEW", level: 1 })).toBeInTheDocument();
-        // Overview lists the stored file with a download.
-        expect(screen.getByRole("button", { name: "Download LABDHI_NEW.docx" })).toBeInTheDocument();
+        expect(await screen.findByRole("tab", { name: "Overview", selected: true })).toBeInTheDocument();
 
-        await user.click(screen.getByRole("tab", { name: "Document" }));
+        // Documents tab: the stored file with an authenticated download, and its rendered preview.
+        await user.click(screen.getByRole("tab", { name: "Documents" }));
+        expect(screen.getByRole("button", { name: "Download LABDHI_NEW.docx" })).toBeInTheDocument();
         const doc = await screen.findByRole("document", { name: "LABDHI_NEW.docx preview" });
         expect(await within(doc).findByText("TRANSFER LETTER")).toBeInTheDocument();
         expect(within(doc).getByText("Licence No")).toBeInTheDocument();
@@ -87,9 +83,9 @@ describe("MasterDetail documents, accordion and related records", () => {
         expect(screen.getByText("110%")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
 
-        // Details: the file is under Attachments, not repeated as a raw URL field.
+        // Details: the file is not repeated as a raw URL field (it lives in Documents).
         await user.click(screen.getByRole("tab", { name: "Details" }));
-        expect(screen.getByRole("button", { name: "Attachments and documents" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "General information" })).toBeInTheDocument();
         expect(screen.queryByText("http://localhost:8000/media/tl/LABDHI_NEW.docx")).not.toBeInTheDocument();
     });
 
@@ -97,7 +93,9 @@ describe("MasterDetail documents, accordion and related records", () => {
         const user = userEvent.setup();
         routes(() => Promise.reject({ response: { status: 404 } }));
         renderAt("/masters/transfer-letters/41?tab=document");
-        await user.click(await screen.findByRole("tab", { name: "Document" }));
+        // Old `?tab=document` links open the Documents tab.
+        expect(await screen.findByRole("tab", { name: "Documents", selected: true })).toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: "Documents" }));
         expect(await screen.findByText("Document file is missing")).toBeInTheDocument();
         expect(renderAsync).not.toHaveBeenCalled();
     });
@@ -120,7 +118,7 @@ describe("MasterDetail documents, accordion and related records", () => {
         expect(screen.getByRole("region", { name: "Export items" })).toHaveTextContent("BISCUITS");
         expect(screen.getByRole("region", { name: "Import items" })).toHaveTextContent("1101 - Flour");
         expect(screen.queryByRole("region", { name: "Notes" })).not.toBeInTheDocument();
-        expect(screen.queryByRole("tab", { name: "Document" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("tab", { name: "Documents" })).not.toBeInTheDocument();
     });
 });
 

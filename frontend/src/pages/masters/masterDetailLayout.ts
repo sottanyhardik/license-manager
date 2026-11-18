@@ -9,7 +9,8 @@ import type { FieldSpec } from "@/components/shared/FieldGrid";
 import { masterColumnLabel, resolveMasterColumns, type MasterNestedCollection } from "./masterColumns";
 import { formatMasterLabel, formatMasterValue, masterDetailFields, MASTER_AUDIT_FIELDS, readMasterField } from "./masterDetailFields";
 
-export type MasterDetailSectionId = "general" | "additional" | "attachments" | "audit";
+/** Details accordion sections. Attachments live in the record's Documents tab. */
+export type MasterDetailSectionId = "general" | "additional" | "audit";
 
 export interface MasterDetailSection {
     id: MasterDetailSectionId;
@@ -44,7 +45,6 @@ export interface MasterDetailLayout {
 const SECTION_TITLES: Record<MasterDetailSectionId, string> = {
     general: "General information",
     additional: "Additional information",
-    attachments: "Attachments and documents",
     audit: "Audit information",
 };
 
@@ -93,7 +93,6 @@ export function buildMasterDetailLayout(
     const sections: MasterDetailSection[] = [
         { id: "general" as const, title: SECTION_TITLES.general, fields: general },
         { id: "additional" as const, title: SECTION_TITLES.additional, fields: additional },
-        { id: "attachments" as const, title: SECTION_TITLES.attachments, fields: documents.map(d => ({ key: d.key, label: d.label })) },
         { id: "audit" as const, title: SECTION_TITLES.audit, fields: [...audit] },
     ].filter(section => section.fields.length > 0);
 

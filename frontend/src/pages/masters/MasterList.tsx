@@ -26,8 +26,9 @@ import GenericMasterCards, { type MasterBulkAction, type MasterBulkResult } from
 import LicensesTable from "./tables/LicensesTable";
 import TradesListView from "./TradesListView";
 import BoeTable from "@/features/bill-of-entry/BoeTable";
-import {getDefaultFilters, getMasterRecordKey} from "./masterListConfig";
+import {getDefaultFilters, getMasterRecordKey, getMasterRecordLookup} from "./masterListConfig";
 import { MASTER_COLUMNS } from "./masterColumns";
+import { apiErrorMessage } from "./apiErrorMessage";
 import { masterEntities } from "../../routes/config";
 import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel";
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
@@ -116,11 +117,18 @@ export function groupLinkedTrades(trades: TradeListItem[]): TradeGroup[] {
  * - Table with data
  * - Pagination
  */
+/**
+ * `tab` belongs to the record opened inline (`/masters/:entity/:id?tab=details`), never to the list query:
+ * it is read once as the record's first tab and is not sent to the API as a filter.
+ */
+const RECORD_TAB_PARAM = "tab";
+
 /** Read `page` and filter params from a URL query string (API-format keys). */
 function parseListUrl(search: string): { filters: Record<string, string>; page: number | null } {
     const filters: Record<string, string> = {};
     let page: number | null = null;
     for (const [key, value] of new URLSearchParams(search).entries()) {
+        if (key === RECORD_TAB_PARAM) continue;
         if (key === "page") {
             const parsed = Number.parseInt(value, 10);
             page = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
@@ -155,9 +163,24 @@ function normalizeFilterValues(filters: Record<string, unknown>): Record<string,
 }
 
 export default function MasterList() {
-    const {entity} = useParams();
+    // `id` (decoded by the router) = the record opened inline: `/masters/:entity/:id` is this list, not a page.
+    const {entity, id: openRecord} = useParams();
     const location = useLocation();
     const navigate = useNavigate();
+    // First tab for the record named in the entry URL only: `/:id/edit` (old edit page) → Edit, `?tab=` → that tab.
+    const [initialRecordTab] = useState(() => {
+        const fromState = (location.state as { recordTab?: string } | null)?.recordTab;
+        const tab = location.pathname.endsWith("/edit") ? "edit" : fromState ?? new URLSearchParams(location.search).get(RECORD_TAB_PARAM);
+        return openRecord && tab ? { lookup: openRecord, tab } : undefined;
+    });
+    // `/masters/:entity/:id/edit` is a compatibility entry: show the record URL (the list with the record open on Edit).
+    useEffect(() => {
+        if (!entity || !openRecord || !location.pathname.endsWith("/edit")) return;
+        navigate(
+            { pathname: `/masters/${entity}/${encodeURIComponent(openRecord)}`, search: location.search },
+            { replace: true, state: { recordTab: "edit" } },
+        );
+    }, [entity, openRecord, location.pathname, location.search, navigate]);
 
     // Determine the actual entity name - either from params or from path
     const entityName = entity ||
@@ -409,6 +432,7 @@ export default function MasterList() {
         const urlFilters: Record<string, string> = {};
         let urlPage: number | null = null;
         for (const [key, value] of urlParams.entries()) {
+            if (key === RECORD_TAB_PARAM) continue;
             // Pagination belongs to its own state. Keeping `page` in filters
             // makes the URL synchronization effect turn numeric page 1 into
             // string "1", producing a second React Query key/request for the
@@ -705,8 +729,14 @@ export default function MasterList() {
             }
             toast.success("Record deleted successfully");
             invalidateList();
+            // The deleted record was open inline: close it instead of showing "Record not found".
+            if (openRecord && !['licenses', 'allotments', 'trades', 'incentive-licenses', 'bill-of-entries'].includes(entityName)
+                && openRecord === getMasterRecordLookup(entityName, item)) {
+                navigate({ pathname: `/masters/${entityName}`, search: location.search });
+            }
         } catch (err) {
-            toast.error(err.response?.data?.detail || "Failed to delete record");
+            // DRF refusals arrive as `detail`, a list or a field error (e.g. "referenced by 2 licences").
+            toast.error(apiErrorMessage(err, "Failed to delete record"));
         }
     };
 
@@ -1538,6 +1568,13 @@ export default function MasterList() {
                             onDelete={handleDelete}
                             canWrite={canWrite}
                             onBulk={handleMasterBulk}
+                            expandedLookup={openRecord ?? null}
+                            onExpandedChange={(lookup) => {
+                                // Push (back/forward walks open/closed records); the list query string is kept as-is.
+                                const base = `/masters/${entityName}`;
+                                navigate({ pathname: lookup ? `${base}/${encodeURIComponent(lookup)}` : base, search: location.search });
+                            }}
+                            initialRecordTab={initialRecordTab}
                         />
                     ))}
 

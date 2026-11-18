@@ -251,6 +251,16 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   Tests: vitest masters 115/115, nav/licence/routes 64/64; tsc exit 0; ESLint exit 0; build exit 0; real-backend
   eight-master spec 10/10 (exit 0); masters-workspace 6/6 (exit 0). Run the two specs in **separate** harness runs —
   together they trip the API throttle (429 on `auth/me` → sign-out). No backend change; no business-rule change. Not pushed.
+- Transfer Letter DOCX viewer + generic record tabs/accordion (2026-11-18) `b06133f7`. **NEW DEPENDENCY** `docx-preview@0.4.1`.
+- One page per master — records open and edit inline (2026-11-18): no standalone master detail or edit screens.
+  `/masters/:entity/:id?` → `MasterList` (one route, no remount) with that record expanded in its row
+  (`MasterRecordPanel` via License's `DetailTabs`): Overview · Details (accordion) · Edit (generic `MasterForm`,
+  `embedded`; save/cancel in place; writers only) · Documents (files + DOCX preview) · Related records · History.
+  `/masters/:entity/:id/edit` → same list, record on Edit (URL normalised). `?tab=` is reserved (never a list filter).
+  Off-page records show pinned above the list. Row delete now surfaces DRF list/field refusals (`apiErrorMessage`).
+  Tests: frontend gate exit 0 (lint, typecheck, 924/924 vitest, build); real-backend masters-detail 4/4,
+  eight-master 10/10, masters-workspace 6/6 (each exit 0, separate runs). No backend change. Not pushed.
+  Open: `/masters/:entity/create` is still a page; editing a code-keyed master's code leaves the open URL on the old code.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

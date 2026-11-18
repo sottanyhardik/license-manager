@@ -124,9 +124,15 @@ describe("GenericMasterCards", () => {
     const renderCards = (extra: Record<string, unknown> = {}) => {
         const navigate = vi.fn();
         const onDelete = vi.fn();
-        const view = render(<ConfirmProvider><MemoryRouter><GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} /></MemoryRouter></ConfirmProvider>);
+        // Expanded rows load the record inline (MasterRecordPanel), so the rows need a query client and auth.
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const auth = { isSuperAdmin: () => true, hasRole: () => true, hasAnyRole: () => true } as unknown as React.ContextType<typeof AuthContext>;
+        const wrap = (ui: React.ReactElement) => (
+            <QueryClientProvider client={client}><AuthContext.Provider value={auth}><ConfirmProvider><MemoryRouter>{ui}</MemoryRouter></ConfirmProvider></AuthContext.Provider></QueryClientProvider>
+        );
+        const view = render(wrap(<GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} />));
         const rerenderCards = (more: Record<string, unknown>) =>
-            view.rerender(<ConfirmProvider><MemoryRouter><GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} {...more} /></MemoryRouter></ConfirmProvider>);
+            view.rerender(wrap(<GenericMasterCards {...props} navigate={navigate} onDelete={onDelete} {...extra} {...more} />));
         return { navigate, onDelete, rerenderCards };
     };
 
@@ -136,12 +142,15 @@ describe("GenericMasterCards", () => {
         expect(screen.getByText("Advance authorisation")).toBeInTheDocument();
     });
 
-    it("edits and deletes through the shared action menu", async () => {
+    it("edits inline (no edit page) and deletes through the shared action menu", async () => {
         const user = userEvent.setup();
+        getSpy.mockImplementation(() => new Promise(() => {})); // record stays loading; the panel's tabs have their own tests
         const { navigate, onDelete } = renderCards();
         await user.click(screen.getByRole("button", { name: "Actions for 025/2023" }));
         await user.click(screen.getByRole("menuitem", { name: /Edit/ }));
-        expect(navigate).toHaveBeenCalledWith("/masters/notification-numbers/025%2F2023/edit");
+        // Edit opens the record in its row; nothing navigates to /edit.
+        expect(screen.getByRole("region", { name: "025/2023 details" })).toBeInTheDocument();
+        expect(navigate).not.toHaveBeenCalled();
         await user.click(screen.getByRole("button", { name: "Actions for 025/2023" }));
         await user.click(screen.getByRole("menuitem", { name: /Delete/ }));
         expect(onDelete).toHaveBeenCalledWith(props.data[0]);

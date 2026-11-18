@@ -43,7 +43,6 @@ const Profile = lazyLoadWithRetry(() => import("../pages/Profile"));
 const MasterList = lazyLoadWithRetry(() => import("../pages/masters/MasterList"));
 const MasterForm = lazyLoadWithRetry(() => import("../pages/masters/MasterForm"));
 const MastersHub = lazyLoadWithRetry(() => import("../pages/masters/MastersHub"));
-const MasterDetail = lazyLoadWithRetry(() => import("../pages/masters/MasterDetail"));
 const AllotmentAction = lazyLoadWithRetry(() => import("../pages/AllotmentAction"));
 const BOETransferLetter = lazyLoadWithRetry(() => import("../pages/BOETransferLetter"));
 
@@ -338,7 +337,10 @@ export default function AppRoutes() {
                         <AdminLayout><MastersHub /></AdminLayout>
                     </ProtectedRoute>
                 } />
-                <Route path="/masters/:entity" element={
+                {/* One route for the list and `/masters/:entity/:id` (record opened inline in its row), so moving
+                    between them never remounts the list: search, filters, page and scroll are kept. Static
+                    `/create` and the longer `/:id/edit` outrank the optional segment. */}
+                <Route path="/masters/:entity/:id?" element={
                     <ProtectedRoute>
                         <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
@@ -348,14 +350,11 @@ export default function AppRoutes() {
                         <AdminLayout><MasterForm /></AdminLayout>
                     </ProtectedRoute>
                 } />
-                <Route path="/masters/:entity/:id" element={
-                    <ProtectedRoute>
-                        <AdminLayout><MasterDetail /></AdminLayout>
-                    </ProtectedRoute>
-                } />
+                {/* Old edit-page URL: the list with the record open on its Edit tab (no standalone edit page). The Edit
+                    tab itself is shown only to writers and the API enforces permissions on save. */}
                 <Route path="/masters/:entity/:id/edit" element={
-                    <ProtectedRoute requiredAnyRole={USER_ADMIN_ROLES}>
-                        <AdminLayout><MasterForm /></AdminLayout>
+                    <ProtectedRoute>
+                        <AdminLayout><MasterList /></AdminLayout>
                     </ProtectedRoute>
                 } />
 

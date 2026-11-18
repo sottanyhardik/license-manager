@@ -110,8 +110,9 @@ export const paymentLedgerKeys = {
 };
 
 /** One query shared by the Purchase and Sale tabs. Mounted only while a tab is active, so it is lazy. */
-export function usePaymentLedgers(licenseId: number | string) {
+export function usePaymentLedgers(licenseId: number | string, enabled = true) {
     return useQuery<PaymentLedgers>({
+        enabled,
         queryKey: paymentLedgerKeys.trade(licenseId),
         queryFn: async () => (await api.get(`licenses/${licenseId}/overview-payment-ledgers/`)).data as PaymentLedgers,
     });

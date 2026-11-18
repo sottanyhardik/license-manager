@@ -289,6 +289,11 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
     details, Purchase invoices, Sale invoices, Bank payment ledger (accounting roles), BOE & Allotments (expandable),
     Documents & licence copy actions (+ inline Edit for writers), Ownership History (expandable). Gate exit 0 (951/951);
     e2e one-page 1/1 (asserts zero tabs), payment ledgers 3/3; screenshot confirms the tab bar is gone.
+  - SUPERSEDED same day by the owner (explicit choice: persistent header + 8 tabs, single owner per datum): permanent licence
+    header + 4 licence-level cards; tabs Ledger (company-wise transactions + reference links only) / Purchase Invoices / Sale
+    Invoices (invoice-level totals) / Bank Payment Ledger (licence-linked bank totals; each bank txn once) / BOE & Allotments /
+    Documents / Ownership History / Edit. Cross-references switch tab and focus the record (invoice no. / UTR). The separate
+    bank-movement block and inline bank rows were removed (duplicates). Gate exit 0 (950/950); e2e one-page 1/1, payment 3/3.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

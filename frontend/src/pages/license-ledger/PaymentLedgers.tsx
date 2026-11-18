@@ -2,7 +2,7 @@
  * Purchase / Sale / Bank Payment ledger tabs of the inline licence workspace (Licence Ledger).
  * Read-only: every figure (rows and summary totals) comes from the API — nothing is recomputed here.
  */
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { EmptyState, InlineError, LoadingState, StatusBadge, type Tone } from "@/components/shared";
@@ -36,7 +36,7 @@ interface SummaryItem { label: string; value: string }
 
 function SummaryStrip({ label, items }: { label: string; items: SummaryItem[] }) {
     return (
-        <dl aria-label={label} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <dl aria-label={label} className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
             {items.map((item) => (
                 <div key={item.label} className="rounded-lg border border-border/70 bg-card px-3 py-2">
                     <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">{item.label}</dt>
@@ -46,6 +46,9 @@ function SummaryStrip({ label, items }: { label: string; items: SummaryItem[] })
         </dl>
     );
 }
+
+/** A request (from another tab) to show one record: `key` identifies it; `n` changes per request. */
+export interface LedgerFocus { key: string; n: number }
 
 interface LedgerFrameProps<T> {
     query: UseQueryResult<unknown>;
@@ -58,12 +61,27 @@ interface LedgerFrameProps<T> {
     rows: T[];
     matches: (row: T, needle: string) => boolean;
     renderTable: (pageRows: T[]) => ReactNode;
+    /** Cross-tab focus: clears the search and jumps to the page holding the record whose key matches. */
+    focus?: LedgerFocus;
+    rowKey?: (row: T) => string;
+    /** Caption telling which level the summary totals belong to (invoice-level, licence-linked bank…). */
+    summaryCaption?: string;
 }
 
 /** Shared states (loading / 403 / error / empty), summary strip, search and 25-per-page pagination. */
-function LedgerFrame<T>({ query, forbiddenTitle, emptyTitle, searchLabel, tableLabel, summaryLabel, summary, rows, matches, renderTable }: LedgerFrameProps<T>) {
+function LedgerFrame<T>({ query, forbiddenTitle, emptyTitle, searchLabel, tableLabel, summaryLabel, summary, rows, matches, renderTable, focus, rowKey, summaryCaption }: LedgerFrameProps<T>) {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(0);
+    const focusKey = focus?.key;
+    const focusNonce = focus?.n;
+    useEffect(() => {
+        if (focusKey === undefined || !rowKey) return;
+        const index = rows.findIndex((row) => rowKey(row) === focusKey);
+        if (index < 0) return;
+        setSearch("");
+        setPage(Math.floor(index / LEDGER_PAGE_SIZE));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- a new request (nonce) or newly loaded rows re-run it
+    }, [focusKey, focusNonce, rows.length]);
 
     if (query.isLoading) return <LoadingState variant="skeleton-rows" rows={4} label={`Loading ${tableLabel.toLowerCase()}`} />;
     if (query.isError) {
@@ -81,6 +99,7 @@ function LedgerFrame<T>({ query, forbiddenTitle, emptyTitle, searchLabel, tableL
 
     return (
         <div className="space-y-3">
+            {summaryCaption && <p className="text-[11px] text-muted-foreground">{summaryCaption}</p>}
             <SummaryStrip label={summaryLabel} items={summary} />
             {rows.length === 0 ? <EmptyState title={emptyTitle} /> : (
                 <>
@@ -186,9 +205,30 @@ function Outstanding({ value }: { value: string }) {
         : <span>{money(value)}</span>;
 }
 
-function TradeTable({ copy, rows }: { copy: TradeCopy; rows: TradeLedgerRow[] }) {
+/** Expands, scrolls to and highlights the focused row of the current page. */
+function useRowFocus<T>(rows: T[], keyOf: (row: T) => string, idOf: (row: T) => number, focus: LedgerFocus | undefined, setOpenId: (id: number) => void) {
+    const tableRef = useRef<HTMLDivElement>(null);
+    const [highlight, setHighlight] = useState<string | null>(null);
+    const focusKey = focus?.key;
+    const focusNonce = focus?.n;
+    useEffect(() => {
+        if (focusKey === undefined) return;
+        const row = rows.find((r) => keyOf(r) === focusKey);
+        if (!row) return;
+        setOpenId(idOf(row));
+        setHighlight(focusKey);
+        requestAnimationFrame(() => {
+            tableRef.current?.querySelector(`[data-ledger-row="${CSS.escape(focusKey)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- run per focus request / when the page with the row renders
+    }, [focusKey, focusNonce, rows]);
+    return { tableRef, highlight };
+}
+
+function TradeTable({ copy, rows, focus, onOpenBank }: { copy: TradeCopy; rows: TradeLedgerRow[]; focus?: LedgerFocus; onOpenBank?: (reference: string) => void }) {
     const [openId, setOpenId] = useState<number | null>(null);
     const [openError, setOpenError] = useState<string | null>(null);
+    const { tableRef, highlight } = useRowFocus(rows, (r) => r.invoice_number, (r) => r.trade_id, focus, setOpenId);
 
     const openInvoice = async (row: TradeLedgerRow) => {
         if (!row.document) return;
@@ -203,6 +243,7 @@ function TradeTable({ copy, rows }: { copy: TradeCopy; rows: TradeLedgerRow[] })
     return (
         <>
             {openError && <p role="alert" className="text-xs text-destructive">{openError}</p>}
+            <div ref={tableRef}>
             <TableShell label={copy.tableLabel} minWidth="min-w-[960px]">
                 <thead className="bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground">
                     <tr>
@@ -226,7 +267,7 @@ function TradeTable({ copy, rows }: { copy: TradeCopy; rows: TradeLedgerRow[] })
                         const status = TRADE_STATUS[row.status];
                         return (
                             <Fragment key={row.trade_id}>
-                                <tr className="border-t border-border/60 hover:bg-muted/30">
+                                <tr data-ledger-row={row.invoice_number} className={cn("border-t border-border/60 hover:bg-muted/30", highlight === row.invoice_number && "bg-primary/10 ring-1 ring-inset ring-primary/40")}>
                                     <td className="px-2 py-1.5">
                                         <ExpandButton open={open} label={`${open ? "Hide" : "Show"} ${copy.noun} for invoice ${row.invoice_number}`}
                                             onClick={() => setOpenId(open ? null : row.trade_id)} />
@@ -260,7 +301,12 @@ function TradeTable({ copy, rows }: { copy: TradeCopy; rows: TradeLedgerRow[] })
                                                         <td className="whitespace-nowrap px-2 py-1">{fmtDate(p.date)}</td>
                                                         <td className="px-2 py-1 text-right tabular-nums">{money(p.amount)}</td>
                                                         <td className="px-2 py-1">{p.note || "—"}</td>
-                                                        <td className="px-2 py-1">{p.bank_reference || "—"}</td>
+                                                        <td className="px-2 py-1">
+                                                            {p.bank_reference && onOpenBank ? (
+                                                                <button type="button" className="font-medium text-primary hover:underline" onClick={() => onOpenBank(p.bank_reference!)}
+                                                                    aria-label={`Open bank transaction ${p.bank_reference}`}>{p.bank_reference}</button>
+                                                            ) : (p.bank_reference || "—")}
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </MiniTable>
@@ -272,11 +318,12 @@ function TradeTable({ copy, rows }: { copy: TradeCopy; rows: TradeLedgerRow[] })
                     })}
                 </tbody>
             </TableShell>
+            </div>
         </>
     );
 }
 
-function TradeLedgerTab({ licenseId, copy }: { licenseId: number; copy: TradeCopy }) {
+function TradeLedgerTab({ licenseId, copy, focus, onOpenBank }: { licenseId: number; copy: TradeCopy; focus?: LedgerFocus; onOpenBank?: (reference: string) => void }) {
     const query = usePaymentLedgers(licenseId);
     const section = query.data?.[copy.key];
     const s = section?.summary;
@@ -300,17 +347,22 @@ function TradeLedgerTab({ licenseId, copy }: { licenseId: number; copy: TradeCop
                 row.invoice_number.toLowerCase().includes(needle)
                 || (row.company_name ?? "").toLowerCase().includes(needle)
                 || row.payments.some((p) => (p.bank_reference ?? "").toLowerCase().includes(needle))}
-            renderTable={(pageRows) => <TradeTable key={copy.key} copy={copy} rows={pageRows} />}
+            renderTable={(pageRows) => <TradeTable key={copy.key} copy={copy} rows={pageRows} focus={focus} onOpenBank={onOpenBank} />}
+            focus={focus}
+            rowKey={(row) => row.invoice_number}
+            summaryCaption="Invoice-level totals — this licence's invoices (full invoice amounts; licence-level figures are in the summary cards above)."
         />
     );
 }
 
-export function PurchaseLedgerTab({ licenseId }: { licenseId: number }) {
-    return <TradeLedgerTab licenseId={licenseId} copy={PURCHASE_COPY} />;
+export interface TradeLedgerTabProps { licenseId: number; focus?: LedgerFocus; onOpenBank?: (reference: string) => void }
+
+export function PurchaseLedgerTab(props: TradeLedgerTabProps) {
+    return <TradeLedgerTab {...props} copy={PURCHASE_COPY} />;
 }
 
-export function SaleLedgerTab({ licenseId }: { licenseId: number }) {
-    return <TradeLedgerTab licenseId={licenseId} copy={SALE_COPY} />;
+export function SaleLedgerTab(props: TradeLedgerTabProps) {
+    return <TradeLedgerTab {...props} copy={SALE_COPY} />;
 }
 
 // ── Bank payment ledger ──────────────────────────────────────────────────────
@@ -321,10 +373,17 @@ const RECON: Record<BankReconciliation, { tone: Tone; label: string }> = {
     UNRECONCILED: { tone: "neutral", label: "Unreconciled" },
 };
 
-function BankTable({ rows }: { rows: BankLedgerRow[] }) {
+const BANK_SIDE: Record<"WITHDRAWAL" | "DEPOSIT", { tone: Tone; label: string }> = {
+    WITHDRAWAL: { tone: "danger", label: "WITHDRAWAL / DEBIT" },
+    DEPOSIT: { tone: "success", label: "DEPOSIT / CREDIT" },
+};
+
+function BankTable({ rows, focus, onOpenInvoice }: { rows: BankLedgerRow[]; focus?: LedgerFocus; onOpenInvoice?: (direction: "PURCHASE" | "SALE", invoiceNumber: string) => void }) {
     const [openId, setOpenId] = useState<number | null>(null);
+    const { tableRef, highlight } = useRowFocus(rows, (r) => r.reference, (r) => r.payment_id, focus, setOpenId);
     return (
-        <TableShell label="Bank payment ledger" minWidth="min-w-[1100px]">
+        <div ref={tableRef}>
+        <TableShell label="Bank payment ledger" minWidth="min-w-[1180px]">
             <thead className="bg-muted/95 text-[10.5px] uppercase tracking-wide text-muted-foreground">
                 <tr>
                     <th scope="col" className="w-8 px-2 py-1.5"><span className="sr-only">Details</span></th>
@@ -333,6 +392,7 @@ function BankTable({ rows }: { rows: BankLedgerRow[] }) {
                     <th scope="col" className={cn(TH, "text-left")}>UTR / Reference</th>
                     <th scope="col" className={cn(TH, "text-left")}>Mode</th>
                     <th scope="col" className={cn(TH, "text-left")}>Type</th>
+                    <th scope="col" className={cn(TH, "text-left")}>Bank side</th>
                     <th scope="col" className={cn(TH, "text-left")}>Counterparty</th>
                     <th scope="col" className={cn(TH, "text-left")}>Linked invoices</th>
                     <th scope="col" className={cn(TH, "text-right")}>Amount</th>
@@ -348,7 +408,7 @@ function BankTable({ rows }: { rows: BankLedgerRow[] }) {
                     const name = row.reference || `payment ${row.payment_id}`;
                     return (
                         <Fragment key={row.payment_id}>
-                            <tr className="border-t border-border/60 hover:bg-muted/30">
+                            <tr data-ledger-row={row.reference} className={cn("border-t border-border/60 hover:bg-muted/30", highlight !== null && highlight === row.reference && "bg-primary/10 ring-1 ring-inset ring-primary/40")}>
                                 <td className="px-2 py-1.5">
                                     <ExpandButton open={open} label={`${open ? "Hide" : "Show"} allocations for ${name}`}
                                         onClick={() => setOpenId(open ? null : row.payment_id)} />
@@ -360,15 +420,32 @@ function BankTable({ rows }: { rows: BankLedgerRow[] }) {
                                 <td className={TD}>
                                     <StatusBadge tone={row.direction === "PAYMENT" ? "primary" : "info"} label={row.direction === "PAYMENT" ? "Payment" : "Receipt"} />
                                 </td>
+                                <td className={TD}>
+                                    {(() => {
+                                        const side = BANK_SIDE[row.bank_direction ?? (row.direction === "PAYMENT" ? "WITHDRAWAL" : "DEPOSIT")];
+                                        return <StatusBadge tone={side.tone} label={side.label} />;
+                                    })()}
+                                </td>
                                 <td className={TD}>{row.party || "—"}</td>
-                                <td className={TD}>{row.invoices.length ? row.invoices.map((i) => i.number).join(", ") : "—"}</td>
+                                <td className={TD}>
+                                    {row.invoices.length === 0 ? "—" : row.invoices.map((i, idx) => (
+                                        <Fragment key={`${i.invoice_id ?? "t"}-${i.number}`}>
+                                            {idx > 0 && ", "}
+                                            {onOpenInvoice ? (
+                                                <button type="button" className="font-medium text-primary hover:underline"
+                                                    onClick={() => onOpenInvoice(row.direction === "PAYMENT" ? "PURCHASE" : "SALE", i.number)}
+                                                    aria-label={`Open ${row.direction === "PAYMENT" ? "purchase" : "sale"} invoice ${i.number}`}>{i.number}</button>
+                                            ) : i.number}
+                                        </Fragment>
+                                    ))}
+                                </td>
                                 <td className={cn(TD, "text-right tabular-nums")}>{money(row.amount)}</td>
                                 <td className={cn(TD, "text-right tabular-nums")}>{money(row.allocated_to_licence)}</td>
                                 <td className={cn(TD, "text-right tabular-nums")}>{money(row.unallocated)}</td>
                                 <td className={TD}><StatusBadge tone={recon.tone} label={recon.label} /></td>
                             </tr>
                             {open && (
-                                <DetailPanel colSpan={12}>
+                                <DetailPanel colSpan={13}>
                                     <div className="grid gap-3 md:grid-cols-2">
                                         <div>
                                             <h4 className="mb-1 text-[11px] font-semibold text-foreground">Invoice allocations</h4>
@@ -405,10 +482,11 @@ function BankTable({ rows }: { rows: BankLedgerRow[] }) {
                 })}
             </tbody>
         </TableShell>
+        </div>
     );
 }
 
-export function BankPaymentLedgerTab({ licenseId }: { licenseId: number }) {
+export function BankPaymentLedgerTab({ licenseId, focus, onOpenInvoice }: { licenseId: number; focus?: LedgerFocus; onOpenInvoice?: (direction: "PURCHASE" | "SALE", invoiceNumber: string) => void }) {
     const query = useBankLedger(licenseId);
     const s = query.data?.summary;
     return (
@@ -420,17 +498,22 @@ export function BankPaymentLedgerTab({ licenseId }: { licenseId: number }) {
             tableLabel="Bank payment ledger"
             summaryLabel="Bank payment ledger summary"
             summary={s ? [
-                { label: "Total Payments", value: money(s.total_payments) },
-                { label: "Total Receipts", value: money(s.total_receipts) },
-                { label: "Total Allocated", value: money(s.total_allocated) },
-                { label: "Total Unallocated", value: money(s.total_unallocated) },
+                { label: "Total Bank Withdrawals", value: money(s.total_withdrawals ?? s.total_payments) },
+                { label: "Total Bank Credits", value: money(s.total_credits ?? s.total_receipts) },
+                { label: "Total Allocated Payments", value: money(s.total_allocated_payments) },
+                { label: "Total Allocated Receipts", value: money(s.total_allocated_receipts) },
+                { label: "Total Unallocated Withdrawals", value: money(s.total_unallocated_withdrawals) },
+                { label: "Total Unallocated Credits", value: money(s.total_unallocated_credits) },
             ] : null}
+            summaryCaption="Licence-linked bank totals — only bank payments/receipts allocated to this licence's invoices; other account activity is excluded."
+            focus={focus}
+            rowKey={(row) => row.reference}
             rows={query.data?.rows ?? []}
             matches={(row, needle) =>
                 row.reference.toLowerCase().includes(needle)
                 || row.party.toLowerCase().includes(needle)
                 || row.invoices.some((i) => i.number.toLowerCase().includes(needle))}
-            renderTable={(pageRows) => <BankTable rows={pageRows} />}
+            renderTable={(pageRows) => <BankTable rows={pageRows} focus={focus} onOpenInvoice={onOpenInvoice} />}
         />
     );
 }

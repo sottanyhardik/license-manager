@@ -349,15 +349,10 @@ describe("LicenseLedger fresh filters", () => {
         routeParams = { licenseId: "2619", itemId: "881" };
         render(wrap());
         const workspace = await screen.findByRole("region", { name: "Licence 0311000001 workspace" });
-        // One continuous workspace: no tab navigation; sections and inline actions instead.
-        expect(within(workspace).queryByRole("tablist")).not.toBeInTheDocument();
-        expect(within(workspace).queryAllByRole("tab")).toHaveLength(0);
-        for (const label of ["Purchase invoices", "Sale invoices", "Bank payment ledger", "Documents & licence copy"]) {
-            expect(within(workspace).getByRole("region", { name: label })).toBeInTheDocument();
-        }
-        for (const name of ["BOE & Allotments", "Ownership History", "Preview ledger PDF", "Edit licence"]) {
-            expect(within(workspace).getByRole("button", { name })).toBeInTheDocument();
-        }
+        // Persistent header + eight single-owner tabs (Ledger first).
+        expect(within(workspace).getAllByRole("tab").map((t) => t.textContent)).toEqual(
+            ["Ledger", "Purchase Invoices", "Sale Invoices", "Bank Payment Ledger", "BOE & Allotments", "Documents", "Ownership History", "Edit"]);
+        expect(within(workspace).getByRole("tab", { name: "Ledger", selected: true })).toBeInTheDocument();
         await waitFor(() => expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/2619/ledger_detail/?company=881"));
         expect(screen.getByRole("button", { name: "0311000001" })).toHaveAttribute("aria-expanded", "true");
         await userEvent.click(within(workspace).getByRole("button", { name: "Collapse licence 0311000001" }));

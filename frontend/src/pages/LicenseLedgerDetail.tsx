@@ -204,7 +204,7 @@ function LedgerColumnHeader({ isDFIA, billCurrency, bankColumn = false }: { isDF
                 <th scope="col" className="whitespace-nowrap px-2.5 py-1 text-right font-medium text-success">
                     Purchase Bill {billSuffix}
                 </th>
-                {bankColumn && <th scope="col" className="whitespace-nowrap px-2.5 py-1 text-left font-bold text-foreground">Bank</th>}
+                {bankColumn && <th scope="col" className="whitespace-nowrap px-2.5 py-1 text-left font-bold text-foreground">Payment</th>}
             </tr>
         </thead>
     );

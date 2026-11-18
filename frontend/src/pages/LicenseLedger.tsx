@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toast } from "sonner";
 import api from '../api/axios';
 import { formatIndianNumber } from '../utils/numberFormatter';
@@ -16,6 +16,7 @@ import type { ActiveFilterItem } from '@/components/ActiveFilters';
 import { getCurrentFinancialYearRange, getPreviousFinancialYearRange } from '../utils/dateRangePresets';
 import { buildLicenseLedgerParams, defaultLicenseLedgerFilters, type LicenseLedgerFilters } from './licenseLedgerFilters';
 import { normalizeLicenseWiseData, type LicenseWiseData } from './licenseLedgerData';
+import LedgerLicenceWorkspace from './license-ledger/LedgerLicenceWorkspace';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-    ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar,
+    ArrowDownCircle, ArrowUpCircle, BookOpen, Building2, Calendar, ChevronDown,
     CalendarCheck, CalendarRange, Download, FileSpreadsheet, FileText, FolderDown,
     Globe, Inbox, ListChecks, Loader2, Trophy, X, XCircle,
 } from "lucide-react";
@@ -54,111 +55,119 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 
 // ─── LicenseWiseLedger sub-component ─────────────────────────────────────────
 
-function TransactionLedger({ data, navigate }: { data: LicenseWiseData; navigate: ReturnType<typeof useNavigate> }) {
-    const { licenses } = normalizeLicenseWiseData(data);
-    const fmtInr = (value: number) => `₹${formatIndianNumber(value, 2)}`;
-    const fmtFc = (value: number) => formatIndianNumber(value, 2);
-
-    if (licenses.length === 0) {
-        return <EmptyState icon={Inbox} title="No transactions found" description="No purchase or sale transactions match the current filters" />;
-    }
-
-    return (
-        <div className="space-y-2 p-2 sm:p-3" data-testid="transaction-ledger">
-            {licenses.map((license) => (
-                <section key={license.license_id} className="overflow-hidden rounded-lg border border-border/70" aria-label={`Transactions for license ${license.license_number}`}>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-primary px-3 py-1.5 text-primary-foreground">
-                        <span className="font-bold text-sm">License {license.license_number}</span>
-                        <span className="text-xs text-primary-foreground/80">{license.license_type}</span>
-                        <span className="hidden text-xs text-primary-foreground/80 sm:inline">Date: {license.license_date}</span>
-                        <span className="hidden text-xs text-primary-foreground/80 lg:inline">Expiry: {license.expiry_date}</span>
-                        {license.sion_norms && <span className="hidden text-xs text-primary-foreground/80 lg:inline">SION: {license.sion_norms}</span>}
-                        {license.transactions[0] && (
-                            <button type="button" onClick={() => navigate(`/license-ledger/${license.license_id}`)} className="ml-auto text-xs font-semibold underline underline-offset-2 hover:text-primary-foreground/80">Details</button>
-                        )}
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse text-xs">
-                            <thead className="sticky top-0 z-10">
-                                <tr className="border-b bg-muted/70 text-left text-muted-foreground">
-                                    <th className="px-2.5 py-1.5 font-semibold">Company</th>
-                                    <th className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">SION</th>
-                                    <th className="px-2.5 py-1.5 font-semibold">Date</th>
-                                    <th className="hidden px-2.5 py-1.5 font-semibold sm:table-cell">Counterparty</th>
-                                    <th className="px-2.5 py-1.5 font-semibold">Invoice</th>
-                                    <th className="px-2.5 py-1.5 font-semibold">Type</th>
-                                    <th className="hidden px-2.5 py-1.5 font-semibold lg:table-cell">Product</th>
-                                    <th className="px-2.5 py-1.5 text-right font-semibold">FC Amount</th>
-                                    <th className="px-2.5 py-1.5 text-right font-semibold">INR Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {license.transactions.map((transaction) => {
-                                    const isPurchase = transaction.transaction_type === 'PURCHASE';
-                                    return <tr key={`${transaction.transaction_type}-${transaction.trade_id}`} className={cn("border-b last:border-b-0", isPurchase ? "bg-success/[0.06]" : "bg-info/[0.06]")}>
-                                        <td className="px-2.5 py-1 font-medium">{transaction.company_name}</td>
-                                        <td className="hidden px-2.5 py-1 lg:table-cell text-xs">{transaction.sion_norms || license.sion_norms || '—'}</td>
-                                        <td className="px-2.5 py-1 whitespace-nowrap text-xs">{transaction.invoice_date}</td>
-                                        <td className="hidden px-2.5 py-1 text-xs sm:table-cell">{transaction.party_name}</td>
-                                        <td className="px-2.5 py-1 font-medium text-xs">{transaction.invoice_number}</td>
-                                        <td className="px-2.5 py-1"><Badge variant={isPurchase ? 'default' : 'info'} className={cn("text-[9px]", isPurchase && "bg-success hover:bg-success")}>{transaction.transaction_type}</Badge></td>
-                                        <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{transaction.item_names.join(', ') || '—'}</td>
-                                        <td className="px-2.5 py-1 text-right tabular-nums text-xs">{fmtFc(transaction.amount)}</td>
-                                        <td className="px-2.5 py-1 text-right font-medium tabular-nums text-xs">{fmtInr(transaction.bill_amount)}</td>
-                                    </tr>;
-                                })}
-                                <tr className="border-t-2 border-primary bg-primary/5 font-bold">
-                                    <td colSpan={8} className="px-2.5 py-1.5 text-xs uppercase">License Total</td>
-                                    <td className={cn("px-2.5 py-1.5 text-right tabular-nums text-xs", license.profit_loss >= 0 ? "text-success" : "text-destructive")}>
-                                        {fmtInr(license.purchase_bill_total)} / {fmtInr(license.sale_bill_total)}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            ))}
-        </div>
-    );
+/** The licence opened inline (from `/license-ledger/:licenseId/:itemId`). */
+export interface OpenLedgerLicence {
+    licenseId: string;
+    companyId?: string;
 }
 
-function LicenseWiseLedger({
-    data,
-    navigate,
-    selectedLicenseIds,
-    onToggleLicense,
-    onDownloadLicense,
-    onDownloadCustomLedger,
-}: {
+interface LicenseWiseLedgerProps {
     data: LicenseWiseData;
-    navigate: ReturnType<typeof useNavigate>;
     selectedLicenseIds: Set<string>;
     onToggleLicense: (licenseId: string) => void;
     onDownloadLicense: (licenseId: string) => void;
     onDownloadCustomLedger: (licenseId: string) => void;
-}) {
+    /** Licence expanded inline (one at a time). */
+    open: OpenLedgerLicence | null;
+    /** Opens (or, when already open, closes) a licence's inline workspace; `tab` picks its first tab. */
+    onOpen: (licenseId: string, companyId: string | undefined, tab?: string) => void;
+    onClose: () => void;
+    /** First tab for the licence opened by the entry URL (`?tab=`). */
+    initialTab?: string;
+}
+
+const isOpen = (open: OpenLedgerLicence | null, licenseId: unknown, companyId?: unknown) =>
+    !!open && open.licenseId === String(licenseId) && (open.companyId === undefined || open.companyId === String(companyId ?? ""));
+
+/**
+ * One-page Licence Ledger: Category (summary cards, above) → Company accordion → SION accordion → licence row →
+ * inline licence workspace (LedgerLicenceWorkspace). Figures are the API's (`license-wise`), shown as received.
+ */
+function LicenseWiseLedger({
+    data,
+    selectedLicenseIds,
+    onToggleLicense,
+    onDownloadLicense,
+    onDownloadCustomLedger,
+    open,
+    onOpen,
+    onClose,
+    initialTab,
+}: LicenseWiseLedgerProps) {
     const { licenses, company_groups = [], grand_total } = normalizeLicenseWiseData(data);
     const fmt = (v: number) => `₹${formatIndianNumber(v, 2)}`;
+    // Groups start expanded (the familiar view); each company / SION collapses independently.
+    const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+    const toggleGroup = (key: string) => setCollapsed(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    });
+    // The opened licence's company / SION are always shown (deep links, back/forward).
+    const openedGroups = new Set<string>();
+    if (open) {
+        for (const company of company_groups) {
+            for (const sion of company.sion_groups) {
+                if (sion.licenses.some(l => isOpen(open, l.license_id, company.company_id))) {
+                    openedGroups.add(`c:${company.company_id}`);
+                    openedGroups.add(`s:${company.company_id}:${sion.sion_norm || '__empty__'}`);
+                }
+            }
+        }
+    }
+    const isCollapsed = (key: string) => collapsed.has(key) && !openedGroups.has(key);
 
     if (company_groups.length > 0) {
         return (
         <div className="space-y-2 p-2 sm:p-3" data-testid="company-sion-ledger">
-                {company_groups.map((company) => (
+                {company_groups.map((company) => {
+                    const companyKey = `c:${company.company_id}`;
+                    const companyCollapsed = isCollapsed(companyKey);
+                    const companyPanel = `ledger-company-${company.company_id}`;
+                    const companyLicences = company.sion_groups.reduce((n, s) => n + (s.license_count ?? s.licenses.length), 0);
+                    return (
                     <section key={company.company_id} aria-label={`Company ${company.company_name}`} className="overflow-hidden rounded-lg border border-border/70">
-                        <h2 className="flex items-center gap-2 bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
-                            <Building2 className="size-4" aria-hidden="true" />{company.company_name}
+                        <h2 className="bg-primary text-xs font-bold text-primary-foreground">
+                            <button
+                                type="button"
+                                aria-expanded={!companyCollapsed}
+                                aria-controls={companyPanel}
+                                onClick={() => toggleGroup(companyKey)}
+                                className="flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-left text-xs leading-normal outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                <ChevronDown className={cn("size-4 shrink-0 transition-transform motion-reduce:transition-none", companyCollapsed && "-rotate-90")} aria-hidden="true" />
+                                <Building2 className="size-4 shrink-0" aria-hidden="true" />
+                                <span className="text-sm">{company.company_name}</span>
+                                <span className="font-normal text-primary-foreground/80">{companyLicences} licence{companyLicences === 1 ? '' : 's'}</span>
+                                <span className="ml-auto hidden font-normal tabular-nums sm:inline">Pur {fmt(company.total_purchase_bill_inr)}</span>
+                                <span className="hidden font-normal tabular-nums sm:inline">Sale {fmt(company.total_sale_bill_inr)}</span>
+                                <span className="tabular-nums">P/L {fmt(company.total_profit_loss_inr)}</span>
+                            </button>
                         </h2>
-                        <div className="space-y-2 p-2 sm:p-3">
-                            {company.sion_groups.map((sion) => (
+                        <div id={companyPanel} hidden={companyCollapsed} className="space-y-2 p-2 sm:p-3">
+                            {company.sion_groups.map((sion) => {
+                                const sionKey = `s:${company.company_id}:${sion.sion_norm || '__empty__'}`;
+                                const sionCollapsed = isCollapsed(sionKey);
+                                const sionPanel = `ledger-sion-${company.company_id}-${(sion.sion_norm || 'none').replace(/[^A-Za-z0-9_-]/g, '_')}`;
+                                return (
                                 <section key={sion.sion_norm || '__empty__'} aria-label={`SION ${sion.label}`} className="overflow-hidden rounded-md border border-border/70">
-                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 bg-muted px-3 py-1.5">
-                                        <h3 className="text-xs font-bold text-foreground">SION: {sion.label}</h3>
-                                        <span className="text-xs text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
-                                        <span className="ml-auto hidden text-xs tabular-nums lg:inline">Pur: {fmt(sion.total_purchase_bill_inr)}</span>
-                                        <span className="hidden text-xs tabular-nums lg:inline">Sale: {fmt(sion.total_sale_bill_inr)}</span>
-                                        <span className={cn("text-xs font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
-                                    </div>
-                                    <div className="overflow-x-auto">
+                                    <h3 className="bg-muted text-xs">
+                                        <button
+                                            type="button"
+                                            aria-expanded={!sionCollapsed}
+                                            aria-controls={sionPanel}
+                                            onClick={() => toggleGroup(sionKey)}
+                                            className="flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-left text-xs leading-normal outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        >
+                                            <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none", sionCollapsed && "-rotate-90")} aria-hidden="true" />
+                                            <span className="font-bold text-foreground">SION: {sion.label}</span>
+                                            <span className="text-muted-foreground">{sion.license_count} license{sion.license_count === 1 ? '' : 's'}</span>
+                                            <span className="ml-auto hidden tabular-nums lg:inline">Pur: {fmt(sion.total_purchase_bill_inr)}</span>
+                                            <span className="hidden tabular-nums lg:inline">Sale: {fmt(sion.total_sale_bill_inr)}</span>
+                                            <span className={cn("font-semibold tabular-nums", sion.total_profit_loss_inr >= 0 ? "text-success" : "text-destructive")}>P/L {fmt(sion.total_profit_loss_inr)}</span>
+                                        </button>
+                                    </h3>
+                                    <div id={sionPanel} hidden={sionCollapsed} className="overflow-x-auto">
                                         <table className="w-full border-collapse text-xs">
                                             <thead><tr className="border-y bg-primary/5 text-left">
                                                 <th className="px-2.5 py-1"><span className="sr-only">Select</span></th>
@@ -172,10 +181,30 @@ function LicenseWiseLedger({
                                                 <th className="hidden px-2.5 py-1 text-right font-semibold sm:table-cell">P/L</th>
                                                 <th className="px-2.5 py-1" />
                                             </tr></thead>
-                                            <tbody>{sion.licenses.map((license) => (
-                                                <tr key={license.license_id} className={cn("border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive")}>
+                                            <tbody>{sion.licenses.map((license) => {
+                                                const expanded = isOpen(open, license.license_id, company.company_id);
+                                                const workspaceId = `ledger-licence-${license.license_id}-${company.company_id}`;
+                                                return (
+                                                <React.Fragment key={license.license_id}>
+                                                <tr
+                                                    aria-expanded={expanded}
+                                                    onClick={(e) => { if (!(e.target as HTMLElement).closest('a,button,input,label')) onOpen(String(license.license_id), String(company.company_id)); }}
+                                                    className={cn("cursor-pointer border-b last:border-b-0", !license.has_purchase_bill && "bg-destructive/10 text-destructive", expanded && "bg-primary/10")}
+                                                >
                                                     <td className="px-2.5 py-1"><input type="checkbox" checked={selectedLicenseIds.has(String(license.license_id))} onChange={() => onToggleLicense(String(license.license_id))} aria-label={`Select licence ${license.license_number}`} /></td>
-                                                    <td className="px-2.5 py-1 font-semibold text-xs">{license.license_number}{!license.has_purchase_bill && <span className="ml-1.5 rounded bg-destructive px-1 py-0.5 text-[9px] font-bold text-destructive-foreground">NO BILL</span>}</td>
+                                                    <td className="px-2.5 py-1 text-xs font-semibold">
+                                                        <button
+                                                            type="button"
+                                                            aria-expanded={expanded}
+                                                            aria-controls={workspaceId}
+                                                            onClick={() => onOpen(String(license.license_id), String(company.company_id))}
+                                                            className="inline-flex cursor-pointer items-center gap-1 rounded-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                        >
+                                                            <ChevronDown className={cn("size-3 shrink-0 transition-transform motion-reduce:transition-none", !expanded && "-rotate-90")} aria-hidden="true" />
+                                                            {license.license_number}
+                                                        </button>
+                                                        {!license.has_purchase_bill && <span className="ml-1.5 rounded bg-destructive px-1 py-0.5 text-[9px] font-bold text-destructive-foreground">NO BILL</span>}
+                                                    </td>
                                                     <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{license.license_type}</td>
                                                     <td className="hidden px-2.5 py-1 text-xs sm:table-cell">{license.license_date}</td>
                                                     <td className="hidden px-2.5 py-1 text-xs lg:table-cell">{license.first_purchase_date}</td>
@@ -187,25 +216,49 @@ function LicenseWiseLedger({
                                                         <button
                                                             type="button"
                                                             className="text-xs font-semibold text-primary hover:underline"
-                                                            onClick={() => navigate(`/license-ledger/${license.license_id}/${company.company_id}`)}
+                                                            onClick={() => onOpen(String(license.license_id), String(company.company_id), 'ledger')}
                                                         >
                                                             Ledger
                                                         </button>
                                                         {license.license_type === 'DFIA' && <button type="button" className="ml-1.5 text-xs font-semibold text-primary hover:underline" onClick={() => onDownloadCustomLedger(String(license.license_id))}>PDF</button>}
                                                     </td>
                                                 </tr>
-                                            ))}</tbody>
+                                                {expanded && (
+                                                    <tr className="border-b bg-card">
+                                                        <td colSpan={10} className="p-0">
+                                                            <div id={workspaceId} role="region" aria-label={`Licence ${license.license_number} workspace`} className="min-w-0 border-l-2 border-primary px-3 pb-2 pt-1.5">
+                                                                <div className="mb-1 flex items-center justify-end">
+                                                                    <Button type="button" size="sm" variant="ghost" onClick={onClose} aria-label={`Collapse licence ${license.license_number}`}>
+                                                                        <X className="size-3.5" aria-hidden="true" /> Close
+                                                                    </Button>
+                                                                </div>
+                                                                <LedgerLicenceWorkspace
+                                                                    licenseId={String(license.license_id)}
+                                                                    companyId={String(company.company_id)}
+                                                                    licenseNumber={String(license.license_number)}
+                                                                    licenseType={String(license.license_type || 'DFIA')}
+                                                                    initialTab={initialTab}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                </React.Fragment>
+                                                );
+                                            })}</tbody>
                                         </table>
                                     </div>
                                 </section>
-                            ))}
+                                );
+                            })}
                             <div className="flex flex-wrap justify-end gap-3 border-t-2 border-primary px-3 py-1.5 text-xs font-bold">
                                 <span>Total</span><span>Pur {fmt(company.total_purchase_bill_inr)}</span>
                                 <span>Sale {fmt(company.total_sale_bill_inr)}</span><span>P/L {fmt(company.total_profit_loss_inr)}</span>
                             </div>
                         </div>
                     </section>
-                ))}
+                    );
+                })}
                 {grand_total && company_groups.length > 1 && (
                     <div className="flex flex-wrap justify-end gap-3 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">
                         <span>{grand_total.license_count} licenses</span>
@@ -251,7 +304,8 @@ function LicenseWiseLedger({
                         {lic.companies[0]?.company_id != null && (
                             <button
                                 type="button"
-                                onClick={() => navigate(`/license-ledger/${lic.license_id}/${lic.companies[0].company_id}`)}
+                                onClick={() => onOpen(String(lic.license_id), String(lic.companies[0].company_id), 'ledger')}
+                                aria-expanded={isOpen(open, lic.license_id, lic.companies[0].company_id)}
                                 aria-label={`View ledger for ${lic.license_number}`}
                                 className="ml-auto flex cursor-pointer items-center gap-1 rounded-md border border-white/30 bg-white/15 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/25"
                             >
@@ -362,10 +416,33 @@ function LicenseWiseLedger({
                         </tbody>
                     </table>
                     </div>
+                    {isOpen(open, lic.license_id, lic.companies[0]?.company_id) && (
+                        <div role="region" aria-label={`Licence ${lic.license_number} workspace`} className="min-w-0 border-t border-border px-3 pb-2 pt-1.5">
+                            <div className="mb-1 flex items-center justify-end">
+                                <Button type="button" size="sm" variant="ghost" onClick={onClose} aria-label={`Collapse licence ${lic.license_number}`}>
+                                    <X className="size-3.5" aria-hidden="true" /> Close
+                                </Button>
+                            </div>
+                            <LedgerLicenceWorkspace
+                                licenseId={String(lic.license_id)}
+                                companyId={lic.companies[0]?.company_id != null ? String(lic.companies[0].company_id) : undefined}
+                                licenseNumber={String(lic.license_number)}
+                                licenseType={String(lic.license_type || 'DFIA')}
+                                initialTab={initialTab}
+                            />
+                        </div>
+                    )}
                 </div>
             ))}
         </div>
     );
+}
+
+/** Is the URL-opened licence among the loaded rows (grouped or fallback view)? */
+function ledgerHasLicence(data: LicenseWiseData | null, open: OpenLedgerLicence): boolean {
+    const { licenses, company_groups = [] } = normalizeLicenseWiseData(data);
+    if (company_groups.some(c => c.sion_groups.some(s => s.licenses.some(l => isOpen(open, l.license_id, c.company_id))))) return true;
+    return licenses.some(l => isOpen(open, l.license_id, l.companies[0]?.company_id));
 }
 
 // ─── Summary stat item ─────────────────────────────────────────────────────────
@@ -406,6 +483,24 @@ async function settleWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: n
 
 export default function LicenseLedger() {
     const navigate = useNavigate();
+    const location = useLocation();
+    // One-page ledger: `/license-ledger/:licenseId/:itemId` (old detail URL) is this page with that licence open.
+    const { licenseId: openLicenseId, itemId: openCompanyId } = useParams();
+    const openLicence = useMemo(
+        () => (openLicenseId ? { licenseId: openLicenseId, companyId: openCompanyId } : null),
+        [openLicenseId, openCompanyId],
+    );
+    const [entryQuery] = useState(() => new URLSearchParams(location.search));
+    const [requestedTab, setRequestedTab] = useState<string | undefined>(() => entryQuery.get('tab') ?? undefined);
+    const openLedgerLicence = (licenseId: string, companyId: string | undefined, tab?: string) => {
+        if (openLicence && openLicence.licenseId === licenseId && (openLicence.companyId ?? '') === (companyId ?? '')) {
+            if (!tab) { navigate('/license-ledger'); return; }
+        }
+        setRequestedTab(tab);
+        // Push: back/forward walks opened/closed licences; the list state (filters) lives in this component.
+        navigate(`/license-ledger/${encodeURIComponent(licenseId)}${companyId ? `/${encodeURIComponent(companyId)}` : ''}`);
+    };
+    const closeLedgerLicence = () => navigate('/license-ledger');
     const [summary, setSummary] = useState<Record<string, Record<string, number>> | null>(null);
     const [companyWiseData, setCompanyWiseData] = useState<LicenseWiseData | null>(null);
     const [companyWiseLoading, setCompanyWiseLoading] = useState(false);
@@ -880,9 +975,34 @@ export default function LicenseLedger() {
                         <InlineError error={loadError} title="Failed to load License Ledger" onRetry={() => setReloadKey(key => key + 1)} />
                     </div>
                 ) : companyWiseData ? (
+                    <>
+                    {openLicence && !ledgerHasLicence(companyWiseData, openLicence) && (
+                        // Opened by URL but outside the current filters (e.g. a purchase-date range): shown pinned.
+                        <section aria-label={`Licence ${openLicence.licenseId} workspace`} className="m-2 overflow-hidden rounded-lg border border-ring/40 sm:m-3">
+                            <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 text-xs">
+                                <span className="font-semibold">Opened licence</span>
+                                <span className="text-muted-foreground">Not in the current filtered results</span>
+                                <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={closeLedgerLicence} aria-label="Close opened licence">
+                                    <X className="size-3.5" aria-hidden="true" /> Close
+                                </Button>
+                            </div>
+                            <div className="px-3 pb-2 pt-1.5">
+                                <LedgerLicenceWorkspace
+                                    licenseId={openLicence.licenseId}
+                                    companyId={openLicence.companyId}
+                                    licenseNumber={openLicence.licenseId}
+                                    licenseType={entryQuery.get('license_type') || 'DFIA'}
+                                    initialTab={requestedTab}
+                                />
+                            </div>
+                        </section>
+                    )}
                     <LicenseWiseLedger
                         data={companyWiseData}
-                        navigate={navigate}
+                        open={openLicence}
+                        onOpen={openLedgerLicence}
+                        onClose={closeLedgerLicence}
+                        initialTab={requestedTab}
                         selectedLicenseIds={selectedLicenseIds}
                         onToggleLicense={toggleLicense}
                         onDownloadLicense={(licenseId) => downloadPackage([licenseId])}
@@ -891,6 +1011,7 @@ export default function LicenseLedger() {
                             catch (error) { toast.error(licenseLedgerExportError(error, 'Unable to generate the Custom Ledger PDF.')); }
                         }}
                     />
+                    </>
                 ) : (
                     <EmptyState icon={Building2} title="No data" description="No trades found for the current filters" />
                 )}

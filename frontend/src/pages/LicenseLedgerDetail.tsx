@@ -275,8 +275,24 @@ function LedgerItemsCell({ itemNames }: { itemNames: string[] | undefined }) {
 
 // ─── Main component ──────────────────────────────────────────────────────────────
 
-export default function LicenseLedgerDetail() {
-    const { licenseId, itemId } = useParams();
+export interface LicenseLedgerDetailProps {
+    /** Licence id; defaults to the route `:licenseId`. */
+    licenseId?: string;
+    /** Company id scoping the ledger (`?company=`); defaults to the route `:itemId`. */
+    itemId?: string;
+    /**
+     * Inside the Licence Ledger page's expanded licence (one-page ledger): no full-height wrapper, no Back /
+     * export toolbar (exports live in the workspace's Documents tab).
+     */
+    embedded?: boolean;
+    /** `overview` = licence header + reconciliation summary; `ledger` = the transaction tables; default both. */
+    section?: 'all' | 'overview' | 'ledger';
+}
+
+export default function LicenseLedgerDetail({ licenseId: propLicenseId, itemId: propItemId, embedded = false, section = 'all' }: LicenseLedgerDetailProps = {}) {
+    const params = useParams();
+    const licenseId = propLicenseId ?? params.licenseId;
+    const itemId = propItemId ?? params.itemId;
     const navigate = useNavigate();
     const location = useLocation();
     const [ledger, setLedger] = useState<CanonicalLedgerResponse | null>(null);
@@ -335,9 +351,11 @@ export default function LicenseLedgerDetail() {
                     <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
                     {error}
                 </div>
-                <Button onClick={() => navigate(-1)}>
-                    <ArrowLeft className="size-4" aria-hidden="true" />Go Back
-                </Button>
+                {!embedded && (
+                    <Button onClick={() => navigate(-1)}>
+                        <ArrowLeft className="size-4" aria-hidden="true" />Go Back
+                    </Button>
+                )}
             </div>
         );
     }
@@ -386,9 +404,13 @@ export default function LicenseLedgerDetail() {
     const isNegativeBalance = currentBalance < 0;
     const showPurchaseWarning = !hasPurchases || isNegativeBalance;
 
+    const showOverview = section !== 'ledger';
+    const showLedger = section !== 'overview';
+
     return (
-        <div className="min-h-screen bg-muted/40">
-            {/* ── Toolbar (compact) ─────────────────────────────── */}
+        <div className={embedded ? "min-w-0 space-y-2 [&>*]:!mx-0" : "min-h-screen bg-muted/40"}>
+            {/* ── Toolbar (compact; page only) ──────────────────── */}
+            {!embedded && (
             <div className="sticky top-0 z-20 border-b border-border-strong bg-foreground px-3 py-1.5 shadow-sm sm:px-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -422,9 +444,10 @@ export default function LicenseLedgerDetail() {
                     </div>
                 </div>
             </div>
+            )}
 
             {/* ── Purchase warning ──────────────────────────────── */}
-            {showPurchaseWarning && (
+            {showOverview && showPurchaseWarning && (
                 <div className="mx-3 mt-2 flex items-start gap-2 rounded-md border border-warning/30 border-l-4 border-warning bg-warning/10 px-3 py-2 sm:mx-5">
                     <TriangleAlert className="size-3.5 shrink-0 text-warning mt-0.5" aria-hidden="true" />
                     <div className="flex-1">
@@ -442,6 +465,7 @@ export default function LicenseLedgerDetail() {
             )}
 
             {/* ── License header ────────────────────────────────── */}
+            {showOverview && (
             <div className="mx-3 mt-2 rounded-lg border border-border bg-card px-3 py-2.5 shadow-sm sm:mx-5 sm:px-4">
                 <div className="grid grid-cols-1 items-start gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                     <div>
@@ -506,11 +530,13 @@ export default function LicenseLedgerDetail() {
                 </div>
             </div>
 
+            )}
+
             {/* ── CA summary band ──────────────────────────────── */}
-            <LedgerSummaryCards summary={summary} />
+            {showOverview && <LedgerSummaryCards summary={summary} />}
 
             {/* ── Ledger tables ─────────────────────────────────── */}
-            {(() => {
+            {showLedger && (() => {
                 // THE DISPLAY RULE lives in `selectLedgerDisplayRows` — never
                 // re-expressed here. `rows` is PURCHASE + SALE only (so the
                 // synthetic OPENING row can no longer form a bogus "N/A"

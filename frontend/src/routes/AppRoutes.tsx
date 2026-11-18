@@ -63,7 +63,6 @@ const ReconciliationPanel = lazyLoadWithRetry(() => import("../pages/Reconciliat
 const ReconciliationIssues = lazyLoadWithRetry(() => import("../pages/ReconciliationIssues"));
 const LedgerUpload = lazy(() => import("../pages/LedgerUpload"));
 const LicenseLedger = lazy(() => import("../pages/LicenseLedger"));
-const LicenseLedgerDetail = lazy(() => import("../pages/LicenseLedgerDetail"));
 const LicenseLedgerPackageReadiness = lazyLoadWithRetry(() => import("../pages/LicenseLedgerPackageReadiness"));
 const LicenseDownloadRequests = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequests"));
 const LicenseDownloadRequestDetail = lazyLoadWithRetry(() => import("../pages/LicenseDownloadRequestDetail"));
@@ -269,7 +268,9 @@ export default function AppRoutes() {
                         <AdminLayout><LedgerUpload /></AdminLayout>
                     </ProtectedRoute>
                 } />
-                <Route path="/license-ledger" element={
+                {/* One-page Licence Ledger. `/license-ledger/:licenseId/:itemId` (and `/:licenseId`) — the former detail
+                    page URLs — open this page with that licence expanded inline; static routes below outrank them. */}
+                <Route path="/license-ledger/:licenseId?/:itemId?" element={
                     <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
                         <AdminLayout><LicenseLedger /></AdminLayout>
                     </ProtectedRoute>
@@ -287,16 +288,6 @@ export default function AppRoutes() {
                 <Route path="/license-ledger/package-readiness/:jobId" element={
                     <ProtectedRoute requiredAnyRole={LEDGER_PACKAGE_READINESS_ROLES}>
                         <AdminLayout><LicenseLedgerPackageReadiness /></AdminLayout>
-                    </ProtectedRoute>
-                } />
-                <Route path="/license-ledger/:licenseId/:itemId" element={
-                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
-                        <AdminLayout><LicenseLedgerDetail /></AdminLayout>
-                    </ProtectedRoute>
-                } />
-                <Route path="/license-ledger/:licenseId" element={
-                    <ProtectedRoute requiredAnyRole={LEDGER_READ_ROLES}>
-                        <AdminLayout><LicenseLedgerDetail /></AdminLayout>
                     </ProtectedRoute>
                 } />
 

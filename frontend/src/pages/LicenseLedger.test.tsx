@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,7 +9,14 @@ import LicenseLedger from "./LicenseLedger";
 import { normalizeLicenseWiseData } from "./licenseLedgerData";
 
 const navigate = vi.fn();
-vi.mock("react-router-dom", () => ({ useNavigate: () => navigate, Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a> }));
+// `routeParams` = the one-page ledger's opened licence (`/license-ledger/:licenseId/:itemId`).
+let routeParams: Record<string, string | undefined> = {};
+vi.mock("react-router-dom", () => ({
+    useNavigate: () => navigate,
+    useParams: () => routeParams,
+    useLocation: () => ({ pathname: "/license-ledger", search: "", state: null }),
+    Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+}));
 vi.mock("../api/axios", () => ({ default: { get: vi.fn() } }));
 vi.mock("../services/licenseLedgerExport", () => ({
     previewLicenseLedgerPdf: vi.fn(), downloadLicenseLedgerExcel: vi.fn(), createLicenseLedgerPackage: vi.fn(), downloadLicenseLedgerPackage: vi.fn(), downloadCustomLedgerPdf: vi.fn(), relativeApiUrl: (url: string) => url.replace(/^\/api\//, ""), retryLicenseLedgerPackage: vi.fn(),
@@ -63,6 +70,7 @@ function queryFor(prefix: string): URLSearchParams {
 describe("LicenseLedger fresh filters", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        routeParams = {};
         mockedCreatePackage.mockResolvedValue({ job_id: "job-test", status: "queued", total: 2, queued: 2, running: 0, completed: 0, failed: 0, percentage: 0, status_url: "/api/license-ledger/download-package/job-test/", download_url: null });
         mockedApiGet.mockImplementation((url: string) => {
             if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: ledgerData });
@@ -180,9 +188,10 @@ describe("LicenseLedger fresh filters", () => {
         });
     });
 
-    it("opens the retained detail route and normalizes malformed rows", async () => {
+    it("View opens the licence inline at its record URL (one page) and normalizes malformed rows", async () => {
         render(<LicenseLedger />);
         fireEvent.click(await screen.findByRole("button", { name: /view ledger for LIC-2436/i }));
+        // Same URL as the former detail page — now this page with the licence expanded.
         expect(navigate).toHaveBeenCalledWith("/license-ledger/2436/766");
         expect(normalizeLicenseWiseData({ licenses: [null, { license_id: "", companies: [] }] })).toEqual({ licenses: [] });
     });
@@ -242,10 +251,10 @@ describe("LicenseLedger fresh filters", () => {
         });
 
         render(<LicenseLedger />);
-        expect(await screen.findByRole("heading", { name: "LABDHI MERCANTILE LLP" })).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "SION: E1" })).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "SION: E5, E132" })).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "SION: N/A / EMPTY" })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: /^LABDHI MERCANTILE LLP(\s|$)/ })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: /^SION: E1(\s|$)/ })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: /^SION: E5, E132(\s|$)/ })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: /^SION: N\/A \/ EMPTY(\s|$)/ })).toBeInTheDocument();
         expect(screen.getAllByText("LIC-MULTI")).toHaveLength(1);
         expect(screen.getByText("NO BILL")).toBeInTheDocument();
         expect(screen.getAllByText("₹100.00").length).toBeGreaterThan(0);
@@ -292,5 +301,60 @@ describe("LicenseLedger fresh filters", () => {
             expect(await screen.findByText("LIC-250", {}, { timeout: 5000 })).toBeInTheDocument();
             expect(mockedApiGet.mock.calls.filter(([url]) => !String(url).includes("license-wise") && !String(url).includes("summary"))).toHaveLength(0);
         });
+    });
+
+    it("one page: company and SION accordions collapse; a licence row opens inline; the old detail URL opens it expanded", async () => {
+        const grouped = {
+            licenses: [], company_groups: [{ company_id: 881, company_name: "LABDHI GLOBAL LLP", total_purchase_bill_inr: 100, total_sale_bill_inr: 120, total_profit_loss_inr: 20, sion_groups: [{
+                sion_norm: "E1", label: "E1", license_count: 1, total_purchase_bill_inr: 100, total_sale_bill_inr: 120, total_profit_loss_inr: 20,
+                licenses: [{ license_id: 2619, license_number: "0311000001", license_type: "DFIA", license_date: "2026-01-01", first_purchase_date: "", current_balance: 50, purchase_bill_inr: 100, sale_bill_inr: 120, profit_loss_inr: 20, has_purchase_bill: true }],
+            }] }],
+        };
+        const detail = { license_number: "0311000001", license_type: "DFIA", exporter_name: "LABDHI GLOBAL LLP", transactions: [], company_utilizations: {}, totals: {} };
+        mockedApiGet.mockImplementation((url: string) => {
+            if (url.startsWith("license-ledger/license-wise/?")) return Promise.resolve({ data: grouped });
+            if (url.startsWith("license-ledger/summary/?")) return Promise.resolve({ data: summaryData });
+            if (url.startsWith("license-ledger/2619/ledger_detail/")) return Promise.resolve({ data: detail });
+            return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+        const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+        const { AuthContext } = await import("../context/AuthContext");
+        const auth = { hasAnyRole: () => true, hasRole: () => true, isSuperAdmin: () => true } as unknown as React.ContextType<typeof AuthContext>;
+        const wrap = () => (
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <AuthContext.Provider value={auth}><LicenseLedger /></AuthContext.Provider>
+            </QueryClientProvider>
+        );
+
+        const view = render(wrap());
+        const company = await screen.findByRole("button", { name: /LABDHI GLOBAL LLP/ });
+        expect(company).toHaveAttribute("aria-expanded", "true");
+        await userEvent.click(company);
+        expect(company).toHaveAttribute("aria-expanded", "false");
+        expect(screen.queryByText("0311000001")).not.toBeVisible();
+        await userEvent.click(company);
+        const sion = screen.getByRole("button", { name: /SION: E1/ });
+        await userEvent.click(sion);
+        expect(sion).toHaveAttribute("aria-expanded", "false");
+        await userEvent.click(sion);
+
+        // Row actions open inline at the record URL (no detail page); Ledger asks for the Ledger tab.
+        await userEvent.click(screen.getByRole("button", { name: "0311000001" }));
+        expect(navigate).toHaveBeenLastCalledWith("/license-ledger/2619/881");
+        await userEvent.click(screen.getByRole("button", { name: "Ledger" }));
+        expect(navigate).toHaveBeenLastCalledWith("/license-ledger/2619/881");
+        view.unmount();
+
+        // Direct visit to the former detail URL: groups shown, licence expanded inline with its tabs + real data.
+        routeParams = { licenseId: "2619", itemId: "881" };
+        render(wrap());
+        const workspace = await screen.findByRole("region", { name: "Licence 0311000001 workspace" });
+        for (const name of ["Overview", "Ledger", "BOE & Allotments", "Invoices", "Documents", "Edit", "History"]) {
+            expect(within(workspace).getByRole("tab", { name })).toBeInTheDocument();
+        }
+        await waitFor(() => expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/2619/ledger_detail/?company=881"));
+        expect(screen.getByRole("button", { name: "0311000001" })).toHaveAttribute("aria-expanded", "true");
+        await userEvent.click(within(workspace).getByRole("button", { name: "Collapse licence 0311000001" }));
+        expect(navigate).toHaveBeenLastCalledWith("/license-ledger");
     });
 });

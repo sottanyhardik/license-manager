@@ -276,6 +276,12 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
     visual 1/1 (all exit 0); backend financial/ledger/incentive 203/203 (balance calculator, CIF single source, canonical
     ledger, BOE/allotment CIF attribution, ledger exports/statement); seed + architecture 12/12. Global mobile 44px
     touch-target rule no longer distorts Radix switches/checkboxes (index.css).
+  - One-page Licence Ledger (2026-11-18): Category → Company accordion → SION accordion → licence row → inline
+    `LedgerLicenceWorkspace` (Overview / Ledger = former detail page via embedded `LicenseLedgerDetail`; BOE & Allotments,
+    Invoices, History = licence register tabs; Documents = ledger PDF/Excel/customs PDF + licence copy; Edit = embedded form).
+    `/license-ledger/:licenseId?/:itemId?` is the one route (old detail URLs open the licence inline; off-filter → pinned).
+    Real record 2619/881 (0311054050, company LABDHI GLOBAL LLP) verified read-only via `ledger_detail` (200, 3 txns,
+    current balance 137,653.62 USD). Tests: gate exit 0 (935/935); e2e one-page 1/1, workspaces 6/6, visual 1/1. No backend change.
 - Next: apply the licence register pattern to the next module (owner-agnostic, non-financial lists first);
   owner decisions B1, B8, B9.
 <!-- CHECKPOINT:generic-erp:END -->

@@ -22,6 +22,7 @@ from apps.license.api.views.parse_pdf import LicensePdfParseView
 from apps.license.views_actions import LicenseActionViewSet
 from apps.license.views_incentive import IncentiveLicenseViewSet
 from apps.license.api.views.replan_status import LicenseReplanStatusView
+from apps.license.api.views.entitlement_plan import EntitlementPlanView
 from apps.license.api.views.import_item_suggestion import ImportItemSuggestionView
 from apps.license.api.views.license_overview_transactions import LicenseOverviewTransactionsView
 
@@ -45,6 +46,7 @@ urlpatterns = [
     # Specific paths must come BEFORE router.urls to avoid conflicts
     # Dashboard unified endpoint
     path("dashboard/", DashboardDataView.as_view(), name="dashboard"),
+    path("entitlement-plan/", EntitlementPlanView.as_view(), name="entitlement-plan"),
     # License PDF parse (DFIA licence copy → prefill License form)
     path("licenses/parse-pdf/", LicensePdfParseView.as_view(), name="licenses-parse-pdf"),
     path("licenses/<str:license_id>/replan-status/", LicenseReplanStatusView.as_view(), name="license-replan-status"),

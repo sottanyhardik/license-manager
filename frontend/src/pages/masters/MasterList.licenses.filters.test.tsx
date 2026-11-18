@@ -182,7 +182,7 @@ describe("other entities: header + filter DOM unchanged", () => {
     sessionStorage.clear();
     getMock.mockImplementation(() => Promise.resolve({ data: { ...META, filter_config: { company: { type: "icontains", label: "Company" }, is_boe: { type: "exact", label: "BOE" } } } }));
   });
-  for (const entity of ["allotments", "trades", "incentive-licenses", "companies"]) {
+  for (const entity of ["trades", "incentive-licenses", "companies"]) {
     it(`${entity}`, async () => {
       const { container } = renderAt(`/masters/${entity}`);
       await waitFor(() => expect(screen.getByText("Company")).toBeInTheDocument());
@@ -193,7 +193,7 @@ describe("other entities: header + filter DOM unchanged", () => {
   }
 });
 
-describe("compact register layout (licenses + bill-of-entries)", () => {
+describe("compact register layout (licenses + allotments + bill-of-entries)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
@@ -210,6 +210,7 @@ describe("compact register layout (licenses + bill-of-entries)", () => {
   });
   for (const [entity, path, title] of [
     ["licenses", "/licenses", "Licenses"],
+    ["allotments", "/masters/allotments", "Allotments"],
     ["bill-of-entries", "/masters/bill-of-entries", "Bills of Entry"],
   ] as const) {
     it(`${entity}: one h1 and actions inside the filter toolbar`, async () => {

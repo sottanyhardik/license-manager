@@ -42,6 +42,11 @@ def _to_decimal(value, default: Decimal = DEC_0) -> Decimal:
 from apps.core.models import AuditModel
 
 
+def remaining_allotment_value(required_value, allotted_value) -> Decimal:
+    """max(required − allotted, 0) in exact Decimals (allotment remaining CIF FC)."""
+    return max(_to_decimal(required_value, DEC_0) - _to_decimal(allotted_value, DEC_0), DEC_0)
+
+
 class AllotmentModel(AuditModel):
     planning_target_item = models.ForeignKey("core.ItemNameModel", on_delete=models.PROTECT, null=True, blank=True, related_name="allotment_planning_targets", db_index=True)
     planning_mapping_status = models.CharField(max_length=32, default="UNMAPPED_AMBIGUOUS", db_index=True)
@@ -184,6 +189,15 @@ class AllotmentModel(AuditModel):
         )
         remaining = _to_decimal(self.required_quantity, DEC_000) - total_allocated
         return remaining if remaining >= DEC_000 else DEC_000
+
+    @cached_property
+    def balanced_value(self) -> Decimal:
+        """Remaining allotment CIF (FC) = max(required_value - allotted_value, 0).
+
+        Read-only display of the same ceiling ``allocate-items`` enforces
+        (``views_actions._allocate_items_atomic``: "remaining allotment CIF").
+        """
+        return remaining_allotment_value(self.required_value, self.allotted_value)
 
     @cached_property
     def alloted_quantity(self) -> Decimal:

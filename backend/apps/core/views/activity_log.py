@@ -56,6 +56,12 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         if endpoint:
             qs = qs.filter(endpoint=endpoint if endpoint.endswith('/') else f'{endpoint}/')
 
+        # Additive: every audited request under one API path (e.g. all of an
+        # allotment's allocate / release calls: /api/allotment-actions/7/).
+        endpoint_prefix = params.get('endpoint_prefix', '').strip()
+        if endpoint_prefix:
+            qs = qs.filter(endpoint__startswith=endpoint_prefix if endpoint_prefix.endswith('/') else f'{endpoint_prefix}/')
+
         date_from = params.get('date_from', '').strip()
         if date_from:
             qs = qs.filter(timestamp__date__gte=date_from)

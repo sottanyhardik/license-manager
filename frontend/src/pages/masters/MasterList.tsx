@@ -66,7 +66,7 @@ function usesLegacyNestedView(entityName: string, defs: unknown): boolean {
     return hasNestedCollections(defs) && !MASTER_COLUMNS[entityName]?.nested;
 }
 /** Entities that use the compact register layout (toolbar header instead of PageHeader). */
-const COMPACT_REGISTER = new Set(["licenses", "bill-of-entries", "incentive-licenses"]);
+const COMPACT_REGISTER = new Set(["licenses", "allotments", "bill-of-entries", "incentive-licenses"]);
 /** Business registers that use the generic rows + inline record (masters always do): entity → API collection. */
 const INLINE_RECORD_REGISTERS: Record<string, string> = { "incentive-licenses": "incentive-licenses/" };
 
@@ -293,16 +293,6 @@ export default function MasterList() {
             const next = new Set(prev);
             if (next.has(pairKey)) next.delete(pairKey);
             else next.add(pairKey);
-            return next;
-        });
-    };
-
-    const [expandedAllotments, setExpandedAllotments] = useState(new Set());
-    const toggleAllotment = (id) => {
-        setExpandedAllotments(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
             return next;
         });
     };
@@ -1163,8 +1153,6 @@ export default function MasterList() {
                             pageSize={pageSize}
                             navigate={navigate}
                             onDelete={handleDelete}
-                            expandedAllotments={expandedAllotments}
-                            toggleAllotment={toggleAllotment}
                         />
                     )}
 

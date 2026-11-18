@@ -19,8 +19,11 @@ const SECTIONS: { id: string; title: string; defaultOpen?: boolean; fields: Fiel
         { key: "contact_person", label: "Contact Person" },
         { key: "contact_number", label: "Contact Number" },
     ] },
-    { id: "value", title: "Requested value", fields: [
+    { id: "value", title: "Quantities & value", defaultOpen: true, fields: [
         { key: "required_quantity", label: "Required Qty" },
+        { key: "alloted_quantity", label: "Allotted Qty" },
+        { key: "balanced_quantity", label: "Balanced Qty" },
+        { key: "allotted_value", label: "Allotted Value" },
         { key: "unit_value_per_unit", label: "Unit Value" },
         { key: "cif_fc", label: "CIF (FC)" },
         { key: "exchange_rate", label: "Exchange Rate" },

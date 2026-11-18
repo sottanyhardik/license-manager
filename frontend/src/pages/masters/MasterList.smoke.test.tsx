@@ -224,6 +224,8 @@ describe("MasterList smoke", () => {
 
     renderAt("allotments");
 
+    // Compact register: the filter panel is closed by default and opens on demand.
+    await userEvent.click(await screen.findByRole("button", { name: /^Filters/ }));
     expect(await screen.findByText("Company")).toBeInTheDocument();
     expect(screen.getByText("Port")).toBeInTheDocument();
     expect(screen.getByText("BOE")).toBeInTheDocument();

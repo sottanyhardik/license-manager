@@ -1,134 +1,66 @@
-import { Inbox } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { buildAllotmentActions } from "@/features/allotment/allotmentCardActions";
-import { AllotmentRecordWorkspace } from "@/features/allotment/AllotmentRecordWorkspace";
-import EntityCard from "../../../components/primitives/EntityCard";
-import { openLicenseCopyPdf } from "../../../utils/licenseCopyPdf";
-import { formatTruthyIndianNumber, formatTruthyInr } from "../masterDisplayFormatters";
+/**
+ * AllotmentsTable: the /allotments register. A list of compact allotment rows;
+ * one row is expanded at a time into its record workspace
+ * (`features/allotment/AllotmentCard`) — the Licence register's interaction.
+ * The row owns presentation; the list owns the single-expand state.
+ */
+import { useCallback, useMemo, useState } from "react";
+
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/shared";
+import { AllotmentCard } from "@/features/allotment/AllotmentCard";
+import type { AllotmentActionContext, AllotmentRecord } from "@/features/allotment/types";
 
 interface AllotmentsTableProps {
     loading: boolean;
-    data: any[];
+    data: AllotmentRecord[];
     canWrite: boolean;
     entityName: string;
-    filterParams: Record<string, any>;
+    filterParams: Record<string, unknown>;
     currentPage: number;
     pageSize: number;
     navigate: (path: string) => void;
-    onDelete: (item: any) => void;
-    expandedAllotments: Set<any>;
-    toggleAllotment: (id: any) => void;
+    onDelete: (item: AllotmentRecord) => void;
 }
 
-/**
- * Allotments list rendering, extracted verbatim from MasterList as part of the
- * config-driven <EntityTable> decomposition. Card header unchanged; the
- * expanded body is the DetailTabs record workspace (features/allotment).
- */
-export default function AllotmentsTable({
-    loading, data, canWrite, entityName, filterParams, currentPage, pageSize,
-    navigate, onDelete, expandedAllotments, toggleAllotment,
-}: AllotmentsTableProps) {
-    const actionCtx = { canWrite, entityName, filterParams, currentPage, pageSize, navigate, onDelete };
+function AllotmentSkeleton() {
     return (
-                        loading ? (
-                            <div className="text-center py-5">
-                                <span className="inline-block size-5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
-                                <div className="mt-2 text-muted-foreground">Loading Allotments...</div>
-                            </div>
-                        ) : data.length === 0 ? (
-                            <div className="empty-state">
-                                <div className="empty-icon"><Inbox className="size-4" aria-hidden="true" /></div>
-                                <div className="empty-title">No allotments found</div>
-                                <div className="empty-sub">Try adjusting filters or create a new allotment.</div>
-                            </div>
-                        ) : (
-                            <div>
-                                {data.map(item => {
-                                    const fmtInr = (val) => formatTruthyInr(val);
-                                    const fmtQty = (val) => formatTruthyIndianNumber(val, { maximumFractionDigits: 3 });
-                                    const detailRows = item.allotment_details || [];
-                                    return (
-                                        <EntityCard
-                                            key={item.id}
-                                            accent={item.is_boe ? 'success' : 'primary'}
-                                            title={item.invoice || <span className="italic font-normal text-muted-foreground/70">No Invoice</span>}
-                                            headerChips={[
-                                                item.estimated_arrival_date && { icon: 'calendar3', label: item.estimated_arrival_date },
-                                                item.port_name           && { icon: 'geo-alt', label: item.port_name, tone: 'info' },
-                                                item.company_name        && { icon: 'building', label: item.company_name, tone: 'primary' },
-                                            ].filter(Boolean)}
-                                            statusBadges={[
-                                                item.is_boe      && { tone: 'success', label: 'BOE ✓' },
-                                                item.is_approved && { tone: 'info',    label: 'Approved' },
-                                            ].filter(Boolean)}
-                                            summary={[
-                                                { label: 'Req Qty',      value: fmtQty(item.required_quantity) },
-                                                { label: 'Req Value',    value: fmtInr(item.required_value) },
-                                                { label: 'Balanced Qty', value: fmtQty(item.balanced_quantity), tone: (item.balanced_quantity > 0 ? 'success' : undefined) },
-                                                { label: 'Allotted Items', value: item.allotted_items_count ?? 0 },
-                                                { label: 'Allocated Licenses', value: item.allocated_licenses_count ?? 0 },
-                                            ]}
-                                            actions={buildAllotmentActions(item, actionCtx)}
-                                            viewOpen={expandedAllotments.has(item.id)}
-                                            onView={() => toggleAllotment(item.id)}
-                                            ariaExpanded={expandedAllotments.has(item.id)}
-                                            ariaControls={`allotment-detail-${item.id}`}
-                                            detailLabel={detailRows.length ? `${detailRows.length} Item${detailRows.length !== 1 ? 's' : ''}` : 'Details'}
-                                            detail={() => (
-                                                <AllotmentRecordWorkspace item={item} actions={buildAllotmentActions(item, actionCtx)} />
-                                            )}
-                                        >
-                                            {(item.item_name || item.dfia_list) && (
-                                                <div className="flex flex-wrap items-start gap-4">
-                                                    <div className="min-w-[200px] flex-1">
-                                                        <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Item</div>
-                                                        <div className="text-[14.5px] font-medium text-foreground">
-                                                            {item.item_name || <span className="italic text-muted-foreground/70">No item name</span>}
-                                                        </div>
-                                                    </div>
-                                                    {item.dfia_list && (
-                                                        <div className="min-w-[140px] flex-1">
-                                                            <div className="mb-0.5 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">Licenses</div>
-                                                            <div className="text-[13.5px] font-medium text-primary">
-                                                                {(() => {
-                                                                    const licenseNumbers = item.dfia_list.split(', ').filter(Boolean);
-                                                                    const licenseMap = new Map();
-                                                                    (item.allotment_details || []).forEach(detail => {
-                                                                        if (detail.license_number) {
-                                                                            licenseMap.set(detail.license_number, detail.license_id);
-                                                                        }
-                                                                    });
-                                                                    return (
-                                                                        <div className="flex flex-wrap items-center gap-2">
-                                                                            {licenseNumbers.map((licNum) => {
-                                                                                const licenseId = licenseMap.get(licNum);
-                                                                                return (
-                                                                                    <button
-                                                                                        key={licNum}
-                                                                                        type="button"
-                                                                                        onClick={() => licenseId && openLicenseCopyPdf(licenseId, licNum)}
-                                                                                        disabled={!licenseId}
-                                                                                        className={cn('text-primary', 'hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring', 'cursor-pointer', !licenseId && 'opacity-50 cursor-not-allowed')}
-                                                                                        title="Open License Copy PDF"
-                                                                                        aria-label={`Open License Copy PDF for ${licNum}`}
-                                                                                    >
-                                                                                        {licNum}
-                                                                                    </button>
-                                                                                );
-                                                                            })}
-                                                                        </div>
-                                                                    );
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </EntityCard>
-                                    );
-                                })}
-                            </div>
-                        )
+        <div role="status" aria-label="Loading allotments" className="space-y-1.5">
+            {[80, 65, 90, 70, 75].map((w, i) => (
+                <div key={i} className="flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3" style={{ width: `${w * 2}px` }} />
+                    <Skeleton className="ml-auto h-5 w-16 rounded-full" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-20" />
+                </div>
+            ))}
+        </div>
+    );
+}
+
+export default function AllotmentsTable({
+    loading, data, canWrite, entityName, filterParams, currentPage, pageSize, navigate, onDelete,
+}: AllotmentsTableProps) {
+    // Only one row open at a time (Licence register convention).
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+    const handleToggle = useCallback((id: number) => setExpandedId((prev) => (prev === id ? null : id)), []);
+    const ctx = useMemo<AllotmentActionContext>(
+        () => ({ canWrite, entityName, filterParams, currentPage, pageSize, navigate, onDelete }),
+        [canWrite, entityName, filterParams, currentPage, pageSize, navigate, onDelete],
+    );
+
+    if (loading) return <AllotmentSkeleton />;
+    if (data.length === 0) {
+        return <EmptyState size="page" title="No allotments found" description="Try adjusting your search or filters, or create a new allotment." />;
+    }
+    return (
+        <ul className="flex min-w-0 flex-col gap-1.5" aria-label="Allotments">
+            {data.map((item) => (
+                <li key={item.id} className="min-w-0">
+                    <AllotmentCard item={item} expanded={expandedId === item.id} onToggle={handleToggle} ctx={ctx} />
+                </li>
+            ))}
+        </ul>
     );
 }

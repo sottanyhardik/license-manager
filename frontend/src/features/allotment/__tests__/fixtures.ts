@@ -3,7 +3,7 @@ export const ALLOTMENT_FIXTURES = [
     {
         id: 101, invoice: "INV-101", item_name: "Crude Palm Oil", is_boe: false, is_approved: true,
         estimated_arrival_date: "12-10-2026", port_name: "Mundra", company_name: "Acme Foods",
-        required_quantity: "12500.500", required_value: "1520000.75", balanced_quantity: "250.000",
+        required_quantity: "12500.500", required_value: "1520000.75", balanced_quantity: "250.000", alloted_quantity: "12250.500", allotted_value: "1420000.75", balanced_value: "100000.00",
         allotted_items_count: 2, allocated_licenses_count: 2, dfia_list: "0310001111, 0310002222",
         allotment_details: [
             { id: 1, license_number: "0310001111", license_id: 11, serial_number: 3, product_description: "Palm Oil", qty: "10000.000", cif_fc: "12000.50", cif_inr: "1000000.00" },

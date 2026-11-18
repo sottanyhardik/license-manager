@@ -177,6 +177,17 @@ class BillOfEntryViewSet(BaseBillOfEntryViewSet):
             'allotment__company',
         )
 
+        # Additive, read-only: every BOE linked to one allotment (allotment
+        # workspace BOE tab). Bypasses the legacy is_invoice default so the
+        # complete linkage is shown; BOE permissions still apply.
+        allotment_param = self.request.query_params.get('allotment')
+        if allotment_param:
+            try:
+                allotment_pk = int(allotment_param)
+            except (TypeError, ValueError):
+                return queryset.none()
+            return queryset.filter(allotment=allotment_pk).distinct()
+
         # Handle available_for_trade filtering
         statuses = self._requested_invoice_statuses()
         if self.request.query_params.get('available_for_trade') == 'true':

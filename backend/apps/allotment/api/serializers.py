@@ -28,6 +28,21 @@ class ListProjectionDecimalField(serializers.DecimalField):
         return getattr(instance, self.fallback_attr)
 
 
+class BalancedValueField(serializers.DecimalField):
+    """Remaining allotment CIF (FC), read-only. Uses the list's allotted-value
+    annotation when present so list pages add no per-row query."""
+
+    def __init__(self, **kwargs):
+        super().__init__(read_only=True, max_digits=15, decimal_places=2, **kwargs)
+
+    def get_attribute(self, instance):
+        from apps.allotment.models.core import remaining_allotment_value
+        allotted = getattr(instance, "_list_allotted_value", None)
+        if allotted is None:
+            allotted = instance.allotted_value
+        return remaining_allotment_value(instance.required_value, allotted)
+
+
 class AllotmentItemSerializer(serializers.ModelSerializer):
     # Read-only fields from cached properties. allow_null=True on every chain
     # that walks self.item.license.* so an item or license that's been unset
@@ -159,6 +174,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
         fallback_attr="required_value", max_digits=15, decimal_places=2
     )
     dfia_list = serializers.SerializerMethodField()
+    balanced_value = BalancedValueField()
     balanced_quantity = ListProjectionDecimalField(
         annotation_name="_list_balanced_quantity", fallback_attr="balanced_quantity",
         max_digits=15, decimal_places=2,
@@ -309,7 +325,7 @@ class AllotmentSerializer(serializers.ModelSerializer):
             'estimated_arrival_date', 'bl_detail', 'port', 'related_company',
             'is_boe', 'is_approved', 'created_on', 'modified_on', 'created_by', 'modified_by',
             'required_value', 'dfia_list', 'balanced_quantity',
-            'alloted_quantity', 'allotted_value', 'company_name', 'port_name',
+            'alloted_quantity', 'allotted_value', 'balanced_value', 'company_name', 'port_name',
             'related_company_name', 'display_label', 'allotment_details',
             'allotted_items_count', 'allocated_licenses_count'
         ]

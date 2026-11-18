@@ -120,6 +120,8 @@ def test_exact_target_list_contract_and_query_trace(authenticated_client, test_a
         "balanced_quantity": "1000.00",
         "alloted_quantity": "0.00",
         "allotted_value": "0.00",
+        # Additive, read-only (allotment workspace, 2026-11-18): remaining allotment CIF (FC).
+        "balanced_value": "1184.00",
         "company_name": "Test Exporter Ltd",
         "port_name": "Mumbai Port",
         "display_label": "Test Exporter Ltd | Qty: 1000.00",

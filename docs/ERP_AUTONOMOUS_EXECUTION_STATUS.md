@@ -172,6 +172,21 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
 - Local data note: E126/A3627 are inactive with no DB rules locally; shown from the code registry (read-only).
 <!-- CHECKPOINT:planning-workspace:END -->
 
+<!-- CHECKPOINT:allotments-workspace:BEGIN -->
+**/allotments — licence-style rows + inline workspace + allotted-licence management — TESTED (2026-11-18)**
+- Compact register toolbar (filters closed by default), single-expand rows, three-stage summary (allotment →
+  allocated to licences → BOE). Tabs: Overview · Allotted Licences · Allocation · Allocate Licence (existing
+  allocation page embedded) · BOE · Documents · Edit (inline MasterForm) · History.
+- Allocation/release reuse `allotment-actions/allocate-items` + `delete-item` (no new model). Per-licence outstanding
+  + status from `licenses/<id>/overview-allotments/` (same records as the licence workspace).
+- **API (additive, read-only):** allotment `balanced_value` (= allocate-items remaining-CIF ceiling);
+  `bill-of-entries/?allotment=<id>` (BOE permission); `masters/activity-logs/?endpoint_prefix=` (user managers).
+  Display fix: FC values (`required_value`/`allotted_value`) now shown as USD (were labelled ₹).
+- Tests: backend gate tests/ 246 + apps 3678 passed, 1 xfailed (ruff F401 pre-existing, unrelated); frontend gate exit 0
+  (vitest 972/972); Playwright `allotments-workspace.visual.spec.ts` 5/5 (real local data via `LM_ALLOTMENT_FIXTURE`).
+  cif-balance-auditor: APPROVE, no business-rule change. No live allocation writes were made on the dev DB.
+<!-- CHECKPOINT:allotments-workspace:END -->
+
 
 <!-- CHECKPOINT:accounting-banking-proposals:BEGIN -->
 **Accounting banking — statement import + invoice proposals — TESTED (2026-11-17)** (session license-manager-b5)

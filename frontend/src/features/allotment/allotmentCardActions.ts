@@ -1,4 +1,6 @@
 import { toast } from "sonner";
+import { ArrowDownToLine, Copy, Download, FileText, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import type { ActionMenuItem } from "@/components/shared";
 import api from "@/api/axios";
 import { openPdfPreview } from "@/utils/pdfPreview";
 import { saveFilterState } from "@/utils/filterPersistence";
@@ -52,4 +54,29 @@ export function buildAllotmentActions(item: AllotmentRecord, ctx: AllotmentActio
         canWrite && { icon: 'trash', title: 'Delete', tone: 'danger', onClick: () => onDelete(item) },
     ];
     return actions.filter((a): a is AllotmentCardAction => Boolean(a));
+}
+
+export const ALLOTMENT_ACTION_ICONS: Record<string, LucideIcon> = {
+    pencil: Pencil,
+    copy: Copy,
+    "box-arrow-in-down": ArrowDownToLine,
+    "file-pdf": FileText,
+    download: Download,
+    trash: Trash2,
+};
+
+/**
+ * The same actions as compact action-menu items (row action menu). `overrides`
+ * replaces a handler by title — e.g. Edit opens the inline Edit tab instead of
+ * the edit page. Order, gating and tones are unchanged.
+ */
+export function toActionMenuItems(actions: AllotmentCardAction[], overrides: Record<string, () => void> = {}): ActionMenuItem[] {
+    return actions.map((a) => ({
+        id: a.title.toLowerCase().replace(/\s+/g, "-"),
+        label: a.title,
+        icon: ALLOTMENT_ACTION_ICONS[a.icon],
+        tone: a.tone === "danger" ? "danger" as const : "default" as const,
+        separatorBefore: a.tone === "danger",
+        onSelect: overrides[a.title] ?? (() => { void a.onClick(); }),
+    }));
 }

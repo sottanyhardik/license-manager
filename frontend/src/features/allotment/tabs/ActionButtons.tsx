@@ -1,16 +1,9 @@
-import { ArrowDownToLine, Copy, Download, FileText, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OUTLINE_TOKENS } from "@/lib/display";
 import type { AllotmentCardAction } from "../types";
+import { ALLOTMENT_ACTION_ICONS } from "../allotmentCardActions";
 
-const ICONS: Record<string, LucideIcon> = {
-    pencil: Pencil,
-    copy: Copy,
-    "box-arrow-in-down": ArrowDownToLine,
-    "file-pdf": FileText,
-    download: Download,
-    trash: Trash2,
-};
+const ICONS = ALLOTMENT_ACTION_ICONS;
 
 /** Labelled buttons for existing card actions (same handlers + gating as the card header). */
 export function ActionButtons({ actions }: { actions: AllotmentCardAction[] }) {

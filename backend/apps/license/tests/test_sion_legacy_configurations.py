@@ -27,7 +27,11 @@ def test_configuration_has_stable_unique_ordered_identity(norm):
 
 
 def test_e126_exact_split_and_rebalance_contract():
-    case = GOLDEN_CASES["E126"][1]
+    """Legacy ``plan_e126`` oracle only (no production caller): it still applies the
+    PKO -> Olive value-gain rebalance. The E126 registry definition dropped that
+    REBALANCE by owner decision 2026-11-18 (fixed 50:50 split; see golden case
+    ``split_fixed_50_50_no_rebalance``), so the inputs are pinned inline here."""
+    case = {"balance_cif": "400", "records": [{"record_id": "split", "hs_code": "15132900", "description": "olive 1509 blend", "quantity": "100"}]}
     result = plan_e126(case["records"], Decimal(case["balance_cif"]))
     rows = {row["planning_item_name"]: row for row in result["items"]}
     assert rows["PALM KERNEL OIL - E126"]["total_quantity"] == Decimal("31.25")

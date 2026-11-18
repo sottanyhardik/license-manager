@@ -95,10 +95,11 @@ E126 = {
          "config": {"mode": "PHYSICAL_PRODUCT", "identity": "HSN_DESCRIPTION_UNIT_WITH_ITEM_NAME_FALLBACK", "representative": "LOWEST_SERIAL_NUMBER", "quantity": "SUM_AVAILABLE_QUANTITY", "output_order": ["NUTS", "PKO", "OLIVE"]}},
         {"stable_key": "E126:ACTION:004:ALLOCATE", "priority": 4, "action_type": "ALLOCATE",
          "config": {"mode": "SEQUENTIAL_CIF_WATERFALL", "consume_remaining": True, "partial_mode": "REDUCE_EFFECTIVE_RATE", "order": ["NUTS", "PKO", "OLIVE"]}},
-        {"stable_key": "E126:ACTION:005:REBALANCE", "priority": 5, "action_type": "REBALANCE",
-         "config": {"mode": "VALUE_GAIN_SHIFT", "source": "PKO", "target": "OLIVE", "eligible_source": "PKO_OLIVE_SPLIT", "record_order": "INPUT", "stop_at_balance": True}},
-        {"stable_key": "E126:ACTION:006:ROUND", "priority": 6, "action_type": "ROUND", "config": {"quantity": {"precision": 0, "rounding": "FLOOR"}, "planned_cif": {"precision": 2, "rounding": "ROUND_HALF_EVEN"}, "recompute_value_after_quantity_rounding": True}},
-        {"stable_key": "E126:ACTION:007:MAP", "priority": 7, "action_type": "MAP_OUTPUT", "config": {"omit_zero_value": True, "existing_split_policy": "PRESERVE_GROUP_WIDE_ONCE_GENERATED"}},
+        # Owner decision 2026-11-18: no REBALANCE for E126 — the 50:50 PKO / Olive
+        # opening split is fixed; spare CIF stays unplanned rather than moving
+        # quantity between the two independent entitlements. (E132 unchanged.)
+        {"stable_key": "E126:ACTION:006:ROUND", "priority": 5, "action_type": "ROUND", "config": {"quantity": {"precision": 0, "rounding": "FLOOR"}, "planned_cif": {"precision": 2, "rounding": "ROUND_HALF_EVEN"}, "recompute_value_after_quantity_rounding": True}},
+        {"stable_key": "E126:ACTION:007:MAP", "priority": 6, "action_type": "MAP_OUTPUT", "config": {"omit_zero_value": True, "existing_split_policy": "PRESERVE_GROUP_WIDE_ONCE_GENERATED"}},
     ],
     "mappings": [
         {"stable_key": "E126:OUTPUT:001:NUTS", "priority": 1, "source_key": "NUTS", "output_name": "NUTS - E126", "rate": "3.00", "conversion_factor": "1", "unit": "KG"},
@@ -187,7 +188,9 @@ GOLDEN_CASES = {
             {"record_id": "nuts", "hs_code": "08021100", "description": "cashew nuts", "quantity": "10"},
             {"record_id": "olive", "hs_code": "1509", "description": "olive oil", "quantity": "10"}],
          "expected": {"rows": [{"output_key": "NUTS", "quantity": "10", "unit_price": "3.00", "value": "30.00"}, {"output_key": "OLIVE", "quantity": "10", "unit_price": "2", "value": "20"}], "remaining_cif": "0"}},
-        {"name": "split_rebalance_exact", "balance_cif": "400", "records": [{"record_id": "split", "hs_code": "15132900", "description": "olive 1509 blend", "quantity": "100"}], "expected": {"rows": [{"output_key": "PKO", "quantity": "31.25", "unit_price": "1.80", "value": "56.2500"}, {"output_key": "OLIVE", "quantity": "68.75", "unit_price": "5.00", "value": "343.7500"}], "remaining_cif": "0"}},
+        # Owner decision 2026-11-18: fixed 50:50 split, no PKO -> Olive value-gain shift;
+        # the 60.00 spare CIF stays unplanned (was PKO 31.25 / Olive 68.75, remaining 0).
+        {"name": "split_fixed_50_50_no_rebalance", "balance_cif": "400", "records": [{"record_id": "split", "hs_code": "15132900", "description": "olive 1509 blend", "quantity": "100"}], "expected": {"rows": [{"output_key": "PKO", "quantity": "50", "unit_price": "1.80", "value": "90.00"}, {"output_key": "OLIVE", "quantity": "50", "unit_price": "5.00", "value": "250.00"}], "remaining_cif": "60.00"}},
     ],
     "E132": [
         {"name": "ordered_classification", "balance_cif": "1000", "records": [{"record_id": "nuts", "hs_code": "08021100", "description": "Cheese Vegetable Oil Nut Blend", "quantity": "2"}, {"record_id": "rbd", "hs_code": "1510", "description": "oil", "quantity": "3"}], "expected": {"rows": [{"output_key": "NUTS", "quantity": "2", "unit_price": "3.00", "value": "6.00"}, {"output_key": "RBD", "quantity": "3", "unit_price": "1.20", "value": "3.60"}], "remaining_cif": "990.40"}},

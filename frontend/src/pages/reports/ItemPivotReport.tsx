@@ -18,6 +18,7 @@ import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
+import ItemPivotIntelligence from "./item-pivot/ItemPivotIntelligence";
 import C969EntitlementTable, { C969GroupSummary } from "./C969EntitlementTable";
 import { openAuthedFile } from "../../utils/documentDownload";
 import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
@@ -331,13 +332,21 @@ export default function ItemPivotReport() {
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [reportView] = useState<'summary' | 'matrix'>(searchParams.get('view') === 'license-matrix' ? 'matrix' : 'summary');
     const [activeNotification, setActiveNotification] = useState<string>('total');
+    // Intelligence (default) or the classic notification pivot; kept in the URL so refresh / links keep the mode.
+    const mode: 'intelligence' | 'classic' = searchParams.get('mode') === 'classic' ? 'classic' : 'intelligence';
+    const setMode = (next: 'intelligence' | 'classic') => {
+        const params = new URLSearchParams(searchParams);
+        if (next === 'classic') params.set('mode', 'classic'); else params.delete('mode');
+        setSearchParams(params, { replace: true });
+    };
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
     // Filter states
     const [selectedCompanies, setSelectedCompanies] = useState([]);
     const [excludeCompanies, setExcludeCompanies] = useState([]);
-    const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+    // Closed by default (compact report toolbar); "Show Filters" opens them.
+    const [filtersCollapsed, setFiltersCollapsed] = useState(true);
     const [activeNormTab, setActiveNormTab] = useState(null);
     const [availableNorms, setAvailableNorms] = useState([]);
     const [minBalance, setMinBalance] = useState(200);
@@ -516,10 +525,10 @@ export default function ItemPivotReport() {
 
     // Load report when active norm tab changes or filters change
     useEffect(() => {
-        if (activeNormTab) {
+        if (activeNormTab && mode === 'classic') {
             loadReport(activeNormTab);
         }
-    }, [activeNormTab, loadReport]);
+    }, [activeNormTab, loadReport, mode]);
 
     const handleUpdateBalance = async () => {
         const statusText = licenseStatus === 'active' ? 'active' : licenseStatus === 'inactive' ? 'inactive' : 'all';
@@ -787,8 +796,27 @@ export default function ItemPivotReport() {
                 loading={loading}
             />
 
-            {/* Report Tables - Only show active norm */}
-            <div>
+            {activeNormTab && (
+                <div className="mb-2 mt-3 flex flex-wrap items-center gap-2">
+                    <div role="group" aria-label="Report mode" className="inline-flex rounded-md border border-border p-0.5">
+                        <Button size="sm" variant={mode === 'intelligence' ? 'default' : 'ghost'} aria-pressed={mode === 'intelligence'} onClick={() => setMode('intelligence')}>Utilization intelligence</Button>
+                        <Button size="sm" variant={mode === 'classic' ? 'default' : 'ghost'} aria-pressed={mode === 'classic'} onClick={() => setMode('classic')}>Classic pivot</Button>
+                    </div>
+                </div>
+            )}
+            {activeNormTab && mode === 'intelligence' && (
+                <ItemPivotIntelligence query={(() => {
+                    const params = new URLSearchParams(buildItemPivotReportPath({
+                        format: "json", normClass: activeNormTab, selectedCompanies, excludeCompanies, minBalance: debouncedMinBalance,
+                        licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus,
+                    }).split("?")[1]);
+                    params.delete("format");
+                    return params.toString();
+                })()} />
+            )}
+
+            {/* Report Tables - Only show active norm (classic pivot) */}
+            <div hidden={mode !== 'classic' && !!activeNormTab}>
                     {/* Empty state: norms exist but none selected */}
                     {!activeNormTab && !loading && availableNorms.length > 0 && (
                         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-8 text-center sm:gap-4 sm:py-12 md:py-16">

@@ -148,6 +148,14 @@ class ItemPivotService:
         usage = get_item_usage_for_items(
             item.id for license_obj in licenses for item in license_obj.import_license.all()
         )
+        # Licence-level CIF comes from the canonical balance engine (owner decision
+        # 2026-11-18): allocation-aware BOE debit, BOE-netted outstanding allotments,
+        # billed-without-BOE, and the signed financial balance (never floored).
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+        canonical_debit = LicenseBalanceCalculator.calculate_debit_for_licenses(ids)
+        canonical_allotment = LicenseBalanceCalculator.calculate_allotment_for_licenses(ids)
+        canonical_billed = LicenseBalanceCalculator.calculate_trade_for_licenses(ids)
+        canonical_balance = LicenseBalanceCalculator.calculate_financial_balance_for_licenses(ids)
         # Mapping is read from the persisted BOE/allotment target relationship
         # while the canonical allocation rows are still unique.  This is one
         # batched usage population for the entire report, never one query per
@@ -243,8 +251,10 @@ class ItemPivotService:
                 "",
             )
             total_cif = sum((_decimal(item.cif_fc) for item in export_items), ZERO_CIF)
-            debited_cif = sum((usage_totals[item.id]["boe_cif"] for item in import_items), ZERO_CIF)
-            allotted_cif = sum((usage_totals[item.id]["allot_cif"] for item in import_items), ZERO_CIF)
+            debited_cif = _decimal(canonical_debit.get(license_obj.id))
+            allotted_cif = _decimal(canonical_allotment.get(license_obj.id))
+            billed_cif = _decimal(canonical_billed.get(license_obj.id))
+            licence_balance_cif = _decimal(canonical_balance.get(license_obj.id))
             cells = {}
             planned_cif = ZERO_CIF
 
@@ -572,7 +582,9 @@ class ItemPivotService:
                 "transfer_available": bool(getattr(license_obj, "latest_transfer", None)),
                 "latest_transfer": str(getattr(license_obj, "latest_transfer", "") or ""),
                 "total_cif": _text(total_cif), "debited_cif": _text(debited_cif), "allotted_cif": _text(allotted_cif),
-                "planned_cif": _text(planned_cif), "balance_cif": _text(max(total_cif - debited_cif - allotted_cif, ZERO_CIF)), "items": cells,
+                "billed_cif": _text(billed_cif), "planned_cif": _text(planned_cif),
+                "balance_cif": _text(licence_balance_cif), "is_over_utilised": licence_balance_cif < ZERO_CIF,
+                "final_balance_cif": _text(licence_balance_cif - planned_cif), "items": cells,
                 "issues": issues, "issue_count": len(issues),
                 "highest_issue": min(issues, key=lambda issue: 0 if issue["severity"] == "critical" else 1)["type"] if issues else None,
             })
@@ -636,14 +648,18 @@ class ItemPivotService:
             "total_cif": sum((_decimal(row["total_cif"]) for row in all_licenses), ZERO_CIF),
             "actual_boe_cif": sum((_decimal(row["debited_cif"]) for row in all_licenses), ZERO_CIF),
             "actual_allotment_cif": sum((_decimal(row["allotted_cif"]) for row in all_licenses), ZERO_CIF),
+            "actual_billed_cif": sum((_decimal(row.get("billed_cif")) for row in all_licenses), ZERO_CIF),
             "actual_balance_cif": sum((_decimal(row["balance_cif"]) for row in all_licenses), ZERO_CIF),
             "effective_planned_cif": sum((_decimal(row["planned_cif"]) for row in all_licenses), ZERO_CIF),
         }
-        summary["total_actual_used_cif"] = summary["actual_boe_cif"] + summary["actual_allotment_cif"]
-        summary["final_balance_cif"] = max(summary["actual_balance_cif"] - summary["effective_planned_cif"], ZERO_CIF)
+        summary["total_actual_used_cif"] = summary["actual_boe_cif"] + summary["actual_allotment_cif"] + summary["actual_billed_cif"]
+        # Signed: a negative final balance is an over-plan / over-use signal, never hidden by a floor.
+        summary["final_balance_cif"] = summary["actual_balance_cif"] - summary["effective_planned_cif"]
         # Shared licence CIF is reconciled at licence level.  Keep actual
         # overdraw and planning overage separate; neither is an item cap.
-        summary["overdrawn_cif"] = max(summary["total_actual_used_cif"] - summary["total_cif"], ZERO_CIF)
+        # Over-use is read from the signed canonical balances (their opening / purchase-credit
+        # terms are not part of total − used), never from a recomputed difference.
+        summary["overdrawn_cif"] = sum((-_decimal(row["balance_cif"]) for row in all_licenses if _decimal(row["balance_cif"]) < ZERO_CIF), ZERO_CIF)
         summary["over_planned_cif"] = max(summary["effective_planned_cif"] - summary["actual_balance_cif"], ZERO_CIF)
         summary["planning_coverage_percent"] = (summary["effective_planned_cif"] * Decimal("100") / summary["actual_balance_cif"] if summary["actual_balance_cif"] else ZERO_CIF)
         item_summary = {}

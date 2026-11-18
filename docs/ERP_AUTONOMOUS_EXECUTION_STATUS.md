@@ -187,6 +187,20 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   cif-balance-auditor: APPROVE, no business-rule change. No live allocation writes were made on the dev DB.
 <!-- CHECKPOINT:allotments-workspace:END -->
 
+<!-- CHECKPOINT:item-pivot-intelligence:BEGIN -->
+**Item Pivot — utilization intelligence + canonical licence figures — TESTED (2026-11-18)**
+- Owner decisions: docs/decisions/2026-11-18-planning-cif-budget-e126-split-item-pivot.md (canonical engine;
+  ItemNameModel × SION identity). Audit + implementation notes: docs/reports/item-pivot-audit-2026-11-18.md.
+- **BUSINESS-RULE / API (additive):** classic pivot licence rows now canonical (signed balance, `is_over_utilised`,
+  billed, allocation netting; summary final balance signed). New read-only `item-pivot/intelligence/` and
+  `item-pivot/recommendations/` (ReportPermission, Excel). UI: Intelligence (default) | Classic pivot; four views.
+- Tests: backend gate tests/ 246 + apps 3714 passed, 1 xfailed (ruff F401 pre-existing, unrelated); frontend gate
+  exit 0 (vitest 978/978); Playwright `item-pivot-intelligence.visual.spec.ts` (real E5/E126 dumps + built-in) pass.
+  cif-balance-auditor findings addressed (item basis labelled; other-adjustments from engine maps; overdrawn signed).
+- Next: AI-assisted product matching (owner: deterministic matcher + pluggable AI; approval links import items to
+  the master item — affects Auto Plan classification; approver LICENSE_MANAGER).
+<!-- CHECKPOINT:item-pivot-intelligence:END -->
+
 
 <!-- CHECKPOINT:accounting-banking-proposals:BEGIN -->
 **Accounting banking — statement import + invoice proposals — TESTED (2026-11-17)** (session license-manager-b5)

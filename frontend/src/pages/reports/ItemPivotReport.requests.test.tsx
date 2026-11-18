@@ -8,7 +8,7 @@ import ItemPivotReport from "./ItemPivotReport";
 vi.mock("react-router-dom", async (importOriginal) => ({
     ...(await importOriginal<typeof import("react-router-dom")>()),
     useNavigate: () => vi.fn(),
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+    useSearchParams: () => [new URLSearchParams("mode=classic"), vi.fn()],
 }));
 vi.mock("../../api/axios", () => ({ default: { get: vi.fn() } }));
 vi.mock("../../utils/documentDownload", () => ({ openAuthedFile: vi.fn(() => Promise.resolve()) }));
@@ -37,6 +37,8 @@ describe("ItemPivotReport request counts", () => {
         render(<ItemPivotReport />);
         fireEvent.click((await screen.findAllByRole("button", { name: /E1/ }))[0]);
         await waitFor(() => expect(count("reports/item-pivot/")).toBe(1));
+        // Filters are closed by default; open them on demand.
+        fireEvent.click(screen.getByRole("button", { name: /Show Filters/ }));
 
         const select = screen.getByLabelText(/Minimum Balance/);
         fireEvent.change(select, { target: { value: "1000" } });
@@ -53,6 +55,7 @@ describe("ItemPivotReport request counts", () => {
         render(<ItemPivotReport />);
         fireEvent.click((await screen.findAllByRole("button", { name: /E1/ }))[0]);
         await waitFor(() => expect(count("reports/item-pivot/")).toBe(1));
+        fireEvent.click(screen.getByRole("button", { name: /Show Filters/ }));
         fireEvent.change(screen.getByLabelText(/Minimum Balance/), { target: { value: "5000" } });
         fireEvent.click(screen.getByRole("button", { name: /excel/i }));
         await waitFor(() => expect(vi.mocked(openAuthedFile)).toHaveBeenCalledTimes(1));

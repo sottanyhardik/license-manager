@@ -28,6 +28,8 @@ export interface MasterColumnConfig {
      * tables in the expanded row. Only non-empty collections render.
      */
     nested?: MasterNestedCollection[];
+    /** File fields (stored media paths) shown under Attachments; a `.docx` also gets the Document tab viewer. */
+    documents?: string[];
 }
 
 export interface MasterNestedCollection {
@@ -45,6 +47,7 @@ export const MASTER_COLUMNS: Readonly<Record<string, MasterColumnConfig>> = {
         columns: [code("iec", "IEC", "minmax(7.5rem,9rem)"), text("name", "Name", "minmax(12rem,2fr)"), code("pan", "PAN", "minmax(7rem,8.5rem)"), code("gst_number", "GSTIN", "minmax(9rem,11rem)")],
         // Banking fields are only in the response for roles allowed to see them (CompanyPermission / serializer).
         details: ["contact_person", "email", "phone_number", "address", "address_line_1", "address_line_2", "bank_name", "ifsc_code", "account_type", "bank_account_number"],
+        documents: ["logo", "signature", "stamp"],
     },
     ports: { columns: [code("code", "Code"), text("name", "Port", "minmax(12rem,3fr)")] },
     "hs-codes": {
@@ -70,7 +73,7 @@ export const MASTER_COLUMNS: Readonly<Record<string, MasterColumnConfig>> = {
     "scheme-codes": { columns: [code("code", "Code"), text("label", "Scheme", "minmax(12rem,3fr)")] },
     "notification-numbers": { columns: [code("code", "Notification", "minmax(7rem,9rem)"), text("label", "Description", "minmax(12rem,3fr)")] },
     "purchase-statuses": { columns: [code("code", "Code", "minmax(4rem,5rem)"), text("label", "Purchase status", "minmax(12rem,3fr)"), num("display_order", "Order", "minmax(4rem,5rem)")] },
-    "transfer-letters": { columns: [text("name", "Transfer letter", "minmax(12rem,3fr)")], details: ["tl"] },
+    "transfer-letters": { columns: [text("name", "Transfer letter", "minmax(12rem,3fr)")], details: ["tl"], documents: ["tl"] },
     "exchange-rates": {
         // Rates are the row's content: they share the width (values shown exactly as stored, never rounded).
         columns: [code("date", "Date", "minmax(6.5rem,8rem)"), num("usd", "USD", "minmax(5rem,1fr)"), num("euro", "EUR", "minmax(5rem,1fr)"), num("pound_sterling", "GBP", "minmax(5rem,1fr)"), num("chinese_yuan", "CNY", "minmax(5rem,1fr)")],

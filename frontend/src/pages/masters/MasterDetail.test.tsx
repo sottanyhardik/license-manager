@@ -61,23 +61,34 @@ describe("MasterDetail", () => {
         });
     });
 
-    it("shows the record fields, audit data and breadcrumbs", async () => {
-        renderAt("/masters/ports/5");
+    it("shows the record fields, audit data and breadcrumbs (?tab=details deep link, accordion sections)", async () => {
+        const user = userEvent.setup();
+        sessionStorage.clear();
+        renderAt("/masters/ports/5?tab=details");
         expect(await screen.findByRole("heading", { name: "INMAA1", level: 1 })).toBeInTheDocument();
+        expect(screen.getByRole("tab", { name: "Details", selected: true })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "General information", expanded: true })).toBeInTheDocument();
         expect(screen.getByText("Port code")).toBeInTheDocument();
         expect(screen.getByText("Chennai")).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "Audit" })).toBeInTheDocument();
+        // Audit starts collapsed; it expands in place.
+        const audit = screen.getByRole("button", { name: "Audit information", expanded: false });
+        await user.click(audit);
+        expect(audit).toHaveAttribute("aria-expanded", "true");
         expect(screen.getByText("Last updated")).toBeInTheDocument();
+        // Ports have no child collections or documents: no Related records / Document tabs.
+        expect(screen.queryByRole("tab", { name: /Related records/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole("tab", { name: "Document" })).not.toBeInTheDocument();
         expect(screen.getByRole("link", { name: "Masters" })).toHaveAttribute("href", "/masters");
         expect(screen.getByRole("link", { name: "Ports" })).toHaveAttribute("href", "/masters/ports");
         expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/masters/ports/5/edit");
     });
 
     it("addresses slash codes with an encoded API path and omits absent audit fields", async () => {
-        renderAt("/masters/notification-numbers/025%2F2023");
+        renderAt("/masters/notification-numbers/025%2F2023?tab=details");
         expect(await screen.findByRole("heading", { name: "025/2023", level: 1 })).toBeInTheDocument();
         expect(getSpy).toHaveBeenCalledWith("masters/notification-numbers/025%2F2023/", expect.anything());
-        expect(screen.queryByRole("heading", { name: "Audit" })).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "General information" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Audit information" })).not.toBeInTheDocument();
         expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/masters/notification-numbers/025%2F2023/edit");
     });
 

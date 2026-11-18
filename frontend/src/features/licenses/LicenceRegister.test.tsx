@@ -12,6 +12,19 @@ import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/utils/pdfPreview", () => ({ openPdfPreview: vi.fn() }));
+// Inline Edit tab embeds the one licence form (MasterForm, covered by its own tests); the stub exposes its contract.
+const { licenceFormProps } = vi.hoisted(() => ({ licenceFormProps: vi.fn() }));
+vi.mock("@/pages/masters/MasterForm", () => ({
+    default: (props: { entityName: string; recordId: number; embedded?: boolean; onSuccess?: (id: number) => void; onClose?: () => void }) => {
+        licenceFormProps(props);
+        return (
+            <form aria-label="Licence edit form">
+                <button type="button" onClick={() => { props.onSuccess?.(props.recordId); props.onClose?.(); }}>Update</button>
+                <button type="button" onClick={() => props.onClose?.()}>Cancel</button>
+            </form>
+        );
+    },
+}));
 vi.mock("@/utils/documentDownload", () => ({ openAuthedFile: vi.fn(() => Promise.resolve()), openDocument: vi.fn() }));
 
 function customs(id: number) {
@@ -108,7 +121,7 @@ const CHANGED_STRINGS = {
         after: "Use 'Fetch from DGFT' in the Actions menu to load ownership history.",
     },
     removedTabs: ["Edit Options"],
-    addedTabs: ["Reconciliation"],
+    addedTabs: ["Reconciliation", "Edit"], // Edit: inline licence edit (writers), replaces the /licenses/:id/edit page
     duplicateRemoved: "Edit licence", // merged into the single "Edit" action
     /** Owner-approved CIF unification: new financial summary uses the card's `$` en-US formatter. */
     summaryCifFormat: { field: "customs_ledger.summary.opening_balance", value: 5000, rendered: "$5,000.00" },
@@ -272,7 +285,9 @@ describe("Licence register card — actions per role", () => {
         await pick("Recalculate / hide-restore BOE (License Overview)");
         expect(props.navigate).toHaveBeenLastCalledWith("/licenses/101/overview");
         await pick("Edit");
-        expect(props.navigate).toHaveBeenLastCalledWith("/licenses/101/edit");
+        // Edit now opens the licence's Edit tab inline; it never navigates to the old edit page.
+        expect(props.navigate).not.toHaveBeenCalledWith("/licenses/101/edit");
+        expect(await screen.findByRole("tab", { name: "Edit", selected: true })).toBeInTheDocument();
         await pick("Balance PDF");
         await waitFor(() => expect(get).toHaveBeenCalledWith("licenses/101/balance-pdf/", { responseType: "blob" }));
         await pick("Balance Excel");
@@ -326,7 +341,7 @@ describe("Licence register card — requests, panels, isolation, a11y", () => {
         const user = userEvent.setup();
         renderLicensesTable("LICENSE_MANAGER");
         const region = await expand(user, 104);
-        for (const tab of ["Overview", "Import Items", "BOE & Allotment", "Invoices", "Planning", "Reconciliation", "History"]) {
+        for (const tab of ["Overview", "Import Items", "BOE & Allotment", "Invoices", "Planning", "Reconciliation", "Edit", "History"]) {
             await user.click(within(region).getByRole("tab", { name: tab }));
             const panel = within(region).getByRole("tabpanel");
             // Content = visible text, or a loading skeleton while a reused body (Planning) fetches.
@@ -335,6 +350,33 @@ describe("Licence register card — requests, panels, isolation, a11y", () => {
         }
         await user.click(within(region).getByRole("tab", { name: "History" }));
         expect(await within(region).findByText("No transfer history")).toBeInTheDocument();
+    });
+
+    it("(4b) licence Edit is inline: the record's own form, save refreshes in place, cancel returns to Overview", async () => {
+        const user = userEvent.setup();
+        const { props } = renderLicensesTable("LICENSE_MANAGER");
+        const region = await expand(user, 101);
+        const menu = await openMenu(user, 101);
+        await user.click(within(menu).getByRole("menuitem", { name: "Edit" }));
+        expect(await within(region).findByRole("form", { name: "Licence edit form" })).toBeInTheDocument();
+        expect(licenceFormProps).toHaveBeenLastCalledWith(expect.objectContaining({ entityName: "licenses", recordId: 101, embedded: true }));
+
+        await user.click(within(region).getByRole("button", { name: "Update" }));
+        expect(await within(region).findByRole("tab", { name: "Overview", selected: true })).toBeInTheDocument();
+        await user.click(within(region).getByRole("tab", { name: "Edit" }));
+        await user.click(within(region).getByRole("button", { name: "Cancel" }));
+        expect(within(region).getByRole("tab", { name: "Overview", selected: true })).toBeInTheDocument();
+        // The list was never left (no navigation to an edit page).
+        expect(props.navigate).not.toHaveBeenCalled();
+    });
+
+    it("(4c) viewers get no Edit tab and no Edit action", async () => {
+        const user = userEvent.setup();
+        renderLicensesTable("LICENSE_VIEWER");
+        const region = await expand(user, 101);
+        expect(within(region).queryByRole("tab", { name: "Edit" })).not.toBeInTheDocument();
+        const menu = await openMenu(user, 101);
+        expect(within(menu).queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
     });
 
     it("(5) cross-record isolation: one open card, B never shows A's data", async () => {

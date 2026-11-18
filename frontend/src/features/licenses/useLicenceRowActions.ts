@@ -7,7 +7,6 @@ import { autoPlanLicense } from "@/api/planningRuleApi";
 import { invalidateLicence } from "@/lib/queryKeys";
 import { openPdfPreview } from "@/utils/pdfPreview";
 import { openAuthedFile } from "@/utils/documentDownload";
-import { saveFilterState } from "@/utils/filterPersistence";
 
 import type { LicenseListItem } from "./types";
 
@@ -35,7 +34,7 @@ function excelErrorMessage(err: unknown): string {
 export function useLicenceRowActions(item: LicenseListItem, ctx: LicenceRowActionContext) {
     const queryClient = useQueryClient();
     const [isPlanning, setIsPlanning] = useState(false);
-    const { entityName, filterParams, currentPage, pageSize, navigate } = ctx;
+    const { navigate } = ctx;
 
     const openMergedDocuments = useCallback(async (e: MouseEvent) => {
         e.stopPropagation(); // never toggles the card
@@ -52,11 +51,6 @@ export function useLicenceRowActions(item: LicenseListItem, ctx: LicenceRowActio
             else toast.error("Failed to load license documents");
         }
     }, [item.id, item.license_number, item.has_tl, item.has_copy]);
-
-    const editLicence = useCallback(() => {
-        saveFilterState(entityName, { filters: filterParams, pagination: { currentPage, pageSize }, search: "" });
-        navigate(`/licenses/${item.id}/edit`);
-    }, [entityName, filterParams, currentPage, pageSize, navigate, item.id]);
 
     const openOverview = useCallback(() => {
         navigate(`/licenses/${item.id}/overview`);
@@ -100,5 +94,5 @@ export function useLicenceRowActions(item: LicenseListItem, ctx: LicenceRowActio
         }
     }, [item.id, item.license_number]);
 
-    return { isPlanning, openMergedDocuments, editLicence, openOverview, autoPlan, downloadPdf, downloadExcel };
+    return { isPlanning, openMergedDocuments, openOverview, autoPlan, downloadPdf, downloadExcel };
 }

@@ -116,7 +116,8 @@ export const LicenceCard = memo(function LicenceCard({
         isPlanning: actions.isPlanning,
         isFetchingDGFT,
         openOverview: actions.openOverview,
-        editLicence: actions.editLicence,
+        // Edit opens the record's Edit tab inline (no edit page): list filters, page and scroll are kept.
+        editLicence: () => handleTabChange("edit"),
         autoPlan: () => { void actions.autoPlan(); },
         fetchFromDgft: () => onFetchDGFT(item),
         downloadPdf: () => { void actions.downloadPdf(); },

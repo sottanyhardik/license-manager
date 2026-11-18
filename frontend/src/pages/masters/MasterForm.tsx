@@ -1152,7 +1152,7 @@ export default function MasterForm({
                                     type="button"
                                     variant="outline"
                                     size="lg"
-                                    onClick={() => { setSavedLicenseId(id); setShowBalanceModal(true); }}
+                                    onClick={() => { setSavedLicenseId(recordId); setShowBalanceModal(true); }}
                                     disabled={saving}
                                 >
                                     <Eye className="size-4" aria-hidden="true" />
@@ -1165,7 +1165,7 @@ export default function MasterForm({
                                     type="button"
                                     variant="outline"
                                     size="lg"
-                                    onClick={() => navigate(`/licenses/${id}/overview`)}
+                                    onClick={() => navigate(`/licenses/${recordId}/overview`)}
                                     disabled={saving}
                                 >
                                     <BarChart3 className="size-4" aria-hidden="true" />

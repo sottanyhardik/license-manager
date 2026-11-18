@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { DetailTabs, type DetailTab } from "@/components/workspace";
+import { LoadingState } from "@/components/shared";
 import { invalidateLicence } from "@/lib/queryKeys";
 import LicenseOverviewContent from "@/pages/license-overview/LicenseOverviewContent";
 
@@ -12,6 +13,10 @@ import InvoicesTab from "./tabs/InvoicesTab";
 import ReconciliationTab from "./tabs/ReconciliationTab";
 import { useLicenceLedger } from "./useLicenceLedger";
 
+// The one licence form (same fields, validation, API and permissions as /licenses/:id/edit), embedded in the
+// expanded licence. Lazy so the register does not load the form until a writer opens Edit.
+const MasterForm = lazy(() => import("@/pages/masters/MasterForm"));
+
 export type LicenseRecordTabId =
     | "overview"
     | "import-item"
@@ -19,6 +24,7 @@ export type LicenseRecordTabId =
     | "invoices"
     | "plan"
     | "reconciliation"
+    | "edit"
     | "history";
 
 export interface LicenseRecordWorkspaceProps {
@@ -64,6 +70,28 @@ function PlanningTab({ licenseId }: { licenseId: number }) {
 }
 
 /**
+ * Inline licence edit (Edit tab): save refreshes this licence and the register in place; Save/Cancel return
+ * to Overview. List filters, page and scroll are untouched because nothing navigates.
+ */
+function EditTab({ licenseId, onDone }: { licenseId: number; onDone: () => void }) {
+    const queryClient = useQueryClient();
+    return (
+        <Suspense fallback={<LoadingState variant="spinner" label="Loading licence form" />}>
+            <MasterForm
+                embedded
+                entityName="licenses"
+                recordId={licenseId}
+                onSuccess={() => {
+                    void invalidateLicence(queryClient, licenseId);
+                    void queryClient.invalidateQueries({ queryKey: ["entity-list", "licenses"] });
+                }}
+                onClose={onDone}
+            />
+        </Suspense>
+    );
+}
+
+/**
  * Tabs of one expanded licence (05 §16). Lazy (only the active body mounts),
  * keyed `license:<id>` so records never share panel state. Every body reuses an
  * existing component and endpoint; nothing is computed here.
@@ -92,6 +120,8 @@ export default function LicenseRecordWorkspace({
         { id: "invoices", label: "Invoices", render: () => <InvoicesTab licenseId={licenseId} /> },
         { id: "plan", label: "Planning", visible: canWrite, render: () => <PlanningTab licenseId={licenseId} /> },
         { id: "reconciliation", label: "Reconciliation", visible: hasTradingActivity, render: () => <ReconciliationTab licenseId={licenseId} /> },
+        // Same write rule as the action menu's Edit (LICENSE_MANAGER); the API enforces LicensePermission on save.
+        { id: "edit", label: "Edit", visible: canWrite, render: () => <EditTab licenseId={licenseId} onDone={() => onTabChange("overview")} /> },
         { id: "history", label: "History", render: renderHistory },
     ];
 

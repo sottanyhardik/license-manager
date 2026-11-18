@@ -74,6 +74,14 @@ def add_license_overview_actions(viewset_class):
         data = build_invoice_ledger(license_obj)
         return Response(_json_safe(data))
 
+    @action(detail=True, methods=['get'], url_path='overview-payment-ledgers')
+    def overview_payment_ledgers(self, request, pk=None):
+        from apps.license.services.license_payment_ledgers import build_trade_payment_ledgers
+
+        license_obj = self.get_object()
+        data = build_trade_payment_ledgers(license_obj)
+        return Response(_json_safe(data))
+
     @action(detail=True, methods=['get'], url_path='plan-utilization')
     def plan_utilization(self, request, pk=None):
         """
@@ -127,7 +135,7 @@ def add_license_overview_actions(viewset_class):
 
     for method in (
         overview_summary, overview_boes, overview_allotments,
-        overview_items, overview_invoice_ledger, plan_utilization,
+        overview_items, overview_invoice_ledger, overview_payment_ledgers, plan_utilization,
     ):
         setattr(viewset_class, method.__name__, method)
 

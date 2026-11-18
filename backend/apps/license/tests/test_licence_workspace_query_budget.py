@@ -132,6 +132,10 @@ class DetailEndpointBudgets(_Base):
         # payments.aggregate() (ignores the prefetch) twice per trade (~2 q/trade).
         self.budget("/api/licenses/{id}/overview-invoice-ledger/", 10, 31)
 
+    def test_overview_payment_ledgers_budget(self):
+        # Proves: payment ledgers prefetch lines/payments/documents -> flat (no per-trade aggregate).
+        self.budget("/api/licenses/{id}/overview-payment-ledgers/", 9, 9, flat=True)
+
     def test_balance_ledger_budget(self):
         # Proves: balance-ledger costs ~80 queries at 1 row and ~11 more per item/BOE/trade
         # (per-row allocation + invoice/BOE relationship builders).

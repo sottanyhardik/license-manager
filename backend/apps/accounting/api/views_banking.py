@@ -297,3 +297,16 @@ class LineSplitView(ApproverView):
     def delete(self, request, line_id: int):
         line = proposals_svc.undo_split(StatementLine.objects.get(pk=line_id), user=request.user)
         return ok({"line_id": line.pk, "status": line.status})
+
+
+class LicenceBankLedgerView(AccountingView):
+    """Read-only: bank payments/receipts linked (structurally) to one licence's trades."""
+
+    def get(self, request, license_id: int):
+        from django.shortcuts import get_object_or_404
+
+        from apps.accounting.selectors.licence_bank_ledger import licence_bank_ledger
+        from apps.license.models import LicenseDetailsModel
+
+        license_obj = get_object_or_404(LicenseDetailsModel, pk=license_id)
+        return ok(licence_bank_ledger(license_obj))

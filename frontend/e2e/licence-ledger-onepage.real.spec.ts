@@ -65,7 +65,7 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         await page.screenshot({ path: testInfo.outputPath("ledger-onepage-overview-1440.png"), fullPage: true });
 
         // Ledger = the transaction tables (purchase + sale rows).
-        await workspace.getByRole("tab", { name: "Ledger" }).click();
+        await workspace.getByRole("tab", { name: "Ledger", exact: true }).click();
         await expect(workspace.getByText(/Purchase|Sale/).first()).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("ledger-onepage-ledger-1440.png"), fullPage: true });
 
@@ -111,7 +111,7 @@ test.describe("One-page Licence Ledger (real backend)", () => {
         await page.goto(`/license-ledger/${LICENCE_ID}/${companyId}?tab=ledger`, { waitUntil: "networkidle" });
         await expect(page.getByRole("heading", { level: 1 })).toHaveText("License Ledger");
         const opened = page.getByRole("region", { name: `Licence ${LICENCE} workspace` });
-        await expect(opened.getByRole("tab", { name: "Ledger", selected: true })).toBeVisible();
+        await expect(opened.getByRole("tab", { name: "Ledger", exact: true, selected: true })).toBeVisible();
         await expect(page.getByRole("button", { name: /^E2E Browser Exporter/ })).toHaveAttribute("aria-expanded", "true");
         await page.reload({ waitUntil: "networkidle" });
         await expect(page.getByRole("region", { name: `Licence ${LICENCE} workspace` })).toBeVisible();

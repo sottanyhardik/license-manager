@@ -243,6 +243,7 @@ FINANCIAL_WRITE_BASELINE = {('allotment', 'backfill_allocation_status', 'Allotme
  ('accounting', 'seed_accounting_e2e', 'LicenseImportItemsModel'): 1,  # disposable test_* E2E seed
  ('accounting', 'seed_accounting_e2e', 'LicenseTrade'): 1,
  ('accounting', 'seed_accounting_e2e', 'LicenseTradeLine'): 1,
+ ('accounting', 'seed_payment_ledger_e2e', 'LicenseTradePayment'): 2,  # disposable test_* E2E seed (payment ledgers)
  ('license', 'seed_browser_2509', 'AllotmentItems'): 2,
  ('license', 'seed_browser_2509', 'AllotmentModel'): 2,
  ('license', 'seed_browser_2509', 'LicenseBalance'): 2,

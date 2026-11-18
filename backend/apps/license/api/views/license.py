@@ -233,7 +233,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # all read-only (GET), so they only ever hit LicenseBalanceLedgerPermission's
         # SAFE_METHODS/read_roles branch, never write_action_roles.
         'overview_summary', 'overview_boes', 'overview_allotments',
-        'overview_items', 'overview_invoice_ledger', 'plan_utilization',
+        'overview_items', 'overview_invoice_ledger', 'overview_payment_ledgers', 'plan_utilization',
     }
 
     def get_permissions(self):
@@ -581,7 +581,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
             'retrieve', 'update', 'partial_update', 'destroy', 'nested_items',
             'item_usage', 'balance_ledger', 'balance_pdf', 'balance_excel', 'auto_plan',
             'overview_summary', 'overview_boes', 'overview_allotments',
-            'overview_items', 'overview_invoice_ledger', 'plan_utilization',
+            'overview_items', 'overview_invoice_ledger', 'overview_payment_ledgers', 'plan_utilization',
             # Validity must report an expired or inactive licence's current
             # state.  Object permissions still apply after lookup.
             'check_validity',

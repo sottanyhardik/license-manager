@@ -7,6 +7,8 @@
  *   Ledger        — purchase/sale transactions per company     (LicenseLedgerDetail, section="ledger")
  *   BOE & Allot.  — linked Bills of Entry + allotments          (licence register BoeAllotmentTab; DFIA)
  *   Invoices      — invoice ledger                              (licence register InvoicesTab; DFIA)
+ *   Purchase / Sale Ledger — invoices + payment allocations     (PaymentLedgers; DFIA)
+ *   Bank Payment Ledger — bank transactions touching the licence (PaymentLedgers; DFIA, accounting read roles)
  *   Documents     — ledger PDF / Excel / customs-ledger PDF, licence copy
  *   Edit          — the one licence / incentive form, embedded  (writers only; API enforces)
  *   History       — DGFT ownership / transfer history           (licence register HistoryTab; DFIA)
@@ -31,13 +33,14 @@ import {
     downloadCustomLedgerPdf, downloadLicenseLedgerExcel, licenseLedgerExportError, previewLicenseLedgerPdf,
 } from "@/services/licenseLedgerExport";
 import LicenseLedgerDetail from "../LicenseLedgerDetail";
+import { BankPaymentLedgerTab, PurchaseLedgerTab, SaleLedgerTab } from "./PaymentLedgers";
 
 const MasterForm = lazy(() => import("../masters/MasterForm"));
 
 /** Mirrors backend `LicensePermission.required_roles_for_read` (licence, BOE/allotment, invoice and ownership data). */
 const LICENCE_DATA_READ_ROLES = [ROLES.LICENSE_MANAGER, ROLES.LICENSE_VIEWER, ROLES.TRADE_VIEWER, ROLES.TRADE_MANAGER];
 
-export type LedgerWorkspaceTab = "overview" | "ledger" | "boe-allotment" | "invoices" | "documents" | "edit" | "history";
+export type LedgerWorkspaceTab = "overview" | "ledger" | "boe-allotment" | "invoices" | "purchase-ledger" | "sale-ledger" | "bank-ledger" | "documents" | "edit" | "history";
 
 export interface LedgerLicenceWorkspaceProps {
     licenseId: string;
@@ -62,6 +65,8 @@ export default function LedgerLicenceWorkspace({ licenseId, companyId, licenseNu
     const isDfia = licenseType === "DFIA";
     const numericId = Number(licenseId);
     const canReadLicence = isDfia && hasAnyRole(LICENCE_DATA_READ_ROLES);
+    /** Mirrors backend `AccountingPermission` reads (bank transactions); the API stays authoritative (403 -> inline no-access). */
+    const canReadBank = isDfia && hasAnyRole([ROLES.ACCOUNTS_VIEWER, ROLES.ACCOUNTS_MANAGER, ROLES.ACCOUNTS_APPROVER]);
     const canEdit = isDfia ? hasAnyRole([ROLES.LICENSE_MANAGER]) : hasAnyRole([ROLES.INCENTIVE_LICENSE_MANAGER]);
 
     const changeTab = (next: string) => {
@@ -96,6 +101,9 @@ export default function LedgerLicenceWorkspace({ licenseId, companyId, licenseNu
         { id: "ledger", label: "Ledger", render: () => <LicenseLedgerDetail embedded section="ledger" licenseId={licenseId} itemId={companyId} /> },
         { id: "boe-allotment", label: "BOE & Allotments", visible: canReadLicence, render: () => <BoeAllotmentTab licenseId={numericId} /> },
         { id: "invoices", label: "Invoices", visible: canReadLicence, render: () => <InvoicesTab licenseId={numericId} /> },
+        { id: "purchase-ledger", label: "Purchase Ledger", visible: canReadLicence, render: () => <PurchaseLedgerTab licenseId={numericId} /> },
+        { id: "sale-ledger", label: "Sale Ledger", visible: canReadLicence, render: () => <SaleLedgerTab licenseId={numericId} /> },
+        { id: "bank-ledger", label: "Bank Payment Ledger", visible: canReadBank, render: () => <BankPaymentLedgerTab licenseId={numericId} /> },
         {
             id: "documents",
             label: "Documents",

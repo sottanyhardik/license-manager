@@ -349,7 +349,7 @@ describe("LicenseLedger fresh filters", () => {
         routeParams = { licenseId: "2619", itemId: "881" };
         render(wrap());
         const workspace = await screen.findByRole("region", { name: "Licence 0311000001 workspace" });
-        for (const name of ["Overview", "Ledger", "BOE & Allotments", "Invoices", "Documents", "Edit", "History"]) {
+        for (const name of ["Overview", "Ledger", "BOE & Allotments", "Invoices", "Purchase Ledger", "Sale Ledger", "Bank Payment Ledger", "Documents", "Edit", "History"]) {
             expect(within(workspace).getByRole("tab", { name })).toBeInTheDocument();
         }
         await waitFor(() => expect(mockedApiGet).toHaveBeenCalledWith("license-ledger/2619/ledger_detail/?company=881"));

@@ -52,6 +52,7 @@ urlpatterns = [
     path("accounting/narration-aliases/<int:alias_id>/", b.NarrationAliasView.as_view(), name="narration-alias"),
     path("accounting/suspense/", b.SuspenseView.as_view(), name="suspense"),
     path("accounting/suspense/<int:item_id>/resolve/", b.SuspenseResolveView.as_view(), name="suspense-resolve"),
+    path("accounting/licence-bank-ledger/<int:license_id>/", b.LicenceBankLedgerView.as_view(), name="licence-bank-ledger"),
     # reports, loans, migration
     path("accounting/reports/consolidated/", r.ConsolidatedView.as_view(), name="consolidated"),
     path("accounting/reports/<str:name>/", r.ReportView.as_view(), name="report"),

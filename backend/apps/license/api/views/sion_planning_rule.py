@@ -295,6 +295,25 @@ class SionPlanningRuleViewSet(viewsets.ModelViewSet):
         response["Cache-Control"] = "no-store"
         return response
 
+    @action(detail=False, methods=("get",), url_path="norm-summary")
+    def norm_summary(self, request):
+        """Read-only: one row per active/configured norm for the /planning list."""
+        from apps.license.services.sion_planning_workspace import norm_summaries
+        return Response(norm_summaries())
+
+    @action(detail=False, methods=("get",), url_path="norm-configuration")
+    def norm_configuration(self, request):
+        """Read-only: rule versions, profiles, registry split config, entitlement mapping and audit for one norm."""
+        from apps.license.services.sion_planning_workspace import norm_configuration
+        try:
+            sion_id = int(request.query_params.get("sion", ""))
+        except (TypeError, ValueError):
+            return Response({"sion": "A valid SION id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        sion = SionNormClassModel.objects.filter(pk=sion_id).first()
+        if sion is None:
+            return Response({"sion": "SION norm was not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(norm_configuration(sion))
+
     def _audit(self, event, *, rule=None, sion_id=None, extra=None):
         from apps.core.models import ActivityLog
         try:

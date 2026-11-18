@@ -499,7 +499,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = SionPlanningRule
         fields = (
-            "id", "sion", "sion_code", "name", "version", "expression",
+            "id", "sion", "sion_code", "stable_key", "name", "version", "expression",
             "max_unit_price", "unit", "priority", "is_active", "execution_output",
             "strategy", "import_item", "standard_item_name", "unit_value_rows", "percentage_rows",
             "percentage_constraint", "rule_type", "cif_restriction_percentage",
@@ -507,7 +507,7 @@ class SionPlanningRuleSerializer(serializers.ModelSerializer):
             "modified_by_username",
         )
         read_only_fields = (
-            "version", "priority", "created_on", "created_by_username", "modified_on",
+            "stable_key", "version", "priority", "created_on", "created_by_username", "modified_on",
             "modified_by_username", "standard_item_name",
         )
 

@@ -158,6 +158,20 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   DataTable/sort, trade-screen accounting badge).
 <!-- CHECKPOINT:accounting-frontend:END -->
 
+<!-- CHECKPOINT:planning-workspace:BEGIN -->
+**/planning SION workspace — licence-style accordion + inline tabs — TESTED (2026-11-18)**
+- Norm list = compact accordion rows (one open, `?sion=` push → refresh/back/forward); config-driven tabs Overview ·
+  Rules · Split Configuration · Product Mapping · Validation · Version History (+ Simulation when a preview exists).
+- **API (additive, read-only, LicensePermission):** `GET sion-planning-rules/norm-summary/`,
+  `GET sion-planning-rules/norm-configuration/?sion=` (service `license/services/sion_planning_workspace.py`); rule
+  serializer gains read-only `stable_key`. No engine/calculation change; E126 split read from registry + entitlement profile.
+- Tests: new backend 6 passed + planning rule suites 61 passed; frontend gate exit 0 (vitest 971/971, lint, typecheck,
+  build); Playwright `planning-workspace.visual.spec.ts` 7/7 (mocked API, real local data via `LM_PLANNING_FIXTURE`).
+  Backend gate: tests/ 246 + apps 3672 passed, 1 xfailed; **ruff F401 FAIL pre-existing** in
+  `accounting/selectors/licence_bank_ledger.py` (unused `Q`, commit 44911fd3) — not touched.
+- Local data note: E126/A3627 are inactive with no DB rules locally; shown from the code registry (read-only).
+<!-- CHECKPOINT:planning-workspace:END -->
+
 
 <!-- CHECKPOINT:accounting-banking-proposals:BEGIN -->
 **Accounting banking — statement import + invoice proposals — TESTED (2026-11-17)** (session license-manager-b5)

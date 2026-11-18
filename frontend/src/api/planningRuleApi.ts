@@ -58,6 +58,7 @@ export type SionPlanningRule = {
     rule_type?: string;
     cif_restriction_percentage?: string | number | null;
     output_item?: number | null;
+    stable_key?: string | null;
     version?: number;
     modified_on?: string;
     modified_by_username?: string;
@@ -214,4 +215,45 @@ export async function autoPlanLicense(licenseId: number): Promise<AutoPlanRespon
         console.error('[autoPlanLicense] Error:', error);
         throw error;
     }
+}
+
+// ── /planning SION workspace (read-only configuration views) ────────────────
+export type SionNormSummary = {
+    id: number; norm_class: string; description?: string | null; is_active: boolean;
+    active_rule_count: number; split_rule_count: number; rule_version_count: number;
+    max_rule_version: number | null; last_updated: string | null;
+    profile_version: number | null; profile_action_count: number;
+    registry_rule_count: number; registry_action_count: number; registry_split_count: number; profile_split_count?: number;
+    has_entitlement_profile: boolean;
+};
+export type PlanningActionConfig = { stable_key: string; priority: number; action_type: string; config: Record<string, unknown>; version?: number; is_active?: boolean };
+export type RegistryRule = { stable_key: string; name: string; priority: number; expression: RuleGroup | RuleCondition; max_unit_price: string; unit: string; output_key: string };
+export type RegistryMapping = { stable_key: string; priority: number; source_key: string; output_name: string; rate: string; conversion_factor: string; unit: string };
+export type EntitlementProduct = { name: string; entitlement: string; aliases: string[] };
+export type EntitlementGroupConfig = { key: string; label: string; entitlement_items: string[]; source_rule: string | null; split_action: string | null; products: EntitlementProduct[] };
+export type EntitlementConfig = { item: string; label?: string; split_target?: string; valuation?: string; sequence?: number };
+export type RuleVersionRow = {
+    id: number; stable_key: string | null; name: string; version: number; priority: number; is_active: boolean; strategy?: string;
+    created_on: string | null; created_by_username: string | null; modified_on: string | null; modified_by_username: string | null;
+};
+export type PlanningProfileRow = {
+    id: number; stable_key: string; strategy_type: string; version: number; is_active: boolean; modified_on: string | null;
+    actions: PlanningActionConfig[];
+    output_mappings: { stable_key: string; source_rule_id: number | null; source_rule_name: string | null; output_item: string | null; rate: string | null; unit: string; priority: number; is_active: boolean }[];
+};
+export type SionAuditEvent = { id: number; timestamp: string | null; username: string | null; event: string; rule_id: number | null; rule_version: number | null };
+export type SionNormConfiguration = {
+    sion: { id: number; norm_class: string; description?: string | null; is_active: boolean };
+    rule_versions: RuleVersionRow[];
+    profiles: PlanningProfileRow[];
+    registry: { source: string; rules: RegistryRule[]; actions: PlanningActionConfig[]; mappings: RegistryMapping[] } | null;
+    entitlement_profile: { source: string; groups: EntitlementGroupConfig[]; entitlements: EntitlementConfig[] } | null;
+    audit: SionAuditEvent[];
+};
+export async function fetchSionNormSummaries(): Promise<SionNormSummary[]> {
+    const { data } = await api.get("sion-planning-rules/norm-summary/");
+    return Array.isArray(data) ? data : [];
+}
+export async function fetchSionNormConfiguration(sion: number): Promise<SionNormConfiguration> {
+    return (await api.get("sion-planning-rules/norm-configuration/", { params: { sion } })).data;
 }

@@ -800,3 +800,91 @@ def apply_saved_description_mapping(sender, instance, created, **kwargs):
             logger.exception("Automatic description mapping failed for import item %s", pk)
 
     transaction.on_commit(_run)
+
+
+# --- BOE Product Name / Allotment Item Name → Planning Target Item (saved name mappings) ------------------------------
+
+_NAME_FIELD = {BillOfEntryModel: ("boe", "product_name"), AllotmentModel: ("allotment", "item_name")}
+
+
+@receiver(post_init, sender=BillOfEntryModel)
+@receiver(post_init, sender=AllotmentModel)
+def stash_source_name(sender, instance, **kwargs):
+    """Remember the loaded Product Name / Item Name (no query: a deferred field stays deferred)."""
+    instance._orig_source_name = instance.__dict__.get(_NAME_FIELD[sender][1], _MISSING)
+
+
+def _schedule_name_mapping(kind: str, record_id: int) -> None:
+    def _run():
+        from apps.license.services.product_intelligence.source_name_mapping import auto_apply
+
+        _run._source_name_marker = None  # executed: a later change in the same connection schedules its own re-check
+        try:
+            auto_apply(kind, record_id)
+        except Exception:  # noqa: BLE001 — classification follow-up; the record itself is already saved
+            logger.exception("Automatic %s name mapping failed for record %s", kind, record_id)
+
+    # One re-check per header per transaction (a BOE with 50 debit rows queues one, not 50). The on_commit list is
+    # cleared on commit and on rollback, so a marker found there always belongs to the current transaction.
+    marker = (kind, record_id)
+    conn = transaction.get_connection()
+    if conn.in_atomic_block and any(getattr(entry[1], "_source_name_marker", None) == marker for entry in conn.run_on_commit):
+        return
+    _run._source_name_marker = marker
+    transaction.on_commit(_run)
+
+
+@receiver(post_save, sender=BillOfEntryModel)
+@receiver(post_save, sender=AllotmentModel)
+def apply_saved_source_name_mapping(sender, instance, created, **kwargs):
+    """Owner spec 2026-11-19: a NEW BOE / allotment — or one whose name changed — with an exact saved name mapping gets
+    its Planning Target Item automatically (status AUTO). Other saves never touch the target. Runs after commit; a
+    failure is logged and never fails the save (the mapping's Retry re-applies it)."""
+    if kwargs.get("raw", False) or not instance.pk:
+        return
+    from apps.license.services.product_intelligence.description_mapping import description_key
+
+    kind, field = _NAME_FIELD[sender]
+    old = getattr(instance, "_orig_source_name", _MISSING)
+    new = instance.__dict__.get(field, _MISSING)
+    if new is _MISSING:
+        return
+    instance._orig_source_name = new
+    if not description_key(new):
+        return
+    if not created and (old is _MISSING or description_key(old) == description_key(new)):
+        return
+    _schedule_name_mapping(kind, instance.pk)
+
+
+def _debit_ref(sender, instance):
+    if sender is RowDetails:
+        return "boe", instance.__dict__.get("bill_of_entry_id", _MISSING), instance.__dict__.get("sr_number_id", _MISSING)
+    return "allotment", instance.__dict__.get("allotment_id", _MISSING), instance.__dict__.get("item_id", _MISSING)
+
+
+@receiver(post_init, sender=RowDetails)
+@receiver(post_init, sender=AllotmentItems)
+def stash_debit_item(sender, instance, **kwargs):
+    """Remember the loaded debited import item (no query) so a re-point can be detected."""
+    instance._orig_debit_item = _debit_ref(sender, instance)[2]
+
+
+@receiver(post_save, sender=RowDetails)
+@receiver(post_save, sender=AllotmentItems)
+@receiver(post_delete, sender=RowDetails)
+@receiver(post_delete, sender=AllotmentItems)
+def recheck_source_name_mapping_on_debit(sender, instance, created=False, **kwargs):
+    """A licence debit recorded, re-pointed to another import item or removed changes whether the header's saved name
+    mapping is verifiable (the target must be legitimate for every debited import item under its SION rules):
+    re-check it after commit. Quantity / CIF edits of a row do not. Idempotent."""
+    if kwargs.get("raw", False):
+        return
+    kind, header_id, item_id = _debit_ref(sender, instance)
+    old = getattr(instance, "_orig_debit_item", _MISSING)
+    instance._orig_debit_item = item_id
+    if not header_id or header_id is _MISSING:
+        return
+    deleted = kwargs.get("signal") is post_delete
+    if deleted or created or (old is not _MISSING and old != item_id):
+        _schedule_name_mapping(kind, header_id)

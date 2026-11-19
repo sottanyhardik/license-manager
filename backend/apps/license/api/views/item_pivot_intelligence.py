@@ -512,6 +512,96 @@ class ItemPivotItemNameMappingMixin:
         except MatchValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+    # --- BOE Product Name / Allotment Item Name → Planning Target Item (saved name mappings) ------------------------
+
+    @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)/names")
+    def source_name_list(self, request, kind=None):
+        """One row per unique (strictly normalised) BOE Product Name / Allotment Item Name. ``?filters=`` as for
+        import descriptions (field ``description`` = the name); ``?status`` / ``?q`` / ``?offset`` / ``?limit``."""
+        import json
+
+        from apps.license.services.product_intelligence.description_filters import FilterError, clean_filters
+        from apps.license.services.product_intelligence.source_name_mapping import names
+
+        p = request.query_params
+        raw = p.get("filters") or ""
+        if len(raw) > 8000:
+            return Response({"filters": "Filters are too long."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            filters = clean_filters(json.loads(raw) if raw else None)
+        except (FilterError, ValueError, TypeError, RecursionError) as exc:
+            return Response({"filters": str(exc) or "Invalid filters."}, status=status.HTTP_400_BAD_REQUEST)
+        data = names(kind, q=(p.get("q") or "").strip()[:200], status=(p.get("status") or "").strip().upper()[:20],
+                     offset=_safe_int(p.get("offset"), 0), limit=_safe_int(p.get("limit"), 50), filters=filters)
+        return Response({**data, "can_apply": _can_approve(request.user)})
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)/names/save", permission_classes=[])
+    def source_name_save(self, request, kind=None):
+        """Body: ``{name, target_id, expected_version?}`` — create or REPLACE the mapping for that exact name and apply it
+        to every existing record with it (and future ones automatically). LICENSE_MANAGER."""
+        from apps.license.services.product_intelligence.source_name_mapping import save_mapping
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Planning target mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None or not isinstance(body.get("name"), str):
+            return Response({"detail": "A JSON object with the original name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        expected = body.get("expected_version")
+        if expected is not None and (not isinstance(expected, int) or isinstance(expected, bool)):
+            return Response({"expected_version": "Must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = save_mapping(kind=kind, name=body["name"], target_id=body.get("target_id"), user=request.user, expected_version=expected,
+                                  require_version=True)
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)/names/(?P<mapping_id>\d+)/reapply",
+            permission_classes=[])
+    def source_name_reapply(self, request, kind=None, mapping_id=None):
+        from apps.license.services.product_intelligence.source_name_mapping import reapply
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Planning target mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            result = reapply(kind, int(mapping_id), user=request.user)
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        return Response(result)
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)/names/bulk/(?P<step>preview|apply)",
+            permission_classes=[])
+    def source_name_bulk(self, request, kind=None, step=None):
+        """Body: ``{mode: "filter"|"keys", filters?, keys?, status?, q?, target_id?, fingerprint?}`` — same preview →
+        confirm → apply contract as the import description bulk update; every name gets its own mapping. LICENSE_MANAGER."""
+        from apps.license.services.product_intelligence import source_name_mapping as snm
+        from apps.license.services.product_intelligence.description_filters import FilterError
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Planning target mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None:
+            return Response({"detail": "A JSON object is required."}, status=status.HTTP_400_BAD_REQUEST)
+        keys = body.get("keys")
+        criteria = {name: str(body.get(name) or "")[:200] for name in ("status", "q")}
+        if keys is not None and (not isinstance(keys, list) or len(keys) > snm.MAX_BULK):
+            return Response({"keys": f"Up to {snm.MAX_BULK} names."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            if step == "preview":
+                return Response(snm.bulk_preview(kind, mode=body.get("mode"), filters=body.get("filters"), keys=keys, **criteria))
+            result = snm.bulk_execute(kind, mode=body.get("mode"), filters=body.get("filters"), keys=keys, target_id=body.get("target_id"),
+                                      fingerprint=body.get("fingerprint"), user=request.user, **criteria)
+        except (MatchValidationError, FilterError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        written = any(e.get("applied") or e.get("action") in ("CREATE", "REPLACE") for e in result["succeeded"])
+        return Response(result, status=status.HTTP_201_CREATED if written else status.HTTP_200_OK)
+
     @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)")
     def item_name_mapping_queue(self, request, kind=None):
         from apps.license.services.product_intelligence.item_name_mapping import queue

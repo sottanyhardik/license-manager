@@ -490,7 +490,7 @@ def undo_import_approval(*, decision_id: int, user) -> dict:
 
 
 def counts(*, fresh: bool = False) -> dict:
-    """Pending counts per source: BOE / allotment records + distinct descriptions; licence import items whose master
+    """Pending counts per source: BOE / allotment records + distinct names without a saved name mapping; licence import items whose master
     link is missing or ambiguous (0 or several Item Names), as distinct descriptions. Cached 60 s (dropped on approval)."""
     from django.core.cache import cache
 
@@ -509,14 +509,23 @@ def drop_counts_cache() -> None:
 
 
 def _counts() -> dict:
-    from apps.license.models import ImportDescriptionMapping, LicenseImportItemsModel
+    from apps.license.models import ImportDescriptionMapping, LicenseImportItemsModel, SourceNameMapping
     from apps.license.services.product_intelligence.description_mapping import description_key, key_hash
 
     out = {}
     for kind in KINDS:
-        _, _, _, _, desc_field = _models(kind)
-        descs = list(_pending_headers(kind).values_list(desc_field, flat=True))
-        out[kind] = {"records": len(descs), "descriptions": len({normalise(d) for d in descs})}
+        # Unique BOE Product Names / Allotment Item Names (strict key) without a saved name mapping ("Mapping Required").
+        Header, _, _, _, desc_field = _models(kind)
+        code = SourceNameMapping.BOE if kind == "boe" else SourceNameMapping.ALLOTMENT
+        saved = set(SourceNameMapping.objects.filter(kind=code, is_active=True).values_list("key_hash", flat=True))
+        name_keys: dict[str, str] = {}
+        records = 0
+        for name in Header.objects.exclude(**{desc_field: ""}).values_list(desc_field, flat=True):
+            if name not in name_keys:
+                name_keys[name] = description_key(name)
+            if name_keys[name] and key_hash(name_keys[name]) not in saved:
+                records += 1
+        out[kind] = {"records": records, "descriptions": len({k for k in name_keys.values() if k and key_hash(k) not in saved})}
     # Licence import items: unique descriptions (strict key) without a saved description mapping ("Mapping Required").
     mapped = set(ImportDescriptionMapping.objects.filter(is_active=True).values_list("key_hash", flat=True))
     keys: dict[str, str] = {}

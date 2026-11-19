@@ -196,7 +196,7 @@ class MappingWorkspaceTests(_MappingFixture):
         from apps.license.models import ProductIntelAuditEvent
         rec = ProductIntelAuditEvent.objects.get(action="boe_item_name_mapped").detail["records"][0]
         assert rec["validation"].startswith("PASSED") and rec["licence_ids"] == [self.licences[0].pk] and rec["previous_status"] == "UNMAPPED_AMBIGUOUS"
-        assert counts(fresh=True)["boe"]["records"] == before["boe"]["records"] - 1
+        assert counts(fresh=True)["boe"]["records"] == before["boe"]["records"]  # pending = names without a saved name mapping
 
     def test_api_bulk_history_counts_and_pagination(self):
         client = APIClient()

@@ -256,6 +256,33 @@ rather than blocked (the auditor considers this acceptable).
    record is created / re-described — at that point a "Not verified" note is refreshed or cleared.
 4. No financial change; commits stay local on `feature/v5`; push only after separate owner approval.
 
+## BOE & Allotment → Planning Target Item mapping (owner spec 2026-11-19, "BOE & ALLOTMENT ITEM TO PLANNING TARGET MAPPING")
+
+- Destination = the existing canonical planning target master (`core.ItemNameModel`, the single `planning_target_item`
+  FK of `BillOfEntryModel` / `AllotmentModel`) → single select. No new master, no duplicates.
+- Models (migration `license/0065_source_name_mapping`, additive): `SourceNameMapping` (kind BOE / ALLOTMENT +
+  strict key, unique per kind), `SourceNameMappingVersion` (CREATE / REPLACE history), `SourceNameMappingRecord`
+  (per header: mapping version, APPLIED / AUTO / CONFLICT, verified, pre-mapping target / status / source).
+- Service `services/product_intelligence/source_name_mapping.py`; API `item-pivot/matching/item-name-mapping/<boe|allotment>/names/`
+  (+ `save/`, `<id>/reapply/`, `bulk/preview|apply/`), writes LICENSE_MANAGER. Hooks in `license/signals.py`: header
+  create / rename, debit row create / re-point / delete → after-commit `auto_apply` (one per header per transaction).
+- Verification = existing contract `resolve_targets_for_source` for every debited import item: legitimate → applied
+  (`MAPPED_EXPLICIT` / `NAME_MAPPING`); configured rules exclude it → CONFLICT (record unchanged / restored);
+  not verifiable (no debit yet, or no rule for the licence) → target stored, `UNMAPPED_NO_TARGET` (planning keeps it
+  unmapped), shown "Applied · Not verified", re-checked on debit / Save / Retry / bulk. A valid target written elsewhere
+  is never downgraded, and automatic re-checks never replace it (explicit Save / Retry / bulk do — REPLACE).
+- Header writes: queryset `update` of the planning-target fields only (no `save()`; money never recomputed).
+- Frontend: the import-description table is configurable (`mappingSources.ts`); BOE (Product Name) and Allotment
+  (Item Name*) tabs use it with the nested filter builder (name field only), bulk update, licence chips. The old
+  per-record BOE / allotment queue UI (MappingTable, mappingRow, ItemNameSelect) was removed; its APIs are kept.
+- Counts (`item-name-mapping/counts/`): BOE / allotment now = names / records without a saved name mapping
+  (semantic change, same shape).
+- Review (opus code-reviewer): B1 unverifiable downgrade, B2 auto-recheck overwrite, B3 lock-order inversion, N1 re-point /
+  delete not re-checked, N3 per-row re-check cost, N4 count gap — all fixed + tests. Open: N2 renaming a record away from a
+  mapped name keeps the old target (same as import descriptions); ledger-import bulk-created rows are not re-checked
+  (Retry); local dev DB not migrated to 0065 yet (needs owner approval).
+- Tests: backend `test_source_name_mapping.py` 11 passed (exit 0); frontend gate exit 0 (lint, typecheck, 1017 vitest, build).
+
 ## Next action
 
 Push: waits for separate owner approval. Optional: a real-data Playwright run of `/mapping`.

@@ -64,3 +64,76 @@ class ImportItemDescriptionMapping(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["mapping", "status"])]
+
+
+class SourceNameMapping(models.Model):
+    """Saved BOE Product Name / Allotment Item Name → Planning Target Item mapping (owner spec 2026-11-19, "BOE &
+    allotment item to planning target mapping"). One mapping per (source kind, strictly normalised name); BOE and
+    allotment identities never mix with each other or with licence import descriptions. The target is the existing
+    canonical planning target master (``core.ItemNameModel`` — the ``planning_target_item`` FK of both headers, a single
+    target per record). Applied to every existing record with that exact name and automatically to future ones."""
+    BOE, ALLOTMENT = "BOE", "ALLOTMENT"
+    KINDS = [(BOE, "BOE Product Name"), (ALLOTMENT, "Allotment Item Name")]
+
+    kind = models.CharField(max_length=9, choices=KINDS)
+    key_hash = models.CharField(max_length=64, help_text="sha256 of name_key")
+    name_key = models.TextField(help_text="Strictly normalised source name (identity within its kind)")
+    name = models.TextField(help_text="An original wording with this key (display; sources are never changed)")
+    target = models.ForeignKey("core.ItemNameModel", on_delete=models.PROTECT, related_name="+")
+    is_active = models.BooleanField(default=True, db_index=True)
+    version = models.PositiveIntegerField(default=1)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_on = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    updated_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_on", "-pk")
+        constraints = [models.UniqueConstraint(fields=["kind", "key_hash"], name="uniq_source_name_mapping_kind_key")]
+
+    def __str__(self):
+        return f"{self.kind} {self.name_key[:60]} v{self.version}"
+
+
+class SourceNameMappingVersion(models.Model):
+    """Append-only history: every create / replace of a source name mapping (previous → new target)."""
+    CREATE, REPLACE = "CREATE", "REPLACE"
+    ACTIONS = [(CREATE, "Created"), (REPLACE, "Replaced")]
+
+    mapping = models.ForeignKey(SourceNameMapping, on_delete=models.PROTECT, related_name="versions")
+    version = models.PositiveIntegerField()
+    action = models.CharField(max_length=8, choices=ACTIONS)
+    target_id_value = models.PositiveIntegerField(help_text="Planning Target Item id of this version")
+    previous_target_id = models.PositiveIntegerField(null=True, blank=True)
+    mapping_change = models.ForeignKey("license.MappingChange", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-pk",)
+
+
+class SourceNameMappingRecord(models.Model):
+    """Which mapping version is applied to one BOE / allotment header: APPLIED (saved by a user) or AUTO (future record),
+    optionally ``verified=False`` (no licence debit yet, or no planning rule configured for its licence — the target is
+    kept but planning keeps treating the record as unmapped), or CONFLICT (the target is not legitimate under the
+    record's SION rules / the record keeps another valid target — left unchanged). ``previous_*`` = the header's
+    planning-target fields before a name mapping first touched it (audit + restore on conflict)."""
+    APPLIED, AUTO, CONFLICT = "APPLIED", "AUTO", "CONFLICT"
+    STATUSES = [(APPLIED, "Applied"), (AUTO, "Automatically mapped"), (CONFLICT, "Conflict")]
+
+    kind = models.CharField(max_length=9, choices=SourceNameMapping.KINDS)
+    record_id = models.PositiveIntegerField(help_text="BillOfEntryModel / AllotmentModel id")
+    mapping = models.ForeignKey(SourceNameMapping, on_delete=models.PROTECT, related_name="applications")
+    applied_version = models.PositiveIntegerField()
+    status = models.CharField(max_length=8, choices=STATUSES, db_index=True)
+    verified = models.BooleanField(default=True)
+    previous_target_id = models.PositiveIntegerField(null=True, blank=True)
+    previous_status = models.CharField(max_length=32, blank=True, default="")
+    previous_source = models.CharField(max_length=32, blank=True, default="")
+    detail = models.TextField(blank=True, default="")
+    applied_on = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["kind", "record_id"], name="uniq_source_name_mapping_record")]
+        indexes = [models.Index(fields=["mapping", "status"])]

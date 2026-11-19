@@ -34,9 +34,9 @@ export const countConditions = (g: FilterGroup): number => g.conditions.reduce((
 export const validFilters = (g: FilterGroup): boolean => g.conditions.every((c) => (isGroup(c) ? validFilters(c) : NO_VALUE.includes(c.op) || !!c.value.trim()));
 export const sameFilters = (a: Filters, b: Filters) => JSON.stringify(stripIds(a)) === JSON.stringify(stripIds(b));
 
-export function describeFilters(g: FilterGroup): string {
+export function describeFilters(g: FilterGroup, labels: Partial<Record<FilterField, string>> = FIELD_LABEL): string {
     const node = (n: Condition | FilterGroup): string => isGroup(n)
         ? `(${n.conditions.map(node).join(n.operator === "AND" ? " AND " : " OR ")})`
-        : `${FIELD_LABEL[n.field]} ${OP_LABEL[n.op].toLowerCase()}${NO_VALUE.includes(n.op) ? "" : ` “${n.value}”`}`;
+        : `${labels[n.field] ?? FIELD_LABEL[n.field]} ${OP_LABEL[n.op].toLowerCase()}${NO_VALUE.includes(n.op) ? "" : ` “${n.value}”`}`;
     return g.conditions.length ? node(g) : "";
 }

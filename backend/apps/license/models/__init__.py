@@ -11,4 +11,7 @@ from .core import *  # noqa: F401,F403
 from .invoice import Invoice, InvoiceItem  # noqa: F401
 from .product_matching import ProductMatchDecision, ProductMatchingJob, ProductMatchSuggestion, ProductTextEmbedding  # noqa: F401,E402
 from .product_intelligence import ProductAlias, ProductIntelAuditEvent, ProductIntelDataset, ProductIntelModel, ProductMatchSelection, MappingChange  # noqa: F401,E402
-from .description_mapping import ImportDescriptionMapping, ImportDescriptionMappingVersion, ImportItemDescriptionMapping  # noqa: F401,E402
+from .description_mapping import (  # noqa: F401,E402
+    ImportDescriptionMapping, ImportDescriptionMappingVersion, ImportItemDescriptionMapping, SourceNameMapping, SourceNameMappingRecord,
+    SourceNameMappingVersion,
+)

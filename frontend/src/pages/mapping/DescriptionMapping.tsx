@@ -8,6 +8,10 @@
  * Filter Conditions only SELECT rows (evaluated on the server — one implementation for the table and bulk updates);
  * a bulk update gives every selected description its OWN mapping. Bulk = preview (exact set + fingerprint) → confirm →
  * apply (refused if the set changed) → per-description results with Retry for failures. Classification only.
+ *
+ * The same table serves the BOE (Product Name) and Allotment (Item Name*) tabs through ``source`` (``mappingSources``):
+ * one row per unique source name → ONE Planning Target Item (single select; the records' `planning_target_item`),
+ * with its own saved mappings (never combined with another source). No HSN / SION columns there.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -21,21 +25,29 @@ import { ConfirmDialog, EmptyState, InlineError, LoadingState, StatusBadge, type
 
 import FilterConditions from "./FilterConditions";
 import { describeFilters, EMPTY_FILTERS, type Filters } from "./filterModel";
+import { SOURCES, type SourceConfig } from "./mappingSources";
 import { invalidateMappingQueries } from "./invalidate";
-import type { Master } from "./ItemNameSelect";
+import type { Master } from "./mappingSources";
 import ItemNameMultiSelect from "./ItemNameMultiSelect";
 import LicenceRefs, { type LicenceRef } from "./LicenceRefs";
 import { errorText } from "./matchingShared";
 
 const PAGE = 50;
-const BASE = "item-pivot/matching/item-name-mapping/import/descriptions/";
 
 type DescriptionStatus = "MAPPING_REQUIRED" | "APPLIED" | "AUTO" | "CONFLICT" | "PARTIAL";
 export type DescriptionRow = {
     key: string; description: string; wordings: number; records: number; licence_count: number; licence_numbers: string[];
     hsn_codes: string[]; sion: string[]; status: DescriptionStatus; counts: { applied: number; auto: number; conflict: number; stale: number; unverified?: number };
-    conflicts: string[]; mapping: { id: number; version: number; items: Master[] } | null; licences: LicenceRef[];
+    conflicts: string[]; mapping: { id: number; version: number; items: Master[] } | null; licences: LicenceRef[]; notes?: string[];
 };
+/** BOE / allotment name rows as the API returns them (single target). */
+type NameRow = Omit<DescriptionRow, "description" | "mapping" | "hsn_codes" | "sion" | "licence_numbers"> & {
+    name: string; mapping: { id: number; version: number; target: Master } | null;
+};
+const fromNameRow = (r: NameRow): DescriptionRow => ({
+    ...r, description: r.name, hsn_codes: [], sion: [], licence_numbers: [],
+    mapping: r.mapping ? { id: r.mapping.id, version: r.mapping.version, items: [r.mapping.target] } : null,
+});
 type Listing = { rows: DescriptionRow[]; total: number; total_records: number; summary: Partial<Record<DescriptionStatus, number>>; offset: number; limit: number; can_apply: boolean };
 type SaveResult = { action: string; applied: number; unchanged: number; conflicts: number; mapping: { id: number; version: number; items: Master[] } };
 type Criteria = { search: string; status: DescriptionStatus | ""; filters: Filters };
@@ -62,8 +74,10 @@ function statusBadge(row: DescriptionRow, dirty: boolean): { tone: Tone; label: 
 const sameSet = (a: Master[], b: Master[]) => a.length === b.length && a.every((x) => b.some((y) => y.item_id === x.item_id));
 const criteriaBody = (c: Criteria) => ({ filters: c.filters, status: c.status, q: c.search });
 
-export default function DescriptionMapping() {
+export default function DescriptionMapping({ source = SOURCES.import }: { source?: SourceConfig }) {
     const qc = useQueryClient();
+    const BASE = source.base;
+    const { noun, rowNoun, recordNoun } = source;
     const [q, setQ] = useState("");
     const [criteria, setCriteria] = useState<Criteria>({ search: "", status: "MAPPING_REQUIRED", filters: EMPTY_FILTERS });
     const [offset, setOffset] = useState(0);
@@ -84,11 +98,14 @@ export default function DescriptionMapping() {
         return () => clearTimeout(t);
     }, [q, criteria.search]);
     const listing = useQuery({
-        queryKey: ["item-name-mapping", "import-descriptions", criteria, offset],
+        queryKey: ["item-name-mapping", `${source.kind}-descriptions`, criteria, offset],
         placeholderData: keepPreviousData,
-        queryFn: async ({ signal }) => (await api.get(BASE, { signal, params: {
-            ...(criteria.search ? { q: criteria.search } : {}), ...(criteria.status ? { status: criteria.status } : {}),
-            ...(criteria.filters.conditions.length ? { filters: JSON.stringify(criteria.filters) } : {}), offset, limit: PAGE } })).data as Listing,
+        queryFn: async ({ signal }) => {
+            const raw = (await api.get(BASE, { signal, params: {
+                ...(criteria.search ? { q: criteria.search } : {}), ...(criteria.status ? { status: criteria.status } : {}),
+                ...(criteria.filters.conditions.length ? { filters: JSON.stringify(criteria.filters) } : {}), offset, limit: PAGE } })).data as Listing;
+            return source.multi ? raw : { ...raw, rows: (raw.rows as unknown as NameRow[]).map(fromNameRow) };
+        },
     });
     const masters = useQuery({
         queryKey: ["item-pivot-masters", "all"],
@@ -102,9 +119,10 @@ export default function DescriptionMapping() {
     const save = useMutation({
         // the selection is captured at click time (mutation variables)
         mutationFn: async ({ row, items }: { row: DescriptionRow; items: Master[] }) => (await api.post(`${BASE}save/`, {
-            description: row.description, item_ids: items.map((i) => i.item_id), ...(row.mapping ? { expected_version: row.mapping.version } : {}) })).data as SaveResult,
+            ...(source.multi ? { description: row.description, item_ids: items.map((i) => i.item_id) } : { name: row.description, target_id: items[0]?.item_id }),
+            ...(row.mapping ? { expected_version: row.mapping.version } : {}) })).data as SaveResult,
         onSuccess: (r, { row }) => {
-            toast.success(`${r.action === "UNCHANGED" ? "Mapping unchanged" : "Mapping saved"} — applied to ${r.applied} record(s)${r.unchanged ? `, ${r.unchanged} already current` : ""}${r.conflicts ? `; ${r.conflicts} conflict(s) flagged` : ""}. Future records with this description map automatically.`);
+            toast.success(`${r.action === "UNCHANGED" ? "Mapping unchanged" : "Mapping saved"} — applied to ${r.applied} record(s)${r.unchanged ? `, ${r.unchanged} already current` : ""}${r.conflicts ? `; ${r.conflicts} conflict(s) flagged` : ""}. Future records with this ${rowNoun} map automatically.`);
             clearRow(row.key);
             invalidateMappingQueries(qc);
         },
@@ -126,7 +144,7 @@ export default function DescriptionMapping() {
     });
     const applyBulk = useMutation({
         mutationFn: async ({ body, fingerprint, items }: { body: BulkBody; fingerprint: string; items: Master[] }) =>
-            (await api.post(`${BASE}bulk/apply/`, { ...body, fingerprint, item_ids: items.map((i) => i.item_id) })).data as BulkResult,
+            (await api.post(`${BASE}bulk/apply/`, { ...body, fingerprint, ...(source.multi ? { item_ids: items.map((i) => i.item_id) } : { target_id: items[0]?.item_id }) })).data as BulkResult,
         onSuccess: (r, { items }) => {
             setResult({ ...r, items });
             toast[r.failed.length ? "warning" : "success"](`Bulk update: ${r.succeeded.length} updated · ${r.skipped.length} unchanged / skipped · ${r.failed.length} failed`);
@@ -152,38 +170,38 @@ export default function DescriptionMapping() {
     const toolbar = (
         <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-2.5 top-2 size-4 text-muted-foreground" aria-hidden="true" />
-                <input aria-label="Search licence import item descriptions" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Original description…"
+                <input aria-label={source.searchLabel} value={q} onChange={(e) => setQ(e.target.value)} placeholder={source.placeholder}
                     className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm" /></div>
             <label className="flex items-center gap-1">Show
                 <select aria-label="Filter by status" value={criteria.status} onChange={(e) => changeCriteria({ status: e.target.value as DescriptionStatus | "" })}
                     className="h-8 rounded-md border border-input bg-background px-1.5 text-xs">
                     {(["MAPPING_REQUIRED", "APPLIED", "AUTO", "CONFLICT", "PARTIAL"] as DescriptionStatus[]).map((s) =>
                         <option key={s} value={s}>{STATUS[s].label}{data?.summary[s] != null ? ` (${data.summary[s]})` : ""}</option>)}
-                    <option value="">All descriptions</option>
+                    <option value="">All {rowNoun}s</option>
                 </select>
             </label>
-            <Link to="/masters/item-names" className="ml-auto text-primary hover:underline">Item Name missing? Create it in Masters → Item Names</Link>
+            <Link to="/masters/item-names" className="ml-auto text-primary hover:underline">{noun} missing? Create it in Masters → Item Names</Link>
         </div>
     );
-    if (listing.isPending) return <div className="space-y-2">{toolbar}<LoadingState variant="spinner" label="Loading import item descriptions…" /></div>;
-    if (listing.isError && !data) return <div className="space-y-2">{toolbar}<InlineError error={listing.error as Error} title="Could not load import item descriptions" onRetry={() => void listing.refetch()} /></div>;
+    if (listing.isPending) return <div className="space-y-2">{toolbar}<LoadingState variant="spinner" label={`Loading ${source.tableLabel.toLowerCase()}…`} /></div>;
+    if (listing.isError && !data) return <div className="space-y-2">{toolbar}<InlineError error={listing.error as Error} title={`Could not load ${source.tableLabel.toLowerCase()}`} onRetry={() => void listing.refetch()} /></div>;
     if (!data) return null;
     return (
         <div className="space-y-2">
             {toolbar}
-            <FilterConditions key={JSON.stringify(criteria.filters)} applied={criteria.filters} onApply={(f) => changeCriteria({ filters: f })} />
+            <FilterConditions key={JSON.stringify(criteria.filters)} applied={criteria.filters} labels={source.filterLabels} onApply={(f) => changeCriteria({ filters: f })} />
             {data.can_apply && (
                 <section aria-label="Selection and bulk update" className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-2 text-xs">
-                    <span><strong className="tabular-nums">{data.total}</strong> matching description(s) · <strong className="tabular-nums">{data.total_records}</strong> licence import record(s)</span>
+                    <span><strong className="tabular-nums">{data.total}</strong> matching {rowNoun}(s) · <strong className="tabular-nums">{data.total_records}</strong> {recordNoun}(s)</span>
                     <Button size="sm" variant="outline" disabled={!hasCriteria || !data.total || listing.isPlaceholderData} title={hasCriteria ? undefined : "Apply a filter, status or search first"}
                         onClick={() => setSelection({ mode: "filter", criteria, descriptions: data.total, records: data.total_records })}>Select All Matching</Button>
                     <Button size="sm" variant="ghost" disabled={selection.mode === "none"} onClick={clearSelection}>Clear Selection</Button>
-                    <span role="status" aria-live="polite" className="font-medium">{selectedCount ? `${selectedCount} description(s) selected${selection.mode === "filter" ? " (all matching)" : ""}` : ""}</span>
+                    <span role="status" aria-live="polite" className="font-medium">{selectedCount ? `${selectedCount} ${rowNoun}(s) selected${selection.mode === "filter" ? " (all matching)" : ""}` : ""}</span>
                     {selection.mode !== "none" && (
                         <div className="flex w-full flex-wrap items-start gap-2 border-t border-border/60 pt-2">
-                            <span className="pt-1 font-semibold">Bulk Update Item Names</span>
-                            <ItemNameMultiSelect label="bulk update" value={bulkItems} onChange={setBulkItems} masters={masters.data?.masters ?? []} />
-                            <span className="pt-1 text-muted-foreground">Behaviour: REPLACE — the selected Item Names replace each description's current ones.</span>
+                            <span className="pt-1 font-semibold">Bulk Update {noun}{source.multi ? "s" : ""}</span>
+                            <ItemNameMultiSelect label="bulk update" value={bulkItems} onChange={setBulkItems} masters={masters.data?.masters ?? []} single={!source.multi} noun={noun} />
+                            <span className="pt-1 text-muted-foreground">Behaviour: REPLACE — {source.multi ? `the selected Item Names replace each description's current ones.` : `the selected ${noun} replaces each ${rowNoun}'s current one.`}</span>
                             <Button size="sm" disabled={!bulkItems.length || preview.isPending || busy} onClick={() => { const b = selectionBody(); if (b) startBulk(b, bulkItems); }}>Apply Bulk Update</Button>
                         </div>
                     )}
@@ -202,19 +220,22 @@ export default function DescriptionMapping() {
                         onClick={() => startBulk({ mode: "keys", keys: result.failed.map((f) => f.key) }, result.items)}><RotateCcw className="size-3.5" />Retry failed</Button>}
                 </section>
             )}
-            {masters.isError && <p role="alert" className="text-[11px] text-destructive">The Item Name list could not be loaded — type in the search box to find Item Names.</p>}
+            {masters.isError && <p role="alert" className="text-[11px] text-destructive">The {noun} list could not be loaded — type in the search box to find {noun}s.</p>}
             {listing.isError && <p role="alert" className="text-[11px] text-destructive">Could not refresh — showing the last loaded list.</p>}
-            <p className="text-[11px] text-muted-foreground">Map each description once. Saving applies the selected Item Names to every licence with exactly this description and to future ones automatically.</p>
+            <p className="text-[11px] text-muted-foreground">{source.multi
+                ? "Map each description once. Saving applies the selected Item Names to every licence with exactly this description and to future ones automatically."
+                : `Map each ${rowNoun} once. Saving applies the selected ${noun} to every ${recordNoun} with exactly this ${rowNoun} and to future ones automatically. Names, quantities, CIF and debits are never changed.`}</p>
             <div className="max-h-[65vh] overflow-auto rounded-lg border border-border/70">
-                <table className="w-full min-w-[1040px] text-xs" aria-label="Licence import item descriptions" aria-busy={busy || listing.isPlaceholderData || undefined}>
+                <table className={`w-full ${source.showCodes ? "min-w-[1040px]" : "min-w-[760px]"} text-xs`} aria-label={source.tableLabel} aria-busy={busy || listing.isPlaceholderData || undefined}>
                     <thead><tr className="sticky top-0 z-[1] bg-muted text-left text-[11px] uppercase text-muted-foreground">
                         {data.can_apply && <th scope="col" className="w-8 px-2 py-2">
                             <input type="checkbox" aria-label="Select this page" disabled={selection.mode === "filter" || !data.rows.length}
                                 checked={selection.mode === "filter" || (data.rows.length > 0 && data.rows.every((r) => selectedKeys.has(r.key)))}
                                 onChange={(e) => data.rows.forEach((r) => toggleKey(r.key, e.target.checked))} />
                         </th>}
-                        <th scope="col" className="px-2 py-2">Original Item Description</th><th scope="col" className="px-2">HSN</th><th scope="col" className="px-2">SION</th>
-                        <th scope="col" className="px-2">Select Item Name</th><th scope="col" className="px-2">Status</th><th scope="col" className="px-2"><span className="sr-only">Action</span></th>
+                        <th scope="col" className="px-2 py-2">{source.sourceLabel}</th>
+                        {source.showCodes && <><th scope="col" className="px-2">HSN</th><th scope="col" className="px-2">SION</th></>}
+                        <th scope="col" className="px-2">Select {noun}</th><th scope="col" className="px-2">Status</th><th scope="col" className="px-2"><span className="sr-only">Action</span></th>
                     </tr></thead>
                     <tbody>{data.rows.map((row, i) => {
                         const saved = row.mapping?.items ?? [];
@@ -233,13 +254,13 @@ export default function DescriptionMapping() {
                                     <span className="font-medium">{row.description}</span>
                                     <LicenceRefs refs={row.licences ?? []} records={row.records} label={row.description} />
                                     <div className="text-[10px] text-muted-foreground">{row.wordings > 1 ? `${row.wordings} identical wordings` : ""}{row.wordings > 1 && row.counts.auto ? " · " : ""}{row.counts.auto ? `${row.counts.auto} mapped automatically` : ""}
-                                        {row.counts.unverified ? <span className="text-amber-700 dark:text-amber-400"> · {row.counts.unverified} not verified (no HSN / SION reference)</span> : null}</div>
+                                        {row.counts.unverified ? <span className="text-amber-700 dark:text-amber-400"> · {row.counts.unverified} not verified ({source.showCodes ? "no HSN / SION reference" : row.notes?.[0]?.replace(/^Not verified: /, "") ?? "cannot be checked yet"})</span> : null}</div>
                                     {row.conflicts.map((c, n) => <div key={n} className="mt-0.5 text-[11px] text-destructive">{c}</div>)}
                                 </th>
-                                <td className="px-2 py-1.5 font-mono" title={row.hsn_codes.join(", ")}>{row.hsn_codes.slice(0, 3).join(", ") || "—"}{row.hsn_codes.length > 3 ? ` +${row.hsn_codes.length - 3}` : ""}</td>
-                                <td className="px-2 py-1.5">{row.sion.join(", ") || "—"}</td>
+                                {source.showCodes && <><td className="px-2 py-1.5 font-mono" title={row.hsn_codes.join(", ")}>{row.hsn_codes.slice(0, 3).join(", ") || "—"}{row.hsn_codes.length > 3 ? ` +${row.hsn_codes.length - 3}` : ""}</td>
+                                <td className="px-2 py-1.5">{row.sion.join(", ") || "—"}</td></>}
                                 <td className="px-2 py-1.5">
-                                    <ItemNameMultiSelect label={row.description} value={current} masters={masters.data?.masters ?? []} disabled={!data.can_apply}
+                                    <ItemNameMultiSelect label={row.description} value={current} masters={masters.data?.masters ?? []} disabled={!data.can_apply} single={!source.multi} noun={noun}
                                         describedBy={errors[row.key] ? errId : undefined}
                                         onChange={(next) => { setPicked((p) => ({ ...p, [row.key]: { items: next, base: row.mapping?.version ?? 0 } })); setErrors((e) => { const n = { ...e }; delete n[row.key]; return n; }); }} />
                                     {errors[row.key] && <div role="alert" id={errId} className="mt-0.5 max-w-[22rem] text-[11px] text-destructive">{errors[row.key]}</div>}
@@ -253,10 +274,10 @@ export default function DescriptionMapping() {
                         );
                     })}</tbody>
                 </table>
-                {!data.rows.length && <EmptyState title="Nothing here" description={criteria.status === "MAPPING_REQUIRED" && !hasCriteria ? "Every licence import description has a saved mapping." : "No descriptions match these filters."} />}
+                {!data.rows.length && <EmptyState title="Nothing here" description={criteria.status === "MAPPING_REQUIRED" && !hasCriteria ? `Every ${rowNoun} has a saved mapping.` : `No ${rowNoun}s match these filters.`} />}
             </div>
             {data.total > PAGE && (
-                <nav aria-label="Description pages" className="flex items-center justify-end gap-2 text-xs">
+                <nav aria-label={`${source.sourceLabel.replace("*", "")} pages`} className="flex items-center justify-end gap-2 text-xs">
                     <Button size="sm" variant="outline" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE))}><ChevronLeft className="size-3.5" />Previous</Button>
                     <span className="tabular-nums">{offset + 1}–{Math.min(offset + PAGE, data.total)} of {data.total}</span>
                     <Button size="sm" variant="outline" disabled={offset + PAGE >= data.total} onClick={() => setOffset((o) => o + PAGE)}>Next<ChevronRight className="size-3.5" /></Button>
@@ -265,17 +286,17 @@ export default function DescriptionMapping() {
             <ConfirmDialog open={!!pending} onOpenChange={(o) => { if (!o) setPending(null); }}
                 title="Confirm bulk update"
                 description={pending ? <div className="space-y-1.5 text-sm">
-                    <p><strong>{pending.preview.descriptions}</strong> unique description(s) · <strong>{pending.preview.records}</strong> existing licence import record(s) ·{" "}
+                    <p><strong>{pending.preview.descriptions}</strong> unique {rowNoun}(s) · <strong>{pending.preview.records}</strong> existing {recordNoun}(s) ·{" "}
                         <strong>{pending.preview.licence_count}</strong> distinct licence(s).</p>
-                    <p>Item Names: {pending.items.map((m) => m.name).join(", ")}.</p>
-                    <p>Behaviour: REPLACE — each description gets its own mapping; its records' current Item Names are replaced. Future records with those exact descriptions map automatically.</p>
-                    {pending.body.mode === "filter" && <p>Filter: {describeFilters(pending.body.filters) || "(status / search only)"}.</p>}
+                    <p>{noun}{source.multi ? "s" : ""}: {pending.items.map((m) => m.name).join(", ")}.</p>
+                    <p>Behaviour: REPLACE — each {rowNoun} gets its own mapping; its records' current {noun}{source.multi ? "s are" : " is"} replaced. Future records with those exact {rowNoun}s map automatically.</p>
+                    {pending.body.mode === "filter" && <p>Filter: {describeFilters(pending.body.filters, source.filterLabels) || "(status / search only)"}.</p>}
                     {pending.preview.licences.length > 0 && <div><p className="text-xs font-semibold">Affected licences{pending.preview.licences_truncated ? ` (first ${pending.preview.licences.length} of ${pending.preview.licence_count})` : ""}</p>
                         <LicenceRefs refs={pending.preview.licences} total={pending.preview.licence_count} label="the bulk update" visible={12} /></div>}
-                    {pending.preview.missing.length > 0 && <p>{pending.preview.missing.length} selected description(s) no longer exist and will be skipped.</p>}
-                    {pending.preview.too_many && <p className="text-destructive">Too many: bulk updates are limited to {pending.preview.limit} descriptions — narrow the filter or select in batches.</p>}
+                    {pending.preview.missing.length > 0 && <p>{pending.preview.missing.length} selected {rowNoun}(s) no longer exist and will be skipped.</p>}
+                    {pending.preview.too_many && <p className="text-destructive">Too many: bulk updates are limited to {pending.preview.limit} {rowNoun}s — narrow the filter or select in batches.</p>}
                 </div> : null}
-                confirmLabel={pending?.preview.too_many ? "Cannot apply" : `Update ${pending?.preview.descriptions ?? 0} description(s)`}
+                confirmLabel={pending?.preview.too_many ? "Cannot apply" : `Update ${pending?.preview.descriptions ?? 0} ${rowNoun}(s)`}
                 onConfirm={async () => {
                     if (!pending || pending.preview.too_many) return;
                     // ConfirmDialog does not catch: errors are reported by the mutation (toast) and nothing was changed.

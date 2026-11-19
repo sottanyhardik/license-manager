@@ -6,44 +6,45 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 import api from "@/api/axios";
-import MappingWorkspace, { type MappingGroup } from "./MappingWorkspace";
+import MappingWorkspace from "./MappingWorkspace";
 
-const group = (over: Partial<MappingGroup>): MappingGroup => ({
-    key: "k", description: "D", record_ids: [1], records: 1, statuses: { UNMAPPED_AMBIGUOUS: 1 }, licence_count: 1, licence_numbers: ["0310000001"],
-    hsn_codes: ["15131900"], sion: ["E126"], quantity: "40.000", units: ["kg"], legitimate: [{ item_id: 5, name: "PKO" }], mappable: true,
-    suggestion: { item_id: 5, name: "PKO", confidence: 100, explanation: "Same wording approved in another source: Licence import item approval #3" },
-    similar: [], conflicts: [], boe_numbers: ["987654321"], latest_boe_date: "2026-01-02", ...over,
+type NameRow = { key: string; name: string; wordings: number; records: number; licence_count: number; status: string;
+    counts: { applied: number; auto: number; conflict: number; stale: number; unverified: number }; conflicts: string[]; notes: string[];
+    mapping: { id: number; version: number; target: { item_id: number; name: string } } | null; licences: { id: number; license_number: string }[] };
+const nameRow = (over: Partial<NameRow>): NameRow => ({
+    key: "K", name: "N", wordings: 1, records: 2, licence_count: 1, status: "MAPPING_REQUIRED", counts: { applied: 0, auto: 0, conflict: 0, stale: 0, unverified: 0 },
+    conflicts: [], notes: [], mapping: null, licences: [{ id: 41, license_number: "0310000041" }], ...over,
 });
-const boeQueue = { kind: "boe", total_groups: 3, total_records: 4, offset: 0, limit: 50, can_apply: true, groups: [
-    group({ key: "boe:crude palm kernel oil:5", description: "CRUDE PALM KERNEL OIL", record_ids: [11, 12], records: 2 }),
-    group({ key: "boe:palm kernel oil:5", description: "PALM KERNEL OIL", record_ids: [14], suggestion: null }),
-    group({ key: "boe:widget:", description: "WIDGET", record_ids: [13], legitimate: [], mappable: false, suggestion: null,
-        conflicts: [{ code: "SION", detail: "No Item Name is a legitimate planning target" }] }),
-] };
+const boeRows = [
+    nameRow({ key: "CRUDE PALM KERNEL OIL", name: "CRUDE PALM KERNEL OIL", records: 2 }),
+    nameRow({ key: "RASIN", name: "RASIN", records: 5, status: "APPLIED", counts: { applied: 4, auto: 0, conflict: 0, stale: 0, unverified: 1 },
+        notes: ["Not verified: no licence debit recorded yet — checked when one is recorded"], mapping: { id: 9, version: 2, target: { item_id: 6, name: "RAISIN" } } }),
+];
+const allotRows = [nameRow({ key: "WALNUT INSHELL", name: "WALNUT INSHELL", records: 3 })];
 const counts = { import: { records: 9, descriptions: 4 }, boe: { records: 4, descriptions: 3 }, allotment: { records: 2, descriptions: 1 } };
+const listing = (rows: NameRow[]) => ({ kind: "boe", rows, total: rows.length, total_records: rows.reduce((n, r) => n + r.records, 0), summary: { MAPPING_REQUIRED: 1 },
+    offset: 0, limit: 50, can_apply: true });
 
 function setup() {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url.includes("item-name-mapping/counts")) return { data: counts };
-        if (url.includes("import/descriptions")) return { data: { rows: [], total: 0, summary: {}, offset: 0, limit: 50, can_apply: true } };
-        if (url.includes("/history/")) return { data: { rows: [{ id: 11, description: "CRUDE PALM KERNEL OIL", item_id: 5, item: "PKO", hsn_codes: ["15131900"], mapping_version: 7, by: "hardik", on: "2026-11-19T10:00:00Z" }], total: 1 } };
-        if (url.includes("item-name-mapping/boe")) return { data: boeQueue };
-        if (url.includes("matching/masters")) return { data: { masters: [{ item_id: 5, name: "PKO" }, { item_id: 6, name: "OLIVE OIL" }] } };
-        if (url.includes("available-norms")) return { data: [{ norm_class: "E126", description: "Biscuits" }] };
-        if (url.includes("matching/health")) return { data: { model: { ok: true }, worker: { ok: true }, available_memory_mb: null } };
+        if (url.includes("import/descriptions")) return { data: { rows: [], total: 0, total_records: 0, summary: {}, offset: 0, limit: 50, can_apply: true } };
+        if (url.includes("boe/names")) return { data: listing(boeRows) };
+        if (url.includes("allotment/names")) return { data: listing(allotRows) };
+        if (url.includes("matching/masters")) return { data: { masters: [{ item_id: 5, name: "PKO" }, { item_id: 6, name: "RAISIN" }, { item_id: 7, name: "WALNUT" }] } };
         if (url.includes("mapping-changes")) return { data: { changes: [], can_retry: false } };
         return { data: {} };
     });
-    vi.mocked(api.post).mockResolvedValue({ data: { mapped: 2, unchanged: 0 } });
+    vi.mocked(api.post).mockResolvedValue({ data: { action: "CREATE", applied: 2, unchanged: 0, conflicts: 0, mapping: { id: 1, version: 1 } } });
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><MappingWorkspace /></MemoryRouter></QueryClientProvider>);
     return userEvent.setup();
 }
 
-async function openBoe(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole("tab", { name: /^BOE/ }));
-    const table = await screen.findByRole("table", { name: "Pending BOE mappings" });
-    await screen.findAllByRole("option", { name: "OLIVE OIL" });
-    return table;
+async function openTab(user: ReturnType<typeof userEvent.setup>, tab: RegExp, table: string) {
+    await user.click(screen.getByRole("tab", { name: tab }));
+    const found = await screen.findByRole("table", { name: table });
+    await screen.findAllByRole("option", { name: "PKO" });
+    return found;
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -56,55 +57,63 @@ describe("Mapping workspace", () => {
         await waitFor(() => expect(tabs.map((t) => t.textContent)).toEqual(["Licence Import Item (4)", "BOE (3)", "Allotment (1)"]));
     });
 
-    it("BOE: suggestion is a reference only; the explicitly selected Item Name id is posted", async () => {
+    it("BOE: one row per Product Name, Planning Target Item column, empty for a new name, single target posted", async () => {
         const user = setup();
-        const table = await openBoe(user);
+        const table = await openTab(user, /^BOE/, "BOE product names");
+        expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["", "Product Name", "Select Planning Target Item", "Status", "Action"]);
         const row = within(table).getByText("CRUDE PALM KERNEL OIL").closest("tr")!;
-        expect(within(row).getByText(/Suggestion only/)).toBeInTheDocument();
-        expect(within(row).getByText(/987654321/)).toBeInTheDocument();
-        expect((within(row).getByLabelText("Item Name for CRUDE PALM KERNEL OIL") as HTMLSelectElement).value).toBe("");
-        const approve = within(row).getByRole("button", { name: "Approve CRUDE PALM KERNEL OIL" });
-        expect(approve).toBeDisabled();
-        await user.selectOptions(within(row).getByLabelText("Item Name for CRUDE PALM KERNEL OIL"), "5");
-        await user.click(approve);
-        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/boe/apply/", { record_ids: [11, 12], item_id: 5 }));
-        expect(within(table).getByText(/No legitimate Item Name under the SION rules/)).toBeInTheDocument();
-        expect(within(within(table).getByText("WIDGET").closest("tr")!).getByText("Review required")).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /Create it in Masters/ })).toHaveAttribute("href", "/masters/item-names");
+        expect(within(row).getByText("Mapping Required")).toBeInTheDocument();
+        expect(within(row).queryByRole("list", { name: /Selected Planning Target Items/ })).toBeNull(); // nothing pre-filled
+        expect(within(row).getByRole("link", { name: "Open licence 0310000041" })).toBeInTheDocument();
+        const save = within(row).getByRole("button", { name: "Save mapping for CRUDE PALM KERNEL OIL" });
+        expect(save).toBeDisabled();
+        const picker = within(row).getByLabelText("Add Planning Target Item for CRUDE PALM KERNEL OIL");
+        await user.selectOptions(picker, "5");
+        await user.selectOptions(within(row).getByLabelText("Change Planning Target Item for CRUDE PALM KERNEL OIL"), "7"); // single: replaces
+        expect(within(within(row).getByRole("list", { name: /Selected Planning Target Items/ })).getAllByRole("listitem")).toHaveLength(1);
+        await user.click(save);
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/boe/names/save/", { name: "CRUDE PALM KERNEL OIL", target_id: 7 }));
     });
 
-    it("bulk approval requires an individually selected Item Name per row (a suggestion never counts)", async () => {
+    it("BOE: a saved mapping reopens with its target, version and Not verified status", async () => {
         const user = setup();
-        const table = await openBoe(user);
-        await user.click(within(table).getByLabelText("Select CRUDE PALM KERNEL OIL"));
-        await user.click(within(table).getByLabelText("Select PALM KERNEL OIL"));
-        const bulk = screen.getByRole("button", { name: "Approve selected (2)" });
-        await user.selectOptions(within(table).getByLabelText("Item Name for CRUDE PALM KERNEL OIL"), "5");
-        expect(bulk).toBeDisabled(); // second row has a suggestion but no selection
-        await user.selectOptions(within(table).getByLabelText("Item Name for PALM KERNEL OIL"), "5");
-        expect(bulk).toBeEnabled();
-        await user.click(bulk);
-        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/boe/apply/", {
-            entries: [{ record_ids: [11, 12], item_id: 5 }, { record_ids: [14], item_id: 5 }] }));
+        const table = await openTab(user, /^BOE/, "BOE product names");
+        const row = within(table).getByText("RASIN").closest("tr")!;
+        expect(within(within(row).getByRole("list", { name: /Selected Planning Target Items/ })).getByText("RAISIN")).toBeInTheDocument();
+        expect(within(row).getByText("Applied · Not verified")).toBeInTheDocument();
+        expect(within(row).getByText(/no licence debit recorded yet/)).toBeInTheDocument();
+        await user.click(within(row).getByRole("button", { name: "Remove RAISIN from RASIN" }));
+        await user.selectOptions(within(row).getByLabelText("Add Planning Target Item for RASIN"), "5");
+        await user.click(within(row).getByRole("button", { name: "Save mapping for RASIN" }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/boe/names/save/", { name: "RASIN", target_id: 5, expected_version: 2 }));
     });
 
-    it("keeps the entry pending and shows the server's validation reason on failure", async () => {
+    it("Allotment: Item Name* column; bulk update previews then posts one target", async () => {
         const user = setup();
-        vi.mocked(api.post).mockRejectedValueOnce({ response: { data: { detail: "1 record(s) failed validation — nothing was mapped. #11: OLIVE OIL is not a legitimate planning target" } } });
-        const table = await openBoe(user);
-        await user.selectOptions(within(table).getByLabelText("Item Name for CRUDE PALM KERNEL OIL"), "6");
-        await user.click(within(table).getByRole("button", { name: "Approve CRUDE PALM KERNEL OIL" }));
-        expect(await within(table).findByRole("alert")).toHaveTextContent("not a legitimate planning target");
-        expect(within(table).getByText("CRUDE PALM KERNEL OIL")).toBeInTheDocument();
+        const table = await openTab(user, /^Allotment/, "Allotment item names");
+        expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["", "Item Name*", "Select Planning Target Item", "Status", "Action"]);
+        vi.mocked(api.post).mockResolvedValueOnce({ data: { descriptions: 1, records: 3, licence_count: 1, licences: [{ id: 41, license_number: "0310000041" }],
+            licences_truncated: false, fingerprint: "fp", sample: ["WALNUT INSHELL"], missing: [], limit: 150, too_many: false } });
+        await user.click(within(table).getByLabelText("Select WALNUT INSHELL"));
+        await user.selectOptions(screen.getByLabelText("Add Planning Target Item for bulk update"), "7");
+        await user.click(screen.getByRole("button", { name: "Apply Bulk Update" }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/allotment/names/bulk/preview/", { mode: "keys", keys: ["WALNUT INSHELL"] }));
+        const dialog = await screen.findByRole("alertdialog");
+        expect(within(dialog).getByText(/existing allotment record/)).toBeInTheDocument();
+        expect(within(dialog).getByRole("link", { name: "Open licence 0310000041" })).toBeInTheDocument();
+        vi.mocked(api.post).mockResolvedValueOnce({ data: { succeeded: [{ key: "WALNUT INSHELL", description: "WALNUT INSHELL", applied: 3 }], skipped: [], failed: [], descriptions: 1, records: 3 } });
+        await user.click(within(dialog).getByRole("button", { name: "Update 1 item name(s)" }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/allotment/names/bulk/apply/",
+            { mode: "keys", keys: ["WALNUT INSHELL"], fingerprint: "fp", target_id: 7 }));
     });
 
-    it("shows approved history", async () => {
+    it("BOE filter builder filters by Product Name only", async () => {
         const user = setup();
-        await openBoe(user);
-        await user.click(screen.getByRole("button", { name: "Approved history" }));
-        const hist = await screen.findByRole("table", { name: "Approved BOE mappings" });
-        expect(within(hist).getByText("PKO")).toBeInTheDocument();
-        expect(within(hist).getByText("v7")).toBeInTheDocument();
+        await openTab(user, /^BOE/, "BOE product names");
+        await user.click(screen.getByRole("button", { name: /Filter Conditions/ }));
+        await user.click(screen.getByRole("button", { name: "Add condition to Root filter group" }));
+        const field = screen.getByLabelText("Condition 1 field");
+        expect(within(field).getAllByRole("option").map((o) => o.textContent)).toEqual(["Product Name"]);
     });
 
     it("licence import item tab is the one-row description mapping table (no suggestion / product review)", async () => {

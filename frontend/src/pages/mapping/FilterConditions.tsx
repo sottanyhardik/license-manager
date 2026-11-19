@@ -1,4 +1,4 @@
-/** Nested filter-condition builder for the licence import description table — same layout and interaction as the
+/** Nested filter-condition builder for the mapping tables (licence import descriptions, BOE / allotment names) — same layout and interaction as the
  *  Licence Planning rule builder (`pages/planning/ExpressionTreeEditor`): a root group, nested groups with their own
  *  ALL / ANY logic, + Condition / + Group, remove (populated groups ask first), indentation per level.
  *  Filters only select rows; matching is evaluated on the server (one implementation for the table and bulk updates). */
@@ -13,9 +13,11 @@ import {
     type Condition, type FilterField, type FilterGroup, type FilterOp, type Filters,
 } from "./filterModel";
 
-type GroupProps = { group: FilterGroup; onChange: (g: FilterGroup) => void; depth: number; path: string; onRemove?: () => void };
+/** Field → label of the fields a table can filter on (default: description, HSN, SION). */
+export type FieldLabels = Partial<Record<FilterField, string>>;
+type GroupProps = { group: FilterGroup; onChange: (g: FilterGroup) => void; depth: number; path: string; onRemove?: () => void; labels: FieldLabels };
 
-function GroupNode({ group, onChange, depth, path, onRemove }: GroupProps) {
+function GroupNode({ group, onChange, depth, path, onRemove, labels }: GroupProps) {
     const isRoot = depth === 0;
     const [expanded, setExpanded] = useState(true);
     const [confirm, setConfirm] = useState(false);
@@ -47,12 +49,12 @@ function GroupNode({ group, onChange, depth, path, onRemove }: GroupProps) {
                 <div className="space-y-2">
                     {group.conditions.map((node, index) => {
                         const childPath = isRoot ? `${index + 1}` : `${path}.${index + 1}`;
-                        if (isGroup(node)) return <GroupNode key={node.id ?? `g${index}`} group={node} depth={depth + 1} path={childPath} onChange={(next) => replace(index, next)} onRemove={() => removeAt(index)} />;
+                        if (isGroup(node)) return <GroupNode key={node.id ?? `g${index}`} group={node} labels={labels} depth={depth + 1} path={childPath} onChange={(next) => replace(index, next)} onRemove={() => removeAt(index)} />;
                         const name = `Condition ${childPath}`;
                         return (
                             <div key={node.id ?? `c${index}`} className="grid min-h-10 items-center gap-2 border-l border-border pl-3 sm:grid-cols-[minmax(150px,0.9fr)_minmax(150px,0.9fr)_minmax(180px,1.5fr)_32px]">
                                 <select aria-label={`${name} field`} value={node.field} onChange={(e) => replace(index, { ...node, field: e.target.value as FilterField })} className="h-9 rounded-md border bg-background px-2 text-sm">
-                                    {(Object.keys(FIELD_LABEL) as FilterField[]).map((f) => <option key={f} value={f}>{FIELD_LABEL[f]}</option>)}
+                                    {(Object.keys(labels) as FilterField[]).map((f) => <option key={f} value={f}>{labels[f]}</option>)}
                                 </select>
                                 <select aria-label={`${name} operator`} value={node.op} onChange={(e) => replace(index, { ...node, op: e.target.value as FilterOp })} className="h-9 rounded-md border bg-background px-2 text-sm">
                                     {(Object.keys(OP_LABEL) as FilterOp[]).map((o) => <option key={o} value={o}>{OP_LABEL[o]}</option>)}
@@ -75,7 +77,7 @@ function GroupNode({ group, onChange, depth, path, onRemove }: GroupProps) {
     );
 }
 
-export default function FilterConditions({ applied, onApply }: { applied: Filters; onApply: (f: Filters) => void }) {
+export default function FilterConditions({ applied, onApply, labels = FIELD_LABEL }: { applied: Filters; onApply: (f: Filters) => void; labels?: FieldLabels }) {
     const [open, setOpen] = useState(applied.conditions.length > 0);
     const [draft, setDraft] = useState<Filters>(() => withIds(applied));
     const valid = validFilters(draft);
@@ -88,7 +90,7 @@ export default function FilterConditions({ applied, onApply }: { applied: Filter
             </button>
             {open && (
                 <div className="mt-2 space-y-2">
-                    <GroupNode group={draft} depth={0} path="" onChange={setDraft} />
+                    <GroupNode group={draft} depth={0} path="" onChange={setDraft} labels={labels} />
                     <div className="flex flex-wrap items-center gap-1.5">
                         <Button size="sm" disabled={!valid} onClick={() => onApply(stripIds(draft))}>Apply Filters</Button>
                         <Button size="sm" variant="ghost" disabled={!draft.conditions.length && !applied.conditions.length} onClick={() => { setDraft(EMPTY_FILTERS); onApply(EMPTY_FILTERS); }}>Clear Filters</Button>

@@ -400,12 +400,13 @@ def test_e126_hsn_implies_the_entitlement_even_without_alias_wording():
         _validate(row, olive, allow_review=True)  # an alias-less PKO-HSN record can't be linked to Olive Oil
 
 
-def test_sunflower_to_olive_classification_is_scoped_to_e126_only():
+def test_sunflower_to_olive_classification_is_scoped_to_e5_and_e126():
+    # Owner decision 2026-11-19 (decision 3): E5 as well as E126; never E132 / A3627.
     from apps.license.utils.item_matcher import get_item_filters
     olive = [c for c in get_item_filters() if c["base_name"] == "OLIVE OIL"]
     sunflower = [c for c in olive if any("sunflower" in str(f).lower() for f in c["filters"])]
-    assert sunflower and all(c["norms"] == ["E126"] for c in sunflower)
-    assert not any("sunflower" in str(f).lower() for c in olive if "E5" in c["norms"] for f in c["filters"])
+    assert sunflower and all(sorted(c["norms"]) == ["E126", "E5"] for c in sunflower)
+    assert not any(n in c["norms"] for c in sunflower for n in ("E132", "A3627"))
 
 
 def test_e132_never_receives_e126_entitlement_aliases():

@@ -200,6 +200,6 @@ Applied to the local dev DB only.
 
 ## Next action
 
-Owner decision needed: should Sunflower Oil count as Olive Oil on **E5** licences (currently E126 only)?
+Decided 2026-11-19: Sunflower Oil counts as Olive Oil on E5 too (implemented); planning engine stays REPLACE. Open: decision 5 (one mapping version per header in bulk debit-target backfills).
 Owner / reviewers: record decisions in Product Matching until ≥ 60 verified labels (≥ 20 per class), then
 "Generate dataset + train candidate" and promote only if the gate passes.

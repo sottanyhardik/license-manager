@@ -77,3 +77,14 @@ Owner decisions taken in session (Claude Code, 2026-11-18).
   engine into soft-supersede (and a posted / frozen plan state, which does not exist today) would change every plan
   consumer — not done; needs a separate owner decision.
 - The E1 PP consolidation is applied by the owner through the UI (not by an agent).
+
+## 8. Owner answers 2026-11-19 (open decisions 3 and 4)
+
+- **Decision 3 — Sunflower → Olive Oil on E5: YES.** HSN 1512 + "sunflower" (no PKO / 1513 signal) counts toward the
+  Olive Oil entitlement on **E5 and E126**; never PKO; never E132 / A3627 (Olive Oil restricted). Implemented in
+  `get_item_filters()` (`item_matcher.py`); pinned by `test_sunflower_olive_mapping.py` (characterisation run failed only
+  on E5 before the change). Local DB had 0 matching E5 records — forward-looking, no existing data re-classified.
+- **Decision 4 — planning engine: REPLACE (unchanged).** The re-plan engine keeps physically replacing generated plan
+  lines; no soft-supersede and no posted / frozen plan state. History of superseded lines lives in the `MappingChange`
+  archive (§7).
+- Decision 5 (one mapping version per header for bulk debit-target backfills) remains **open**.

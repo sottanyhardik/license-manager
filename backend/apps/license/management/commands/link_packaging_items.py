@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count
 
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
-from apps.license.utils.item_matcher import bulk_auto_link_license_items, classify_packaging_item
+from apps.license.utils.item_matcher import classify_packaging_item, rule_auto_link_license_items
 
 
 class Command(BaseCommand):
@@ -93,7 +93,7 @@ class Command(BaseCommand):
                 through_model.objects.filter(
                     licenseimportitemsmodel__license=license_obj
                 ).delete()
-            linked = bulk_auto_link_license_items(license_obj)
+            linked = rule_auto_link_license_items(license_obj)  # explicit operator command: rule linking on purpose
             total_linked += linked
             self.stdout.write(
                 f"  [{idx}/{total}] {license_obj.license_number}: linked {linked} import item(s)"

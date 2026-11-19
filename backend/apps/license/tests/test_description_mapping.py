@@ -210,3 +210,21 @@ class DescriptionMappingTests(pivot_fixture.IntelligenceFixture):
         ok = client.post(url, {"description": "PALM KERNEL OIL", "item_ids": [self.olive.pk], "expected_version": 1}, format="json")
         assert ok.status_code == 201 and ok.json()["action"] == "REPLACE"
         assert client.post(url, {"description": "X" * 2001, "item_ids": [self.pko.pk]}, format="json").status_code == 400
+
+    def test_rule_auto_link_is_replaced_new_unmapped_items_stay_empty_and_bulk_saves_apply_mappings(self):
+        """Owner decision 2026-11-19 ("replace"): no rule-based guess; only exact saved description mappings link."""
+        from apps.core.models import HSCodeModel
+        from apps.license.utils.item_matcher import RULE_AUTO_LINK, bulk_auto_link_license_items
+        assert RULE_AUTO_LINK is False
+        with self.captureOnCommitCallbacks(execute=True):
+            unmapped = self.item(self.licences[0], 20, "15131900", "OLIVE OIL EXTRA VIRGIN", "5")
+        assert self.links(unmapped) == [[]]  # stays empty → Mapping Required
+        save_mapping(description="PALM KERNEL OIL", item_ids=[self.pko.pk], user=self.user)
+        code = HSCodeModel.objects.get(hs_code="15131900")
+        LicenseImportItemsModel.objects.bulk_create([  # bulk imports send no post_save
+            LicenseImportItemsModel(license=self.licences[0], serial_number=21, hs_code=code, description="palm kernel oil", quantity=Decimal("1")),
+            LicenseImportItemsModel(license=self.licences[0], serial_number=22, hs_code=code, description="SOMETHING NEW", quantity=Decimal("1")),
+        ])
+        assert bulk_auto_link_license_items(self.licences[0]) == 1
+        bulk = {r.description: r for r in LicenseImportItemsModel.objects.filter(license=self.licences[0], serial_number__in=[21, 22])}
+        assert self.links(bulk["palm kernel oil"]) == [[self.pko.pk]] and self.links(bulk["SOMETHING NEW"]) == [[]]

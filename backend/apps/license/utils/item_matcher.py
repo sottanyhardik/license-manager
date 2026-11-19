@@ -11,6 +11,12 @@ from apps.license.services.product_norm_guard import is_olive_oil_allowed
 
 logger = logging.getLogger(__name__)
 
+# Owner decision 2026-11-19 ("replace"): saved licence import description mappings REPLACE rule-based auto-linking.
+# A new import item gets Item Names only from an exact saved description mapping
+# (services/product_intelligence/description_mapping.py); without one it stays empty and shows as "Mapping Required".
+# The rule matchers below stay available for read-only classification and explicit operator commands.
+RULE_AUTO_LINK = False
+
 
 def _description_hsn_prefix_q(codes):
     """Description match for HSN-style codes: a code must start a number.
@@ -982,6 +988,16 @@ def _get_or_create_packaging_item_name(packaging_name: str, norm: str):
 
 
 def bulk_auto_link_license_items(license_instance):
+    """Link Item Names to a licence's import items after a bulk save. With ``RULE_AUTO_LINK`` off (owner decision
+    2026-11-19) this applies the saved description mappings instead of guessing; returns the number of items mapped."""
+    if not RULE_AUTO_LINK:
+        from apps.license.services.product_intelligence.description_mapping import apply_for_licence
+
+        return apply_for_licence(license_instance.pk)
+    return rule_auto_link_license_items(license_instance)
+
+
+def rule_auto_link_license_items(license_instance):
     """
     Bulk auto-link ItemNameModel rows to all unlinked import items on a
     licence. Runs ~M queries (one per filter config that applies to this

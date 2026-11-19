@@ -5,7 +5,7 @@ from apps.core.models import HeadSIONNormsModel, HSCodeModel, ItemNameModel, Sio
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
 from apps.license.signals import suspend_license_flag_recalc
 from apps.license.utils.item_matcher import (
-    bulk_auto_link_license_items,
+    rule_auto_link_license_items,
     classify_packaging_item,
     extract_gsm_range,
     match_import_item_to_items,
@@ -605,7 +605,7 @@ class TestBulkAutoLinkLicenseItemsPackaging:
                 description="Unrelated component",
             )
 
-        linked_count = bulk_auto_link_license_items(license_obj)
+        linked_count = rule_auto_link_license_items(license_obj)
 
         assert linked_count == 1
         pkg_item.refresh_from_db()
@@ -624,7 +624,7 @@ class TestBulkAutoLinkLicenseItemsPackaging:
                 description="Duplex Paper Board 230 GSM",
             )
 
-        linked_count = bulk_auto_link_license_items(license_obj)
+        linked_count = rule_auto_link_license_items(license_obj)
 
         assert linked_count == 1
         item.refresh_from_db()
@@ -646,7 +646,7 @@ class TestBulkAutoLinkLicenseItemsPackaging:
                 description="HDPE granules",
             )
 
-        linked_count = bulk_auto_link_license_items(license_obj)
+        linked_count = rule_auto_link_license_items(license_obj)
 
         assert linked_count == 1
         item.refresh_from_db()
@@ -664,7 +664,7 @@ class TestBulkAutoLinkLicenseItemsPackaging:
                 description="HDPE granules",
             )
 
-        linked_count = bulk_auto_link_license_items(license_obj)
+        linked_count = rule_auto_link_license_items(license_obj)
 
         assert linked_count == 0
         item.refresh_from_db()

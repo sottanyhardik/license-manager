@@ -229,6 +229,26 @@ def auto_apply(import_item_id: int) -> str | None:
     return ImportItemDescriptionMapping.CONFLICT if result["conflicts"] else ImportItemDescriptionMapping.AUTO
 
 
+def apply_for_licence(license_id: int) -> int:
+    """Bulk saves (incl. ``bulk_create``, which sends no post_save): apply every exact saved description mapping to this
+    licence's import items that do not carry its current version yet. Returns the number of records mapped (AUTO)."""
+    mapped = 0
+    with transaction.atomic():
+        records = list(LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(license_id=license_id)
+                       .exclude(description__isnull=True).exclude(description="").select_related("hs_code").prefetch_related("items").order_by("pk"))
+        by_hash: dict[str, list] = defaultdict(list)
+        for r in records:
+            k = description_key(r.description)
+            if k:
+                by_hash[key_hash(k)].append(r)
+        for mapping in (ImportDescriptionMapping.objects.select_for_update(no_key=True)
+                        .filter(key_hash__in=list(by_hash), is_active=True).order_by("pk")):
+            result = _apply(mapping, by_hash[mapping.key_hash], user=None, status=ImportItemDescriptionMapping.AUTO,
+                            change_detail={"action": "AUTO", "license": license_id}, plan_impact=False)
+            mapped += result["applied"]
+    return mapped
+
+
 def serialise(m: ImportDescriptionMapping) -> dict:
     return {"id": m.pk, "version": m.version, "description": m.description, "key": m.description_key,
             "items": [{"item_id": i.pk, "name": i.name} for i in m.items.order_by("name")]}

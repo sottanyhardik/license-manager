@@ -392,6 +392,23 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     # Update license flags
     update_license_flags(instance)
 
+    from apps.license.utils.item_matcher import RULE_AUTO_LINK
+
+    if not RULE_AUTO_LINK:
+        # Owner decision 2026-11-19: saved description mappings replace rule-based linking — apply them after commit.
+        license_id = instance.pk
+
+        def _apply_mappings():
+            try:
+                from apps.license.services.product_intelligence.description_mapping import apply_for_licence
+
+                apply_for_licence(license_id)
+            except Exception:  # noqa: BLE001 — classification follow-up; the licence itself is saved
+                logger.exception("Applying saved description mappings failed for licence %s", license_id)
+
+        transaction.on_commit(_apply_mappings)
+        return
+
     # Only auto-link items if import items exist
     if not instance.import_license.exists():
         return
@@ -484,6 +501,13 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
 
     if instance.license:
         update_license_flags(instance.license)
+
+        # Owner decision 2026-11-19: saved description mappings replace rule-based auto-linking (item_matcher.RULE_AUTO_LINK);
+        # the description-mapping hook below assigns Item Names for an exact saved description.
+        from apps.license.utils.item_matcher import RULE_AUTO_LINK
+
+        if not RULE_AUTO_LINK:
+            return
 
         # Only auto-link items if no items are currently linked (items field is empty)
         if instance.items.exists():

@@ -68,11 +68,11 @@ def test_bulk_auto_link_links_e5_sunflower_to_olive_oil(olive_masters):
     from decimal import Decimal
 
     from apps.license.models import LicenseExportItemModel
-    from apps.license.utils.item_matcher import bulk_auto_link_license_items
+    from apps.license.utils.item_matcher import rule_auto_link_license_items
     record = _record(5, "15121190", "Refined Sunflower Oil")
     LicenseExportItemModel.objects.create(license=record.license, norm_class=SionNormClassModel.objects.get(norm_class="E5"), cif_fc=Decimal("1"))
     record.items.clear()  # the save signal may already have linked it — exercise the bulk path explicitly
-    assert bulk_auto_link_license_items(record.license) == 1
+    assert rule_auto_link_license_items(record.license) == 1
     assert _names(record.items.all()) == ["OLIVE OIL - E5"]
 
 

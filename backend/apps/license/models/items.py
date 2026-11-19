@@ -413,7 +413,12 @@ def update_balance(sender, instance, **kwargs):
     except Exception:
         _job()
 
-    # Auto-tag blank items using a predefined filter list (lazy import)
+    # Auto-tag blank items using a predefined filter list (lazy import) — rule-based linking, replaced by saved
+    # description mappings (owner decision 2026-11-19, item_matcher.RULE_AUTO_LINK).
+    from apps.license.utils.item_matcher import RULE_AUTO_LINK
+
+    if not RULE_AUTO_LINK:
+        return
     try:
         from backend.setup.migrations_script import filter_list
     except Exception:

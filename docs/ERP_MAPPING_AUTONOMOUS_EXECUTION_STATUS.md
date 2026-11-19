@@ -126,6 +126,49 @@ the alias created by that approval, audit event `import_item_mapping_undone` (us
 versions and history are never changed or deleted. `suggest()` no longer reuses an undone approval (row is Pending, no
 pre-filled Item Name); undone approvals are not cross-source evidence nor training labels.
 
+## Automatic licence Item Name mapping (owner spec 2026-11-19, "FINAL IMPLEMENTATION — AUTOMATIC LICENCE ITEM NAME MAPPING")
+
+| ID | Task | Status | Evidence |
+|---|---|---|---|
+| D1 | One saved mapping per unique strictly-normalised description, 1..20 existing Item Names | VERIFIED | `test_description_mapping.py` |
+| D2 | Save applies to every existing licence import item with exactly that key (REPLACE), HSN / SION conflicts flagged + left unchanged | VERIFIED | backend tests |
+| D3 | Future / re-described records mapped automatically (AUTO) after commit; other saves never touch links | VERIFIED | hook tests |
+| D4 | New descriptions → Mapping Required (no guess by this feature) | VERIFIED | backend + vitest |
+| D5 | Edit = REPLACE with version history (previous → new ids), `expected_version` required via API | VERIFIED | backend tests |
+| D6 | Retry-safe re-apply; drift (manual re-link) shown as Partially applied | VERIFIED | backend tests |
+| D7 | One-row UI: Description · HSN · SION · Select Item Name (multi-select chips) · Status · Action | VERIFIED | `DescriptionMapping.test.tsx` 7 |
+
+**SCHEMA CHANGE (additive):** `license/0064_import_description_mapping` — tables `ImportDescriptionMapping` (unique `key_hash`,
+M2M Item Names, version), `ImportDescriptionMappingVersion` (append-only history), `ImportItemDescriptionMapping` (one per
+import item: mapping, applied version, APPLIED / AUTO / CONFLICT, links before first application); `MappingChange.kind`
+gains `DESCRIPTION_MAPPING` (choices only). No backfill / RunPython. **Not applied to the local dev DB** (`migrate` needs
+owner approval) — the Mapping tab's Licence Import Item view needs it.
+**API (additive):** `GET …/item-name-mapping/import/descriptions/?q&status&sion&offset&limit` (ReportPermission),
+`POST …/import/descriptions/save/` `{description, item_ids, expected_version}` and `POST …/import/descriptions/<id>/reapply/`
+(LICENSE_MANAGER). All earlier APIs (matching, decide, approved / undo, BOE / allotment queues) are kept.
+**Removed (frontend only):** the Licence Import Item two-table / suggestion / product-review UI (`ImportItemMapping`,
+`ProductMatchingView`, `MultiProductSelection`). BOE / Allotment tabs unchanged.
+**Financial:** classification only — `items` M2M + mapping tables; quantities / CIF / debits / balances never written
+(test pins import-item description / qty / CIF / HSN and the financial balance). No business-rule change.
+**Performance (real data, read-only):** 23,463 described import items → 3,239 unique keys; scan + key in 0.17 s.
+**Reviews (/review-diff, 7 reviewers):** code-reviewer 4 blocking (hook re-applied on every save and could revert manual
+links; serializer ordering; on_commit exception → 500; per-record plan archive on AUTO) → fixed (hook only on create /
+description change, post_init stash, try/except + log, AUTO without plan archive, drift detection → Retry);
+react-reviewer 1 blocking (stale edits over a newer version) → fixed (edit tied to base version, test); key normalisation
+tightened (no gluing across "." "/", "1,000" kept, zero-width removed); `select_for_update(no_key=True)` (deadlock);
+description ≤ 2000; reapply audited. Not changed: per-record `update_or_create` of application rows; listing recomputed
+per request (0.2–0.4 s est.); rule-based auto-link signal kept (see decision below).
+
+**Tests (real runs):** `test_description_mapping.py` 11 + `test_item_name_mapping.py` 20 passed; vitest mapping 17;
+backend gate: `tests/` pass, manage.py check pass, migrations check pass, flake8 pass, app-level 3907 passed / 1 failed
+(`test_product_matching_migrations` pinned LATEST = 0063 → extended to 0064, rerun 1 passed), ruff F401 FAIL pre-existing in
+`apps/accounting/selectors/licence_bank_ledger.py` (not touched; `ruff check apps/license` clean); frontend gate exit 0
+(lint, typecheck, 994 unit, build); Playwright navigation + licence overview 10/10.
+
+**Owner decision needed:** the pre-existing rule-based auto-link (`update_license_on_import_item_change` →
+`item_matcher`) still links Item Names on a new import item without a saved mapping. Spec §5 says new descriptions must not
+be guessed; Auto Plan currently relies on those links. Keep it, or disable it so unmapped descriptions stay empty?
+
 ## Next action
 
 Push needs owner approval. Optional: a real-data Playwright run of `/mapping` (backend + local DB).

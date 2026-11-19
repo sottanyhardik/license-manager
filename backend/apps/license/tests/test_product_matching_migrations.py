@@ -1,4 +1,4 @@
-"""Migrations 0058 / 0059 / 0060 are additive and repeatable: backwards removes only their own
+"""Migrations 0058 … 0064 are additive and repeatable: backwards removes only their own
 tables, forwards recreates them, and no pre-existing table is touched."""
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
@@ -7,8 +7,11 @@ from django.test import TransactionTestCase
 NEW_TABLES = {"license_productmatchdecision", "license_productmatchingjob", "license_producttextembedding", "license_productmatchsuggestion",
               # 0060 product intelligence registry
               "license_productalias", "license_productinteldataset", "license_productintelmodel", "license_productintelauditevent",
-              "license_productmatchselection", "license_mappingchange"}
-LATEST = "0063_mapping_change_propagation"
+              "license_productmatchselection", "license_mappingchange",
+              # 0064 import description mappings
+              "license_importdescriptionmapping", "license_importdescriptionmapping_items", "license_importdescriptionmappingversion",
+              "license_importitemdescriptionmapping"}
+LATEST = "0064_import_description_mapping"
 
 
 class ProductMatchingMigrationRoundTripTests(TransactionTestCase):

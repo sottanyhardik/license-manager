@@ -424,6 +424,52 @@ class ItemPivotItemNameMappingMixin:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result, status=status.HTTP_200_OK)
 
+    # --- Licence import description mappings (map each unique description once; applied to all + future records) ---
+
+    @action(detail=False, methods=["get"], url_path="matching/item-name-mapping/import/descriptions")
+    def import_description_list(self, request):
+        from apps.license.services.product_intelligence.description_mapping import descriptions
+
+        p = request.query_params
+        data = descriptions(q=(p.get("q") or "").strip()[:200], status=(p.get("status") or "").strip().upper()[:20], sion=(p.get("sion") or "").strip()[:20],
+                            offset=_safe_int(p.get("offset"), 0), limit=_safe_int(p.get("limit"), 50))
+        return Response({**data, "can_apply": _can_approve(request.user)})
+
+    @action(detail=False, methods=["post"], url_path="matching/item-name-mapping/import/descriptions/save", permission_classes=[])
+    def import_description_save(self, request):
+        """Body: ``{description, item_ids: [id, …], expected_version?}`` — create or REPLACE the mapping for that exact
+        (normalised) description and apply it to every existing licence import item with it. LICENSE_MANAGER."""
+        from apps.license.services.product_intelligence.description_mapping import save_mapping
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Item Name mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None or not isinstance(body.get("description"), str):
+            return Response({"detail": "A JSON object with the original description is required."}, status=status.HTTP_400_BAD_REQUEST)
+        expected = body.get("expected_version")
+        if expected is not None and (not isinstance(expected, int) or isinstance(expected, bool)):
+            return Response({"expected_version": "Must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = save_mapping(description=body["description"], item_ids=body.get("item_ids"), user=request.user, expected_version=expected,
+                                  require_version=True)
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        return Response(result, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/import/descriptions/(?P<mapping_id>\d+)/reapply", permission_classes=[])
+    def import_description_reapply(self, request, mapping_id=None):
+        from apps.license.services.product_intelligence.description_mapping import reapply
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Item Name mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            return Response(reapply(int(mapping_id), user=request.user))
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)")
     def item_name_mapping_queue(self, request, kind=None):
         from apps.license.services.product_intelligence.item_name_mapping import queue

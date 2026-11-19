@@ -509,17 +509,22 @@ def drop_counts_cache() -> None:
 
 
 def _counts() -> dict:
-    from django.db.models import Count
-
-    from apps.license.models import LicenseImportItemsModel
+    from apps.license.models import ImportDescriptionMapping, LicenseImportItemsModel
+    from apps.license.services.product_intelligence.description_mapping import description_key, key_hash
 
     out = {}
     for kind in KINDS:
         _, _, _, _, desc_field = _models(kind)
         descs = list(_pending_headers(kind).values_list(desc_field, flat=True))
         out[kind] = {"records": len(descs), "descriptions": len({normalise(d) for d in descs})}
-    pending = (LicenseImportItemsModel.objects.annotate(n=Count("items")).exclude(n=1).exclude(description__isnull=True).exclude(description="")
-               .values_list("description", flat=True))
-    descs = list(pending)
-    out["import"] = {"records": len(descs), "descriptions": len({normalise(d) for d in descs})}
+    # Licence import items: unique descriptions (strict key) without a saved description mapping ("Mapping Required").
+    mapped = set(ImportDescriptionMapping.objects.filter(is_active=True).values_list("key_hash", flat=True))
+    keys: dict[str, str] = {}
+    records = 0
+    for desc in LicenseImportItemsModel.objects.exclude(description__isnull=True).exclude(description="").values_list("description", flat=True):
+        if desc not in keys:
+            keys[desc] = description_key(desc)
+        if keys[desc] and key_hash(keys[desc]) not in mapped:
+            records += 1
+    out["import"] = {"records": records, "descriptions": len({k for k in keys.values() if k and key_hash(k) not in mapped})}
     return out

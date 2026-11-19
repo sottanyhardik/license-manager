@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/axios", () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 import api from "@/api/axios";
-import type { ApprovedRow } from "./ImportItemMapping";
 import MappingWorkspace, { type MappingGroup } from "./MappingWorkspace";
 
 const group = (over: Partial<MappingGroup>): MappingGroup => ({
@@ -23,22 +22,17 @@ const boeQueue = { kind: "boe", total_groups: 3, total_records: 4, offset: 0, li
 ] };
 const counts = { import: { records: 9, descriptions: 4 }, boe: { records: 4, descriptions: 3 }, allotment: { records: 2, descriptions: 1 } };
 
-let approvedRows: ApprovedRow[] = [];
-let pendingImport: Record<string, unknown>[] = [];
-const approvedRow: ApprovedRow = { id: 41, description: "PALM KERNEL OIL CRUDE", hsn_code: "15131900", sion: "E126", item_id: 5, item: "PKO", records: 2,
-    status: "APPROVED", by: "hardik", on: "2026-11-19T10:00:00Z" };
-
 function setup() {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url.includes("item-name-mapping/counts")) return { data: counts };
-        if (url.includes("import/approved")) return { data: { rows: approvedRows, total: approvedRows.length, offset: 0, limit: 50, can_undo: true } };
+        if (url.includes("import/descriptions")) return { data: { rows: [], total: 0, summary: {}, offset: 0, limit: 50, can_apply: true } };
         if (url.includes("/history/")) return { data: { rows: [{ id: 11, description: "CRUDE PALM KERNEL OIL", item_id: 5, item: "PKO", hsn_codes: ["15131900"], mapping_version: 7, by: "hardik", on: "2026-11-19T10:00:00Z" }], total: 1 } };
         if (url.includes("item-name-mapping/boe")) return { data: boeQueue };
         if (url.includes("matching/masters")) return { data: { masters: [{ item_id: 5, name: "PKO" }, { item_id: 6, name: "OLIVE OIL" }] } };
         if (url.includes("available-norms")) return { data: [{ norm_class: "E126", description: "Biscuits" }] };
         if (url.includes("matching/health")) return { data: { model: { ok: true }, worker: { ok: true }, available_memory_mb: null } };
         if (url.includes("mapping-changes")) return { data: { changes: [], can_retry: false } };
-        return { data: { matcher: "d", can_approve: true, summary: {}, suggestions: pendingImport, latest_job: null, decisions: [] } };
+        return { data: {} };
     });
     vi.mocked(api.post).mockResolvedValue({ data: { mapped: 2, unchanged: 0 } });
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><MappingWorkspace /></MemoryRouter></QueryClientProvider>);
@@ -52,7 +46,7 @@ async function openBoe(user: ReturnType<typeof userEvent.setup>) {
     return table;
 }
 
-beforeEach(() => { vi.clearAllMocks(); approvedRows = []; pendingImport = []; });
+beforeEach(() => vi.clearAllMocks());
 
 describe("Mapping workspace", () => {
     it("has exactly three primary tabs with pending counts", async () => {
@@ -113,66 +107,10 @@ describe("Mapping workspace", () => {
         expect(within(hist).getByText("v7")).toBeInTheDocument();
     });
 
-    it("licence import item tab reviews one SION at a time through the product matching review", async () => {
-        const user = setup();
-        expect(screen.getByText("Choose a SION norm")).toBeInTheDocument();
-        await screen.findByRole("option", { name: /E126/ });
-        await user.selectOptions(screen.getByLabelText("SION norm"), "E126");
-        await waitFor(() => expect(vi.mocked(api.get).mock.calls.some(([u]) => String(u).startsWith("item-pivot/matching/?sion_norm=E126"))).toBe(true));
-    });
-
-    it("licence import item: Approved Mappings on top, Pending Mappings below", async () => {
-        approvedRows = [approvedRow];
+    it("licence import item tab is the one-row description mapping table (no suggestion / product review)", async () => {
         setup();
-        const approved = await screen.findByRole("table", { name: "Approved licence import item mappings" });
-        expect(within(approved).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(
-            ["Original Item Description", "HSN", "SION", "Approved Item Name", "Status", "Action"]);
-        const tr = within(approved).getByText("PALM KERNEL OIL CRUDE").closest("tr")!;
-        expect(within(tr).getByText("PKO")).toBeInTheDocument();
-        expect(within(tr).getByText("Approved")).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "Approved Mappings (1)" })).toBeInTheDocument();
-        const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-        expect(headings.indexOf("Approved Mappings (1)")).toBeLessThan(headings.indexOf("Pending Mappings"));
-        expect(screen.getByRole("link", { name: /Create it in Masters/ })).toHaveAttribute("href", "/masters/item-names");
-    });
-
-    it("licence import item: Undo asks for confirmation, then posts once and removes the row", async () => {
-        approvedRows = [approvedRow];
-        const user = setup();
-        vi.mocked(api.post).mockResolvedValue({ data: { decision_id: 41, undone: true, already_undone: false, restored: 2 } });
-        const approved = await screen.findByRole("table", { name: "Approved licence import item mappings" });
-        await user.click(within(approved).getByRole("button", { name: "Undo mapping of PALM KERNEL OIL CRUDE" }));
-        const dialog = await screen.findByRole("alertdialog");
-        expect(dialog).toHaveTextContent("return to Pending and need a fresh Item Name selection");
-        await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-        expect(api.post).not.toHaveBeenCalled();
-        await user.click(within(approved).getByRole("button", { name: "Undo mapping of PALM KERNEL OIL CRUDE" }));
-        approvedRows = []; // the server no longer lists it
-        await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Undo mapping" }));
-        await waitFor(() => expect(api.post).toHaveBeenCalledWith("item-pivot/matching/item-name-mapping/import/approved/41/undo/", {}));
-        expect(api.post).toHaveBeenCalledTimes(1);
-        await waitFor(() => expect(within(approved).queryByText("PALM KERNEL OIL CRUDE")).toBeNull());
-    });
-
-    it("licence import item: after Undo the row is back in Pending with an empty Item Name selector", async () => {
-        approvedRows = [approvedRow];
-        const user = setup();
-        vi.mocked(api.post).mockResolvedValue({ data: { decision_id: 41, undone: true, already_undone: false, restored: 2 } });
-        await screen.findByRole("option", { name: /E126/ });
-        await user.selectOptions(screen.getByLabelText("SION norm"), "E126");
-        const pending = await screen.findByRole("table", { name: "Pending licence import item mappings" });
-        expect(within(pending).queryByText("PALM KERNEL OIL CRUDE")).toBeNull();
-        const approved = screen.getByRole("table", { name: "Approved licence import item mappings" });
-        await user.click(within(approved).getByRole("button", { name: "Undo mapping of PALM KERNEL OIL CRUDE" }));
-        approvedRows = [];
-        pendingImport = [{ source_key: "pko", kind: "UNMAPPED", description: "PALM KERNEL OIL CRUDE", aliases: [], hsn_code: "15131900", hsn_codes: ["15131900"], sion: "E126",
-            import_item_ids: [1, 2], license_numbers: ["0310000001"], band: "HIGH", action: "", confidence: 100, suggestion: { item_id: 5, name: "PKO" }, explanation: "",
-            conflicts: [], checks: {}, candidates: [{ item_id: 5, name: "PKO" }], history: [] }];
-        await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Undo mapping" }));
-        const tr = (await within(pending).findByText("PALM KERNEL OIL CRUDE")).closest("tr")!;
-        expect((within(tr).getByLabelText("Item Name for PALM KERNEL OIL CRUDE") as HTMLSelectElement).value).toBe("");
-        expect(within(tr).getByText("Pending")).toBeInTheDocument();
-        expect(within(tr).getByRole("button", { name: "Approve PALM KERNEL OIL CRUDE" })).toBeDisabled();
-        expect(within(approved).queryByText("PALM KERNEL OIL CRUDE")).toBeNull();
+        expect(await screen.findByRole("table", { name: "Licence import item descriptions" })).toBeInTheDocument();
+        expect(screen.queryByText(/Suggested Item Name/)).toBeNull();
+        expect(screen.queryByText(/Review products/)).toBeNull();
     });
 });

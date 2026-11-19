@@ -744,3 +744,35 @@ def snapshot_exporter_name_on_company_delete(sender, instance, **kwargs):
     LicenseDetailsModel.objects.filter(exporter=instance).update(
         archived_exporter_name=instance.name or ""
     )
+
+
+@receiver(post_init, sender=LicenseImportItemsModel)
+def stash_import_item_description(sender, instance, **kwargs):
+    """Remember the loaded description (no query: a deferred field stays deferred)."""
+    instance._orig_description = instance.__dict__.get("description", _MISSING)
+
+
+@receiver(post_save, sender=LicenseImportItemsModel)
+def apply_saved_description_mapping(sender, instance, created, **kwargs):
+    """Owner spec 2026-11-19: a NEW import item — or one whose description changed — that has an exact saved
+    description mapping gets its Item Names automatically (status AUTO; HSN / SION conflicts are flagged, not
+    assigned). Other saves (quantity, CIF, form re-saves) never touch links, so manual re-links are not reverted.
+    Runs after commit (the saved mapping takes precedence over the rule-based auto-link above); a failure is logged
+    and never fails the save — the mapping's Retry re-applies it."""
+    if kwargs.get("raw", False) or not instance.pk or not (instance.description or "").strip():
+        return
+    from apps.license.services.product_intelligence.description_mapping import auto_apply, description_key
+
+    old = getattr(instance, "_orig_description", _MISSING)
+    instance._orig_description = instance.description
+    if not created and (old is _MISSING or description_key(old) == description_key(instance.description)):
+        return
+    pk = instance.pk
+
+    def _run():
+        try:
+            auto_apply(pk)
+        except Exception:  # noqa: BLE001 — classification follow-up; the import item itself is already saved
+            logger.exception("Automatic description mapping failed for import item %s", pk)
+
+    transaction.on_commit(_run)

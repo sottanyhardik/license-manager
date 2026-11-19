@@ -3,7 +3,7 @@
  *
  * Exactly three primary tabs: Licence Import Item · BOE · Allotment. All three map to the SAME Item Name master
  * (`ItemNameModel` id) that Item Pivot (Classic Mode) groups by and Licence Planning consumes:
- * licence import items via the two-table Approved / Pending workflow (`ImportItemMapping`, `item-pivot/matching/decide/`), BOE / allotment headers via
+ * licence import items per unique description, mapped once and applied to all + future records (`DescriptionMapping`), BOE / allotment headers via
  * `planning_target_item` (`item-pivot/matching/item-name-mapping/<kind>/apply/`). Suggestions are never approvals;
  * every approval is validated on the server (SION rules, HSN, entitlement) and versioned for re-planning.
  * Descriptions, quantities, CIF and debit rows are never changed. A missing Item Name is created only through
@@ -22,7 +22,7 @@ import { EmptyState, InlineError, LoadingState } from "@/components/shared";
 import { DetailTabs } from "@/components/workspace";
 
 import type { Master } from "./ItemNameSelect";
-import ImportItemMapping from "./ImportItemMapping";
+import DescriptionMapping from "./DescriptionMapping";
 import { invalidateMappingQueries } from "./invalidate";
 import MappingChanges from "./MappingChanges";
 import MappingTable from "./MappingTable";
@@ -204,7 +204,7 @@ export default function MappingWorkspace() {
             <div className="space-y-3">
                 <DetailTabs recordKey="mapping-workspace" value={tab} onValueChange={setTab} ariaLabel="Mapping sources"
                     tabs={[
-                        { id: "import", label: `Licence Import Item${n("import")}`, render: () => <ImportItemMapping /> },
+                        { id: "import", label: `Licence Import Item${n("import")}`, render: () => <DescriptionMapping /> },
                         { id: "boe", label: `BOE${n("boe")}`, render: () => <SourceTab kind="boe"><DebitQueue kind="boe" /></SourceTab> },
                         { id: "allotment", label: `Allotment${n("allotment")}`, render: () => <SourceTab kind="allotment"><DebitQueue kind="allotment" /></SourceTab> },
                     ]} />

@@ -237,6 +237,16 @@ rather than blocked (the auditor considers this acceptable).
   licence overview + licence register 15/15. Review (react-reviewer): no blocking; fixed — target dropped on user change / failed
   load, plain-click hand-off only, always-mounted live region for the notice.
 
+## Completion round (owner "CONTINUE AND COMPLETE", 2026-11-19)
+
+- Re-verified the committed deep link (e3f13ca6) on the final tree; fixes: a pending target is cancelled only by a REAL filter
+  change (the filter panel's config re-sync is ignored — new test with a real filter config), and by page-size changes too;
+  notice uses theme warning tokens; mapping rows show "<status> · Not verified" when HSN / SION context could not be checked
+  (real conflicts stay "Conflict", records unchanged).
+- Tests (final tree): backend description filters / bulk / mapping / item-name mapping / balance calculator 147 passed (backend
+  unchanged since 84af5605, whose full gate passed); frontend gate exit 0 (lint, typecheck, 1017 unit, build); Playwright navigation +
+  licence overview + licence register 15/15. Final independent review: approve-with-nits (no blocking) → nits fixed.
+
 ## Next action
 
 Push: not authorised in the latest instruction (do not push). Optional: a real-data Playwright run of `/mapping`.

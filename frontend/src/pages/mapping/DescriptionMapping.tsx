@@ -53,6 +53,12 @@ const STATUS: Record<DescriptionStatus, { label: string; tone: Tone }> = {
     CONFLICT: { label: "Conflict", tone: "danger" },
     PARTIAL: { label: "Partially applied", tone: "info" },
 };
+/** Row status badge. Mapped but HSN / SION context not verifiable for some records → "… · Not verified" (never claim compatibility). */
+function statusBadge(row: DescriptionRow, dirty: boolean): { tone: Tone; label: string } {
+    if (dirty) return { tone: "primary", label: "Ready to save" };
+    if ((row.status === "APPLIED" || row.status === "AUTO") && row.counts.unverified) return { tone: "warning", label: `${STATUS[row.status].label} · Not verified` };
+    return STATUS[row.status];
+}
 const sameSet = (a: Master[], b: Master[]) => a.length === b.length && a.every((x) => b.some((y) => y.item_id === x.item_id));
 const criteriaBody = (c: Criteria) => ({ filters: c.filters, status: c.status, q: c.search });
 
@@ -238,7 +244,7 @@ export default function DescriptionMapping() {
                                         onChange={(next) => { setPicked((p) => ({ ...p, [row.key]: { items: next, base: row.mapping?.version ?? 0 } })); setErrors((e) => { const n = { ...e }; delete n[row.key]; return n; }); }} />
                                     {errors[row.key] && <div role="alert" id={errId} className="mt-0.5 max-w-[22rem] text-[11px] text-destructive">{errors[row.key]}</div>}
                                 </td>
-                                <td className="px-2 py-1.5"><StatusBadge tone={dirty ? "primary" : STATUS[row.status].tone} label={dirty ? "Ready to save" : STATUS[row.status].label} /></td>
+                                <td className="px-2 py-1.5"><StatusBadge {...statusBadge(row, dirty)} /></td>
                                 <td className="px-2 py-1.5 text-right">{data.can_apply && (row.status === "PARTIAL" && !dirty && row.mapping
                                     ? <Button size="sm" variant="outline" disabled={busy} aria-label={`Retry applying ${row.description}`} onClick={() => retry.mutate(row)}><RotateCcw className="size-3.5" />Retry</Button>
                                     : <Button size="sm" disabled={!dirty || !current.length || busy} aria-describedby={errors[row.key] ? errId : undefined}

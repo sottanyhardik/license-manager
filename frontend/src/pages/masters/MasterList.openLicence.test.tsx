@@ -19,8 +19,9 @@ const authValue = { user: { id: 1, username: "t", is_superuser: true, roles: [] 
     hasRole: () => true, hasAnyRole: () => true, isSuperAdmin: () => true, canManageUsers: () => true };
 const lic = (id: number, n: string) => ({ id, license_number: n, exporter: { id: 1, name: "ACME" }, license_date: "2024-01-01", license_expiry_date: "2027-01-01", balance_cif: "100.00", is_active: true });
 const page1 = [lic(1, "0310835340"), lic(2, "0310835341")];
+let filterConfig: Record<string, unknown> = {};
 const meta = (results: unknown[]) => ({ count: results.length, results, list_display: ["license_number"], form_fields: [], search_fields: ["license_number"], filter_fields: [],
-    filter_config: {}, ordering_fields: [], nested_field_defs: {}, nested_list_display: {}, field_meta: {}, default_filters: {}, inline_editable: [],
+    filter_config: filterConfig, ordering_fields: [], nested_field_defs: {}, nested_list_display: {}, field_meta: {}, default_filters: {}, inline_editable: [],
     current_page: 1, total_pages: 1, page_size: 25, has_next: false, has_previous: false });
 
 let lastSearch = "";
@@ -37,6 +38,7 @@ describe("Licence List opens a licence handed over by a Mapping licence chip", (
     beforeEach(() => {
         vi.clearAllMocks();
         sessionStorage.clear();
+        filterConfig = {};
         getMock.mockImplementation((url: string, cfg?: { params?: Record<string, unknown> }) => {
             if (url !== "licenses/") return Promise.resolve({ data: null }); // workspace endpoints: not under test here
             const p = cfg?.params ?? {};
@@ -89,6 +91,19 @@ describe("Licence List opens a licence handed over by a Mapping licence chip", (
         await new Promise((r) => setTimeout(r, 400)); // failed load settles; the target is dropped
         expect(screen.queryByRole("button", { name: "Collapse license 0310835341" })).toBeNull();
         expect(listParams().every((p) => p.license_number === undefined)).toBe(true); // no lookup was attempted
+    });
+
+    it("still opens the target with a real filter panel (its config-driven re-sync is not a user change)", async () => {
+        filterConfig = {
+            is_expired: { type: "exact", label: "Is Expired" }, flags__is_null: { type: "exact", label: "Flags" },
+            purchase_status: { type: "choice", label: "Purchase Status", choices: [["11", "A"], ["10", "B"], ["1", "C"]] },
+            license_date: { type: "date_range", label: "Licence Date" },
+        };
+        requestOpenLicence({ id: 77, license_number: "0210118391" });
+        renderAt(LICENCE_LIST_URL);
+        expect(await expandedButton("0210118391")).toHaveAttribute("aria-expanded", "true");
+        await new Promise((r) => setTimeout(r, 700)); // past the panel's 400 ms auto-apply window
+        expect(screen.getByRole("button", { name: "Collapse license 0210118391" })).toHaveAttribute("aria-expanded", "true");
     });
 });
 

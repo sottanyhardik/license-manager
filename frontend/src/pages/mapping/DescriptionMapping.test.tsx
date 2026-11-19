@@ -119,5 +119,17 @@ describe("Licence import description mapping (map once)", () => {
         expect(within(tr).queryByText("Ready to save")).toBeNull();
         expect(within(tr).getByRole("button", { name: /Save mapping/ })).toBeDisabled();
     });
+
+    it("shows a visible Not verified status when HSN / SION context could not be checked; conflicts stay Conflict", async () => {
+        rows = [
+            row({ key: "U", description: "UNVERIFIED OIL", status: "APPLIED", counts: { applied: 2, auto: 0, conflict: 0, stale: 0, unverified: 1 }, mapping: { id: 5, version: 1, items: [{ item_id: 5, name: "PKO" }] } }),
+            row({ key: "C", description: "CONFLICT OIL", status: "CONFLICT", conflicts: ["HSN 2710 is outside the chapters used by PKO (15)"], mapping: { id: 6, version: 1, items: [{ item_id: 5, name: "PKO" }] } }),
+        ];
+        setup();
+        expect(within(await tableRow("UNVERIFIED OIL")).getByText("Applied · Not verified")).toBeInTheDocument();
+        const c = await tableRow("CONFLICT OIL");
+        expect(within(c).getByText("Conflict")).toBeInTheDocument();
+        expect(within(c).getByText(/outside the chapters/)).toBeInTheDocument();
+    });
 });
 

@@ -231,6 +231,8 @@ export default function MasterList() {
         const { filters } = parseListUrl(location.search);
         return Object.keys(filters).length > 0 ? filters : getDefaultFilters(entityName);
     });
+    const filterParamsRef = useRef(filterParams);
+    filterParamsRef.current = filterParams;
     const backendDefaultsApplied = useRef(false);
     // Canonical search string of the last URL write made by the sync effect.
     // The init effect skips that echo so it never re-seeds state (page size,
@@ -655,9 +657,14 @@ export default function MasterList() {
         // filters arrives in API format (license_date__gte etc.) from AdvancedFilter.
         // Keep in API format — queryParams spreads filterParams directly into the API call.
         // uiFilterParams (derived via useMemo) converts back to UI format for display.
-        setFilterParams(normalizeFilterValues(filters));
+        const next = normalizeFilterValues(filters);
+        const same = (a: Record<string, string>, b: Record<string, string>) =>
+            JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+        // A real change by the user cancels a pending deep-link target; a no-op re-emit (e.g. the filter panel
+        // re-syncing once its config arrives) must not.
+        if (!same(filterParamsRef.current, next)) setLicenceTarget(null);
+        setFilterParams(next);
         setCurrentPage(1);
-        setLicenceTarget(null); // the user changed the list: a pending deep-link target must not override that later
     }, []);
     // Deep-link lookups change the filters without cancelling the target.
     const applyLicenceLookup = useCallback((filters: Record<string, unknown>) => {
@@ -718,6 +725,7 @@ export default function MasterList() {
     };
 
     const handlePageSizeChange = (size) => {
+        setLicenceTarget(null);
         setPageSize(size);
         setCurrentPage(1);
     };
@@ -1199,7 +1207,7 @@ export default function MasterList() {
                     {/* Licenses — extracted to dedicated component */}
                     {entityName === 'licenses' && (
                         <div role="status" aria-live="polite">{licenceTargetNotice && (
-                            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-sm text-warning-text">
                                 <span>Licence {licenceTargetNotice.license_number} is not in the current filters (it may be expired or have another purchase status).</span>
                                 <button type="button" className="font-medium underline" onClick={() => {
                                     setLicenceTarget({ ...licenceTargetNotice, searched: true });

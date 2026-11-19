@@ -5,7 +5,7 @@ exactly the same filtered, prefetched licence population.
 """
 from decimal import Decimal
 
-from django.db.models import Prefetch
+from django.db.models import Q, Prefetch
 
 from apps.core.constants import CO, GE, MI
 from apps.core.models import ItemNameModel
@@ -18,7 +18,7 @@ def select_pivot_licenses(days: int = 30, sion_norm: str = None,
                           company_ids: str = None, exclude_company_ids: str = None,
                           min_balance: int = 200, license_status: str = 'active',
                           expiry_date_from: str = None, expiry_date_to: str = None,
-                          purchase_status: str = None) -> list:
+                          purchase_status: str = None, include_norm_links: bool = False) -> list:
     from datetime import date, timedelta
     today = date.today()
 
@@ -103,8 +103,16 @@ def select_pivot_licenses(days: int = 30, sion_norm: str = None,
 
     # If sion_norm specified, filter prefetch queries to only that norm.
     if sion_norm:
-        item_names_qs = item_names_qs.filter(sion_norm_class__norm_class=sion_norm)
+        if include_norm_links:
+            # Intelligence views: a master is legitimate for the norm through its ``norms`` M2M (the authoritative,
+            # multi-norm field) as well as the legacy single-norm FK — e.g. canonical "PP" (FK A3627, norms E1/E5/…).
+            # The classic pivot keeps the legacy FK filter unchanged.
+            item_names_qs = item_names_qs.filter(Q(sion_norm_class__norm_class=sion_norm) | Q(norms__norm_class=sion_norm)).distinct()
+        else:
+            item_names_qs = item_names_qs.filter(sion_norm_class__norm_class=sion_norm)
         export_items_qs = export_items_qs.filter(norm_class__norm_class=sion_norm)
+    if include_norm_links:
+        item_names_qs = item_names_qs.prefetch_related("norms")
 
     # Optimize with select_related and prefetch_related to reduce queries.
     # balance_cif / balance_report_notes / condition_sheet / current_owner now

@@ -36,6 +36,13 @@ QTY_TOL = Decimal("0.001")
 CIF_TOL = Decimal("0.01")
 
 CORRECT, UNDERUTILIZED, WARNING, BLOCKED, OVERPLANNED = "CORRECT", "UNDERUTILIZED", "WARNING", "BLOCKED", "OVERPLANNED"
+# One headline status per consolidated product: the most severe of its licence cells.
+STATUS_SEVERITY = (OVERPLANNED, WARNING, UNDERUTILIZED, CORRECT, BLOCKED)
+INTEGRITY_FIELDS = ("entitlement_qty", "allotted_qty", "debited_qty", "billed_qty", "balance_qty", "planned_qty", "planned_cif")
+
+
+def _headline_status(counts: dict[str, int]) -> str | None:
+    return next((s for s in STATUS_SEVERITY if counts.get(s)), None)
 
 
 def _d(value, default=DEC_0) -> Decimal:
@@ -57,13 +64,29 @@ def _licence_sion(licence) -> str | None:
     return ", ".join(norms) or None
 
 
-def _product_identity(item, sion: str | None) -> tuple[str, dict]:
+def _product_identity(item, sion: str | None, classified: dict | None = None) -> tuple[str, dict]:
     """Master-item identity of one import item (never guessed)."""
     names = list(item.items.all())
+    selections = (classified or {}).get(item.pk) if len(names) != 1 else None
+    if selections:
+        # Approved multi-product classification: one shared quantity / CIF, so the record stays ONE separate row —
+        # never attributed to each product (owner spec 2026-11-19 §6; allocation must be verified first).
+        ids = sorted({sel.item_id for sel in selections})
+        hsn = getattr(item.hs_code, "hs_code", None) if item.hs_code_id else None
+        return f"MULTI:{hsn or '-'}:{_norm_text(item.description)}:{'-'.join(map(str, ids))}:{sion or '-'}", {
+            "kind": "MULTI_PRODUCT", "item_name_id": None, "product": " + ".join(sorted({sel.item.name for sel in selections})), "sion": sion,
+            "mapping_basis": "Approved multi-product classification — shared quantity / CIF not allocated to the products (allocation pending)",
+            "classified_item_ids": ids,
+        }
     hsn = getattr(item.hs_code, "hs_code", None) if item.hs_code_id else None
     if len(names) == 1:
         name = names[0]
-        item_sion = name.sion_norm_class.norm_class if name.sion_norm_class_id else sion
+        # The licence's own norm when the master is legitimate for it (multi-norm canonical masters such as "PP",
+        # whose legacy FK names another norm); otherwise the master's legacy FK norm, as before.
+        licence_norms = {n.strip() for n in (sion or "").split(",") if n.strip()}
+        legit = {n.norm_class for n in name.norms.all()} if "norms" in getattr(name, "_prefetched_objects_cache", {}) else set()
+        own = sorted(licence_norms & legit)
+        item_sion = own[0] if own else (name.sion_norm_class.norm_class if name.sion_norm_class_id else sion)
         return f"ITEM:{name.pk}:{item_sion or '-'}", {
             "kind": "MAPPED", "item_name_id": name.pk, "product": name.name, "sion": item_sion,
             "mapping_basis": "Master item link (LicenseImportItemsModel.items)",
@@ -177,16 +200,24 @@ def build_intelligence(licences: list) -> dict[str, Any]:
             "other_adjustments_cif": _s(other), "components_reconcile": reconciles,
             "available_cif": _s(avail), "is_over_utilised": avail < DEC_0,
             "planned_cif": _s(planned), "final_balance_cif": _s(avail - planned),
+            # Part 15: a mapping change advanced the planning source revision and the re-plan has not applied yet —
+            # this licence's planned figures are provisional until it does.
+            "planning_stale": (getattr(lic, "planning_source_revision", 0) or 0) > (getattr(lic, "planning_applied_revision", 0) or 0),
             "utilisation_percent": _s(((original - avail) * 100 / original).quantize(Decimal("0.1"))) if original > 0 else None,
             "products": [],
         }
 
+    from apps.license.services.product_intelligence.multi_product import approved_by_import_item
+
+    classified = approved_by_import_item()
     products: dict[str, dict] = {}
     cells: dict[tuple[int, str], dict] = {}
+    # Unconsolidated per-source-record totals: the consolidated rows must reproduce them exactly.
+    raw_totals: dict[str, Decimal] = {field: DEC_0 for field in INTEGRITY_FIELDS}
     for lic in licences:
         sion = _licence_sion(lic)
         for item in lic.import_license.all():
-            key, ident = _product_identity(item, sion)
+            key, ident = _product_identity(item, sion, classified)
             hsn = getattr(item.hs_code, "hs_code", None) if item.hs_code_id else None
             debited = sum((_d(r.qty) for r in usage.get(item.pk, {}).get("boes", [])), DEC_000)
             allotted = sum((_d(r.qty) for r in usage.get(item.pk, {}).get("allotments", [])), DEC_000)
@@ -210,9 +241,13 @@ def build_intelligence(licences: list) -> dict[str, Any]:
             for field, value in (("entitlement_qty", qty), ("allotted_qty", allotted), ("debited_qty", debited), ("billed_qty", billed_q),
                                  ("balance_qty", balance), ("planned_qty", planned_qty), ("planned_cif", planned_cif)):
                 product[field] += value
+            for field, value in (("entitlement_qty", qty), ("allotted_qty", allotted), ("debited_qty", debited), ("billed_qty", billed_q),
+                                 ("balance_qty", balance), ("planned_qty", planned_qty), ("planned_cif", planned_cif)):
+                raw_totals[field] += value
             product["source_records"].append({
                 "license_id": lic.pk, "license_number": lic.license_number, "import_item_id": item.pk,
                 "serial_number": item.serial_number, "description": item.description, "hsn_code": hsn,
+                "item_name_ids": sorted(n.pk for n in item.items.all()), "sion": ident["sion"],
             })
             cell = cells.setdefault((lic.pk, key), {
                 "license_id": lic.pk, "license_number": lic.license_number, "product_key": key, "product": ident["product"],
@@ -236,7 +271,7 @@ def build_intelligence(licences: list) -> dict[str, Any]:
         status, reasons = _status({**cell, "balance_qty": cell["balance_qty"], "planned_qty": cell["planned_qty"]}, licence)
         status_counts[status] += 1
         out = {k: (_s(v) if isinstance(v, Decimal) else v) for k, v in cell.items()}
-        out.update({"status": status, "reasons": reasons, "licence_available_cif": licence["available_cif"],
+        out.update({"status": status, "reasons": reasons, "company": licence["company"], "licence_available_cif": licence["available_cif"],
                     "licence_final_balance_cif": licence["final_balance_cif"],
                     "planning_eligible": status == UNDERUTILIZED})
         eligibility.append(out)
@@ -251,6 +286,11 @@ def build_intelligence(licences: list) -> dict[str, Any]:
             **{k: (_s(v) if isinstance(v, Decimal) else v) for k, v in prod.items() if k not in {"hsn_codes", "aliases", "licence_ids"}},
             "hsn_codes": sorted(prod["hsn_codes"]), "aliases": sorted(prod["aliases"]), "eligible_licences": len(prod["licence_ids"]),
             "source_record_count": len(prod["source_records"]), "status_counts": dict(prod_status),
+            "status": _headline_status(prod_status),
+            # Licence-level CIF of the licences carrying this product. Shared with the licence's other
+            # products — informational, never additive across product rows.
+            "licences_available_cif": _s(sum((_d(licence_rows[i]["available_cif"]) for i in prod["licence_ids"]), DEC_0)),
+            "licences_remaining_cif": _s(sum((_d(licence_rows[i]["final_balance_cif"]) for i in prod["licence_ids"]), DEC_0)),
             # Master-item grouping is authoritative (owner decision), but HSN codes from different
             # chapters under one master item are surfaced for review — never silently accepted.
             "hsn_chapters": sorted({h[:2] for h in prod["hsn_codes"] if h}),
@@ -280,10 +320,23 @@ def build_intelligence(licences: list) -> dict[str, Any]:
             "mapped": sum(1 for r in product_rows if r["kind"] == "MAPPED"),
             "ambiguous": sum(1 for r in product_rows if r["kind"] == "AMBIGUOUS"),
             "unmapped": sum(1 for r in product_rows if r["kind"] == "UNMAPPED"),
+            "multi_product": sum(1 for r in product_rows if r["kind"] == "MULTI_PRODUCT"),
             "merged_source_records": sum(r["source_record_count"] for r in product_rows if r["kind"] == "MAPPED" and r["source_record_count"] > 1),
             "mapping_review": sum(1 for r in product_rows if r["mapping_review"]),
         },
     }
+    consolidated = {field: sum((_d(r[field]) for r in product_rows), DEC_0) for field in INTEGRITY_FIELDS}
+    overview["integrity"] = {
+        "source_record_count": len(import_items),
+        "consolidated_source_record_count": sum(r["source_record_count"] for r in product_rows),
+        "consolidated_product_count": len(product_rows),
+        "pending_mapping_count": overview["consolidation"]["unmapped"] + overview["consolidation"]["ambiguous"],
+        "source_totals": {k: _s(v) for k, v in raw_totals.items()},
+        "consolidated_totals": {k: _s(v) for k, v in consolidated.items()},
+        "preserved": len(import_items) == sum(r["source_record_count"] for r in product_rows)
+        and all(raw_totals[k] == consolidated[k] for k in INTEGRITY_FIELDS),
+    }
+    overview["planning_stale_licence_count"] = sum(1 for r in licence_rows.values() if r["planning_stale"])
     overview["unreconciled_licence_count"] = sum(1 for r in licence_rows.values() if not r["components_reconcile"])
     overview["bases"] = {
         "licence": "Canonical LicenseBalanceCalculator (financial engine): allocation-aware BOE debit, BOE-netted outstanding allotments, billed without BOE, signed balance.",

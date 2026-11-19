@@ -18,59 +18,15 @@ import { DetailTabs } from "@/components/workspace";
 import { cn } from "@/lib/utils";
 import { openAuthedFile } from "@/utils/documentDownload";
 import { EntitlementPlanningReport } from "@/pages/planning/EntitlementPlanningReport";
+import BulkConsolidation from "./BulkConsolidation";
+import MappingChanges from "./MappingChanges";
+import ProductIntelligenceAdmin from "./ProductIntelligenceAdmin";
+import ProductMatchingView from "./ProductMatchingView";
 
-type Money = string;
-type Status = "CORRECT" | "UNDERUTILIZED" | "WARNING" | "BLOCKED" | "OVERPLANNED";
-export interface IntelLicence {
-    license_id: number; license_number: string; sion: string | null; company: string | null; expiry_date: string | null; purchase_status: string | null;
-    original_cif: Money; boe_cif: Money; allotment_cif: Money; billed_cif: Money; other_adjustments_cif: Money; available_cif: Money;
-    is_over_utilised: boolean; components_reconcile: boolean; planned_cif: Money; final_balance_cif: Money; utilisation_percent: string | null; products: string[];
-}
-export interface IntelProduct {
-    key: string; kind: "MAPPED" | "AMBIGUOUS" | "UNMAPPED"; item_name_id: number | null; product: string; sion: string | null; mapping_basis: string;
-    hsn_codes: string[]; aliases: string[]; hsn_chapters: string[]; mapping_review: string | null; eligible_licences: number; source_record_count: number;
-    source_records: { license_id: number; license_number: string; import_item_id: number; serial_number: number; description: string | null; hsn_code: string | null }[];
-    entitlement_qty: string; allotted_qty: string; debited_qty: string; billed_qty: string; balance_qty: string; max_unit_price: string | null;
-    planned_qty: string; planned_cif: Money; utilisation_percent: string | null; status_counts: Partial<Record<Status, number>>;
-}
-export interface IntelCell {
-    license_id: number; license_number: string; product_key: string; product: string; kind: string; sion: string | null; status: Status; reasons: string[];
-    entitlement_qty: string; debited_qty: string; allotted_qty: string; billed_qty: string; balance_qty: string; planned_qty: string; planned_cif: Money;
-    max_unit_price: string | null; licence_available_cif: Money; licence_final_balance_cif: Money; planning_eligible: boolean;
-    references: { boes: string[]; allotments: string[] };
-}
-export interface IntelReport {
-    overview: Record<string, unknown> & { consolidation: Record<string, number>; status_counts: Partial<Record<Status, number>>; bases: { licence: string; item: string } };
-    licences: IntelLicence[]; products: IntelProduct[]; eligibility: IntelCell[];
-}
-type Recommendation = {
-    rank: number; license_id: number; license_number: string; expiry_date: string | null; sion: string; product: string | null; rule_priority: number | null;
-    unit_price: string; recommended_qty: string; recommended_cif: Money; existing_qty: string; existing_cif: Money; additional_qty: string; additional_cif: Money;
-    licence_available_cif: Money; remaining_licence_cif_after: Money; cif_status: string | null; reason: string; alternatives: string[];
-};
+import { fmt, neg, NUM, STATUS, TD, TH, usd, type IntelCell, type IntelLicence, type IntelProduct, type IntelReport, type Integrity, type IntegrityField, type Recommendation, type Selection, type Status } from "./intelligenceShared";
+import ProductAnalysisView from "./ProductAnalysisView";
 
-const STATUS: Record<Status, { tone: Tone; label: string }> = {
-    CORRECT: { tone: "success", label: "Correct" },
-    UNDERUTILIZED: { tone: "primary", label: "Underutilized" },
-    WARNING: { tone: "warning", label: "Warning" },
-    BLOCKED: { tone: "danger", label: "Blocked" },
-    OVERPLANNED: { tone: "danger", label: "Overplanned" },
-};
-const fmt = (v: string | null | undefined, digits = 2) => {
-    if (v == null || v === "") return "—";
-    const n = Number(v);
-    return Number.isFinite(n) ? n.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: digits }) : String(v);
-};
-/** Display-only: sign before the currency symbol (−$1,234), value from the backend string. */
-const usd = (v: string | null | undefined) => {
-    if (v == null || v === "") return "—";
-    const text = String(v).trim();
-    return text.startsWith("-") ? `−$${fmt(text.slice(1))}` : `$${fmt(text)}`;
-};
-const neg = (v: string | null | undefined) => v != null && v.trim().startsWith("-");
-const TH = "sticky top-0 z-[1] bg-muted px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
-const TD = "px-2.5 py-1.5 align-top";
-const NUM = "text-right tabular-nums whitespace-nowrap";
+export type { IntelCell, IntelLicence, IntelProduct, IntelReport } from "./intelligenceShared";
 
 function Metric({ label, value, tone, hint }: { label: string; value: string; tone?: "blue" | "green" | "red" | "amber"; hint?: string }) {
     return (
@@ -146,76 +102,41 @@ function OverviewView({ data }: { data: IntelReport }) {
                     <p className="mt-3 text-[11px] text-muted-foreground"><strong>Licence figures:</strong> {o.bases.licence}<br /><strong>Product quantities:</strong> {o.bases.item}</p>
                 </section>
             </div>
+            {o.integrity && <IntegrityPanel integrity={o.integrity} />}
         </div>
     );
 }
 
-type Selection = { product: string | null; licence: number | null; mode: "entitlement" | "planning" };
+const INTEGRITY_ROWS: [IntegrityField, string, boolean][] = [
+    ["entitlement_qty", "Total entitlement qty", false], ["allotted_qty", "Allotted qty", false], ["debited_qty", "Debited qty (BOE)", false],
+    ["billed_qty", "Billed without BOE qty", false], ["balance_qty", "Available qty", false], ["planned_qty", "Planned qty", false], ["planned_cif", "Planned CIF", true],
+];
 
-function ProductsView({ data, selection, onSelect }: { data: IntelReport; selection: Selection; onSelect: (s: Partial<Selection>) => void }) {
-    const [q, setQ] = useState("");
-    const [kind, setKind] = useState("all");
-    const [open, setOpen] = useState<string | null>(null);
-    const licenceProducts = selection.licence != null ? new Set(data.licences.find((l) => l.license_id === selection.licence)?.products ?? []) : null;
-    const rows = data.products.filter((p) => (kind === "all" || p.kind === kind)
-        && (!q || `${p.product} ${p.sion} ${p.hsn_codes.join(" ")} ${p.aliases.join(" ")}`.toLowerCase().includes(q.toLowerCase())));
+/** Before (one row per source record) vs after (consolidated products): totals must match exactly. */
+function IntegrityPanel({ integrity: g }: { integrity: Integrity }) {
     return (
-        <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-2.5 top-2 size-4 text-muted-foreground" aria-hidden="true" /><input aria-label="Search products" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Product, HSN or alias…" className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm" /></div>
-                <select aria-label="Mapping kind" value={kind} onChange={(e) => setKind(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs"><option value="all">All mappings</option><option value="MAPPED">Master item</option><option value="AMBIGUOUS">Ambiguous</option><option value="UNMAPPED">Unmapped</option></select>
-                <span className="text-xs text-muted-foreground">{rows.length} of {data.products.length} products</span>
-                {selection.licence != null && <Button size="sm" variant="ghost" onClick={() => onSelect({ licence: null })}><X className="size-3.5" />Clear licence highlight</Button>}
+        <section aria-label="Consolidation integrity" className="rounded-lg border border-border/70 bg-card p-3 text-sm">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+                <h3 className="font-semibold">Consolidation integrity — source records vs consolidated products</h3>
+                <StatusBadge tone={g.preserved ? "success" : "danger"} label={g.preserved ? "Consolidation preserved every record and total" : "Totals differ — investigate"} />
             </div>
-            <div className="max-h-[70vh] overflow-auto rounded-lg border border-border/70">
-                <table className="w-full min-w-[1180px] text-sm" aria-label="Products">
-                    <thead><tr><th className={TH}>Product</th><th className={TH}>SION</th><th className={TH}>HSN codes</th><th className={`${TH} text-right`}>Licences</th><th className={`${TH} text-right`}>Entitlement qty</th><th className={`${TH} text-right`}>Allotted</th><th className={`${TH} text-right`}>Debited</th><th className={`${TH} text-right`}>Balance qty</th><th className={`${TH} text-right`}>Max price</th><th className={`${TH} text-right`}>Planned qty</th><th className={`${TH} text-right`}>Planned CIF</th><th className={`${TH} text-right`}>Util.</th><th className={TH}>Status</th></tr></thead>
+            <p className="mb-2 text-[11px] text-muted-foreground">Checks that grouping into products loses or duplicates nothing. The figures themselves come from the canonical engine and item-level records described above.</p>
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-xs" aria-label="Consolidation totals">
+                    <thead><tr className="text-left text-muted-foreground"><th className="py-1 font-medium">Measure</th><th className="py-1 text-right font-medium">Source records</th><th className="py-1 text-right font-medium">Consolidated</th><th className="py-1 text-right font-medium">Difference</th></tr></thead>
                     <tbody>
-                        {rows.map((p) => {
-                            const highlighted = licenceProducts ? licenceProducts.has(p.key) : selection.product === p.key;
-                            const muted = licenceProducts ? !licenceProducts.has(p.key) : false;
-                            const usable = p.kind === "MAPPED" && Number(p.balance_qty) > 0;
-                            return (
-                                <Fragment key={p.key}>
-                                    <tr className={cn("border-t border-border/50", highlighted && "bg-primary/10", muted && "opacity-40", usable && !highlighted && "hover:bg-success/5")}>
-                                        <td className={TD}>
-                                            <div className="flex items-start gap-1">
-                                                <button type="button" aria-expanded={open === p.key} aria-label={`${open === p.key ? "Collapse" : "Expand"} ${p.product}`} onClick={() => setOpen(open === p.key ? null : p.key)} className="mt-0.5 rounded p-0.5 text-muted-foreground hover:bg-muted"><ChevronRight className={cn("size-3.5 transition-transform", open === p.key && "rotate-90")} /></button>
-                                                <button type="button" onClick={() => onSelect({ product: selection.product === p.key ? null : p.key, licence: null })} className="text-left font-medium hover:underline" aria-pressed={selection.product === p.key}>{p.product}</button>
-                                            </div>
-                                            {p.kind !== "MAPPED" && <div className="ml-5 text-[11px] text-amber-600">{p.kind === "AMBIGUOUS" ? "Ambiguous mapping" : "Unmapped"}</div>}
-                                            {p.mapping_review && <div className="ml-5 text-[11px] text-amber-600">{p.mapping_review}</div>}
-                                        </td>
-                                        <td className={TD}>{p.sion ?? "—"}</td>
-                                        <td className={cn(TD, "max-w-[12rem] truncate font-mono text-[11px]")} title={p.hsn_codes.join(", ")}>{p.hsn_codes.join(", ") || "—"}</td>
-                                        <td className={cn(TD, NUM)}>{p.eligible_licences}</td>
-                                        <td className={cn(TD, NUM)}>{fmt(p.entitlement_qty, 3)}</td>
-                                        <td className={cn(TD, NUM)}>{fmt(p.allotted_qty, 3)}</td>
-                                        <td className={cn(TD, NUM)}>{fmt(p.debited_qty, 3)}</td>
-                                        <td className={cn(TD, NUM, usable && "font-semibold text-success", neg(p.balance_qty) && "text-destructive")}>{fmt(p.balance_qty, 3)}</td>
-                                        <td className={cn(TD, NUM)}>{p.max_unit_price ? usd(p.max_unit_price) : "—"}</td>
-                                        <td className={cn(TD, NUM, "text-primary")}>{fmt(p.planned_qty, 3)}</td>
-                                        <td className={cn(TD, NUM, "text-primary")}>{usd(p.planned_cif)}</td>
-                                        <td className={cn(TD, NUM)}>{p.utilisation_percent ? `${p.utilisation_percent}%` : "—"}</td>
-                                        <td className={TD}><div className="flex flex-wrap gap-1">{(Object.keys(STATUS) as Status[]).filter((s) => p.status_counts[s]).map((s) => <StatusBadge key={s} tone={STATUS[s].tone} label={`${STATUS[s].label} ${p.status_counts[s]}`} />)}</div></td>
-                                    </tr>
-                                    {open === p.key && (
-                                        <tr className="bg-muted/20"><td colSpan={13} className="px-4 py-2">
-                                            <p className="mb-1 text-xs text-muted-foreground">{p.mapping_basis} · {p.source_record_count} source record{p.source_record_count === 1 ? "" : "s"}</p>
-                                            <table className="w-full text-xs" aria-label={`Source records of ${p.product}`}><thead><tr className="text-left text-muted-foreground"><th className="py-1">Licence</th><th>Sl#</th><th>HSN</th><th>Original description</th></tr></thead>
-                                                <tbody>{p.source_records.map((r) => <tr key={r.import_item_id} className="border-t border-border/40"><td className="py-1 font-mono">{r.license_number}</td><td>{r.serial_number}</td><td className="font-mono">{r.hsn_code ?? "—"}</td><td>{r.description ?? "—"}</td></tr>)}</tbody></table>
-                                        </td></tr>
-                                    )}
-                                </Fragment>
-                            );
+                        <tr className="border-t border-border/40"><td className="py-1">Rows</td><td className={NUM}>{fmt(String(g.source_record_count), 0)}</td><td className={NUM}>{fmt(String(g.consolidated_product_count), 0)} products ({g.pending_mapping_count} pending mapping)</td><td className={cn(NUM, g.source_record_count !== g.consolidated_source_record_count && "text-destructive")}>{g.source_record_count === g.consolidated_source_record_count ? "all records kept" : `${g.source_record_count - g.consolidated_source_record_count} missing`}</td></tr>
+                        {INTEGRITY_ROWS.map(([field, label, money]) => {
+                            const same = g.source_totals[field] === g.consolidated_totals[field];
+                            return <tr key={field} className="border-t border-border/40"><td className="py-1">{label}</td><td className={NUM}>{money ? usd(g.source_totals[field]) : fmt(g.source_totals[field], 3)}</td><td className={NUM}>{money ? usd(g.consolidated_totals[field]) : fmt(g.consolidated_totals[field], 3)}</td><td className={cn(NUM, same ? "text-success" : "text-destructive")}>{same ? "0" : "mismatch"}</td></tr>;
                         })}
                     </tbody>
                 </table>
-                {!rows.length && <EmptyState title="No products" description="Adjust the search or mapping filter." />}
             </div>
-        </div>
+        </section>
     );
 }
+
 
 function LicencesView({ data, selection, onSelect }: { data: IntelReport; selection: Selection; onSelect: (s: Partial<Selection>) => void }) {
     const [open, setOpen] = useState<number | null>(null);
@@ -262,6 +183,7 @@ function LicencesView({ data, selection, onSelect }: { data: IntelReport; select
                                     <span className="text-xs text-muted-foreground">{lic.sion} · {lic.company ?? "—"} · Exp {lic.expiry_date ?? "—"}</span>
                                     {match && <span className="text-xs text-primary">{selection.mode === "planning" ? "Eligible for more planning" : "Entitlement includes product"}: {fmt(match.balance_qty, 3)} qty · max {match.max_unit_price ? usd(match.max_unit_price) : "—"}</span>}
                                     <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-right text-xs tabular-nums">
+                                        {lic.planning_stale && <StatusBadge tone="warning" label="Re-planning" title="A mapping change is being applied — planned figures are provisional" />}
                                         {lic.is_over_utilised && <StatusBadge tone="danger" label="Over-utilised" />}
                                         {!lic.components_reconcile && <StatusBadge tone="warning" label="Reconcile" />}
                                         {([["Original", lic.original_cif, ""], ["BOE", lic.boe_cif, ""], ["Allotment", lic.allotment_cif, ""], ["Available", lic.available_cif, "text-success"], ["Planned", lic.planned_cif, "text-primary"], ["Final", lic.final_balance_cif, neg(lic.final_balance_cif) ? "text-destructive" : "text-success"]] as const).map(([label, value, tone]) => (
@@ -400,6 +322,20 @@ function PlanningView({ data, query }: { data: IntelReport; query: string }) {
 
 export type IntelligenceQuery = string;
 
+/** Part 15: never present planned figures as current while a mapping change is still re-planning (or failed). */
+function PropagationBanner({ overview, onOpen }: { overview: IntelReport["overview"]; onOpen: () => void }) {
+    const stale = Number(overview.planning_stale_licence_count ?? 0);
+    const prop = (overview.mapping_propagation ?? { propagating: 0, failed: 0 }) as { propagating: number; failed: number };
+    if (!stale && !prop.propagating && !prop.failed) return null;
+    return (
+        <div role="status" className={cn("flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm", prop.failed ? "border-destructive/40 bg-destructive/5" : "border-amber-500/40 bg-amber-500/10")}>
+            <span>{prop.failed ? `${prop.failed} mapping change(s) failed to re-plan — the previous plans are still in place. ` : ""}
+                {stale ? `${stale} licence(s) are being re-planned after a mapping change — their planned quantities and CIF are provisional.` : prop.propagating ? `${prop.propagating} mapping change(s) are re-planning.` : ""}</span>
+            <Button size="sm" variant="outline" onClick={onOpen}>View mapping changes</Button>
+        </div>
+    );
+}
+
 /** Four views over one report payload; selection highlights flow between Products and Licences. */
 export default function ItemPivotIntelligence({ query }: { query: IntelligenceQuery }) {
     const [tab, setTab] = useState("overview");
@@ -421,6 +357,7 @@ export default function ItemPivotIntelligence({ query }: { query: IntelligenceQu
     if (!data.licences.length) return <EmptyState title="No licences match" description="Adjust the norm or filters." />;
     return (
         <div className="space-y-2">
+            <PropagationBanner overview={data.overview} onOpen={() => setTab("mapping-changes")} />
             <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button size="sm" variant="outline" disabled={exporting} onClick={async () => {
                     setExporting(true);
@@ -435,9 +372,13 @@ export default function ItemPivotIntelligence({ query }: { query: IntelligenceQu
                 className="min-w-0 [&_[role=tablist]]:flex-nowrap [&_[role=tablist]]:overflow-x-auto [&_[role=tab]]:shrink-0"
                 tabs={[
                     { id: "overview", label: "Overview", render: () => <OverviewView data={data} /> },
-                    { id: "products", label: `Product Analysis (${data.products.length})`, render: () => <ProductsView data={data} selection={selection} onSelect={setSelection} /> },
+                    { id: "products", label: `Product Analysis (${data.products.length})`, render: () => <ProductAnalysisView data={data} query={query} selection={selection} onSelect={setSelection} /> },
                     { id: "licences", label: `Licence Analysis (${data.licences.length})`, render: () => <LicencesView data={data} selection={selection} onSelect={setSelection} /> },
                     { id: "planning", label: "Planning & Optimization", render: () => <PlanningView data={data} query={query} /> },
+                    { id: "matching", label: `Product Matching (${data.overview.consolidation.unmapped + data.overview.consolidation.ambiguous})`, render: () => <ProductMatchingView query={query} /> },
+                    { id: "mapping-changes", label: "Mapping changes", render: () => <MappingChanges /> },
+                    { id: "bulk-consolidation", label: "Bulk consolidation", render: () => <BulkConsolidation defaultSion={new URLSearchParams(query).get("sion_norm") ?? ""} /> },
+                    { id: "intelligence-admin", label: "Intelligence admin", render: () => <ProductIntelligenceAdmin /> },
                 ]}
             />
         </div>

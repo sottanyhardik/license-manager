@@ -46,7 +46,11 @@ async function mockApi(page: Page) {
     if (path === "auth/me/") return json(user);
     if (path === "item-pivot/available-norms/") return json(data.norms);
     if (path === "item-pivot/intelligence/") return json(data.intel[url.searchParams.get("sion_norm") ?? NORM] ?? data.intel[NORM]);
-    if (path === "item-pivot/recommendations/") return json(Object.values(data.recs as Record<string, { data: unknown }>)[0]?.data ?? { read_only: true, errors: [], recommendations: [] });
+    if (path === "item-pivot/matching/admin/") return json(data.admin ?? { can_manage: true, inventory: [], labels: { verified: 0, positive: 0, negative: 0, required: { total: 60, per_class: 20 }, new_since_last_dataset: 0 }, active_model: null, promotion_gate: { precision: 0.95, false_merge_rate: 0.05, recall: 0.5, ece: 0.1 }, models: [], datasets: [], aliases: 0, events: [] });
+    if (path === "item-pivot/matching/aliases/") return json({ aliases: [] });
+    if (path === "item-pivot/matching/health/") return json(data.health ?? { model: { ok: false }, worker: { ok: false }, available_memory_mb: null });
+    if (path === "item-pivot/matching/") return json((data.matching?.suggestions ? data.matching : data.matching?.[url.searchParams.get("sion_norm") ?? NORM]) ?? { matcher: "deterministic", can_approve: true, summary: {}, suggestions: [], latest_job: null, decisions: [] });
+    if (path === "item-pivot/recommendations/") return json(((data.recs ?? {}) as Record<string, { data: unknown }>)[NORM]?.data ?? Object.values((data.recs ?? {}) as Record<string, { data: unknown }>)[0]?.data ?? { read_only: true, errors: [], recommendations: [] });
     return json({ results: [], count: 0 });
   });
   return blocked;
@@ -67,6 +71,12 @@ test("item pivot intelligence — four views at 1440", async ({ page }, testInfo
   await page.getByRole("tab", { name: /Product Analysis/ }).click();
   await expect(page.getByRole("table", { name: "Products" })).toBeVisible();
   await shot(page, testInfo.outputPath("02-products.png"));
+  const products = page.getByRole("table", { name: "Products" });
+  await products.locator("tbody tr button[aria-expanded]").first().click();
+  await expect(page.getByRole("region", { name: /^Entitlement summary of / })).toBeVisible();
+  await expect(page.getByRole("region", { name: /^Eligible licences for / })).toBeVisible();
+  await shot(page, testInfo.outputPath("02b-product-expanded.png"));
+  await products.locator("tbody tr button[aria-expanded=true]").first().click();
 
   const firstUsable = page.getByRole("table", { name: "Products" }).locator("tbody tr button[aria-pressed]").first();
   await firstUsable.click();
@@ -90,3 +100,69 @@ test("item pivot intelligence — four views at 1440", async ({ page }, testInfo
   expect(errors).toEqual([]);
   expect(blocked).toEqual([]);
 });
+
+test("item pivot product matching review at 1440", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const blocked = await mockApi(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/reports/item-pivot", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: new RegExp(`^${NORM}\\b`) }).first().click();
+  await page.getByRole("tab", { name: /Product Matching/ }).click();
+  const table = page.getByRole("table", { name: "Product matches" });
+  await expect(table).toBeVisible();
+  await shot(page, testInfo.outputPath("05-matching.png"));
+  const first = table.locator("tbody tr button[aria-expanded]").first();
+  if (await first.count()) {
+    await first.click();
+    await expect(page.getByText("Full description").first()).toBeVisible();
+  }
+  await shot(page, testInfo.outputPath("06-matching-expanded.png"));
+  expect(errors).toEqual([]);
+  expect(blocked).toEqual([]);
+});
+
+test("item pivot intelligence admin at 1440", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const blocked = await mockApi(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/reports/item-pivot", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: new RegExp(`^${NORM}\\b`) }).first().click();
+  await page.getByRole("tab", { name: "Intelligence admin" }).click();
+  await expect(page.getByRole("region", { name: "Model status" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Inventory" })).toBeVisible();
+  await shot(page, testInfo.outputPath("07-intelligence-admin.png"));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBeFalsy();
+  expect(errors).toEqual([]);
+  expect(blocked).toEqual([]);
+});
+
+test("item pivot multi-product selection at 1440", async ({ page }, testInfo) => {
+  const matching = (data.matching?.suggestions ? data.matching : data.matching?.[NORM]) as { suggestions?: { description: string; segments?: { phrase: string; approved?: unknown }[] }[] } | undefined;
+  const multi = matching?.suggestions?.find((s) => (s.segments?.length ?? 0) > 1 && (s.segments ?? []).some((x) => !x.approved));
+  test.skip(!multi, "no multi-product description in this dataset");
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const blocked = await mockApi(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/reports/item-pivot", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: new RegExp(`^${NORM}\\b`) }).first().click();
+  await page.getByRole("tab", { name: /Product Matching/ }).click();
+  await page.getByLabel("Search matches").fill(multi!.description);
+  await page.getByRole("table", { name: "Product matches" }).getByRole("button", { name: multi!.description, exact: true }).first().click();
+  const detected = page.getByRole("table", { name: "Detected products" });
+  await expect(detected).toBeVisible();
+  await expect(detected.getByRole("checkbox")).toHaveCount(multi!.segments!.length);
+  // Only already-approved products start ticked; tick the first unapproved one.
+  const preApproved = multi!.segments!.filter((x) => x.approved).length;
+  const firstOpen = multi!.segments!.findIndex((x) => !x.approved);
+  const box = detected.getByRole("checkbox").nth(firstOpen);
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await expect(page.getByRole("status", { name: "Selection summary" })).toContainText(`Selected ${preApproved + 1}`);
+  await shot(page, testInfo.outputPath("08-multi-product-selection.png"));
+  expect(errors).toEqual([]);
+  expect(blocked).toEqual([]);  // selecting never posts anything
+});
+

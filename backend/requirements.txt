@@ -38,3 +38,5 @@ numpy>=2.1,<3
 #   pip install -e ../mds-client
 # (Left as a comment so default installs don't require the local path.)
 # mds-client
+onnxruntime==1.32.0  # Item Pivot local product matching (MiniLM ONNX embeddings, CPU only)
+tokenizers==0.23.3

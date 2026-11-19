@@ -371,8 +371,18 @@ CELERY_TASK_ROUTES = {
     "license.finalize_license_ledger_package": {"queue": "celery"},
     "license.recover_license_ledger_package_jobs": {"queue": "celery"},
     "license.cleanup_expired_ledger_packages": {"queue": "celery"},
+    # Local MiniLM product matching runs on its own queue so it never delays ERP work:
+    #   celery -A lmanagement worker -Q matching -c 1 --max-memory-per-child=700000 -n matching@%h
+    "license.run_product_matching_job": {"queue": "matching"},
+    "license.product_intel_build_and_train": {"queue": "matching"},
 }
 CELERY_TASK_ANNOTATIONS = {
+    # Below the 1800 s train lock so a run can never outlive its lock.
+    "license.product_intel_build_and_train": {"soft_time_limit": 1500, "time_limit": 1600},
+    "license.run_product_matching_job": {
+        "soft_time_limit": int(os.getenv("PRODUCT_MATCH_SOFT_TIME_LIMIT", "1800")),
+        "time_limit": int(os.getenv("PRODUCT_MATCH_TIME_LIMIT", "1900")),
+    },
     "planning.replan_license": {
         "acks_late": True,
         "reject_on_worker_lost": True,

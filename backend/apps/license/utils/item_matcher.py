@@ -452,6 +452,19 @@ def get_item_filters():
             ],
         },
         {
+            # Owner decision 2026-11-18: under E126 only, Sunflower Oil (HSN 1512 +
+            # "sunflower") counts toward the Olive Oil entitlement, never toward PKO.
+            # A record carrying the PKO (1513) signal stays PKO-only. Not applied to
+            # E5 / E132 / other norms (domain audit 2026-11-19).
+            "base_name": "OLIVE OIL",
+            "norms": ["E126"],
+            "filters": [
+                Q(hs_code__hs_code__startswith="1512")
+                & Q(description__icontains="sunflower")
+                & ~(Q(hs_code__hs_code__startswith="1513") | _description_hsn_prefix_q(["1513"]))
+            ],
+        },
+        {
             "base_name": "RBD PALMOLEIN OIL",
             "norms": ["E1", "E5", "E126"],
             "filters": [

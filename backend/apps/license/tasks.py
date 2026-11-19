@@ -589,3 +589,41 @@ def recover_license_ledger_package_jobs(limit: int = 100) -> dict:
         elif job.items.exists() and not job.items.exclude(status=LicenseLedgerPackageItem.STATUS_SERVER_READY).exists():
             finalize_license_ledger_package_job.delay(job.pk)
     return {"jobs": len(jobs), "dispatched": dispatched}
+
+
+@shared_task(name="license.run_product_matching_job", acks_late=True)
+def run_product_matching_job(job_id: int) -> dict:
+    """Local semantic product matching (queue ``matching``; run one worker with concurrency 1)."""
+    from apps.license.models import ProductMatchingJob
+    from apps.license.services.product_matching_semantic import run_job
+
+    job = ProductMatchingJob.objects.filter(pk=job_id).first()
+    if job is None or job.status == ProductMatchingJob.DONE:
+        return {"job_id": job_id, "skipped": True}
+    # run_job claims the job atomically (a live RUNNING job is skipped there; a stale one is recovered).
+    job = run_job(job)
+    return {"job_id": job.pk, "status": job.status, "processed": job.processed, "total": job.total}
+
+
+@shared_task(name="license.product_intel_build_and_train", acks_late=True)
+def product_intel_build_and_train(user_id: int | None = None, train: bool = True) -> dict:
+    """Generate a versioned dataset and (optionally) train + evaluate a candidate model. Never promotes."""
+    from django.contrib.auth import get_user_model
+
+    from apps.license.services.product_intelligence.knowledge import build_dataset
+    from apps.license.services.product_intelligence.lifecycle import train as train_model
+
+    from django.core.cache import cache
+
+    from apps.license.services.product_intelligence.knowledge import inventory_cache_key
+
+    try:
+        user = get_user_model().objects.filter(pk=user_id).first() if user_id else None
+        dataset = build_dataset(user=user)
+        out = {"dataset": dataset.version, "labels": dataset.label_count}
+        if train:
+            model = train_model(dataset, user=user)
+            out.update({"model": model.version, "status": model.status})
+        return out
+    finally:
+        cache.delete(inventory_cache_key() + ":train-lock")

@@ -31,16 +31,21 @@ const report: IntelReport = {
         warning_count: 1, attention_product_count: 1, unreconciled_licence_count: 0, status_counts: { UNDERUTILIZED: 1, CORRECT: 1, WARNING: 1 },
         consolidation: { mapped: 1, ambiguous: 0, unmapped: 1, merged_source_records: 2, mapping_review: 0 },
         bases: { licence: "Canonical engine", item: "Item-level raw records" },
+        integrity: {
+            source_record_count: 3, consolidated_source_record_count: 3, consolidated_product_count: 2, pending_mapping_count: 1, preserved: true,
+            source_totals: { entitlement_qty: "205", allotted_qty: "20", debited_qty: "80", billed_qty: "0", balance_qty: "105", planned_qty: "40", planned_cif: "400.00" },
+            consolidated_totals: { entitlement_qty: "205", allotted_qty: "20", debited_qty: "80", billed_qty: "0", balance_qty: "105", planned_qty: "40", planned_cif: "400.00" },
+        },
     },
     licences: [licence(1, "LIC-A"), licence(2, "LIC-B", { products: ["ITEM:1:E5", "UNMAPPED:x"], final_balance_cif: "-25.00" })],
     products: [
         { key: "ITEM:1:E5", kind: "MAPPED", item_name_id: 1, product: "SUGAR", sion: "E5", mapping_basis: "Master item link", hsn_codes: ["17019990"], aliases: ["Sugar", "SUGAR refined"],
           hsn_chapters: ["17"], mapping_review: null, eligible_licences: 2, source_record_count: 2,
           source_records: [{ license_id: 1, license_number: "LIC-A", import_item_id: 11, serial_number: 1, description: "Sugar", hsn_code: "17019990" }, { license_id: 2, license_number: "LIC-B", import_item_id: 21, serial_number: 1, description: "SUGAR refined", hsn_code: "17019990" }],
-          entitlement_qty: "200", allotted_qty: "20", debited_qty: "80", billed_qty: "0", balance_qty: "100", max_unit_price: "4.00", planned_qty: "40", planned_cif: "400.00", utilisation_percent: "50.0", status_counts: { UNDERUTILIZED: 1, CORRECT: 1 } },
+          entitlement_qty: "200", allotted_qty: "20", debited_qty: "80", billed_qty: "0", balance_qty: "100", max_unit_price: "4.00", planned_qty: "40", planned_cif: "400.00", utilisation_percent: "50.0", status_counts: { UNDERUTILIZED: 1, CORRECT: 1 }, status: "UNDERUTILIZED", licences_available_cif: "1000.00", licences_remaining_cif: "275.00" },
         { key: "UNMAPPED:x", kind: "UNMAPPED", item_name_id: null, product: "Misc ingredient", sion: "E5", mapping_basis: "No master item link — kept separate", hsn_codes: [], aliases: ["Misc ingredient"],
           hsn_chapters: [], mapping_review: null, eligible_licences: 1, source_record_count: 1, source_records: [], entitlement_qty: "5", allotted_qty: "0", debited_qty: "0", billed_qty: "0", balance_qty: "5",
-          max_unit_price: null, planned_qty: "0", planned_cif: "0.00", utilisation_percent: "0.0", status_counts: { WARNING: 1 } },
+          max_unit_price: null, planned_qty: "0", planned_cif: "0.00", utilisation_percent: "0.0", status_counts: { WARNING: 1 }, status: "WARNING" },
     ],
     eligibility: [
         cell(1, "LIC-A", "ITEM:1:E5", "SUGAR", "CORRECT", false),
@@ -59,6 +64,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     get.mockImplementation(async (url: string) => {
         if (url.startsWith("item-pivot/intelligence/")) return { data: report };
+        if (url.startsWith("item-pivot/matching/")) return { data: { matcher: "deterministic", can_approve: false, summary: { REVIEW: 1 }, latest_job: null, decisions: [], suggestions: [{ source_key: "misc|-|E5", product_key: "UNMAPPED:x", kind: "UNMAPPED", description: "Misc ingredient", aliases: [], hsn_code: "", hsn_codes: [], sion: "E5", import_item_ids: [], license_numbers: [], band: "REVIEW", action: "MANUAL_REVIEW", confidence: 84, suggestion: { item_id: 7, name: "FLAVOUR" }, explanation: "", conflicts: [], checks: {}, candidates: [], history: [] }] } };
         if (url === "item-pivot/recommendations/") return { data: { read_only: true, errors: [], recommendations: [{ rank: 1, license_id: 2, license_number: "LIC-B", expiry_date: "2026-12-31", sion: "E5", product: "SUGAR", rule_priority: 1, unit_price: "4.00", recommended_qty: "50", recommended_cif: "200.00", existing_qty: "20", existing_cif: "80.00", additional_qty: "30", additional_cif: "120.00", licence_available_cif: "500.00", remaining_licence_cif_after: "300.00", cif_status: "FULLY_FUNDED", reason: "Auto Plan engine", alternatives: ["LIC-A"] }] } };
         throw new Error(`unexpected ${url}`);
     });
@@ -129,5 +135,49 @@ describe("Item pivot intelligence", () => {
         await screen.findByRole("region", { name: "Utilization waterfall" });
         await user.click(screen.getByRole("button", { name: /Excel \(products/ }));
         await waitFor(() => expect(openAuthedFile).toHaveBeenCalledWith("item-pivot/intelligence/?sion_norm=E5&min_balance=200&format=excel", "item_pivot_intelligence.xlsx"));
+    });
+
+    it("shows the source vs consolidated integrity check on the overview", async () => {
+        setup();
+        const panel = await screen.findByRole("region", { name: "Consolidation integrity" });
+        expect(within(panel).getByText("Consolidation preserved every record and total")).toBeInTheDocument();
+        expect(within(panel).getByText("all records kept")).toBeInTheDocument();
+    });
+
+    it("product analysis: one status, closed filters, sorting, match status and inline detail", async () => {
+        const user = setup();
+        await screen.findByRole("region", { name: "Utilization waterfall" });
+        await user.click(screen.getByRole("tab", { name: /Product Analysis/ }));
+        const table = screen.getByRole("table", { name: "Products" });
+        expect(screen.queryByLabelText("Mapping kind")).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: "Filters" }));
+        expect(screen.getByLabelText("Mapping kind")).toBeInTheDocument();
+        expect(await within(table).findByText("Probable 80–89% → FLAVOUR")).toBeInTheDocument();
+        const firstProduct = () => within(table).getAllByRole("button", { name: /^(SUGAR|Misc ingredient)$/ })[0].textContent;
+        await user.click(within(table).getByRole("button", { name: "Available qty" }));
+        expect(firstProduct()).toBe("SUGAR");
+        await user.click(within(table).getByRole("button", { name: "Available qty" }));
+        expect(firstProduct()).toBe("Misc ingredient");
+        await user.click(screen.getByRole("button", { name: "Expand SUGAR" }));
+        expect(screen.getByRole("region", { name: "Entitlement summary of SUGAR" })).toHaveTextContent("$1,000 → $275");
+        const licences = screen.getByRole("table", { name: "Licences for SUGAR" });
+        expect(within(licences).getAllByRole("row")).toHaveLength(3);
+        expect(within(licences).getByText(/eligible for more planning/)).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /Compute recommended plan/ }));
+        expect(await within(licences).findByText("(+$120)")).toBeInTheDocument();
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("warns that planned figures are provisional while licences re-plan after a mapping change", async () => {
+        get.mockImplementation(async (url: string) => {
+            if (url.startsWith("item-pivot/intelligence/")) return { data: { ...report, overview: { ...report.overview, planning_stale_licence_count: 1, mapping_propagation: { open: [], propagating: 1, failed: 0 } },
+                licences: [{ ...report.licences[0], planning_stale: true }, report.licences[1]] } };
+            throw new Error(`unexpected ${url}`);
+        });
+        const user = setup();
+        const banner = await screen.findByText(/being re-planned after a mapping change/);
+        expect(banner).toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: /Licence Analysis/ }));
+        expect(screen.getByRole("article", { name: "Licence LIC-A" })).toHaveTextContent("Re-planning");
     });
 });

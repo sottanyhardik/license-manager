@@ -121,3 +121,9 @@ Desktop.ini
 
 # Committed template (no secrets) — see scripts/dev/init-local-env.sh
 !.env.example
+
+# Local product-matching model files (downloaded + checksum-verified by manage.py product_matching_model --download)
+var/models/
+
+# Product Intelligence datasets / trained model artifacts (versioned + sha256 in ProductIntelDataset / ProductIntelModel)
+var/product_intel/

@@ -96,7 +96,7 @@ class IntelligenceTests(IntelligenceFixture):
         assert len(by_kind["AMBIGUOUS"]) == 1 and "not merged" in by_kind["AMBIGUOUS"][0]["mapping_basis"]
         # Unmapped rows merge only on identical normalised description + HSN (punctuation/spacing).
         assert len(by_kind["UNMAPPED"]) == 1 and Decimal(by_kind["UNMAPPED"][0]["entitlement_qty"]) == Decimal("12")
-        assert data["overview"]["consolidation"] == {"mapped": 1, "ambiguous": 1, "unmapped": 1, "merged_source_records": 2, "mapping_review": 0}
+        assert data["overview"]["consolidation"] == {"mapped": 1, "ambiguous": 1, "unmapped": 1, "merged_source_records": 2, "mapping_review": 0, "multi_product": 0}
 
     def test_licence_figures_are_canonical_and_statuses_follow_entitlement(self):
         a, b = self.licences

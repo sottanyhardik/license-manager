@@ -5,12 +5,12 @@ from contextlib import contextmanager
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
+from django.db.models.signals import m2m_changed, post_delete, post_init, post_save, pre_delete, pre_save
 from django.db import transaction
 from django.dispatch import receiver
 from django.utils import timezone
 
-from apps.allotment.models import AllotmentItems
+from apps.allotment.models import AllotmentItems, AllotmentModel
 from apps.bill_of_entry.models import BillOfEntryModel, RowDetails
 from apps.core.models import CompanyModel, ItemNameModel, SionNormClassModel
 from apps.license.models import LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel
@@ -201,6 +201,46 @@ def enqueue_replan_for_import_item_mapping_change(sender, instance, action, **kw
     """Item-name mappings affect SION classification and plan eligibility."""
     if action in {"post_add", "post_remove", "post_clear"}:
         _enqueue_replan(instance.license_id, "import_item_mapping_changed", source_model=sender._meta.label, source_pk=instance.pk)
+
+
+_MISSING = object()
+
+
+@receiver(post_init, sender=BillOfEntryModel)
+@receiver(post_init, sender=AllotmentModel)
+def stash_debit_target(sender, instance, **kwargs):
+    """Remember the loaded debit target (no query: deferred fields stay deferred)."""
+    instance._orig_debit_target = instance.__dict__.get("planning_target_item_id", _MISSING)
+
+
+@receiver(post_save, sender=BillOfEntryModel)
+@receiver(post_save, sender=AllotmentModel)
+def propagate_debit_target_change(sender, instance, created, **kwargs):
+    """Owner decision 2026-11-19 (Part 15): a BOE / allotment debit-target change is a mapping change — versioned,
+    affected plans archived, licences re-planned automatically. Header saves did not re-plan before."""
+    if kwargs.get("raw", False) or created:
+        return
+    old = getattr(instance, "_orig_debit_target", _MISSING)
+    new = instance.__dict__.get("planning_target_item_id", _MISSING)
+    if old is _MISSING or new is _MISSING or old == new:
+        return
+    instance._orig_debit_target = new
+    from apps.license.models import MappingChange
+    from apps.license.services.product_intelligence.propagation import record_change
+
+    if sender is BillOfEntryModel:
+        kind = MappingChange.BOE_TARGET
+        license_ids = set(RowDetails.objects.filter(bill_of_entry_id=instance.pk).values_list("sr_number__license_id", flat=True))
+    else:
+        kind = MappingChange.ALLOTMENT_TARGET
+        license_ids = set(AllotmentItems.objects.filter(allotment_id=instance.pk).values_list("item__license_id", flat=True))
+    license_ids.discard(None)
+    if not license_ids:
+        return
+    record_change(kind=kind, source_model=sender._meta.label, source_refs=[instance.pk], license_ids=sorted(license_ids),
+                  user=getattr(instance, "modified_by", None), detail={"previous_target": old, "new_target": new})
+    for license_id in sorted(license_ids):
+        _enqueue_replan(license_id, "debit_target_changed", source_model=sender._meta.label, source_pk=instance.pk)
 
 
 def _update_all_import_items_available_value(license_instance):

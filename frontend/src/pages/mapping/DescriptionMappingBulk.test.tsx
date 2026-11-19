@@ -112,12 +112,12 @@ describe("Description mapping — filter conditions and bulk update", () => {
         expect(screen.getByRole("button", { name: "Apply Filters" })).toBeEnabled();
     });
 
-    it("rows show record + licence counts with licence chips linking to the licence page by id; +N more expands", async () => {
+    it("rows show record + licence counts with licence chips opening the Licence List", async () => {
         setup();
         const table = await screen.findByRole("table", { name: "Licence import item descriptions" });
         const tr = within(table).getByText("DESC 00").closest("tr") as HTMLElement;
         expect(within(tr).getByText("2 records · 1 licence")).toBeInTheDocument();
-        expect(within(tr).getByRole("link", { name: "0310000001" })).toHaveAttribute("href", "/licenses/7/overview");
+        expect(within(tr).getByRole("link", { name: "Open licence 0310000001" })).toHaveAttribute("href", "/licenses?flags__is_null=False&is_expired=False&page=1&purchase_status=11%2C10%2C1%2C2%2C4%2C5%2C7");
     });
 
     it("individual selection survives pagination; bulk confirms counts, Item Names and REPLACE, then posts the fingerprint", async () => {
@@ -135,7 +135,7 @@ describe("Description mapping — filter conditions and bulk update", () => {
         expect(dialog).toHaveTextContent("Item Names: PKO");
         expect(dialog).toHaveTextContent("REPLACE");
         expect(dialog).toHaveTextContent("2 distinct licence(s)");
-        expect(within(dialog).getByRole("link", { name: "0310000002" })).toHaveAttribute("href", "/licenses/9/overview");
+        expect(within(dialog).getByRole("link", { name: "Open licence 0310000002" })).toBeInTheDocument();
         await user.click(within(dialog).getByRole("button", { name: "Update 2 description(s)" }));
         await waitFor(() => expect(api.post).toHaveBeenCalledWith(expect.stringMatching(/bulk\/apply\/$/),
             { mode: "keys", keys: ["DESC 00", "DESC 51"], fingerprint: "fp-1", item_ids: [5] }));

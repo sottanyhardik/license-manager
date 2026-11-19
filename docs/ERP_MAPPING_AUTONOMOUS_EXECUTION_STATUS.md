@@ -221,6 +221,22 @@ typecheck, 1006 unit, build); Playwright navigation + licence overview 10/10.
 **Owner to confirm (policy):** records whose HSN / SION context cannot be verified are mapped with a visible "Not verified" note
 rather than blocked (the auditor considers this acceptable).
 
+## Licence chip navigation (owner spec 2026-11-19 "LICENCE NUMBER CHIP OPENS LICENCE LIST AND SELECTED LICENCE")
+
+- Chips (row references, "+ N more" and the bulk confirmation) navigate to exactly
+  `/licenses?flags__is_null=False&is_expired=False&page=1&purchase_status=11%2C10%2C1%2C2%2C4%2C5%2C7` and hand over the real licence
+  id + number (`features/licenses/openLicenceTarget.ts`, sessionStorage — the list rebuilds its URL from filter state and drops
+  router state / unknown params). Plain clicks only (a modified click opens a plain list in a new tab).
+- Licence List (`MasterList`): reads the target once (StrictMode-safe), waits until the list is loaded and not refetching, then
+  opens that licence's existing card workspace (Overview tab inside) via `LicensesTable.openRequest` (set, never toggle → no
+  duplicate workspace; scrolls to it). Not on the page → the existing exact licence-number lookup with the active filters kept.
+  Excluded by the filters (e.g. expired) → notice with "Show it without filters". A user filter / page change or a failed load
+  drops a pending target. No backend change; no direct `/licenses/:id/overview` navigation.
+- Tests: vitest `MasterList.openLicence.test.tsx` 5, `LicensesTable.openRequest.test.tsx` 1, `LicenceRefs.test.tsx` 5; existing
+  MasterList deep-link / filters / smoke suites pass; frontend gate exit 0 (1015 unit, lint, typecheck, build); Playwright navigation +
+  licence overview + licence register 15/15. Review (react-reviewer): no blocking; fixed — target dropped on user change / failed
+  load, plain-click hand-off only, always-mounted live region for the notice.
+
 ## Next action
 
 Push: not authorised in the latest instruction (do not push). Optional: a real-data Playwright run of `/mapping`.

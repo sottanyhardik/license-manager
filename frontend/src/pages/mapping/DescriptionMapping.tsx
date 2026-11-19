@@ -265,7 +265,7 @@ export default function DescriptionMapping() {
                     <p>Behaviour: REPLACE — each description gets its own mapping; its records' current Item Names are replaced. Future records with those exact descriptions map automatically.</p>
                     {pending.body.mode === "filter" && <p>Filter: {describeFilters(pending.body.filters) || "(status / search only)"}.</p>}
                     {pending.preview.licences.length > 0 && <div><p className="text-xs font-semibold">Affected licences{pending.preview.licences_truncated ? ` (first ${pending.preview.licences.length} of ${pending.preview.licence_count})` : ""}</p>
-                        <LicenceRefs refs={pending.preview.licences} total={pending.preview.licence_count} label="the bulk update" visible={12} newTab /></div>}
+                        <LicenceRefs refs={pending.preview.licences} total={pending.preview.licence_count} label="the bulk update" visible={12} /></div>}
                     {pending.preview.missing.length > 0 && <p>{pending.preview.missing.length} selected description(s) no longer exist and will be skipped.</p>}
                     {pending.preview.too_many && <p className="text-destructive">Too many: bulk updates are limited to {pending.preview.limit} descriptions — narrow the filter or select in batches.</p>}
                 </div> : null}

@@ -5,7 +5,7 @@
  * the single-expand state.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared";
@@ -28,6 +28,8 @@ export interface LicensesTableProps {
     onFetchOwnership: (item: LicenseListItem) => void;
     invalidateList: () => void;
     onDGFTComplete?: (licenseId: number) => void;
+    /** Open this licence's workspace (deep link). ``n`` changes per request; an already-open card stays open. */
+    openRequest?: { id: number; n: number } | null;
 }
 
 function LicenseSkeleton() {
@@ -59,9 +61,16 @@ export default function LicensesTable({
     fetchingOwnershipIds,
     onFetchOwnership,
     onDGFTComplete,
+    openRequest,
 }: LicensesTableProps) {
     // Only one card open at a time.
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    useEffect(() => {
+        if (!openRequest) return;
+        setExpandedId(openRequest.id); // set, never toggle: a second click on an open licence keeps one workspace
+        const t = setTimeout(() => document.getElementById(`licence-${openRequest.id}`)?.scrollIntoView?.({ block: "start", behavior: "smooth" }), 0);
+        return () => clearTimeout(t);
+    }, [openRequest]);
     const handleToggle = useCallback((id: number) => {
         setExpandedId((prev) => (prev === id ? null : id));
     }, []);
@@ -75,7 +84,7 @@ export default function LicensesTable({
     return (
         <ul className="flex min-w-0 flex-col gap-1.5" aria-label="Licenses">
             {data.map((item) => (
-                <li key={item.id} className="min-w-0">
+                <li key={item.id} id={`licence-${item.id}`} className="min-w-0">
                     <LicenceCard
                         item={item}
                         expanded={expandedId === item.id}

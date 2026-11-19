@@ -33,6 +33,7 @@ import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel
 import {useConfirmDialog} from "../../hooks/useConfirmDialog.jsx";
 import PageHeader from "@/components/PageHeader";
 import { WorkspaceTitle } from "@/components/workspace/WorkspaceToolbar";
+import { clearLicenceTarget, peekLicenceTarget, type LicenceTarget } from "@/features/licenses/openLicenceTarget";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/shared";
 import { cn } from "@/lib/utils";
@@ -556,6 +557,16 @@ export default function MasterList() {
 
     // Derive list data and metadata from query result
     const data = listResponse?.results ?? EMPTY_LIST;
+
+    // Deep link from elsewhere (e.g. Mapping licence chips): open that licence's workspace once the list is ready —
+    // on the loaded page, else via the existing exact licence-number lookup (filters kept), else explain why not.
+    const [licenceTarget, setLicenceTarget] = useState<(LicenceTarget & { searched: boolean }) | null>(() => {
+        const t = entityName === 'licenses' ? peekLicenceTarget() : null;
+        return t ? { ...t, searched: false } : null;
+    });
+    useEffect(() => { if (entityName === 'licenses') clearLicenceTarget(); }, [entityName]); // taken once (after mount)
+    const [licenceOpenRequest, setLicenceOpenRequest] = useState<{ id: number; n: number } | null>(null);
+    const [licenceTargetNotice, setLicenceTargetNotice] = useState<LicenceTarget | null>(null);
     const totalRecords = listResponse?.count ?? data.length;
     const totalPages = listResponse?.total_pages ?? 1;
     const hasNext = listResponse?.has_next ?? false;
@@ -646,7 +657,35 @@ export default function MasterList() {
         // uiFilterParams (derived via useMemo) converts back to UI format for display.
         setFilterParams(normalizeFilterValues(filters));
         setCurrentPage(1);
+        setLicenceTarget(null); // the user changed the list: a pending deep-link target must not override that later
     }, []);
+    // Deep-link lookups change the filters without cancelling the target.
+    const applyLicenceLookup = useCallback((filters: Record<string, unknown>) => {
+        setFilterParams(normalizeFilterValues(filters));
+        setCurrentPage(1);
+    }, []);
+
+    useEffect(() => {
+        if (!licenceTarget || loading || isRefreshing) return;
+        if (listFailed) {
+            setLicenceTarget(null);
+            return;
+        }
+        if (data.some((row: { id?: number }) => row.id === licenceTarget.id)) {
+            setLicenceOpenRequest({ id: licenceTarget.id, n: Date.now() });
+            setLicenceTargetNotice(null);
+            setLicenceTarget(null);
+            return;
+        }
+        if (!licenceTarget.searched) {
+            // Not on this page: look it up by its licence number (exact identity filter), keeping the active filters.
+            setLicenceTarget({ ...licenceTarget, searched: true });
+            applyLicenceLookup({ ...filterParams, search: licenceTarget.license_number });
+            return;
+        }
+        setLicenceTargetNotice({ id: licenceTarget.id, license_number: licenceTarget.license_number });
+        setLicenceTarget(null);
+    }, [licenceTarget, loading, isRefreshing, listFailed, data, filterParams, applyLicenceLookup]);
 
     useEffect(() => {
         // Keep every list's current search and filters in the URL.  The old
@@ -675,6 +714,7 @@ export default function MasterList() {
 
     const handlePageChange = (page) => {
         setCurrentPage(page);
+        setLicenceTarget(null);
     };
 
     const handlePageSizeChange = (size) => {
@@ -1158,7 +1198,21 @@ export default function MasterList() {
 
                     {/* Licenses — extracted to dedicated component */}
                     {entityName === 'licenses' && (
+                        <div role="status" aria-live="polite">{licenceTargetNotice && (
+                            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                                <span>Licence {licenceTargetNotice.license_number} is not in the current filters (it may be expired or have another purchase status).</span>
+                                <button type="button" className="font-medium underline" onClick={() => {
+                                    setLicenceTarget({ ...licenceTargetNotice, searched: true });
+                                    setLicenceTargetNotice(null);
+                                    applyLicenceLookup({ search: licenceTargetNotice.license_number });
+                                }}>Show it without filters</button>
+                                <button type="button" className="ml-auto text-xs underline" onClick={() => setLicenceTargetNotice(null)}>Dismiss</button>
+                            </div>
+                        )}</div>
+                    )}
+                    {entityName === 'licenses' && (
                         <LicensesTable
+                            openRequest={licenceOpenRequest}
                             loading={loading}
                             data={data}
                             canWrite={canWrite}

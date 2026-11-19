@@ -10,7 +10,7 @@ import ItemPivotReport from "./ItemPivotReport";
 vi.mock("react-router-dom", async (importOriginal) => ({
     ...(await importOriginal<typeof import("react-router-dom")>()),
     useNavigate: () => vi.fn(),
-    useSearchParams: () => [new URLSearchParams("mode=classic"), vi.fn()],
+    useSearchParams: () => [new URLSearchParams(""), vi.fn()],
 }));
 
 vi.mock("../../api/axios", () => ({
@@ -301,6 +301,13 @@ describe("ItemPivotReport — merged vs. genuinely-distinct import items", () =>
         // already-merged "FRUIT JUICE - E1" column: exactly one badge in the
         // whole row, not two.
         expect(within(row).getAllByText(/\d+ items/)).toHaveLength(1);
+    });
+
+    it("is Classic Mode only — no Utilization intelligence mode or mode switch (owner spec 2026-11-19)", async () => {
+        await renderAndSelectNorm();
+        expect(screen.getByText("LIC-MERGE-TEST")).toBeInTheDocument();
+        expect(screen.queryByRole("group", { name: "Report mode" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Utilization intelligence/ })).not.toBeInTheDocument();
     });
 
     it("renders license and item Remaining CIF columns after reconciliation", async () => {

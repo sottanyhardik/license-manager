@@ -136,7 +136,11 @@ def verified_labels() -> list[dict]:
             if text:
                 labels.append({"description": text, "hsn": "", "sion": None, "item_id": item_id, "label": 1,
                                "provenance": f"{name}#{pk} USER_SELECTED", "exclude_import_ids": []})
+    from apps.license.services.product_intelligence.item_name_mapping import undone_import_decision_ids
+    undone = undone_import_decision_ids()  # an approval reversed by Undo is not a positive label
     for d in ProductMatchDecision.objects.select_related("sion").order_by("decided_on", "pk"):
+        if d.pk in undone:
+            continue
         base = {"description": d.source_description, "hsn": d.hsn_code, "sion": getattr(d.sion, "norm_class", None),
                 "provenance": f"ProductMatchDecision#{d.pk}", "exclude_import_ids": list(d.import_item_ids or [])}
         if d.decision == ProductMatchDecision.APPROVED and d.chosen_item_id:

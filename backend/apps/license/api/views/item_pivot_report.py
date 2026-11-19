@@ -63,8 +63,8 @@ from apps.license.api.views.item_pivot_helpers import (  # noqa: F401  (re-expor
 from apps.license.api.views.item_pivot_excel import ItemPivotExcelMixin
 from apps.license.api.views.item_pivot_generate import ItemPivotGenerateMixin
 from apps.license.api.views.item_pivot_intelligence import (  # noqa: E501
-    ItemPivotConsolidationMixin, ItemPivotIntelligenceMixin, ItemPivotMappingChangeMixin, ItemPivotMatchingMixin, ItemPivotMultiProductMixin,
-    ProductIntelligenceMixin,
+    ItemPivotConsolidationMixin, ItemPivotIntelligenceMixin, ItemPivotItemNameMappingMixin, ItemPivotMappingChangeMixin, ItemPivotMatchingMixin,
+    ItemPivotMultiProductMixin, ProductIntelligenceMixin,
 )
 from apps.license.api.views.item_pivot_row import ItemPivotRowMixin
 
@@ -139,7 +139,7 @@ class ItemPivotReportView(ItemPivotGenerateMixin, ItemPivotRowMixin, ItemPivotEx
         return JsonResponse(report_data, safe=False)
 
 
-class ItemPivotViewSet(ItemPivotMappingChangeMixin, ItemPivotConsolidationMixin, ItemPivotMultiProductMixin, ProductIntelligenceMixin, ItemPivotMatchingMixin,
+class ItemPivotViewSet(ItemPivotItemNameMappingMixin, ItemPivotMappingChangeMixin, ItemPivotConsolidationMixin, ItemPivotMultiProductMixin, ProductIntelligenceMixin, ItemPivotMatchingMixin,
                        ItemPivotIntelligenceMixin, viewsets.ViewSet):
     """
     ViewSet for Item Pivot Report.

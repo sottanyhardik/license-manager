@@ -268,14 +268,17 @@ def suggest(groups: list[dict], *, advisor: ProductMatchAdvisor | None = None, l
     ruled = {code: _ruled_items(s.pk) for code, s in sions.items()}
     classified = approved_by_source([g["source_key"] for g in groups])  # approved multi-product classifications
     prior: dict[str, list[ProductMatchDecision]] = defaultdict(list)
-    for decision in ProductMatchDecision.objects.filter(source_key__in=[g["source_key"] for g in groups]).select_related("chosen_item", "suggested_item", "decided_by"):
+    for decision in ProductMatchDecision.objects.filter(source_key__in=[g["source_key"] for g in groups]).select_related("chosen_item", "suggested_item", "decided_by").order_by("-decided_on", "-pk"):
         prior[decision.source_key].append(decision)
+    from apps.license.services.product_intelligence.item_name_mapping import undone_import_decision_ids
+    undone = undone_import_decision_ids(d.pk for ds in prior.values() for d in ds if d.decision == ProductMatchDecision.APPROVED)
 
     out = []
     for group in groups:
         sion, hsn, text = group.get("sion"), group.get("hsn_code") or "", group["description"]
         decisions = prior.get(group["source_key"], [])
-        approved = next((d for d in decisions if d.decision == ProductMatchDecision.APPROVED and d.chosen_item_id), None)
+        # An approval reversed by Undo (Mapping workspace) is history only: the source is pending again and needs a fresh selection.
+        approved = next((d for d in decisions if d.decision == ProductMatchDecision.APPROVED and d.chosen_item_id and d.pk not in undone), None)
         rejected_ids = {d.suggested_item_id for d in decisions if d.decision in {ProductMatchDecision.REJECTED, ProductMatchDecision.DIFFERENT}}
         entitlement_hits = _entitlement_targets(sion, text, hsn)
         required_entitlements = set(entitlement_hits.values())
@@ -457,7 +460,7 @@ def _validate(suggestion: dict, item: ItemNameModel, *, allow_review: bool) -> N
 
 
 def decide(*, suggestions: list[dict], decision: str, user, item_id: int | None = None, bulk: bool = False,
-           evaluators: dict | None = None, replace_links: bool = False) -> list[ProductMatchDecision]:
+           evaluators: dict | None = None, replace_links: bool = False, item_ids: dict | None = None) -> list[ProductMatchDecision]:
     """Record decisions atomically. APPROVED links the import items to the master item.
 
     An import item that already has several master links (Ambiguous) is only re-linked when the reviewer
@@ -477,12 +480,18 @@ def decide(*, suggestions: list[dict], decision: str, user, item_id: int | None 
             change = record_change(kind=MappingChange.MATCH_DECISION, user=user, source_model="license.ProductMatchDecision",
                                    import_item_ids={i for s_ in suggestions for i in s_.get("import_item_ids") or []})
         for suggestion in suggestions:
-            target_id = item_id or (suggestion.get("suggestion") or {}).get("item_id")
+            # ``item_ids``: per-source selection (bulk, Mapping workspace); then one ``item_id``; then the suggestion.
+            target_id = (item_ids or {}).get(suggestion["source_key"]) or item_id or (suggestion.get("suggestion") or {}).get("item_id")
             target = ItemNameModel.objects.prefetch_related("norms").select_related("sion_norm_class").filter(pk=target_id).first() if target_id else None
             if decision == ProductMatchDecision.APPROVED:
                 if target is None:
                     raise MatchValidationError("Choose a master item to approve")
-                _validate(suggestion, target, allow_review=not bulk)
+                if not target.is_active:
+                    raise MatchValidationError(f"{target.name} is not an active Item Name")
+                # Bulk was limited to HIGH-band suggestions; a row whose Item Name the reviewer selected explicitly
+                # (``item_ids``, Mapping workspace) is validated exactly like a single approval instead.
+                explicit = suggestion["source_key"] in (item_ids or {})
+                _validate(suggestion, target, allow_review=not bulk or explicit)
                 # A reviewer-chosen master is re-checked with the full deterministic rules (HSN chapter,
                 # multi-product, entitlement) — not only the checks computed for the original suggestion.
                 evaluate = (evaluators or {}).get(suggestion["source_key"])

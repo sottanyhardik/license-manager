@@ -54,6 +54,7 @@ const ExpiringLicenses = lazy(() => import("../pages/reports/ExpiringLicenses"))
 const ActiveLicenses = lazy(() => import("../pages/reports/ActiveLicenses"));
 const DownloadLicense = lazy(() => import("../pages/reports/DownloadLicense"));
 const ItemPivotReport = lazyLoadWithRetry(() => import("../pages/reports/ItemPivotReport"));
+const MappingWorkspace = lazyLoadWithRetry(() => import("../pages/mapping/MappingWorkspace"));
 const ItemReport = lazyLoadWithRetry(() => import("../pages/reports/ItemReport"));
 const PlannedReport = lazyLoadWithRetry(() => import("../pages/reports/PlannedReport"));
 const LicensePurchaseProfitReport = lazyLoadWithRetry(() => import("../pages/reports/LicensePurchaseProfitReport"));
@@ -87,6 +88,7 @@ const REPORT_ROUTES: [string, ReactElement][] = [
     ["/reports/active-licenses", <ActiveLicenses />],
     ["/reports/download-license", <DownloadLicense />],
     ["/reports/item-pivot", <ItemPivotReport />],
+    ["/mapping", <MappingWorkspace />],
     ["/reports/item-report", <ItemReport />],
     ["/reports/planned-report", <PlannedReport />],
     ["/reports/license-purchase-profit", <LicensePurchaseProfitReport />],

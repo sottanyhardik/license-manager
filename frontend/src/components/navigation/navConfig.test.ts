@@ -19,6 +19,7 @@ const EXPECTED = {
         ["Allotments", "/allotments"], ["Bill of Entry", "/bill-of-entries"], ["Trade In & Out", "/trades"],
         ["Reconciliation", "/reconciliation"], ["Reconciliation Issues", "/reconciliation-issues"],
     ],
+    Mapping: [["Item Name Mapping", "/mapping"]],
     Accounting: [
         ["Accounting Dashboard", "/accounting/dashboard"], ["Chart of Accounts", "/accounting/masters/accounts"],
         ["Account Groups", "/accounting/masters/groups"], ["Parties", "/accounting/masters/parties"],
@@ -78,7 +79,7 @@ describe("navConfig hierarchy", () => {
 describe("visibleNavGroups (role-based visibility)", () => {
     it("shows everything to a user with every role", () => {
         expect(labelsByGroup(visibleNavGroups(withRoles(allRoles)))).toEqual(labelsByGroup());
-        expect(visibleNavGroups(everyone)).toHaveLength(5); // + Accounting
+        expect(visibleNavGroups(everyone)).toHaveLength(6); // + Accounting + Mapping
     });
 
     it("gates Reports on REPORT_ROLES and keeps Masters ungated (unchanged behaviour)", () => {
@@ -91,6 +92,11 @@ describe("visibleNavGroups (role-based visibility)", () => {
         const groups = labelsByGroup(visibleNavGroups(withRoles([ROLES.TRADE_VIEWER])));
         expect(groups.Licenses).toEqual(["License Ledger"]);
         expect(groups.Operations).toEqual(["Trade In & Out", "Reconciliation Issues"]);
+    });
+
+    it("shows the Mapping workspace on the Reports gate", () => {
+        expect(labelsByGroup(visibleNavGroups(withRoles([ROLES.LICENSE_MANAGER]))).Mapping).toEqual(["Item Name Mapping"]);
+        expect(labelsByGroup(visibleNavGroups(withRoles([ROLES.LICENSE_VIEWER]))).Mapping).toBeUndefined();
     });
 
     it("hides Auto Plan from everyone but LICENSE_MANAGER", () => {
@@ -110,6 +116,7 @@ describe("resolveActiveNavPath", () => {
         ["/reports/parle/sion-e126", "/reports/parle/sion-e126"],
         ["/masters/ports/3", "/masters/ports"],
         ["/masters", "/masters"],
+        ["/mapping", "/mapping"],
         ["/masters/notification-numbers/025%2F2023/edit", "/masters/notification-numbers"],
         ["/profile", null],
         ["/licenses-archive", null],

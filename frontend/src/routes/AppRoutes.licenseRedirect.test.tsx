@@ -10,6 +10,7 @@ vi.mock("../layout/AdminLayout", () => ({ default: ({ children }: { children: Re
 vi.mock("../pages/license-overview/LicenseOverviewPage", () => ({ default: () => <div>OVERVIEW PAGE</div> }));
 vi.mock("../pages/masters/MasterForm", () => ({ default: () => <div>MASTER FORM</div> }));
 vi.mock("../pages/Forbidden", () => ({ default: () => <div>FORBIDDEN</div> }));
+vi.mock("../pages/mapping/MappingWorkspace", () => ({ default: () => <div>MAPPING WORKSPACE</div> }));
 
 function Where() {
     const l = useLocation();
@@ -68,5 +69,16 @@ describe("/licenses/:id redirect", () => {
     it("SionNormReport link target (/licenses/:id/overview) resolves", async () => {
         renderAt("/licenses/9/overview");
         expect(await screen.findByText("OVERVIEW PAGE")).toBeTruthy();
+    });
+
+    it("keeps the individual licence Overview route after the Mapping / Item Pivot changes (/licenses/312/overview)", async () => {
+        renderAt("/licenses/312/overview?tab=transactions");
+        expect(await screen.findByText("OVERVIEW PAGE")).toBeTruthy();
+        expect(screen.getByTestId("where").textContent).toBe("/licenses/312/overview?tab=transactions"); // no redirect / rename
+    });
+
+    it("routes /mapping to the Mapping workspace for report roles only", async () => {
+        renderAt("/mapping");
+        expect(await screen.findByText("MAPPING WORKSPACE")).toBeTruthy();
     });
 });

@@ -90,6 +90,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         }],
     },
     {
+        // Mapping workspace (owner spec 2026-11-19): source descriptions → existing Item Name ids, three tabs inside.
+        id: "mapping",
+        label: "Mapping",
+        icon: "tags",
+        roles: REPORT_ROLES,
+        sections: [{
+            items: [
+                { path: "/mapping", label: "Item Name Mapping", icon: "tags" },
+            ],
+        }],
+    },
+    {
         id: "accounting",
         label: "Accounting",
         icon: "journal-text",

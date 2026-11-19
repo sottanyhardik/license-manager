@@ -19,19 +19,44 @@ class TargetResolution:
         return len(self.target_ids) == 1
 
 
-def resolve_targets_for_source(source_item) -> TargetResolution:
+def prime_target_cache(cache: dict, license_ids) -> dict:
+    """Load the SION ids of many licences in one query into a ``resolve_targets_for_source`` cache."""
+    from collections import defaultdict
+
+    from apps.license.models import LicenseExportItemModel
+
+    wanted = set(license_ids) - set(cache.setdefault("sion_ids", {}))
+    found: dict[int, set[int]] = defaultdict(set)
+    for license_id, sion_id in (LicenseExportItemModel.objects.filter(license_id__in=wanted).exclude(norm_class_id__isnull=True)
+                                .values_list("license_id", "norm_class_id").distinct()):
+        found[license_id].add(sion_id)
+    for license_id in wanted:
+        cache["sion_ids"][license_id] = sorted(found.get(license_id, ()))
+    return cache
+
+
+def resolve_targets_for_source(source_item, cache: dict | None = None) -> TargetResolution:
     """Return all active configured targets that can legally own a source.
 
     A caller may auto-map only an exactly-one result.  Zero or multiple
     targets are deliberately not interpreted as a fallback/default target.
+
+    ``cache`` (optional, per request): a dict reused across calls so a batch of
+    sources loads each licence's SION, each SION's active rules (with their
+    targets and norm memberships) only once.  Same rules, same result — only
+    the number of queries changes.
     """
     from apps.license.models import LicenseExportItemModel, SionPlanningRule
 
-    sion_ids = list(
-        LicenseExportItemModel.objects.filter(license_id=source_item.license_id)
-        .exclude(norm_class_id__isnull=True)
-        .values_list("norm_class_id", flat=True).distinct()
-    )
+    cache = {} if cache is None else cache
+    sions_by_licence = cache.setdefault("sion_ids", {})
+    if source_item.license_id not in sions_by_licence:
+        sions_by_licence[source_item.license_id] = list(
+            LicenseExportItemModel.objects.filter(license_id=source_item.license_id)
+            .exclude(norm_class_id__isnull=True)
+            .values_list("norm_class_id", flat=True).distinct()
+        )
+    sion_ids = sions_by_licence[source_item.license_id]
     if len(sion_ids) != 1:
         return TargetResolution(())
     record = {
@@ -43,24 +68,28 @@ def resolve_targets_for_source(source_item) -> TargetResolution:
         "unit": source_item.unit or "",
         "serial_number": source_item.serial_number,
     }
+    rules_by_sion = cache.setdefault("rules", {})
+    if sion_ids[0] not in rules_by_sion:
+        rules_by_sion[sion_ids[0]] = list(
+            SionPlanningRule.objects.filter(sion_id=sion_ids[0], is_active=True)
+            .select_related("import_item")
+            .prefetch_related("import_item__norms", "unit_value_rows__import_item__norms", "percentage_rows__import_item__norms")
+        )
     targets: set[int] = set()
-    rules = SionPlanningRule.objects.filter(sion_id=sion_ids[0], is_active=True).prefetch_related(
-        "unit_value_rows", "percentage_rows"
-    )
-    for rule in rules:
+    for rule in rules_by_sion[sion_ids[0]]:
         if not evaluate_expression(rule.expression or {}, record):
             continue
         def legitimate(item):
             # The M2M is the canonical norm membership.  The FK fallback is
             # only transitional while old master writers are being migrated.
             return item and (
-                item.norms.filter(pk=rule.sion_id).exists()
+                any(n.pk == rule.sion_id for n in item.norms.all())
                 or item.sion_norm_class_id == rule.sion_id
             )
         if (rule.strategy or "STANDARD") == "SPLIT_BY_PERCENT":
-            targets.update(row.import_item_id for row in rule.percentage_rows.select_related("import_item") if legitimate(row.import_item))
+            targets.update(row.import_item_id for row in rule.percentage_rows.all() if legitimate(row.import_item))
         elif (rule.strategy or "STANDARD") == "SPLIT_BY_UNIT_VALUE":
-            targets.update(row.import_item_id for row in rule.unit_value_rows.select_related("import_item") if legitimate(row.import_item))
+            targets.update(row.import_item_id for row in rule.unit_value_rows.all() if legitimate(row.import_item))
         elif rule.import_item_id and legitimate(rule.import_item):
             targets.add(rule.import_item_id)
     return TargetResolution(tuple(sorted(targets)))
@@ -91,7 +120,7 @@ def apply_deterministic_target_mapping(actual_usage, source_item) -> TargetResol
     return resolution
 
 
-def validate_explicit_target(source_item, target_id: int) -> TargetResolution:
+def validate_explicit_target(source_item, target_id: int, cache: dict | None = None) -> TargetResolution:
     """Validate a user-selected target against this source's current rules.
 
     A foreign key alone is not proof of legitimacy: a source can have several
@@ -99,7 +128,7 @@ def validate_explicit_target(source_item, target_id: int) -> TargetResolution:
     different rule/SION.  Keeping this in the domain service makes BOE and
     unlinked-allotment writes obey exactly the same contract.
     """
-    resolution = resolve_targets_for_source(source_item)
+    resolution = resolve_targets_for_source(source_item, cache)
     if int(target_id) not in resolution.target_ids:
         raise ValueError("The selected planning target is not legitimate for this source item.")
     return resolution

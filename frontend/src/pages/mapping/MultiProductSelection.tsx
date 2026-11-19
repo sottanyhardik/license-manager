@@ -16,6 +16,7 @@ import api from "@/api/axios";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, type Tone } from "@/components/shared";
 import { cn } from "@/lib/utils";
+import { invalidateMappingQueries } from "./invalidate";
 import { errorText, type DetectedProduct, type MatchSuggestion, type SelectionResult } from "./matchingShared";
 
 type Choice = { key: string; index: number | null; phrase: string; itemId: number | null };
@@ -90,8 +91,7 @@ export default function MultiProductSelection({ suggestion, filters, canApprove 
             if (mode === "clear") toast.success(`Approved classification removed (${data.revoked.length} product(s))`);
             else toast.success(`Classification saved — ${data.results.length - failed.length} product(s) approved${data.revoked.length ? `, ${data.revoked.length} deselected` : ""}`);
             if (failed.length) toast.warning(`Not approved: ${failed.map((f) => `${f.phrase} (${f.reasons[0] ?? "invalid"})`).join("; ")}`, { duration: 12_000 });
-            void qc.invalidateQueries({ queryKey: ["item-pivot-matching"] });
-            void qc.invalidateQueries({ queryKey: ["item-pivot-intelligence"] });
+            invalidateMappingQueries(qc);
         },
         onError: (err: unknown) => {
             const results = (err as { response?: { data?: { results?: SelectionResult[] } } })?.response?.data?.results;

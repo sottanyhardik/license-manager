@@ -8,7 +8,7 @@ import ItemPivotReport from "./ItemPivotReport";
 vi.mock("react-router-dom", async (importOriginal) => ({
     ...(await importOriginal<typeof import("react-router-dom")>()),
     useNavigate: () => vi.fn(),
-    useSearchParams: () => [new URLSearchParams("mode=classic"), vi.fn()],
+    useSearchParams: () => [new URLSearchParams(""), vi.fn()],
 }));
 vi.mock("../../api/axios", () => ({ default: { get: vi.fn() } }));
 vi.mock("../../utils/documentDownload", () => ({ openAuthedFile: vi.fn(() => Promise.resolve()) }));

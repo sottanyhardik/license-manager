@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.renderers import JSONRenderer
@@ -85,6 +86,13 @@ def _clean_filters(raw) -> dict | None:
         return None
     allowed = set(FILTER_KEYS) | {"min_balance", "days"}
     return {k: str(v) for k, v in raw.items() if k in allowed and v not in (None, "")}
+
+
+def _drop_mapping_counts() -> None:
+    """Import-item links changed → Mapping workspace pending counts are stale (after commit)."""
+    from apps.license.services.product_intelligence.item_name_mapping import drop_counts_cache
+
+    transaction.on_commit(drop_counts_cache)
 
 
 def _can_approve(user) -> bool:
@@ -189,7 +197,9 @@ class ItemPivotMatchingMixin:
 
         if not _can_approve(request.user):
             return Response({"detail": "Product matching decisions require LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
-        body = request.data or {}
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None:
+            return Response({"detail": "A JSON object is required."}, status=status.HTTP_400_BAD_REQUEST)
         keys = body.get("source_keys") or []
         decision = body.get("decision")
         if not isinstance(keys, list) or not keys:
@@ -210,12 +220,29 @@ class ItemPivotMatchingMixin:
         missing = [k for k in keys if k not in by_key]
         if missing:
             return Response({"source_keys": f"Unknown or already resolved: {missing[:5]}"}, status=status.HTTP_400_BAD_REQUEST)
+        item_id = body.get("item_id")
+        if item_id is not None and (not isinstance(item_id, int) or isinstance(item_id, bool) or item_id <= 0):
+            return Response({"item_id": "Must be an Item Name id."}, status=status.HTTP_400_BAD_REQUEST)
+        raw_ids = body.get("item_ids") or {}
+        if not isinstance(raw_ids, dict) or not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in raw_ids.values()):
+            return Response({"item_ids": "Must map each source key to an Item Name id."}, status=status.HTTP_400_BAD_REQUEST)
+        item_ids = {str(k): v for k, v in raw_ids.items()}
+        if decision == "APPROVED":
+            # Mapping workspace spec (2026-11-19): a suggestion is never an approval — every approved source carries an
+            # explicitly selected Item Name id (``item_id`` for one key, ``item_ids`` per key for bulk).
+            unpicked = [k for k in keys if not (item_ids.get(k) or (item_id and len(keys) == 1))]
+            if unpicked:
+                return Response({"detail": f"Select an Item Name for every approved entry ({len(unpicked)} without one)."}, status=status.HTTP_400_BAD_REQUEST)
+            multi = [k for k in keys if len(keys) > 1 and len(by_key[k].get("segments") or []) > 1]
+            if multi:
+                return Response({"detail": "Multi-product descriptions are approved individually, never in bulk."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             rows = decide(suggestions=[by_key[k] for k in keys], decision=decision, user=request.user,
-                          item_id=_safe_int(body.get("item_id"), 0) or None, bulk=len(keys) > 1, evaluators=evaluators,
+                          item_id=item_id if len(keys) == 1 else None, item_ids=item_ids, bulk=len(keys) > 1, evaluators=evaluators,
                           replace_links=body.get("replace_links") is True)
         except MatchValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
         return Response({"recorded": [r.pk for r in rows], "decision": decision,
                          "alias_skipped": [{"decision_id": r.pk, "reason": r.alias_skipped} for r in rows if getattr(r, "alias_skipped", None)]},
                         status=status.HTTP_201_CREATED)
@@ -250,6 +277,7 @@ class ItemPivotMultiProductMixin:
             return Response({"detail": str(exc), "results": [r.as_dict() for r in exc.results]}, status=status.HTTP_400_BAD_REQUEST)
         except MatchValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
         return Response(result, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="matching/masters")
@@ -302,6 +330,7 @@ class ItemPivotConsolidationMixin:
                            user=request.user, reason=str(body.get("reason") or ""))
         except MatchValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
         return Response(result, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="matching/consolidation/revert", permission_classes=[])
@@ -312,9 +341,11 @@ class ItemPivotConsolidationMixin:
         if not _can_approve(request.user):
             return Response({"detail": "Requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
         try:
-            return Response(revert(batch=str((request.data or {}).get("batch") or ""), user=request.user))
+            result = revert(batch=str((request.data or {}).get("batch") or ""), user=request.user)
         except MatchValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        return Response(result)
 
 
 class ItemPivotMappingChangeMixin:
@@ -350,6 +381,83 @@ class ItemPivotMappingChangeMixin:
         if change is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(serialise(retry(change, user=request.user)))
+
+
+class ItemPivotItemNameMappingMixin:
+    """Mapping workspace (owner spec 2026-11-19): BOE / allotment description → Item Name queues, approval, history and
+    pending counts. Same ``ItemNameModel`` master as licence import items (``matching`` / ``matching/decide``).
+    Reads: the viewset's ReportPermission. Writes: LICENSE_MANAGER."""
+
+    @action(detail=False, methods=["get"], url_path="matching/item-name-mapping/counts")
+    def item_name_mapping_counts(self, request):
+        from apps.license.services.product_intelligence.item_name_mapping import counts
+
+        return Response(counts())
+
+    @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/(?P<kind>import|boe|allotment)/history")
+    def item_name_mapping_history(self, request, kind=None):
+        from apps.license.services.product_intelligence.item_name_mapping import history
+
+        params = request.query_params
+        return Response(history(kind, offset=_safe_int(params.get("offset"), 0), limit=_safe_int(params.get("limit"), 50)))
+
+    @action(detail=False, methods=["get"], url_path="matching/item-name-mapping/import/approved")
+    def item_name_mapping_import_approved(self, request):
+        """Active licence import item mappings (Approved Mappings table) — ``?q&offset&limit``."""
+        from apps.license.services.product_intelligence.item_name_mapping import import_approved
+
+        params = request.query_params
+        data = import_approved(q=(params.get("q") or "").strip()[:200], offset=_safe_int(params.get("offset"), 0), limit=_safe_int(params.get("limit"), 50))
+        return Response({**data, "can_undo": _can_approve(request.user)})
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/import/approved/(?P<decision_id>\d+)/undo", permission_classes=[])
+    def item_name_mapping_import_undo(self, request, decision_id=None):
+        """Undo one active licence import item approval: the records return to Pending (idempotent, audited)."""
+        from apps.license.services.product_intelligence.item_name_mapping import undo_import_approval
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Undoing a mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            result = undo_import_approval(decision_id=int(decision_id), user=request.user)
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)")
+    def item_name_mapping_queue(self, request, kind=None):
+        from apps.license.services.product_intelligence.item_name_mapping import queue
+
+        params = request.query_params
+        data = queue(kind, q=(params.get("q") or "").strip()[:200], offset=_safe_int(params.get("offset"), 0), limit=_safe_int(params.get("limit"), 50))
+        return Response({**data, "can_apply": _can_approve(request.user)})
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)/apply", permission_classes=[])
+    def item_name_mapping_apply(self, request, kind=None):
+        """Body: ``{record_ids, item_id}`` (one entry) or ``{entries: [{record_ids, item_id}, ...]}`` (bulk — every
+        entry carries its own selected Item Name id). All-or-nothing."""
+        from apps.license.services.product_intelligence.item_name_mapping import apply_entries
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Item Name mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None:
+            return Response({"detail": "A JSON object is required."}, status=status.HTTP_400_BAD_REQUEST)
+        raw = body.get("entries") if "entries" in body else [{"record_ids": body.get("record_ids"), "item_id": body.get("item_id")}]
+
+        def _ints(v):
+            return isinstance(v, list) and bool(v) and all(isinstance(i, int) and not isinstance(i, bool) for i in v)
+
+        if (not isinstance(raw, list) or not raw or len(raw) > 200
+                or not all(isinstance(e, dict) and _ints(e.get("record_ids")) and isinstance(e.get("item_id"), int)
+                           and not isinstance(e.get("item_id"), bool) for e in raw)):
+            return Response({"entries": "Each entry needs a list of record ids and its own selected Item Name id."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = apply_entries(kind=kind, entries=raw, user=request.user, reason=str(body.get("reason") or ""))
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result, status=status.HTTP_201_CREATED)
 
 
 def _model_payload(m):

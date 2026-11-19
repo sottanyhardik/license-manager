@@ -428,12 +428,54 @@ class ItemPivotItemNameMappingMixin:
 
     @action(detail=False, methods=["get"], url_path="matching/item-name-mapping/import/descriptions")
     def import_description_list(self, request):
+        """``?filters=`` JSON — nested groups in the Licence Planning rule shape ``{operator: "AND"|"OR", conditions: [{field, op,
+        value} | <group>]}`` (``ALL`` / ``ANY`` aliases, optional ``groups`` list; the flat ``{logic, conditions}`` form is accepted).
+        Filters select rows only — never a mapping identity."""
+        import json
+
+        from apps.license.services.product_intelligence.description_filters import FilterError, clean_filters
         from apps.license.services.product_intelligence.description_mapping import descriptions
 
         p = request.query_params
+        raw = p.get("filters") or ""
+        if len(raw) > 8000:
+            return Response({"filters": "Filters are too long."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            filters = clean_filters(json.loads(raw) if raw else None)
+        except (FilterError, ValueError, TypeError, RecursionError) as exc:
+            return Response({"filters": str(exc) or "Invalid filters."}, status=status.HTTP_400_BAD_REQUEST)
         data = descriptions(q=(p.get("q") or "").strip()[:200], status=(p.get("status") or "").strip().upper()[:20], sion=(p.get("sion") or "").strip()[:20],
-                            offset=_safe_int(p.get("offset"), 0), limit=_safe_int(p.get("limit"), 50))
+                            offset=_safe_int(p.get("offset"), 0), limit=_safe_int(p.get("limit"), 50), filters=filters)
         return Response({**data, "can_apply": _can_approve(request.user)})
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/import/descriptions/bulk/(?P<step>preview|apply)", permission_classes=[])
+    def import_description_bulk(self, request, step=None):
+        """Bulk update. Body: ``{mode: "filter"|"keys", filters?, keys?, item_ids?, fingerprint?}``. ``preview`` returns the
+        exact target set (+ fingerprint); ``apply`` REPLACEs each target description's mapping independently and refuses if
+        the target set no longer matches the confirmed fingerprint. LICENSE_MANAGER."""
+        from apps.license.services.product_intelligence import description_bulk
+        from apps.license.services.product_intelligence.description_filters import FilterError
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Item Name mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None:
+            return Response({"detail": "A JSON object is required."}, status=status.HTTP_400_BAD_REQUEST)
+        keys = body.get("keys")
+        criteria = {name: str(body.get(name) or "")[:200] for name in ("status", "q", "sion")}
+        if keys is not None and (not isinstance(keys, list) or len(keys) > description_bulk.MAX_BULK):
+            return Response({"keys": f"Up to {description_bulk.MAX_BULK} descriptions."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            if step == "preview":
+                return Response(description_bulk.preview(mode=body.get("mode"), filters=body.get("filters"), keys=keys, **criteria))
+            result = description_bulk.execute(mode=body.get("mode"), filters=body.get("filters"), keys=keys, item_ids=body.get("item_ids"),
+                                              fingerprint=body.get("fingerprint"), user=request.user, **criteria)
+        except (MatchValidationError, FilterError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        written = any(e.get("applied") or e.get("action") in ("CREATE", "REPLACE") for e in result["succeeded"])
+        return Response(result, status=status.HTTP_201_CREATED if written else status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="matching/item-name-mapping/import/descriptions/save", permission_classes=[])
     def import_description_save(self, request):

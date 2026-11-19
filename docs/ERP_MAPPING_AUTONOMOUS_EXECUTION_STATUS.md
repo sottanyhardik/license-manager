@@ -169,6 +169,58 @@ backend gate: `tests/` pass, manage.py check pass, migrations check pass, flake8
 `item_matcher`) still links Item Names on a new import item without a saved mapping. Spec §5 says new descriptions must not
 be guessed; Auto Plan currently relies on those links. Keep it, or disable it so unmapped descriptions stay empty?
 
+## Rule auto-link replaced (owner decision 2026-11-19 "replace") — committed 7146a616
+
+`item_matcher.RULE_AUTO_LINK = False`: new import items get Item Names only from an exact saved description mapping; bulk /
+licence saves apply saved mappings (`apply_for_licence`). Backend gate app-level 3909 passed. Local dev DB already at 0064.
+
+## Advanced filters & bulk update (owner spec 2026-11-19, "MASTER IMPLEMENTATION PROMPT — … ADVANCED FILTERS & BULK UPDATE")
+
+| ID | Task | Status | Evidence |
+|---|---|---|---|
+| F1 | Filter Conditions (description / HSN / SION × 10 operators, ALL / ANY), one server-side evaluator | VERIFIED | `test_description_filters.py` 44; vitest |
+| F2 | Matching description + record counts, Select All Matching (= table criteria), Clear, per-row + per-page selection across pages | VERIFIED | vitest `DescriptionMappingBulk.test.tsx` 7 |
+| F3 | Bulk update: preview (exact set + fingerprint) → confirm (counts, Item Names, REPLACE) → apply; one mapping per description; per-description succeeded / skipped / failed; Retry failed | VERIFIED | `test_description_bulk.py` 10; vitest |
+| F4 | Safety: fingerprint guard, one bulk at a time (cache lock), ≤ 150 descriptions per request, batch audit + summary event, catch-all per description | VERIFIED | backend tests |
+| F5 | HSN check per selected Item Name; own records excluded from the reference chapters; unverifiable context noted ("Not verified …"), shown per row | VERIFIED | backend tests |
+| F6 | "Automatically Mapped" status (all records AUTO) | VERIFIED | backend + vitest |
+
+**API (additive):** listing `?filters=` JSON (≤ 8 KB) + `total_records`, status `AUTO`; `POST …/import/descriptions/bulk/preview/` and
+`…/bulk/apply/` `{mode: filter|keys, filters?, status?, q?, sion?, keys?, item_ids, fingerprint}` (LICENSE_MANAGER; 201 when
+something was written, else 200). No migration.
+**Reviews (6 passes: code, React/TS, Django/Python, security, performance, cif-balance-auditor):** no blocking backend findings;
+React 4 blocking (TS `.at` in a test; Retry-failed lost on preview error; Select All Matching during placeholder data; bulk Item
+Names pre-filled after apply) → fixed; financial: **no canonical figure can change or be multiplied** (APPROVE); HSN/SION:
+4 MEDIUM → per-Item-Name HSN check, self-exclusion of mapped records from reference chapters, "Not verified" notes instead of
+silent passes, conflict details per description in bulk results. Security / perf: batch audit, lock, input caps, MAX_BULK 150
+(measured preview 0.24 s; est. 50–100 ms per description), batched application upsert.
+**Not changed (reported):** unverifiable context is noted, not blocked (≈ 3,000 import items have no HSN — blocking would
+prevent mapping them; owner may decide otherwise); reference HSN chapters still include pre-existing rule-based links of other
+records; bulk is synchronous (≤ 150) — a Celery job would be needed for larger single updates; reports that label a record
+with each of its Item Names (`purchase_profit_report`, unused `get_item_group_data`) pre-date this work (auditor LOW-3).
+
+## Nested filter groups + licence references (owner specs 2026-11-19 "NESTED FILTER CONDITION GROUPS" and "MASTER … LICENCE REFERENCES")
+
+| ID | Task | Status | Evidence |
+|---|---|---|---|
+| N1 | Nested ALL / ANY groups in the Licence Planning rule shape (`{operator: AND\|OR, conditions: [condition\|group]}`; ALL/ANY + `groups` accepted; flat form accepted), ≤ 12 levels / 128 nodes like `sion_rule_engine`, empty nested groups pruned, strict node classification | VERIFIED | `test_description_filters.py` 52 (examples A–D, 3+ levels, validation) |
+| N2 | Tree editor with the Planning `ExpressionTreeEditor` layout/interaction (Planning code untouched): + Condition / + Group per group, remove (populated group confirms), stable keys, unapplied-changes hint | VERIFIED | vitest (Example A, 3 levels, sibling removal) |
+| N3 | Nested filters drive the listing, Select All Matching and bulk (same server evaluator) | VERIFIED | `test_licence_references_counts_and_nested_filter_bulk` |
+| L1 | Per description: records, distinct licences, every licence as a chip → `/licenses/:id/overview` (real id), first 3 + "+ N more" | VERIFIED | backend + `LicenceRefs.test.tsx` |
+| L2 | Bulk confirmation: descriptions, records, distinct licences, affected licence chips (new tab); conflict licences reported uncapped | VERIFIED | backend + vitest |
+
+**Reviews (4 agents for 8 passes):** code (identity / recursion / bulk / future import): 1 BLOCKING (ambiguous nodes silently pruned → wider
+filter) → strict classification + tests; React (nested UI / licence refs): 1 BLOCKING (index keys in the recursive editor) → stable
+client ids stripped before apply + test; financial + HSN/SION (Opus): **APPROVE — no figure can change or be multiplied**; MEDIUM
+bulk order-dependence → HSN reference computed once per batch before any write + test; LOW stale notes refreshed, conflict licences
+uncapped. Performance: listing 0.25 s / 6 queries, nested filter 0.30 s, preview 0.23 s; licence refs built for the returned page only.
+**Tests (real runs):** description filters 52 + bulk 13 + mapping 12 = 77 passed; vitest mapping 29; backend gate: app-level
+3974 passed / 1 xfailed, tests/ 246 passed, check + migrations check + flake8 pass, ruff F401 FAIL pre-existing in
+`apps/accounting/selectors/licence_bank_ledger.py` (untouched; `ruff check apps/license` clean); frontend gate exit 0 (lint,
+typecheck, 1006 unit, build); Playwright navigation + licence overview 10/10.
+**Owner to confirm (policy):** records whose HSN / SION context cannot be verified are mapped with a visible "Not verified" note
+rather than blocked (the auditor considers this acceptable).
+
 ## Next action
 
-Push needs owner approval. Optional: a real-data Playwright run of `/mapping` (backend + local DB).
+Push: not authorised in the latest instruction (do not push). Optional: a real-data Playwright run of `/mapping`.

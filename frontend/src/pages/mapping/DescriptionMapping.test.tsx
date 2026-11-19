@@ -10,7 +10,7 @@ import DescriptionMapping, { type DescriptionRow } from "./DescriptionMapping";
 
 const row = (over: Partial<DescriptionRow>): DescriptionRow => ({
     key: "K", description: "D", wordings: 1, records: 3, licence_count: 2, licence_numbers: ["0310000001"], hsn_codes: ["15131900"], sion: ["E126"],
-    status: "MAPPING_REQUIRED", counts: { applied: 0, auto: 0, conflict: 0, stale: 0 }, conflicts: [], mapping: null, ...over,
+    status: "MAPPING_REQUIRED", counts: { applied: 0, auto: 0, conflict: 0, stale: 0 }, conflicts: [], mapping: null, licences: [{ id: 1, license_number: "0310000001" }], ...over,
 });
 const MASTERS = [{ item_id: 5, name: "PKO" }, { item_id: 6, name: "OLIVE OIL" }, { item_id: 7, name: "RBD PALMOLEIN OIL" }];
 let rows: DescriptionRow[] = [];
@@ -18,7 +18,7 @@ let rows: DescriptionRow[] = [];
 function setup(canApply = true) {
     vi.mocked(api.get).mockImplementation(async (url: string) => url.includes("matching/masters")
         ? { data: { masters: MASTERS } }
-        : { data: { rows, total: rows.length, summary: { MAPPING_REQUIRED: 1 }, offset: 0, limit: 50, can_apply: canApply } });
+        : { data: { rows, total: rows.length, total_records: rows.reduce((n, r) => n + r.records, 0), summary: { MAPPING_REQUIRED: 1 }, offset: 0, limit: 50, can_apply: canApply } });
     vi.mocked(api.post).mockResolvedValue({ data: { action: "CREATE", applied: 3, unchanged: 0, conflicts: 0, mapping: { id: 1, version: 1, items: [] } } });
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><DescriptionMapping /></MemoryRouter></QueryClientProvider>);
     return userEvent.setup();
@@ -34,7 +34,7 @@ describe("Licence import description mapping (map once)", () => {
         setup();
         const table = await screen.findByRole("table", { name: "Licence import item descriptions" });
         expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(
-            ["Original Item Description", "HSN", "SION", "Select Item Name", "Status", "Action"]);
+            ["", "Original Item Description", "HSN", "SION", "Select Item Name", "Status", "Action"]); // row-selection checkbox + the six business columns
         const tr = (await tableRow("RELEVANT FATS AND OILS NAMELY SESAME OIL / OLIVE OIL / PALM BASED OIL"));
         expect(within(tr).queryByRole("list", { name: /Selected Item Names/ })).toBeNull(); // no chips
         expect(within(tr).getByText("Mapping Required")).toBeInTheDocument();

@@ -76,53 +76,86 @@ def _legit_sions(items) -> dict[int, set[str] | None]:
     return out
 
 
-def _conflict(record, items, legit, chapters, sions) -> str:
-    """'' when the selected Item Names fit this record's licence SION and HSN, else the reason (record is not changed)."""
+def _chapters(item_ids, exclude_import_ids) -> dict[int, set[str]]:
+    """Item Name id → HSN chapters of the import items it is linked to, EXCLUDING the records being mapped now (their
+    current links must not vouch for themselves)."""
+    out: dict[int, set[str]] = defaultdict(set)
+    through = LicenseImportItemsModel.items.through
+    for name_id, hsn in (through.objects.filter(itemnamemodel_id__in=list(item_ids)).exclude(licenseimportitemsmodel_id__in=list(exclude_import_ids))
+                         .values_list("itemnamemodel_id", "licenseimportitemsmodel__hs_code__hs_code")):
+        if hsn:
+            out[name_id].add(str(hsn)[:2])
+    return out
+
+
+def _conflict(record, items, legit, chapters, sions) -> tuple[str, str]:
+    """→ (conflict, note). A conflict blocks the record (left unchanged, flagged): an Item Name not legitimate for the
+    licence's SION, or one whose known HSN chapters exclude the record's chapter (every Item Name is checked). A note
+    is informational — the context could not be verified (no HSN / no SION / no reference data) — and is shown."""
     licence_sions = sions.get(record.license_id, set())
+    notes = []
     if licence_sions:
         wrong = [i.name for i in items if legit[i.pk] is not None and not (legit[i.pk] & licence_sions)]
         if wrong:
-            return f"{', '.join(wrong)} not legitimate for licence SION {', '.join(sorted(licence_sions))}"
+            return f"{', '.join(wrong)} not legitimate for licence SION {', '.join(sorted(licence_sions))}", ""
+        unrestricted = [i.name for i in items if legit[i.pk] is None]
+        if unrestricted:
+            notes.append(f"no SION data for {', '.join(unrestricted)}")
+    else:
+        notes.append("licence has no SION")
     hsn = (record.hs_code.hs_code if record.hs_code_id else "") or ""
-    known = [chapters.get(i.pk, set()) for i in items]
-    if hsn and known and all(known) and not any(hsn[:2] in c for c in known):
-        return f"HSN {hsn} differs from the chapters used by {', '.join(i.name for i in items)} ({', '.join(sorted(set().union(*known)))})"
-    return ""
+    if not hsn:
+        notes.append("record has no HSN")
+    else:
+        wrong = [f"{i.name} ({', '.join(sorted(chapters[i.pk]))})" for i in items if chapters.get(i.pk) and hsn[:2] not in chapters[i.pk]]
+        if wrong:
+            return f"HSN {hsn} is outside the chapters used by {', '.join(wrong)}", ""
+        unknown = [i.name for i in items if not chapters.get(i.pk)]
+        if unknown:
+            notes.append(f"no HSN history for {', '.join(unknown)}")
+    return "", ("Not verified: " + "; ".join(notes)) if notes else ""
 
 
-def _records_for(key: str, *, lock: bool = False) -> list:
-    """Every import item whose description has exactly this key (raw wordings are normalised once each)."""
-    raw_hits = [d for d in LicenseImportItemsModel.objects.exclude(description__isnull=True).exclude(description="")
-                .values_list("description", flat=True).distinct() if description_key(d) == key]
+def _records_for(key: str, *, lock: bool = False, raw_descriptions=None) -> list:
+    """Every import item whose description has exactly this key. ``raw_descriptions``: the original wordings with this key
+    when the caller already knows them (bulk) — they are re-checked against the key, never trusted blindly."""
+    if raw_descriptions is None:
+        raw_descriptions = (LicenseImportItemsModel.objects.exclude(description__isnull=True).exclude(description="")
+                            .values_list("description", flat=True).distinct())
+    raw_hits = [d for d in raw_descriptions if description_key(d) == key]
     qs = LicenseImportItemsModel.objects.filter(description__in=raw_hits)
     if lock:
         list(qs.select_for_update(of=("self",)).order_by("pk").values_list("pk", flat=True))
-    return list(qs.select_related("hs_code").prefetch_related("items").order_by("pk"))
+    return list(qs.select_related("hs_code", "license").prefetch_related("items").order_by("pk"))
 
 
 # --- apply ----------------------------------------------------------------------------------------------------------
 
-def _apply(mapping: ImportDescriptionMapping, records: list, *, user, status: str, change_detail: dict, plan_impact: bool = True) -> dict:
-    """REPLACE the records' Item Names with the mapping's set (conflicts flagged). Caller holds the transaction."""
+def _apply(mapping: ImportDescriptionMapping, records: list, *, user, status: str, change_detail: dict, plan_impact: bool = True,
+           chapters: dict | None = None) -> dict:
+    """REPLACE the records' Item Names with the mapping's set (conflicts flagged). Caller holds the transaction.
+    ``chapters``: HSN reference computed once by a bulk run before any of its writes (order-independent results)."""
     from apps.license.services.product_intelligence.propagation import record_change
     from apps.license.services.replan_requests import mark_license_replan_source_changed
 
-    from apps.license.services.product_matching import _master_hsn_chapters
-
     items = list(mapping.items.prefetch_related("norms").select_related("sion_norm_class").order_by("pk"))
     item_ids = [i.pk for i in items]
-    legit, chapters = _legit_sions(items), _master_hsn_chapters(set(item_ids))
+    legit = _legit_sions(items)
+    chapters = _chapters(item_ids, [r.pk for r in records]) if chapters is None else chapters
     sions = _licence_sions(r.license_id for r in records)
     existing = {a.import_item_id: a for a in ImportItemDescriptionMapping.objects.filter(import_item_id__in=[r.pk for r in records])}
-    to_link, conflicts, unchanged = [], [], 0
+    to_link, conflicts, unchanged, note_only = [], [], 0, []
+    notes: dict[int, str] = {}
     for r in records:
-        reason = _conflict(r, items, legit, chapters, sions)
+        reason, notes[r.pk] = _conflict(r, items, legit, chapters, sions)
         current = sorted(i.pk for i in r.items.all())
         app = existing.get(r.pk)
         if reason:
             conflicts.append((r, reason, current))
         elif current == item_ids and app and app.mapping_id == mapping.pk and app.applied_version == mapping.version and app.status != app.CONFLICT:
             unchanged += 1  # idempotent / retry-safe
+            if (app.detail or "") != notes[r.pk]:
+                note_only.append((r, app))  # verification note changed (e.g. HSN data appeared) — refresh it, links untouched
         else:
             to_link.append((r, current))
     change = None
@@ -132,23 +165,42 @@ def _apply(mapping: ImportDescriptionMapping, records: list, *, user, status: st
                                source_refs=[mapping.pk], import_item_ids=[r.pk for r, _ in to_link],
                                detail={**change_detail, "mapping": mapping.pk, "version": mapping.version, "item_ids": item_ids},
                                plan_impact=plan_impact)
+    rows = []
     for r, current in to_link:
         if current != item_ids:
             r.items.set(item_ids)  # REPLACE
         app = existing.get(r.pk)
-        ImportItemDescriptionMapping.objects.update_or_create(import_item=r, defaults={
-            "mapping": mapping, "applied_version": mapping.version, "status": status, "detail": "",
-            "previous_item_ids": app.previous_item_ids if app else current})
+        rows.append(ImportItemDescriptionMapping(import_item=r, mapping=mapping, applied_version=mapping.version, status=status,
+                                                 detail=notes.get(r.pk, "")[:1000], previous_item_ids=app.previous_item_ids if app else current))
     for r, reason, current in conflicts:
         app = existing.get(r.pk)
-        ImportItemDescriptionMapping.objects.update_or_create(import_item=r, defaults={
-            "mapping": mapping, "applied_version": mapping.version, "status": ImportItemDescriptionMapping.CONFLICT, "detail": reason[:1000],
-            "previous_item_ids": app.previous_item_ids if app else current})
+        rows.append(ImportItemDescriptionMapping(import_item=r, mapping=mapping, applied_version=mapping.version, status=ImportItemDescriptionMapping.CONFLICT,
+                                                 detail=reason[:1000], previous_item_ids=app.previous_item_ids if app else current))
+    for r, app in note_only:
+        rows.append(ImportItemDescriptionMapping(import_item=r, mapping=mapping, applied_version=mapping.version, status=app.status,
+                                                 detail=notes[r.pk][:1000], previous_item_ids=app.previous_item_ids))
+    if rows:  # one upsert instead of a SELECT + write per record (no signals listen on this table)
+        ImportItemDescriptionMapping.objects.bulk_create(rows, update_conflicts=True, unique_fields=["import_item"],
+                                                         update_fields=["mapping", "applied_version", "status", "detail", "previous_item_ids", "applied_on"])
     for license_id in sorted({r.license_id for r, _ in to_link}):
         mark_license_replan_source_changed(license_id=license_id, reason="item_master_link_changed", source_model="license.MappingChange",
                                            source_pk=change.pk if change else None)
+    conflict_licences = sorted({(r.license_id, r.license.license_number) for r, _, _ in conflicts}, key=lambda x: (x[1] or "", x[0]))
     return {"applied": len(to_link), "unchanged": unchanged, "conflicts": len(conflicts), "mapping_change": change.pk if change else None,
-            "conflict_details": [{"import_item_id": r.pk, "license_id": r.license_id, "reason": reason} for r, reason, _ in conflicts[:50]]}
+            "conflict_details": [{"import_item_id": r.pk, "license_id": r.license_id, "license_number": r.license.license_number, "reason": reason}
+                                 for r, reason, _ in conflicts[:50]],
+            "conflict_licences": [{"id": lic, "license_number": number} for lic, number in conflict_licences]}  # every one, uncapped
+
+
+def validate_item_ids(item_ids) -> list[int]:
+    """1..MAX_ITEMS existing, active Item Name ids (sorted, de-duplicated) or MatchValidationError."""
+    if (not isinstance(item_ids, list) or not item_ids or len(item_ids) > MAX_ITEMS
+            or not all(isinstance(i, int) and not isinstance(i, bool) and i > 0 for i in item_ids)):
+        raise MatchValidationError(f"Select between 1 and {MAX_ITEMS} existing Item Names")
+    wanted = sorted(set(item_ids))
+    if set(ItemNameModel.objects.filter(pk__in=wanted, is_active=True).values_list("pk", flat=True)) != set(wanted):
+        raise MatchValidationError("Choose existing, active Item Names (create a missing one in Masters → Item Names first)")
+    return wanted
 
 
 def save_mapping(*, description: str, item_ids: list[int], user, expected_version: int | None = None, require_version: bool = False) -> dict:
@@ -160,13 +212,15 @@ def save_mapping(*, description: str, item_ids: list[int], user, expected_versio
     key = description_key(description)
     if not key:
         raise MatchValidationError("A description is required")
-    if (not isinstance(item_ids, list) or not item_ids or len(item_ids) > MAX_ITEMS
-            or not all(isinstance(i, int) and not isinstance(i, bool) and i > 0 for i in item_ids)):
-        raise MatchValidationError(f"Select between 1 and {MAX_ITEMS} existing Item Names")
-    wanted = sorted(set(item_ids))
-    found = set(ItemNameModel.objects.filter(pk__in=wanted, is_active=True).values_list("pk", flat=True))
-    if found != set(wanted):
-        raise MatchValidationError("Choose existing, active Item Names (create a missing one in Masters → Item Names first)")
+    return save_for_key(key=key, description=description, item_ids=item_ids, user=user, expected_version=expected_version,
+                        require_version=require_version)
+
+
+def save_for_key(*, key: str, description: str, item_ids: list[int], user, expected_version: int | None = None, require_version: bool = False,
+                 raw_descriptions=None, source: str = "row", batch: str = "", validated: bool = False, chapters: dict | None = None) -> dict:
+    """``save_mapping`` for an already computed strict key (one description = one mapping; bulk calls this per key with
+    ids it has already validated)."""
+    wanted = sorted(set(item_ids)) if validated else validate_item_ids(item_ids)
     with transaction.atomic():
         mapping, created = ImportDescriptionMapping.objects.select_for_update(no_key=True).get_or_create(
             key_hash=key_hash(key), defaults={"description_key": key, "description": description.strip()[:5000], "created_by": user, "updated_by": user})
@@ -186,15 +240,16 @@ def save_mapping(*, description: str, item_ids: list[int], user, expected_versio
                                                                      item_ids=wanted, previous_item_ids=previous, user=user)
         else:
             action, version = "UNCHANGED", None
-        records = _records_for(key, lock=True)
-        result = _apply(mapping, records, user=user, status=ImportItemDescriptionMapping.APPLIED,
-                        change_detail={"action": action, "previous_item_ids": previous})
+        records = _records_for(key, lock=True, raw_descriptions=raw_descriptions)
+        result = _apply(mapping, records, user=user, status=ImportItemDescriptionMapping.APPLIED, chapters=chapters,
+                        change_detail={"action": action, "previous_item_ids": previous, "source": source, **({"batch": batch} if batch else {})})
         if version is not None and result["mapping_change"]:
             version.mapping_change_id = result["mapping_change"]
             version.save(update_fields=["mapping_change"])
         ProductIntelAuditEvent.objects.create(action="import_description_mapped", user=user, detail={
             "mapping": mapping.pk, "version": mapping.version, "key": key[:300], "action": action, "item_ids": wanted,
-            "previous_item_ids": previous, "applied": result["applied"], "conflicts": result["conflicts"]})
+            "previous_item_ids": previous, "applied": result["applied"], "conflicts": result["conflicts"], "source": source,
+            **({"batch": batch} if batch else {})})
     return {"mapping": serialise(mapping), "action": action, **result}
 
 
@@ -216,7 +271,7 @@ def auto_apply(import_item_id: int) -> str | None:
     when there is no mapping (the description then shows as Mapping Required). Idempotent."""
     with transaction.atomic():
         record = (LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(pk=import_item_id)
-                  .select_related("hs_code").prefetch_related("items").first())
+                  .select_related("hs_code", "license").prefetch_related("items").first())
         if record is None or not (record.description or "").strip():
             return None
         mapping = (ImportDescriptionMapping.objects.select_for_update(no_key=True)
@@ -235,7 +290,7 @@ def apply_for_licence(license_id: int) -> int:
     mapped = 0
     with transaction.atomic():
         records = list(LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(license_id=license_id)
-                       .exclude(description__isnull=True).exclude(description="").select_related("hs_code").prefetch_related("items").order_by("pk"))
+                       .exclude(description__isnull=True).exclude(description="").select_related("hs_code", "license").prefetch_related("items").order_by("pk"))
         by_hash: dict[str, list] = defaultdict(list)
         for r in records:
             k = description_key(r.description)
@@ -256,14 +311,12 @@ def serialise(m: ImportDescriptionMapping) -> dict:
 
 # --- listing --------------------------------------------------------------------------------------------------------
 
-MAPPING_REQUIRED, APPLIED, CONFLICT, PARTIAL = "MAPPING_REQUIRED", "APPLIED", "CONFLICT", "PARTIAL"
+MAPPING_REQUIRED, APPLIED, AUTO, CONFLICT, PARTIAL = "MAPPING_REQUIRED", "APPLIED", "AUTO", "CONFLICT", "PARTIAL"
 
 
-def descriptions(*, q: str = "", status: str = "", sion: str = "", offset: int = 0, limit: int = 50) -> dict:
-    """One row per unique description key across all licence import items, with its saved mapping and status:
-    MAPPING_REQUIRED (no mapping) · APPLIED (every record carries the current version) · CONFLICT (some records were
-    flagged) · PARTIAL (some records not yet at the current version — retry)."""
-    offset, limit = max(0, int(offset)), max(1, min(int(limit), 100))
+def description_index() -> dict[str, dict]:
+    """strict key → {description, wordings (raw), record_ids, licences, numbers, hsn, sion, values} over every described
+    licence import item. ``values`` is what filter conditions evaluate (description wordings, HSN codes, SION norms)."""
     rows = list(LicenseImportItemsModel.objects.exclude(description__isnull=True).exclude(description="")
                 .values_list("pk", "description", "hs_code__hs_code", "license_id", "license__license_number"))
     sions = _licence_sions({r[3] for r in rows})
@@ -275,14 +328,46 @@ def descriptions(*, q: str = "", status: str = "", sion: str = "", offset: int =
         k = keys[desc]
         if not k:
             continue
-        g = groups.setdefault(k, {"key": k, "wordings": defaultdict(int), "record_ids": [], "hsn": set(), "sion": set(), "licences": set(), "numbers": set()})
-        g["wordings"][desc] += 1
+        g = groups.setdefault(k, {"key": k, "counts": defaultdict(int), "record_ids": [], "hsn": set(), "sion": set(), "licences": set(),
+                                  "numbers": set(), "refs": {}})
+        g["counts"][desc] += 1
         g["record_ids"].append(pk)
         g["licences"].add(lic)
         g["numbers"].add(number)
+        g["refs"][lic] = number  # distinct licences: id → licence number (a licence with two matching records appears once)
         if hsn:
             g["hsn"].add(hsn)
         g["sion"] |= sions.get(lic, set())
+    for g in groups.values():
+        g["wordings"] = sorted(g["counts"])
+        g["description"] = max(g["counts"].items(), key=lambda kv: (kv[1], kv[0]))[0]
+        g["values"] = {"description": g["wordings"], "hsn": sorted(g["hsn"]), "sion": sorted(g["sion"])}
+    return groups
+
+
+def licence_refs(group: dict) -> list[dict]:
+    """Every distinct licence holding a record with this description: ``[{id, license_number}]`` by licence number."""
+    return [{"id": lic, "license_number": number} for lic, number in sorted(group["refs"].items(), key=lambda kv: (kv[1] or "", kv[0]))]
+
+
+def descriptions(*, q: str = "", status: str = "", sion: str = "", offset: int = 0, limit: int = 50, filters=None) -> dict:
+    offset, limit = max(0, int(offset)), max(1, min(int(limit), 100))
+    out, summary, index = description_rows(q=q, status=status, sion=sion, filters=filters)
+    page = out[offset:offset + limit]
+    for r in page:  # every distinct licence, built for the returned page only
+        r["licences"] = licence_refs(index[r["key"]])
+    return {"rows": page, "total": len(out), "total_records": sum(r["records"] for r in out),
+            "summary": summary, "offset": offset, "limit": limit}
+
+
+def description_rows(*, q: str = "", status: str = "", sion: str = "", filters=None, index: dict | None = None) -> tuple[list[dict], dict, dict]:
+    """One row per unique description key across all licence import items, with its saved mapping and status:
+    MAPPING_REQUIRED (no mapping) · APPLIED (current version on every record, at least one saved by a user) · AUTO (every
+    record mapped automatically) · CONFLICT (some records flagged) · PARTIAL (some records not at the current version /
+    links changed — retry). ``filters`` (validated with ``description_filters.clean_filters``) select rows only."""
+    from apps.license.services.product_intelligence.description_filters import matches
+
+    groups = description_index() if index is None else index
     mappings = {m.key_hash: m for m in ImportDescriptionMapping.objects.filter(is_active=True).prefetch_related("items")}
     applied_by_item: dict[int, dict] = {a["import_item_id"]: a for a in ImportItemDescriptionMapping.objects.values(
         "import_item_id", "mapping_id", "applied_version", "status", "detail")}
@@ -297,8 +382,10 @@ def descriptions(*, q: str = "", status: str = "", sion: str = "", offset: int =
             continue
         if sion and sion not in g["sion"]:
             continue
+        if filters and not matches(g["values"], filters):
+            continue
         m = mappings.get(key_hash(k))
-        counts = {"applied": 0, "auto": 0, "conflict": 0, "stale": 0}
+        counts = {"applied": 0, "auto": 0, "conflict": 0, "stale": 0, "unverified": 0}
         reasons = []
         if m:
             wanted = {i.pk for i in m.items.all()}
@@ -311,15 +398,16 @@ def descriptions(*, q: str = "", status: str = "", sion: str = "", offset: int =
                 elif a["status"] == ImportItemDescriptionMapping.CONFLICT:
                     counts["conflict"] += 1
                     reasons.append(a["detail"])
-                elif a["status"] == ImportItemDescriptionMapping.AUTO:
-                    counts["auto"] += 1
                 else:
-                    counts["applied"] += 1
-        row_status = MAPPING_REQUIRED if m is None else CONFLICT if counts["conflict"] else PARTIAL if counts["stale"] else APPLIED
+                    counts["auto" if a["status"] == ImportItemDescriptionMapping.AUTO else "applied"] += 1
+                    if a["detail"]:
+                        counts["unverified"] += 1
+        row_status = (MAPPING_REQUIRED if m is None else CONFLICT if counts["conflict"] else PARTIAL if counts["stale"]
+                      else AUTO if counts["auto"] and not counts["applied"] else APPLIED)
         out.append({
-            "key": k, "description": max(g["wordings"].items(), key=lambda kv: (kv[1], kv[0]))[0], "wordings": len(g["wordings"]),
+            "key": k, "description": g["description"], "wordings": len(g["wordings"]),
             "records": len(g["record_ids"]), "licence_count": len(g["licences"]), "licence_numbers": sorted(g["numbers"])[:5],
-            "hsn_codes": sorted(g["hsn"])[:5], "sion": sorted(g["sion"]), "status": row_status, "counts": counts,
+            "hsn_codes": sorted(g["hsn"]), "sion": sorted(g["sion"]), "status": row_status, "counts": counts,
             "conflicts": list(dict.fromkeys(reasons))[:3],
             "mapping": {"id": m.pk, "version": m.version, "items": [{"item_id": i.pk, "name": i.name} for i in sorted(m.items.all(), key=lambda x: x.name)]} if m else None,
         })
@@ -328,6 +416,6 @@ def descriptions(*, q: str = "", status: str = "", sion: str = "", offset: int =
         summary[r["status"]] += 1
     if status:
         out = [r for r in out if r["status"] == status]
-    order = {MAPPING_REQUIRED: 0, CONFLICT: 1, PARTIAL: 2, APPLIED: 3}
+    order = {MAPPING_REQUIRED: 0, CONFLICT: 1, PARTIAL: 2, AUTO: 3, APPLIED: 4}
     out.sort(key=lambda r: (order[r["status"]], -r["records"], r["key"]))
-    return {"rows": out[offset:offset + limit], "total": len(out), "summary": dict(summary), "offset": offset, "limit": limit}
+    return out, dict(summary), groups

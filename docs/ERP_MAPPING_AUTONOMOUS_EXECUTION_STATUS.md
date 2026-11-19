@@ -247,6 +247,15 @@ rather than blocked (the auditor considers this acceptable).
   unchanged since 84af5605, whose full gate passed); frontend gate exit 0 (lint, typecheck, 1017 unit, build); Playwright navigation +
   licence overview + licence register 15/15. Final independent review: approve-with-nits (no blocking) → nits fixed.
 
+## Owner decision 2026-11-19 — HSN / SION verification policy (confirmed)
+
+1. Records whose HSN or SION is missing / cannot be verified are NOT blocked: the mapping is applied and the row shows
+   "Applied · Not verified" (note kept on the application row).
+2. Actually detected HSN / SION conflicts stay blocked (records unchanged, flagged, licences reported).
+3. Audit history is preserved; compatibility is re-validated when the mapping is saved or re-applied (Retry / bulk) or a
+   record is created / re-described — at that point a "Not verified" note is refreshed or cleared.
+4. No financial change; commits stay local on `feature/v5`; push only after separate owner approval.
+
 ## Next action
 
-Push: not authorised in the latest instruction (do not push). Optional: a real-data Playwright run of `/mapping`.
+Push: waits for separate owner approval. Optional: a real-data Playwright run of `/mapping`.

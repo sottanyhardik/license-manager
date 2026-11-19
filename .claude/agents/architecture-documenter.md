@@ -1,7 +1,7 @@
 ---
 name: architecture-documenter
 description: Architecture documenter. Use to keep architecture docs, Mermaid diagrams and ADRs (docs/02-architecture.md, docs/adr/, docs/claude/) in sync with the code after structural changes, using the code index and dependency graph. Edits docs/ only.
-model: sonnet
+model: haiku
 tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 

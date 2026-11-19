@@ -1,6 +1,6 @@
 # Architecture decisions — index and BOE session records
 
-Precedence: project `.claude/rules` > ADR-003 + `ARCHITECTURE_RULES.md` > vendored `.claude/rules/ecc` (see [README](README.md)).
+Precedence: project `.claude/rules` > ADR-003 + `ARCHITECTURE_RULES.md` > vendored `.claude/reference/ecc` (see [README](README.md)).
 This file links to existing decisions. It does not copy them.
 
 ## 1. Existing decisions (index)

@@ -1,7 +1,7 @@
 ---
 name: code-explorer
 description: Deeply analyzes existing codebase features by tracing execution paths, mapping architecture layers, and documenting dependencies to inform new development.
-model: sonnet
+model: haiku
 tools: Read, Grep, Glob
 ---
 
@@ -81,7 +81,7 @@ You deeply analyze codebases to understand how existing features work before new
 ## License Manager project context (added on vendoring — takes precedence over generic guidance above)
 
 - **Index first:** before opening source, `grep -i "Name" .claude/index/symbols.tsv` and `grep "^path" .claude/index/dependents.tsv` for blast radius. Read only the lines you need.
-- **Rules:** `CLAUDE.md`, `.claude/rules/` (project rules override the generic ECC rules in `.claude/rules/ecc/`).
+- **Rules:** `CLAUDE.md`, `.claude/rules/` (project rules override the generic ECC rules in `.claude/reference/ecc/`).
 - **Stack:** Django 6 / DRF / Python 3.14 / Postgres 16 / Redis / Celery (`backend/`), React 19 + TS 5.9 + Vite + Tailwind v4 + shadcn (`frontend/`), Django master-data service (`master-data-service/`) and its client (`mds-client/`).
 - **Business logic is critical infrastructure** — never change CIF/balance math, API response shapes or permissions silently. See `.claude/rules/business-rules.md`; escalate to `cif-balance-auditor` for anything touching balances.
 - **Gates:** authoritative CI is `.github/workflows/ci.yml`; run the relevant gates via `scripts/dev/quality-gate.sh` and report results honestly.

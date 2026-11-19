@@ -1,8 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "ECC_HOOK_PROFILE": "minimal",
+    "BASH_DEFAULT_TIMEOUT_MS": "300000"
+  },
   "permissions": {
-    "defaultMode": "acceptEdits",
-    "disableBypassPermissionsMode": "disable",
     "allow": [
       "Read",
       "Edit",
@@ -106,7 +108,47 @@
       "Bash(master-data-service/.venv/bin/python -m pytest:*)",
       "Bash(master-data-service/.venv/bin/python manage.py check:*)",
       "Bash(master-data-service/.venv/bin/python manage.py makemigrations:*)",
-      "Bash(master-data-service/.venv/bin/python manage.py showmigrations:*)"
+      "Bash(master-data-service/.venv/bin/python manage.py showmigrations:*)",
+      "Bash(rtk git status:*)",
+      "Bash(rtk git log:*)",
+      "Bash(rtk git diff:*)",
+      "Bash(rtk git show:*)",
+      "Bash(rtk ls:*)",
+      "Bash(rtk tree:*)",
+      "Bash(rtk grep:*)",
+      "Bash(rtk rg:*)",
+      "Bash(rtk pytest:*)",
+      "Bash(rtk ruff check:*)",
+      "Bash(rtk npx eslint:*)",
+      "Bash(rtk npx vitest:*)",
+      "Bash(rtk npx tsc:*)",
+      "Bash(rtk gain:*)",
+      "Bash(rtk recall:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)",
+      "Bash(python manage.py flush:*)",
+      "Bash(python manage.py reset_db:*)",
+      "Read(./.env)",
+      "Read(./backend/.env)",
+      "Read(./backend/.env_dgft)",
+      "Read(./frontend/.env.production)",
+      "Read(./master-data-service/.env)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.production)",
+      "Read(**/.env_dgft)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(~/.ssh/**)"
     ],
     "ask": [
       "Bash(git push:*)",
@@ -149,35 +191,8 @@
       "mcp__pycharm__import_data",
       "mcp__pycharm__execute_run_configuration"
     ],
-    "deny": [
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(git push --force-with-lease:*)",
-      "Bash(git reset --hard:*)",
-      "Bash(git clean -f:*)",
-      "Bash(git filter-branch:*)",
-      "Bash(ssh:*)",
-      "Bash(scp:*)",
-      "Bash(rsync:*)",
-      "Bash(python manage.py flush:*)",
-      "Bash(python manage.py reset_db:*)",
-      "Read(./.env)",
-      "Read(./backend/.env)",
-      "Read(./backend/.env_dgft)",
-      "Read(./frontend/.env.production)",
-      "Read(./master-data-service/.env)",
-      "Read(**/.env)",
-      "Read(**/.env.local)",
-      "Read(**/.env.production)",
-      "Read(**/.env_dgft)",
-      "Read(**/*.pem)",
-      "Read(**/*.key)",
-      "Read(~/.ssh/**)"
-    ]
-  },
-  "env": {
-    "ECC_HOOK_PROFILE": "minimal",
-    "BASH_DEFAULT_TIMEOUT_MS": "300000"
+    "defaultMode": "acceptEdits",
+    "disableBypassPermissionsMode": "disable"
   },
   "hooks": {
     "PreToolUse": [
@@ -193,6 +208,11 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_commit_check.py\"",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "rtk hook claude",
+            "timeout": 5
           }
         ]
       }
@@ -249,5 +269,13 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "context-mode": {
+      "source": {
+        "source": "github",
+        "repo": "mksglu/context-mode"
+      }
+    }
   }
 }

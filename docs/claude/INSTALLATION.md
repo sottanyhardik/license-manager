@@ -46,7 +46,7 @@ Then: `gh auth login` (GitHub CLI) and open a new terminal.
   `.claude/ECC_VENDORED.txt`; license: `.claude/ECC_LICENSE` (MIT). It contains:
   - 12 agents in `.claude/agents/`
   - 18 skills in `.claude/skills/`
-  - Python/React/TypeScript/web/common rules in `.claude/rules/ecc/`, path-scoped
+  - Python/React/TypeScript/web/common rules in `.claude/reference/ecc/`, path-scoped
 - **Optional full plugin:** `bootstrap-macos.sh --with-ecc-plugin`, or inside Claude run
   `/plugin marketplace add https://github.com/affaan-m/ECC` and then `/plugin install ecc@ecc`.
   This needs Node. `.claude/settings.json` sets `ECC_HOOK_PROFILE=minimal`. Don't copy ECC hooks into

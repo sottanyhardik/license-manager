@@ -31,7 +31,7 @@ Why vendored instead of the full plugin (decision 2026-11-15, `.claude/memory/de
 |---|---|
 | Specialist agents | 12 ECC agents in `.claude/agents/` (origin E in the roster), each with a project-context section |
 | Skills | 18 ECC skills in `.claude/skills/` (`metadata.origin: ECC`) |
-| Rules | `.claude/rules/ecc/{common,python,typescript,react,web}` (lower precedence than project rules) |
+| Rules | `.claude/reference/ecc/{common,python,typescript,react,web}` (lower precedence than project rules) |
 | Hooks | Project-native hooks (`.claude/hooks/`) instead of ECC's Node hooks (`ECC_HOOK_PROFILE=minimal` kept for the opt-in plugin) |
 | Commands / workflows | Project commands `/orchestrate /quality-gate /review-diff /cif-audit /report /remember /session-summary` |
 | Memory / context | `.claude/memory/` (shared) + `.claude/index/` (auto-rebuilt code index) + ECC `strategic-compact`, `context-budget` |

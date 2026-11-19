@@ -83,7 +83,7 @@ deletion/irreversible data operations. Never print or commit secrets (`.env*`,
 ## 6. Where things are
 
 - Agents: `.claude/agents/` (roster: `.claude/agents/README.md`)
-- Rules: `.claude/rules/` (project) + `.claude/rules/ecc/` (vendored ECC, lower precedence)
+- Rules: `.claude/rules/` (project, auto-loaded) · vendored ECC in `.claude/reference/ecc/` — on demand via skill `ecc-guidelines` (lower precedence) · token rules: `.claude/rules/token-optimization.md`
 - Skills: `.claude/skills/` · Commands: `.claude/commands/` (`/orchestrate`, `/quality-gate`, `/cif-audit`, `/review-diff`, `/report`, `/remember`, `/session-summary`)
 - Project memory: `.claude/memory/` (index: `.claude/memory/README.md`)
 - Setup/troubleshooting: `docs/claude/INSTALLATION.md`, `docs/claude/TROUBLESHOOTING.md`

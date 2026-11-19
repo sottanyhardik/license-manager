@@ -9,6 +9,6 @@ Rules moved to `.claude/rules/` on 2026-11-15 (original: `.claude/backups/2026-1
 | `rules/frontend.md` | React/Tailwind/shadcn stack + frontend gates — `frontend/**` |
 | `rules/safety.md` | Autonomy boundaries (always loaded) |
 | `rules/documentation-mode.md` | docs/ generation spec — `docs/**` |
-| `rules/ecc/**` | Vendored ECC language rules (lower precedence than the above) |
+| `reference/ecc/**` (on demand, not auto-loaded) | Vendored ECC language rules (lower precedence than the above) |
 
 Quality gates for every area: `scripts/dev/quality-gate.sh` (mirrors `.github/workflows/ci.yml`).

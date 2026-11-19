@@ -12,7 +12,7 @@ workstream is editing are marked *verify after WSn*.
 | 2 | `docs/decisions/ADR-003-backend-modular-monolith.md` | Backend layering. Status: Proposed, Batch C approved 2026-11-16. |
 | 3 | `docs/modernization/ARCHITECTURE_RULES.md` (rules 1-9) | How ADR-003 is enforced. AST ratchets: `backend/tests/architecture/test_architecture.py`. |
 | 4 | `docs/modernization/DECISION_REGISTER.md`, `docs/ui-modernization/DESIGN_SYSTEM.md`, `COMPONENT_STATUS.md`, `docs/modernization/frontend-audit/05_REUSABLE_COMPONENT_SPEC.md` | Workspace/UI decisions and component specs. |
-| 5 | `.claude/rules/ecc/{common,python,typescript,react,web}` | **Vendored Everything-Claude-Code (ECC) rule set.** Generic style, patterns, security and testing guidance. No project ADRs. Lowest precedence. |
+| 5 | `.claude/reference/ecc/{common,python,typescript,react,web}` | **Vendored Everything-Claude-Code (ECC) rule set.** Generic style, patterns, security and testing guidance. No project ADRs. Lowest precedence. |
 
 "ECC" in file names here means "decisions recorded under this workflow". It does not mean the vendored rules are the architecture.
 

@@ -3,6 +3,7 @@ Item Pivot Report - Excel rendering (export_to_excel_streaming).
 """
 
 import logging
+from decimal import Decimal, InvalidOperation
 
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,30 @@ from apps.license.api.views.item_pivot_helpers import (
 )
 
 
+_XLSX_TEXT_ITEM_FIELDS = ("hsn_code", "description")
+
+
+def _xlsx_number(value):
+    """The canonical JSON carries Decimals as strings; write them as numeric cells (exact Decimal, no arithmetic)."""
+    if isinstance(value, str):
+        try:
+            return Decimal(value)
+        except InvalidOperation:
+            return value
+    return value
+
+
+def _xlsx_item_value(key, value):
+    return value if key in _XLSX_TEXT_ITEM_FIELDS else _xlsx_number(value)
+
+
 class ItemPivotExcelMixin:
     """Mixin holding methods moved verbatim from ItemPivotReportView."""
 
     def export_to_excel_streaming(self, days=30, sion_norm=None, company_ids=None,
                                   exclude_company_ids=None, min_balance=200, license_status='active',
-                                  expiry_date_from=None, expiry_date_to=None, purchase_status=None):
+                                  expiry_date_from=None, expiry_date_to=None, purchase_status=None,
+                                  license_numbers=None):
         """
         Export report to Excel - uses existing generate_report for data, then formats as Excel.
         This ensures consistency with JSON output.
@@ -49,7 +68,7 @@ class ItemPivotExcelMixin:
 
         try:
             # Use the working generate_report method
-            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to, purchase_status)
+            report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to, purchase_status, license_numbers=license_numbers)
 
             # Export the exact canonical matrix used by the React pivot.  Do
             # not re-run any plan/usage arithmetic in the spreadsheet path.
@@ -148,10 +167,10 @@ class ItemPivotExcelMixin:
                     # Data rows start at row 4
                     dataStartRow = 4
                     for index, license_row in enumerate(group["licenses"], dataStartRow):
-                        row_data = [index - (dataStartRow - 1), license_row["license_number"], license_row["expiry_date"], license_row["exporter"], license_row["total_cif"], license_row["debited_cif"], license_row["allotted_cif"], license_row["planned_cif"], license_row["balance_cif"]]
+                        row_data = [index - (dataStartRow - 1), license_row["license_number"], license_row["expiry_date"], license_row["exporter"]] + [_xlsx_number(license_row[key]) for key in ("total_cif", "debited_cif", "allotted_cif", "planned_cif", "balance_cif")]
                         for item_idx, item in enumerate(item_groups):
                             cell = license_row["items"].get(item["key"])
-                            row_data.extend(cell.get(key) if cell else None for key, _label in item_fields[item_idx])
+                            row_data.extend(_xlsx_item_value(key, cell.get(key)) if cell else None for key, _label in item_fields[item_idx])
                         for col_idx, value in enumerate(row_data, 1):
                             cell = sheet.cell(row=index, column=col_idx, value=value)
                             if col_idx > numFixed:
@@ -160,12 +179,12 @@ class ItemPivotExcelMixin:
                     # Totals row
                     totals = group["totals"]
                     totalRow = dataStartRow + len(group["licenses"])
-                    total_row_data = [f"TOTAL — {group['license_count']} LICENCES", None, None, None, totals["total_cif"], totals["debited_cif"], totals["allotted_cif"], totals["planned_cif"], totals["balance_cif"]]
+                    total_row_data = [f"TOTAL — {group['license_count']} LICENCES", None, None, None] + [_xlsx_number(totals[key]) for key in ("total_cif", "debited_cif", "allotted_cif", "planned_cif", "balance_cif")]
                     for item_idx, item in enumerate(item_groups):
                         cell = totals["items"][item["key"]]
                         # Identity columns and RESTRICTION % carry no item total.
                         total_row_data.extend(
-                            None if key in ("hsn_code", "description", "restriction_percent") else cell.get(key)
+                            None if key in ("hsn_code", "description", "restriction_percent") else _xlsx_item_value(key, cell.get(key))
                             for key, _label in item_fields[item_idx]
                         )
                     totalFont = Font(bold=True, size=11)

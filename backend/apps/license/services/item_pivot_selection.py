@@ -3,6 +3,7 @@
 Moved verbatim from ``ItemPivotGenerateMixin.generate_report`` so both read
 exactly the same filtered, prefetched licence population.
 """
+import re
 from decimal import Decimal
 
 from django.db.models import Q, Prefetch
@@ -14,11 +15,54 @@ from apps.license.models import (
 )
 
 
+# License Numbers filter: pasted lists are split on commas (and newlines / semicolons / tabs, which is what a
+# spreadsheet column paste produces). A token longer than the model field can never match and is reported invalid.
+LICENSE_NUMBER_SEPARATORS = re.compile(r"[,;\n\r\t]+")
+LICENSE_NUMBER_MAX_LENGTH = 50  # LicenseDetailsModel.license_number max_length
+MAX_LICENSE_NUMBERS = 5000
+
+
+def parse_license_numbers(raw) -> list[str]:
+    """Split, trim, drop empties and de-duplicate (first occurrence order kept). Exact values — no case folding."""
+    if not raw:
+        return []
+    seen: dict[str, None] = {}
+    for token in LICENSE_NUMBER_SEPARATORS.split(str(raw)):
+        token = token.strip()
+        if token:
+            seen.setdefault(token, None)
+    return list(seen)
+
+
+def license_number_filter_summary(requested: list[str], selected_licenses: list) -> dict:
+    """Additive report metadata: which requested numbers matched, which exist but fall outside the other filters
+    (with their SION norms, since the report is built per norm tab), and which match no licence at all."""
+    matched_set = {lic.license_number for lic in selected_licenses}
+    candidates = [n for n in requested if len(n) <= LICENSE_NUMBER_MAX_LENGTH]
+    norms_by_number: dict[str, set] = {}
+    for number, norm in LicenseDetailsModel.objects.filter(license_number__in=candidates).values_list(
+            "license_number", "export_license__norm_class__norm_class"):
+        norms_by_number.setdefault(number, set())
+        if norm:
+            norms_by_number[number].add(norm)
+    return {
+        "requested": requested,
+        "requested_count": len(requested),
+        "matched": [n for n in requested if n in matched_set],
+        "excluded_by_filters": [
+            {"license_number": n, "sion_norms": sorted(norms_by_number[n])}
+            for n in requested if n not in matched_set and n in norms_by_number
+        ],
+        "not_found": [n for n in requested if n not in matched_set and n not in norms_by_number],
+    }
+
+
 def select_pivot_licenses(days: int = 30, sion_norm: str = None,
                           company_ids: str = None, exclude_company_ids: str = None,
                           min_balance: int = 200, license_status: str = 'active',
                           expiry_date_from: str = None, expiry_date_to: str = None,
-                          purchase_status: str = None, include_norm_links: bool = False) -> list:
+                          purchase_status: str = None, include_norm_links: bool = False,
+                          license_numbers: list[str] | None = None) -> list:
     from datetime import date, timedelta
     today = date.today()
 
@@ -33,6 +77,11 @@ def select_pivot_licenses(days: int = 30, sion_norm: str = None,
     licenses = LicenseDetailsModel.objects.filter(
         purchase_status__code__in=ps_codes
     )
+
+    # License Numbers filter (AND-ed with every other filter; one ``IN`` query, applied before the live-balance
+    # batch so only the requested licences are balanced). None/empty keeps the historical behaviour.
+    if license_numbers:
+        licenses = licenses.filter(license_number__in=list(license_numbers))
 
     # Apply license status filter
     if license_status == 'active':

@@ -364,3 +364,20 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   `e2e/e126-entitlement.live.spec.ts` written; NOT RUN (no saved auth state).
 - Open: Auto Plan Olive CIF 8,77,628.98 vs residual 8,80,668.89 (planner reserves PKO at rate; 3,046.18 not re-flowed) — owner decision.
 <!-- CHECKPOINT:e126-entitlement:END -->
+
+<!-- CHECKPOINT:item-pivot-license-numbers:BEGIN -->
+**Item Pivot — License Numbers filter — VERIFIED + COMMITTED (2026-11-20, feature/v5, not pushed)** (only these hunks; peers' WIP in the same files left uncommitted)
+- Backend: `license_numbers` GET param (comma/newline/;/tab split, trim, dedupe, exact `IN`, AND-ed with all filters, max 5000 → 400)
+  in `item_pivot_selection.py` (`parse_license_numbers`, `license_number_filter_summary`), threaded through `item_pivot_report.py`,
+  `item_pivot_generate.py`, `item_pivot_excel.py`. Additive response key `license_number_filter` {requested, matched,
+  excluded_by_filters[{license_number, sion_norms}], not_found}. Excel matrix sheet CIF/qty cells now written as numbers (were text).
+- Frontend: textarea + count + Apply (Ctrl+Enter) + Clear in `ItemPivotFilters.tsx`; state/export/chips/notice in `ItemPivotReport.tsx`.
+- Tests: pytest `-k pivot` 294 passed (exit 0) incl. new `test_item_pivot_license_numbers.py` (19); balance pins 144 passed (exit 0);
+  vitest ItemPivot* 41 passed (exit 0); tsc 0; eslint 0; build 0; Playwright new spec 1/1 passed. Existing `item-pivot.sticky.spec.ts`
+  fails: seeded norm "E2E2509" absent from the current local DB (pre-existing data dependency).
+- Snapshot gate (`quality-gate.sh all`, detached worktree of the exact commit tree): all PASS except 2 pre-existing, unrelated:
+  ruff F401 `apps/accounting/selectors/licence_bank_ledger.py:25` (present at HEAD; peer WIP fixes it) and mds-client in `all`
+  mode (gate leaks `DJANGO_SETTINGS_MODULE=mds.settings`; standalone mds-client runtests exit 0). cif-balance-auditor: PASS.
+  Playwright spec re-run against a backend+Vite started from the snapshot: 1/1 passed.
+- Next: none for this feature. Open: other norm tabs are separate pivots (by design); GET URL length (~600 numbers at nginx 8 KB default).
+<!-- CHECKPOINT:item-pivot-license-numbers:END -->

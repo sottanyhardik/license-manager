@@ -18,6 +18,7 @@ import LicensePlanningPanel from "../../components/planning/LicensePlanningPanel
 import { PURCHASE_STATUS_PALETTE, PURCHASE_STATUS_UNKNOWN } from "../../theme/tokens";
 import NormCardGrid from "./NormCardGrid";
 import ItemPivotFilters from "./ItemPivotFilters";
+import { parseLicenseNumbers } from "./itemPivotFilterHelpers";
 import C969EntitlementTable, { C969GroupSummary } from "./C969EntitlementTable";
 import { openAuthedFile } from "../../utils/documentDownload";
 import { usePurchaseStatusOptions } from "../../hooks/useMasterOptions";
@@ -356,6 +357,11 @@ export default function ItemPivotReport() {
     // uses for its own Purchase Status filter).
     const { options: purchaseStatusOptions } = usePurchaseStatusOptions();
     const [purchaseStatus, setPurchaseStatus] = useState<string[]>([]);
+    // License Numbers filter: the textarea draft vs. the applied (parsed, de-duplicated) list sent to the API.
+    const [licenseNumbersInput, setLicenseNumbersInput] = useState('');
+    const [licenseNumbers, setLicenseNumbers] = useState<string[]>([]);
+    const applyLicenseNumbers = () => setLicenseNumbers(parseLicenseNumbers(licenseNumbersInput));
+    const clearLicenseNumbers = () => { setLicenseNumbersInput(''); setLicenseNumbers([]); };
     const purchaseStatusDefaultApplied = useRef(false);
     useEffect(() => {
         if (!purchaseStatusDefaultApplied.current && purchaseStatusOptions.length > 0) {
@@ -492,6 +498,7 @@ export default function ItemPivotReport() {
                 expiryDateFrom,
                 expiryDateTo,
                 purchaseStatus,
+                licenseNumbers,
             }), { signal: controller.signal });
 
             // Only commit state if this request was not superseded
@@ -515,7 +522,7 @@ export default function ItemPivotReport() {
                 setLoading(false);
             }
         }
-    }, [selectedCompanies, excludeCompanies, debouncedMinBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus]);
+    }, [selectedCompanies, excludeCompanies, debouncedMinBalance, licenseStatus, expiryDateFrom, expiryDateTo, purchaseStatus, licenseNumbers]);
 
     // Load report when active norm tab changes or filters change
     useEffect(() => {
@@ -593,6 +600,7 @@ export default function ItemPivotReport() {
                 expiryDateFrom,
                 expiryDateTo,
                 purchaseStatus,
+                licenseNumbers,
             }), "item_pivot_report.xlsx");
         } catch (error) {
             toast.error(error?.response?.data?.error || 'Failed to download report. Please try again.');
@@ -635,6 +643,7 @@ export default function ItemPivotReport() {
         setExpiryDateTo('');
         // Back to the master's active-status default, not a hardcoded list.
         setPurchaseStatus(purchaseStatusOptions.map(o => o.value));
+        clearLicenseNumbers();
     };
 
     // Purchase Status is "active" only when it differs from the master's
@@ -642,7 +651,7 @@ export default function ItemPivotReport() {
     const isDefaultPurchaseStatus =
         purchaseStatus.length === purchaseStatusOptions.length &&
         purchaseStatusOptions.every(o => purchaseStatus.includes(o.value));
-    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus;
+    const hasActiveFilters = selectedCompanies.length > 0 || excludeCompanies.length > 0 || minBalance !== 200 || licenseStatus !== 'active' || expiryDateFrom || expiryDateTo || !isDefaultPurchaseStatus || licenseNumbers.length > 0;
 
     const getTotalLicenseCount = () => {
         if (!reportData) return 0;
@@ -752,6 +761,9 @@ export default function ItemPivotReport() {
                     excludeCompanies={excludeCompanies} handleExcludeCompanyChange={handleExcludeCompanyChange}
                     hasActiveFilters={hasActiveFilters} handleClearFilters={handleClearFilters}
                     isDefaultPurchaseStatus={isDefaultPurchaseStatus}
+                    licenseNumbersInput={licenseNumbersInput} setLicenseNumbersInput={setLicenseNumbersInput}
+                    appliedLicenseNumbers={licenseNumbers}
+                    onApplyLicenseNumbers={applyLicenseNumbers} onClearLicenseNumbers={clearLicenseNumbers}
                 />
             )}
 
@@ -765,6 +777,7 @@ export default function ItemPivotReport() {
                     expiryDateFrom,
                     expiryDateTo,
                     purchaseStatus,
+                    licenseNumbers,
                 }}
                 onRemoveFilter={(key) => {
                     switch (key) {
@@ -775,6 +788,7 @@ export default function ItemPivotReport() {
                         case 'expiryDateFrom': setExpiryDateFrom(''); break;
                         case 'expiryDateTo': setExpiryDateTo(''); break;
                         case 'purchaseStatus': setPurchaseStatus(purchaseStatusOptions.map(o => o.value)); break;
+                        case 'licenseNumbers': clearLicenseNumbers(); break;
                     }
                 }}
                 onClearAll={handleClearFilters}
@@ -789,6 +803,7 @@ export default function ItemPivotReport() {
                 setReportData={setReportData}
                 loading={loading}
             />
+            <LicenseNumberFilterNotice summary={licenseNumbers.length ? reportData?.license_number_filter : null} />
 
             {/* Report Tables - Only show active norm (classic pivot) */}
             <div>
@@ -1860,6 +1875,7 @@ function ItemPivotReportActiveFiltersDisplay({
         expiryDateFrom: string;
         expiryDateTo: string;
         purchaseStatus: string[];
+        licenseNumbers?: string[];
     };
     onRemoveFilter: (key: string) => void;
     onClearAll: () => void;
@@ -1867,6 +1883,15 @@ function ItemPivotReportActiveFiltersDisplay({
 }) {
     const activeFilters: ActiveFilterItem[] = useMemo(() => {
         const items: ActiveFilterItem[] = [];
+
+        // License Numbers
+        if (filters.licenseNumbers?.length) {
+            items.push({
+                key: 'licenseNumbers',
+                label: 'License Numbers',
+                value: `${filters.licenseNumbers.length} entered`,
+            });
+        }
 
         // Companies
         if (filters.selectedCompanies.length > 0) {
@@ -1944,6 +1969,33 @@ function ItemPivotReportActiveFiltersDisplay({
                 onClearAll={onClearAll}
                 showCount={true}
             />
+        </div>
+    );
+}
+
+/** Requested licence numbers the current report does not show: unknown numbers, and licences that exist but are
+ *  outside the other filters (another SION norm tab, status, balance, purchase status, company…). */
+export function LicenseNumberFilterNotice({ summary }: { summary?: { requested_count?: number; matched?: string[]; not_found?: string[]; excluded_by_filters?: { license_number: string; sion_norms: string[] }[] } | null }) {
+    if (!summary) return null;
+    const notFound = summary.not_found || [];
+    const excluded = summary.excluded_by_filters || [];
+    const matched = summary.matched?.length ?? 0;
+    return (
+        <div className="mb-4 rounded-md border border-border bg-card px-3 py-2 text-xs" role="status" data-testid="license-number-filter-notice">
+            <div className="font-medium text-foreground">
+                License Numbers: {matched} of {summary.requested_count ?? matched} matched in this report
+            </div>
+            {excluded.length > 0 && (
+                <div className="mt-1 text-muted-foreground">
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Outside the other filters ({excluded.length}):</span>{' '}
+                    {excluded.map(e => e.sion_norms.length ? `${e.license_number} (${e.sion_norms.join('/')})` : e.license_number).join(', ')}
+                </div>
+            )}
+            {notFound.length > 0 && (
+                <div className="mt-1 text-muted-foreground">
+                    <span className="font-medium text-destructive">Not found ({notFound.length}):</span> {notFound.join(', ')}
+                </div>
+            )}
         </div>
     );
 }

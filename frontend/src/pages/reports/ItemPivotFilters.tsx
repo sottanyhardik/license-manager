@@ -2,8 +2,10 @@ import { useId } from "react";
 import Select from "react-select";
 import AsyncSelectField from "../../components/AsyncSelectField";
 import DateRangeFilter from "../../components/DateRangeFilter";
-import { Building2, CalendarCheck, CalendarRange, DollarSign, Filter, MinusCircle, ShoppingCart, SlidersHorizontal, XCircle } from "lucide-react";
-import { normalizeMinBalance } from "./itemPivotFilterHelpers";
+import { Building2, CalendarCheck, CalendarRange, DollarSign, Filter, Hash, MinusCircle, ShoppingCart, SlidersHorizontal, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { normalizeMinBalance, parseLicenseNumbers } from "./itemPivotFilterHelpers";
 
 type SelectOption = {
     value: string;
@@ -29,6 +31,12 @@ interface ItemPivotFiltersProps {
     hasActiveFilters: boolean | string;
     handleClearFilters: () => void;
     isDefaultPurchaseStatus: boolean;
+    /** Draft text of the License Numbers box (applied on "Apply" / Ctrl+Enter, not per keystroke). */
+    licenseNumbersInput?: string;
+    setLicenseNumbersInput?: (v: string) => void;
+    appliedLicenseNumbers?: string[];
+    onApplyLicenseNumbers?: () => void;
+    onClearLicenseNumbers?: () => void;
 }
 
 const BALANCE_OPTIONS = [
@@ -49,7 +57,13 @@ export default function ItemPivotFilters({
     expiryDateFrom, setExpiryDateFrom, expiryDateTo, setExpiryDateTo,
     selectedCompanies, handleCompanyChange, excludeCompanies, handleExcludeCompanyChange,
     hasActiveFilters, handleClearFilters, isDefaultPurchaseStatus,
+    licenseNumbersInput = "", setLicenseNumbersInput, appliedLicenseNumbers = [],
+    onApplyLicenseNumbers, onClearLicenseNumbers,
 }: ItemPivotFiltersProps) {
+    const licenseNumbersId = useId();
+    const licenseNumbersCountId = useId();
+    const enteredLicenseNumbers = parseLicenseNumbers(licenseNumbersInput);
+    const licenseNumbersPending = enteredLicenseNumbers.join(",") !== appliedLicenseNumbers.join(",");
     const minBalanceId = useId();
     const licenseStatusId = useId();
     const purchaseStatusId = useId();
@@ -78,6 +92,45 @@ export default function ItemPivotFilters({
                 )}
             </div>
             <div className="px-3 py-3 sm:px-4 sm:py-4">
+                {setLicenseNumbersInput && (
+                    <div className="mb-3 sm:mb-4">
+                        <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={licenseNumbersId}>
+                            <Hash className="size-4" aria-hidden="true" />
+                            License Numbers
+                        </label>
+                        <Textarea
+                            id={licenseNumbersId}
+                            aria-describedby={licenseNumbersCountId}
+                            rows={2}
+                            className="min-h-9 resize-y bg-card font-mono text-sm"
+                            placeholder="Enter license numbers separated by commas"
+                            value={licenseNumbersInput}
+                            onChange={(e) => setLicenseNumbersInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                    e.preventDefault();
+                                    onApplyLicenseNumbers?.();
+                                }
+                            }}
+                        />
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span id={licenseNumbersCountId} className="text-xs text-muted-foreground" aria-live="polite">
+                                {enteredLicenseNumbers.length} {enteredLicenseNumbers.length === 1 ? "license" : "licenses"} entered
+                                {appliedLicenseNumbers.length > 0 && !licenseNumbersPending && " · applied"}
+                                {licenseNumbersPending && " · not applied yet (Ctrl+Enter)"}
+                            </span>
+                            <div className="ml-auto flex gap-1.5">
+                                <Button type="button" size="sm" variant="default" onClick={onApplyLicenseNumbers} disabled={!licenseNumbersPending}>
+                                    Apply
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" aria-label="Clear license numbers" onClick={onClearLicenseNumbers} disabled={!licenseNumbersInput && appliedLicenseNumbers.length === 0}>
+                                    <XCircle className="size-4" aria-hidden="true" />
+                                    Clear
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4 lg:gap-4">
                     <div>
                         <label className="form-label mb-2 flex items-center gap-2 font-bold" htmlFor={minBalanceId}>
@@ -210,6 +263,9 @@ export default function ItemPivotFilters({
                                 )}
                                 {expiryDateFrom && <span className="chip chip-primary text-xs">Expiry From: {expiryDateFrom}</span>}
                                 {expiryDateTo && <span className="chip chip-primary text-xs">Expiry To: {expiryDateTo}</span>}
+                                {appliedLicenseNumbers.length > 0 && (
+                                    <span className="chip chip-primary text-xs">License Numbers: {appliedLicenseNumbers.length}</span>
+                                )}
                                 {selectedCompanies.length > 0 && (
                                     <span className="badge bg-primary text-xs">Incl. Companies: {selectedCompanies.length}</span>
                                 )}

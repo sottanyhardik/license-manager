@@ -102,11 +102,16 @@ class ItemPivotReportView(ItemPivotGenerateMixin, ItemPivotRowMixin, ItemPivotEx
         expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
         expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
         purchase_status = request.GET.get('purchase_status')    # Comma-separated codes
+        # Comma-separated licence numbers (exact match); trimmed, de-duplicated, empty tokens ignored.
+        from apps.license.services.item_pivot_selection import MAX_LICENSE_NUMBERS, parse_license_numbers
+        license_numbers = parse_license_numbers(request.GET.get('license_numbers')) or None
+        if license_numbers and len(license_numbers) > MAX_LICENSE_NUMBERS:
+            return JsonResponse({'error': f'Too many license numbers: {len(license_numbers)} (maximum {MAX_LICENSE_NUMBERS}).'}, status=400)
 
         # For Excel export, use streaming approach to avoid timeout
         if output_format == 'excel':
             try:
-                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to, purchase_status)
+                return self.export_to_excel_streaming(days, sion_norm, company_ids, exclude_company_ids, min_balance, license_status, expiry_date_from, expiry_date_to, purchase_status, license_numbers=license_numbers)
             except Exception as e:
                 logger.exception("Error exporting item pivot report to Excel")
                 return JsonResponse({
@@ -129,7 +134,8 @@ class ItemPivotReportView(ItemPivotGenerateMixin, ItemPivotRowMixin, ItemPivotEx
         # For JSON, generate full report
         try:
             report_data = self.generate_report(days, sion_norm, company_ids, exclude_company_ids, min_balance,
-                                               license_status, expiry_date_from, expiry_date_to, purchase_status)
+                                               license_status, expiry_date_from, expiry_date_to, purchase_status,
+                                               license_numbers=license_numbers)
         except Exception as e:
             return JsonResponse({
                 'error': str(e)

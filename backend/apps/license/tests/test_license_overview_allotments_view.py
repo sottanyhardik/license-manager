@@ -190,7 +190,9 @@ class OverviewAllotmentsOutstandingCifScenarioTests(LicenseBalanceLedgerFixtureM
         # Decided 2026-11-17: ANY M2M link is full consumption (no remainder 25).
         self._assert_footer_equals_engine(rows, engine, Decimal("0.00"))
 
-    def test_c_prime_partial_formal_allocation_leaves_remainder(self):
+    def test_c_prime_partial_formal_allocation_releases_remainder(self):
+        # Owner DEC-14 B (2026-11-20): a short formal allocation releases the
+        # uncovered remainder (was: remainder 25 kept reserved).
         from apps.reconciliation.services.allocation_service import create_boe_allotment_allocation
 
         _, allotment_item = self._allot(Decimal("40.00"))
@@ -202,7 +204,7 @@ class OverviewAllotmentsOutstandingCifScenarioTests(LicenseBalanceLedgerFixtureM
         )
         rows, engine = self._rows_and_engine()
         self.assertEqual(rows[0]["cif_fc"], 40.0)
-        self._assert_footer_equals_engine(rows, engine, Decimal("25.00"))
+        self._assert_footer_equals_engine(rows, engine, Decimal("0.00"))
 
     def test_d_mixed_allotments_footer_excludes_only_linked(self):
         self._allot(Decimal("30.00"))  # outstanding

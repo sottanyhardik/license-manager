@@ -414,7 +414,8 @@ class TestItemBalanceCalculator(TestCase):
         mock_item = Mock()
 
         with patch.object(ItemBalanceCalculator, 'calculate_item_credit_debit',
-                          return_value=(Decimal('500.00'), Decimal('200.00'))):
+                          return_value=(Decimal('500.00'), Decimal('200.00'))), \
+                patch.object(ItemBalanceCalculator, 'licence_balance_cap', return_value=Decimal('1000.00')):
             # Execute
             result = ItemBalanceCalculator.calculate_item_balance(mock_item)
 
@@ -427,7 +428,8 @@ class TestItemBalanceCalculator(TestCase):
         mock_item = Mock()
 
         with patch.object(ItemBalanceCalculator, 'calculate_item_credit_debit',
-                          return_value=(Decimal('100.00'), Decimal('300.00'))):
+                          return_value=(Decimal('100.00'), Decimal('300.00'))), \
+                patch.object(ItemBalanceCalculator, 'licence_balance_cap', return_value=Decimal('1000.00')):
             # Execute
             result = ItemBalanceCalculator.calculate_item_balance(mock_item)
 
@@ -1153,6 +1155,12 @@ class TestOutstandingAllotmentQuantityExclusion(DjangoTestCase):
             company=company, bill_of_entry_number=str(uuid.uuid4().int)[:9],
             bill_of_entry_date=datetime.now().date(), exchange_rate=Decimal("84.50"),
         )
+        # A REAL BOE carries a DEBIT row (owner DEC-03 C, 2026-11-20: a link to
+        # a rowless BOE no longer consumes the allotment).
+        RowDetails.objects.create(
+            bill_of_entry=boe, sr_number=item, transaction_type=DEBIT,
+            cif_fc=Decimal("500.00"), cif_inr=Decimal("42250.00"), qty=Decimal("100.000"),
+        )
         allotment = AllotmentModel.objects.create(company=company, item_name="Linked Allotment", is_boe=False)
         boe.allotment.add(allotment)
         AllotmentItems.objects.create(
@@ -1185,10 +1193,11 @@ class TestOutstandingAllotmentQuantityExclusion(DjangoTestCase):
         assert qty == Decimal("100.000")
         assert cif == Decimal("500.00")
 
-    def test_partially_allocated_allotment_only_leaves_remainder_quantity(self):
-        """A formal, PARTIAL `BOEAllotmentAllocation` (no `.boes` M2M tag)
-        must leave only the unallocated remainder as outstanding — nothing
-        lost, nothing double-counted."""
+    def test_partially_allocated_allotment_releases_remainder_quantity(self):
+        """Owner DEC-14 B (2026-11-20, supersedes the 2026-11-17 partial
+        netting): a formal, PARTIAL `BOEAllotmentAllocation` releases the
+        whole allotment item — the uncovered remainder is no longer
+        reserved. The BOE row itself stays debited once."""
         from apps.allotment.models import AllotmentItems, AllotmentModel
         from apps.reconciliation.services.allocation_service import create_boe_allotment_allocation
 
@@ -1216,8 +1225,8 @@ class TestOutstandingAllotmentQuantityExclusion(DjangoTestCase):
 
         qty, cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(item)
 
-        assert qty == Decimal("40.000")  # 100 - 60 allocated
-        assert cif == Decimal("200.00")  # 500 - 300 allocated
+        assert qty == DEC_0  # remainder 40 released (DEC-14 B)
+        assert cif == DEC_0  # remainder 200 released (DEC-14 B)
 
 
 class TestHiddenBoeExclusion(DjangoTestCase):

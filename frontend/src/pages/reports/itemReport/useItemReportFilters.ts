@@ -22,6 +22,9 @@ function isDefaultSelection(selected: string[], options: SelectOption[]): boolea
  * balance thresholds, license status, purchase status, norms,
  * notifications, product description / HSN search, expiry range).
  */
+/** Item Report Planning Status filter (server-side `planning_status`). */
+export type PlanningStatus = "all" | "planned" | "unplanned";
+
 export function useItemReportFilters() {
     const [selectedItemNames, setSelectedItemNames] = useState<unknown[]>([]);
     const [minBalance, setMinBalance] = useState(200);
@@ -51,6 +54,8 @@ export function useItemReportFilters() {
     const [notificationOptions, setNotificationOptions] = useState<SelectOption[]>([]);
     const [expiryDateFrom, setExpiryDateFrom] = useState('');
     const [expiryDateTo, setExpiryDateTo] = useState('');
+    const [planningStatus, setPlanningStatus] = useState<PlanningStatus>('all');
+    const [licenseNumbers, setLicenseNumbers] = useState('');
 
     useEffect(() => {
         let isMounted = true;
@@ -99,7 +104,9 @@ export function useItemReportFilters() {
         selectedNotifications,
         expiryDateFrom,
         expiryDateTo,
-    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications, expiryDateFrom, expiryDateTo]);
+        planningStatus,
+        licenseNumbers,
+    }), [selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies, isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications, expiryDateFrom, expiryDateTo, planningStatus, licenseNumbers]);
 
     const { debouncedFilters, isPending } = useDebouncedFilters(filters, 500);
 
@@ -143,9 +150,11 @@ export function useItemReportFilters() {
         setSelectedNotifications([]);
         setExpiryDateFrom('');
         setExpiryDateTo('');
+        setPlanningStatus('all');
+        setLicenseNumbers('');
     };
 
-    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || !isDefaultSelection(purchaseStatus, purchaseStatusOptions) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0 || expiryDateFrom !== '' || expiryDateTo !== '';
+    const hasActiveFilters = selectedItemNames.length > 0 || minBalance !== 200 || minAvailQty !== 0 || licenseStatus !== 'active' || selectedCompanies.length > 0 || excludeCompanies.length > 0 || isRestricted !== 'all' || !isDefaultSelection(purchaseStatus, purchaseStatusOptions) || productDescSearch !== '' || hsnCodeSearch !== '' || selectedNorms.length > 0 || selectedNotifications.length > 0 || expiryDateFrom !== '' || expiryDateTo !== '' || planningStatus !== 'all' || licenseNumbers.trim() !== '';
 
     // Whether there's enough of a query to actually load/show a report —
     // matches the "select filters to view report" gating used by both pages.
@@ -171,6 +180,8 @@ export function useItemReportFilters() {
         normOptions,
         expiryDateFrom,
         expiryDateTo,
+        planningStatus,
+        licenseNumbers,
 
         // Setters (for plain-value controls)
         setSelectedItemNames,
@@ -182,6 +193,8 @@ export function useItemReportFilters() {
         setHsnCodeSearch,
         setExpiryDateFrom,
         setExpiryDateTo,
+        setPlanningStatus,
+        setLicenseNumbers,
 
         // Change handlers (for react-select / AsyncSelectField controls)
         handleItemNameChange,

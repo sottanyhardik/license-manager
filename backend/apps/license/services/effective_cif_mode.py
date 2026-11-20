@@ -66,12 +66,21 @@ def project_effective_item_cif(*, licence, item, legacy_row_balance: Decimal | A
     """
     mode = resolve_effective_cif_mode(licence)
     raw_override = getattr(licence, "individual_item_cif_override", None)
+    # Resolve the licence balance once for diagnostics and shared-pool output.
+    # Resolved BEFORE the item balance: `ItemBalanceCalculator.licence_balance_cap`
+    # (D-A/D-B cap) reuses this cached figure instead of recomputing it.
+    cached = getattr(licence, "_effective_cif_license_balance", None)
+    if cached is None:
+        cached = _decimal(licence.get_balance_cif)
+        setattr(licence, "_effective_cif_license_balance", cached)
     # `balance_cif_fc` is the legacy/display availability alias and may be a
     # licence-wide shared pool.  Individual mode must instead use the live
     # debit/credit ledger for this *persisted import-row primary key*.
     # Never derive this from HSN, product/SION labels, serials, or UI order.
     if getattr(item, "pk", None) is not None:
         from apps.license.services.balance_calculator import ItemBalanceCalculator
+        if getattr(item, "license_id", None) == getattr(licence, "pk", object()):
+            item.license = licence  # same row: share the cached licence balance
         individual = _decimal(ItemBalanceCalculator.calculate_item_balance(item))
     else:
         # Lightweight projections/tests may not be persisted models. They
@@ -79,11 +88,6 @@ def project_effective_item_cif(*, licence, item, legacy_row_balance: Decimal | A
         # always take the PK-backed live ledger branch above.
         individual = _decimal(getattr(item, "balance_cif_fc", 0))
 
-    # Resolve the licence balance once for diagnostics and shared-pool output.
-    cached = getattr(licence, "_effective_cif_license_balance", None)
-    if cached is None:
-        cached = _decimal(licence.get_balance_cif)
-        setattr(licence, "_effective_cif_license_balance", cached)
 
     if mode == INDIVIDUAL_ITEM:
         effective = individual

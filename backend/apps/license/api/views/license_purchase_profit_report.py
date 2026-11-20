@@ -222,6 +222,10 @@ class LicensePurchaseProfitReportView(APIView):
         import openpyxl
         from openpyxl.cell.cell import MergedCell
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from apps.core.exporters.excel.cell_formats import (
+            AMOUNT_FORMAT, INTEGER_FORMAT, QUANTITY_FORMAT, finalize_workbook,
+            write_date, write_number, write_text,
+        )
 
         workbook = openpyxl.Workbook()
         worksheet = workbook.active
@@ -255,7 +259,8 @@ class LicensePurchaseProfitReportView(APIView):
                     cell = ws.cell(row=row, column=col)
                     cell.border = thin_border
                     if col in numeric_cols:
-                        cell.number_format = '#,##0.00'
+                        if cell.number_format == 'General':
+                            cell.number_format = AMOUNT_FORMAT
                         cell.alignment = right_align
                     elif col in text_cols:
                         cell.alignment = left_align
@@ -313,7 +318,10 @@ class LicensePurchaseProfitReportView(APIView):
         summary_first_data_row = current_row
         for metric, value in _summary_metric_rows(summary):
             worksheet.cell(row=current_row, column=1, value=metric)
-            worksheet.cell(row=current_row, column=2, value=value)
+            write_number(
+                worksheet.cell(row=current_row, column=2), value,
+                INTEGER_FORMAT if metric == "Total Licenses" else AMOUNT_FORMAT,
+            )
             current_row += 1
         summary_last_data_row = current_row - 1
         _apply_grid(
@@ -345,7 +353,13 @@ class LicensePurchaseProfitReportView(APIView):
                 lic['trade_balance_usd'],
             ]
             for col_num, value in enumerate(row_data, 1):
-                worksheet.cell(row=current_row, column=col_num, value=value)
+                cell = worksheet.cell(row=current_row, column=col_num, value=value)
+                if col_num == 1:
+                    write_text(cell, value)
+                elif col_num in (2, 3):
+                    write_date(cell, value)
+                elif col_num >= 7:
+                    write_number(cell, value, AMOUNT_FORMAT)
             current_row += 1
         last_data_row = current_row - 1
 
@@ -363,6 +377,7 @@ class LicensePurchaseProfitReportView(APIView):
         ]
         for offset, value in enumerate(total_row_values):
             cell = worksheet.cell(row=current_row, column=n_static + 1 + offset, value=value)
+            write_number(cell, value, AMOUNT_FORMAT)
             cell.font = Font(bold=True)
         current_row += 1
 
@@ -446,13 +461,19 @@ class LicensePurchaseProfitReportView(APIView):
                 row['sale_amount'], row['sale_usd'], row['profit_loss'], row['trade_balance_usd'],
             ]
             for col_idx, value in enumerate(row_values, 1):
-                matrix_ws.cell(row=data_row, column=col_idx, value=value)
+                cell = matrix_ws.cell(row=data_row, column=col_idx, value=value)
+                if col_idx == 1:
+                    write_text(cell, value)
+                elif col_idx in (2, 3):
+                    write_date(cell, value)
+                elif col_idx >= 7:
+                    write_number(cell, value, AMOUNT_FORMAT)
             for i, item_name in enumerate(item_headers):
                 cell_data = row['items'].get(item_name, {"qty": 0, "cif": 0.0, "bill": 0.0})
                 base_col = n_static + 1 + i * 3
-                matrix_ws.cell(row=data_row, column=base_col, value=cell_data['qty'])
-                matrix_ws.cell(row=data_row, column=base_col + 1, value=cell_data['cif'])
-                matrix_ws.cell(row=data_row, column=base_col + 2, value=cell_data['bill'])
+                write_number(matrix_ws.cell(row=data_row, column=base_col), cell_data['qty'], QUANTITY_FORMAT)
+                write_number(matrix_ws.cell(row=data_row, column=base_col + 1), cell_data['cif'], AMOUNT_FORMAT)
+                write_number(matrix_ws.cell(row=data_row, column=base_col + 2), cell_data['bill'], AMOUNT_FORMAT)
             data_row += 1
         matrix_last_data_row = data_row - 1
 
@@ -472,12 +493,14 @@ class LicensePurchaseProfitReportView(APIView):
         ]
         for offset, value in enumerate(matrix_static_totals):
             static_total_cell = matrix_ws.cell(row=data_row, column=n_label + 1 + offset, value=value)
+            write_number(static_total_cell, value, AMOUNT_FORMAT)
             static_total_cell.font = Font(bold=True)
         for i, item_name in enumerate(item_headers):
             base_col = n_static + 1 + i * 3
             item_totals = matrix_totals.get(item_name, {"qty": 0, "cif": 0.0, "bill": 0.0})
             for offset, key in enumerate(('qty', 'cif', 'bill')):
                 total_cell = matrix_ws.cell(row=data_row, column=base_col + offset, value=item_totals[key])
+                write_number(total_cell, item_totals[key], QUANTITY_FORMAT if key == 'qty' else AMOUNT_FORMAT)
                 total_cell.font = Font(bold=True)
         matrix_total_row = data_row
 
@@ -521,6 +544,7 @@ class LicensePurchaseProfitReportView(APIView):
         )
         filename = build_export_filename('purchase-profit-report', 'xlsx', from_date=from_date, to_date=to_date)
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        finalize_workbook(workbook)
         workbook.save(response)
         return response
 

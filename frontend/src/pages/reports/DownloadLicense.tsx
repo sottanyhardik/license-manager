@@ -1,5 +1,6 @@
 import { useId, useState, useMemo } from "react";
 import { toast } from "sonner";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 import {
     ScanBarcode, Funnel, FileSpreadsheet, Loader2, Info,
     CircleCheck, TriangleAlert, CheckCircle2,
@@ -24,6 +25,15 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type LicenseStatus = (typeof STATUS_OPTIONS)[number]["value"];
+
+const URL_FILTER_KEYS = ["status", "days"] as const;
+const isLicenseStatus = (value: string | null): value is LicenseStatus =>
+    STATUS_OPTIONS.some(option => option.value === value);
+/** `?status=active|expiring&days=N` — invalid or missing values fall back to Active / 365 days. */
+const normalizeUrlFilters = (raw: { status: string | null; days: string | null }) => ({
+    status: isLicenseStatus(raw.status) ? raw.status : "active",
+    days: String(normalizeDownloadDays(raw.days ?? DEFAULT_DAYS)),
+});
 
 type LicenseReportItem = {
     license_number?: unknown;
@@ -65,8 +75,12 @@ function downloadBlob(data: BlobPart, filename: string): void {
 }
 
 export default function DownloadLicense() {
-    const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>("active");
-    const [days, setDays] = useState(DEFAULT_DAYS);
+    const [urlFilters, setUrlFilters] = useUrlFilters(URL_FILTER_KEYS, normalizeUrlFilters);
+    const licenseStatus = urlFilters.status as LicenseStatus;
+    const days = Number(urlFilters.days);
+    // A status switch is a navigation step (back returns to it); typing days only replaces the entry.
+    const setLicenseStatus = (status: LicenseStatus) => setUrlFilters({ status });
+    const setDays = (next: number) => setUrlFilters({ days: String(normalizeDownloadDays(next)) }, { replace: true });
     const [loading, setLoading] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
     const [bulkLoading, setBulkLoading] = useState(false);
@@ -235,10 +249,7 @@ export default function DownloadLicense() {
                                 if (key === 'licenseStatus') setLicenseStatus('active');
                                 if (key === 'days') setDays(DEFAULT_DAYS);
                             }}
-                            onClearAll={() => {
-                                setLicenseStatus('active');
-                                setDays(DEFAULT_DAYS);
-                            }}
+                            onClearAll={() => setUrlFilters({ status: "active", days: String(DEFAULT_DAYS) })}
                         />
 
                         <Button className="mt-auto w-full" onClick={handleDownload} disabled={loading}>

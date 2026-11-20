@@ -5,6 +5,7 @@
  * utilisation and active planning kept separate. Display only — every figure comes from the backend.
  */
 import { Fragment, useState } from "react";
+import { formatDateTime } from "@/utils/dateFormatter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -90,7 +91,7 @@ export default function MappingChanges() {
                             <td className="px-2 py-1.5">{c.kind.replace(/_/g, " ").toLowerCase()}</td>
                             <td className="px-2 py-1.5"><StatusBadge tone={TONE[c.status]} label={LABEL[c.status]} />{c.error && <div className="mt-0.5 max-w-[24rem] text-[11px] text-destructive">{c.error}</div>}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums">{c.import_items}</td><td className="px-2 py-1.5 text-right tabular-nums">{c.licences}</td>
-                            <td className="px-2 py-1.5 text-muted-foreground">{c.created_by ?? "system"} · {new Date(c.created_on).toLocaleString("en-IN")}</td>
+                            <td className="px-2 py-1.5 text-muted-foreground">{c.created_by ?? "system"} · {(formatDateTime(c.created_on) || "—")}</td>
                             <td className="px-2 py-1.5 text-right">{list.data.can_retry && (c.status === "FAILED" || c.status === "PROPAGATING") && <Button size="sm" variant="ghost" disabled={retry.isPending} onClick={() => retry.mutate(c.version)}><RotateCcw className="size-3.5" />Retry</Button>}</td>
                         </tr>
                         {open === c.version && <tr className="bg-muted/20"><td colSpan={7} className="px-3 py-2">{c.status === "NO_PLANNING_IMPACT" ? <p className="text-xs text-muted-foreground">Classification only — Item Pivot grouping changed; no licence plan depends on it.</p> : <ImpactView version={c.version} />}</td></tr>}

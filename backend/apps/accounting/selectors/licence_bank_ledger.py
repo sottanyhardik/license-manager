@@ -22,7 +22,7 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List
 
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 
 from apps.accounting.models import (
     BankMatch, DocStatus, Invoice, InvoiceLine, Payment, PaymentDirection, Settlement,

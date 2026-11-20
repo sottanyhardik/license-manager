@@ -562,12 +562,37 @@ describe("ItemPivotReport — Item Summary table for non-C969 norms", () => {
         expect(screen.queryByText("EXCEPTIONS")).not.toBeInTheDocument();
         expect(screen.queryByText("AVG PRICE")).not.toBeInTheDocument();
 
-        // Zero values are blank; the subtotal's unit price is RUTILE's, the only priced row.
+        // A calculated zero shows as 0.00 and a missing value (no unit price) as "—" — never a blank cell that could hide
+        // real transactions; the subtotal's unit price is RUTILE's, the only priced row.
         const bodyRows = Array.from(table.querySelectorAll("tbody tr")).map((tr) => Array.from(tr.querySelectorAll("td")).map((td) => td.textContent));
         expect(bodyRows).toEqual([
-            ["RUTILE", "A3627", "32061190", "25", "1,000.00", "", "", "200.00", "300.00", "800.00", "1.60", "100.00", "160.00"],
-            ["OLIVE OIL", "E1", "—", "2", "50.00", "", "", "", "", "50.00", "", "", ""],
-            ["SUBTOTAL", "1,050.00", "", "", "200.00", "300.00", "850.00", "1.60", "100.00", "160.00"],
+            ["RUTILE", "A3627", "32061190", "25", "1,000.00", "0.00", "0.00", "200.00", "300.00", "800.00", "1.60", "100.00", "160.00"],
+            ["OLIVE OIL", "E1", "—", "2", "50.00", "0.00", "0.00", "0.00", "0.00", "50.00", "—", "0.00", "0.00"],
+            ["SUBTOTAL", "1,050.00", "0.00", "0.00", "200.00", "300.00", "850.00", "1.60", "100.00", "160.00"],
         ]);
     });
 });
+
+describe("ItemPivotReport — Item Summary ↔ Licence Summary reconciliation status", () => {
+    it("shows the reconciliation line and the NOT ATTRIBUTED hint from the backend reconciliation", async () => {
+        vi.clearAllMocks();
+        const reconciliation = {
+            reconciled: false, license_ids: [7], unreconciled_license_count: 1,
+            metrics: {
+                allotted_cif: { licence_summary: "400.00", item_summary: "400.00", difference: "0.00" },
+                debited_cif: { licence_summary: "600.00", item_summary: "500.00", difference: "100.00" },
+                planned_cif: { licence_summary: "160.00", item_summary: "160.00", difference: "0.00" },
+            },
+            not_attributed_records: [{ kind: "BOE", row_id: 1 }],
+        };
+        mockApi({ ...ITEM_SUMMARY_PAYLOAD, groups: [{ ...ITEM_SUMMARY_PAYLOAD.groups[0], reconciliation }] });
+        render(<ItemPivotReport />);
+        fireEvent.click((await screen.findAllByRole("button", { name: /E1/ }))[0]);
+        fireEvent.click(await screen.findByRole("button", { name: "Notification NOTIF-1 · Global Exim (0)" }));
+        const status = await screen.findByText(/Does not reconcile with the Licence Summary/);
+        expect(status.textContent).toContain("1 of 1 licences differ");
+        expect(status.textContent).toContain("Debited CIF 600.00 / 500.00 (difference 100.00)");
+        expect(status.textContent).toContain("1 BOE / allotment / billed record(s) are not carried by a planned item");
+    });
+});
+

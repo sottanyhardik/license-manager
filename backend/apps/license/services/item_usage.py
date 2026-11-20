@@ -196,6 +196,31 @@ def billed_no_boe_bulk_map(item_ids) -> dict:
     return {row['sr_number_id']: row['t'] for row in rows}
 
 
+def billed_no_boe_lines_bulk(item_ids) -> dict:
+    """Row-level sibling of `billed_no_boe_bulk_map` / `billed_no_boe_qty_bulk_map` (identical filter): the SALE trade
+    lines with no BOE attached, grouped by import item, for traceability and per-line apportionment.
+
+    Returns `{item_id: [{'line_id', 'invoice_id', 'invoice_number', 'date', 'qty', 'cif'}]}` ordered by line id. One query.
+    """
+    from apps.trade.models import LicenseTradeLine
+
+    ids = list(item_ids)
+    if not ids:
+        return {}
+    out = {}
+    rows = (
+        LicenseTradeLine.objects.filter(sr_number_id__in=ids, trade__direction='SALE', trade__boes__isnull=True)
+        .select_related('trade')
+        .order_by('id')
+    )
+    for line in rows:
+        out.setdefault(line.sr_number_id, []).append({
+            'line_id': line.pk, 'invoice_id': line.trade_id, 'invoice_number': line.trade.invoice_number or '',
+            'date': line.trade.invoice_date, 'qty': line.qty_kg, 'cif': line.cif_fc,
+        })
+    return out
+
+
 def billed_no_boe_qty_bulk_map(item_ids) -> dict:
     """
     Batched sibling of `LicenseImportItemSerializer.get_billed_no_boe_qty` —

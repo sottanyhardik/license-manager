@@ -5,6 +5,13 @@ from django.http import HttpResponse
 
 from apps.bill_of_entry.api.serializers import BillOfEntrySerializer
 
+from apps.core.exporters.excel.cell_formats import (
+    INTEGER_FORMAT,
+    finalize_workbook,
+    write_date,
+    write_text,
+)
+
 from .common import OPENPYXL_AVAILABLE, _decimal_or_default, _text_response
 
 if OPENPYXL_AVAILABLE:
@@ -51,7 +58,7 @@ def export_port_xlsx(queryset):
         # Totals from the prefetched rows (identical Decimals, no per-BOE SUM queries).
         BillOfEntrySerializer._seed_totals_from_prefetch(boe)
         boe_number = boe.bill_of_entry_number or '--'
-        boe_date = boe.bill_of_entry_date.strftime('%d-%m-%Y') if boe.bill_of_entry_date else '--'
+        boe_date = boe.bill_of_entry_date  # real date cell (blank when missing)
         port_code = boe.port.code if boe.port else '--'
         company_name = boe.company.name if boe.company else '--'
         total_quantity = _decimal_or_default(boe.get_total_quantity)
@@ -62,9 +69,13 @@ def export_port_xlsx(queryset):
         for col_idx, value in enumerate(data, 1):
             cell = ws.cell(row=row, column=col_idx, value=value)
             cell.border = border
+            if col_idx == 1:
+                write_text(cell, value)  # BOE number is an identifier
+            elif col_idx == 2:
+                write_date(cell, value)
             if col_idx == 5:
                 cell.alignment = Alignment(horizontal='right', vertical='center')
-                cell.number_format = '#,##0'
+                cell.number_format = INTEGER_FORMAT
             elif col_idx == 6:
                 cell.alignment = Alignment(horizontal='right', vertical='center')
                 cell.number_format = '₹#,##0.00'
@@ -93,5 +104,6 @@ def export_port_xlsx(queryset):
     )
     today = datetime.now().strftime('%d-%m-%Y')
     response['Content-Disposition'] = f'attachment; filename="Port BOE Report - {today}.xlsx"'
+    finalize_workbook(wb)
     wb.save(response)
     return response

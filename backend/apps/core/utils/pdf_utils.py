@@ -150,7 +150,7 @@ class BusinessPDFExporter:
             elements.append(Paragraph(subtitle, self.subtitle_style))
 
         # Add timestamp
-        timestamp_text = f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+        timestamp_text = f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}"
         timestamp_style = ParagraphStyle(
             'Timestamp',
             parent=self.styles['Normal'],

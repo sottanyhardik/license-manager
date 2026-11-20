@@ -55,7 +55,6 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
     """
     from apps.license.models import LicenseImportItemsModel
     from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
-    from apps.allotment.models import AllotmentItems
 
     distinct_conds: Iterable[str] = (
         LicenseImportItemsModel.objects
@@ -82,6 +81,10 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
     except Exception:
         LicenseTradeLine = None  # type: ignore
 
+    from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+    outstanding_map = LicenseBalanceCalculator.get_outstanding_allotment_totals_for_items([license_obj.id])
+
     pools: dict[str, Decimal] = {}
     for cond, pct in pcts.items():
         pool = license_credit * pct / Decimal("100")
@@ -102,11 +105,12 @@ def compute_condition_pools(license_obj) -> dict[str, Decimal]:
             t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
         )["t"] or DEC_0
 
-        allotted = AllotmentItems.objects.filter(
-            item_id__in=item_ids, allotment__bill_of_entry__isnull=True
-        ).aggregate(
-            t=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField())
-        )["t"] or DEC_0
+        # Outstanding allotment CIF from the Balance Engine (one rule for
+        # every consumer: AT + AR, release rule `_allotment_release_condition`
+        # — owner DEC-01/03/07b/14, 2026-11-20).
+        allotted = sum(
+            (outstanding_map.get(i, (DEC_0, DEC_0))[1] for i in item_ids), DEC_0
+        )
 
         traded = DEC_0
         if LicenseTradeLine is not None:
@@ -145,7 +149,6 @@ def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
 
     from apps.license.models import LicenseImportItemsModel, LicenseExportItemModel
     from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
-    from apps.allotment.models import AllotmentItems
 
     license_ids = list(license_ids)
     if not license_ids:
@@ -194,12 +197,15 @@ def compute_condition_pools_bulk(license_ids) -> dict[int, dict[str, Decimal]]:
             ),
             "sr_number_id",
         )
-        allotted_map = _per_item(
-            AllotmentItems.objects.filter(
-                item_id__in=all_item_ids, allotment__bill_of_entry__isnull=True
-            ),
-            "item_id",
-        )
+        from apps.license.services.balance_calculator import LicenseBalanceCalculator
+
+        # Same Balance Engine outstanding-allotment rule as the single path.
+        allotted_map = {
+            iid: cif
+            for iid, (_qty, cif) in LicenseBalanceCalculator.get_outstanding_allotment_totals_for_items(
+                list(license_ids)
+            ).items()
+        }
         try:
             from apps.trade.models import LicenseTradeLine
             # Only SALE trade lines debit the pool, matching

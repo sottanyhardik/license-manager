@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { formatDateTime } from "@/utils/dateFormatter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AuthContext } from "../context/AuthContext";
@@ -64,12 +65,7 @@ const USERS_KEY = ["tasks-assignable-users"] as const;
 // ---------------------------------------------------------------------------
 
 function formatDate(value) {
-    if (!value) return "";
-    try {
-        return new Date(value).toLocaleString();
-    } catch {
-        return value;
-    }
+    return formatDateTime(value) || (value ? String(value) : "");
 }
 
 const URGENT_RX = /\b(urgent|asap|high\s*priority)\b/i;

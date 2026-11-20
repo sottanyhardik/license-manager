@@ -1,5 +1,5 @@
 import { formatIndianNumber } from "@/utils/numberFormatter";
-import { formatDate } from "@/utils/dateFormatter";
+import { formatDate, formatDateTime } from "@/utils/dateFormatter";
 import type { CustomsLedgerRowKind, FinancialLedgerRowKind, TimelineEventColor } from "./types";
 
 /** Format a number (or null/undefined) as an Indian-grouped 2dp string, "—" for empty. */
@@ -19,11 +19,7 @@ export function fmtDate(value: string | null | undefined): string {
 /** Format an ISO datetime string as date + time, "—" for empty/invalid — used by the Timeline. */
 export function fmtDateTime(value: string | null | undefined): string {
     if (!value) return "—";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "—";
-    const datePart = formatDate(value) || "—";
-    const timePart = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-    return `${datePart} ${timePart}`;
+    return formatDateTime(value) || "—";
 }
 
 /** Join a list of invoice numbers with ", ", "—" when empty. */

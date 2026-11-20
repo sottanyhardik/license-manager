@@ -97,7 +97,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "A3",
             "type": "str",
             "value": "9000002"
@@ -107,10 +107,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "B3",
-            "type": "str",
-            "value": "05-03-2025"
+            "type": "datetime",
+            "value": "2025-03-05T00:00:00"
           },
           {
             "bold": false,

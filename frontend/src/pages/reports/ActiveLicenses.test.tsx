@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,7 +13,7 @@ const mockedOpenAuthedFile = vi.mocked(openAuthedFile);
 
 describe("ActiveLicenses", () => {
     it("renders active-license export copy without stale year-specific language", () => {
-        render(<ActiveLicenses />);
+        render(<ActiveLicenses />, { wrapper: MemoryRouter });
 
         expect(screen.getByRole("heading", { name: "Active Licenses Report" })).toBeInTheDocument();
         expect(
@@ -25,14 +26,14 @@ describe("ActiveLicenses", () => {
     });
 
     it("downloads the active-license report using the normalized lookback period", async () => {
-        render(<ActiveLicenses />);
+        render(<ActiveLicenses />, { wrapper: MemoryRouter });
 
         fireEvent.change(screen.getByLabelText("Days to look back"), { target: { value: "45" } });
         fireEvent.click(screen.getByRole("button", { name: /download excel report/i }));
 
         await waitFor(() => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledWith(
-                "license/reports/active-licenses/?format=excel&days=45",
+                "reports/active-licenses/?format=excel&days=45",
                 expect.stringMatching(/^active-licenses_\d{4}-\d{2}-\d{2}\.xlsx$/),
             );
         });

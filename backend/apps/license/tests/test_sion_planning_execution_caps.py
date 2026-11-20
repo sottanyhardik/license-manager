@@ -118,6 +118,10 @@ def test_individual_item_snapshot_is_keyed_by_import_row_not_shared_hsn(monkeypa
     licence = LicenseDetailsModel.objects.create(
         license_number=f"SOURCE-PK-CIF-{head.pk}", individual_item_cif_override=True,
     )
+    # D-A / D-B (SAT-DEF-005, 2026-11-20): item caps never exceed the licence
+    # balance, so the licence needs the credit the mocked eligibility implies.
+    from apps.license.models import LicenseExportItemModel
+    LicenseExportItemModel.objects.create(license=licence, cif_fc=Decimal("10128.53"))
     SionPlanningRule.objects.create(
         sion=sion, name="source identity", expression={}, max_unit_price=Decimal("1.00"), priority=1,
     )

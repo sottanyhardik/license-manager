@@ -16,7 +16,7 @@ import { ROLES } from "../../routes/authorizationRoles";
  */
 
 type Id = string | number;
-type ApiError = { response?: { data?: { detail?: string; error?: string; condition_type?: string[] } } };
+type ApiError = { response?: { data?: { detail?: string; error?: string; condition_type?: string[]; items?: string[] } } };
 
 export type LicenceTextField = "condition_sheet" | "balance_report_notes";
 export type UsageType = "import" | "export";
@@ -84,7 +84,7 @@ export function useLicenceModalEdits(licenseId: Id) {
                 return true;
             } catch (error) {
                 const data = (error as ApiError).response?.data;
-                toast.error(data?.detail || data?.error || "Failed to update items");
+                toast.error(data?.detail || data?.error || data?.items?.[0] || "Failed to update items");
                 return false;
             }
         },

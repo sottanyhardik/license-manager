@@ -34,7 +34,7 @@ def generate_allotment_pdf_bytes(allotment):
     elements = []
 
     # Header
-    elements.append(Paragraph(f"Allotment Time: {datetime.now().strftime('%d %B %Y %H:%M')}", header_style))
+    elements.append(Paragraph(f"Allotment Time: {datetime.now().strftime('%d-%m-%Y %H:%M')}", header_style))
     elements.append(Spacer(1, 12))
 
     # Company details
@@ -62,7 +62,7 @@ def generate_allotment_pdf_bytes(allotment):
     summary_data = [
         ['Date', 'Item', 'Port Of Discharge'],
         [
-            allotment.estimated_arrival_date.strftime('%d/%m/%Y') if allotment.estimated_arrival_date else 'N/A',
+            allotment.estimated_arrival_date.strftime('%d-%m-%Y') if allotment.estimated_arrival_date else 'N/A',
             item_name,
             allotment.port.code if allotment.port else 'N/A',
         ],

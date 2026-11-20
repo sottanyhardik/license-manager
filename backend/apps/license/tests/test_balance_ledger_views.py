@@ -667,11 +667,10 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         self.assertEqual(summary["total_pending_allotment_cif"], Decimal("20000.00"))
         self.assertEqual(summary["computed_balance"], Decimal("80000.00"))  # 100000 - 20000
 
-    def test_partially_boe_allocated_allotment_only_deducts_remainder_once(self):
-        """An allotment PARTLY consumed by a formal `BOEAllotmentAllocation`
-        (not `is_boe`-tagged) must show only its unallocated remainder as
-        Pending — the allocated portion is never double-deducted, and
-        nothing is silently lost either."""
+    def test_partially_boe_allocated_allotment_releases_remainder(self):
+        """Owner DEC-14 B (2026-11-20): an allotment PARTLY covered by a
+        formal `BOEAllotmentAllocation` releases its uncovered remainder at
+        once — no Pending row; the BOE debit is counted exactly once."""
         company = self.make_company()
         license_obj = self.make_license(company)
         from apps.license.models import LicenseExportItemModel
@@ -693,11 +692,10 @@ class CustomsLedgerTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixture
         rows, summary = LicenseBalanceLedgerBuilder.build_customs_ledger(license_obj)
 
         pending_rows = [r for r in rows if r["row_kind"] == "customs_pending_allotment"]
-        self.assertEqual(len(pending_rows), 1)
-        self.assertEqual(pending_rows[0]["debit"], Decimal("10000.00"))  # 20000 - 10000 allocated
-        self.assertEqual(summary["total_pending_allotment_cif"], Decimal("10000.00"))
-        # 100000 - 10000 (BOE) - 10000 (allotment remainder) = 80000
-        self.assertEqual(summary["computed_balance"], Decimal("80000.00"))
+        self.assertEqual(len(pending_rows), 0)  # remainder 10000 released (DEC-14 B)
+        self.assertEqual(summary["total_pending_allotment_cif"], Decimal("0"))
+        # 100000 - 10000 (BOE, once) = 90000
+        self.assertEqual(summary["computed_balance"], Decimal("90000.00"))
 
 
 class FinancialLedgerOpeningBalanceGateTests(LicenseBalanceLedgerFixtureMixin, ReconciliationFixtureMixin, TestCase):

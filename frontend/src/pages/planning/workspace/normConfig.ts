@@ -6,6 +6,7 @@
  * product; E126's PKO / Olive Oil split appears only because its registry and
  * entitlement profile declare it.
  */
+import { formatDateTime } from "@/utils/dateFormatter";
 import type {
     EntitlementGroupConfig, PlanningActionConfig, RegistryRule, RuleCondition, RuleGroup,
     SionNormConfiguration, SionNormSummary, SionPlanningRule,
@@ -49,8 +50,7 @@ export function percentLabel(percent: unknown): string {
 
 export function displayDate(value?: string | null): string {
     if (!value) return "Not available";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+    return formatDateTime(value) || "Not available";
 }
 
 // ── Expression helpers ──────────────────────────────────────────────────────

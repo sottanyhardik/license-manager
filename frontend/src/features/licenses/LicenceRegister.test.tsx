@@ -331,7 +331,9 @@ describe("Licence register card — requests, panels, isolation, a11y", () => {
             await user.click(within(region).getByRole("tab", { name: tab }));
             await waitFor(() => expect([...requested()].sort()).toEqual([...expected].sort()));
         };
-        await step("Import Items", ["licenses/101/overview-items/"]);
+        // 2026-11-20: the Import Items tab also loads its Item Name mappings (separate endpoint, so overview-items keeps its
+        // pinned 4-query backend budget).
+        await step("Import Items", ["licenses/101/overview-items/", "licenses/101/import-item-names/"]);
         await step("BOE & Allotment", ["licenses/101/overview-boes/", "licenses/101/overview-allotments/"]);
         await step("Invoices", ["licenses/101/overview-invoice-ledger/"]);
         await step("History", ["license-actions/101/ownership-data/"]);

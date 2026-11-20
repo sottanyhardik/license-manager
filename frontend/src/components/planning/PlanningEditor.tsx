@@ -20,6 +20,7 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { formatDate } from "@/utils/dateFormatter";
 import {
     AlertTriangle,
     BookOpen,
@@ -929,9 +930,7 @@ export default function PlanningEditor({
             });
         });
         const lastUpdatedLabel = lastUpdated
-            ? new Date(lastUpdated).toLocaleDateString("en-IN", {
-                  day: "numeric", month: "short", year: "numeric",
-              })
+            ? formatDate(lastUpdated)
             : null;
         return {
             totalAvail, theoreticalPlanned, theoreticalCif,

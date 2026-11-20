@@ -118,13 +118,13 @@ class TestFormatDateDisplay(TestCase):
         """Should format date object"""
         input_date = date(2024, 1, 15)
         result = format_date_display(input_date)
-        assert result == "15/01/2024"
+        assert result == "15-01-2024"
 
     def test_format_datetime_object(self):
         """Should format datetime object (date part only)"""
         input_dt = datetime(2024, 1, 15, 10, 30, 45)
         result = format_date_display(input_dt)
-        assert result == "15/01/2024"
+        assert result == "15-01-2024"
 
     def test_format_custom_format(self):
         """Should use custom format string"""

@@ -118,10 +118,11 @@ def _item_summary_rows_from_matrix(group):
 
 
 def _item_summary_rows_from_projection(rows):
-    """Backend projection rows (all-notification total), named as on screen, with the SION-rule priority prefix."""
+    """Backend projection rows (every notification and the total), named as on screen, with the SION-rule priority prefix.
+    A canonical row (Item Name × SION) is named by its canonical Item Name, never by a category it shares with others."""
     named = []
     for row in rows:
-        name = _item_summary_name(row.get("product_category"), row.get("item_name"))
+        name = row["item_name"] if row.get("canonical_item_id") is not None and row.get("item_name") else _item_summary_name(row.get("product_category"), row.get("item_name"))
         priority = row.get("planning_priority")
         named.append({**row, "item_name": f"{priority} · {name}" if priority is not None else name})
     return named
@@ -129,13 +130,19 @@ def _item_summary_rows_from_projection(rows):
 
 def _item_summary_subtotal(rows):
     """SUBTOTAL of the Item Summary rows. Unit price is weighted by balance QTY over the rows that have one."""
+    from decimal import Decimal
+
+    def dec(value):
+        return Decimal(str(value)) if value not in (None, "") else Decimal("0")
+
+    # Decimal sums (exact); converted to a number only when the cell is written.
     subtotal = {
-        field: sum(float(row.get(field) or 0) for row in rows)
+        field: sum((dec(row.get(field)) for row in rows), Decimal("0"))
         for field in ("total_qty", "allotted_qty", "allotted_cif", "boe_used_qty", "boe_used_cif", "balance_qty", "planned_qty", "planned_cif")
     }
-    priced = [row for row in rows if row.get("unit_price") is not None and float(row.get("balance_qty") or 0) > 0]
-    weight = sum(float(row["balance_qty"]) for row in priced)
-    subtotal["unit_price"] = sum(float(row["unit_price"]) * float(row["balance_qty"]) for row in priced) / weight if weight > 0 else None
+    priced = [row for row in rows if row.get("unit_price") is not None and dec(row.get("balance_qty")) > 0]
+    weight = sum((dec(row["balance_qty"]) for row in priced), Decimal("0"))
+    subtotal["unit_price"] = sum((dec(row["unit_price"]) * dec(row["balance_qty"]) for row in priced), Decimal("0")) / weight if weight > 0 else None
     return subtotal
 
 
@@ -151,8 +158,9 @@ def _write_item_summary_table(sheet, start_row, title, rows, subtotal, header_fo
     sheet.cell(row=start_row, column=1).alignment = Alignment(wrap_text=True, vertical='center')
 
     def metric(value):
-        # Zero and missing values stay blank, as on screen.
-        return float(value) if value not in (None, '') and float(value) != 0 else None
+        # Numeric cells stay numeric: a calculated zero is written as 0 (never blanked); a genuinely missing value (e.g. no
+        # unit price) is an empty cell — never a text dash, so formulas and totals over the column keep working.
+        return float(value) if value not in (None, '') else None
 
     row_number = start_row + 1
     for row in rows:

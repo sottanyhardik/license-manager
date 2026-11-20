@@ -364,6 +364,7 @@ def test_single_product_with_modifiers_is_no_longer_a_multi_product_conflict():
     assert [d for d, _ in detected_products("SODA ASH DENSE / LIGHT")] == ["SODA ASH DENSE / LIGHT"]
 
 
+@pytest.mark.django_db  # matching_groups drops records covered by Description + HSN approvals (one query)
 def test_report_rows_with_the_same_normalised_wording_become_one_review_group():
     row = lambda key, desc, ids: {"key": key, "kind": "UNMAPPED", "product": desc, "aliases": [desc], "hsn_codes": ["76071994"], "sion": "E126",
                                   "entitlement_qty": "10.000", "balance_qty": "4.000",
@@ -375,6 +376,7 @@ def test_report_rows_with_the_same_normalised_wording_become_one_review_group():
     assert g["import_item_ids"] == [1, 2, 3] and g["product_keys"] == ["U:a", "U:b"] and g["entitlement_qty"] == "20.000"
 
 
+@pytest.mark.django_db  # matching_groups drops records covered by Description + HSN approvals (one query)
 def test_merged_group_kind_follows_precedence_not_row_order():
     row = lambda key, kind, ids: {"key": key, "kind": kind, "product": "Alu foil / LDPE", "aliases": ["Alu foil / LDPE"], "hsn_codes": ["7607"],
                                   "sion": "E5", "entitlement_qty": "1", "balance_qty": "1",

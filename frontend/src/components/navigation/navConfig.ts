@@ -180,7 +180,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         roles: REPORT_ROLES,
         columns: 3,
         sections: [
-            { label: "Reports",        items: reportEntities.map(({ path, label, icon }) => ({ path, label, icon })) },
+            { label: "Reports",        items: reportEntities.map(({ path, label, icon, roles }) => ({ path, label, icon, roles })) },
             { label: "Licence status", items: LICENCE_STATUS_REPORTS },
             { label: "SION norms",     items: SION_REPORTS },
         ],

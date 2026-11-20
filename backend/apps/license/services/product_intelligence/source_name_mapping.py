@@ -100,10 +100,13 @@ def _holds_other_valid(record, existing) -> bool:
 
 
 def _verdict(record, target: ItemNameModel, debited: list, existing, memo: dict, resolver_cache: dict) -> tuple[str, str]:
-    """→ ("ok" | "unverified" | "conflict", reason / note)."""
+    """→ ("ok" | "unverified" | "kept" | "conflict", reason / note). "kept": the record already holds this target in a valid status
+    but it cannot be verified — left exactly as it is (not a conflict)."""
     from apps.license.services.planning_actual_target_mapping import resolve_targets_for_source
 
     if not debited:
+        if _holds_other_valid(record, existing) and record.planning_target_item_id == target.pk:
+            return "kept", "Not verified: the record already holds this planning target (no licence debit yet) — kept as it is"
         if _holds_other_valid(record, existing):
             return "conflict", (f"Record already has a valid planning target (#{record.planning_target_item_id}); {target.name} cannot be "
                                 "verified yet (no licence debit) — the existing target is kept")
@@ -120,6 +123,9 @@ def _verdict(record, target: ItemNameModel, debited: list, existing, memo: dict,
         if not legit:
             unconfigured.append(number)
     if unconfigured:
+        if _holds_other_valid(record, existing) and record.planning_target_item_id == target.pk:
+            return "kept", (f"Not verified: the record already holds this planning target (no planning rule for licence "
+                            f"{', '.join(sorted(set(unconfigured))[:3])}) — kept as it is")
         if _holds_other_valid(record, existing):
             return "conflict", (f"Record already has a valid planning target (#{record.planning_target_item_id}); {target.name} cannot be "
                                 f"verified (no planning rule for licence {', '.join(sorted(set(unconfigured))[:3])})")
@@ -145,7 +151,7 @@ def _apply(spec: Spec, mapping: SourceNameMapping, records: list, *, user, statu
     existing = {a.record_id: a for a in SourceNameMappingRecord.objects.filter(kind=spec.code, record_id__in=ids)}
     memo: dict[int, set[int]] = {}
     writes: dict[tuple, list[int]] = defaultdict(list)  # (target, status, source) → record ids
-    rows, changed, conflicts, unverified, unchanged, applied, skipped = [], [], [], 0, 0, 0, 0
+    rows, changed, conflicts, unverified, unchanged, applied, skipped, kept = [], [], [], 0, 0, 0, 0, 0
     for r in records:
         app = existing.get(r.pk)
         if protect_existing and _holds_other_valid(r, app) and r.planning_target_item_id != target.pk:
@@ -158,6 +164,9 @@ def _apply(spec: Spec, mapping: SourceNameMapping, records: list, *, user, statu
             ours = app is not None and r.planning_mapping_source == SOURCE
             wanted = previous if ours else current  # restore what this mapping replaced; never touch anything else
             conflicts.append((r, note))
+        elif state == "kept":
+            wanted = current  # same target already held in a valid status: never downgraded, never re-sourced
+            kept += 1  # its own count: the record is not newly set to "Not verified"
         else:
             wanted = (target.pk, VERIFIED_STATUS if state == "ok" else UNVERIFIED_STATUS, SOURCE)
             unverified += state == "unverified"
@@ -201,7 +210,7 @@ def _apply(spec: Spec, mapping: SourceNameMapping, records: list, *, user, statu
     for r, _ in conflicts:
         for item in debits.get(r.pk, []):
             conflict_licences[item.license_id] = item.license.license_number
-    return {"applied": applied, "unchanged": unchanged, "conflicts": len(conflicts), "unverified": unverified, "skipped": skipped,
+    return {"applied": applied, "unchanged": unchanged, "conflicts": len(conflicts), "unverified": unverified, "skipped": skipped, "kept": kept,
             "mapping_change": change.pk if change else None,
             "conflict_details": [{"record_id": r.pk, "reason": note} for r, note in conflicts[:50]],
             "conflict_licences": [{"id": lic, "license_number": n} for lic, n in sorted(conflict_licences.items(), key=lambda kv: (kv[1] or "", kv[0]))]}
@@ -255,7 +264,7 @@ def save_for_key(*, kind: str, key: str, name: str, target_id, user, expected_ve
             version.save(update_fields=["mapping_change"])
         ProductIntelAuditEvent.objects.create(action=f"{kind}_name_mapped", user=user, detail={
             "mapping": mapping.pk, "version": mapping.version, "key": key[:300], "action": action, "target": target.pk, "target_name": target.name,
-            "previous_target": previous, "applied": result["applied"], "conflicts": result["conflicts"], "unverified": result["unverified"],
+            "previous_target": previous, "applied": result["applied"], "conflicts": result["conflicts"], "unverified": result["unverified"], "kept": result["kept"],
             "mapping_change": result["mapping_change"], "source": source, **({"batch": batch} if batch else {})})
     return {"mapping": serialise(mapping), "action": action, **result}
 
@@ -461,7 +470,7 @@ def bulk_execute(kind: str, *, mode: str, target_id, user, fingerprint: str, fil
                 failed.append({"key": key, "description": name, "reason": "Unexpected error — nothing was changed for this name; retry it"})
                 continue
             entry = {"key": key, "description": name, "action": result["action"], "applied": result["applied"], "unchanged": result["unchanged"],
-                     "conflicts": result["conflicts"], "unverified": result["unverified"], "conflict_licences": result["conflict_licences"]}
+                     "conflicts": result["conflicts"], "unverified": result["unverified"], "kept": result["kept"], "conflict_licences": result["conflict_licences"]}
             (skipped if result["action"] == "UNCHANGED" and not result["applied"] else succeeded).append(entry)
     finally:
         if cache.get(lock) == batch:

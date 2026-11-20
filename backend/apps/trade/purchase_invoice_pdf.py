@@ -202,7 +202,7 @@ def generate_purchase_invoice_pdf(trade, include_signature=True):
             from_addr.append(f'PAN/IT No        : {trade.from_pan}')
 
     # Format invoice date
-    invoice_date_str = trade.invoice_date.strftime('%d-%b-%y') if trade.invoice_date else ''
+    invoice_date_str = trade.invoice_date.strftime('%d-%m-%Y') if trade.invoice_date else ''
 
     header_data = [
         [

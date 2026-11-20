@@ -59,8 +59,10 @@ export function visibleItemFields(item: any, group: any): { key: string; label: 
             || group.licenses.some((license: any) => hasPivotValue(license.items?.[item.key]?.[key])));
 }
 
-// Item Summary name: the product category (RUTILE, ALUMINIUM OXIDE, ...), because item names can be raw import descriptions.
-export function itemSummaryName(row: { product_category?: string | null; item_name?: string | null }): string {
+// Item Summary name: a canonical row (Item Name × SION) shows its canonical Item Name, so two items of one category never
+// read as one row; a row without a canonical identity falls back to its product category (RUTILE, ALUMINIUM OXIDE, ...).
+export function itemSummaryName(row: { product_category?: string | null; item_name?: string | null; canonical_item_id?: number | null }): string {
+    if (row.canonical_item_id != null && row.item_name) return row.item_name;
     const category = row.product_category;
     return category && category !== 'UNCLASSIFIED' ? category : (row.item_name || '');
 }

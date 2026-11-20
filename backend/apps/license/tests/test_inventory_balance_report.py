@@ -198,12 +198,18 @@ def test_excel_summary_row_matches_json_summary(report_viewer_client, inv_master
         r for r in range(1, 30)
         if sheet.cell(row=r, column=1).value == "Total"
     )
-    assert sheet.cell(row=total_row, column=5).value == json_summary["total_quantity"]
-    assert sheet.cell(row=total_row, column=6).value == json_summary["total_debited"]
-    assert sheet.cell(row=total_row, column=7).value == json_summary["total_allotted"]
-    assert sheet.cell(row=total_row, column=8).value == json_summary["total_available"]
-    assert sheet.cell(row=total_row, column=9).value == json_summary["total_cif_value"]
-    assert sheet.cell(row=total_row, column=10).value == json_summary["available_cif_value"]
+    # Totals are live SUM formulas over the item rows; evaluated they equal the JSON summary.
+    from apps.license.tests.xlsx_eval import evaluate_formula
+
+    def total(col):
+        return float(evaluate_formula(sheet, sheet.cell(row=total_row, column=col).value))
+
+    assert total(5) == json_summary["total_quantity"]
+    assert total(6) == json_summary["total_debited"]
+    assert total(7) == json_summary["total_allotted"]
+    assert total(8) == json_summary["total_available"]
+    assert total(9) == json_summary["total_cif_value"]
+    assert total(10) == json_summary["available_cif_value"]
     assert sheet.cell(row=total_row, column=11).value == json_summary["total_items"]
 
 

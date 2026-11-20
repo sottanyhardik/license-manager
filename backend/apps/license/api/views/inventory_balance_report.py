@@ -299,9 +299,30 @@ class InventoryBalanceReportView(APIView):
         current_row += 1
 
         # Add data rows
+        from apps.core.exporters.excel.cell_formats import (
+            AMOUNT_FORMAT, INTEGER_FORMAT, QUANTITY_FORMAT, finalize_workbook,
+            write_number, write_sum,
+        )
+        data_first_row = current_row
+        data_last_row = current_row + len(report_data['items']) - 1
+        total_row_index = current_row + len(rows) - 1
         for row_data in rows:
             for col_num, value in enumerate(row_data, 1):
-                worksheet.cell(row=current_row, column=col_num, value=value)
+                cell = worksheet.cell(row=current_row, column=col_num, value=value)
+                if row_data and row_data[0] == 'Total' and current_row == total_row_index:
+                    if 5 <= col_num <= 8:
+                        write_sum(cell, data_first_row, data_last_row, QUANTITY_FORMAT)
+                    elif col_num in (9, 10):
+                        write_sum(cell, data_first_row, data_last_row, AMOUNT_FORMAT)
+                    elif col_num == 11:
+                        write_number(cell, value, INTEGER_FORMAT)
+                elif data_first_row <= current_row <= data_last_row:
+                    if 5 <= col_num <= 8:
+                        write_number(cell, value, QUANTITY_FORMAT)
+                    elif col_num in (9, 10):
+                        write_number(cell, value, AMOUNT_FORMAT)
+                    elif col_num == 11:
+                        write_number(cell, value, INTEGER_FORMAT)
             current_row += 1
 
         # Auto-adjust column widths
@@ -334,6 +355,7 @@ class InventoryBalanceReportView(APIView):
         filename = build_export_filename(f'inventory-balance-{sion_norm}', 'xlsx')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
+        finalize_workbook(workbook)
         workbook.save(response)
         return response
 

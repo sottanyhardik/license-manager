@@ -9,7 +9,7 @@ export default function ActiveLicenses() {
             daysLabel="Days to look back"
             defaultDays={30}
             helpText={(days) => `Shows licenses expiring from ${days} days ago onward`}
-            endpoint={(days) => `license/reports/active-licenses/?format=excel&days=${days}`}
+            endpoint={(days) => `reports/active-licenses/?format=excel&days=${days}`}
             filename={() => buildExportFilename("active-licenses", "xlsx")}
             features={[
                 "Separate sheets for each SION norm",

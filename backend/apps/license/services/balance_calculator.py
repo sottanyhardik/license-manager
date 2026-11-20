@@ -729,13 +729,14 @@ class LicenseBalanceCalculator:
         being passed in here; this only adds annotations, never a license
         filter.
 
-        `contributed` is forced to 0 whenever the parent `AllotmentModel` has
-        ANY linked BOE at all (an `Exists()` check against the real
-        `BillOfEntryModel.allotment` M2M relationship set by the BOE form's
-        allotment picker, `apps/bill_of_entry/serializers.py`), REGARDLESS of
-        whether a `BOEAllotmentAllocation` row exists yet — this must still
-        fully exclude, on top of (not replaced by) the finer
-        BOEAllotmentAllocation-driven partial exclusion below.
+        `contributed` is forced to 0 whenever the row is RELEASED — see
+        `_allotment_release_condition` (owner rules 2026-11-17 / 2026-11-20:
+        an M2M-linked BOE that carries DEBIT rows, ANY active formal
+        `BOEAllotmentAllocation` (a short BOE releases the remainder,
+        DEC-14 B), or status RELEASED/COMPLETED). Otherwise the row
+        contributes its full `cif_fc`/`qty` (`matched` is then 0, so the
+        `Greatest(cif_fc − matched, 0)` default equals `cif_fc`; the
+        `allocated`/`matched` annotations stay for display consumers).
 
         This checks the REAL relationship rather than `AllotmentModel.
         is_boe` (a hand-maintained cache boolean set/cleared alongside the
@@ -763,7 +764,6 @@ class LicenseBalanceCalculator:
         Returns:
             The same queryset with the annotations above applied.
         """
-        from apps.bill_of_entry.models import BillOfEntryModel
         from apps.reconciliation.models import BOEAllotmentAllocation
 
         allocated_subquery = (
@@ -795,9 +795,7 @@ class LicenseBalanceCalculator:
         # `calculate_allotment()`'s `Sum('contributed')` aggregate. `Exists`
         # is a correlated subquery, never joined into the outer FROM clause,
         # so it can't duplicate rows regardless of how many BOEs are linked.
-        has_linked_boe = Exists(
-            BillOfEntryModel.objects.filter(allotment=OuterRef("allotment_id"))
-        )
+        released = LicenseBalanceCalculator._allotment_release_condition()
 
         return (
             queryset
@@ -823,7 +821,7 @@ class LicenseBalanceCalculator:
             )
             .annotate(
                 contributed=Case(
-                    When(has_linked_boe, then=Value(DEC_0)),
+                    When(released, then=Value(DEC_0)),
                     default=Greatest(
                         F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
                     ),
@@ -832,13 +830,64 @@ class LicenseBalanceCalculator:
             )
             .annotate(
                 contributed_qty=Case(
-                    When(has_linked_boe, then=Value(DEC_0)),
+                    When(released, then=Value(DEC_0)),
                     default=Greatest(
                         F("qty") - F("matched_qty"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
                     ),
                     output_field=_ALLOCATION_DECIMAL_FIELD,
                 )
             )
+        )
+
+    # Allotment item statuses that no longer reserve CIF/qty (owner DEC-07b,
+    # 2026-11-20): a RELEASED item was given up; a COMPLETED item is fully
+    # consumed by its BOE(s).
+    NON_RESERVING_ALLOTMENT_STATUSES = ("RELEASED", "COMPLETED")
+
+    @staticmethod
+    def _allotment_release_condition():
+        """
+        `Q` for an `AllotmentItems` row whose reservation is RELEASED, i.e.
+        that contributes 0 to ALLOTMENT CIF/qty. ONE definition for every
+        allotment-contribution consumer (`_annotate_allotment_contribution`
+        and therefore `calculate_allotment*`, `get_outstanding_allotment_
+        totals*`, the Customs/Financial Ledger "Pending/Active Allotment"
+        rows and the overview Allotments tab).
+
+        Owner decisions (2026-11-17, amended 2026-11-20 —
+        `docs/qa/SAT_USER_DECISION_REGISTER.md`):
+        - M2M link to a BOE = full consumption (2026-11-17), BUT only when
+          that BOE actually carries at least one DEBIT row (DEC-03 C): a link
+          to a rowless/placeholder BOE debits nothing, so the allotment stays
+          outstanding (and is listed by
+          `apps.license.services.allotment_exceptions`).
+        - A formal `BOEAllotmentAllocation` (ACTIVE, current) covering any
+          part of the item releases the WHOLE item (DEC-14 B): the uncovered
+          remainder of a short BOE goes back to available at once.
+        - Status RELEASED / COMPLETED (DEC-07b A).
+
+        Correlated `Exists()` subqueries only (never a JOIN), so a row is
+        never duplicated by multiple links/allocations.
+        """
+        from apps.reconciliation.models import BOEAllotmentAllocation
+
+        linked_boe_with_rows = Exists(
+            RowDetails.objects.filter(
+                bill_of_entry__allotment=OuterRef("allotment_id"),
+                transaction_type=DEBIT,
+            )
+        )
+        has_allocation = Exists(
+            BOEAllotmentAllocation.objects.filter(
+                allotment_item_id=OuterRef("pk"),
+                status=BOEAllotmentAllocation.STATUS_ACTIVE,
+                is_current=True,
+            )
+        )
+        return (
+            Q(linked_boe_with_rows)
+            | Q(has_allocation)
+            | Q(status__in=LicenseBalanceCalculator.NON_RESERVING_ALLOTMENT_STATUSES)
         )
 
     @staticmethod
@@ -903,10 +952,12 @@ class LicenseBalanceCalculator:
         linked allotment, fully or partially, is never counted here, and a
         formally-allocated remainder is netted the same way).
 
-        Restricted to `AllotmentModel.type == 'AT'` — ARO-type allotments
-        are treated as already-debited (folded into "Debited", not
-        "Allotted") by `calculate_balance.py`'s existing AT/ARO split, which
-        this does not change.
+        Both allotment types count (owner DEC-01 A, 2026-11-20): an ARO
+        (`AR`) allotment reserves item qty/CIF exactly like an AT one, the
+        same as the licence-level `calculate_allotment` (which never filtered
+        by type). Previously restricted to `'AT'`, while the stored writer's
+        ARO fold-in filtered `'ARO'` on a 2-char field and never matched, so
+        AR was deducted at licence level only (SAT-DEF-001).
 
         Args:
             import_item: LicenseImportItemsModel instance
@@ -916,7 +967,7 @@ class LicenseBalanceCalculator:
         """
         row = (
             LicenseBalanceCalculator.get_allotment_rows(import_item.license)
-            .filter(item=import_item, allotment__type='AT')
+            .filter(item=import_item)
             .aggregate(
                 qty=Coalesce(Sum("contributed_qty"), Value(DEC_0), output_field=DecimalField()),
                 cif=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField()),
@@ -954,7 +1005,6 @@ class LicenseBalanceCalculator:
             return {}
         rows = (
             LicenseBalanceCalculator.get_allotment_rows_bulk(ids)
-            .filter(allotment__type='AT')
             .values('item_id')
             .annotate(
                 qty=Coalesce(Sum("contributed_qty"), Value(DEC_0), output_field=DecimalField()),
@@ -1048,15 +1098,16 @@ class LicenseBalanceCalculator:
             license_obj: LicenseDetailsModel instance
 
         Returns:
-            LicenseTradeLine queryset (trade__direction in PURCHASE/
-            COMMISSION_PURCHASE — same two directions `build_timeline`
-            already treats as "purchase" for its own event labeling).
+            LicenseTradeLine queryset (trade__direction == PURCHASE only).
+            COMMISSION_PURCHASE is excluded (owner DEC-06 A, 2026-11-20,
+            matching `LEDGER_APPROVED_SEMANTICS.md` §COMMISSION): a commission
+            deal is neither a purchase credit nor an opening-balance gate.
         """
         from apps.trade.models import LicenseTrade, LicenseTradeLine
 
         return LicenseTradeLine.objects.filter(
             sr_number__license=license_obj,
-            trade__direction__in=(LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE),
+            trade__direction=LicenseTrade.DIR_PURCHASE,  # DEC-06 A: COMMISSION_PURCHASE excluded
         )
 
     @staticmethod
@@ -1171,7 +1222,7 @@ class LicenseBalanceCalculator:
         Batched sibling of `get_purchase_trade_rows(...).exists()` —
         `{license_id: bool}` for MANY licenses in one query (not one per
         license). Same direction set as `get_purchase_trade_rows`
-        (PURCHASE + COMMISSION_PURCHASE). Feeds the Opening Balance gate in
+        (PURCHASE only — DEC-06 A). Feeds the Opening Balance gate in
         `calculate_financial_balance_for_licenses` — the batched equivalent
         of `build_financial_ledger`'s/`calculate_financial_balance`'s own
         per-license `has_purchase` check. Distinct from
@@ -1187,7 +1238,7 @@ class LicenseBalanceCalculator:
         purchasing_ids = set(
             LicenseTradeLine.objects.filter(
                 sr_number__license_id__in=ids,
-                trade__direction__in=(LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE),
+                trade__direction=LicenseTrade.DIR_PURCHASE,  # DEC-06 A: COMMISSION_PURCHASE excluded
             ).values_list("sr_number__license_id", flat=True)
         )
         return {lid: (lid in purchasing_ids) for lid in ids}
@@ -1195,67 +1246,19 @@ class LicenseBalanceCalculator:
     @staticmethod
     def calculate_allotment_for_licenses(license_ids) -> dict:
         """
-        Batched sibling of `calculate_allotment` — total allotment
-        (allocation-driven, partial exclusion; see `calculate_allotment`'s
-        docstring for the business rule) for MANY licenses in one query,
-        grouped by license id. Same per-row allocation annotation as
-        `calculate_allotment` — evaluated per-AllotmentItems-row via a
-        single correlated subquery regardless of how many licenses are
-        batched, so it stays a bounded number of queries (not one per
-        license). See `calculate_credit_for_licenses` for the return-
-        shape/zero-default contract.
+        Batched sibling of `calculate_allotment` — total ALLOTMENT CIF for
+        MANY licenses in one query, grouped by license id. Uses the SAME
+        annotation chain (`get_allotment_rows_bulk` →
+        `_annotate_allotment_contribution`) as the single-licence path, so
+        batched (bulk report) and single-licence balances can never diverge.
+        See `calculate_credit_for_licenses` for the return-shape/zero-default
+        contract.
         """
         ids = list(license_ids)
         if not ids:
             return {}
-        from apps.bill_of_entry.models import BillOfEntryModel
-        from apps.reconciliation.models import BOEAllotmentAllocation
-
-        allocated_subquery = (
-            BOEAllotmentAllocation.objects.filter(
-                allotment_item_id=OuterRef("pk"),
-                status=BOEAllotmentAllocation.STATUS_ACTIVE,
-                is_current=True,
-            )
-            .order_by()
-            .values("allotment_item_id")
-            .annotate(total=Sum("allocated_cif_fc"))
-            .values("total")
-        )
-        # Same `Exists()` linked-BOE exclusion as `get_allotment_rows()` —
-        # see that method's docstring for why this must be an `Exists()`
-        # subquery, not a `Case`/`When` over the M2M lookup directly (which
-        # would duplicate rows and corrupt this `Sum('contributed')`).
-        has_linked_boe = Exists(
-            BillOfEntryModel.objects.filter(allotment=OuterRef("allotment_id"))
-        )
-
         rows = (
-            AllotmentItems.objects
-            .filter(
-                item__license_id__in=ids,
-            )
-            .annotate(
-                allocated=Coalesce(
-                    Subquery(allocated_subquery, output_field=_ALLOCATION_DECIMAL_FIELD),
-                    Value(DEC_0),
-                    output_field=_ALLOCATION_DECIMAL_FIELD,
-                )
-            )
-            .annotate(
-                matched=Least(F("cif_fc"), F("allocated"), output_field=_ALLOCATION_DECIMAL_FIELD)
-            )
-            .annotate(
-                # Kept in sync with get_allotment_rows() so batched (bulk
-                # report) and single-license balances never diverge.
-                contributed=Case(
-                    When(has_linked_boe, then=Value(DEC_0)),
-                    default=Greatest(
-                        F("cif_fc") - F("matched"), Value(DEC_0), output_field=_ALLOCATION_DECIMAL_FIELD
-                    ),
-                    output_field=_ALLOCATION_DECIMAL_FIELD,
-                )
-            )
+            LicenseBalanceCalculator.get_allotment_rows_bulk(ids)
             .values("item__license_id")
             .annotate(total=Coalesce(Sum("contributed"), Value(DEC_0), output_field=DecimalField()))
         )
@@ -1304,7 +1307,7 @@ class LicenseBalanceCalculator:
             LicenseTradeLine.objects
             .filter(
                 sr_number__license_id__in=ids,
-                trade__direction__in=(LicenseTrade.DIR_PURCHASE, LicenseTrade.DIR_COMMISSION_PURCHASE),
+                trade__direction=LicenseTrade.DIR_PURCHASE,  # DEC-06 A: COMMISSION_PURCHASE excluded
             )
             .values("sr_number__license_id")
             .annotate(total=Coalesce(Sum("cif_fc"), Value(DEC_0), output_field=DecimalField()))
@@ -1754,10 +1757,12 @@ class ItemBalanceCalculator:
     def calculate_item_attributed_balance(cls, import_item) -> Decimal:
         """Available CIF from an import item's positive, attributed CIF.
 
-        This is intentionally item-scoped: its own visible BOE debits plus
-        its own outstanding AT allotment contribution reduce its own credit.
-        It does not use ``LicenseBalance.balance_cif`` and never lets a
-        sibling item's utilisation consume this item's attributed CIF.
+        Item-scoped: its own visible BOE debits plus its own outstanding
+        (AT + AR) allotment contribution reduce its own credit. Owner DEC-50 D
+        (2026-11-20) adds ONE cross-item term: realised over-use of a sibling
+        on the same licence is covered from this item's unused CIF (and vice
+        versa) — `item_cif_adjustment.compute_item_cif_adjustments`. Allotment
+        caps (`calculate_item_balance`) are not adjusted (gate G1).
         """
         credit = to_decimal(import_item.cif_fc, DEC_0)
         debit = to_decimal(
@@ -1767,7 +1772,13 @@ class ItemBalanceCalculator:
             DEC_0,
         )
         _qty, outstanding_cif = LicenseBalanceCalculator.get_outstanding_allotment_totals(import_item)
-        balance = credit - debit - outstanding_cif
+        # DEC-50 D (owner 2026-11-20): realised over-use is covered by other
+        # attributed items' unused CIF on the same licence (see
+        # `apps.license.services.item_cif_adjustment`).
+        from apps.license.services.item_cif_adjustment import compute_item_cif_adjustments
+
+        adjustment = compute_item_cif_adjustments([import_item.license_id]).for_item(import_item.id)
+        balance = credit - debit - outstanding_cif + adjustment.net
         return balance if balance >= DEC_0 else DEC_0
 
     @classmethod
@@ -1786,10 +1797,16 @@ class ItemBalanceCalculator:
         license_ids = list({item.license_id for item in attributed if item.license_id})
         debit_map = cls.calculate_debited_cif_for_items(item_ids)
         outstanding_map = LicenseBalanceCalculator.get_outstanding_allotment_totals_for_items(license_ids)
+        from apps.license.services.item_cif_adjustment import compute_item_cif_adjustments
+
+        adjustments = compute_item_cif_adjustments(license_ids)  # DEC-50 D
         result = {}
         for item in attributed:
             _qty, outstanding_cif = outstanding_map.get(item.id, (DEC_0, DEC_0))
-            balance = to_decimal(item.cif_fc, DEC_0) - debit_map.get(item.id, DEC_0) - outstanding_cif
+            balance = (
+                to_decimal(item.cif_fc, DEC_0) - debit_map.get(item.id, DEC_0) - outstanding_cif
+                + adjustments.for_item(item.id).net
+            )
             result[item.id] = balance if balance >= DEC_0 else DEC_0
         return result
 
@@ -1866,7 +1883,28 @@ class ItemBalanceCalculator:
         """
         credit, debit = cls.calculate_item_credit_debit(import_item)
         balance = credit - debit
+        # D-A / D-B (owner 2026-11-20, SAT-DEF-005): no item cap may exceed
+        # what the licence itself has left — min(item cap, max(licence
+        # balance, 0)). The shared-ceiling branch (`cif_fc == 0`) otherwise
+        # ignores sibling allotments, AR and hidden BOEs.
+        balance = min(balance, cls.licence_balance_cap(import_item))
         return balance if balance >= DEC_0 else DEC_0
+
+    @staticmethod
+    def licence_balance_cap(import_item) -> Decimal:
+        """`max(licence balance, 0)` for the item's licence — the live
+        `LicenseDetailsModel.get_balance_cif` (financial engine), cached on
+        the licence instance for the duration of the request object."""
+        licence = import_item.license
+        cached = getattr(licence, "_item_cap_licence_balance", None)
+        if cached is None:
+            # Same `get_balance_cif` figure already resolved on this instance
+            # by `effective_cif_mode.project_effective_item_cif`.
+            cached = getattr(licence, "_effective_cif_license_balance", None)
+        if cached is None:
+            cached = to_decimal(licence.get_balance_cif, DEC_0)
+            setattr(licence, "_item_cap_licence_balance", cached)
+        return cached if cached >= DEC_0 else DEC_0
 
     @staticmethod
     def _direct_sale_quantity_rows(item_ids=None, import_item=None):

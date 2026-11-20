@@ -112,6 +112,9 @@ class _ExcelPassthroughRenderer(BaseRenderer):
 logger = logging.getLogger(__name__)
 
 
+PLANNING_STATUSES = ('all', 'planned', 'unplanned')
+
+
 class ItemReportView(APIView):
     """
     Report showing all License Import Items with filters.
@@ -148,13 +151,17 @@ class ItemReportView(APIView):
         notification_numbers = request.GET.get('notification_numbers')  # Comma-separated notification numbers
         expiry_date_from = request.GET.get('expiry_date_from')  # YYYY-MM-DD
         expiry_date_to = request.GET.get('expiry_date_to')      # YYYY-MM-DD
+        # Planning Status filter (owner 2026-11-20): all (default) | planned | unplanned — applied server-side.
+        planning_status = (request.GET.get('planning_status') or 'all').strip().lower()
+        if planning_status not in PLANNING_STATUSES:
+            return JsonResponse({'planning_status': f"Must be one of: {', '.join(PLANNING_STATUSES)}."}, status=400)
 
         # Generate the report data ONCE — the same dict is used for the JSON
         # response and, if requested, handed to the Excel exporter. Neither
         # path recomputes it independently (Display Dataset rule, see
         # docs/02-architecture.md).
         try:
-            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to)
+            report_data = self.generate_report(item_names, company_ids, exclude_company_ids, min_balance, min_avail_qty, license_status, is_restricted, purchase_status, product_description, hsn_code, norms, notification_numbers, expiry_date_from, expiry_date_to, planning_status=planning_status)
         except Exception as e:
             logger.exception("Error generating item report")
             return JsonResponse({'error': str(e)}, status=500)
@@ -168,7 +175,7 @@ class ItemReportView(APIView):
 
         return JsonResponse(report_data, safe=False)
 
-    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None):
+    def generate_report(self, item_names=None, company_ids=None, exclude_company_ids=None, min_balance=200, min_avail_qty=0, license_status='active', is_restricted=None, purchase_status=None, product_description=None, hsn_code=None, norms=None, notification_numbers=None, expiry_date_from=None, expiry_date_to=None, planning_status='all'):
         """
         Generate item report with all license import items.
 
@@ -350,6 +357,18 @@ class ItemReportView(APIView):
             plan_cache_by_license[lid][iid]['planned_quantity'] += plan.planned_quantity or Decimal('0')
             plan_cache_by_license[lid][iid]['planned_cif'] += plan.planned_cif_fc or Decimal('0')
 
+        # Planned = linked to at least one valid plan (owner decision 2026-11-20): the plan line's own import item, or one
+        # of the plan's source items (``allocation_provenance.source_item_ids``, as Item Pivot reads plans) on the plan's
+        # own licence. Plan rows only — never item names or guessed matching.
+        from apps.license.services.item_pivot_service import _plan_source_ids
+        _items_by_license: dict = {}
+        for it in item_list:
+            _items_by_license.setdefault(it.license_id, set()).add(it.id)
+        planned_item_ids: set = set()
+        for plan in plans:
+            own = _items_by_license.get(plan.license_id, set())
+            planned_item_ids |= {plan.import_item_id, *_plan_source_ids(plan)} & own
+
         # Build final cache in the expected format: {license_id: (source, {import_item_id: {plan_data}})}
         for lid in _license_ids:
             has_plan = lid in plan_cache_by_license and plan_cache_by_license[lid]
@@ -450,11 +469,25 @@ class ItemReportView(APIView):
                 # list itself stays one entry per raw import item, since the
                 # Item Report table edits item names per raw row.
                 'group_key': plan_group_key(item),
+                # Additive: planning status of this row (see planned_item_ids above).
+                'is_planned': item.id in planned_item_ids,
             })
+
+        # Counts for every status within the other active filters (before the Planning Status filter), then filter —
+        # server-side and before the client paginates. One row per import item, so an item with several plans is never
+        # duplicated.
+        planned_count = sum(1 for row in report_items if row['is_planned'])
+        planning_counts = {'all': len(report_items), 'planned': planned_count, 'unplanned': len(report_items) - planned_count}
+        if planning_status == 'planned':
+            report_items = [row for row in report_items if row['is_planned']]
+        elif planning_status == 'unplanned':
+            report_items = [row for row in report_items if not row['is_planned']]
 
         return {
             'report_date': date.today().isoformat(),
             'total_items': len(report_items),
+            'planning_status': planning_status,
+            'planning_counts': planning_counts,
             'items': report_items
         }
 

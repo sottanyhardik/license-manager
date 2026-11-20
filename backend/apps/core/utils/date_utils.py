@@ -109,12 +109,15 @@ def format_date(
         return ''
 
     if isinstance(value, datetime):
+        # Aware datetimes are shown in the app time zone (no UTC date shift).
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
         value = value.date()
 
     return value.strftime(format_str)
 
 
-def format_date_display(value: DateRangeValue, format_str: str = "%d/%m/%Y") -> str:
+def format_date_display(value: DateRangeValue, format_str: str = "%d-%m-%Y") -> str:
     if not isinstance(value, (date, datetime)):
         return ""
     return format_date(value, format_str)

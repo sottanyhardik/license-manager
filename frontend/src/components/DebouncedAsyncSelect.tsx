@@ -21,6 +21,9 @@ import { _fkDetailCache, _fkInFlight } from "./fkDetailCache";
  * @param {boolean} isDisabled - Disable the select
  * @param {function} formatLabel - Custom function to format option label
  * @param {number} debounceDelay - Debounce delay in milliseconds (default: 300)
+ * @param {string} ariaLabel - Accessible name for the input
+ * @param {boolean} autoFocus - Focus the input on mount
+ * @param {boolean} portalMenu - Render the menu in document.body (inside scroll containers / tables); off by default
  * @param {boolean} loadOnMount - Control whether to load options on mount (default: false)
  *
  * @example
@@ -45,7 +48,10 @@ export default function DebouncedAsyncSelect({
     formatLabel = null,
     className = "",
     loadOnMount = false,
-    debounceDelay = 300
+    debounceDelay = 300,
+    ariaLabel = undefined,
+    autoFocus = false,
+    portalMenu = false
 }) {
     // Strip /api/ prefix if it exists to avoid double /api/api/
     let cleanEndpoint = endpoint?.startsWith('/api/') ? endpoint.substring(5) : endpoint;
@@ -195,7 +201,8 @@ export default function DebouncedAsyncSelect({
             const values = selected ? selected.map(opt => opt.value) : [];
             onChange(values);
         } else {
-            onChange(selected ? selected.value : null);
+            // 2nd arg (full option) is additive; existing callers ignore it.
+            onChange(selected ? selected.value : null, selected ?? null);
         }
     };
 
@@ -210,6 +217,10 @@ export default function DebouncedAsyncSelect({
                 isMulti={isMulti}
                 isClearable={isClearable}
                 isDisabled={isDisabled}
+                aria-label={ariaLabel}
+                autoFocus={autoFocus}
+                menuPortalTarget={portalMenu && typeof document !== "undefined" ? document.body : undefined}
+                menuPosition={portalMenu ? "fixed" : undefined}
                 placeholder={placeholder}
                 className={className}
                 classNamePrefix="react-select"
@@ -220,6 +231,10 @@ export default function DebouncedAsyncSelect({
                         borderColor: "var(--tb-border)"
                     }),
                     menu: (base) => ({
+                        ...base,
+                        zIndex: 9999
+                    }),
+                    menuPortal: (base) => ({
                         ...base,
                         zIndex: 9999
                     })

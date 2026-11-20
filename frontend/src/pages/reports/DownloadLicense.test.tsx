@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
@@ -63,7 +64,7 @@ describe("DownloadLicense", () => {
     });
 
     it("deduplicates manual license numbers before requesting the bulk Excel export", async () => {
-        render(<DownloadLicense />);
+        render(<DownloadLicense />, { wrapper: MemoryRouter });
 
         fireEvent.change(screen.getByLabelText("License Numbers"), {
             target: { value: " LIC-1, LIC-2\nLIC-1 " },
@@ -92,7 +93,7 @@ describe("DownloadLicense", () => {
                 ],
             },
         });
-        render(<DownloadLicense />);
+        render(<DownloadLicense />, { wrapper: MemoryRouter });
 
         fireEvent.change(screen.getByLabelText("Look-back period (days)"), { target: { value: "99999" } });
         fireEvent.click(screen.getByRole("button", { name: /^download excel$/i }));
@@ -109,7 +110,7 @@ describe("DownloadLicense", () => {
     });
 
     it("uses the expiring-license report endpoint when expiring status is selected", async () => {
-        render(<DownloadLicense />);
+        render(<DownloadLicense />, { wrapper: MemoryRouter });
 
         fireEvent.click(screen.getByRole("button", { name: "Expiring Soon" }));
         fireEvent.change(screen.getByLabelText("Expiring within (days)"), { target: { value: "45" } });
@@ -122,7 +123,7 @@ describe("DownloadLicense", () => {
     });
 
     it("keeps the manual export action disabled for empty input", () => {
-        render(<DownloadLicense />);
+        render(<DownloadLicense />, { wrapper: MemoryRouter });
 
         const button = screen.getByRole("button", { name: /download excel \(0 licenses\)/i });
 

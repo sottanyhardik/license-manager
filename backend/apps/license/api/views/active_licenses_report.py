@@ -310,6 +310,11 @@ class ActiveLicensesReportView(APIView):
         """
         import openpyxl
         from openpyxl.styles import Font, Alignment, PatternFill
+        from apps.core.exporters.excel.cell_formats import (
+            AMOUNT_FORMAT, QUANTITY_FORMAT, write_date, write_number, write_sum,
+            finalize_workbook, sum_cells_formula,
+        )
+        usd_format = '"$"#,##0.00'
 
         workbook = openpyxl.Workbook()
         workbook.remove(workbook.active)  # Remove default sheet
@@ -345,6 +350,7 @@ class ActiveLicensesReportView(APIView):
                 to_date=report_data['report_period']['to_date'],
             )
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            finalize_workbook(workbook)
             workbook.save(response)
             return response
 
@@ -355,6 +361,7 @@ class ActiveLicensesReportView(APIView):
             worksheet = workbook.create_sheet(title=sheet_name)
 
             current_row = 1
+            balance_cells = []
 
             # Title
             title = f"Active Licenses (Expiry from {report_data['report_period']['from_date']} onwards) - {norm_name}"
@@ -389,12 +396,19 @@ class ActiveLicensesReportView(APIView):
                 details = [
                     ['Notification Number:', license_data['notification_number'], 'License Date:', license_data['license_date']],
                     ['Exporter:', license_data['exporter'], 'Port:', license_data['port']],
-                    ['SION Norms:', ', '.join(license_data['sion_norms']), 'Balance CIF:', f"${license_data['balance_cif']:.2f}"],
+                    ['SION Norms:', ', '.join(license_data['sion_norms']), 'Balance CIF:', license_data['balance_cif']],
                     ['Ledger Date:', license_data.get('ledger_date') or '-', '', ''],
                 ]
-                for detail_row in details:
+                for detail_idx, detail_row in enumerate(details):
                     for col_num, value in enumerate(detail_row, 1):
-                        worksheet.cell(row=current_row, column=col_num, value=value)
+                        cell = worksheet.cell(row=current_row, column=col_num, value=value)
+                        if (detail_idx, col_num) == (0, 4):
+                            write_date(cell, license_data['license_date'])
+                        elif (detail_idx, col_num) == (3, 2):
+                            write_date(cell, license_data.get('ledger_date'))
+                        elif (detail_idx, col_num) == (2, 4):
+                            write_number(cell, license_data['balance_cif'], usd_format)
+                            balance_cells.append(cell.coordinate)
                     current_row += 1
 
                 current_row += 1
@@ -414,6 +428,7 @@ class ActiveLicensesReportView(APIView):
                 current_row += 1
 
                 # Items data
+                items_first_row = current_row
                 for item in license_data['items']:
                     row_data = [
                         item['serial_numbers'],
@@ -428,7 +443,11 @@ class ActiveLicensesReportView(APIView):
                         item['available_value'],
                     ]
                     for col_num, value in enumerate(row_data, 1):
-                        worksheet.cell(row=current_row, column=col_num, value=value)
+                        cell = worksheet.cell(row=current_row, column=col_num, value=value)
+                        if 5 <= col_num <= 8:
+                            write_number(cell, value, QUANTITY_FORMAT)
+                        elif col_num in (9, 10):
+                            write_number(cell, value, AMOUNT_FORMAT)
                     current_row += 1
 
                     # Add conditions as notes below item if available
@@ -441,6 +460,7 @@ class ActiveLicensesReportView(APIView):
                         notes_cell.alignment = Alignment(wrap_text=True, vertical='top')
                         current_row += 1
 
+                items_last_row = current_row - 1
                 # License summary
                 summary = license_data['import_summary']
                 current_row += 1
@@ -456,6 +476,8 @@ class ActiveLicensesReportView(APIView):
                     cell = worksheet.cell(row=current_row, column=col_num)
                     cell.value = value
                     cell.font = Font(bold=True)
+                    if 5 <= col_num <= 8:
+                        write_sum(cell, items_first_row, items_last_row, QUANTITY_FORMAT)
                 current_row += 3
 
             # Norm summary (for this sheet)
@@ -492,7 +514,7 @@ class ActiveLicensesReportView(APIView):
             norm_summary_rows = [
                 ['Total Licenses:', norm_total_licenses],
                 ['Total Items:', norm_total_items],
-                ['Total Balance CIF:', f"${norm_total_balance:.2f}"],
+                ['Total Balance CIF:', norm_total_balance],
             ]
             for summary_row in norm_summary_rows:
                 for col_num, value in enumerate(summary_row, 1):
@@ -500,6 +522,11 @@ class ActiveLicensesReportView(APIView):
                     cell.value = value
                     if col_num == 1:
                         cell.font = Font(bold=True)
+                    elif summary_row[0] == 'Total Balance CIF:':
+                        write_number(cell, value, usd_format)
+                        # Live SUM of the per-licence Balance cells; keeps the computed
+                        # value if the list would exceed Excel's formula limits.
+                        cell.value = sum_cells_formula(balance_cells, cell.value)
                 current_row += 1
 
             # Add item-wise summary table
@@ -555,6 +582,7 @@ class ActiveLicensesReportView(APIView):
             current_row += 1
 
             # Item-wise summary data rows
+            itemwise_first_row = current_row
             for item_data in sorted(itemwise_summary.values(), key=lambda x: x['item_name']):
                 row_data = [
                     item_data['item_name'],
@@ -569,9 +597,14 @@ class ActiveLicensesReportView(APIView):
                 for col_num, value in enumerate(row_data, 1):
                     cell = worksheet.cell(row=current_row, column=col_num)
                     cell.value = value
+                    if 3 <= col_num <= 6:
+                        write_number(cell, value, QUANTITY_FORMAT)
+                    elif col_num in (7, 8):
+                        write_number(cell, value, AMOUNT_FORMAT)
                     cell.fill = PatternFill(start_color='D9EAD3', end_color='D9EAD3', fill_type='solid')
                 current_row += 1
 
+            itemwise_last_row = current_row - 1
             # Grand total row
             current_row += 1
             grand_total_data = [
@@ -586,6 +619,10 @@ class ActiveLicensesReportView(APIView):
             for col_num, value in enumerate(grand_total_data, 1):
                 cell = worksheet.cell(row=current_row, column=col_num)
                 cell.value = value
+                if 3 <= col_num <= 6:
+                    write_sum(cell, itemwise_first_row, itemwise_last_row, QUANTITY_FORMAT)
+                elif col_num in (7, 8):
+                    write_sum(cell, itemwise_first_row, itemwise_last_row, AMOUNT_FORMAT)
                 cell.font = Font(bold=True, size=11, color='FFFFFF')
                 cell.fill = PatternFill(start_color='274E13', end_color='274E13', fill_type='solid')
             current_row += 1
@@ -624,6 +661,7 @@ class ActiveLicensesReportView(APIView):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
+        finalize_workbook(workbook)
         workbook.save(response)
         return response
 

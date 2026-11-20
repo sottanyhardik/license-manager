@@ -257,7 +257,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "B7",
             "type": "str",
             "value": "9000004"
@@ -267,10 +267,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "C7",
-            "type": "str",
-            "value": "02-03-2025"
+            "type": "datetime",
+            "value": "2025-03-02T00:00:00"
           },
           {
             "bold": false,
@@ -287,10 +287,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "right",
-            "number_format": "General",
+            "number_format": "#,##0.000",
             "ref": "E7",
-            "type": "int",
-            "value": 100
+            "type": "float",
+            "value": 100.1
           },
           {
             "bold": false,
@@ -347,7 +347,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "K7",
             "type": "str",
             "value": "--"
@@ -367,7 +367,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "M7",
             "type": "str",
             "value": "0311000002"
@@ -377,10 +377,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "N7",
-            "type": "str",
-            "value": "20-02-2024"
+            "type": "datetime",
+            "value": "2024-02-20T00:00:00"
           },
           {
             "bold": false,
@@ -447,10 +447,10 @@
             "bordered": false,
             "fill": null,
             "h_align": null,
-            "number_format": "#,##0",
+            "number_format": "#,##0.000",
             "ref": "E8",
-            "type": "int",
-            "value": 100
+            "type": "str",
+            "value": "=SUM(E7:E7)"
           },
           {
             "bold": true,
@@ -459,8 +459,8 @@
             "h_align": null,
             "number_format": "#,##0.00",
             "ref": "G8",
-            "type": "float",
-            "value": 10.1
+            "type": "str",
+            "value": "=SUM(G7:G7)"
           },
           {
             "bold": true,
@@ -469,8 +469,8 @@
             "h_align": null,
             "number_format": "₹#,##0.00",
             "ref": "I8",
-            "type": "float",
-            "value": 839.58
+            "type": "str",
+            "value": "=SUM(I7:I7)"
           },
           {
             "bold": true,
@@ -487,10 +487,10 @@
             "bordered": false,
             "fill": "00f1f5f9",
             "h_align": "right",
-            "number_format": "#,##0",
+            "number_format": "#,##0.000",
             "ref": "E10",
-            "type": "int",
-            "value": 100
+            "type": "str",
+            "value": "=SUMIF(C8:C8,\"Total\",E8:E8)"
           },
           {
             "bold": true,
@@ -499,18 +499,18 @@
             "h_align": "right",
             "number_format": "#,##0.00",
             "ref": "G10",
-            "type": "float",
-            "value": 10.1
+            "type": "str",
+            "value": "=SUMIF(C8:C8,\"Total\",G8:G8)"
           },
           {
             "bold": true,
             "bordered": false,
             "fill": "00f1f5f9",
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "\"CIF INR: ₹\"#,##0.00",
             "ref": "H10",
             "type": "str",
-            "value": "CIF INR: ₹839.58"
+            "value": "=SUMIF(C8:C8,\"Total\",I8:I8)"
           }
         ],
         "column_widths": {
@@ -518,10 +518,10 @@
           "B": 12.0,
           "C": 12.0,
           "D": 10.0,
-          "E": 16.0,
+          "E": 22.0,
           "F": 16.0,
-          "G": 11.0,
-          "H": 18.0,
+          "G": 22.0,
+          "H": 22.0,
           "I": 15.0,
           "J": 11.0,
           "K": 10.0,

@@ -24,6 +24,7 @@ from apps.license.api.views.active_dfia_report import add_active_dfia_report_act
 from apps.license.api.views.license_report import add_license_report_action
 from apps.license.api.views.license_balance_ledger import add_license_balance_ledger_actions
 from apps.license.api.views.license_overview import add_license_overview_actions
+from apps.license.api.views.import_item_names import add_import_item_name_actions
 
 
 # Helper function to get default purchase status IDs from codes
@@ -240,7 +241,7 @@ class LicenseDetailsViewSet(_LicenseDetailsViewSetBase):
         # bulk_balance_excel uses POST only because the licence-number list
         # goes in the request body; behaviour is read-only. Allow any role
         # that can read licences.
-        if getattr(self, 'action', None) == 'bulk_balance_excel':
+        if getattr(self, 'action', None) in ('bulk_balance_excel', 'import_item_names_preview'):  # preview: POST body only, writes nothing
             return [LicenseReadOnlyPermission()]
         if getattr(self, 'action', None) in self._BALANCE_LEDGER_ACTIONS:
             return [LicenseBalanceLedgerPermission()]
@@ -1257,3 +1258,4 @@ LicenseDetailsViewSet = add_license_report_action(LicenseDetailsViewSet)
 LicenseDetailsViewSet = add_active_dfia_report_action(LicenseDetailsViewSet)
 LicenseDetailsViewSet = add_license_balance_ledger_actions(LicenseDetailsViewSet)
 LicenseDetailsViewSet = add_license_overview_actions(LicenseDetailsViewSet)
+LicenseDetailsViewSet = add_import_item_name_actions(LicenseDetailsViewSet)

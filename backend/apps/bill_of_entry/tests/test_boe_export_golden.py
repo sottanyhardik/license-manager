@@ -38,8 +38,8 @@ XLSX_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 def _norm_text(text):
     today = datetime.now()
+    text = re.sub(r"Generated on: \d{2}-\d{2}-\d{4} \d{2}:\d{2}", "Generated on: <GENERATED>", text)
     text = text.replace(today.strftime("%d-%m-%Y"), "<TODAY>")
-    text = re.sub(r"Generated on: .*? (AM|PM)", "Generated on: <GENERATED>", text)
     return text
 
 

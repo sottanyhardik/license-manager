@@ -1,11 +1,11 @@
 import { ArrowRight, Network } from "lucide-react";
+import { formatDate, formatDateTime } from "@/utils/dateFormatter";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, StatusBadge, type Tone } from "@/components/shared";
 
 import type { LicenceOwnershipData } from "../types";
 
-const DATE_OPTS: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
 
 /** Same keyword buckets as before; only the visual tone vocabulary changed. */
 function transferTone(status: string | null): Tone {
@@ -66,7 +66,7 @@ export default function HistoryTab({ ownershipData, loading }: HistoryTabProps) 
                             {owner.address && <dd className="text-xs text-muted-foreground">{owner.address}</dd>}
                             {ownershipData.last_ownership_fetch && (
                                 <dd className="mt-1 text-xs text-muted-foreground">
-                                    Last synced: {new Date(ownershipData.last_ownership_fetch).toLocaleString("en-IN")}
+                                    Last synced: {formatDateTime(ownershipData.last_ownership_fetch)}
                                 </dd>
                             )}
                         </div>
@@ -90,10 +90,10 @@ export default function HistoryTab({ ownershipData, loading }: HistoryTabProps) 
                             <li key={idx} className="grid grid-cols-1 items-start gap-2 px-3 py-2 md:grid-cols-[10rem_1fr_auto_1fr]">
                                 <div className="flex flex-col items-start gap-1">
                                     <StatusBadge tone={transferTone(t.transfer_status)} label={t.transfer_status || "Unknown"} />
-                                    {date && <span className="text-xs tabular-nums text-muted-foreground">{new Date(date).toLocaleDateString("en-IN", DATE_OPTS)}</span>}
+                                    {date && <span className="text-xs tabular-nums text-muted-foreground">{formatDate(date)}</span>}
                                     {t.transfer_initiation_date && (
                                         <span className="text-xs text-muted-foreground">
-                                            Initiated: {new Date(t.transfer_initiation_date).toLocaleDateString("en-IN", DATE_OPTS)}
+                                            Initiated: {formatDate(t.transfer_initiation_date)}
                                         </span>
                                     )}
                                 </div>

@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
+import { formatDateTime } from "@/utils/dateFormatter";
 import { toast } from "sonner";
 import {
     RefreshCw, LogIn, LogOut, Eye, PlusCircle, Pencil, Trash2,
@@ -71,10 +72,7 @@ const ALL = "__all__";
 
 function fmtDate(ts: string | null | undefined): string {
     if (!ts) return "—";
-    return new Date(ts).toLocaleString("en-IN", {
-        day: "2-digit", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    });
+    return formatDateTime(ts) || "—";
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

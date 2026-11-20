@@ -121,7 +121,7 @@ def export_grouped_pdf(queryset):
             alignment=TA_CENTER,
             spaceAfter=10,
         )
-        ts_para = Paragraph(f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", ts_style)
+        ts_para = Paragraph(f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", ts_style)
 
         header_layout = RLTable([[title_para, exch_table]], colWidths=[8.85 * inch, 1.5 * inch])
         header_layout.setStyle(TableStyle([

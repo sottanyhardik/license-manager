@@ -174,6 +174,27 @@ class LicenseImportItemSerializer(serializers.ModelSerializer):
     items = serializers.PrimaryKeyRelatedField(many=True, queryset=ItemNameModel.objects.all(), required=False)
     items_detail = serializers.SerializerMethodField(read_only=True)
     license_number = serializers.CharField(source="license.license_number", read_only=True, allow_null=True)
+
+    def validate_items(self, value):
+        """Owner decision 2026-11-20: an Item Name row override is changed or reverted only in Licence Detail → Import
+        Items (audited, versioned). Other editors may re-send the same links but never change them."""
+        instance = getattr(self, "instance", None)
+        if instance is not None and getattr(instance, "pk", None):
+            from apps.license.models import ImportItemNameOverride
+
+            if ImportItemNameOverride.objects.filter(import_item_id=instance.pk).exists():
+                wanted = sorted({getattr(i, "pk", i) for i in value})
+                if wanted != sorted(instance.items.values_list("pk", flat=True)):
+                    raise serializers.ValidationError(
+                        "This import item has an Item Name override — change or revert it in Licence Detail → Import Items.")
+            from apps.license.services.product_intelligence.import_item_approval import approval_for
+
+            if approval_for(instance) is not None:
+                wanted = sorted({getattr(i, "pk", i) for i in value})
+                if wanted != sorted(instance.items.values_list("pk", flat=True)):
+                    raise serializers.ValidationError(
+                        "This Description + HSN has an approved mapping — change it in Licence Detail → Import Items or Product Mapping → Approved.")
+        return value
     license_date = IndianDateField(source="license.license_date", read_only=True, allow_null=True)
     license_expiry_date = IndianDateField(source="license.license_expiry_date", read_only=True, allow_null=True)
     notification_number = serializers.SlugRelatedField(source="license.notification_number", slug_field="code", read_only=True)

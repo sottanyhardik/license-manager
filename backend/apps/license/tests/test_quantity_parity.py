@@ -211,8 +211,10 @@ class CanonicalQuantityParityTests(QuantityFixtureMixin, TestCase):
         self.allot(self.company, a, "30.000")
         self.allot(self.company, a, "20.000")
         self.allot(self.company, b, "100.000")
-        self.allot(self.company, a, "7.000", atype=ARO)  # ARO-type: never "outstanding allotted"
-        self.assert_canonical(a, "950.000", "0.000", False)
+        # Owner DEC-01 A (2026-11-20, SAT-DEF-001): an ARO allotment consumes
+        # item qty like AT (was: never "outstanding allotted").
+        self.allot(self.company, a, "7.000", atype=ARO)
+        self.assert_canonical(a, "943.000", "0.000", False)
         self.assert_canonical(b, "400.000", "0.000", False)
 
     def test_allotment_represented_by_boe_is_not_outstanding(self):

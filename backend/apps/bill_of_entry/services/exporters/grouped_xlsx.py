@@ -5,12 +5,34 @@ from decimal import Decimal
 
 from django.http import HttpResponse
 
+from apps.core.exporters.excel.cell_formats import (
+    QUANTITY_FORMAT,
+    finalize_workbook,
+    sum_formula,
+    sumif_label_formula,
+    write_date,
+    write_number,
+    write_text,
+)
+
 from .common import OPENPYXL_AVAILABLE, _decimal_or_default, _text_response
 from .grouping import group_boe
 
 if OPENPYXL_AVAILABLE:
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+
+
+def _sum_of_rows(column, rows):
+    """Grand total as a live formula summing only the given sub-total rows.
+
+    Uses SUMIF on the sub-total label ("Total", column C) over this company's
+    span (first..last sub-total row), so the formula length is constant (no Excel
+    8,192-char / 255-argument limit) and other companies' rows are excluded.
+    """
+    if not rows:
+        return 0
+    return sumif_label_formula(3, "Total", column, min(rows), max(rows))
 
 
 def export_grouped_xlsx(queryset):
@@ -76,10 +98,9 @@ def export_grouped_xlsx(queryset):
         cell.alignment = Alignment(horizontal='center', vertical='center')
         row += 1
 
-        # Track company totals
-        company_total_qty = 0
-        company_total_inr = 0
-        company_total_fc = 0
+        # Rows holding each product total; the company grand total sums only these
+        # (never the data rows again), so nothing is double counted.
+        product_total_rows = []
 
         # Merge all products into a single table (group by product name only, ignore license serial)
         merged_products = defaultdict(lambda: defaultdict(list))
@@ -112,9 +133,7 @@ def export_grouped_xlsx(queryset):
             row += 1
 
             sr_no = 1
-            product_total_qty = 0
-            product_total_value = 0
-            product_total_inr = 0
+            first_data_row = row
 
             # Process each port within product
             for port_code, boe_list in ports_dict.items():
@@ -129,7 +148,7 @@ def export_grouped_xlsx(queryset):
                             boe['boe_number'],
                             boe['boe_date'],
                             port_code,
-                            int(boe['total_quantity']),
+                            boe['total_quantity'],  # raw Decimal so the SUM totals are exact
                             round(unit_price, 2),
                             round(boe['total_fc'], 2),
                             round(boe['exchange_rate'], 2),  # Exchange Rate
@@ -150,10 +169,16 @@ def export_grouped_xlsx(queryset):
                             cell = ws.cell(row=row, column=col_idx, value=value)
                             cell.border = border
                             cell.font = Font(size=12)
+                            if col_idx in (3, 14):  # BOE Date / License Date: real dates
+                                write_date(cell, value)
+                            elif col_idx in (2, 11, 13):  # BOE no. / Invoice / License no.: identifiers
+                                write_text(cell, value)
                             if col_idx in [5, 6, 7, 8, 9, 17, 18, 19]:  # Number columns
                                 cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
                                 if col_idx in [6, 7, 18]:  # USD columns
                                     cell.number_format = '#,##0.00'
+                                elif col_idx == 5:  # Total quantity: real number, 3dp
+                                    write_number(cell, value, QUANTITY_FORMAT)
                                 elif col_idx in [9, 19]:  # INR columns
                                     cell.number_format = '₹#,##0.00'
                                 elif col_idx == 8:  # Exchange Rate column
@@ -191,6 +216,10 @@ def export_grouped_xlsx(queryset):
                                 cell = ws.cell(row=row, column=col_idx, value=value)
                                 cell.border = border
                                 cell.font = Font(size=12)
+                                if col_idx == 14:  # License Date: real date
+                                    write_date(cell, value)
+                                elif col_idx == 13:  # License no.: identifier
+                                    write_text(cell, value)
                                 if col_idx in [17, 18, 19]:
                                     cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
                                     if col_idx in [18, 19]:
@@ -257,21 +286,17 @@ def export_grouped_xlsx(queryset):
                             row += 1
 
                     sr_no += 1
-                    product_total_qty += boe['total_quantity']
-                    product_total_value += boe['total_fc']
-                    product_total_inr += boe['total_inr']
-                    company_total_qty += boe['total_quantity']
-                    company_total_inr += boe['total_inr']
-                    company_total_fc += boe['total_fc']
 
-            # Product totals
+            # Product totals: live SUM over this product's data rows only.
+            last_data_row = row - 1
             ws.cell(row=row, column=3, value="Total").font = Font(bold=True)
-            ws.cell(row=row, column=5, value=int(product_total_qty)).font = Font(bold=True)
-            ws.cell(row=row, column=5).number_format = '#,##0'
-            ws.cell(row=row, column=7, value=round(product_total_value, 2)).font = Font(bold=True)
+            ws.cell(row=row, column=5, value=sum_formula(5, first_data_row, last_data_row)).font = Font(bold=True)
+            ws.cell(row=row, column=5).number_format = QUANTITY_FORMAT
+            ws.cell(row=row, column=7, value=sum_formula(7, first_data_row, last_data_row)).font = Font(bold=True)
             ws.cell(row=row, column=7).number_format = '#,##0.00'
-            ws.cell(row=row, column=9, value=round(product_total_inr, 2)).font = Font(bold=True)
+            ws.cell(row=row, column=9, value=sum_formula(9, first_data_row, last_data_row)).font = Font(bold=True)
             ws.cell(row=row, column=9).number_format = '₹#,##0.00'
+            product_total_rows.append(row)
             row += 2
 
         # Add grand total after all products
@@ -281,18 +306,19 @@ def export_grouped_xlsx(queryset):
         cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
-        ws.cell(row=row, column=5, value=int(company_total_qty)).font = Font(bold=True, size=14)
+        ws.cell(row=row, column=5, value=_sum_of_rows(5, product_total_rows)).font = Font(bold=True, size=14)
         ws.cell(row=row, column=5).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
         ws.cell(row=row, column=5).alignment = Alignment(horizontal='right', vertical='center')
-        ws.cell(row=row, column=5).number_format = '#,##0'
+        ws.cell(row=row, column=5).number_format = QUANTITY_FORMAT
 
-        ws.cell(row=row, column=7, value=round(company_total_fc, 2)).font = Font(bold=True, size=14)
+        ws.cell(row=row, column=7, value=_sum_of_rows(7, product_total_rows)).font = Font(bold=True, size=14)
         ws.cell(row=row, column=7).fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
         ws.cell(row=row, column=7).alignment = Alignment(horizontal='right', vertical='center')
         ws.cell(row=row, column=7).number_format = '#,##0.00'
 
         ws.merge_cells(f'H{row}:I{row}')
-        cell = ws.cell(row=row, column=8, value=f"CIF INR: ₹{company_total_inr:,.2f}")
+        cell = ws.cell(row=row, column=8, value=_sum_of_rows(9, product_total_rows))
+        cell.number_format = '"CIF INR: ₹"#,##0.00'
         cell.font = Font(bold=True, size=14, color="1e3a8a")
         cell.fill = PatternFill(start_color='f1f5f9', end_color='f1f5f9', fill_type='solid')
         cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -324,6 +350,7 @@ def export_grouped_xlsx(queryset):
     )
     today = datetime.now().strftime('%d-%m-%Y')
     response['Content-Disposition'] = f'attachment; filename="BOE Report - {today}.xlsx"'
+    finalize_workbook(wb)
     wb.save(response)
 
     return response

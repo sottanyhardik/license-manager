@@ -66,6 +66,15 @@ class CommodityItemLinkCommand(BaseCommand):
             .distinct()
         )
 
+        # Records decided by a row override / Description + HSN approval (incl. a clear) are never touched by this tool.
+        from apps.license.services.product_intelligence.import_item_approval import protected_import_item_ids
+
+        protected = protected_import_item_ids(set(matching_items.values_list("id", flat=True)) | set(other_items.values_list("id", flat=True)))
+        if protected:
+            matching_items = matching_items.exclude(pk__in=list(protected))
+            other_items = other_items.exclude(pk__in=list(protected))
+            self.stdout.write(self.style.WARNING(f"   Skipped {len(protected)} protected record(s) (row override / approved or cleared Description + HSN)"))
+
         matching_count = matching_items.count()
         other_count = other_items.count()
 

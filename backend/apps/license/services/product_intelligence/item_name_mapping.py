@@ -460,6 +460,16 @@ def undo_import_approval(*, decision_id: int, user) -> dict:
         # Checked AFTER the record locks: an approval of the same source committed while we waited is seen here.
         if _later_approvals(decision.source_key, decision.pk).exists():
             raise MatchValidationError("A later approval replaced this mapping — undo that one instead")
+        from apps.license.models import ImportItemNameOverride
+
+        from apps.license.services.product_intelligence import import_item_approval as ia
+
+        approved = ia.coverage(list(LicenseImportItemsModel.objects.filter(pk__in=ids).select_related("hs_code")))
+        if approved:
+            raise MatchValidationError(ia.refusal(len(approved)))
+        pinned = ImportItemNameOverride.objects.filter(import_item_id__in=ids).count()
+        if pinned:
+            raise MatchValidationError(f"{pinned} record(s) have a licence-level Item Name override — change them in Licence Detail → Import Items")
         changed = [k for k in map(str, ids) if k not in items or sorted(n.pk for n in items[k].items.all()) != sorted((decision.new_links or {}).get(k) or [])]
         if changed:
             raise MatchValidationError(f"{len(changed)} source record(s) changed since this approval — nothing was undone")
@@ -510,7 +520,7 @@ def drop_counts_cache() -> None:
 
 def _counts() -> dict:
     from apps.license.models import ImportDescriptionMapping, LicenseImportItemsModel, SourceNameMapping
-    from apps.license.services.product_intelligence.description_mapping import description_key, key_hash
+    from apps.license.services.product_intelligence.description_mapping import description_key, key_hash, norm_hsn
 
     out = {}
     for kind in KINDS:
@@ -527,13 +537,23 @@ def _counts() -> dict:
                 records += 1
         out[kind] = {"records": records, "descriptions": len({k for k in name_keys.values() if k and key_hash(k) not in saved})}
     # Licence import items: unique descriptions (strict key) without a saved description mapping ("Mapping Required").
+    # Combinations (key + HSN) with an active approval / clear are decided and never pending (owner amendment 2026-11-20).
+    from apps.license.models import ImportItemMappingApproval
+
     mapped = set(ImportDescriptionMapping.objects.filter(is_active=True).values_list("key_hash", flat=True))
+    approved = set(ImportItemMappingApproval.objects.filter(is_active=True).values_list("key_hash", "hsn_code"))
     keys: dict[str, str] = {}
+    pending_keys: set[str] = set()
     records = 0
-    for desc in LicenseImportItemsModel.objects.exclude(description__isnull=True).exclude(description="").values_list("description", flat=True):
+    for desc, hsn in (LicenseImportItemsModel.objects.exclude(description__isnull=True).exclude(description="")
+                      .values_list("description", "hs_code__hs_code")):
         if desc not in keys:
             keys[desc] = description_key(desc)
-        if keys[desc] and key_hash(keys[desc]) not in mapped:
+        if not keys[desc]:
+            continue
+        kh = key_hash(keys[desc])
+        if kh not in mapped and (kh, norm_hsn(hsn)) not in approved:
             records += 1
-    out["import"] = {"records": records, "descriptions": len({k for k in keys.values() if k and key_hash(k) not in mapped})}
+            pending_keys.add(keys[desc])
+    out["import"] = {"records": records, "descriptions": len(pending_keys)}
     return out

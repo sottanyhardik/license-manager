@@ -71,6 +71,53 @@ def classify_record(description: str, hsn: str, links: list[ItemNameModel], *, t
     return ELIGIBLE, f"Unlinked → {target.name}"
 
 
+def approval_gate(status: str, reason: str, approval, links: list, target: ItemNameModel) -> tuple[str, str]:
+    """Owner amendment 2026-11-20: a consolidation never silently overrides a Description + HSN approval. A record whose approval
+    points at the Item Name being replaced stays ELIGIBLE (the approval is re-pointed to the target — versioned + audited); a
+    cleared combination, or an approval pointing at anything else, is excluded."""
+    if approval is None or status not in {ELIGIBLE}:
+        return status, reason
+    if not approval.item_id:
+        return EXCLUDED, "Approved Description + HSN mapping with no Item Name (cleared) — consolidation never links it"
+    if approval.item_id == target.pk:
+        return status, reason
+    if [n.pk for n in links] == [approval.item_id]:
+        return status, f"{reason} (approved Description + HSN mapping is re-pointed to {target.name}, versioned)"
+    return EXCLUDED, f"Approved Description + HSN mapping points to another Item Name — not changed by consolidation"
+
+
+OVERRIDE_REASON = "Row override — change it in Licence Detail → Import Items"
+
+
+def override_gate(status: str, reason: str, overridden: bool) -> tuple[str, str]:
+    """Precedence: a row override (one-record exception) outranks every consolidation — the record is never moved."""
+    if overridden and status == ELIGIBLE:
+        return EXCLUDED, OVERRIDE_REASON
+    return status, reason
+
+
+def _overridden_ids(ids) -> set[int]:
+    from apps.license.models import ImportItemNameOverride
+
+    ids = list(ids)
+    return set(ImportItemNameOverride.objects.filter(import_item_id__in=ids).values_list("import_item_id", flat=True)) if ids else set()
+
+
+def _lock_records(ids, *, extra_combinations=()) -> None:
+    """Lock order approval -> records everywhere: lock the active approvals of the records' combinations, then the UNION of
+    the records and every record of those approved combinations (a re-point locks them anyway), once, in pk order."""
+    from apps.license.services.product_intelligence import import_item_approval as ia
+
+    ids = set(ids)
+    probe = list(LicenseImportItemsModel.objects.filter(pk__in=ids).select_related("hs_code"))
+    combos = {(a.key_hash, a.hsn_code) for a in ia.coverage(probe).values()} | set(extra_combinations)
+    ia.lock_approvals({kh for kh, _ in combos})
+    for kh, hsn in sorted(combos):
+        ids |= {r.pk for r in ia.records_for(kh, hsn)}
+    if ids:
+        list(LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(pk__in=ids).order_by("pk").values_list("pk", flat=True))
+
+
 def preview(*, sion: str, target_id: int) -> dict:
     """Every candidate record of the SION grouped by (normalised description, HSN), with status and reason."""
     target = ItemNameModel.objects.prefetch_related("norms").select_related("sion_norm_class").filter(pk=target_id, is_active=True).first()
@@ -82,8 +129,12 @@ def preview(*, sion: str, target_id: int) -> dict:
     if not target_core:
         raise MatchValidationError(f"{target.name} has no usable product identity")
     chapters = _target_chapters(target)
-    items = (LicenseImportItemsModel.objects.filter(license__export_license__norm_class__norm_class=sion).distinct()
-             .select_related("hs_code", "license").prefetch_related("items").order_by("pk"))
+    from apps.license.services.product_intelligence import import_item_approval as ia
+
+    items = list(LicenseImportItemsModel.objects.filter(license__export_license__norm_class__norm_class=sion).distinct()
+                 .select_related("hs_code", "license").prefetch_related("items").order_by("pk"))
+    approvals = ia.coverage(items)
+    overridden = _overridden_ids(i.pk for i in items)
     groups: dict[str, dict] = {}
     for item in items:
         description = (item.description or "").strip()
@@ -94,6 +145,8 @@ def preview(*, sion: str, target_id: int) -> dict:
         status, reason = classify_record(description, hsn, links, target=target, target_core=target_core, chapters=chapters)
         if reason == "Not a candidate":
             continue
+        status, reason = approval_gate(status, reason, approvals.get(item.pk), links, target)
+        status, reason = override_gate(status, reason, item.pk in overridden)
         key = source_key(normalise(description), hsn, sion)
         group = groups.setdefault(key, {
             "key": key, "description": description, "hsn_code": hsn, "sion": sion, "records": [], "statuses": Counter(),
@@ -146,13 +199,19 @@ def apply(*, sion: str, target_id: int, keys: list[str], user, reason: str) -> d
     batch = uuid.uuid4().hex
     decisions, aliases, skipped_aliases = [], [], []
     target_core, chapters = identity_tokens(master_label(target.name)), _target_chapters(target)
+    from apps.license.services.product_intelligence import import_item_approval as ia
+
     with transaction.atomic():
         # Lock every record first and re-classify it under the lock: a link / HSN / wording change after the preview
         # aborts the whole batch (all-or-nothing) instead of overwriting it.
         ids = sorted({i for k in keys for i in current[k]["eligible_record_ids"]})
+        _lock_records(ids)  # approval rows, then the union of eligible + approved-combination records, pk order
         locked = {i.pk: i for i in LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(pk__in=ids).order_by("pk")
                   .select_related("hs_code").prefetch_related("items")}
         to_change: dict[int, list[int]] = {}
+        approvals = ia.coverage(list(locked.values()))
+        overridden = _overridden_ids(locked)
+        repoints: dict[int, tuple[int, int]] = {}  # approval id -> (item id it pointed to, its version)
         for item_id in ids:
             item = locked.get(item_id)
             if item is None:
@@ -160,10 +219,15 @@ def apply(*, sion: str, target_id: int, keys: list[str], user, reason: str) -> d
             links = list(item.items.all())
             status, why = classify_record((item.description or "").strip(), getattr(item.hs_code, "hs_code", "") if item.hs_code_id else "",
                                           links, target=target, target_core=target_core, chapters=chapters)
+            status, why = approval_gate(status, why, approvals.get(item_id), links, target)
+            status, why = override_gate(status, why, item_id in overridden)
             if status not in {ELIGIBLE, ALREADY}:
                 raise MatchValidationError(f"Record #{item_id} changed since the preview ({why}) — nothing was changed; refresh the preview")
             if status == ELIGIBLE:
                 to_change[item_id] = sorted(n.pk for n in links)
+                ap = approvals.get(item_id)
+                if ap is not None and ap.item_id and ap.item_id != target.pk:
+                    repoints[ap.pk] = (ap.item_id, ap.version)
         change = record_change(kind=MappingChange.CONSOLIDATION, user=user, source_model="license.ProductMatchDecision",
                                import_item_ids=set(to_change), detail={"batch": batch, "sion": sion, "target": target.name, "reason": reason})
         for key in keys:
@@ -191,12 +255,20 @@ def apply(*, sion: str, target_id: int, keys: list[str], user, reason: str) -> d
                 skipped_aliases.append({"description": row["description"], "reason": str(exc)})
         change.source_refs = [d.pk for d in decisions]
         change.save(update_fields=["source_refs"])
-        ProductIntelAuditEvent.objects.create(action="bulk_consolidation", user=user, detail={
+        # Approvals whose Item Name was just replaced follow it to the target: versioned + audited, never silent.
+        approval_repoints = []
+        for approval_id in sorted(repoints):
+            res = ia.repoint(approval_id, target.pk, user=user, expected_item_id=repoints[approval_id][0], expected_version=repoints[approval_id][1],
+                             reason=f"bulk consolidation {batch}: {reason}"[:500])
+            if res is None:
+                raise MatchValidationError("An approved Description + HSN mapping changed during the consolidation — nothing was changed; refresh the preview")
+            approval_repoints.append(res)
+        ProductIntelAuditEvent.objects.create(action="bulk_consolidation", user=user, detail={"approval_repoints": approval_repoints,
             "batch": batch, "sion": sion, "target_id": target.pk, "target": target.name, "reason": reason, "mapping_change": change.pk,
             "decisions": [d.pk for d in decisions], "aliases": aliases, "skipped_aliases": skipped_aliases,
             "records": sum(len(d.import_item_ids) for d in decisions)})
     return {"batch": batch, "mapping_change": change.pk, "decisions": [d.pk for d in decisions], "records": sum(len(d.import_item_ids) for d in decisions),
-            "aliases": aliases, "skipped_aliases": skipped_aliases}
+            "aliases": aliases, "skipped_aliases": skipped_aliases, "approval_repoints": approval_repoints}
 
 
 def revert(*, batch: str, user) -> dict:
@@ -213,6 +285,20 @@ def revert(*, batch: str, user) -> dict:
         if ProductIntelAuditEvent.objects.filter(action="bulk_consolidation_reverted", detail__batch=batch).exists():
             raise MatchValidationError("This batch was already reverted")
         decisions = ProductMatchDecision.objects.filter(pk__in=event.detail.get("decisions") or []).order_by("pk")
+        from apps.license.services.product_intelligence import import_item_approval as ia
+
+        repointed = event.detail.get("approval_repoints") or []
+        repointed_rows = {a.pk: a for a in ia.A.objects.filter(pk__in=[r["approval_id"] for r in repointed])}
+        # Lock order approval -> records: every approval covering a batch record (and the re-pointed ones), then all the records once.
+        all_ids = {i for d in decisions for i in d.import_item_ids}
+        _lock_records(all_ids, extra_combinations={(a.key_hash, a.hsn_code) for a in repointed_rows.values()})
+        list(ia.A.objects.select_for_update(no_key=True).filter(pk__in=[r["approval_id"] for r in repointed]).order_by("pk").values_list("pk", flat=True))
+        # Re-pointed approvals that are still exactly what this batch made them (item + version); anything else is a later decision.
+        batch_approvals = {r["approval_id"] for r in repointed
+                           if (a := ia.A.objects.filter(pk=r["approval_id"]).first()) is not None and a.is_active
+                           and a.item_id == r["to_item_id"] and a.version == r["version"]}
+        overridden = _overridden_ids(all_ids)
+        covering = ia.coverage(list(LicenseImportItemsModel.objects.filter(pk__in=all_ids).select_related("hs_code")))
         change = record_change(kind=MappingChange.CONSOLIDATION_REVERT, user=user, source_model="license.ProductMatchDecision",
                                source_refs=[d.pk for d in decisions], import_item_ids={i for d in decisions for i in d.import_item_ids},
                                detail={"batch": batch})
@@ -223,6 +309,13 @@ def revert(*, batch: str, user) -> dict:
                 item = items.get(item_id)
                 if item is None:
                     conflicts.append({"import_item_id": item_id, "reason": "record no longer exists"})
+                    continue
+                if item.pk in overridden:
+                    conflicts.append({"import_item_id": item_id, "reason": "a row override was created since the consolidation — left as is"})
+                    continue
+                cover = covering.get(item.pk)
+                if cover is not None and cover.pk not in batch_approvals:
+                    conflicts.append({"import_item_id": item_id, "reason": "an approved Description + HSN mapping now decides this record — left as is"})
                     continue
                 now = sorted(n.pk for n in item.items.all())
                 if now != (d.new_links or {}).get(item_id):
@@ -239,8 +332,17 @@ def revert(*, batch: str, user) -> dict:
                     previous_links={k: (d.new_links or {}).get(k) for k in done}, new_links=done, decided_by=user)
             if len(done) == len(d.previous_links or {}):
                 ProductAlias.objects.filter(decision=d).update(is_active=False)  # only aliases of fully restored decisions
+        approvals_back = []
+        for r in repointed:  # re-point back (versioned) only while the approval is still exactly what the consolidation made it
+            res = ia.repoint(r["approval_id"], r["from_item_id"], user=user, expected_item_id=r["to_item_id"], expected_version=r["version"],
+                             reason=f"revert of bulk consolidation {batch}")
+            if res is None:
+                conflicts.append({"approval_id": r["approval_id"], "reason": "approved Description + HSN mapping changed since the consolidation — left as is"})
+            else:
+                approvals_back.append(res)
         ProductIntelAuditEvent.objects.create(action="bulk_consolidation_reverted", user=user,
-                                              detail={"batch": batch, "restored": restored, "conflicts": conflicts, "mapping_change": change.pk})
+                                              detail={"batch": batch, "restored": restored, "conflicts": conflicts, "mapping_change": change.pk,
+                                                      "approval_repoints": approvals_back})
     return {"batch": batch, "restored": restored, "conflicts": conflicts, "mapping_change": change.pk}
 
 

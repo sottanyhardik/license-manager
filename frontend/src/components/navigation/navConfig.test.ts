@@ -62,6 +62,17 @@ const EXPECTED = {
     ],
 };
 
+describe("Reports menu gates mirror their routes", () => {
+    it("shows License Downloads only to roles its route (LEDGER_READ_ROLES) admits", () => {
+        const reportLabels = (roles: Role[]) => labelsByGroup(visibleNavGroups(withRoles(roles))).Reports ?? [];
+        // REPORT_VIEWER can open the Reports menu but the download-requests route would 403.
+        expect(reportLabels([ROLES.REPORT_VIEWER])).not.toContain("License Downloads");
+        expect(reportLabels([ROLES.REPORT_VIEWER])).toContain("Expiring Licenses");
+        expect(reportLabels([ROLES.LICENSE_MANAGER])).toContain("License Downloads");
+        expect(reportLabels([ROLES.TRADE_MANAGER])).toContain("License Downloads");
+    });
+});
+
 describe("navConfig hierarchy", () => {
     it("keeps every category, item, order and route", () => {
         expect(NAV_GROUPS.map(g => g.label)).toEqual(Object.keys(EXPECTED));

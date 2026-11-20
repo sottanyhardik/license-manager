@@ -1030,6 +1030,10 @@ def rule_auto_link_license_items(license_instance):
         .filter(_link_count=0)
         .values_list("id", flat=True)
     )
+    # Records decided by an override / Description + HSN approval (incl. a clear) are never rule-linked.
+    from apps.license.services.product_intelligence.import_item_approval import unprotected
+
+    unlinked_ids = unprotected(unlinked_ids)
     if not unlinked_ids:
         return 0
 

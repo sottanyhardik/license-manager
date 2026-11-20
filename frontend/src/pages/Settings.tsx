@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState } from "react";
+import { formatDate } from "@/utils/dateFormatter";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import api from "../api/axios";
@@ -53,9 +54,7 @@ type FormData = {
 
 function fmtDate(val: string | null | undefined): string {
     if (!val) return "—";
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return "—";
-    return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+    return formatDate(val) || "—";
 }
 
 // ─── Tone → Tailwind class map ────────────────────────────────────────────────

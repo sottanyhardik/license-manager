@@ -14,6 +14,7 @@ from apps.license.models import (
     LicenseDetailsModel, LicenseExportItemModel, LicenseImportItemsModel, LicenseTransferModel,
 )
 
+MITC_CODE = "MI"  # PurchaseStatus.code of MITC (the legacy ``MI`` constant is "NP")
 
 # License Numbers filter: pasted lists are split on commas (and newlines / semicolons / tabs, which is what a
 # spreadsheet column paste produces). A token longer than the model field can never match and is reported invalid.
@@ -73,7 +74,9 @@ def select_pivot_licenses(days: int = 30, sion_norm: str = None,
     if purchase_status:
         ps_codes = [c.strip() for c in purchase_status.split(',') if c.strip()]
     else:
-        ps_codes = [GE, MI, CO]
+        # MITC's purchase-status code is "MI"; the legacy ``MI`` constant is "NP", which matched no MITC licence, so the
+        # default silently dropped every MITC licence (E1 025/2023 MITC, 2026-11-20). Both codes are accepted.
+        ps_codes = [GE, MI, MITC_CODE, CO]
     licenses = LicenseDetailsModel.objects.filter(
         purchase_status__code__in=ps_codes
     )
@@ -181,7 +184,7 @@ def select_pivot_licenses(days: int = 30, sion_norm: str = None,
                      Prefetch('items', queryset=item_names_qs)
                  ).only('id', 'license_id', 'hs_code_id', 'quantity', 'allotted_quantity',
                         'debited_quantity', 'available_quantity', 'debited_value', 'cif_fc', 'description',
-                        'condition_type', 'serial_number')),
+                        'condition_type', 'serial_number', 'unit')),
         Prefetch('export_license',
                  queryset=export_items_qs.only('id', 'license_id', 'norm_class_id', 'cif_fc')),
         'license_documents',

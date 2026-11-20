@@ -425,9 +425,12 @@ def auto_fetch_import_items(sender, instance, created, **kwargs):
     from apps.license.utils.item_matcher import match_import_item_to_items
 
     # For each import item in the license, find and link matching ItemNameModel items
+    from apps.license.services.product_intelligence.import_item_approval import protected_import_item_ids
+
+    protected = protected_import_item_ids(instance.import_license.values_list("pk", flat=True))
     for import_item in instance.import_license.all():
-        # Skip if items are already linked
-        if import_item.items.exists():
+        # Skip if items are already linked, or if an override / Description + HSN approval (incl. a clear) decides the record
+        if import_item.pk in protected or import_item.items.exists():
             continue
 
         matching_items = match_import_item_to_items(import_item, license_norm_classes)
@@ -508,6 +511,11 @@ def update_license_on_import_item_change(sender, instance, created, **kwargs):
 
         if not RULE_AUTO_LINK:
             return
+
+        from apps.license.services.product_intelligence.import_item_approval import protected_import_item_ids
+
+        if protected_import_item_ids([instance.pk]):
+            return  # row override / approved / cleared Description + HSN: rule-based linking never decides this record
 
         # Only auto-link items if no items are currently linked (items field is empty)
         if instance.items.exists():
@@ -772,8 +780,9 @@ def snapshot_exporter_name_on_company_delete(sender, instance, **kwargs):
 
 @receiver(post_init, sender=LicenseImportItemsModel)
 def stash_import_item_description(sender, instance, **kwargs):
-    """Remember the loaded description (no query: a deferred field stays deferred)."""
+    """Remember the loaded description and HSN (no query: a deferred field stays deferred)."""
     instance._orig_description = instance.__dict__.get("description", _MISSING)
+    instance._orig_hs_code_id = instance.__dict__.get("hs_code_id", _MISSING)
 
 
 @receiver(post_save, sender=LicenseImportItemsModel)
@@ -788,8 +797,12 @@ def apply_saved_description_mapping(sender, instance, created, **kwargs):
     from apps.license.services.product_intelligence.description_mapping import auto_apply, description_key
 
     old = getattr(instance, "_orig_description", _MISSING)
+    old_hs = getattr(instance, "_orig_hs_code_id", _MISSING)
     instance._orig_description = instance.description
-    if not created and (old is _MISSING or description_key(old) == description_key(instance.description)):
+    instance._orig_hs_code_id = instance.hs_code_id
+    description_same = old is _MISSING or description_key(old) == description_key(instance.description)
+    hsn_same = old_hs is _MISSING or old_hs == instance.hs_code_id  # a changed HSN moves the record to another (description, HSN) combination
+    if not created and description_same and hsn_same:
         return
     pk = instance.pk
 

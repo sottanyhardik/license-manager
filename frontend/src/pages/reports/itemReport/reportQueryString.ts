@@ -24,6 +24,10 @@ export type ReportFilterValues = {
     selectedNotifications?: unknown[];
     expiryDateFrom?: unknown;
     expiryDateTo?: unknown;
+    /** Item Report only: "all" (default, not sent) | "planned" | "unplanned" — filtered server-side. */
+    planningStatus?: unknown;
+    /** Item Report only: comma / whitespace separated licence numbers, sent as `license_numbers`. */
+    licenseNumbers?: unknown;
 };
 
 export type ReportQueryOptions = ReportFilterValues & {
@@ -43,6 +47,12 @@ export function normalizeFilterValues(values?: unknown[]): string[] {
     return values
         .map((value) => String(value ?? "").trim())
         .filter(Boolean);
+}
+
+/** Splits free text on commas / whitespace into trimmed, de-duplicated licence numbers. */
+export function parseLicenseNumbers(value: unknown): string[] {
+    const parts = String(value ?? "").split(/[\s,]+/).map((part) => part.trim()).filter(Boolean);
+    return parts.filter((part, index) => parts.indexOf(part) === index);
 }
 
 /**
@@ -65,6 +75,8 @@ export function reportQueryString({
     selectedNotifications = [],
     expiryDateFrom,
     expiryDateTo,
+    planningStatus,
+    licenseNumbers,
 }: ReportQueryOptions): string {
     // Use _format (underscore prefix) so DRF's ?format= content-negotiation
     // interceptor does not reject 'excel' as an unknown format.
@@ -95,6 +107,11 @@ export function reportQueryString({
     if (notifications.length > 0) params.set("notification_numbers", notifications.join(","));
     if (expiryFrom) params.set("expiry_date_from", expiryFrom);
     if (expiryTo) params.set("expiry_date_to", expiryTo);
+    const planning = String(planningStatus ?? "all").trim();
+    if (planning === "planned" || planning === "unplanned") params.set("planning_status", planning);
+
+    const licences = parseLicenseNumbers(licenseNumbers);
+    if (licences.length > 0) params.set("license_numbers", licences.join(","));
 
     return params.toString();
 }

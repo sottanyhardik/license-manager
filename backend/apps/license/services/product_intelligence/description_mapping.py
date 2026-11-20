@@ -26,8 +26,8 @@ from django.db import transaction
 
 from apps.core.models import ItemNameModel
 from apps.license.models import (
-    ImportDescriptionMapping, ImportDescriptionMappingVersion, ImportItemDescriptionMapping, LicenseImportItemsModel, MappingChange,
-    ProductIntelAuditEvent,
+    ImportDescriptionMapping, ImportDescriptionMappingVersion, ImportItemDescriptionMapping, ImportItemMappingApproval, ImportItemNameOverride, LicenseImportItemsModel,
+    MappingChange, ProductIntelAuditEvent,
 )
 from apps.license.services.product_matching import MatchValidationError
 
@@ -138,6 +138,18 @@ def _apply(mapping: ImportDescriptionMapping, records: list, *, user, status: st
     from apps.license.services.product_intelligence.propagation import record_change
     from apps.license.services.replan_requests import mark_license_replan_source_changed
 
+    # Row overrides (Licence Detail -> Import Items, owner decision 2026-11-20) are never re-applied or reverted.
+    overridden_ids = set(ImportItemNameOverride.objects.filter(import_item_id__in=[r.pk for r in records]).values_list("import_item_id", flat=True))
+    overridden = len(overridden_ids)
+    if overridden_ids:
+        records = [r for r in records if r.pk not in overridden_ids]
+    # An active Description + HSN approval outranks this description-only mapping (owner amendment 2026-11-20).
+    from apps.license.services.product_intelligence import import_item_approval as ia
+
+    approved_ids = set(ia.coverage(records)) if records else set()
+    approved = len(approved_ids)
+    if approved_ids:
+        records = [r for r in records if r.pk not in approved_ids]
     items = list(mapping.items.prefetch_related("norms").select_related("sion_norm_class").order_by("pk"))
     item_ids = [i.pk for i in items]
     legit = _legit_sions(items)
@@ -186,7 +198,7 @@ def _apply(mapping: ImportDescriptionMapping, records: list, *, user, status: st
         mark_license_replan_source_changed(license_id=license_id, reason="item_master_link_changed", source_model="license.MappingChange",
                                            source_pk=change.pk if change else None)
     conflict_licences = sorted({(r.license_id, r.license.license_number) for r, _, _ in conflicts}, key=lambda x: (x[1] or "", x[0]))
-    return {"applied": len(to_link), "unchanged": unchanged, "conflicts": len(conflicts), "mapping_change": change.pk if change else None,
+    return {"applied": len(to_link), "unchanged": unchanged, "conflicts": len(conflicts), "overridden": overridden, "approved": approved, "mapping_change": change.pk if change else None,
             "conflict_details": [{"import_item_id": r.pk, "license_id": r.license_id, "license_number": r.license.license_number, "reason": reason}
                                  for r, reason, _ in conflicts[:50]],
             "conflict_licences": [{"id": lic, "license_number": number} for lic, number in conflict_licences]}  # every one, uncapped
@@ -270,9 +282,18 @@ def auto_apply(import_item_id: int) -> str | None:
     """Future records: an exact-key saved mapping is applied automatically (status AUTO). Returns the status, or None
     when there is no mapping (the description then shows as Mapping Required). Idempotent."""
     with transaction.atomic():
+        from apps.license.services.product_intelligence import import_item_approval as ia
+
+        probe = LicenseImportItemsModel.objects.filter(pk=import_item_id).only("description").first()
+        if probe is not None and description_key(probe.description):
+            ia.lock_approvals([key_hash(description_key(probe.description))])  # approval row before the record (approve() order)
         record = (LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(pk=import_item_id)
                   .select_related("hs_code", "license").prefetch_related("items").first())
         if record is None or not (record.description or "").strip():
+            return None
+        if ia.apply_for_records([record])["covered"]:
+            return "APPROVED"  # Description + HSN approval (or clear) decides; the description mapping never applies
+        if ImportItemNameOverride.objects.filter(import_item_id=record.pk).exists():
             return None
         mapping = (ImportDescriptionMapping.objects.select_for_update(no_key=True)
                    .filter(key_hash=key_hash(description_key(record.description)), is_active=True).first())
@@ -281,6 +302,8 @@ def auto_apply(import_item_id: int) -> str | None:
         # A new / re-described record: versioned and its licence re-planned, without a per-record plan archive (bulk imports).
         result = _apply(mapping, [record], user=None, status=ImportItemDescriptionMapping.AUTO,
                         change_detail={"action": "AUTO", "import_item": record.pk}, plan_impact=False)
+    if result["overridden"]:
+        return None  # row override: the saved mapping does not apply to this record
     return ImportItemDescriptionMapping.CONFLICT if result["conflicts"] else ImportItemDescriptionMapping.AUTO
 
 
@@ -289,8 +312,13 @@ def apply_for_licence(license_id: int) -> int:
     licence's import items that do not carry its current version yet. Returns the number of records mapped (AUTO)."""
     mapped = 0
     with transaction.atomic():
+        from apps.license.services.product_intelligence import import_item_approval as ia
+
+        ia.lock_approvals({key_hash(k) for k in (description_key(d) for d in LicenseImportItemsModel.objects.filter(license_id=license_id)
+                                                 .exclude(description__isnull=True).exclude(description="").values_list("description", flat=True).distinct()) if k})
         records = list(LicenseImportItemsModel.objects.select_for_update(of=("self",)).filter(license_id=license_id)
                        .exclude(description__isnull=True).exclude(description="").select_related("hs_code", "license").prefetch_related("items").order_by("pk"))
+        ia.apply_for_records(records)  # approvals first; their records are skipped by ``_apply`` below
         by_hash: dict[str, list] = defaultdict(list)
         for r in records:
             k = description_key(r.description)
@@ -312,6 +340,15 @@ def serialise(m: ImportDescriptionMapping) -> dict:
 # --- listing --------------------------------------------------------------------------------------------------------
 
 MAPPING_REQUIRED, APPLIED, AUTO, CONFLICT, PARTIAL = "MAPPING_REQUIRED", "APPLIED", "AUTO", "CONFLICT", "PARTIAL"
+USER_APPROVED = "USER_APPROVED"  # every (description, HSN) combination present is covered by an active approval
+
+
+HSN_WS = " \t\n\r\u00a0"  # the ONE HSN trim set (space, tab, LF, CR, NBSP) — Python (``norm_hsn``) and SQL (BTRIM) must agree
+
+
+def norm_hsn(value) -> str:
+    """Canonical HSN identity: trimmed of exactly ``HSN_WS`` ("" = no HSN). The SQL side uses ``BTRIM(col, HSN_WS)``."""
+    return ("" if value is None else str(value)).strip(HSN_WS)
 
 
 def description_index() -> dict[str, dict]:
@@ -329,9 +366,10 @@ def description_index() -> dict[str, dict]:
         if not k:
             continue
         g = groups.setdefault(k, {"key": k, "counts": defaultdict(int), "record_ids": [], "hsn": set(), "sion": set(), "licences": set(),
-                                  "numbers": set(), "refs": {}})
+                                  "numbers": set(), "refs": {}, "combos": defaultdict(list)})
         g["counts"][desc] += 1
         g["record_ids"].append(pk)
+        g["combos"][norm_hsn(hsn)].append(pk)
         g["licences"].add(lic)
         g["numbers"].add(number)
         g["refs"][lic] = number  # distinct licences: id → licence number (a licence with two matching records appears once)
@@ -371,6 +409,8 @@ def description_rows(*, q: str = "", status: str = "", sion: str = "", filters=N
     mappings = {m.key_hash: m for m in ImportDescriptionMapping.objects.filter(is_active=True).prefetch_related("items")}
     applied_by_item: dict[int, dict] = {a["import_item_id"]: a for a in ImportItemDescriptionMapping.objects.values(
         "import_item_id", "mapping_id", "applied_version", "status", "detail")}
+    overridden_ids = set(ImportItemNameOverride.objects.values_list("import_item_id", flat=True))
+    approvals = {(a.key_hash, a.hsn_code): a for a in ImportItemMappingApproval.objects.filter(is_active=True)}
     links: dict[int, set[int]] = defaultdict(set)  # actual links of records that carry a mapping (manual drift → PARTIAL)
     through = LicenseImportItemsModel.items.through
     for item_id, name_id in through.objects.filter(licenseimportitemsmodel_id__in=list(applied_by_item)).values_list("licenseimportitemsmodel_id", "itemnamemodel_id"):
@@ -384,12 +424,26 @@ def description_rows(*, q: str = "", status: str = "", sion: str = "", filters=N
             continue
         if filters and not matches(g["values"], filters):
             continue
-        m = mappings.get(key_hash(k))
+        kh = key_hash(k)
+        m = mappings.get(kh)
         counts = {"applied": 0, "auto": 0, "conflict": 0, "stale": 0, "unverified": 0}
         reasons = []
-        if m:
+        covered_ids = set()
+        approved_c = cleared_c = 0
+        for h, pks in g["combos"].items():
+            ap = approvals.get((kh, h))
+            if ap:
+                covered_ids.update(pks)
+                if ap.item_id:
+                    approved_c += 1
+                else:
+                    cleared_c += 1
+        all_covered = bool(g["combos"]) and approved_c + cleared_c == len(g["combos"])
+        if m and not all_covered:
             wanted = {i.pk for i in m.items.all()}
             for rid in g["record_ids"]:
+                if rid in overridden_ids or rid in covered_ids:
+                    continue  # row override: not governed by the mapping (never stale / conflicting)
                 a = applied_by_item.get(rid)
                 if not a or a["mapping_id"] != m.pk or a["applied_version"] != m.version:
                     counts["stale"] += 1
@@ -402,13 +456,15 @@ def description_rows(*, q: str = "", status: str = "", sion: str = "", filters=N
                     counts["auto" if a["status"] == ImportItemDescriptionMapping.AUTO else "applied"] += 1
                     if a["detail"]:
                         counts["unverified"] += 1
-        row_status = (MAPPING_REQUIRED if m is None else CONFLICT if counts["conflict"] else PARTIAL if counts["stale"]
+        row_status = (USER_APPROVED if all_covered else MAPPING_REQUIRED if m is None else CONFLICT if counts["conflict"] else PARTIAL if counts["stale"]
                       else AUTO if counts["auto"] and not counts["applied"] else APPLIED)
         out.append({
             "key": k, "description": g["description"], "wordings": len(g["wordings"]),
             "records": len(g["record_ids"]), "licence_count": len(g["licences"]), "licence_numbers": sorted(g["numbers"])[:5],
             "hsn_codes": sorted(g["hsn"]), "sion": sorted(g["sion"]), "status": row_status, "counts": counts,
             "conflicts": list(dict.fromkeys(reasons))[:3],
+            "overridden": sum(1 for rid in g["record_ids"] if rid in overridden_ids),
+            "combinations": len(g["combos"]), "approved_combinations": approved_c, "cleared_combinations": cleared_c,
             "mapping": {"id": m.pk, "version": m.version, "items": [{"item_id": i.pk, "name": i.name} for i in sorted(m.items.all(), key=lambda x: x.name)]} if m else None,
         })
     summary = defaultdict(int)
@@ -416,6 +472,6 @@ def description_rows(*, q: str = "", status: str = "", sion: str = "", filters=N
         summary[r["status"]] += 1
     if status:
         out = [r for r in out if r["status"] == status]
-    order = {MAPPING_REQUIRED: 0, CONFLICT: 1, PARTIAL: 2, AUTO: 3, APPLIED: 4}
+    order = {MAPPING_REQUIRED: 0, CONFLICT: 1, PARTIAL: 2, AUTO: 3, APPLIED: 4, USER_APPROVED: 5}
     out.sort(key=lambda r: (order[r["status"]], -r["records"], r["key"]))
     return out, dict(summary), groups

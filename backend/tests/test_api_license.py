@@ -15,6 +15,16 @@ from apps.license.models import LicenseDetailsModel
 
 @pytest.mark.api
 @pytest.mark.database
+
+def _v(ws, row, column):
+    """Cell value; exporter totals are live formulas, so evaluate them against the sheet."""
+    from apps.license.tests.xlsx_eval import evaluate_formula
+
+    value = ws.cell(row=row, column=column).value
+    if isinstance(value, str) and value.startswith('='):
+        return float(evaluate_formula(ws, value))
+    return value
+
 class TestLicenseAPI:
     """Test License CRUD operations"""
     
@@ -281,7 +291,7 @@ class TestLicenseAPI:
 
         def _norm_total_row(banner_row):
             r = banner_row + 1
-            while summary.cell(row=r, column=1).value != 'NORM TOTAL':
+            while _v(summary, r, 1) != 'NORM TOTAL':
                 r += 1
                 assert r < banner_row + 50  # safety bound, not a real limit
             return r
@@ -290,14 +300,14 @@ class TestLicenseAPI:
             """{item_name: base_col} from the matrix's 2-row header."""
             hdr_row = banner_row + 1
             cols, col = {}, 10
-            while summary.cell(row=hdr_row, column=col).value:
-                cols[summary.cell(row=hdr_row, column=col).value] = col
+            while _v(summary, hdr_row, col):
+                cols[_v(summary, hdr_row, col)] = col
                 col += 3
             return cols
 
         def _fixed_header_cells(banner_row):
             hdr_row = banner_row + 1
-            return [summary.cell(row=hdr_row, column=c).value for c in range(1, 10)]
+            return [_v(summary, hdr_row, c) for c in range(1, 10)]
 
         # -- The 9 fixed columns are reordered/expanded per the CIF Summary
         # spec: License No | Issue Date | Expiry Date | Exporter | SION Norm
@@ -316,12 +326,12 @@ class TestLicenseAPI:
         dwp_col, swp_col = uncl_cols['Test DWP'], uncl_cols['Test SWP']
         # Both columns carry the SAME group's full available_quantity (the
         # import item's 1000) -- the intentional double count.
-        assert summary.cell(row=uncl_total_row, column=dwp_col).value == pytest.approx(1000.0)
-        assert summary.cell(row=uncl_total_row, column=swp_col).value == pytest.approx(1000.0)
-        assert summary.cell(row=uncl_total_row, column=dwp_col + 1).value == pytest.approx(50.0)
-        assert summary.cell(row=uncl_total_row, column=dwp_col + 2).value == pytest.approx(400.0)
-        assert summary.cell(row=uncl_total_row, column=swp_col + 1).value == pytest.approx(100.0)
-        assert summary.cell(row=uncl_total_row, column=swp_col + 2).value == pytest.approx(500.0)
+        assert _v(summary, uncl_total_row, dwp_col) == pytest.approx(1000.0)
+        assert _v(summary, uncl_total_row, swp_col) == pytest.approx(1000.0)
+        assert _v(summary, uncl_total_row, dwp_col + 1) == pytest.approx(50.0)
+        assert _v(summary, uncl_total_row, dwp_col + 2) == pytest.approx(400.0)
+        assert _v(summary, uncl_total_row, swp_col + 1) == pytest.approx(100.0)
+        assert _v(summary, uncl_total_row, swp_col + 2) == pytest.approx(500.0)
 
         # -- E999 section: untagged split lands in the shared "Unassigned"
         # column, never silently dropped.
@@ -330,21 +340,21 @@ class TestLicenseAPI:
         assert list(e999_cols) == ['Unassigned']
         e999_total_row = _norm_total_row(e999_banner)
         unassigned_col = e999_cols['Unassigned']
-        assert summary.cell(row=e999_total_row, column=unassigned_col).value == pytest.approx(300.0)
-        assert summary.cell(row=e999_total_row, column=unassigned_col + 1).value == pytest.approx(30.0)
-        assert summary.cell(row=e999_total_row, column=unassigned_col + 2).value == pytest.approx(150.0)
+        assert _v(summary, e999_total_row, unassigned_col) == pytest.approx(300.0)
+        assert _v(summary, e999_total_row, unassigned_col + 1) == pytest.approx(30.0)
+        assert _v(summary, e999_total_row, unassigned_col + 2) == pytest.approx(150.0)
 
         # -- Planning Item Summary reuses the SAME Norm Total figures, transposed.
         def _planning_item_summary(total_row):
             r = total_row + 2
-            assert summary.cell(row=r, column=1).value == 'PLANNING ITEM SUMMARY'
+            assert _v(summary, r, 1) == 'PLANNING ITEM SUMMARY'
             r += 2  # skip the section banner + its own header row
             rows = {}
-            while summary.cell(row=r, column=1).value:
-                rows[summary.cell(row=r, column=1).value] = (
-                    summary.cell(row=r, column=2).value,
-                    summary.cell(row=r, column=3).value,
-                    summary.cell(row=r, column=4).value,
+            while _v(summary, r, 1):
+                rows[_v(summary, r, 1)] = (
+                    _v(summary, r, 2),
+                    _v(summary, r, 3),
+                    _v(summary, r, 4),
                 )
                 r += 1
             return rows
@@ -359,19 +369,19 @@ class TestLicenseAPI:
         grand_summary_header_row = next(
             c.row for c in all_cells if c.value == 'GRAND SUMMARY BY NORM'
         ) + 1
-        assert [summary.cell(row=grand_summary_header_row, column=c).value for c in range(1, 6)] == [
+        assert [_v(summary, grand_summary_header_row, c) for c in range(1, 6)] == [
             'SION Norm', 'Licenses', 'Available Qty', 'Planned Qty', 'Planned CIF ($)',
         ]
         norm_summary = {}
         r = grand_summary_header_row + 1
-        while summary.cell(row=r, column=1).value != 'GRAND TOTAL':
-            v = summary.cell(row=r, column=1).value
+        while _v(summary, r, 1) != 'GRAND TOTAL':
+            v = _v(summary, r, 1)
             if v:
                 norm_summary[v] = (
-                    summary.cell(row=r, column=2).value,
-                    summary.cell(row=r, column=3).value,
-                    summary.cell(row=r, column=4).value,
-                    summary.cell(row=r, column=5).value,
+                    _v(summary, r, 2),
+                    _v(summary, r, 3),
+                    _v(summary, r, 4),
+                    _v(summary, r, 5),
                 )
             r += 1
             assert r < grand_summary_header_row + 20  # safety bound
@@ -395,7 +405,7 @@ class TestLicenseAPI:
             for row in sheet.iter_rows():
                 for cell in row:
                     if cell.value == 'TOTALS':
-                        return sheet.cell(row=cell.row, column=8).value
+                        return _v(sheet, cell.row, 8)
             raise AssertionError(f'no TOTALS row found for {license_number}')
 
         assert norm_summary['Unclassified'][3] == pytest.approx(400.0 + 500.0)
@@ -408,17 +418,17 @@ class TestLicenseAPI:
         )
 
         # Invariant B (arithmetic): Σ(Grand Summary by Norm) == Grand Total.
-        assert summary.cell(row=grand_total_row, column=1).value == 'GRAND TOTAL'
-        assert summary.cell(row=grand_total_row, column=2).value == sum(
+        assert _v(summary, grand_total_row, 1) == 'GRAND TOTAL'
+        assert _v(summary, grand_total_row, 2) == sum(
             v[0] for v in norm_summary.values()
         )
-        assert summary.cell(row=grand_total_row, column=3).value == pytest.approx(
+        assert _v(summary, grand_total_row, 3) == pytest.approx(
             sum(v[1] for v in norm_summary.values())
         )
-        assert summary.cell(row=grand_total_row, column=4).value == pytest.approx(
+        assert _v(summary, grand_total_row, 4) == pytest.approx(
             sum(v[2] for v in norm_summary.values())
         )
-        assert summary.cell(row=grand_total_row, column=5).value == pytest.approx(
+        assert _v(summary, grand_total_row, 5) == pytest.approx(
             sum(v[3] for v in norm_summary.values())
         )
 

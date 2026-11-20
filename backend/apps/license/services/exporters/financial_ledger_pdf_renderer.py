@@ -52,7 +52,7 @@ except Exception:  # Linux deployment image may not have macOS supplemental font
 
 
 def _date(value) -> str:
-    return value.strftime("%d-%b-%Y") if isinstance(value, (date, datetime)) else "—"
+    return value.strftime("%d-%m-%Y") if isinstance(value, (date, datetime)) else "—"
 
 
 def _number(value) -> str:

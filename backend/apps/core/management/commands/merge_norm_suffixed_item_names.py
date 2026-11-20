@@ -75,6 +75,10 @@ class Command(BaseCommand):
                     survivor.norms.add(*suffix_norm_ids, *[norm.pk for item in rows for norm in item.norms.all()])
                     through = LicenseImportItemsModel.items.through
                     for duplicate in [item for item in rows if item.pk != survivor.pk]:
+                        # Description + HSN approvals pointing at the merged-away name move to the survivor (versioned + audited; FK is PROTECT).
+                        from apps.license.services.product_intelligence.import_item_approval import repoint_for_merge
+
+                        repoint_for_merge([duplicate.pk], survivor.pk, reason="merge_norm_suffixed_item_names")
                         for source_id in through.objects.filter(itemnamemodel_id=duplicate.pk).values_list("licenseimportitemsmodel_id", flat=True):
                             through.objects.get_or_create(licenseimportitemsmodel_id=source_id, itemnamemodel_id=survivor.pk)
                         through.objects.filter(itemnamemodel_id=duplicate.pk).delete()

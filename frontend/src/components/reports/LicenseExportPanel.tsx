@@ -1,4 +1,5 @@
-import { useId, useState, useMemo } from "react";
+import { useCallback, useId, useState, useMemo } from "react";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { toast } from "sonner";
 import { Download, Loader2, CheckCircle2 } from "lucide-react";
 
@@ -11,6 +12,8 @@ import ActiveFilters, { type ActiveFilterItem } from "@/components/ActiveFilters
 import { openAuthedFile } from "@/utils/documentDownload";
 import { MAX_DAYS, MIN_DAYS, normalizeExportDays } from "./licenseExportHelpers";
 
+
+const DAYS_KEYS = ["days"] as const;
 
 type LicenseExportPanelProps = {
     title: string;
@@ -36,7 +39,14 @@ export default function LicenseExportPanel({
     features = [],
     defaultDays = 30,
 }: LicenseExportPanelProps) {
-    const [days, setDays] = useState(() => normalizeExportDays(defaultDays));
+    // `days` lives in the URL (?days=N) so the filter survives refresh and back/forward.
+    const normalize = useCallback(
+        (raw: { days: string | null }) => ({ days: String(normalizeExportDays(raw.days ?? defaultDays, defaultDays)) }),
+        [defaultDays],
+    );
+    const [filters, setFilters] = useUrlFilters(DAYS_KEYS, normalize);
+    const days = Number(filters.days);
+    const setDays = (next: number) => setFilters({ days: String(normalizeExportDays(next, defaultDays)) }, { replace: true });
     const [loading, setLoading] = useState(false);
     const daysInputId = useId();
     const daysHelpId = `${daysInputId}-help`;

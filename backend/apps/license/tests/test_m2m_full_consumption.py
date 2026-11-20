@@ -1,8 +1,9 @@
 """
 Owner decision 2026-11-17: an allotment linked to a BOE through the
 `BillOfEntryModel.allotment` M2M is FULLY CONSUMED (no partial consumption is
-derived for that relationship). Independently consumed allotments (formal
-`BOEAllotmentAllocation`, no M2M link) keep partial netting.
+derived for that relationship). Amended 2026-11-20 (DEC-03 C / DEC-14 B): the
+linked BOE must carry a DEBIT row, and a formal `BOEAllotmentAllocation`
+covering part of an item releases the whole item.
 
 Pins the rule across layers that expose allotment CIF: engine
 (`calculate_allotment`, `calculate_balance`), item level
@@ -110,7 +111,10 @@ class M2MFullConsumptionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         self.assertEqual(LBC.calculate_balance(self.lic), D("45.00"))  # 100 − (30 BOE + 25 allotment)
 
     # distinction preserved ----------------------------------------------
-    def test_independently_consumed_allotment_keeps_partial_netting(self):
+    def test_independently_consumed_short_allocation_releases_remainder(self):
+        # Owner DEC-14 B (2026-11-20) supersedes the 2026-11-17 "formal
+        # allocation keeps partial netting": a short BOE releases the
+        # remainder (25) at once.
         from apps.reconciliation.services.allocation_service import create_boe_allotment_allocation
 
         a = self._allot(D("40.00"))
@@ -119,7 +123,8 @@ class M2MFullConsumptionTests(LicenseBalanceLedgerFixtureMixin, TestCase):
         row = self.make_debit_row(boe, self.item, D("15.00"))  # no M2M link
         create_boe_allotment_allocation(row, allotment_item, qty=D("3.000"), cif_fc=D("15.00"),
                                         cif_inr=D("1267.50"), user=None)
-        self._assert_allotment_everywhere(D("25.00"))
+        self._assert_allotment_everywhere(D("0.00"))
+        self.assertEqual(LBC.calculate_balance(self.lic), D("85.00"))  # 100 − BOE 15
 
     def test_over_utilisation_stays_negative(self):
         self._allot(D("70.00"))

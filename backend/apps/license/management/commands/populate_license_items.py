@@ -102,7 +102,13 @@ class Command(BaseCommand):
         elif dry_run:
             self.stdout.write(self.style.WARNING(f"Would clear {total_links} item associations (dry-run)"))
         else:
-            through_model.objects.all().delete()
+            # Row overrides / Description + HSN approvals (incl. clears) are never cleared by this rebuild.
+            from apps.license.services.product_intelligence.import_item_approval import all_protected_import_item_ids
+
+            protected = all_protected_import_item_ids()
+            through_model.objects.exclude(licenseimportitemsmodel_id__in=list(protected)).delete()
+            if protected:
+                self.stdout.write(self.style.WARNING(f"Skipped {len(protected)} protected record(s) (row override / approved or cleared Description + HSN)"))
             self.stdout.write(self.style.SUCCESS(f"✓ Cleared {total_links} item associations"))
         self.stdout.write("")
 
@@ -189,6 +195,9 @@ class Command(BaseCommand):
         total_filters = len(items_to_create)
         total_matched = 0
         total_updated = 0
+        from apps.license.services.product_intelligence.import_item_approval import all_protected_import_item_ids
+
+        protected = all_protected_import_item_ids()
 
         for idx, item_data in enumerate(items_to_create, 1):
             item_name = item_data['name']
@@ -210,7 +219,7 @@ class Command(BaseCommand):
                     )
 
                     if not dry_run:
-                        self._bulk_add_item_links(matching_imports, item, batch_size=batch_size)
+                        self._bulk_add_item_links(matching_imports, item, batch_size=batch_size, protected=protected)
 
                     total_matched += match_count
                     total_updated += 1
@@ -227,13 +236,16 @@ class Command(BaseCommand):
         return total_filters, total_matched, total_updated
 
     @staticmethod
-    def _bulk_add_item_links(matching_imports, item, *, batch_size):
+    def _bulk_add_item_links(matching_imports, item, *, batch_size, protected=frozenset()):
         through_model = LicenseImportItemsModel.items.through
         source_field = through_model._meta.get_field("licenseimportitemsmodel")
         target_field = through_model._meta.get_field("itemnamemodel")
         batch = []
 
+        # ``protected``: records an override / approval decides are never linked (computed once per run)
         for import_item_id in matching_imports.values_list('id', flat=True).iterator(chunk_size=batch_size):
+            if import_item_id in protected:
+                continue
             batch.append(through_model(**{
                 f"{source_field.name}_id": import_item_id,
                 f"{target_field.name}_id": item.id,

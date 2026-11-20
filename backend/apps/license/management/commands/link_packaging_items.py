@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count
 
 from apps.license.models import LicenseDetailsModel, LicenseImportItemsModel
+from apps.license.services.product_intelligence.import_item_approval import protected_import_item_ids
 from apps.license.utils.item_matcher import classify_packaging_item, rule_auto_link_license_items
 
 
@@ -90,9 +91,13 @@ class Command(BaseCommand):
         total_linked = 0
         for idx, license_obj in enumerate(licenses.iterator(), 1):
             if clear_existing:
+                # Row overrides / Description + HSN approvals (incl. clears) are never cleared or re-linked by this tool.
+                protected = protected_import_item_ids(license_obj.import_license.values_list("pk", flat=True))
+                if protected:
+                    self.stdout.write(f"  {license_obj.license_number}: skipped {len(protected)} protected record(s)")
                 through_model.objects.filter(
                     licenseimportitemsmodel__license=license_obj
-                ).delete()
+                ).exclude(licenseimportitemsmodel_id__in=list(protected)).delete()
             linked = rule_auto_link_license_items(license_obj)  # explicit operator command: rule linking on purpose
             total_linked += linked
             self.stdout.write(
@@ -128,7 +133,10 @@ class Command(BaseCommand):
                     .annotate(_link_count=Count('items'))
                     .filter(_link_count=0)
                 )
+            skip = protected_import_item_ids(license_obj.import_license.values_list("pk", flat=True))
             for ii in import_items:
+                if ii.pk in skip:
+                    continue
                 hs_code_str = ii.hs_code.hs_code if ii.hs_code_id else None
                 result = classify_packaging_item(hs_code_str, ii.description)
                 if not result:

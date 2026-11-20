@@ -97,7 +97,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "A3",
             "type": "str",
             "value": "9000001"
@@ -107,10 +107,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "B3",
-            "type": "str",
-            "value": "01-03-2025"
+            "type": "datetime",
+            "value": "2025-03-01T00:00:00"
           },
           {
             "bold": false,
@@ -167,7 +167,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "A4",
             "type": "str",
             "value": "9000004"
@@ -177,10 +177,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "B4",
-            "type": "str",
-            "value": "02-03-2025"
+            "type": "datetime",
+            "value": "2025-03-02T00:00:00"
           },
           {
             "bold": false,
@@ -237,7 +237,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "A5",
             "type": "str",
             "value": "9000003"
@@ -247,10 +247,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "B5",
-            "type": "str",
-            "value": "02-03-2025"
+            "type": "datetime",
+            "value": "2025-03-02T00:00:00"
           },
           {
             "bold": false,
@@ -307,7 +307,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "A6",
             "type": "str",
             "value": "9000002"
@@ -317,10 +317,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "B6",
-            "type": "str",
-            "value": "05-03-2025"
+            "type": "datetime",
+            "value": "2025-03-05T00:00:00"
           },
           {
             "bold": false,

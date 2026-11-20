@@ -235,10 +235,15 @@ class SourceNameMappingTests(_MappingFixture):
                                                                planning_mapping_source="USER_SELECTED")
         BillOfEntryModel.objects.filter(pk=self.boe_other.pk).update(planning_target_item=self.sugar, planning_mapping_status="MAPPED_EXPLICIT",
                                                                      planning_mapping_source="USER_SELECTED")  # no debits
-        save_mapping(kind="boe", name="CRUDE PALM KERNEL OIL", target_id=self.pko.pk, user=self.manager)
+        first = save_mapping(kind="boe", name="CRUDE PALM KERNEL OIL", target_id=self.pko.pk, user=self.manager)
         save_mapping(kind="boe", name="RBD PALM KERNEL OIL", target_id=self.pko.pk, user=self.manager)
+        assert first["kept"] == 1  # the kept record has its own count (not counted as newly unverified)
         assert self.header(BillOfEntryModel, self.boe.pk) == (self.pko.pk, "MAPPED_EXPLICIT", "USER_SELECTED")
         assert self.header(BillOfEntryModel, self.boe_other.pk) == (self.sugar.pk, "MAPPED_EXPLICIT", "USER_SELECTED")
+        # same target already held → kept and shown "Not verified", not a conflict; another target → conflict
+        kept = SourceNameMappingRecord.objects.get(kind="BOE", record_id=self.boe.pk)
+        assert (kept.status, kept.verified) == ("APPLIED", False) and "kept as it is" in kept.detail
+        assert SourceNameMappingRecord.objects.get(kind="BOE", record_id=self.boe_other.pk).status == "CONFLICT"
 
     def test_automatic_recheck_never_replaces_a_target_chosen_on_the_record(self):
         save_mapping(kind="boe", name="CRUDE PALM KERNEL OIL", target_id=self.pko.pk, user=self.manager)

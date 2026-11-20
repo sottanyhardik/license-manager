@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,10 +20,11 @@ function renderPanel(defaultDays = 30) {
             daysLabel="Days from today"
             defaultDays={defaultDays}
             helpText={(days) => `Licenses expiring within ${days} days`}
-            endpoint={(days) => `license/reports/expiring-licenses/?format=excel&days=${days}`}
+            endpoint={(days) => `reports/expiring-licenses/?format=excel&days=${days}`}
             filename={(days) => `expiring_licenses_${days}_days.xlsx`}
             features={["Separate sheets", "Grouped rows"]}
         />,
+        { wrapper: MemoryRouter },
     );
 }
 
@@ -48,7 +50,7 @@ describe("LicenseExportPanel", () => {
 
         await waitFor(() => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledWith(
-                "license/reports/expiring-licenses/?format=excel&days=30",
+                "reports/expiring-licenses/?format=excel&days=30",
                 "expiring_licenses_30_days.xlsx",
             );
         });
@@ -63,7 +65,7 @@ describe("LicenseExportPanel", () => {
 
         await waitFor(() => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledWith(
-                "license/reports/expiring-licenses/?format=excel&days=365",
+                "reports/expiring-licenses/?format=excel&days=365",
                 "expiring_licenses_365_days.xlsx",
             );
         });

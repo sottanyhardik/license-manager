@@ -290,6 +290,10 @@ class PlannedReportView(APIView):
         from openpyxl.styles import Font, Alignment, PatternFill
         from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
         from io import BytesIO
+        from apps.core.exporters.excel.cell_formats import (
+            AMOUNT_FORMAT, QUANTITY_FORMAT, RATE_FORMAT, finalize_workbook,
+            write_date, write_number, write_text,
+        )
         from apps.license.utils.condition_excel import annotate_cell as _annotate_condition_cell
 
         # Strip control chars that openpyxl rejects (\x00-\x08, \x0b-\x0c, \x0e-\x1f).
@@ -389,12 +393,12 @@ class PlannedReportView(APIView):
                     if item_idx == 0:
                         ws.cell(row=current_row, column=1, value=sr_no)
                         ws.cell(row=current_row, column=2, value=_safe(item['license_number']))
-                        ws.cell(row=current_row, column=3, value=_safe(item['license_date']))
-                        ws.cell(row=current_row, column=4, value=_safe(item['license_expiry_date']))
-                        ws.cell(row=current_row, column=5, value=_safe(item.get('ledger_date')))
+                        write_date(ws.cell(row=current_row, column=3), item['license_date'])
+                        write_date(ws.cell(row=current_row, column=4), item['license_expiry_date'])
+                        write_date(ws.cell(row=current_row, column=5), item.get('ledger_date'))
                         ws.cell(row=current_row, column=6, value=_safe(item['exporter_name']))
-                        ws.cell(row=current_row, column=13, value=item['available_balance'])
-                        ws.cell(row=current_row, column=14, value=item['balance_cif'])
+                        write_number(ws.cell(row=current_row, column=13), item['available_balance'], AMOUNT_FORMAT)
+                        write_number(ws.cell(row=current_row, column=14), item['balance_cif'], AMOUNT_FORMAT)
                         ws.cell(row=current_row, column=15, value=_safe(item['notes']))
                         ws.cell(row=current_row, column=16, value=_safe(item['condition_sheet']))
                         ws.cell(row=current_row, column=17, value=_safe(item.get('latest_transfer', '')))
@@ -405,13 +409,13 @@ class PlannedReportView(APIView):
                     cond_cell = ws.cell(row=current_row, column=8,  value=cond)
                     _annotate_condition_cell(sn_cell, cond)
                     _annotate_condition_cell(cond_cell, cond)
-                    ws.cell(row=current_row, column=9,  value=_safe(item['hs_code']))
+                    write_text(ws.cell(row=current_row, column=9), _safe(item['hs_code']))
                     ws.cell(row=current_row, column=10, value=_safe(item['product_description']))
                     ws.cell(row=current_row, column=11, value=_safe(item.get('planned_item_name') or ''))  # Planned Item Name
-                    ws.cell(row=current_row, column=12, value=item['available_quantity'])
-                    ws.cell(row=current_row, column=18, value=item.get('planned_quantity') or 0)           # Planned Qty
-                    ws.cell(row=current_row, column=19, value=item.get('unit_price') or 0)                 # Unit Price
-                    ws.cell(row=current_row, column=20, value=item.get('planned_cif') or 0)                # Planned CIF
+                    write_number(ws.cell(row=current_row, column=12), item['available_quantity'], QUANTITY_FORMAT)
+                    write_number(ws.cell(row=current_row, column=18), item.get('planned_quantity') or 0, QUANTITY_FORMAT)  # Planned Qty
+                    write_number(ws.cell(row=current_row, column=19), item.get('unit_price') or 0, RATE_FORMAT)            # Unit Price
+                    write_number(ws.cell(row=current_row, column=20), item.get('planned_cif') or 0, AMOUNT_FORMAT)         # Planned CIF
 
                     current_row += 1
 
@@ -465,6 +469,7 @@ class PlannedReportView(APIView):
             ws.cell(row=1, column=1, value="No items found matching the filter criteria")
 
         # Save to bytes
+        finalize_workbook(wb)
         excel_file = BytesIO()
         wb.save(excel_file)
         excel_file.seek(0)

@@ -55,6 +55,10 @@ export interface ItemReportFiltersProps {
     itemNameOptions: SelectOption[];
     selectedItemNames: unknown[];
     onItemNameChange: (values: unknown[] | null) => void;
+
+    /** Item Report only — when `onLicenseNumbersChange` is omitted the input is not rendered. */
+    licenseNumbers?: string;
+    onLicenseNumbersChange?: (value: string) => void;
 }
 
 /** Item Report / Planned Report shared filter panel — presentational, no internal state. */
@@ -70,6 +74,7 @@ export default function ItemReportFilters({
     notificationOptions, selectedNotifications, onNotificationsChange,
     productDescSearch, onProductDescSearchChange, hsnCodeSearch, onHsnCodeSearchChange,
     itemNameOptions, selectedItemNames, onItemNameChange,
+    licenseNumbers = '', onLicenseNumbersChange,
 }: ItemReportFiltersProps) {
     const minBalanceId = useId();
     const minAvailQtyId = useId();
@@ -82,6 +87,7 @@ export default function ItemReportFilters({
     const restrictedId = useId();
     const productDescriptionId = useId();
     const hsnCodeId = useId();
+    const licenseNumbersId = useId();
     const itemNameFilterId = useId();
 
     return (
@@ -324,6 +330,22 @@ export default function ItemReportFilters({
                         </div>
 
                         <div className="mt-2 grid grid-cols-1 gap-2">
+                            {onLicenseNumbersChange && (
+                                <div>
+                                    <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={licenseNumbersId}>
+                                        <FileText className="size-3.5" aria-hidden="true" />
+                                        Licence numbers
+                                    </label>
+                                    <input
+                                        id={licenseNumbersId}
+                                        type="text"
+                                        className="flex h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+                                        placeholder="Comma or space separated…"
+                                        value={licenseNumbers}
+                                        onChange={(e) => onLicenseNumbersChange(e.target.value)}
+                                    />
+                                </div>
+                            )}
                             <div>
                                 <label className="form-label text-xs font-semibold mb-1 flex items-center gap-1" htmlFor={itemNameFilterId}>
                                     <Tag className="size-3.5" aria-hidden="true" />

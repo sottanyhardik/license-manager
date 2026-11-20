@@ -502,6 +502,17 @@ def decide(*, suggestions: list[dict], decision: str, user, item_id: int | None 
             items = list(LicenseImportItemsModel.objects.select_for_update().filter(pk__in=suggestion["import_item_ids"]).order_by("pk").prefetch_related("items"))
             if len(items) != len(set(suggestion["import_item_ids"])):
                 raise MatchValidationError("Some source records no longer exist")
+            if decision == ProductMatchDecision.APPROVED:
+                from apps.license.models import ImportItemNameOverride
+
+                overridden = ImportItemNameOverride.objects.filter(import_item_id__in=[i.pk for i in items]).count()
+                if overridden:
+                    raise MatchValidationError(f"{overridden} record(s) have a licence-level Item Name override — change them in Licence Detail → Import Items")
+                from apps.license.services.product_intelligence import import_item_approval as ia
+
+                approved = ia.coverage(list(LicenseImportItemsModel.objects.filter(pk__in=[i.pk for i in items]).select_related("hs_code")))
+                if approved:
+                    raise MatchValidationError(ia.refusal(len(approved)))
             previous = {str(i.pk): sorted(n.pk for n in i.items.all()) for i in items}
             multi = [k for k, links in previous.items() if len(links) > 1]
             if decision == ProductMatchDecision.APPROVED and multi and not replace_links:
@@ -587,7 +598,29 @@ def matching_groups(intelligence: dict) -> list[dict]:
         group["license_numbers"] = sorted(set(group["license_numbers"]) | {r["license_number"] for r in product["source_records"]})
         for field in ("entitlement_qty", "balance_qty"):
             group[field] = str(Decimal(group[field]) + Decimal(product[field]))
-    return list(merged.values())
+    return _without_approved(list(merged.values()))
+
+
+def _without_approved(groups: list[dict]) -> list[dict]:
+    """Records covered by an active Description + HSN approval (or clear) are decided: never pending suggestions."""
+    ids = sorted({i for g in groups for i in g["import_item_ids"]})
+    if not ids:
+        return groups
+    from apps.license.services.product_intelligence import import_item_approval as ia
+
+    covered = set(ia.coverage(list(LicenseImportItemsModel.objects.filter(pk__in=ids).select_related("hs_code"))))
+    if not covered:
+        return groups
+    out = []
+    for g in groups:
+        remaining = [i for i in g["import_item_ids"] if i not in covered]
+        if not remaining:
+            continue
+        if len(remaining) != len(g["import_item_ids"]):
+            g = {**g, "import_item_ids": remaining, "source_records": [r for r in g["source_records"] if r["import_item_id"] not in covered],
+                 "license_numbers": sorted({r["license_number"] for r in g["source_records"] if r["import_item_id"] not in covered})}
+        out.append(g)
+    return out
 
 
 def matching_summary(suggestions: list[dict]) -> dict[str, int]:

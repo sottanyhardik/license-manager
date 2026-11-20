@@ -12,14 +12,23 @@ from decimal import Decimal
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from apps.core.exporters.excel.cell_formats import (
+    PERCENT_POINTS_FORMAT,
+    RATE_FORMAT,
+    finalize_workbook,
+)
+
 BOLD = Font(bold=True)
 HEAD = PatternFill("solid", fgColor="E8EEF7")
 NUM = "#,##,##0.00"
-RATE = "0.00"
+RATE = RATE_FORMAT
+QTY = "#,##,##0.000"
+PCT = PERCENT_POINTS_FORMAT
 
 
 def _n(value):
-    return float(Decimal(value)) if value not in (None, "") else None
+    # Decimal is written as-is (exact, signed) — never narrowed to float.
+    return Decimal(str(value)) if value not in (None, "") else None
 
 
 def _row(ws, values, *, bold=False, fill=None, formats=None):
@@ -31,7 +40,7 @@ def _row(ws, values, *, bold=False, fill=None, formats=None):
             cell.font = BOLD
         if fill:
             cell.fill = fill
-        if formats and idx in formats and isinstance(cell.value, (int, float)):
+        if formats and idx in formats and isinstance(cell.value, (int, float, Decimal)):
             cell.number_format = formats[idx]
             cell.alignment = Alignment(horizontal="right")
 
@@ -44,10 +53,10 @@ def render_entitlement_plan_xlsx(result: dict) -> bytes:
     _row(ws, [f"Licence {result['licence_number']} · {result['sion']}"], bold=True)
     _row(ws, ["OPENING PLANNING"], bold=True)
     _row(ws, ["Total CIF", _n(opening["total_cif"]), "Total Qty", _n(opening["total_quantity"])],
-         formats={2: NUM, 4: NUM})
+         formats={2: NUM, 4: QTY})
     _row(ws, ["Group", "Product / Entitlement", "Split %", "Total Qty", "Unit Price", "Planned CIF", "CIF Available"],
          bold=True, fill=HEAD)
-    fmt = {4: NUM, 5: RATE, 6: NUM, 7: NUM}
+    fmt = {3: PCT, 4: QTY, 5: RATE, 6: NUM, 7: NUM}
     for row in opening["rows"]:
         _row(ws, [row["group_label"], row["label"], _n(row["percentage"]), _n(row["quantity"]),
                   _n(row["unit_price"]), _n(row["planned_cif"]), _n(row["cif_available"])], formats=fmt)
@@ -56,7 +65,7 @@ def render_entitlement_plan_xlsx(result: dict) -> bytes:
 
     ws.append([])
     _row(ws, ["AFTER BOE DEBITS AND ALLOTTED"], bold=True)
-    fmt = {2: NUM, 3: RATE, 4: NUM}
+    fmt = {2: QTY, 3: RATE, 4: NUM}
     for ent in result["after"]["entitlements"]:
         ws.append([])
         _row(ws, [f"{ent['group_label']} — {ent['label']}", "Quantity", "Rate", "CIF"], bold=True, fill=HEAD)
@@ -77,6 +86,7 @@ def render_entitlement_plan_xlsx(result: dict) -> bytes:
             ws.append([("BLOCKING · " if issue["blocking"] else "") + issue["code"], issue["message"]])
     for col, width in zip("ABCDEFG", (34, 30, 12, 18, 12, 18, 18)):
         ws.column_dimensions[col].width = width
+    finalize_workbook(wb)
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()

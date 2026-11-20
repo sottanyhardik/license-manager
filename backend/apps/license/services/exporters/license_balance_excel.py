@@ -409,6 +409,8 @@ def build_balance_excel(license_obj, show_hidden=False):
     wb.calculation.fullCalcOnLoad = True
     wb.calculation.forceFullCalc = True
 
+    from apps.core.exporters.excel.cell_formats import finalize_workbook
+    finalize_workbook(wb)
     excel_file = BytesIO()
     wb.save(excel_file)
     excel_file.seek(0)

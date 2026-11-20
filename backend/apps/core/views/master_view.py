@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import math
 from typing import Any, Dict, Optional, Type
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models, transaction
 from django.db.models import F
 from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -15,6 +17,13 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.core.exporters.excel.cell_formats import (
+    DATETIME_FORMAT,
+    RATE_FORMAT,
+    finalize_workbook,
+    to_excel_datetime,
+    write_date,
+)
 from apps.core.services.master_bulk import bulk_actions_for, run_bulk
 
 try:
@@ -815,12 +824,22 @@ class MasterViewSet(viewsets.ModelViewSet):
                         # Format value
                         if value is None:
                             row.append("")
-                        elif hasattr(value, 'strftime'):  # datetime/date
-                            row.append(value.strftime('%d-%m-%Y %H:%M:%S') if hasattr(value, 'hour') else value.strftime('%d-%m-%Y'))
+                        elif isinstance(value, (datetime, date)):  # real date cells
+                            row.append(to_excel_datetime(value) if isinstance(value, datetime) else value)
+                        elif isinstance(value, (Decimal, int, float)) and not isinstance(value, bool):
+                            row.append(value)  # numeric cell, Decimal precision kept
                         else:
                             row.append(str(value))
 
                     ws.append(row)
+                    # Typed cells: numbers stay numeric, dates are real date cells.
+                    for cell in ws[ws.max_row]:
+                        if isinstance(cell.value, datetime):
+                            write_date(cell, cell.value, DATETIME_FORMAT)
+                        elif isinstance(cell.value, date):
+                            write_date(cell, cell.value)
+                        elif isinstance(cell.value, Decimal):
+                            cell.number_format = RATE_FORMAT
 
                 # Auto-size columns
                 for column in ws.columns:
@@ -841,6 +860,7 @@ class MasterViewSet(viewsets.ModelViewSet):
                 )
                 filename = f"{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                finalize_workbook(wb)
                 wb.save(response)
 
                 return response
@@ -882,7 +902,12 @@ class MasterViewSet(viewsets.ModelViewSet):
                         if value is None:
                             row.append("")
                         elif hasattr(value, 'strftime'):
-                            row.append(value.strftime('%d-%m-%Y %H:%M') if hasattr(value, 'hour') else value.strftime('%d-%m-%Y'))
+                            if hasattr(value, 'hour'):
+                                if timezone.is_aware(value):
+                                    value = timezone.localtime(value)
+                                row.append(value.strftime('%d-%m-%Y %H:%M'))
+                            else:
+                                row.append(value.strftime('%d-%m-%Y'))
                         else:
                             # Truncate long values
                             str_value = str(value)

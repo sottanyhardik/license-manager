@@ -34,11 +34,14 @@ import { errorText } from "./matchingShared";
 
 const PAGE = 50;
 
-type DescriptionStatus = "MAPPING_REQUIRED" | "APPLIED" | "AUTO" | "CONFLICT" | "PARTIAL";
+type DescriptionStatus = "MAPPING_REQUIRED" | "APPLIED" | "AUTO" | "CONFLICT" | "PARTIAL" | "USER_APPROVED";
 export type DescriptionRow = {
     key: string; description: string; wordings: number; records: number; licence_count: number; licence_numbers: string[];
     hsn_codes: string[]; sion: string[]; status: DescriptionStatus; counts: { applied: number; auto: number; conflict: number; stale: number; unverified?: number };
-    conflicts: string[]; mapping: { id: number; version: number; items: Master[] } | null; licences: LicenceRef[]; notes?: string[];
+    conflicts: string[];
+    /** Description + HSN approvals (import descriptions only; counts come from the backend). */
+    combinations?: number; approved_combinations?: number; cleared_combinations?: number; overridden?: number;
+    mapping: { id: number; version: number; items: Master[] } | null; licences: LicenceRef[]; notes?: string[];
 };
 /** BOE / allotment name rows as the API returns them (single target). */
 type NameRow = Omit<DescriptionRow, "description" | "mapping" | "hsn_codes" | "sion" | "licence_numbers"> & {
@@ -64,6 +67,7 @@ const STATUS: Record<DescriptionStatus, { label: string; tone: Tone }> = {
     AUTO: { label: "Automatically Mapped", tone: "success" },
     CONFLICT: { label: "Conflict", tone: "danger" },
     PARTIAL: { label: "Partially applied", tone: "info" },
+    USER_APPROVED: { label: "Approved", tone: "success" },
 };
 /** Row status badge. Mapped but HSN / SION context not verifiable for some records → "… · Not verified" (never claim compatibility). */
 function statusBadge(row: DescriptionRow, dirty: boolean): { tone: Tone; label: string } {
@@ -175,7 +179,7 @@ export default function DescriptionMapping({ source = SOURCES.import }: { source
             <label className="flex items-center gap-1">Show
                 <select aria-label="Filter by status" value={criteria.status} onChange={(e) => changeCriteria({ status: e.target.value as DescriptionStatus | "" })}
                     className="h-8 rounded-md border border-input bg-background px-1.5 text-xs">
-                    {(["MAPPING_REQUIRED", "APPLIED", "AUTO", "CONFLICT", "PARTIAL"] as DescriptionStatus[]).map((s) =>
+                    {(["MAPPING_REQUIRED", "APPLIED", "AUTO", "CONFLICT", "PARTIAL", ...(source.multi ? ["USER_APPROVED"] as const : [])] as DescriptionStatus[]).map((s) =>
                         <option key={s} value={s}>{STATUS[s].label}{data?.summary[s] != null ? ` (${data.summary[s]})` : ""}</option>)}
                     <option value="">All {rowNoun}s</option>
                 </select>
@@ -255,6 +259,13 @@ export default function DescriptionMapping({ source = SOURCES.import }: { source
                                     <LicenceRefs refs={row.licences ?? []} records={row.records} label={row.description} />
                                     <div className="text-[10px] text-muted-foreground">{row.wordings > 1 ? `${row.wordings} identical wordings` : ""}{row.wordings > 1 && row.counts.auto ? " · " : ""}{row.counts.auto ? `${row.counts.auto} mapped automatically` : ""}
                                         {row.counts.unverified ? <span className="text-amber-700 dark:text-amber-400"> · {row.counts.unverified} not verified ({source.showCodes ? "no HSN / SION reference" : row.notes?.[0]?.replace(/^Not verified: /, "") ?? "cannot be checked yet"})</span> : null}</div>
+                                    {source.multi && !!row.combinations && (
+                                        <div className="text-[10px] text-muted-foreground">
+                                            <span title="Description + HSN combinations approved from Licence Detail">{row.approved_combinations ?? 0}/{row.combinations} combinations approved</span>
+                                            {!!row.cleared_combinations && ` (${row.cleared_combinations} cleared)`}
+                                            {!!row.overridden && <span className="text-amber-700 dark:text-amber-400"> · {row.overridden} overridden</span>}
+                                        </div>
+                                    )}
                                     {row.conflicts.map((c, n) => <div key={n} className="mt-0.5 text-[11px] text-destructive">{c}</div>)}
                                 </th>
                                 {source.showCodes && <><td className="px-2 py-1.5 font-mono" title={row.hsn_codes.join(", ")}>{row.hsn_codes.slice(0, 3).join(", ") || "—"}{row.hsn_codes.length > 3 ? ` +${row.hsn_codes.length - 3}` : ""}</td>

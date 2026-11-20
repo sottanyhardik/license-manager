@@ -19,6 +19,10 @@ interface UseItemReportDataOptions {
     debouncedFilters: ReportFilterValues;
     /** Filename used for the Excel export download. */
     exportFilename: string;
+    /** Load only once an item name / description / HSN query exists (default true; Item Report passes false). */
+    requireQuery?: boolean;
+    /** When false the report is not fetched (e.g. another view is active). Default true. */
+    enabled?: boolean;
 }
 
 /**
@@ -27,7 +31,7 @@ interface UseItemReportDataOptions {
  * export, and the Notes / Condition Sheet inline-edit-on-license flow (both
  * reports patch the same `licenses/{id}/` fields, identically).
  */
-export function useItemReportData({ buildPath, availableItemsPath, debouncedFilters, exportFilename }: UseItemReportDataOptions) {
+export function useItemReportData({ buildPath, availableItemsPath, debouncedFilters, exportFilename, requireQuery = true, enabled = true }: UseItemReportDataOptions) {
     const [reportData, setReportData] = useState<Record<string, any> | null>(null);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -75,12 +79,14 @@ export function useItemReportData({ buildPath, availableItemsPath, debouncedFilt
     }, [buildPath, debouncedFilters]);
 
     useEffect(() => {
-        if ((debouncedFilters.selectedItemNames?.length ?? 0) > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
+        // Item Report shows every item by default (`requireQuery: false`); the Planned Report keeps its query gate.
+        if (!enabled) return;
+        if (!requireQuery || (debouncedFilters.selectedItemNames?.length ?? 0) > 0 || debouncedFilters.productDescSearch || debouncedFilters.hsnCodeSearch) {
             loadReport();
         } else {
             setReportData(null);
         }
-    }, [debouncedFilters, loadReport]);
+    }, [debouncedFilters, loadReport, requireQuery, enabled]);
 
     const handleExport = useCallback(async (currentFilters: ReportFilterValues) => {
         setDownloading(true);

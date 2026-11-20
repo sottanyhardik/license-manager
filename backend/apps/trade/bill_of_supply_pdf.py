@@ -209,7 +209,7 @@ def generate_bill_of_supply_pdf(trade, include_signature=True, canonical_total_i
     invoice_number = str(trade.invoice_number or '').strip() or 'Invoice number missing in system record'
     invoice_number = escape(invoice_number)
     # Format invoice date
-    invoice_date_str = trade.invoice_date.strftime('%d-%b-%y') if trade.invoice_date else ''
+    invoice_date_str = trade.invoice_date.strftime('%d-%m-%Y') if trade.invoice_date else ''
 
     header_data = [
         [

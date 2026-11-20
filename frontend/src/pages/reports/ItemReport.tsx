@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import api from "../../api/axios";
 import { toast } from "sonner";
@@ -13,7 +13,30 @@ import { useItemReportData } from "./itemReport/useItemReportData";
 import ItemReportFilters from "./itemReport/ItemReportFilters";
 import ItemReportTotalsBar from "./itemReport/ItemReportTotalsBar";
 import ItemReportTable from "./itemReport/ItemReportTable";
+import ItemReportProductTable, { ReconciliationBadge } from "./itemReport/ItemReportProductTable";
+import { useItemReportProducts } from "./itemReport/useItemReportProducts";
 import { buildItemReportPath } from "./reportPaths";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { PlanningStatus } from "./itemReport/useItemReportFilters";
+
+const PLANNING_STATUS_OPTIONS: { value: PlanningStatus; label: string }[] = [
+    { value: "all", label: "All Items" },
+    { value: "planned", label: "Planned" },
+    { value: "unplanned", label: "Unplanned" },
+];
+
+type ReportView = "product" | "import";
+
+const VIEW_OPTIONS: { value: ReportView; label: string }[] = [
+    { value: "product", label: "By product (Item Name × SION)" },
+    { value: "import", label: "By import item" },
+];
+
+const EMPTY_MESSAGE: Record<PlanningStatus, string> = {
+    all: "No items found",
+    planned: "No planned items match the current filters",
+    unplanned: "No unplanned items match the current filters",
+};
 
 
 
@@ -21,13 +44,17 @@ export default function ItemReport() {
     const {
         selectedItemNames, minBalance, minAvailQty, licenseStatus, selectedCompanies, excludeCompanies,
         isRestricted, purchaseStatus, productDescSearch, hsnCodeSearch, selectedNorms, selectedNotifications,
-        notificationOptions, purchaseStatusOptions, normOptions, expiryDateFrom, expiryDateTo,
+        notificationOptions, purchaseStatusOptions, normOptions, expiryDateFrom, expiryDateTo, planningStatus, setPlanningStatus, licenseNumbers, setLicenseNumbers,
         setMinBalance, setMinAvailQty, setLicenseStatus, setIsRestricted,
         setProductDescSearch, setHsnCodeSearch, setExpiryDateFrom, setExpiryDateTo,
         handleItemNameChange, handleCompanyChange, handleExcludeCompanyChange, handlePurchaseStatusChange,
         handleNormsChange, handleNotificationsChange, handleClearFilters,
-        hasActiveFilters, hasQuery, filters, debouncedFilters, isPending,
+        hasActiveFilters, filters, debouncedFilters, isPending,
     } = useItemReportFilters();
+
+    const [view, setView] = useState<ReportView>("product");
+
+    const products = useItemReportProducts(debouncedFilters, view === "product");
 
     const {
         reportData, setReportData, loading, downloading, itemNameOptions,
@@ -37,7 +64,10 @@ export default function ItemReport() {
         availableItemsPath: "item-report/available-items/",
         debouncedFilters,
         exportFilename: "item_report.xlsx",
+        requireQuery: false,
+        enabled: view === "import",
     });
+    const planningCounts = (view === "product" ? products.data?.planning_counts : reportData?.planning_counts) as Record<PlanningStatus, number> | undefined;
 
     // Paginate by LICENSE GROUP (not raw item row) — a license's item rows
     // must never be split across a page boundary, since the first row of
@@ -127,7 +157,15 @@ export default function ItemReport() {
                 pretitle="Reports"
                 title="Item Report"
                 description={
-                    reportData ? (
+                    view === "product" && products.data ? (
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <span>{products.data.report_date}</span>
+                            <span className="text-muted-foreground">•</span>
+                            <Package className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <span>{products.data.products.length} products</span>
+                        </div>
+                    ) : view === "import" && reportData ? (
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                             <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                             <span>{reportData.report_date}</span>
@@ -141,12 +179,12 @@ export default function ItemReport() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleExport(filters)}
-                        disabled={downloading || !hasQuery}
+                        onClick={() => (view === "product" ? products.exportExcel(filters) : handleExport(filters))}
+                        disabled={view === "product" ? products.downloading : downloading}
                     >
-                        {downloading ? <Loader2 className="size-3.5 animate-spin shrink-0" /> : <FileSpreadsheet className="size-3.5 shrink-0" />}
-                        <span className="hidden sm:inline">{downloading ? 'Generating…' : 'Export Excel'}</span>
-                        <span className="sm:hidden">{downloading ? '…' : 'Export'}</span>
+                        {(view === "product" ? products.downloading : downloading) ? <Loader2 className="size-3.5 animate-spin shrink-0" /> : <FileSpreadsheet className="size-3.5 shrink-0" />}
+                        <span className="hidden sm:inline">{(view === "product" ? products.downloading : downloading) ? 'Generating…' : 'Export Excel'}</span>
+                        <span className="sm:hidden">{(view === "product" ? products.downloading : downloading) ? '…' : 'Export'}</span>
                     </Button>
                 }
             />
@@ -187,6 +225,8 @@ export default function ItemReport() {
                 itemNameOptions={itemNameOptions}
                 selectedItemNames={selectedItemNames}
                 onItemNameChange={handleItemNameChange}
+                licenseNumbers={licenseNumbers}
+                onLicenseNumbersChange={setLicenseNumbers}
             />
 
             {/* Active Filters Display */}
@@ -206,6 +246,7 @@ export default function ItemReport() {
                     selectedNotifications,
                     expiryDateFrom,
                     expiryDateTo,
+                    licenseNumbers,
                 }}
                 onRemoveFilter={(key) => {
                     switch (key) {
@@ -223,21 +264,86 @@ export default function ItemReport() {
                         case 'selectedNotifications': handleNotificationsChange(null); break;
                         case 'expiryDateFrom': setExpiryDateFrom(''); break;
                         case 'expiryDateTo': setExpiryDateTo(''); break;
+                        case 'licenseNumbers': setLicenseNumbers(''); break;
                     }
                 }}
                 onClearAll={handleClearFilters}
                 purchaseStatusOptions={purchaseStatusOptions}
             />
 
+            {/* View switch — both views share the filters and Planning Status */}
+            <div role="group" aria-label="Report view" className="mt-3 inline-flex rounded-lg border border-border p-0.5">
+                {VIEW_OPTIONS.map((option) => (
+                    <Button
+                        key={option.value}
+                        type="button"
+                        size="sm"
+                        variant={view === option.value ? "default" : "ghost"}
+                        aria-pressed={view === option.value}
+                        onClick={() => setView(option.value)}
+                    >
+                        {option.label}
+                    </Button>
+                ))}
+            </div>
+
+            {/* Planning Status (server-side filter; counts are within the other active filters) */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label id="planning-status-label" htmlFor="planning-status" className="text-sm font-medium">Planning Status</label>
+                <Select value={planningStatus} onValueChange={(value) => setPlanningStatus(value as PlanningStatus)}>
+                    <SelectTrigger id="planning-status" aria-labelledby="planning-status-label" className="h-8 w-[220px]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {PLANNING_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}{planningCounts ? ` (${planningCounts[option.value].toLocaleString("en-IN")})` : ""}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {view === "product" && products.data && !products.loading && (
+                <div className="mt-3"><ReconciliationBadge reconciliation={products.data.reconciliation} /></div>
+            )}
+
             {/* Sticky Totals Bar */}
-            {!loading && hasQuery && reportData && reportData.items.length > 0 && (
+            {view === "import" && !loading && (reportData?.items?.length ?? 0) > 0 && (
                 <ItemReportTotalsBar items={reportData.items} />
             )}
 
             {/* Report Table */}
             <div className="row mt-3">
                 <div className="col-span-full">
-                    {loading && (
+                    {view === "product" && products.loading && (
+                        <Card>
+                            <CardContent className="flex flex-col items-center py-8 text-center">
+                                <Loader2 className="mb-2 size-8 animate-spin text-primary" />
+                                <h5 className="text-muted-foreground">Loading product report…</h5>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {view === "product" && !products.loading && products.data && products.data.products.length === 0 && (
+                        <Card>
+                            <CardContent className="py-5 text-center">
+                                <Inbox className="size-4" aria-hidden="true" />
+                                <h5 className="mt-3 text-muted-foreground">{EMPTY_MESSAGE[planningStatus]}</h5>
+                                <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {view === "product" && !products.loading && products.data && products.data.products.length > 0 && (
+                        <ItemReportProductTable
+                            products={products.data.products}
+                            totals={products.data.totals}
+                            filters={debouncedFilters}
+                        />
+                    )}
+
+                    {view === "import" && loading && (
                         <Card>
                             <CardContent className="flex flex-col items-center py-8 text-center">
                                 <Loader2 className="mb-2 size-8 animate-spin text-primary" />
@@ -247,21 +353,12 @@ export default function ItemReport() {
                         </Card>
                     )}
 
-                    {!loading && !hasQuery && (
-                        <Card>
-                            <CardContent className="py-5 text-center">
-                                <Tag className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-primary">Select Filters to View Report</h5>
-                                <p className="text-muted-foreground">Please select item names, search by product description, or search by HSN code to load the report data</p>
-                            </CardContent>
-                        </Card>
-                    )}
 
-                    {!loading && hasQuery && reportData && reportData.items.length === 0 && (
+                    {view === "import" && !loading && reportData && (reportData.items?.length ?? 0) === 0 && (
                         <Card>
                             <CardContent className="py-5 text-center">
                                 <Inbox className="size-4" aria-hidden="true" />
-                                <h5 className="mt-3 text-muted-foreground">No items found</h5>
+                                <h5 className="mt-3 text-muted-foreground">{EMPTY_MESSAGE[planningStatus]}</h5>
                                 <p className="text-muted-foreground">Try adjusting your filters to see more results.</p>
                                 <div className="mx-auto mt-3 max-w-[600px] text-left">
                                     <p className="mb-2 text-sm text-muted-foreground"><strong>Tip:</strong> When searching by Product Description or HSN Code, consider:</p>
@@ -275,7 +372,7 @@ export default function ItemReport() {
                         </Card>
                     )}
 
-                    {!loading && hasQuery && reportData && reportData.items.length > 0 && (
+                    {view === "import" && !loading && (reportData?.items?.length ?? 0) > 0 && (
                         <>
                             <ItemReportTable
                                 items={pageItems}
@@ -333,6 +430,7 @@ function ItemReportActiveFiltersDisplay({
         selectedNotifications: string[];
         expiryDateFrom: string;
         expiryDateTo: string;
+        licenseNumbers: string;
     };
     onRemoveFilter: (key: string) => void;
     onClearAll: () => void;
@@ -440,6 +538,14 @@ function ItemReportActiveFiltersDisplay({
                 key: 'selectedNorms',
                 label: 'SION Norms',
                 value: `${filters.selectedNorms.length} selected`,
+            });
+        }
+
+        if (filters.licenseNumbers.trim()) {
+            items.push({
+                key: 'licenseNumbers',
+                label: 'Licence numbers',
+                value: filters.licenseNumbers.trim(),
             });
         }
 

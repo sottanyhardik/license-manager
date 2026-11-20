@@ -89,7 +89,7 @@ def test_list_pdf_extracts_canonical_financial_summary_verbatim():
         },
     })
     for expected in (
-        "FINANCIAL TRADE LEDGER", "LABDHI MERCANTILE LLP", "0310833996", "01-Dec-2025",
+        "FINANCIAL TRADE LEDGER", "LABDHI MERCANTILE LLP", "0310833996", "01-12-2025",
         "E-1", "1,16,485.77", "45,83,719.00", "65,24,056.00", "19,40,337.00",
         "LICENSE LEDGER STATEMENT", "Golden Supplier", "Golden Buyer", "PURCHASE", "SALE",
     ):

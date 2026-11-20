@@ -140,5 +140,6 @@ def test_plan_utilization_section_clamps_planning_capacity_for_negative_balance(
         plan_map={}, groups=[], totals_out=totals,
     )
     values = [c.value for row in ws.iter_rows() for c in row if c.value is not None]
-    assert "$-400.00" in values  # signed balance displayed
+    # Signed balance is a real numeric cell (typed export), not a "$-400.00" string.
+    assert -400.0 in values
     assert totals["remaining_cif"] == 0  # no negative planning capacity

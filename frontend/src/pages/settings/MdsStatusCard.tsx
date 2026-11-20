@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDateTime } from "@/utils/dateFormatter";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, CloudOff, DatabaseZap, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,8 +35,7 @@ function relativeTime(iso: string | null): string {
 
 function absoluteTime(iso: string | null): string {
     if (!iso) return "Never synced";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
+    return formatDateTime(iso);
 }
 
 interface HealthBadge {

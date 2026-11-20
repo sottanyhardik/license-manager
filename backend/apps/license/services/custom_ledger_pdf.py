@@ -30,7 +30,7 @@ def _number(value) -> str:
 
 
 def _date(value) -> str:
-    return value.strftime("%d-%b-%Y") if value else "—"
+    return value.strftime("%d-%m-%Y") if value else "—"
 
 
 def get_custom_ledger_data(licence, user=None, *, canonical_dataset=None) -> dict:

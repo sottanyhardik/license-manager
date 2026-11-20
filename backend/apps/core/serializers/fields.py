@@ -225,13 +225,13 @@ class DateFormatterMixin:
                 return data
     """
 
-    def format_date_indian(self, date_obj: Optional[date], format_str: str = '%d-%b-%y') -> str:
+    def format_date_indian(self, date_obj: Optional[date], format_str: str = '%d-%m-%Y') -> str:
         """
         Format date in Indian style (DD-Mon-YY).
 
         Args:
             date_obj: Date or datetime object
-            format_str: Format string (default: '%d-%b-%y')
+            format_str: Format string (default: '%d-%m-%Y')
 
         Returns:
             Formatted date string or empty string if None
@@ -285,14 +285,14 @@ class DateFormatterMixin:
     def format_datetime_indian(
         self,
         datetime_obj: Optional[datetime],
-        format_str: str = '%d-%b-%y %H:%M'
+        format_str: str = '%d-%m-%Y %H:%M'
     ) -> str:
         """
         Format datetime in Indian style.
 
         Args:
             datetime_obj: Datetime object
-            format_str: Format string (default: '%d-%b-%y %H:%M')
+            format_str: Format string (default: '%d-%m-%Y %H:%M')
 
         Returns:
             Formatted datetime string or empty string if None

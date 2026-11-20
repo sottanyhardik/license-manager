@@ -437,5 +437,10 @@ def update_balance(sender, instance, **kwargs):
             .annotate(item_count=Count("items"))
             .filter(item_count=0)
         )
+        from apps.license.services.product_intelligence.import_item_approval import protected_import_item_ids
+
+        protected = protected_import_item_ids([i.pk for i in matching_items])
         for import_item in matching_items:
+            if import_item.pk in protected:
+                continue  # override / approved / cleared Description + HSN decisions are never replaced by a rule
             import_item.items.add(nItem)

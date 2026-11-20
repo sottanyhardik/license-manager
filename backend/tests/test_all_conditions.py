@@ -585,14 +585,16 @@ class TestItemBalanceCalculator:
     def test_item_balance_positive(self):
         mock_item = Mock()
         with patch.object(ItemBalanceCalculator, "calculate_item_credit_debit",
-                          return_value=(Decimal("500.00"), Decimal("200.00"))):
+                          return_value=(Decimal("500.00"), Decimal("200.00"))), \
+                patch.object(ItemBalanceCalculator, "licence_balance_cap", return_value=Decimal("1000.00")):
             result = ItemBalanceCalculator.calculate_item_balance(mock_item)
         assert result == Decimal("300.00")
 
     def test_item_balance_clamped_to_zero(self):
         mock_item = Mock()
         with patch.object(ItemBalanceCalculator, "calculate_item_credit_debit",
-                          return_value=(Decimal("100.00"), Decimal("300.00"))):
+                          return_value=(Decimal("100.00"), Decimal("300.00"))), \
+                patch.object(ItemBalanceCalculator, "licence_balance_cap", return_value=Decimal("1000.00")):
             result = ItemBalanceCalculator.calculate_item_balance(mock_item)
         assert result == DEC_0
 

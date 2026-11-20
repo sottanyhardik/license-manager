@@ -257,7 +257,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "B7",
             "type": "str",
             "value": "9000001"
@@ -267,10 +267,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "C7",
-            "type": "str",
-            "value": "01-03-2025"
+            "type": "datetime",
+            "value": "2025-03-01T00:00:00"
           },
           {
             "bold": false,
@@ -287,10 +287,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "right",
-            "number_format": "General",
+            "number_format": "#,##0.000",
             "ref": "E7",
-            "type": "int",
-            "value": 1250
+            "type": "float",
+            "value": 1250.625
           },
           {
             "bold": false,
@@ -347,7 +347,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "K7",
             "type": "str",
             "value": "INV-1"
@@ -367,7 +367,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "M7",
             "type": "str",
             "value": "0311000001"
@@ -377,10 +377,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "N7",
-            "type": "str",
-            "value": "10-01-2024"
+            "type": "datetime",
+            "value": "2024-01-10T00:00:00"
           },
           {
             "bold": false,
@@ -557,7 +557,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "M8",
             "type": "str",
             "value": "0311000001"
@@ -567,10 +567,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "N8",
-            "type": "str",
-            "value": "10-01-2024"
+            "type": "datetime",
+            "value": "2024-01-10T00:00:00"
           },
           {
             "bold": false,
@@ -717,10 +717,10 @@
             "bordered": false,
             "fill": null,
             "h_align": null,
-            "number_format": "#,##0",
+            "number_format": "#,##0.000",
             "ref": "E10",
-            "type": "int",
-            "value": 1250
+            "type": "str",
+            "value": "=SUM(E7:E9)"
           },
           {
             "bold": true,
@@ -729,8 +729,8 @@
             "h_align": null,
             "number_format": "#,##0.00",
             "ref": "G10",
-            "type": "float",
-            "value": 120.75
+            "type": "str",
+            "value": "=SUM(G7:G9)"
           },
           {
             "bold": true,
@@ -739,8 +739,8 @@
             "h_align": null,
             "number_format": "₹#,##0.00",
             "ref": "I10",
-            "type": "float",
-            "value": 10203.38
+            "type": "str",
+            "value": "=SUM(I7:I9)"
           },
           {
             "bold": true,
@@ -757,10 +757,10 @@
             "bordered": false,
             "fill": "00f1f5f9",
             "h_align": "right",
-            "number_format": "#,##0",
+            "number_format": "#,##0.000",
             "ref": "E12",
-            "type": "int",
-            "value": 1250
+            "type": "str",
+            "value": "=SUMIF(C10:C10,\"Total\",E10:E10)"
           },
           {
             "bold": true,
@@ -769,18 +769,18 @@
             "h_align": "right",
             "number_format": "#,##0.00",
             "ref": "G12",
-            "type": "float",
-            "value": 120.75
+            "type": "str",
+            "value": "=SUMIF(C10:C10,\"Total\",G10:G10)"
           },
           {
             "bold": true,
             "bordered": false,
             "fill": "00f1f5f9",
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "\"CIF INR: ₹\"#,##0.00",
             "ref": "H12",
             "type": "str",
-            "value": "CIF INR: ₹10,203.38"
+            "value": "=SUMIF(C10:C10,\"Total\",I10:I10)"
           },
           {
             "bold": true,
@@ -1007,7 +1007,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "B18",
             "type": "str",
             "value": "9000003"
@@ -1017,10 +1017,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "C18",
-            "type": "str",
-            "value": "02-03-2025"
+            "type": "datetime",
+            "value": "2025-03-02T00:00:00"
           },
           {
             "bold": false,
@@ -1037,10 +1037,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "right",
-            "number_format": "General",
+            "number_format": "#,##0.000",
             "ref": "E18",
-            "type": "int",
-            "value": 500
+            "type": "float",
+            "value": 500.25
           },
           {
             "bold": false,
@@ -1097,7 +1097,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "K18",
             "type": "str",
             "value": "INV-3"
@@ -1117,7 +1117,7 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "@",
             "ref": "M18",
             "type": "str",
             "value": "0311000002"
@@ -1127,10 +1127,10 @@
             "bordered": true,
             "fill": null,
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "DD-MM-YYYY",
             "ref": "N18",
-            "type": "str",
-            "value": "20-02-2024"
+            "type": "datetime",
+            "value": "2024-02-20T00:00:00"
           },
           {
             "bold": false,
@@ -1197,10 +1197,10 @@
             "bordered": false,
             "fill": null,
             "h_align": null,
-            "number_format": "#,##0",
+            "number_format": "#,##0.000",
             "ref": "E19",
-            "type": "int",
-            "value": 500
+            "type": "str",
+            "value": "=SUM(E18:E18)"
           },
           {
             "bold": true,
@@ -1209,8 +1209,8 @@
             "h_align": null,
             "number_format": "#,##0.00",
             "ref": "G19",
-            "type": "float",
-            "value": 50.75
+            "type": "str",
+            "value": "=SUM(G18:G18)"
           },
           {
             "bold": true,
@@ -1219,8 +1219,8 @@
             "h_align": null,
             "number_format": "₹#,##0.00",
             "ref": "I19",
-            "type": "float",
-            "value": 4288.88
+            "type": "str",
+            "value": "=SUM(I18:I18)"
           },
           {
             "bold": true,
@@ -1237,10 +1237,10 @@
             "bordered": false,
             "fill": "00f1f5f9",
             "h_align": "right",
-            "number_format": "#,##0",
+            "number_format": "#,##0.000",
             "ref": "E21",
-            "type": "int",
-            "value": 500
+            "type": "str",
+            "value": "=SUMIF(C19:C19,\"Total\",E19:E19)"
           },
           {
             "bold": true,
@@ -1249,18 +1249,18 @@
             "h_align": "right",
             "number_format": "#,##0.00",
             "ref": "G21",
-            "type": "float",
-            "value": 50.75
+            "type": "str",
+            "value": "=SUMIF(C19:C19,\"Total\",G19:G19)"
           },
           {
             "bold": true,
             "bordered": false,
             "fill": "00f1f5f9",
             "h_align": "center",
-            "number_format": "General",
+            "number_format": "\"CIF INR: ₹\"#,##0.00",
             "ref": "H21",
             "type": "str",
-            "value": "CIF INR: ₹4,288.88"
+            "value": "=SUMIF(C19:C19,\"Total\",I19:I19)"
           }
         ],
         "column_widths": {
@@ -1268,10 +1268,10 @@
           "B": 12.0,
           "C": 12.0,
           "D": 10.0,
-          "E": 16.0,
+          "E": 22.0,
           "F": 16.0,
-          "G": 11.0,
-          "H": 21.0,
+          "G": 22.0,
+          "H": 22.0,
           "I": 15.0,
           "J": 15.0,
           "K": 10.0,

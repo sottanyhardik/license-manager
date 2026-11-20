@@ -13,7 +13,6 @@ from apps.license.api.views.item_pivot_helpers import (
     _pivot_item_fields,
     _fit_sheet_columns,
     TOTAL_SUMMARY_TITLE,
-    _item_summary_rows_from_matrix,
     _item_summary_rows_from_projection,
     _item_summary_subtotal,
     _write_item_summary_table,
@@ -199,7 +198,9 @@ class ItemPivotExcelMixin:
                     summaryStartRow = totalRow + 2
                     # Same heading and table as the on-screen "Item Summary — Notification … · …" card.
                     summaryTitle = f"Item Summary — Notification {group['notification_number']} · {group['purchase_status']['name']}"
-                    notification_rows = _item_summary_rows_from_matrix(group)
+                    # The same canonical projection as the screen and the TOTAL_Summary sheet (Item Name × SION), so the
+                    # total is the exact sum of the notification summaries.
+                    notification_rows = _item_summary_rows_from_projection(group.get("item_summary", []))
                     _write_item_summary_table(sheet, summaryStartRow, summaryTitle, notification_rows, _item_summary_subtotal(notification_rows), headerFont, headerFill)
 
                 if sheet is not None:

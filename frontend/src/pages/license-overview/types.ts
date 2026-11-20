@@ -217,3 +217,105 @@ export interface LicenseOverviewPlanUtilization {
     norm: LicenseOverviewNorm;
     rows: LicenseOverviewPlanRow[];
 }
+
+// ─── GET/POST licenses/<id>/import-item-names/ — Items tab "Item Name" ────
+
+export interface ImportItemNameItem {
+    id: number;
+    name: string;
+}
+
+export type ImportItemNameStatus = "MAPPED" | "NOT_MAPPED" | "CLEARED" | "MULTIPLE" | "CONFLICT";
+export type ImportItemNameSource = "OVERRIDE" | "APPROVAL" | "DESCRIPTION_MAPPING" | "AUTO" | "OTHER";
+/** `global` = approved decision for every import item with the same Description + HSN; `record` = this row only. */
+export type ImportItemNameScope = "global" | "record";
+
+/** Global Description + HSN approval covering a row (`USER_APPROVED_CLEAR` = deliberately no Item Name). */
+export interface ImportItemNameApproval {
+    id: number;
+    status: "USER_APPROVED" | "USER_APPROVED_CLEAR";
+    version: number;
+    item: ImportItemNameItem | null;
+    records: number;
+    licences: number;
+    updated_by: string | null;
+    updated_on: string | null;
+}
+
+export interface ImportItemNameRow {
+    import_item_id: number;
+    serial_number: number | null;
+    description: string | null;
+    hs_code: string | null;
+    unit: string | null;
+    sion: string[];
+    items: ImportItemNameItem[];
+    status: ImportItemNameStatus;
+    source: ImportItemNameSource | null;
+    note: string;
+    overridden: boolean;
+    override: {
+        item_ids: number[];
+        previous_item_ids: number[];
+        updated_by: string | null;
+        updated_on: string | null;
+        reason: string | null;
+    } | null;
+    description_mapping: {
+        id: number;
+        version: number;
+        status: string;
+        items: ImportItemNameItem[];
+    } | null;
+    approval?: ImportItemNameApproval | null;
+}
+
+export interface ImportItemNamesResponse {
+    can_edit: boolean;
+    rows: ImportItemNameRow[];
+}
+
+export interface ImportItemNameChange {
+    import_item_id: number;
+    item_id: number | null;
+    expected_item_ids: number[];
+    scope?: ImportItemNameScope;
+    expected_approval_version?: number;
+}
+
+export interface ImportItemNameCombination {
+    description: string;
+    hsn_code: string | null;
+}
+
+export interface ImportItemNamePreview {
+    import_item_id: number;
+    combination: ImportItemNameCombination;
+    records: number;
+    licences: number;
+    overridden: number;
+    licence_numbers: string[];
+    current_item_sets: Record<string, number>;
+}
+
+export interface ImportItemNamePropagation {
+    import_item_id: number;
+    combination: ImportItemNameCombination;
+    records: number;
+    licences: number;
+    applied: number;
+    unchanged: number;
+    overridden: number;
+    conflicts: number;
+    conflict_licences: { id: number; license_number: string }[];
+}
+
+export interface ImportItemNameHistoryEvent {
+    /** ISO timestamp (backend `time`). */
+    time: string;
+    user: string | null;
+    action: string;
+    previous_items: ImportItemNameItem[];
+    new_items: ImportItemNameItem[];
+    note: string;
+}

@@ -258,6 +258,7 @@ class BoeAllotmentM2MStoredBalanceTests(BoeApiFixtureMixin, TestCase):
         self.allotment = self.make_allotment(self.company, item=self.item, cif_fc=Decimal("2000.00"))
         self.other_allotment = self.make_allotment(self.company, item_name="Other")
         self.boe = self.make_boe(self.company)
+        _give_boe_a_debit_row_elsewhere(self, self.boe)
         update_license_flags(self.license)
         self.license.refresh_from_db()
         self.assertEqual(LicenseBalanceCalculator.calculate_allotment(self.license), Decimal("2000.00"))
@@ -370,3 +371,19 @@ class BoeExportQueryCountTests(BoeApiFixtureMixin, TestCase):
         total_five, _ = self._count("port_xlsx")
         # WS5 (flipped from 2 extra queries per BOE): constant in N.
         self.assertEqual(total_five - total_one, 0)
+
+
+def _give_boe_a_debit_row_elsewhere(test, boe):
+    """Owner DEC-03 C (2026-11-20): only an M2M link to a BOE that carries a
+    DEBIT row consumes an allotment (a rowless/placeholder BOE does not). Give
+    the fixture BOE one DEBIT row on an UNRELATED licence so this licence's
+    balance figures are unchanged while the link still means consumption."""
+    from apps.bill_of_entry.models import RowDetails
+    from apps.core.constants import DEBIT
+
+    other_licence = test.make_license(test.company)
+    other_item = test.make_item(other_licence, 1)
+    RowDetails.objects.create(
+        bill_of_entry=boe, sr_number=other_item, transaction_type=DEBIT,
+        cif_fc=Decimal("1.00"), cif_inr=Decimal("84.50"), qty=Decimal("1.000"),
+    )

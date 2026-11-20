@@ -7,7 +7,18 @@ from io import BytesIO
 from django.http import HttpResponse
 from rest_framework.decorators import action
 
+from apps.core.exporters.excel.cell_formats import (
+    AMOUNT_FORMAT,
+    QUANTITY_FORMAT,
+    finalize_workbook,
+    sum_formula,
+    sumif_label_formula,
+    write_date,
+    write_number,
+    write_text,
+)
 from apps.core.models import ExchangeRateModel
+from apps.core.utils.date_utils import format_date
 
 try:
     import openpyxl
@@ -37,6 +48,18 @@ DEFAULT_EXCHANGE_RATE = Decimal('89.5')
 
 def _text_response(message, status_code):
     return HttpResponse(message, status=status_code, content_type='text/plain; charset=utf-8')
+
+
+def _sum_of_rows(column, rows):
+    """Grand total as a live formula summing only the given sub-total rows.
+
+    Uses SUMIF on the sub-total label ("Total Quantity", column C) over this company's
+    span (first..last sub-total row), so the formula length is constant (no Excel
+    8,192-char / 255-argument limit) and other companies' rows are excluded.
+    """
+    if not rows:
+        return 0
+    return sumif_label_formula(3, "Total Quantity", column, min(rows), max(rows))
 
 
 def _decimal_or_default(value, default=Decimal('0')):
@@ -164,7 +187,7 @@ def add_grouped_export_action(viewset_class):
             # Create title section
             title_para = Paragraph("Allotment Report", pdf_exporter.title_style)
             subtitle_para = Paragraph(f"Total USD $: {pdf_exporter.format_number(total_usd)}", pdf_exporter.subtitle_style)
-            timestamp_text = f"Generated on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+            timestamp_text = f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}"
             timestamp_style = ParagraphStyle(
                 'Timestamp',
                 parent=pdf_exporter.styles['Normal'],
@@ -463,10 +486,9 @@ def add_grouped_export_action(viewset_class):
             cell.font = Font(bold=True, size=14)
             row += 1
 
-            # Track company totals
-            company_total_qty = 0
-            company_total_value = 0
-            company_total_inr = 0
+            # Rows holding each item/port total (the grand total sums only these,
+            # so nothing is double counted).
+            item_total_rows = []
 
             # Process each item within company
             for item_name_key, ports_dict in items_dict.items():
@@ -521,9 +543,7 @@ def add_grouped_export_action(viewset_class):
                     row += 1
 
                     sr_no = 1
-                    item_total_qty = 0
-                    item_total_value = 0
-                    item_total_inr = 0
+                    first_data_row = row
 
                     for allot in allotments:
                         start_row_for_allot = row
@@ -534,7 +554,7 @@ def add_grouped_export_action(viewset_class):
                             sr_no,
                             allot['date'],
                             allot['port'],
-                            int(allot['quantity']),
+                            allot['quantity'],  # raw Decimal so the SUM totals are exact
                             allot['unit_price'],
                             allot['value'],
                             allot_cif_inr,
@@ -553,6 +573,12 @@ def add_grouped_export_action(viewset_class):
                                     cell.border = border
                                     cell.font = Font(size=12)
                                     cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                                    if col_idx in (2, 10):  # Allotment Date / ETA: real dates
+                                        write_date(cell, value)
+                                    elif col_idx == 9:  # Invoice no. is an identifier
+                                        write_text(cell, value)
+                                    elif col_idx == 4:  # Quantity: real number, 3dp
+                                        write_number(cell, value, QUANTITY_FORMAT)
                                     if col_idx in [4, 5, 6, 7]:  # Number columns (added 7 for Total CIF INR)
                                         cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
                                         if col_idx in [5, 6]:  # USD columns
@@ -564,10 +590,6 @@ def add_grouped_export_action(viewset_class):
                                     if allot.get('is_approved'):
                                         cell.fill = PatternFill(start_color='CCFFCC', end_color='CCFFCC', fill_type='solid')
 
-                                # Track totals only once per allotment
-                                item_total_qty += allot['quantity']
-                                item_total_value += allot['value']
-                                item_total_inr += allot_cif_inr
 
                             # Write license details
                             license_data = [
@@ -584,6 +606,10 @@ def add_grouped_export_action(viewset_class):
                                 cell.border = border
                                 cell.font = Font(size=12)
                                 cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                                if col_idx == len(main_headers) + 1:  # DFIA No. is an identifier
+                                    write_text(cell, value)
+                                elif col_idx == len(main_headers) + 2:  # DFIA Date: real date
+                                    write_date(cell, value)
                                 if col_idx in [len(main_headers) + 5, len(main_headers) + 6]:  # DFIA Qty, DFIA $.
                                     cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
 
@@ -650,19 +676,18 @@ def add_grouped_export_action(viewset_class):
 
                         sr_no += 1
 
-                    # Add to company totals
-                    company_total_qty += item_total_qty
-                    company_total_value += item_total_value
-                    company_total_inr += item_total_inr
-
+                    # Live SUM formulas over this table's data rows only (the
+                    # total row itself is outside the range).
+                    last_data_row = row - 1
                     ws.cell(row=row, column=3, value="Total Quantity").font = Font(bold=True)
-                    ws.cell(row=row, column=4, value=int(item_total_qty)).font = Font(bold=True)
-                    ws.cell(row=row, column=4).number_format = '#,##0'
+                    ws.cell(row=row, column=4, value=sum_formula(4, first_data_row, last_data_row)).font = Font(bold=True)
+                    ws.cell(row=row, column=4).number_format = QUANTITY_FORMAT
                     ws.cell(row=row, column=5, value="Total USD $").font = Font(bold=True)
-                    ws.cell(row=row, column=6, value=item_total_value).font = Font(bold=True)
-                    ws.cell(row=row, column=6).number_format = '#,##0.00'
-                    ws.cell(row=row, column=7, value=item_total_inr).font = Font(bold=True)
+                    ws.cell(row=row, column=6, value=sum_formula(6, first_data_row, last_data_row)).font = Font(bold=True)
+                    ws.cell(row=row, column=6).number_format = AMOUNT_FORMAT
+                    ws.cell(row=row, column=7, value=sum_formula(7, first_data_row, last_data_row)).font = Font(bold=True)
                     ws.cell(row=row, column=7).number_format = '₹#,##0.00'
+                    item_total_rows.append(row)
                     row += 2
 
             # Add grand total after all items
@@ -672,20 +697,21 @@ def add_grouped_export_action(viewset_class):
             cell.fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=4, value=int(company_total_qty)).font = Font(bold=True, size=14)
+            ws.cell(row=row, column=4, value=_sum_of_rows(4, item_total_rows)).font = Font(bold=True, size=14)
             ws.cell(row=row, column=4).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=4).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row, column=4).number_format = QUANTITY_FORMAT
 
             ws.cell(row=row, column=5, value="Total USD $:").font = Font(bold=True, size=14)
             ws.cell(row=row, column=5).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=5).alignment = Alignment(horizontal='center', vertical='center')
 
-            ws.cell(row=row, column=6, value=company_total_value).font = Font(bold=True, size=14)
+            ws.cell(row=row, column=6, value=_sum_of_rows(6, item_total_rows)).font = Font(bold=True, size=14)
             ws.cell(row=row, column=6).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=6).alignment = Alignment(horizontal='center', vertical='center')
             ws.cell(row=row, column=6).number_format = '#,##0.00'
 
-            ws.cell(row=row, column=7, value=company_total_inr).font = Font(bold=True, size=14)
+            ws.cell(row=row, column=7, value=_sum_of_rows(7, item_total_rows)).font = Font(bold=True, size=14)
             ws.cell(row=row, column=7).fill = PatternFill(start_color='F1F5F9', end_color='F1F5F9', fill_type='solid')
             ws.cell(row=row, column=7).alignment = Alignment(horizontal='center', vertical='center')
             ws.cell(row=row, column=7).number_format = '₹#,##0.00'
@@ -714,6 +740,7 @@ def add_grouped_export_action(viewset_class):
         )
         today = datetime.now().strftime('%d-%m-%Y')
         response['Content-Disposition'] = f'attachment; filename="Allotment Report - {today}.xlsx"'
+        finalize_workbook(wb)
         wb.save(response)
 
         return response
@@ -730,8 +757,7 @@ def add_grouped_export_action(viewset_class):
             item_name_key = item_name.upper()  # Case-insensitive grouping key
 
             allot_data = {
-                'date': allotment.created_on.strftime(
-                    '%d-%m-%Y') if allotment.created_on else '--',
+                'date': format_date(allotment.created_on) if allotment.created_on else '--',
                 'port': port_code,
                 'quantity': _decimal_or_default(allotment.required_quantity),
                 'unit_price': _decimal_or_default(allotment.unit_value_per_unit),

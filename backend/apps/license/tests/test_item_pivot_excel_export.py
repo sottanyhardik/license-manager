@@ -150,8 +150,8 @@ ITEM_SUMMARY_METRIC_HEADERS = [
 
 
 def _blank_if_zero(value):
-    # The Excel Item Summary leaves zero values blank, as the on-screen table does.
-    return None if _number(value) == 0 else value
+    # The Excel Item Summary writes a calculated zero as numeric 0 and leaves a genuinely missing value empty.
+    return None if value in (None, "") else value
 
 
 def _fixture_group(report):

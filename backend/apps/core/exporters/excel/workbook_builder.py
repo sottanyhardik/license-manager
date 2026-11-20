@@ -11,6 +11,15 @@ from typing import Any
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.worksheet.worksheet import Worksheet
 
+from .cell_formats import (
+    AMOUNT_FORMAT,
+    NUMERIC_TYPES,
+    sum_formula,
+    to_number,
+    write_date,
+)
+from datetime import date as _date_type
+
 
 @dataclass
 class WorksheetConfig:
@@ -56,6 +65,7 @@ class ExcelWorkbookBuilder:
         self.worksheet = worksheet
         self.config = config or WorksheetConfig()
         self.current_row = 1
+        self._first_data_row: int | None = None
 
     def add_title(self, title: str, row: int | None = None) -> ExcelWorkbookBuilder:
         """
@@ -105,6 +115,7 @@ class ExcelWorkbookBuilder:
             cell.border = self.config.border
 
         self.current_row = row + 1
+        self._first_data_row = row + 1
         return self
 
     def add_data_row(
@@ -128,6 +139,8 @@ class ExcelWorkbookBuilder:
         """
         row = row or self.current_row
         number_columns = number_columns or []
+        if self._first_data_row is None:
+            self._first_data_row = row
 
         for idx, value in enumerate(values):
             col = start_col + idx
@@ -135,12 +148,20 @@ class ExcelWorkbookBuilder:
 
             # Apply number formatting if column is numeric
             if idx in number_columns:
+                # Numeric strings become real numbers; non-numeric text is kept as-is.
+                if not isinstance(value, NUMERIC_TYPES):
+                    number = to_number(value)
+                    if number is not None:
+                        cell.value = number
+                        value = number
                 if isinstance(value, (int, float, Decimal)):
-                    cell.number_format = '#,##0.00'
+                    cell.number_format = AMOUNT_FORMAT
                     cell.alignment = Alignment(horizontal="right", vertical="center")
                 else:
                     cell.alignment = Alignment(horizontal="right", vertical="center")
             else:
+                if isinstance(value, _date_type):
+                    write_date(cell, value)  # real date cell, DD-MM-YYYY
                 cell.alignment = self.config.cell_alignment
 
             cell.border = self.config.border
@@ -179,7 +200,9 @@ class ExcelWorkbookBuilder:
             values: list[Any],
             row: int | None = None,
             start_col: int = 1,
-            number_columns: list[int] | None = None
+            number_columns: list[int] | None = None,
+            sum_columns: list[int] | None = None,
+            first_data_row: int | None = None
     ) -> ExcelWorkbookBuilder:
         """
         Add total/summary row with bold styling.
@@ -189,21 +212,31 @@ class ExcelWorkbookBuilder:
             row: Row number (uses current_row if None)
             start_col: Starting column
             number_columns: Indices of columns that contain numbers
+            sum_columns: Indices (0-indexed, like ``values``) whose cell becomes a
+                live ``=SUM(...)`` over the data rows above this row (the total row
+                itself is never inside the range). Optional: omitted keeps the
+                supplied static value.
+            first_data_row: First data row of the range (defaults to the row after
+                the last ``add_header_row`` / first ``add_data_row``).
             
         Returns:
             Self for chaining
         """
         row = row or self.current_row
         number_columns = number_columns or []
+        sum_columns = sum_columns or []
+        range_start = first_data_row or self._first_data_row or row
 
         for idx, value in enumerate(values):
             col = start_col + idx
+            if idx in sum_columns:
+                value = sum_formula(col, range_start, row - 1)
             cell = self.worksheet.cell(row=row, column=col, value=value)
             cell.font = Font(bold=True)
 
             # Apply number formatting if column is numeric
-            if idx in number_columns and isinstance(value, (int, float, Decimal)):
-                cell.number_format = '#,##0.00'
+            if idx in sum_columns or (idx in number_columns and isinstance(value, (int, float, Decimal))):
+                cell.number_format = AMOUNT_FORMAT
                 cell.alignment = Alignment(horizontal="right", vertical="center")
             else:
                 cell.alignment = self.config.cell_alignment

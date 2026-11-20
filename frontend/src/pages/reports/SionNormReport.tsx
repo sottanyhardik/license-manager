@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "sonner";
+import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { formatDate as formatDateUtil } from "../../utils/dateFormatter";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +22,13 @@ type SionReportFilters = {
 
 type ReportValueMap = Record<string, unknown>;
 
+const URL_FILTER_KEYS = ["is_expired", "is_null"] as const;
+/** `?is_expired=False|True&is_null=False|True` — defaults: active licences, balance CIF > 200. */
+const normalizeUrlFilters = (raw: { is_expired: string | null; is_null: string | null }) => ({
+    is_expired: normalizeBooleanFilter(raw.is_expired),
+    is_null: normalizeBooleanFilter(raw.is_null),
+});
+
 
 /**
  * Reusable SION Norm Report — licenses for a specific SION norm, grouped by
@@ -31,11 +39,12 @@ type ReportValueMap = Record<string, unknown>;
 export default function SionNormReport({ sionNorm, title }: SionNormReportProps) {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState({
-        is_expired: "False",
-        is_null: "False",
-        sion_norm: sionNorm,
-    });
+    // The norm comes from the route (exact); the two radio filters live in the URL.
+    const [urlFilters, setUrlFilters] = useUrlFilters(URL_FILTER_KEYS, normalizeUrlFilters);
+    const filters: SionReportFilters = useMemo(
+        () => ({ ...urlFilters, sion_norm: sionNorm }),
+        [urlFilters, sionNorm],
+    );
 
     useEffect(() => {
         let isMounted = true;
@@ -65,12 +74,8 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
         };
     }, [filters]);
 
-    useEffect(() => {
-        setFilters((prev) => ({ ...prev, sion_norm: sionNorm }));
-    }, [sionNorm]);
-
     const handleFilterChange = (filterName: "is_expired" | "is_null", value: string) =>
-        setFilters((prev) => ({ ...prev, [filterName]: normalizeBooleanFilter(value, prev[filterName]) }));
+        setUrlFilters({ [filterName]: normalizeBooleanFilter(value, filters[filterName]) });
 
     const formatNumber = (num: unknown, decimals = 2) => {
         return formatReportNumber(num, decimals);
@@ -295,7 +300,8 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
         );
     }
 
-    const sionGroup = groups[0] ?? {};
+    // Licences are grouped by primary norm; show this page's norm group, not whichever sorts first.
+    const sionGroup = groups.find(group => group?.sion_norm === sionNorm) ?? groups[0] ?? {};
     const notifications = Array.isArray(sionGroup.notifications) ? sionGroup.notifications : [];
     const totals = sionGroup.totals ?? {};
     let globalSrNo = 0;
@@ -316,13 +322,7 @@ export default function SionNormReport({ sionNorm, title }: SionNormReportProps)
                         case 'is_null': handleFilterChange('is_null', 'False'); break;
                     }
                 }}
-                onClearAll={() => {
-                    setFilters((prev) => ({
-                        ...prev,
-                        is_expired: 'False',
-                        is_null: 'False',
-                    }));
-                }}
+                onClearAll={() => setUrlFilters({ is_expired: 'False', is_null: 'False' })}
             />
 
             {/* Summary cards */}

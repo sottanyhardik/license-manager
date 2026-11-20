@@ -117,6 +117,8 @@ class ReconciliationLog(models.Model):
     ACTION_WARNING_RESTORED = "WARNING_RESTORED"
     ACTION_HIDE_BOE = "HIDE_BOE"
     ACTION_RESTORE_BOE = "RESTORE_BOE"
+    ACTION_AUTO_LINK_ALLOTMENT = "AUTO_LINK_ALLOTMENT"
+    ACTION_REVERSE_AUTO_LINK_ALLOTMENT = "REVERSE_AUTO_LINK_ALLOTMENT"
     ACTION_CHOICES = (
         (ACTION_LINK, "Link"),
         (ACTION_MERGE_BOE, "Merge BOE"),
@@ -132,6 +134,8 @@ class ReconciliationLog(models.Model):
         (ACTION_WARNING_RESTORED, "Warning Restored"),
         (ACTION_HIDE_BOE, "Hide BOE (Previous Owner)"),
         (ACTION_RESTORE_BOE, "Restore BOE"),
+        (ACTION_AUTO_LINK_ALLOTMENT, "Auto-link Allotment (exact match)"),
+        (ACTION_REVERSE_AUTO_LINK_ALLOTMENT, "Reverse Auto-link Allotment"),
     )
 
     action = models.CharField(max_length=30, choices=ACTION_CHOICES, db_index=True)
@@ -575,4 +579,53 @@ class IgnoredWarning(models.Model):
         return (
             f"IgnoredWarning[{self.pk}] {self.warning_type}/{self.entity_type}:{self.entity_id} "
             f"license={self.license_id} ignored={self.ignored}"
+        )
+
+
+class ItemCifAdjustmentRecord(models.Model):
+    """
+    Append-only audit trail of DEC-50 item CIF over-utilisation adjustments
+    (owner decision 2026-11-20; computation:
+    `apps.license.services.item_cif_adjustment.compute_item_cif_adjustments`).
+
+    The Balance Engine always computes adjustments live from canonical data;
+    this table records each distinct computed set per licence (one `batch_id`
+    per refresh that changed something) so every transfer keeps its source
+    item, destination item, amount, timestamp and reason. Rows are never
+    updated or deleted; the current set for a licence is its latest batch.
+    An empty batch (marker row with no items) records that a licence's
+    adjustments went back to none. Statutory entitlement (`cif_fc`) is never
+    altered. Foreign keys are DO_NOTHING without a DB constraint (audit F4):
+    the log keeps its ids even if a licence/item is later deleted (DEC-33
+    cleanup) and never blocks that deletion.
+    """
+
+    batch_id = models.CharField(max_length=36, db_index=True)
+    license = models.ForeignKey(
+        "license.LicenseDetailsModel", on_delete=models.DO_NOTHING, db_constraint=False,
+        related_name="item_cif_adjustments",
+    )
+    source_item = models.ForeignKey(
+        "license.LicenseImportItemsModel", null=True, blank=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, related_name="+",
+    )
+    destination_item = models.ForeignKey(
+        "license.LicenseImportItemsModel", null=True, blank=True, on_delete=models.DO_NOTHING,
+        db_constraint=False, related_name="+",
+    )
+    amount_cif_fc = models.DecimalField(max_digits=15, decimal_places=2, default=DEC_0)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+    )
+    created_on = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_on", "id"]
+        indexes = [models.Index(fields=["license", "created_on"])]
+
+    def __str__(self) -> str:
+        return (
+            f"ItemCifAdjustment[{self.pk}] batch={self.batch_id} lic={self.license_id} "
+            f"{self.source_item_id}->{self.destination_item_id} {self.amount_cif_fc}"
         )

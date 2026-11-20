@@ -8,7 +8,7 @@ async function signInAndOpenPivot(page: import("@playwright/test").Page) {
   await page.waitForURL("**/dashboard");
   await page.goto("/reports/item-pivot", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /E2E2509 Managed browser gate/ }).click();
-  await page.getByRole("button", { name: "Notification 2509", exact: true }).click();
+  await page.getByRole("button", { name: /^Notification 2509 · / }).click();
   await page.waitForLoadState("networkidle");
   await expect(page.locator("[data-item-pivot-sticky-stack]")).toBeVisible({ timeout: 15000 });
 }

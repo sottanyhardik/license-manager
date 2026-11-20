@@ -30,6 +30,9 @@ export type SourceConfig = {
 
 const API = "item-pivot/matching/item-name-mapping";
 
+/** Global Description + HSN approvals (Licence Detail decisions) — listed separately from pending description work. */
+export const APPROVALS_BASE = `${API}/import/approvals/`;
+
 export const SOURCES: Record<SourceKind, SourceConfig> = {
     import: {
         kind: "import", base: `${API}/import/descriptions/`, sourceLabel: "Original Item Description", noun: "Item Name", multi: true, showCodes: true,

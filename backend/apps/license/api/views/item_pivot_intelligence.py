@@ -512,6 +512,68 @@ class ItemPivotItemNameMappingMixin:
         except MatchValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+    # --- Global Description + HSN approvals (owner amendment 2026-11-20) -------------------------------------------
+
+    @action(detail=False, methods=["get"], url_path="matching/item-name-mapping/import/approvals")
+    def import_approval_list(self, request):
+        """Approved / cleared Description + HSN combinations — ``?q&status=APPROVED|CLEARED|REVOKED&offset&limit``."""
+        from apps.license.services.product_intelligence.import_item_approval import listing
+
+        p = request.query_params
+        data = listing(q=(p.get("q") or "").strip()[:200], status=(p.get("status") or "").strip()[:20],
+                       offset=_safe_int(p.get("offset"), 0), limit=_safe_int(p.get("limit"), 50))
+        return Response({**data, "can_apply": _can_approve(request.user)})
+
+    @action(detail=False, methods=["post"], url_path="matching/item-name-mapping/import/approvals/save", permission_classes=[])
+    def import_approval_save(self, request):
+        """Body: ``{description, hsn_code, item_id | null, expected_version?}`` — create or revise (null = deliberate clear).
+        LICENSE_MANAGER; 400 invalid, 409 stale version."""
+        from apps.license.models import ImportItemMappingApproval
+        from apps.license.services.product_intelligence import import_item_approval as ia
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Item Name mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        body = request.data if isinstance(request.data, dict) else None
+        if body is None or not isinstance(body.get("description"), str) or not isinstance(body.get("hsn_code", ""), (str, type(None))):
+            return Response({"detail": "A JSON object with the description and HSN code is required."}, status=status.HTTP_400_BAD_REQUEST)
+        expected = body.get("expected_version")
+        if expected is not None and (not isinstance(expected, int) or isinstance(expected, bool)):
+            return Response({"expected_version": "Must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = ia.approve(description=body["description"], hsn=body.get("hsn_code") or "", item_id=body.get("item_id"), user=request.user,
+                                source=ImportItemMappingApproval.MAPPING_WORKSPACE, expected_version=expected)
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ia.ApprovalConcurrencyError as exc:
+            return Response({"detail": str(exc), "version": exc.version}, status=status.HTTP_409_CONFLICT)
+        _drop_mapping_counts()
+        return Response(result, status=status.HTTP_201_CREATED if result["action"] != "UNCHANGED" else status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], url_path=r"matching/item-name-mapping/import/approvals/(?P<approval_id>\d+)/revoke", permission_classes=[])
+    def import_approval_revoke(self, request, approval_id=None):
+        from apps.license.services.product_intelligence import import_item_approval as ia
+        from apps.license.services.product_matching import MatchValidationError
+
+        if not _can_approve(request.user):
+            return Response({"detail": "Item Name mapping requires LICENSE_MANAGER."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            result = ia.revoke(int(approval_id), request.user)
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _drop_mapping_counts()
+        return Response(result)
+
+    @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/import/approvals/(?P<approval_id>\d+)/history")
+    def import_approval_history(self, request, approval_id=None):
+        from apps.license.services.product_intelligence import import_item_approval as ia
+        from apps.license.services.product_matching import MatchValidationError
+
+        try:
+            return Response({"events": ia.history(int(approval_id))})
+        except MatchValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
     # --- BOE Product Name / Allotment Item Name → Planning Target Item (saved name mappings) ------------------------
 
     @action(detail=False, methods=["get"], url_path=r"matching/item-name-mapping/(?P<kind>boe|allotment)/names")

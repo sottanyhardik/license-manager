@@ -131,5 +131,17 @@ describe("Licence import description mapping (map once)", () => {
         expect(within(c).getByText("Conflict")).toBeInTheDocument();
         expect(within(c).getByText(/outside the chapters/)).toBeInTheDocument();
     });
+
+    it("shows Approved status, approved/combinations and overridden counts from the backend", async () => {
+        rows = [row({ key: "A", description: "STEEL SHEETS", status: "USER_APPROVED", combinations: 3, approved_combinations: 3, cleared_combinations: 1, overridden: 2 })];
+        setup();
+        const tr = await tableRow("STEEL SHEETS");
+        expect(within(tr).getByText("Approved")).toBeInTheDocument();
+        expect(within(tr).getByText("3/3 combinations approved")).toBeInTheDocument();
+        expect(within(tr).getByText(/1 cleared/)).toBeInTheDocument();
+        expect(within(tr).getByText(/2 overridden/)).toBeInTheDocument();
+        const options = within(screen.getByLabelText("Filter by status")).getAllByRole("option").map((o) => o.textContent);
+        expect(options).toContain("Approved");
+    });
 });
 

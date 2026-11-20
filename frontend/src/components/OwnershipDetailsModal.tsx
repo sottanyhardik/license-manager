@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatDateTime } from "@/utils/dateFormatter";
 import { Network, Loader2, TriangleAlert } from "lucide-react";
 
 import api from "../api/axios";
@@ -10,10 +11,7 @@ import { Button } from "@/components/ui/button";
 
 function fmtDateTime(iso) {
     if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    return formatDateTime(iso) || iso;
 }
 
 function CompanyLabel({ iec, name }) {

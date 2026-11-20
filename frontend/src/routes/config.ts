@@ -1,3 +1,5 @@
+import { LEDGER_READ_ROLES } from "./authorizationRoles";
+import type { Role } from "./authorizationRoles";
 export interface RouteConfig {
     path: string;
     label: string;
@@ -32,6 +34,8 @@ export interface ReportRouteConfig {
     path: string;
     label: string;
     icon: string;
+    /** Narrower gate than REPORT_ROLES when the target route has its own guard (mirrors AppRoutes). */
+    roles?: readonly Role[];
 }
 
 export const routes: RouteConfig[] = [
@@ -116,6 +120,8 @@ export const reportEntities: ReportRouteConfig[] = [
         path: "/license-ledger/download-requests",
         label: "License Downloads",
         icon: "file-earmark-excel",
+        // The route is guarded by LEDGER_READ_ROLES, not REPORT_ROLES.
+        roles: LEDGER_READ_ROLES,
     },
     {
         path: "/reports/item-pivot",

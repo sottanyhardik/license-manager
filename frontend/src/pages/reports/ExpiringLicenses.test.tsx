@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,7 +13,7 @@ const mockedOpenAuthedFile = vi.mocked(openAuthedFile);
 
 describe("ExpiringLicenses", () => {
     it("renders expiring-license export copy and default lookahead", () => {
-        render(<ExpiringLicenses />);
+        render(<ExpiringLicenses />, { wrapper: MemoryRouter });
 
         expect(screen.getByRole("heading", { name: "Expiring Licenses Report" })).toBeInTheDocument();
         expect(screen.getByText("Export licenses expiring within the specified number of days")).toBeInTheDocument();
@@ -22,14 +23,14 @@ describe("ExpiringLicenses", () => {
     });
 
     it("downloads the expiring-license report using the normalized lookahead period", async () => {
-        render(<ExpiringLicenses />);
+        render(<ExpiringLicenses />, { wrapper: MemoryRouter });
 
         fireEvent.change(screen.getByLabelText("Days from today"), { target: { value: "60" } });
         fireEvent.click(screen.getByRole("button", { name: /download excel report/i }));
 
         await waitFor(() => {
             expect(mockedOpenAuthedFile).toHaveBeenCalledWith(
-                "license/reports/expiring-licenses/?format=excel&days=60",
+                "reports/expiring-licenses/?format=excel&days=60",
                 expect.stringMatching(/^expiring-licenses_\d{4}-\d{2}-\d{2}\.xlsx$/),
             );
         });

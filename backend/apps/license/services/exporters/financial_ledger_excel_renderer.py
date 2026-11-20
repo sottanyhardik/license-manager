@@ -5,13 +5,20 @@ totals, balances and profit/loss are copied from the canonical DTO unchanged.
 """
 from __future__ import annotations
 
-from datetime import date, datetime
 from io import BytesIO
 from typing import Any, Iterable
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+
+from apps.core.exporters.excel.cell_formats import (
+    finalize_workbook,
+    parse_display_date,
+    to_number,
+    write_date,
+    write_number,
+)
 
 
 NAVY = "17365D"
@@ -21,7 +28,6 @@ WHITE = "FFFFFF"
 THIN_GREY = Side(style="thin", color="B7C9D6")
 USD_FORMAT = '$#,##0.00;[Red]-$#,##0.00;–'
 INR_FORMAT = '[$₹-en-IN]#,##0.00;[Red]-[$₹-en-IN]#,##0.00;–'
-DATE_FORMAT = "dd-mmm-yyyy"
 
 
 def render_financial_ledger_excel(canonical_data: dict) -> BytesIO:
@@ -38,6 +44,7 @@ def render_financial_ledger_excel(canonical_data: dict) -> BytesIO:
     if licenses:
         _render_detail(workbook.create_sheet("Financial Trade Ledger"), licenses)
 
+    finalize_workbook(workbook)
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
@@ -158,6 +165,9 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
         for cell in sheet[row]:
             cell.font = Font(bold=True, color=NAVY)
             cell.fill = PatternFill("solid", fgColor=PALE_BLUE)
+        # Totals stay the canonical DTO values (numeric cells, not SUM formulas):
+        # canonical totals include the opening row, which is not rendered here,
+        # so a SUM over the visible rows would under-state Credit.
         _format_flat_detail_row(sheet, row)
 
     sheet.freeze_panes = "A3"
@@ -173,14 +183,28 @@ def _render_detail(sheet, licenses: list[dict]) -> None:
     _set_widths(sheet, (28, 18, 22, 15, 31, 24, 20, 34, 17, 17, 19, 19, 19, 18, 19))
 
 
+def _type_numeric(cell, number_format: str) -> None:
+    """Real numeric cell (Decimal/sign kept); formulas and blanks/placeholders untouched."""
+    value = cell.value
+    if isinstance(value, str) and value.startswith("="):
+        cell.number_format = number_format
+    elif value is None or to_number(value) is None:
+        cell.number_format = number_format
+    else:
+        write_number(cell, value, number_format)
+
+
+def _type_date(cell) -> None:
+    if parse_display_date(cell.value) is not None:
+        write_date(cell, cell.value)
+
+
 def _format_flat_detail_row(sheet, row: int) -> None:
-    for column in (4,):
-        if isinstance(sheet.cell(row, column).value, (date, datetime)):
-            sheet.cell(row, column).number_format = DATE_FORMAT
+    _type_date(sheet.cell(row, 4))
     for column in (9, 10, 14):
-        sheet.cell(row, column).number_format = USD_FORMAT
+        _type_numeric(sheet.cell(row, column), USD_FORMAT)
     for column in (11, 12, 13, 15):
-        sheet.cell(row, column).number_format = INR_FORMAT
+        _type_numeric(sheet.cell(row, column), INR_FORMAT)
     for cell in sheet[row]:
         cell.alignment = Alignment(vertical="top", wrap_text=True)
         cell.border = Border(bottom=THIN_GREY)
@@ -213,6 +237,9 @@ def _append_total_row(sheet, label: str, totals: dict, *, fill=PALE_BLUE, font_c
     for cell in sheet[row]:
         cell.font = Font(bold=True, color=font_color)
         cell.fill = PatternFill("solid", fgColor=fill)
+    # Totals are canonical DTO values, never SUM formulas: licence rows show the
+    # whole-licence balance while company/SION totals sum each company's share,
+    # so summing the rows would double count multi-company licences.
     _format_list_row(sheet, row)
 
 
@@ -237,11 +264,10 @@ def _style_header(cells) -> None:
 
 def _format_list_row(sheet, row: int) -> None:
     for column in (5, 6):
-        if isinstance(sheet.cell(row, column).value, (date, datetime)):
-            sheet.cell(row, column).number_format = DATE_FORMAT
-    sheet.cell(row, 7).number_format = USD_FORMAT
+        _type_date(sheet.cell(row, column))
+    _type_numeric(sheet.cell(row, 7), USD_FORMAT)
     for column in (8, 9, 10):
-        sheet.cell(row, column).number_format = INR_FORMAT
+        _type_numeric(sheet.cell(row, column), INR_FORMAT)
     for cell in sheet[row]:
         cell.border = Border(bottom=THIN_GREY)
 

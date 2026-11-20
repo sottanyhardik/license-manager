@@ -79,6 +79,20 @@ def _apply_form_import_items(import_item, items):
     """
     if not items:
         return
+    from apps.license.models import ImportItemNameOverride
+
+    if import_item.pk and ImportItemNameOverride.objects.filter(import_item_id=import_item.pk).exists():
+        # Owner decision 2026-11-20: a row override (Licence Detail → Import Items) is changed or reverted only there; the
+        # form re-sends every line on each save, so a stale form must never overwrite it.
+        logging.getLogger(__name__).info("Import item %s: Item Name override kept; licence form items ignored", import_item.id)
+        return
+    from apps.license.services.product_intelligence.import_item_approval import approval_for
+
+    if import_item.pk and approval_for(import_item) is not None:
+        # Owner amendment 2026-11-20: an approved (or cleared) Description + HSN mapping is changed only in Licence Detail →
+        # Import Items / Product Mapping → Approved; the form's stale items are ignored.
+        logging.getLogger(__name__).info("Import item %s: approved Description + HSN mapping kept; licence form items ignored", import_item.id)
+        return
     wanted = {getattr(item, 'pk', item) for item in items}
     stored = set(import_item.items.values_list('id', flat=True))
     if wanted != stored:
@@ -168,7 +182,9 @@ class LicenseWriteMixin:
         obj = LicenseImportItemsModel.objects.create(license=license_inst, **payload)
         if isinstance(items, Iterable):
             # Only set items if the import item has no items linked yet
-            if not obj.items.exists():
+            from apps.license.services.product_intelligence.import_item_approval import approval_for
+
+            if not obj.items.exists() and approval_for(obj) is None:  # an approved / cleared Description + HSN decides
                 obj.items.set(items)
 
         # Save description to ProductDescriptionModel if both description and hs_code exist

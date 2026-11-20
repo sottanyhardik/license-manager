@@ -13,6 +13,7 @@ from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ..base import BaseExporter
+from .cell_formats import finalize_workbook
 
 
 @dataclass
@@ -189,6 +190,7 @@ class BaseExcelExporter(BaseExporter):
         if not self.workbook:
             raise ValueError("Workbook not initialized")
 
+        finalize_workbook(self.workbook)
         self.workbook.save(self.buffer)
 
     def generate(self, data: Any) -> BytesIO:

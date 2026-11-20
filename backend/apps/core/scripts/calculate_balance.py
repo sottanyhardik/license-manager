@@ -27,15 +27,13 @@ def _get_aggregated_values(instance):
     float arithmetic unchanged.
 
     allotment_details (AllotmentItems):
-      `allotted_qty`/`allotted_value` (AT-type, outstanding-only) are computed
-      via `LicenseBalanceCalculator.get_outstanding_allotment_totals` — the
-      SAME Balance Engine query (`Exists()` against the real `BillOfEntryModel
-      .allotment` M2M, plus `BOEAllotmentAllocation` partial-allocation
-      netting) the Financial/Customs Ledgers and Item Summary use, so this
-      stored-field writer can never structurally drift from them. `aro_qty`/
-      `aro_value` (ARO-type, folded into "debited" rather than "allotted" —
-      unchanged business rule) stay a plain local aggregate; ARO allotments
-      aren't subject to BOE-linking exclusion.
+      `allotted_qty`/`allotted_value` (AT + AR, outstanding-only) are
+      computed via `LicenseBalanceCalculator.get_outstanding_allotment_totals`
+      — the SAME Balance Engine query (release rule:
+      `_allotment_release_condition`) the Financial/Customs Ledgers and Item
+      Summary use, so this stored-field writer can never structurally drift
+      from them. `aro_qty`/`aro_value` are always 0 (owner DEC-01 A,
+      2026-11-20: AR is counted once, under allotted).
     """
     from apps.bill_of_entry.models import genuinely_hidden_boe_ids
     from apps.license.services.balance_calculator import (
@@ -71,23 +69,21 @@ def _get_aggregated_values(instance):
         )
 
     # ------------------------------------------------------------------ #
-    # allotment_details (AllotmentItems): ARO stays a plain local aggregate;
-    # AT (outstanding, BOE-link-excluded) delegates to the shared Balance
-    # Engine helper — one extra query, but this function already runs
-    # per-item (from a per-item save signal), so it's not a new N+1 pattern.
+    # allotment_details (AllotmentItems): AT **and** ARO (`AR`) outstanding
+    # (BOE-link-excluded) both come from the shared Balance Engine helper
+    # (owner DEC-01 A, 2026-11-20). The former local ARO fold-in filtered
+    # `type='ARO'` on a 2-char field and never matched (SAT-DEF-001); it is
+    # removed so AR is counted exactly once, under "allotted". `aro_*` keys
+    # stay (0) for callers that read them.
     # ------------------------------------------------------------------ #
-    aro_agg = instance.allotment_details.aggregate(
-        aro_qty=Sum('qty', filter=Q(allotment__type='ARO')),
-        aro_value=Sum('cif_fc', filter=Q(allotment__type='ARO')),
-    )
     allotted_qty, allotted_value = LicenseBalanceCalculator.get_outstanding_allotment_totals(instance)
     direct_sale_qty = ItemBalanceCalculator.calculate_direct_sale_quantity(instance)
 
     return {
         'debited_qty': debited_qty,
         'debited_value': debited_value,
-        'aro_qty': to_decimal(aro_agg['aro_qty'], DEC_0),
-        'aro_value': to_float(aro_agg['aro_value']),
+        'aro_qty': DEC_0,
+        'aro_value': 0.0,
         'allotted_qty': to_decimal(allotted_qty, DEC_0),
         'allotted_value': to_float(allotted_value),
         'direct_sale_qty': to_decimal(direct_sale_qty, DEC_0),

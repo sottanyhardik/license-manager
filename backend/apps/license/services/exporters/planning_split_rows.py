@@ -152,6 +152,13 @@ def write_split_sub_rows(
     """
     from openpyxl.styles import Alignment
 
+    from apps.core.exporters.excel.cell_formats import (
+        AMOUNT_FORMAT, QUANTITY_FORMAT, write_number,
+    )
+
+    qty_num_fmt = qty_num_fmt or QUANTITY_FORMAT
+    cif_num_fmt = cif_num_fmt or AMOUNT_FORMAT
+
     rows = rows_for_splits(splits)
     if not rows:
         return 0
@@ -185,7 +192,9 @@ def write_split_sub_rows(
         name_cell.alignment = Alignment(horizontal='left', vertical='center')
 
         if price_col is not None:
-            price_cell = ws.cell(row=row, column=price_col, value=r['unit_price_label'])
+            # Numeric unit price; the "@ $x/unit" look lives in the number format.
+            price_cell = ws.cell(row=row, column=price_col)
+            write_number(price_cell, r['unit_price'] if r['unit_price'] else None, '"@ $"#,##0.00"/unit"')
             price_cell.fill = fill
             if border is not None:
                 price_cell.border = border
@@ -205,8 +214,7 @@ def write_split_sub_rows(
             qty_cell.border = border
         qty_cell.font = value_font
         qty_cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
-        if qty_num_fmt:
-            qty_cell.number_format = qty_num_fmt
+        qty_cell.number_format = qty_num_fmt
 
         cif_cell = ws.cell(row=row, column=cif_col, value=r['planned_cif_fc'])
         cif_cell.fill = fill
@@ -214,12 +222,14 @@ def write_split_sub_rows(
             cif_cell.border = border
         cif_cell.font = value_font
         cif_cell.alignment = Alignment(horizontal='right', vertical='center', wrap_text=True)
-        if cif_num_fmt:
-            cif_cell.number_format = cif_num_fmt
+        cif_cell.number_format = cif_num_fmt
 
         row += 1
 
     return len(rows)
+
+
+_USD_FMT = '"$"#,##0.00'
 
 
 def render_plan_utilization_section(
@@ -284,6 +294,9 @@ def render_plan_utilization_section(
     """
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
+    from apps.core.exporters.excel.cell_formats import (
+        INTEGER_FORMAT, QUANTITY_FORMAT, sum_cells_formula, write_number,
+    )
     from apps.license.services.plan_reporting import plan_map_for_license
     from apps.license.services.plan_utilization import plan_utilization_rows
 
@@ -369,24 +382,24 @@ def render_plan_utilization_section(
 
     # ── Summary metrics (2 rows x 4 label-value pairs) ───────────────────
     _metrics = [
-        [('Balance CIF $', f"${license_balance:,.2f}", False),
-         ('Planned CIF $', f"${_g_planned_cif:,.2f}", False),
-         ('Remaining CIF $', f"${_g_rem_cif:,.2f}", _g_rem_cif < 0),
-         ('Remaining CIF', f"${max(0, _g_rem_cif):,.2f}", False)],
-        [('Available Qty', f"{_g_avail:,.3f}", False),
-         ('Planned Qty', f"{_g_planned_qty:,.3f}", False),
-         ('Remaining Qty', f"{_g_rem_qty:,.3f}", _g_rem_qty < 0),
-         ('Plan Entries', str(sum(1 for p in _plan_data_rows if p['planned'])), False)],
+        [('Balance CIF $', license_balance, False, _USD_FMT),
+         ('Planned CIF $', _g_planned_cif, False, _USD_FMT),
+         ('Remaining CIF $', _g_rem_cif, _g_rem_cif < 0, _USD_FMT),
+         ('Remaining CIF', max(0, _g_rem_cif), False, _USD_FMT)],
+        [('Available Qty', _g_avail, False, QUANTITY_FORMAT),
+         ('Planned Qty', _g_planned_qty, False, QUANTITY_FORMAT),
+         ('Remaining Qty', _g_rem_qty, _g_rem_qty < 0, QUANTITY_FORMAT),
+         ('Plan Entries', sum(1 for p in _plan_data_rows if p['planned']), False, INTEGER_FORMAT)],
     ]
     for _row_metrics in _metrics:
-        for _mi, (_lbl, _val, _warn) in enumerate(_row_metrics):
+        for _mi, (_lbl, _val, _warn, _mfmt) in enumerate(_row_metrics):
             _col = _mi * 2 + 1
             _lc = ws.cell(row=r, column=_col, value=_lbl)
             _lc.fill = HDR_FILL
             _lc.font = Font(bold=True, color="FFFFFF", size=8)
             _lc.border = THIN_BORDER
             _lc.alignment = Alignment(horizontal='center', vertical='center')
-            _vc = ws.cell(row=r, column=_col + 1, value=_val)
+            _vc = write_number(ws.cell(row=r, column=_col + 1), _val, _mfmt)
             _vc.fill = YEL_FILL
             _vc.border = THIN_BORDER
             _vc.font = Font(bold=True, size=9, color="C00000" if _warn else "1F4E79")
@@ -403,6 +416,7 @@ def render_plan_utilization_section(
 
     # ── Per-group rows (+ split sub-rows) ──────────────────────────────────
     _running_cif = _plan_balance
+    _group_rows = []
     for _idx, _pr in enumerate(_plan_data_rows):
         _rf = None if _idx % 2 == 0 else ALT_FILL
         _running_cif -= _pr['pcif']
@@ -427,6 +441,7 @@ def render_plan_utilization_section(
         _sc.border = THIN_BORDER
         _sc.font = PLAN_GRN_FONT if _pr['planned'] else Font(size=9, color="595959")
         _sc.alignment = Alignment(horizontal='center', vertical='center')
+        _group_rows.append(r)
         _cell(r, 5, _pr['avail'], fill=_rf, align='right', num_fmt='#,##0.000')
         if _pr['planned']:
             _cell(r, 6, _pr['pqty'], fill=_rf, align='right', num_fmt='#,##0.000')
@@ -459,10 +474,19 @@ def render_plan_utilization_section(
     _cell(r, 2, '', fill=TOTAL_FILL)
     _cell(r, 3, '', fill=TOTAL_FILL)
     _cell(r, 4, '', fill=TOTAL_FILL)
-    _cell(r, 5, _g_avail, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(r, 6, _g_planned_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(r, 7, _g_rem_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(r, 8, _g_planned_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+    # Live formulas over the group item rows only (split sub-rows sit between
+    # them and would double count, so cells are listed explicitly; text cells
+    # such as '-' are ignored by SUM). Falls back to the computed value when
+    # there are no group rows. Remaining CIF (col 9) is a clamped running
+    # balance, not a sum of cells, so it keeps its computed value.
+    def _grp_sum(col_letter, fallback):
+        # Length/argument-safe; falls back to the computed value past Excel limits.
+        return sum_cells_formula([f"{col_letter}{gr}" for gr in _group_rows], fallback)
+
+    _cell(r, 5, _grp_sum('E', _g_avail), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(r, 6, _grp_sum('F', _g_planned_qty), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(r, 7, _grp_sum('G', _g_rem_qty), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
+    _cell(r, 8, _grp_sum('H', _g_planned_cif), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
     _cell(r, 9, max(0.0, _g_rem_cif), fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
     r += 1
 

@@ -1,6 +1,15 @@
 """Worksheet writers (Reconciliation, Audit Log) for the licence balance workbook.
 Split out of ``license_balance_excel.py``; behaviour unchanged.
 """
+from apps.core.exporters.excel.cell_formats import (
+    AMOUNT_FORMAT,
+    DATE_FORMAT,
+    DATETIME_FORMAT,
+    QUANTITY_FORMAT,
+    write_date,
+    write_number,
+    write_sum,
+)
 
 
 def _import_items_with_names(license_obj):
@@ -136,14 +145,23 @@ def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summ
             EXPIRY_FILL = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
     else:
         EXPIRY_FILL = INFO_FILL
+    # Date / amount cells keep their "Label: value" look through a literal
+    # prefix in the number format, but hold a real date / number underneath.
     for col, (label, val) in enumerate([
         ('License No', lic_no),
-        ('License Date', license_date_str),
-        ('Expiry Date', license_expiry_str),
-        ('Total CIF', f"{total_license_cif:,.2f}"),
-        ('Ledger Date', ledger_date_str),
+        ('License Date', license_obj.license_date),
+        ('Expiry Date', license_obj.license_expiry_date),
+        ('Total CIF', total_license_cif),
+        ('Ledger Date', license_obj.ledger_date),
     ], 1):
-        c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+        if label == 'License No':
+            c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+        elif label == 'Total CIF':
+            c = write_number(ws.cell(row=r, column=col), val, f'"{label}: "{AMOUNT_FORMAT}')
+        elif val:
+            c = write_date(ws.cell(row=r, column=col), val, f'"{label}: "{DATE_FORMAT}')
+        else:
+            c = ws.cell(row=r, column=col, value=f"{label}: -")
         c.fill = EXPIRY_FILL if col == 3 else INFO_FILL
         c.font = INFO_FONT
         c.border = THIN_BORDER
@@ -171,8 +189,7 @@ def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summ
     diff_row = None
     for label, value in rec_rows:
         ws.cell(row=r, column=1, value=label).font = Font(bold=True)
-        vcell = ws.cell(row=r, column=2, value=float(value))
-        vcell.number_format = '#,##0.00'
+        vcell = write_number(ws.cell(row=r, column=2), value, AMOUNT_FORMAT)
         if label == 'Difference':
             diff_row = r
         r += 1
@@ -204,16 +221,18 @@ def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summ
         _hdr(ws, r, col, h)
     r += 1
 
+    summ_first_row = r
     for _s, _sd, row_data, is_boe in summary_rows:
         fill = BOE_FILL if is_boe else ALLOT_FILL
         _cell(ws, r, 1, row_data['item'],      fill=fill)
         _cell(ws, r, 2, row_data['type'],      fill=fill)
         _cell(ws, r, 3, row_data['company'],   fill=fill)
         _cell(ws, r, 4, row_data['reference'], fill=fill)
-        _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt='#,##0.00')
-        _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt='#,##0.00')
-        _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt='#,##0.00')
+        _cell(ws, r, 5, row_data['qty'],       fill=fill, align='right', num_fmt=QUANTITY_FORMAT)
+        _cell(ws, r, 6, row_data['rate'],      fill=fill, align='right', num_fmt=AMOUNT_FORMAT)
+        _cell(ws, r, 7, row_data['cif'],       fill=fill, align='right', num_fmt=AMOUNT_FORMAT)
         r += 1
+    summ_last_row = r - 1
 
     # Total row
     if summary_rows:
@@ -223,7 +242,8 @@ def _write_reconciliation_sheet(wb, license_obj, financial_summary, customs_summ
         _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
         _cell(ws, r, 5, '', fill=TOTAL_FILL)
         _cell(ws, r, 6, '', fill=TOTAL_FILL)
-        _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        _tc = _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt=AMOUNT_FORMAT)
+        write_sum(_tc, summ_first_row, summ_last_row, AMOUNT_FORMAT)
         r += 1
 
     r += 1  # blank row
@@ -281,8 +301,12 @@ def _write_audit_log_sheet(wb, license_obj):
             return '-'
         return getattr(user, 'get_full_name', lambda: None)() or getattr(user, 'username', None) or '-'
 
-    def fmt_dt(dt):
-        return dt.strftime('%d-%m-%Y %H:%M') if dt else '-'
+    def _put_dt(cell, value):
+        # Real Excel datetime (DD-MM-YYYY HH:MM); blank when never set.
+        if value:
+            write_date(cell, value, DATETIME_FORMAT)
+        else:
+            cell.value = None
 
     def fmt_json(value):
         if not value:
@@ -330,12 +354,14 @@ def _write_audit_log_sheet(wb, license_obj):
         for i, log in enumerate(logs, 1):
             fill = ALT_FILL if i % 2 == 0 else None
             values = [
-                i, fmt_dt(log.created_on), log.get_action_display(),
+                i, log.created_on, log.get_action_display(),
                 user_label(log.user), log.reason or '-',
                 fmt_json(log.before), fmt_json(log.after),
             ]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=r, column=col, value=val)
+                if col == 2:
+                    _put_dt(c, val)
                 c.border = THIN
                 if fill:
                     c.fill = fill
@@ -379,12 +405,14 @@ def _write_audit_log_sheet(wb, license_obj):
             values = [
                 iw.warning_type, iw.entity_type, iw.entity_id,
                 'Ignored' if iw.ignored else 'Restored',
-                user_label(iw.ignored_by), fmt_dt(iw.ignored_at),
-                user_label(iw.restored_by), fmt_dt(iw.restored_at),
+                user_label(iw.ignored_by), iw.ignored_at,
+                user_label(iw.restored_by), iw.restored_at,
                 iw.reason or '-',
             ]
             for col, val in enumerate(values, 1):
                 c = ws.cell(row=r, column=col, value=val)
+                if col in (6, 8):
+                    _put_dt(c, val)
                 c.border = THIN
                 if fill:
                     c.fill = fill

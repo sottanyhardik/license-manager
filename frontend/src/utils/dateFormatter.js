@@ -17,6 +17,11 @@ export const parseDate = (dateString) => {
 
     // Parse string date
     if (typeof dateString === 'string') {
+        // ISO datetime (with 'T'): let Date apply the offset so it shows in local time
+        if (/^\d{4}-\d{2}-\d{2}T/.test(dateString)) {
+            const iso = new Date(dateString);
+            return isNaN(iso.getTime()) ? null : iso;
+        }
         // Check if it contains time component (space followed by time)
         const hasTime = dateString.includes(' ');
         let datePart = dateString;
@@ -54,7 +59,8 @@ export const parseDate = (dateString) => {
             let hours = 12, minutes = 0, seconds = 0;
             if (timePart) {
                 const timeComponents = timePart.split(':');
-                hours = parseInt(timeComponents[0], 10) || 12;
+                const h = parseInt(timeComponents[0], 10);
+                hours = Number.isNaN(h) ? 12 : h;
                 minutes = parseInt(timeComponents[1], 10) || 0;
                 seconds = parseInt(timeComponents[2], 10) || 0;
             }
@@ -132,7 +138,7 @@ export const formatDateTime = (datetime) => {
         let dateObj;
         if (typeof datetime === 'string') {
             // Check if it looks like DD-MM-YYYY format (has dashes and possibly time)
-            if (datetime.match(/^\d{2}[-/]\d{2}[-/]\d{4}/)) {
+            if (datetime.match(/^\d{2}[-/]\d{2}[-/]\d{4}/) || datetime.match(/^\d{4}-\d{2}-\d{2}( |$)/)) {
                 dateObj = parseDate(datetime);
             } else {
                 // Use Date constructor for ISO strings and other formats

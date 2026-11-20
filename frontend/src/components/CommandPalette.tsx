@@ -56,7 +56,7 @@ const BASE_COMMANDS: CommandDef[] = [
 function buildAllCommands(): CommandDef[] {
     const cmds: CommandDef[] = [...BASE_COMMANDS];
     reportEntities.forEach(r => {
-        cmds.push({ id: "report-" + r.path, label: r.label, icon: r.icon || "bar-chart", path: r.path, group: "Reports", roles: REPORT_ROLES });
+        cmds.push({ id: "report-" + r.path, label: r.label, icon: r.icon || "bar-chart", path: r.path, group: "Reports", roles: [...(r.roles ?? REPORT_ROLES)] });
     });
     masterEntities.forEach(m => {
         cmds.push({ id: "master-" + m.path, label: m.label, icon: m.icon || "database", path: m.path, group: "Masters" });

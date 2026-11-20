@@ -386,10 +386,10 @@ def test_item_report_excel_export_renders_planning_split_sub_rows(
                     (badge_col, price_col, item_name_col, qty_col, cif_col)]
 
     assert split_row_1 == [
-        "Split 1", "@ $5.00/unit", f"  └ {item_report_masters['wheat'].name}", 20.0, 100.0,
+        "Split 1", 5.0, f"  └ {item_report_masters['wheat'].name}", 20.0, 100.0,
     ]
     assert split_row_2 == [
-        "Split 2", "@ $7.50/unit", f"  └ {item_report_masters['milk'].name}", 10.0, 75.0,
+        "Split 2", 7.5, f"  └ {item_report_masters['milk'].name}", 10.0, 75.0,
     ]
 
     # The item's own row (row 2) keeps the aggregated Plan Qty / Plan CIF
@@ -473,7 +473,7 @@ def test_item_report_excel_export_merges_shared_description_rows(
     split_row = [ws.cell(row=3, column=c).value for c in
                  (badge_col, price_col, item_name_col, qty_col, cif_col)]
     assert split_row == [
-        "Split 1", "@ $2.00/unit", f"  └ {item_report_masters['wheat'].name}", 15.0, 30.0,
+        "Split 1", 2.0, f"  └ {item_report_masters['wheat'].name}", 15.0, 30.0,
     ]
 
     # No leftover rows for the other 2 merged serials.

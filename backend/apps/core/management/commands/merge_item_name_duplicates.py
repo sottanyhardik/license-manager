@@ -57,6 +57,10 @@ class Command(BaseCommand):
                     survivor, *duplicates = locked
                     survivor.norms.add(*[norm.pk for item in locked for norm in item.norms.all()])
                     for duplicate in duplicates:
+                        # Description + HSN approvals pointing at the merged-away name move to the survivor (versioned + audited; FK is PROTECT).
+                        from apps.license.services.product_intelligence.import_item_approval import repoint_for_merge
+
+                        repoint_for_merge([duplicate.pk], survivor.pk, reason="merge_item_name_duplicates")
                         # The source-item M2M is a business reference too. A
                         # duplicate junction is redundant after identity merge;
                         # preserve one link, never the source row.

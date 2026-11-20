@@ -1,6 +1,32 @@
 """Worksheet writers (Financial Ledger, Customs Ledger, Timeline) for the licence
 balance workbook. Split out of ``license_balance_excel.py``; behaviour unchanged.
 """
+from apps.core.exporters.excel.cell_formats import (
+    AMOUNT_FORMAT,
+    DATETIME_FORMAT,
+    finalize_workbook,  # noqa: F401  (workbook is finalised by the caller)
+    parse_display_date,
+    write_date,
+    write_number,
+)
+
+_NUMERIC_BLANK = ('-', None, '')
+
+
+def _put_date(cell, value, number_format="DD-MM-YYYY"):
+    """Real date cell when ``value`` is a date/datetime/date-string; otherwise keep text."""
+    if value in _NUMERIC_BLANK:
+        cell.value = None
+        return cell
+    if parse_display_date(value) is not None:
+        return write_date(cell, value, number_format)
+    cell.value = value
+    return cell
+
+
+def _put_amount(cell, value):
+    """Numeric cell (Decimal preserved, sign preserved); blank when no amount."""
+    return write_number(cell, None if value in _NUMERIC_BLANK else value, AMOUNT_FORMAT)
 
 
 def _write_financial_ledger_sheet(wb, rows, summary):
@@ -86,20 +112,20 @@ def _write_financial_ledger_sheet(wb, rows, summary):
         font_white = row_data['row_kind'] in ('opening', 'final') and not row_data.get('mismatched')
         values = [
             row_data['sr'],
-            fmt_date(row_data['date']),
+            row_data['date'],
             row_data['type'],
             row_data['document_number'] or '-',
             row_data['boe_number'] or '-',
-            row_data.get('boe_date_display') or fmt_date(row_data['boe_date']),
+            row_data.get('boe_date_display') or row_data['boe_date'],
             row_data['company'] or '-',
             row_data['item_name'] or '-',
             ', '.join(row_data['invoice_numbers']) if row_data['invoice_numbers'] else '-',
-            float(row_data['qty']) if row_data['qty'] is not None else '-',
-            float(row_data['cif_usd']) if row_data['cif_usd'] is not None else '-',
-            float(row_data['cif_inr']) if row_data['cif_inr'] is not None else '-',
-            float(row_data['credit']) if row_data['credit'] else '-',
-            float(row_data['debit']) if row_data['debit'] else '-',
-            float(row_data['running_balance']),
+            row_data['qty'],
+            row_data['cif_usd'],
+            row_data['cif_inr'],
+            row_data['credit'] if row_data['credit'] else None,
+            row_data['debit'] if row_data['debit'] else None,
+            row_data['running_balance'],
             row_data['remarks'],
         ]
         for col, val in enumerate(values, 1):
@@ -109,8 +135,11 @@ def _write_financial_ledger_sheet(wb, rows, summary):
                 c.fill = fill
             if font_white:
                 c.font = Font(color="FFFFFF", bold=True)
-            if col in (10, 11, 12, 13, 14, 15) and isinstance(val, float):
-                c.number_format = '#,##0.00'
+            if col in (2, 6):
+                _put_date(c, val)
+                c.alignment = Alignment(horizontal='left', wrap_text=True)
+            elif col in (10, 11, 12, 13, 14, 15):
+                _put_amount(c, val)
                 c.alignment = Alignment(horizontal='right')
             else:
                 c.alignment = Alignment(horizontal='left', wrap_text=True)
@@ -125,13 +154,13 @@ def _write_financial_ledger_sheet(wb, rows, summary):
         for child in (row_data.get('children') or []):
             child_values = [
                 '', '', f"↳ {child.get('type', '-')}", '',
-                child.get('boe_number') or '-', fmt_date(child.get('boe_date')),
+                child.get('boe_number') or '-', child.get('boe_date'),
                 child.get('company') or '-', child.get('item_name') or '-',
                 ', '.join(child.get('invoice_numbers') or []) if child.get('invoice_numbers') else '-',
-                float(child['qty']) if child.get('qty') is not None else '-',
-                float(child['cif_usd']) if child.get('cif_usd') is not None else '-',
-                float(child['cif_inr']) if child.get('cif_inr') is not None else '-',
-                '-', '-', '-',
+                child.get('qty'),
+                child.get('cif_usd'),
+                child.get('cif_inr'),
+                None, None, None,
                 f"{child.get('status', '-')} — {child.get('remarks', '-')}",
             ]
             for col, val in enumerate(child_values, 1):
@@ -141,8 +170,11 @@ def _write_financial_ledger_sheet(wb, rows, summary):
                 c.font = CHILD_FONT
                 if col == 3:
                     c.alignment = Alignment(horizontal='left', wrap_text=True, indent=2)
-                elif col in (10, 11, 12) and isinstance(val, float):
-                    c.number_format = '#,##0.00'
+                elif col == 6:
+                    _put_date(c, val)
+                    c.alignment = Alignment(horizontal='left', wrap_text=True)
+                elif col in (10, 11, 12, 13, 14, 15):
+                    _put_amount(c, val)
                     c.alignment = Alignment(horizontal='right')
                 else:
                     c.alignment = Alignment(horizontal='left', wrap_text=True)
@@ -176,8 +208,7 @@ def _write_financial_ledger_sheet(wb, rows, summary):
     ]
     for label, value in summary_rows:
         ws.cell(row=r, column=1, value=label).font = Font(bold=True)
-        vcell = ws.cell(row=r, column=2, value=float(value))
-        vcell.number_format = '#,##0.00'
+        vcell = write_number(ws.cell(row=r, column=2), value, AMOUNT_FORMAT)
         r += 1
 
     r += 1
@@ -254,8 +285,7 @@ def _write_customs_ledger_sheet(wb, rows, summary):
     ]
     for label, value in summary_rows:
         ws.cell(row=r, column=1, value=label).font = Font(bold=True)
-        vcell = ws.cell(row=r, column=2, value=float(value))
-        vcell.number_format = '#,##0.00'
+        vcell = write_number(ws.cell(row=r, column=2), value, AMOUNT_FORMAT)
         if summary['mismatched'] and label == 'Difference':
             ws.cell(row=r, column=1).fill = MISMATCH_FILL
             ws.cell(row=r, column=2).fill = MISMATCH_FILL
@@ -296,18 +326,18 @@ def _write_customs_ledger_sheet(wb, rows, summary):
         font_white = row_data['row_kind'] in ('customs_opening', 'final') and not row_data.get('mismatched')
         values = [
             row_data['sr'],
-            fmt_date(row_data['date']),
+            row_data['date'],
             row_data['type'],
             row_data['document_number'] or '-',
             row_data['boe_number'] or '-',
-            fmt_date(row_data['boe_date']),
+            row_data['boe_date'],
             row_data['company'] or '-',
             row_data['item_name'] or '-',
-            float(row_data['qty']) if row_data['qty'] is not None else '-',
-            float(row_data['cif_usd']) if row_data['cif_usd'] is not None else '-',
-            float(row_data['credit']) if row_data['credit'] else '-',
-            float(row_data['debit']) if row_data['debit'] else '-',
-            float(row_data['running_balance']),
+            row_data['qty'],
+            row_data['cif_usd'],
+            row_data['credit'] if row_data['credit'] else None,
+            row_data['debit'] if row_data['debit'] else None,
+            row_data['running_balance'],
             row_data.get('status', '-'),
             row_data['remarks'],
         ]
@@ -318,8 +348,11 @@ def _write_customs_ledger_sheet(wb, rows, summary):
                 c.fill = fill
             if font_white:
                 c.font = Font(color="FFFFFF", bold=True)
-            if col in (9, 10, 11, 12, 13) and isinstance(val, float):
-                c.number_format = '#,##0.00'
+            if col in (2, 6):
+                _put_date(c, val)
+                c.alignment = Alignment(horizontal='left', wrap_text=True)
+            elif col in (9, 10, 11, 12, 13):
+                _put_amount(c, val)
                 c.alignment = Alignment(horizontal='right')
             else:
                 c.alignment = Alignment(horizontal='left', wrap_text=True)
@@ -402,9 +435,9 @@ def _write_timeline_sheet(wb, events):
     for e in events:
         fill = TONE_FILLS.get(e.get('color'))
         values = [
-            e['sr'], fmt_dt(e['date']), e['label'],
+            e['sr'], e['date'], e['label'],
             e.get('document_number') or '-', e.get('company') or '-',
-            fmt_money(e.get('quantity')), fmt_money(e.get('cif')),
+            e.get('quantity'), e.get('cif'),
             e.get('user') or '-', e.get('status') or '-', e.get('remarks') or '-',
         ]
         for col, val in enumerate(values, 1):
@@ -412,8 +445,11 @@ def _write_timeline_sheet(wb, events):
             c.border = THIN
             if fill:
                 c.fill = fill
-            if col in (6, 7) and isinstance(val, float):
-                c.number_format = '#,##0.00'
+            if col == 2:
+                _put_date(c, val, DATETIME_FORMAT)
+                c.alignment = Alignment(horizontal='left', wrap_text=True)
+            elif col in (6, 7):
+                _put_amount(c, val)
                 c.alignment = Alignment(horizontal='right')
             else:
                 c.alignment = Alignment(horizontal='left', wrap_text=True)
@@ -421,9 +457,9 @@ def _write_timeline_sheet(wb, events):
 
         for child in (e.get('children') or []):
             child_values = [
-                '', fmt_dt(child.get('date')), f"↳ {child.get('label', '-')}",
+                '', child.get('date'), f"↳ {child.get('label', '-')}",
                 child.get('document_number') or '-', child.get('company') or '-',
-                fmt_money(child.get('quantity')), fmt_money(child.get('cif')),
+                child.get('quantity'), child.get('cif'),
                 child.get('user') or '-', child.get('status') or '-', child.get('remarks') or '-',
             ]
             for col, val in enumerate(child_values, 1):
@@ -433,8 +469,11 @@ def _write_timeline_sheet(wb, events):
                 c.font = CHILD_FONT
                 if col == 3:
                     c.alignment = Alignment(horizontal='left', wrap_text=True, indent=2)
-                elif col in (6, 7) and isinstance(val, float):
-                    c.number_format = '#,##0.00'
+                elif col == 2:
+                    _put_date(c, val, DATETIME_FORMAT)
+                    c.alignment = Alignment(horizontal='left', wrap_text=True)
+                elif col in (6, 7):
+                    _put_amount(c, val)
                     c.alignment = Alignment(horizontal='right')
                 else:
                     c.alignment = Alignment(horizontal='left', wrap_text=True)

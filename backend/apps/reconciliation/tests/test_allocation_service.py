@@ -394,7 +394,7 @@ class BOEAllotmentAllocationTests(ReconciliationFixtureMixin, AllotmentFixtureMi
         self.assertEqual(item_2_remaining, DEC_0)
         self.assertEqual(LicenseBalanceCalculator.calculate_allotment(license_obj), DEC_0)
 
-    def test_partial_allocation_leaves_correct_unmatched_remainder(self):
+    def test_partial_allocation_releases_unmatched_remainder(self):
         company = self.make_company()
         license_obj = self.make_license(company)
         item = self.make_item(license_obj, 1)
@@ -407,7 +407,9 @@ class BOEAllotmentAllocationTests(ReconciliationFixtureMixin, AllotmentFixtureMi
             row, allotment_item, qty=DEC_0, cif_fc=Decimal("300.00"), cif_inr=Decimal("300.00") * EXC, user=None,
         )
 
-        self.assertEqual(LicenseBalanceCalculator.calculate_allotment(license_obj), Decimal("700.00"))
+        # Owner DEC-14 B (2026-11-20): a short allocation releases the
+        # unmatched remainder (700) at once — it is no longer reserved.
+        self.assertEqual(LicenseBalanceCalculator.calculate_allotment(license_obj), DEC_0)
 
     def test_over_allocation_rejected_exceeds_allotment_item_remaining(self):
         company = self.make_company()
@@ -553,7 +555,8 @@ class BOEAllotmentAllocationTests(ReconciliationFixtureMixin, AllotmentFixtureMi
         self.assertEqual(
             BOEAllotmentAllocation.objects.filter(row_details=row, allotment_item=allotment_item).count(), 2
         )
-        self.assertEqual(LicenseBalanceCalculator.calculate_allotment(license_obj), Decimal("500.00"))
+        # DEC-14 B: the current (edited) allocation still releases the item.
+        self.assertEqual(LicenseBalanceCalculator.calculate_allotment(license_obj), DEC_0)
 
 
 # ---------------------------------------------------------------------------

@@ -15,12 +15,30 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import api from "@/api/axios";
+import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/PageHeader";
 import { DetailTabs } from "@/components/workspace";
 
+import ApprovedMappings from "./ApprovedMappings";
 import DescriptionMapping from "./DescriptionMapping";
 import MappingChanges from "./MappingChanges";
 import { SOURCES } from "./mappingSources";
+
+/** Licence Import Item tab: pending/mapped descriptions, or the separate list of approved Description + HSN combinations. */
+function ImportSection() {
+    const [view, setView] = useState<"descriptions" | "approved">("descriptions");
+    const views = [["descriptions", "Descriptions"], ["approved", "Approved (Description + HSN)"]] as const;
+    return (
+        <div className="space-y-2">
+            <div role="group" aria-label="Licence import item view" className="flex items-center gap-1 text-xs">
+                {views.map(([id, label]) => (
+                    <Button key={id} type="button" size="sm" variant={view === id ? "default" : "outline"} aria-pressed={view === id} onClick={() => setView(id)}>{label}</Button>
+                ))}
+            </div>
+            {view === "descriptions" ? <DescriptionMapping /> : <ApprovedMappings />}
+        </div>
+    );
+}
 
 type Counts = Record<"import" | "boe" | "allotment", { records: number; descriptions: number }>;
 
@@ -38,7 +56,7 @@ export default function MappingWorkspace() {
             <div className="space-y-3">
                 <DetailTabs recordKey="mapping-workspace" value={tab} onValueChange={setTab} ariaLabel="Mapping sources"
                     tabs={[
-                        { id: "import", label: `Licence Import Item${n("import")}`, render: () => <DescriptionMapping /> },
+                        { id: "import", label: `Licence Import Item${n("import")}`, render: () => <ImportSection /> },
                         { id: "boe", label: `BOE${n("boe")}`, render: () => <DescriptionMapping key="boe" source={SOURCES.boe} /> },
                         { id: "allotment", label: `Allotment${n("allotment")}`, render: () => <DescriptionMapping key="allotment" source={SOURCES.allotment} /> },
                     ]} />

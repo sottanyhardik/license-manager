@@ -12,6 +12,10 @@ def build_bulk_balance_excel(request):
     from django.http import HttpResponse
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from apps.core.exporters.excel.cell_formats import (
+        AMOUNT_FORMAT, DATE_FORMAT, INTEGER_FORMAT, QUANTITY_FORMAT, finalize_workbook,
+        write_date, write_number, write_sum,
+    )
     from io import BytesIO
     from collections import defaultdict
     from apps.bill_of_entry.models import RowDetails, annotate_and_exclude_hidden
@@ -75,9 +79,6 @@ def build_bulk_balance_excel(request):
         ws = wb.create_sheet(title=requested_sheet_name)
         sheet_name = ws.title
 
-        license_date_str = license_obj.license_date.strftime('%d-%m-%Y') if license_obj.license_date else '-'
-        license_expiry_str = license_obj.license_expiry_date.strftime('%d-%m-%Y') if license_obj.license_expiry_date else '-'
-        ledger_date_str = license_obj.ledger_date.strftime('%d-%m-%Y') if license_obj.ledger_date else '-'
         lic_no = license_obj.license_number or '-'
 
         summary_rows = []
@@ -231,15 +232,24 @@ def build_bulk_balance_excel(request):
         else:
             EXPIRY_FILL = INFO_FILL
         iec_val = license_obj.exporter.iec if license_obj.exporter else '-'
+        # Date / amount cells keep their "Label: value" look via a literal
+        # prefix in the number format but hold a real date / number.
         for col, (label, val) in enumerate([
             ('License No', lic_no),
             ('IEC', iec_val),
-            ('License Date', license_date_str),
-            ('Expiry Date', license_expiry_str),
-            ('Total CIF', f"{total_license_cif:,.2f}"),
-            ('Ledger Date', ledger_date_str),
+            ('License Date', license_obj.license_date),
+            ('Expiry Date', license_obj.license_expiry_date),
+            ('Total CIF', total_license_cif),
+            ('Ledger Date', license_obj.ledger_date),
         ], 1):
-            c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+            if label in ('License No', 'IEC'):
+                c = ws.cell(row=r, column=col, value=f"{label}: {val}")
+            elif label == 'Total CIF':
+                c = write_number(ws.cell(row=r, column=col), val, f'"{label}: "{AMOUNT_FORMAT}')
+            elif val:
+                c = write_date(ws.cell(row=r, column=col), val, f'"{label}: "{DATE_FORMAT}')
+            else:
+                c = ws.cell(row=r, column=col, value=f"{label}: -")
             c.fill = EXPIRY_FILL if col == 4 else INFO_FILL
             c.font = INFO_FONT
             c.border = THIN_BORDER
@@ -258,25 +268,29 @@ def build_bulk_balance_excel(request):
             _hdr(ws, r, col, h)
         r += 1
 
+        _summ_first_row = r
         for _s, _sd, row_data, is_boe in summary_rows:
             fill = BOE_FILL if is_boe else ALLOT_FILL
             _cell(ws, r, 1, row_data['item'],          fill=fill)
             _cell(ws, r, 2, row_data['type'],          fill=fill)
             _cell(ws, r, 3, row_data['company'],       fill=fill)
             _cell(ws, r, 4, row_data['reference'],     fill=fill)
-            _cell(ws, r, 5, row_data['qty'],           fill=fill, align='right', num_fmt='#,##0.00')
+            _cell(ws, r, 5, row_data['qty'],           fill=fill, align='right', num_fmt=QUANTITY_FORMAT)
             _cell(ws, r, 6, row_data['rate'],          fill=fill, align='right', num_fmt='#,##0.00')
             _cell(ws, r, 7, row_data['cif'],           fill=fill, align='right', num_fmt='#,##0.00')
             _cell(ws, r, 8, row_data.get('cif_inr', 0), fill=fill, align='right', num_fmt='#,##0.00')
             r += 1
+        _summ_last_row = r - 1
 
         if summary_rows:
             _cell(ws, r, 1, '', fill=TOTAL_FILL); _cell(ws, r, 2, '', fill=TOTAL_FILL)
             _cell(ws, r, 3, '', fill=TOTAL_FILL)
             _cell(ws, r, 4, 'TOTAL', fill=TOTAL_FILL, bold=True, align='right')
             _cell(ws, r, 5, '', fill=TOTAL_FILL); _cell(ws, r, 6, '', fill=TOTAL_FILL)
-            _cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-            _cell(ws, r, 8, total_cif_inr, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            write_sum(_cell(ws, r, 7, total_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                      _summ_first_row, _summ_last_row, AMOUNT_FORMAT)
+            write_sum(_cell(ws, r, 8, total_cif_inr, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                      _summ_first_row, _summ_last_row, AMOUNT_FORMAT)
             r += 1
 
         r += 1
@@ -580,6 +594,7 @@ def build_bulk_balance_excel(request):
         _norm_totals = {'available_quantity': 0.0, 'planned_quantity': 0.0, 'planned_cif': 0.0}
         _norm_cif_totals = {'total_cif': 0.0, 'debited_cif': 0.0, 'allotted_cif': 0.0, 'balance_cif': 0.0}
 
+        _lic_first_row = _sr
         for _idx, (_row, _item_data, _totals) in enumerate(_per_license):
             _rf = None if _idx % 2 == 0 else ALT_FILL
             _ld = _row.get('license_date')
@@ -616,8 +631,12 @@ def build_bulk_balance_excel(request):
             _balance_cif = _row['balance_cif']
 
             _cell(_sw, _sr, 1, _row['lic_no'], fill=_rf, bold=True)
-            _cell(_sw, _sr, 2, _ld.strftime('%d-%m-%Y') if _ld else '-', fill=_rf, align='center')
-            _cell(_sw, _sr, 3, _ed.strftime('%d-%m-%Y') if _ed else '-', fill=_rf, align='center')
+            _dc2 = _cell(_sw, _sr, 2, _ld if _ld else '-', fill=_rf, align='center')
+            _dc3 = _cell(_sw, _sr, 3, _ed if _ed else '-', fill=_rf, align='center')
+            if _ld:
+                write_date(_dc2, _ld)
+            if _ed:
+                write_date(_dc3, _ed)
             _cell(_sw, _sr, 4, _row.get('exporter_name') or '-', fill=_rf)
             _cell(_sw, _sr, 5, _norm_label, fill=_rf)
             _cell(_sw, _sr, 6, _total_cif, fill=_rf, align='right', num_fmt='#,##0.00')
@@ -654,22 +673,32 @@ def build_bulk_balance_excel(request):
             _sr += 1
 
         # ── 3. Norm Total row ─────────────────────────────────────────────
+        # Live SUM formulas over this norm's licence rows (own row excluded).
+        _lic_last_row = _sr - 1
+        _norm_total_row = _sr
         for _ci in range(1, _n_cols + 1):
             _sw.cell(row=_sr, column=_ci).fill = TOTAL_FILL
             _sw.cell(row=_sr, column=_ci).border = THIN_BORDER
         _cell(_sw, _sr, 1, 'NORM TOTAL', fill=TOTAL_FILL, bold=True)
         _cell(_sw, _sr, 2, '', fill=TOTAL_FILL); _cell(_sw, _sr, 3, '', fill=TOTAL_FILL); _cell(_sw, _sr, 4, '', fill=TOTAL_FILL)
         _cell(_sw, _sr, 5, '', fill=TOTAL_FILL)
-        _cell(_sw, _sr, 6, _norm_cif_totals['total_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _cell(_sw, _sr, 7, _norm_cif_totals['debited_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _cell(_sw, _sr, 8, _norm_cif_totals['allotted_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
-        _cell(_sw, _sr, 9, _norm_cif_totals['balance_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+        write_sum(_cell(_sw, _sr, 6, _norm_cif_totals['total_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                  _lic_first_row, _lic_last_row, AMOUNT_FORMAT)
+        write_sum(_cell(_sw, _sr, 7, _norm_cif_totals['debited_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                  _lic_first_row, _lic_last_row, AMOUNT_FORMAT)
+        write_sum(_cell(_sw, _sr, 8, _norm_cif_totals['allotted_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                  _lic_first_row, _lic_last_row, AMOUNT_FORMAT)
+        write_sum(_cell(_sw, _sr, 9, _norm_cif_totals['balance_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                  _lic_first_row, _lic_last_row, AMOUNT_FORMAT)
         for _i, _name in enumerate(_ordered_item_names):
             _base_col = 10 + _i * 3
             _t = _norm_item_totals[_name]
-            _cell(_sw, _sr, _base_col, _t['available'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-            _cell(_sw, _sr, _base_col + 1, _t['planned_qty'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-            _cell(_sw, _sr, _base_col + 2, _t['planned_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+            write_sum(_cell(_sw, _sr, _base_col, _t['available'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000'),
+                      _lic_first_row, _lic_last_row, QUANTITY_FORMAT)
+            write_sum(_cell(_sw, _sr, _base_col + 1, _t['planned_qty'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000'),
+                      _lic_first_row, _lic_last_row, QUANTITY_FORMAT)
+            write_sum(_cell(_sw, _sr, _base_col + 2, _t['planned_cif'], fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+                      _lic_first_row, _lic_last_row, AMOUNT_FORMAT)
         _sr += 2
 
         # ── 4. Planning Item Summary — same numbers, transposed ─────────
@@ -685,9 +714,11 @@ def build_bulk_balance_excel(request):
             _rf = None if _i % 2 == 0 else ALT_FILL
             _t = _norm_item_totals[_name]
             _cell(_sw, _sr, 1, _name, fill=_rf, bold=True)
-            _cell(_sw, _sr, 2, _t['available'], fill=_rf, align='right', num_fmt='#,##0.000')
-            _cell(_sw, _sr, 3, _t['planned_qty'], fill=_rf, align='right', num_fmt='#,##0.000')
-            _cell(_sw, _sr, 4, _t['planned_cif'], fill=_rf, align='right', num_fmt='#,##0.00')
+            # Transposed view: each cell points at the Norm Total cell it mirrors.
+            _bc = 10 + _i * 3
+            _cell(_sw, _sr, 2, f"={get_column_letter(_bc)}{_norm_total_row}", fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(_sw, _sr, 3, f"={get_column_letter(_bc + 1)}{_norm_total_row}", fill=_rf, align='right', num_fmt='#,##0.000')
+            _cell(_sw, _sr, 4, f"={get_column_letter(_bc + 2)}{_norm_total_row}", fill=_rf, align='right', num_fmt='#,##0.00')
             _sr += 1
         _sr += 2
 
@@ -706,6 +737,7 @@ def build_bulk_balance_excel(request):
         _hdr(_sw, _sr, _ci, _ch)
     _sr += 1
 
+    _gs_first_row = _sr
     _grand_total_licenses = 0
     _grand_total_available = 0.0
     _grand_total_planned_qty = 0.0
@@ -723,16 +755,21 @@ def build_bulk_balance_excel(request):
         _grand_total_planned_cif += _pcif
         _sr += 1
     _sr += 1
+    _gs_last_row = _sr - 2
 
     # ── 6. Grand Total ────────────────────────────────────────────────────
     for _ci in range(1, 6):
         _sw.cell(row=_sr, column=_ci).fill = TOTAL_FILL
         _sw.cell(row=_sr, column=_ci).border = THIN_BORDER
     _cell(_sw, _sr, 1, 'GRAND TOTAL', fill=TOTAL_FILL, bold=True)
-    _cell(_sw, _sr, 2, _grand_total_licenses, fill=TOTAL_FILL, bold=True, align='center')
-    _cell(_sw, _sr, 3, _grand_total_available, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(_sw, _sr, 4, _grand_total_planned_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000')
-    _cell(_sw, _sr, 5, _grand_total_planned_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00')
+    write_sum(_cell(_sw, _sr, 2, _grand_total_licenses, fill=TOTAL_FILL, bold=True, align='center'),
+              _gs_first_row, _gs_last_row, INTEGER_FORMAT)
+    write_sum(_cell(_sw, _sr, 3, _grand_total_available, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000'),
+              _gs_first_row, _gs_last_row, QUANTITY_FORMAT)
+    write_sum(_cell(_sw, _sr, 4, _grand_total_planned_qty, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.000'),
+              _gs_first_row, _gs_last_row, QUANTITY_FORMAT)
+    write_sum(_cell(_sw, _sr, 5, _grand_total_planned_cif, fill=TOTAL_FILL, bold=True, align='right', num_fmt='#,##0.00'),
+              _gs_first_row, _gs_last_row, AMOUNT_FORMAT)
 
     # ── Column widths ──────────────────────────────────────────────────────
     _sw.column_dimensions['A'].width = 22  # License No
@@ -751,6 +788,7 @@ def build_bulk_balance_excel(request):
     wb.calculation.fullCalcOnLoad = True
     wb.calculation.forceFullCalc = True
 
+    finalize_workbook(wb)
     excel_file = BytesIO()
     wb.save(excel_file)
     excel_file.seek(0)

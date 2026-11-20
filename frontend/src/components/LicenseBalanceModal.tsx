@@ -257,7 +257,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             setEditingItemId(null);
         } catch (error) {
             console.error('Error updating items:', error);
-            toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to update items');
+            toast.error(error.response?.data?.detail || error.response?.data?.error || error.response?.data?.items?.[0] || 'Failed to update items');
         } finally {
             setSaving(false);
         }
@@ -278,7 +278,7 @@ export default function LicenseBalanceModal({ show, onHide, licenseId }) {
             await api.patch(`license-items/${item.id}/`, { items: itemIds });
         } catch (error) {
             setLicenseData(prevData); // revert on failure
-            toast.error(error.response?.data?.detail || error.response?.data?.error || 'Failed to update items');
+            toast.error(error.response?.data?.detail || error.response?.data?.error || error.response?.data?.items?.[0] || 'Failed to update items');
         } finally {
             setTagSaving((s) => ({ ...s, [item.id]: false }));
         }

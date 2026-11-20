@@ -423,7 +423,9 @@ class OverviewTransactionsTests(LicenseBalanceLedgerFixtureMixin, TestCase):
 
         data = self.get(lic)
         self.assertEqual(data["totals"]["unlinked_allotment_cif"], 100.0)
-        self.assertEqual(LicenseBalanceCalculator.calculate_allotment(lic), Decimal("40.00"))
+        # Owner DEC-14 B (2026-11-20): the engine releases the short
+        # allocation's remainder (was 40.00 netted).
+        self.assertEqual(LicenseBalanceCalculator.calculate_allotment(lic), Decimal("0"))
         self.assertIn("NOT allocation-netted", data["cif_basis"]["unlinked_allotment_cif"])
 
     def test_allotment_item_without_allotment_is_excluded_but_engine_counts_it(self):

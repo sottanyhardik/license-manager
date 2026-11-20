@@ -199,7 +199,56 @@ The 2026-08-10 `docs/AUTONOMOUS_EXECUTION_STATUS.md` is a stale snapshot kept fo
   cif-balance-auditor findings addressed (item basis labelled; other-adjustments from engine maps; overdrawn signed).
 - Next: AI-assisted product matching (owner: deterministic matcher + pluggable AI; approval links import items to
   the master item — affects Auto Plan classification; approver LICENSE_MANAGER).
+- **2026-11-20 — Total Summary ↔ detail, attribution, NOT ATTRIBUTED — VERIFIED (uncommitted, feature/v5).** Details +
+  open owner decisions D1–D6: docs/decisions/2026-11-20-item-pivot-attribution-open-decisions.md. No business-rule change
+  (licence CIF canonical). Fixes this session: TARGET MISSING summary rows carry `source_records` + provenance; Opus F1
+  (split plan with NULL Item Name took rows mapped to another target); F3 rounding tolerance in `summary_check`.
+  Evidence: backend gate exit 0 (tests/ 246; apps 4014 passed, 1 xfailed; ruff clean) `/private/tmp/gate_backend_pivot7.log`;
+  frontend gate exit 0 (`gate_frontend_pivot2.log`); Playwright sticky 1/1 (`pw_pivot_harness4.log`); focused 45 passed.
+  Real data (read-only) E1 active: 3 + 63 + 14 = 80 licences, 21 products, Total = Σ groups on 9 metrics, Excel = screen 0 diffs;
+  all norms reconcile per licence. Opus cif-balance-auditor: APPROVED; /review-diff 5 reviewers: no blocking.
+  Next: owner decisions D1–D6 + review follow-ups (decision doc); commit when the owner asks.
 <!-- CHECKPOINT:item-pivot-intelligence:END -->
+
+<!-- CHECKPOINT:import-item-name-override:BEGIN -->
+**Licence Detail → Import Items: editable Item Name (row override) — VERIFIED (2026-11-20, uncommitted, feature/v5)**
+- Owner decisions + design: docs/decisions/2026-11-20-import-item-name-row-override.md (row override; one Item Name per row;
+  LICENSE_MANAGER writes). SCHEMA: migration `license/0066_import_item_name_override` (new table + MappingChange kind choice;
+  additive; NOT yet applied to the local dev DB — `migrate` needs owner approval). No business-rule change.
+- Overrides respected by: description mapping save / bulk / reapply / auto_apply / apply_for_licence, licence form,
+  `PATCH license-items/:id/` (400), matcher decide + undo. Unguarded by design: consolidation, admin commands, RULE_AUTO_LINK (off).
+- Evidence: backend gate exit 0 (apps 4027 passed, 1 xfailed) `/private/tmp/gate_backend_ovr2.log`; frontend gate exit 0
+  (vitest 1028/1028, lint, typecheck, build) `/private/tmp/gate_frontend_ovr4.log`; override suite 13 passed.
+  Reviews: cif-balance-auditor (Opus) APPROVED; code-reviewer APPROVE; security-auditor no Critical/High; findings fixed.
+- Next: owner approves `migrate` on the local dev DB → browser check; commit when the owner asks.
+<!-- CHECKPOINT:import-item-name-override:END -->
+
+<!-- CHECKPOINT:item-report-planning-status:BEGIN -->
+**Item Report — all items by default + Planning Status filter — FOCUSED-VERIFIED (2026-11-20, uncommitted, feature/v5)**
+- Owner decision: Planned = valid plan (active, not deleted / cancelled) whose line is on the item OR lists it in
+  `allocation_provenance.source_item_ids` (own licence only; Item Pivot `_plan_source_ids`). Real data: 3,233 = 723 + 2,510.
+- API (additive): `reports/item-report/?planning_status=all|planned|unplanned` (400 otherwise); rows `is_planned`; response
+  `planning_status`, `planning_counts`. Excel honours the filter. Planned Report unchanged (param never sent; query gate kept).
+- UI: report loads without an item-name / search query; Planning Status select (counts) above the report; status empty states.
+- Tests: backend item report 19 passed (exit 0); vitest src/pages/reports 104 passed (exit 0); eslint + ruff + tsc exit 0.
+- Next: full backend + frontend gates in the same integration run as the Description + HSN approval work (in progress).
+<!-- CHECKPOINT:item-report-planning-status:END -->
+
+<!-- CHECKPOINT:import-item-mapping-approval:BEGIN -->
+**Global Description + HSN import-item mapping approval — REVIEWED, gates pending (2026-11-20, uncommitted, feature/v5)**
+- Owner decisions: docs/decisions/2026-11-20-import-item-name-row-override.md (Amendment): strict key + trimmed HSN ("no HSN"
+  own key); precedence row override → approval (USER_APPROVED / USER_APPROVED_CLEAR) → description mapping → automatic writers.
+- SCHEMA: `license/0066` (override) is ALREADY APPLIED on local `lmanagement` (2026-11-20 04:40 UTC, not by this session;
+  table empty); `license/0067` (approval + version tables) NOT applied — needs owner approval.
+- Reviews: cif-balance-auditor (Opus) APPROVED after fixes B1/B2 (consolidation vs overrides / later decisions) + N1–N4;
+  code review contract mismatches fixed (preview item names, history `time`, mapping invalidation); security no Critical/High
+  (record cap MAX_RECORDS=5000). Tests: approval 37 + override 13 passed; apps/license 2559 passed (2 item-report Excel
+  failures belong to the in-progress Item Report alignment).
+- FOLLOW-UP (pre-existing, accepted by Opus): lock-order cycle `apply_for_licence`/`auto_apply` (records → mapping) vs
+  `save_for_key` (mapping → records) — a deadlock rolls one transaction back; on-commit hooks only log; drift repair heals.
+  Also N6 qty sums in matching groups, N7 licence form ignores edits silently, N8 PROTECT blocks Item Name deletion.
+- Next: full gates with the Item Report alignment; owner approves `migrate` 0067; browser verification.
+<!-- CHECKPOINT:import-item-mapping-approval:END -->
 
 
 <!-- CHECKPOINT:accounting-banking-proposals:BEGIN -->
@@ -365,6 +414,55 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
 - Open: Auto Plan Olive CIF 8,77,628.98 vs residual 8,80,668.89 (planner reserves PKO at rate; 3,046.18 not re-flowed) — owner decision.
 <!-- CHECKPOINT:e126-entitlement:END -->
 
+<!-- CHECKPOINT:reports-menu-audit:BEGIN -->
+**Reports menu audit — VERIFIED (2026-11-20, uncommitted, not pushed)**
+- No entries removed: all 12 Reports / Licence status / SION entries are distinct (route + backend endpoint inspected).
+- Fixed: Expiring/Active export called `license/reports/…` (Django 404) → `reports/…`; License Downloads menu/palette
+  entry now gated by its route's `LEDGER_READ_ROLES` (REPORT_VIEWER saw it and got 403); SION page shows the group of
+  its own norm. URL filters via new `hooks/useUrlFilters.ts`: `?days` (Expiring/Active), `?status&days` (Download
+  License), `?is_expired&is_null` (SION); defaults written with replace, no double fetch.
+- Tests: frontend gate exit 0 (lint, typecheck, vitest 147 files/1057, build); `e2e/reports-menu.spec.ts` 11/11 exit 0.
+  `e2e/navigation.spec.ts` + `reports-menu.spec.ts` 19/19 exit 0 (after d3's `items?.length` null-guard, 2026-11-20).
+- Item Report ↔ Item Pivot alignment: handed to license-manager-d3 (owner of that WIP); D1–D4 owner decisions in
+  docs/decisions/2026-11-20-item-pivot-attribution-owner-decisions-d1-d4.md; d3 re-confirming D1–D3 with the owner.
+- Next: owner review + commit authorisation.
+<!-- CHECKPOINT:reports-menu-audit:END -->
+
+<!-- CHECKPOINT:erp-formatting:BEGIN -->
+**Global ERP formatting standardisation — VERIFIED, uncommitted (2026-11-20)** · audit `docs/erp-formatting/2026-11-20-formatting-standardisation-audit.md`
+- Excel: shared `apps/core/exporters/excel/cell_formats.py`; numeric cells, DD-MM-YYYY date cells, text identifiers, live SUM/SUMIF totals (length-safe) across licence/allotment/BOE/master exporters. Financial Ledger workbook keeps canonical DTO totals (CIF audit B1: SUM would double count multi-company licences).
+- Dates: API stays DD-MM-YYYY (owner, ISO switch deferred); PDFs → `%d-%m-%Y`; frontend ad-hoc formats → `utils/dateFormatter`. Native date inputs listed, not replaced (owner).
+- Tests: backend gate pytest 4100 passed + 1 xfailed, 246 passed; makemigrations clean; ruff 1 F401 in peer file `test_import_item_mapping_approval.py` (gate EXIT 1 for that only). Post-fix targeted reruns 130 + 20 + 83 passed (exit 0). Frontend gate EXIT 0 (vitest 1057/147, build OK, eslint 0 errors).
+- Deferred (peer WIP): `item_pivot_excel.py`, `item_pivot_helpers.py`, `item_report.py` Excel typing/SUM totals.
+- Next: owner review + commit authorisation; ISO API migration and native date-input replacement are separate tasks.
+<!-- CHECKPOINT:erp-formatting:END -->
+
+<!-- CHECKPOINT:cross-surface-reconciliation:BEGIN -->
+**Cross-surface reconciliation — Phase 8 (2026-11-20) — PARTIAL, waiting on peer gates + owner decisions** · report `docs/reports/cross-surface-reconciliation-2026-11-20.md` §8
+- Audit complete: `/tmp/recon_full2.json` exit 0 — 2,182 licences / 26,818 items / 14,314 pivot cells / 4,831 discrepancies on 2,071 licences. The licence-level CIF reconciles on every surface; the item level does not (RC3, RC4a/b, RC13–RC15).
+- Independent Opus cif-balance-auditor: ESCALATE-TO-OWNER. RC4a and RC16 are canonical-rule conflicts (D-A, D-C). RC3 and RC4b are PARTIAL (relabelled). New findings: N1 PDF item Balance CIF = RC4a value (HIGH); N2 PDF Total CIF = opening_balance; N3 dead "never exceeds balance" guard; N4 PDF unit-key split.
+- No application code changed in Phase 8 (docs only).
+- Targeted tests: 305 passed, exit 0 (`TEST_DB_NAME=test_lmanagement_p8_targeted`).
+- Full gates, Playwright and /review-diff: NOT RUN. They wait for peer `license-manager-d3` to finish its in-flux pivot/Item Report work, after which that session runs quality-gate backend + frontend once.
+- Owner decided D-A … D-F + approvals 2026-11-20: `docs/decisions/2026-11-20-cross-surface-owner-decisions-da-df.md` (BUSINESS-RULE CHANGE approved, not implemented).
+- Next: peer gate results → /review-diff → implement decisions (coordinate peer-owned files: item_report.py, item_pivot_*) with characterisation tests + Opus cif-balance-auditor.
+<!-- CHECKPOINT:cross-surface-reconciliation:END -->
+
+<!-- CHECKPOINT:sat-cif-recon:BEGIN -->
+**SAT P0 addendum — licence CIF / import item / planning reconciliation — DONE (audit only, 2026-11-20, session license-manager-2c)**
+- Reports (docs/qa): SAT_IMPORT_ITEM_CIF_RECONCILIATION.md (§10 = consolidated exception table), SAT_PLANNING_BALANCE_AUDIT.md, SAT_INVOICE_BOE_QUANTITY_AUDIT.md, SAT_ZERO_BALANCE_VALIDATION.md, SAT_CIF_RECON_INDEPENDENT_REVIEW.md. Evidence: ~/lm_sat_evidence/cifrecon/.
+- Independent SQL = engine: 26,818 items × 8 metrics, 0 diffs; 2,185 licences, 0 diffs. API live fields = engine (526 licences / 6,679 items). Independent reviewer: 0 figure disagreements (19 items, 3 licences).
+- FAIL / open: API stored fields (RC3/RC13, decided D-D/D-F, not implemented); item CIF over-use unflagged (DEC-50); null-DFIA thresholds 100/200/500 (SAT-DEF-140); saved plans not capped by the live balance (DEC-11; SAT-DEF-100 reclassified as a business-rule question); Plan tab balance ignores the hidden-BOE rule (SAT-DEF-102); invoice qty rule 15 FAIL on the test DB (SAT-DEF-120…132); unlinked allotment + BOE double count (SAT-DEF-150, 420,407.75).
+- Tests: throwaway characterisation tests on test DBs: qty 31 passed (exit 0), planning 21 passed + 114 existing planning tests passed (exit 0). No repo code changed; no gates run (audit only).
+- Register rows handed to SAT controller license-manager-ac (owner of SAT_USER_DECISION_REGISTER / SAT_DEFECT_REGISTER). Numbering: DEC-11…14, 20…26, 50…52, 60; SAT-DEF-100…106, 120…132, 140…142, 150…151.
+- Next: owner decisions; no fix without approval.
+<!-- CHECKPOINT:sat-cif-recon:END -->
+
+**CHECKPOINT:sat-decisions — 2026-11-20 (docs only, no code, no tests)**
+- All SAT owner decisions recorded: `docs/qa/SAT_USER_DECISION_REGISTER.md` (decision closure section + question log).
+- Gate report awaiting owner approval: `docs/qa/SAT_IMPLEMENTATION_APPROVAL_REPORT.md` (WS0–WS8, G1–G8, migrations, data repair, rollback).
+- Next: owner approval → WS0 characterisation tests → WS1 engine (financial-integrity owner). Peer-dirty files in scope: license serializers/views, item_usage.py, signals.py.
+
 <!-- CHECKPOINT:item-pivot-license-numbers:BEGIN -->
 **Item Pivot — License Numbers filter — VERIFIED + COMMITTED (2026-11-20, feature/v5, not pushed)** (only these hunks; peers' WIP in the same files left uncommitted)
 - Backend: `license_numbers` GET param (comma/newline/;/tab split, trim, dedupe, exact `IN`, AND-ed with all filters, max 5000 → 400)
@@ -381,3 +479,7 @@ Detail: `docs/erp-architecture/boe-modernization-progress.md`, `docs/boe-moderni
   Playwright spec re-run against a backend+Vite started from the snapshot: 1/1 passed.
 - Next: none for this feature. Open: other norm tabs are separate pivots (by design); GET URL length (~600 numbers at nginx 8 KB default).
 <!-- CHECKPOINT:item-pivot-license-numbers:END -->
+
+**CHECKPOINT:sat-ws1 — 2026-11-20 (uncommitted)**
+- WS0 + WS1 implemented and verified: backend app-level 4,194 passed / 1 xfailed; `tests/` 246 passed after fixes; ruff/flake8/check/migrations clean. Evidence `~/lm_sat_evidence/ws1/`. Opus cif-balance-auditor APPROVE-WITH-FIXES (F1/F4/F6 fixed).
+- Open: F2 (exception/over-use surfaces not exposed), F3, F5, F7, F9 legacy consumers (→ WS3/WS4). Next: commit approval, then WS2.

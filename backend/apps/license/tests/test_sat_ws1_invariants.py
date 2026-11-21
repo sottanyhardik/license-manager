@@ -139,12 +139,15 @@ class WS1InvariantTests(LicenseBalanceLedgerFixtureMixin, TestCase):
     def test_every_transfer_is_recorded(self):
         from apps.reconciliation.services.item_cif_adjustment_log import refresh_item_cif_adjustment_log
 
-        a, b = self.make_item(self.lic, 2), self.make_item(self.lic, 3)
         with self.captureOnCommitCallbacks(execute=True):
+            a, b = self.make_item(self.lic, 2), self.make_item(self.lic, 3)
             for it in (a, b):
                 it.cif_fc = D("50.00")
                 it.save(update_fields=["cif_fc"])
         with self.captureOnCommitCallbacks(execute=True):
             self.make_debit_row(self.make_boe(self.company), a, D("75.00"))
         # dry run = audit-gap check: nothing left to record
+        from apps.reconciliation.models import ItemCifAdjustmentRecord
+        self.assertEqual(list(ItemCifAdjustmentRecord.objects.values_list("source_item_id", "destination_item_id", "amount_cif_fc")),
+                         [(b.id, a.id, D("25.00"))])
         self.assertEqual(refresh_item_cif_adjustment_log([self.lic.id])["licences_changed"], [])

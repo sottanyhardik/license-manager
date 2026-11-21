@@ -1,0 +1,180 @@
+{
+ "decisions": [
+  {
+   "group": "ING-283-286",
+   "covers": [
+    "ING-186-283",
+    "ING-186-286"
+   ],
+   "decision": "MERGE",
+   "state": "EXECUTED",
+   "canonical": 186,
+   "sources": [
+    283,
+    286
+   ],
+   "final_confirmation": true,
+   "confirmed_on": "2026-11-21",
+   "preview": {
+    "references_moved": 0,
+    "financial_delta": 0,
+    "conflicts": []
+   },
+   "note": "Executed on local dev DB (localhost/lmanagement) via item_name_merge; 0 refs moved, financial difference 0.",
+   "executed_on": "2026-11-21"
+  },
+  {
+   "group": "ING-282-285",
+   "decision": "MERGE",
+   "state": "EXECUTED",
+   "canonical": 271,
+   "sources": [
+    282,
+    285
+   ],
+   "final_confirmation": true,
+   "confirmed_on": "2026-11-21",
+   "preview": {
+    "references_moved": 0,
+    "financial_delta": 0,
+    "conflicts": []
+   },
+   "note": "Executed on local dev DB (localhost/lmanagement) via item_name_merge; 0 refs moved, financial difference 0.",
+   "executed_on": "2026-11-21"
+  },
+  {
+   "group": "ING-127-130",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  },
+  {
+   "group": "ING-191-271",
+   "decision": "MERGE",
+   "state": "EXECUTED",
+   "canonical": 271,
+   "sources": [
+    191
+   ],
+   "norm_union": [
+    "E126",
+    "E132",
+    "A3627"
+   ],
+   "final_confirmation": true,
+   "confirmed_on": "2026-11-21",
+   "preview": {
+    "references_moved": 0,
+    "financial_delta": 0,
+    "conflicts": [
+     "norm eligibility widens for 271 (user accepted)"
+    ]
+   },
+   "note": "Executed on local dev DB (localhost/lmanagement) via item_name_merge; 0 refs moved, financial difference 0.",
+   "executed_on": "2026-11-21"
+  },
+  {
+   "group": "ING-281-287",
+   "decision": "MERGE",
+   "state": "EXECUTED",
+   "canonical": 94,
+   "sources": [
+    281,
+    287
+   ],
+   "final_confirmation": true,
+   "confirmed_on": "2026-11-21",
+   "preview": {
+    "references_moved": 0,
+    "financial_delta": 0,
+    "conflicts": []
+   },
+   "note": "Executed on local dev DB (localhost/lmanagement) via item_name_merge; 0 refs moved, financial difference 0.",
+   "executed_on": "2026-11-21"
+  },
+  {
+   "group": "ING-216-279",
+   "decision": "MERGE",
+   "state": "EXECUTED",
+   "canonical": 216,
+   "sources": [
+    279
+   ],
+   "final_confirmation": true,
+   "confirmed_on": "2026-11-21",
+   "preview": {
+    "references_moved": 0,
+    "financial_delta": 0,
+    "conflicts": []
+   },
+   "note": "Executed on local dev DB (localhost/lmanagement) via item_name_merge; 0 refs moved, financial difference 0.",
+   "executed_on": "2026-11-21"
+  },
+  {
+   "group": "ING-171-224",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  },
+  {
+   "group": "ING-206-211",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  },
+  {
+   "group": "ING-105-106",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  },
+  {
+   "group": "ING-267-274",
+   "decision": "MERGE",
+   "state": "EXECUTED",
+   "canonical": 267,
+   "sources": [
+    274
+   ],
+   "final_confirmation": true,
+   "confirmed_on": "2026-11-21",
+   "preview": {
+    "references_moved": 0,
+    "financial_delta": 0,
+    "conflicts": []
+   },
+   "note": "Executed on local dev DB (localhost/lmanagement) via item_name_merge; 0 refs moved, financial difference 0.",
+   "executed_on": "2026-11-21"
+  },
+  {
+   "group": "ING-103-104",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  },
+  {
+   "group": "ING-108-109",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  },
+  {
+   "group": "ING-145-175",
+   "decision": "KEEP SEPARATE",
+   "state": "REJECTED",
+   "decided_on": "2026-11-21"
+  }
+ ],
+ "scan": {
+  "date": "2026-11-21",
+  "db": "localhost/lmanagement (read-only txn)",
+  "items": 110,
+  "active": 102,
+  "pairs": 5995,
+  "groups": 15,
+  "exact": 0,
+  "very_high": 0,
+  "high": 2,
+  "possible": 13
+ }
+}

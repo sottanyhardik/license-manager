@@ -889,3 +889,85 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.username} | {self.action} | {self.module} | {self.timestamp:%Y-%m-%d %H:%M}"
+
+
+# ---------------------------------------------------------------------------
+# Item Name merge engine (owner rule 2026-11-21): similarity is detected
+# automatically, merging NEVER is. A merge row exists only for an owner-approved
+# group; execution is audited row-by-row and reversible. Source item names are
+# never deleted — they are deactivated and resolved through ItemNameMergeSource.
+# Kept out of ItemNameModel itself so the master-sync payload is unchanged.
+# ---------------------------------------------------------------------------
+class ItemNameMerge(models.Model):
+    APPROVED, EXECUTED, FAILED, REVERSED = "APPROVED", "EXECUTED", "FAILED", "REVERSED"
+    STATUSES = [(s, s.title()) for s in (APPROVED, EXECUTED, FAILED, REVERSED)]
+
+    group_key = models.CharField(max_length=100, unique=True, help_text="Stable similarity-group id, e.g. ING-283-286")
+    canonical = models.ForeignKey("core.ItemNameModel", on_delete=models.PROTECT, related_name="+")
+    status = models.CharField(max_length=10, choices=STATUSES, default=APPROVED, db_index=True)
+    approved_by = models.CharField(max_length=200, help_text="Who approved this specific merge")
+    approval_reference = models.CharField(max_length=300, help_text="Where the approval is recorded")
+    approved_on = models.DateField()
+    final_confirmation = models.BooleanField(default=False, help_text="Second, explicit confirmation after the preview")
+    norm_union = models.JSONField(default=list, blank=True, help_text="SION norm codes the owner approved adding to the canonical")
+    preview = models.JSONField(default=dict, blank=True)
+    financial_before = models.JSONField(default=dict, blank=True)
+    financial_after = models.JSONField(default=dict, blank=True)
+    verification = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default="")
+    created_on = models.DateTimeField(auto_now_add=True)
+    executed_on = models.DateTimeField(null=True, blank=True)
+    executed_by = models.CharField(max_length=200, blank=True, default="")
+    reversed_on = models.DateTimeField(null=True, blank=True)
+    reversed_by = models.CharField(max_length=200, blank=True, default="")
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(status="EXECUTED") | models.Q(final_confirmation=True, executed_on__isnull=False),
+                name="itemnamemerge_executed_requires_confirmation",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.group_key} → {self.canonical_id} ({self.status})"
+
+
+class ItemNameMergeSource(models.Model):
+    merge = models.ForeignKey(ItemNameMerge, on_delete=models.PROTECT, related_name="sources")
+    source = models.ForeignKey("core.ItemNameModel", on_delete=models.PROTECT, related_name="+")
+    original_name = models.CharField(max_length=255)
+    previous_is_active = models.BooleanField(null=True, blank=True)
+    previous_norms = models.JSONField(default=list, blank=True)
+    is_current = models.BooleanField(default=False, help_text="True while the executed merge is in effect")
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["merge", "source"], name="itemnamemergesource_unique_per_merge"),
+            models.UniqueConstraint(fields=["source"], condition=models.Q(is_current=True),
+                                    name="itemnamemergesource_one_current_destination"),
+        ]
+
+
+class ItemNameMergeAudit(models.Model):
+    REPOINT, M2M_MOVE, M2M_DEDUP, APPROVAL_REPOINT, NORM_ADD, DEACTIVATE = (
+        "REPOINT", "M2M_MOVE", "M2M_DEDUP", "APPROVAL_REPOINT", "NORM_ADD", "DEACTIVATE")
+    EXECUTE, ROLLBACK = "EXECUTE", "ROLLBACK"
+
+    merge = models.ForeignKey(ItemNameMerge, on_delete=models.PROTECT, related_name="audit")
+    phase = models.CharField(max_length=10, default=EXECUTE)
+    operation = models.CharField(max_length=20)
+    model_label = models.CharField(max_length=120)
+    field_name = models.CharField(max_length=120)
+    record_pk = models.CharField(max_length=64, help_text="Changed row (through-row pk for M2M)")
+    owner_pk = models.CharField(max_length=64, blank=True, default="", help_text="M2M owner row pk")
+    previous_value = models.CharField(max_length=64, blank=True, default="")
+    new_value = models.CharField(max_length=64, blank=True, default="")
+    detail = models.JSONField(default=dict, blank=True)
+    created_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+        indexes = [models.Index(fields=["merge", "phase"])]
